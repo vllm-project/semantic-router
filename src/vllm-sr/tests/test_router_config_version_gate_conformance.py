@@ -8,11 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from cli.config_schema import schema_document
-from cli.config_schema.validation import (
-    ConfigSchemaValidator,
-    validate_config_structure,
-)
+from cli.config_schema.validation import validate_config_structure
 from cli.models import UserConfig
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 _VERSION_GATE_CONFORMANCE_FIXTURE = (
@@ -48,7 +46,7 @@ def _accepts_with_version_enum(
         "type": "string",
         "enum": ["", *accepted_versions],
     }
-    validator = ConfigSchemaValidator(schema)
+    validator = Draft202012Validator(schema)
     return next(validator.iter_errors(document), None) is None
 
 

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -116,8 +116,8 @@ type HybridCacheOptions struct {
 	// Milvus settings
 	Milvus *config.MilvusConfig
 
-	// Embedding settings
-	EmbeddingModel string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	// EmbeddingDeployment names the deployment entries are embedded with.
+	EmbeddingDeployment string
 
 	// (Deprecated) Milvus settings configuration path
 	MilvusConfigPath string
@@ -222,7 +222,7 @@ func milvusCacheOptionsFromHybridOptions(options HybridCacheOptions) MilvusCache
 		Enabled:             true,
 		SimilarityThreshold: options.SimilarityThreshold,
 		TTLSeconds:          options.TTLSeconds,
-		EmbeddingModel:      options.EmbeddingModel,
+		EmbeddingDeployment: options.EmbeddingDeployment,
 		EmbeddingProvider:   options.EmbeddingProvider,
 	}
 
@@ -233,6 +233,13 @@ func milvusCacheOptionsFromHybridOptions(options HybridCacheOptions) MilvusCache
 
 	milvusOptions.ConfigPath = options.MilvusConfigPath
 	return milvusOptions
+}
+
+func (h *HybridCache) semanticEmbeddingProvider() embedding.Provider {
+	if h.milvusCache == nil {
+		return nil
+	}
+	return h.milvusCache.embeddingProvider
 }
 
 func (h *HybridCache) generateEmbedding(ctx context.Context, text string) ([]float32, error) {

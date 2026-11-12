@@ -1,0 +1,678 @@
+.section {
+  position: relative;
+  scroll-margin-top: calc(var(--site-header-height) + 1rem);
+  padding: var(--site-section-pad-top, var(--site-section-pad)) 0 var(--site-section-pad);
+}
+
+.wrap {
+  width: min(100% - 2 * var(--gut), var(--wrap));
+  margin-inline: auto;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: clamp(18px, 2.4vw, 32px);
+}
+
+.sys {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(24px, 3vw, 40px);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.sys .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--ember-text);
+  font: 600 12px/1.4 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sys.two .eyebrow {
+  color: var(--sky-text);
+}
+
+.sys .title {
+  margin: 14px 0 0;
+  color: var(--ink);
+  font: 500 clamp(36px, 3.6vw, 52px) / 1 var(--serif);
+  letter-spacing: -0.015em;
+}
+
+.sys .api {
+  margin: 16px 0 0;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.9;
+}
+
+.api code {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.sys .what {
+  max-width: 30em;
+  margin: 12px 0 0;
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.code {
+  margin-top: 22px;
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+  margin-top: auto;
+  padding-top: 22px;
+}
+
+/* Where each mode sits, as a small living map in Duo's blocks. Fixed heights keep every packet on its wire. */
+.map {
+  margin: 22px 0 0;
+  padding: 14px 18px 18px;
+  border-radius: var(--r);
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.mapCap {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font: 600 11px/1.4 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mapGrid {
+  display: grid;
+  grid-template-columns: auto minmax(24px, 1fr) auto minmax(24px, 1fr) auto;
+  align-items: center;
+  height: 168px;
+}
+
+.clients {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.single {
+  align-content: center;
+}
+
+.client {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  margin: 0;
+  padding: 0 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--ink);
+  font: 500 13px/1 var(--sans);
+  white-space: nowrap;
+}
+
+.client svg {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.conn {
+  position: relative;
+  height: 168px;
+  container-type: size;
+}
+
+.conn svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.conn path {
+  fill: none;
+  stroke: var(--hair-2);
+  stroke-width: 1.5;
+}
+
+.pkt {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background: var(--sky);
+  opacity: 0;
+}
+
+.fanIn {
+  animation: fanIn 7.2s linear infinite;
+}
+
+.fanOut {
+  animation: fanOut 7.2s linear infinite;
+}
+
+.pkt.ask,
+.pkt.reply {
+  top: 80px;
+  background: var(--ember);
+}
+
+.pkt.ask {
+  animation: ask 4.8s linear infinite;
+}
+
+.pkt.reply {
+  animation: reply 4.8s linear infinite;
+}
+
+@keyframes fanIn {
+  0% {
+    opacity: 1;
+    transform: translate(-4px, calc(var(--y) - 4px));
+  }
+
+  3% {
+    transform: translate(calc(50cqw - 4px), calc(var(--y) - 4px));
+  }
+
+  7% {
+    transform: translate(calc(50cqw - 4px), 80px);
+  }
+
+  9.6% {
+    opacity: 1;
+    transform: translate(calc(100cqw - 4px), 80px);
+  }
+
+  10%,
+  100% {
+    opacity: 0;
+    transform: translate(calc(100cqw - 4px), 80px);
+  }
+}
+
+@keyframes fanOut {
+  0%,
+  13.5% {
+    opacity: 0;
+    transform: translate(-4px, 80px);
+  }
+
+  13.9% {
+    opacity: 1;
+    transform: translate(-4px, 80px);
+  }
+
+  16.5% {
+    transform: translate(calc(50cqw - 4px), 80px);
+  }
+
+  19.6% {
+    transform: translate(calc(50cqw - 4px), calc(var(--y) - 4px));
+  }
+
+  22.2% {
+    opacity: 1;
+    transform: translate(calc(100cqw - 4px), calc(var(--y) - 4px));
+  }
+
+  22.6%,
+  100% {
+    opacity: 0;
+    transform: translate(calc(100cqw - 4px), calc(var(--y) - 4px));
+  }
+}
+
+@keyframes ask {
+  0% {
+    opacity: 1;
+    transform: translateX(-4px);
+  }
+
+  12.5% {
+    opacity: 1;
+    transform: translateX(calc(100cqw - 4px));
+  }
+
+  13%,
+  100% {
+    opacity: 0;
+    transform: translateX(calc(100cqw - 4px));
+  }
+}
+
+@keyframes reply {
+  0%,
+  20.6% {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+
+  21% {
+    opacity: 1;
+    transform: translateX(-4px);
+  }
+
+  29% {
+    opacity: 1;
+    transform: translateX(calc(100cqw - 4px));
+  }
+
+  29.4%,
+  100% {
+    opacity: 0;
+    transform: translateX(calc(100cqw - 4px));
+  }
+}
+
+.hub {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(40, 32, 20, 0.06), 0 6px 18px rgba(40, 32, 20, 0.06);
+}
+
+.hub::after {
+  position: absolute;
+  inset: -5px;
+  border-radius: 18px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sky) 40%, transparent);
+  opacity: 0;
+  content: '';
+}
+
+.hubRouter {
+  outline: 1.5px dashed color-mix(in srgb, var(--sky) 70%, transparent);
+  outline-offset: -1.5px;
+}
+
+.hubRouter::after {
+  animation: ring 2.4s linear infinite;
+}
+
+.hubEngine {
+  color: var(--ink);
+  outline: 1.5px solid color-mix(in srgb, var(--ember) 60%, transparent);
+  outline-offset: -1.5px;
+}
+
+.hub.hubEngine::after {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ember) 35%, transparent);
+  animation: engineRing 4.8s linear infinite;
+}
+
+.hub b {
+  color: var(--ink);
+  font: 500 18px/1 var(--serif);
+}
+
+.hubLogo {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.hubSub {
+  color: var(--muted);
+  font: 600 9.5px/1.2 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+@keyframes ring {
+  0%,
+  28% {
+    opacity: 0;
+  }
+
+  33% {
+    opacity: 1;
+  }
+
+  46%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes engineRing {
+  0%,
+  12% {
+    opacity: 0;
+  }
+
+  16% {
+    opacity: 1;
+  }
+
+  24%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.chipsRow {
+  display: flex;
+  gap: 3px;
+}
+
+.chipsRow i {
+  width: 8px;
+  height: 8px;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  animation: pass 4.8s steps(1, end) infinite;
+}
+
+@keyframes pass {
+  0% {
+    background: var(--ember);
+  }
+
+  7%,
+  100% {
+    background: color-mix(in srgb, var(--ink) 16%, transparent);
+  }
+}
+
+.poolWrap {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+}
+
+.pool {
+  display: grid;
+  grid-template-columns: repeat(4, 18px);
+  gap: 6px;
+}
+
+.block {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+.block.blockSky {
+  background: color-mix(in srgb, var(--sky) 45%, transparent);
+}
+
+.lit {
+  position: absolute;
+  inset: 0;
+  background: var(--ember);
+  opacity: 0;
+  animation: lit 7.2s linear infinite;
+}
+
+@keyframes lit {
+  0%,
+  22% {
+    opacity: 0;
+  }
+
+  23.5%,
+  31% {
+    opacity: 1;
+  }
+
+  33.3%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.poolCap {
+  color: var(--muted);
+  font: 600 9.5px/1.2 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.answers {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.answers li {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.answers li > span:first-child {
+  color: var(--muted);
+  font: 600 9.5px/1.2 var(--mono);
+  letter-spacing: 0.06em;
+}
+
+.answers li:first-child > span:first-child {
+  color: var(--ink);
+}
+
+.bar {
+  position: relative;
+  display: block;
+  width: 78px;
+  height: 8px;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 12%, transparent) 0 8px, transparent 8px 10px);
+}
+
+.bar i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--n) * 10px - 2px);
+  height: 8px;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 55%, transparent) 0 8px, transparent 8px 10px);
+  animation: fill 4.8s infinite;
+}
+
+.answers li:first-child .bar i {
+  background: repeating-linear-gradient(90deg, var(--ember) 0 8px, transparent 8px 10px);
+}
+
+@keyframes fill {
+  0%,
+  29% {
+    opacity: 1;
+    clip-path: inset(0 100% 0 0);
+  }
+
+  50%,
+  85% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+
+  95%,
+  100% {
+    opacity: 0;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.section[data-offscreen] .pkt,
+.section[data-offscreen] .lit,
+.section[data-offscreen] .hub::after,
+.section[data-offscreen] .chipsRow i,
+.section[data-offscreen] .bar i {
+  animation-play-state: paused;
+}
+
+/* The integration points, each linked to its guide. */
+.plugs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plugs li {
+  margin: 0;
+}
+
+.plug {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--ink);
+  font: 500 13.5px/1 var(--sans);
+  text-decoration: none;
+  transition: box-shadow 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.plug::before {
+  width: 6px;
+  height: 6px;
+  background: var(--ember);
+  content: '';
+}
+
+.two .plug::before {
+  background: var(--sky);
+}
+
+.plug:hover {
+  box-shadow: inset 0 0 0 1px var(--ink-2);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.plug:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 2px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.note {
+  justify-content: center;
+}
+
+.channel {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--hair-2);
+  text-underline-offset: 0.2em;
+}
+
+.channel:hover,
+.channel:focus-visible {
+  color: var(--ember-text);
+  text-decoration-color: var(--ember);
+}
+
+:global(html[lang='zh-Hans']) .sys .title {
+  font-size: clamp(30px, 3vw, 42px);
+  letter-spacing: 0;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .sys {
+    padding: 22px 18px;
+    border-radius: 22px;
+  }
+
+  .map {
+    padding: 12px 12px 14px;
+  }
+
+  .mapGrid {
+    grid-template-columns: auto minmax(16px, 1fr) auto minmax(16px, 1fr) auto;
+  }
+
+  .client {
+    gap: 6px;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  .hub {
+    padding: 12px 10px;
+  }
+}
+
+/* Under reduced motion each map holds one finished request: the lit model, the filled answer. */
+@media (prefers-reduced-motion: reduce) {
+  .pkt,
+  .hub::after {
+    display: none;
+  }
+
+  .lit {
+    animation: none;
+  }
+
+  .lit.litStill {
+    opacity: 1;
+  }
+
+  .chipsRow i {
+    animation: none;
+  }
+
+  .bar i {
+    animation: none;
+  }
+}

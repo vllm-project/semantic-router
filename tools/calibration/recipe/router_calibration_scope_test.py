@@ -33,11 +33,13 @@ class EvaluationScopeTest(unittest.TestCase):
             expected_algorithm="multi_factor",
             expected_signals=(("keywords", "direct"),),
             query="Summarize the supplied record.",
+            model="vllm-sr/auto",
         )
 
     def response(self):
         return {
             "recipe": "default",
+            "requested_model": "vllm-sr/auto",
             "routing_decision": "simple",
             "selection_status": "unavailable",
             "selection_reason": "All assigned models are too small",

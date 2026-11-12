@@ -24,9 +24,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
-	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 type fallbackTransportCaller func(ctx context.Context, model string, body []byte, headers map[string]string) ([]byte, int, error)
@@ -91,11 +91,21 @@ func (r *OpenAIRouter) recordPrimarySuccess(ctx *RequestContext) {
 	if primaryModel == "" {
 		primaryModel = ctx.RequestModel
 	}
-	backendName := primaryModel
-	if dispatch, err := r.resolveProviderDispatch(primaryModel, ctx.VSRSelectedDecisionName, false); err == nil && dispatch != nil {
-		backendName = dispatch.backendName
-	}
+	backendName := r.primaryBackendForAccounting(ctx, primaryModel)
 	orch.CircuitBreaker().RecordSuccess(backendName)
+}
+
+func (r *OpenAIRouter) primaryBackendForAccounting(ctx *RequestContext, primaryModel string) string {
+	if ctx != nil && ctx.primaryBackendName != "" {
+		return ctx.primaryBackendName
+	}
+	backendName := primaryModel
+	if ctx != nil {
+		if dispatch, err := r.resolveProviderDispatchForCandidate(primaryModel, ctx.VSRSelectedDecisionName, false, ctx); err == nil && dispatch != nil {
+			backendName = dispatch.backendName
+		}
+	}
+	return backendName
 }
 
 // shouldAttemptFallback reports whether fallback evaluation should be attempted for the request context.
@@ -107,7 +117,7 @@ func (r *OpenAIRouter) shouldAttemptFallback(ctx *RequestContext) bool {
 	if !orch.Policy().Enabled {
 		return false
 	}
-	if ctx.LooperRequest || ctx.ResponseHeadersContinued {
+	if ctx.LooperRequest || ctx.ResponseHeadersContinued || ctx.fallbackExecutedByCaller {
 		return false
 	}
 	return len(ctx.VSREligibleModelRefs) > 1
@@ -131,10 +141,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 	if primaryModel == "" {
 		primaryModel = ctx.RequestModel
 	}
-	backendName := primaryModel
-	if dispatch, err := r.resolveProviderDispatch(primaryModel, ctx.VSRSelectedDecisionName, false); err == nil && dispatch != nil {
-		backendName = dispatch.backendName
-	}
+	backendName := r.primaryBackendForAccounting(ctx, primaryModel)
 
 	if ctx.FallbackRecord == nil {
 		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, ctx.VSRSelectedDecisionName, primaryModel)
@@ -249,14 +256,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 
 		if !candidateEval.CanFallback {
 			if ctx.FallbackRecord.FinalStatus == "" {
-				switch {
-				case errors.Is(attemptErr, context.DeadlineExceeded):
-					ctx.FallbackRecord.FinalStatus = "total_deadline_exceeded"
-				case errors.Is(attemptErr, context.Canceled):
-					ctx.FallbackRecord.FinalStatus = "context_canceled"
-				default:
-					ctx.FallbackRecord.FinalStatus = "fallback_halted"
-				}
+				ctx.FallbackRecord.FinalStatus = fallbackHaltStatus(attemptErr)
 			}
 			logging.ComponentDebugEvent("extproc", "fallback_loop_halted", map[string]interface{}{
 				"request_id":   ctx.RequestID,
@@ -267,7 +267,22 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		}
 	}
 
-	return nil
+	return r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
+}
+
+// fallbackHaltStatus names why a chain stopped at a candidate that could not
+// be tried.
+func fallbackHaltStatus(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "total_deadline_exceeded"
+	case errors.Is(err, context.Canceled):
+		return "context_canceled"
+	case errors.Is(err, principal.ErrCredentialMissing):
+		return delegatedCredentialCode
+	default:
+		return "fallback_halted"
+	}
 }
 
 func (r *OpenAIRouter) executeFallbackCandidate(
@@ -303,6 +318,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	origSemanticRequest := ctx.SemanticRequest
 	origRateLimitCtx := ctx.RateLimitCtx
 	origDiags := ctx.ProtocolDiagnostics
+	origTargetFormat := ctx.TargetFormat
 	var candidateSucceeded bool
 	defer func() {
 		ctx.TraceContext = origTraceContext
@@ -313,130 +329,25 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			ctx.ProtocolDiagnostics = origDiags
 		}
 	}()
-	candidateModel := candidateModelIdentity(*candidateRef)
 	primaryModel := ctx.FallbackRecord.InitialModel
 	primaryStatusCode := ctx.UpstreamStatusCode
 	origPath := ctx.ResponsePath
 	wasStreaming := ctx.IsStreamingResponse
-	useReasoning := r.candidateReasoningChoice(ctx, candidateModel)
-	dispatch, err := r.resolveProviderDispatch(candidateModel, ctx.VSRSelectedDecisionName, useReasoning)
-	if err != nil && candidateRef.LoRAName != "" && candidateRef.Model != "" {
-		if baseDispatch, baseErr := r.resolveProviderDispatch(candidateRef.Model, ctx.VSRSelectedDecisionName, useReasoning); baseErr == nil {
-			dispatch = baseDispatch
-			dispatch.logicalModel = candidateModel
-			dispatch.upstreamModel = r.Config.ResolveExternalModelID(candidateModel, baseDispatch.backendName)
-			err = nil
-		}
-	}
+	// The response-phase fallback answers with a buffered immediate response.
+	candidate, prepared, err := r.prepareFallbackCandidate(callCtx, candidateRef, ctx, true)
 	if err != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, err
+		logSkippedFallbackCandidate(ctx, candidateRef, prepared, err)
+		return nil, prepared, err
 	}
-
-	requestBase := ctx.FallbackRequest
-	requestAlreadyPrepared := requestBase != nil
-	if requestBase == nil {
-		requestBase = ctx.SemanticRequest
-	}
-	reqCopy, cloneErr := cloneSemanticRequestForReplay(requestBase)
-	if cloneErr != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, cloneErr
-	}
-	reqCopy.Model = dispatch.upstreamModel
-	reqCopy.Stream = false // Fallback response is buffered
-	if useReasoning {
-		effort := candidateRef.ReasoningEffort
-		if effort == "" {
-			effort = r.getReasoningEffort(ctx.decisionForCandidate(candidateModel), candidateModel)
-		}
-		reqCopy.ReasoningEffort = effort
-		mode := candidateRef.ReasoningMode
-		if mode == "" {
-			mode = r.getReasoningMode(ctx.decisionForCandidate(candidateModel), candidateModel, true)
-		}
-		reqCopy.ReasoningMode = llmprotocol.ReasoningMode(mode)
-	} else {
-		reqCopy.ReasoningEffort = ""
-		reqCopy.ReasoningMode = ""
-		reqCopy.ReasoningBudgetTokens = nil
-	}
-
-	if requestAlreadyPrepared {
-		if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
-			r.applySemanticReasoningMode(
-				reqCopy, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning,
-				ctx.decisionForCandidate(dispatch.logicalModel),
-			)
-		}
-	} else {
-		if _, decisionErr := r.applyDispatchDecision(reqCopy, dispatch, ctx); decisionErr != nil {
-			return nil, fallback.EvaluationResult{CanFallback: true}, decisionErr
-		}
-		if _, paramsErr := r.applyDispatchRequestParams(reqCopy, ctx); paramsErr != nil {
-			return nil, fallback.EvaluationResult{CanFallback: true}, paramsErr
-		}
-	}
-
-	if err := r.prepareAutomaticDispatch(ctx, reqCopy, dispatch); err != nil {
-		if isContextExpired(callCtx) {
-			return nil, fallback.EvaluationResult{CanFallback: false}, err
-		}
-		return nil, fallback.EvaluationResult{CanFallback: true}, err
-	}
-	if protocolErr := r.rejectDispatchCapabilityMismatch(reqCopy, dispatch, ctx); protocolErr != nil {
-		if isContextExpired(callCtx) {
-			return nil, fallback.EvaluationResult{CanFallback: false}, protocolErr
-		}
-		return nil, fallback.EvaluationResult{CanFallback: true}, protocolErr
-	}
-
-	engine, engineErr := r.protocolEngine()
-	if engineErr != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
-	}
-
-	projected, projectionDiagnostics, projectionErr := r.projectAnthropicRequestForBackendWithDiagnostics(*reqCopy, dispatch.logicalModel, dispatch.targetFormat)
-	if projectionErr != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
-	}
-	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
-	if encodeErr != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
-	}
-	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
-	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
-
-	requestBody := encoded.Body
-	adaptedBody, adaptErr := r.adaptProviderRequest(encoded.Body, dispatch, ctx)
-	if adaptErr != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, adaptErr
-	}
-	if len(adaptedBody) > 0 {
-		requestBody = adaptedBody
-	}
-
-	if rateLimitResponse := r.applyRateLimit(ctx, candidateModel); rateLimitResponse != nil {
-		logging.ComponentEvent("extproc", "fallback_candidate_rate_limited", map[string]interface{}{
-			"request_id":      ctx.RequestID,
-			"candidate_model": candidateModel,
-		})
-		return nil, fallback.EvaluationResult{
-			CanFallback: true,
-			Reason:      "candidate_rate_limited",
-		}, fmt.Errorf("fallback candidate %q rejected by rate limit", candidateModel)
-	}
-
+	candidateModel, dispatch, reqCopy, requestBody := candidate.model, candidate.dispatch, candidate.request, candidate.body
+	engine := candidate.engine
 	var resBody []byte
 	var statusCode int
 	var callErr error
 	attemptStart := time.Now()
 
 	if r.fallbackCaller != nil {
-		extraHeaders := make(map[string]string)
-		if dispatch.profile != nil {
-			for k, v := range dispatch.profile.ExtraHeaders {
-				extraHeaders[k] = v
-			}
-		}
+		extraHeaders := fallbackRequestHeaders(ctx, dispatch.profile, orch)
 		resBody, statusCode, callErr = r.fallbackCaller(attemptCtx, candidateModel, requestBody, extraHeaders)
 	} else {
 		resBody, statusCode, callErr = r.dispatchFallbackHTTP(attemptCtx, ctx, dispatch, requestBody, orch)
@@ -444,24 +355,26 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	attemptDuration := time.Since(attemptStart)
 
 	attemptOutcome := fallback.AttemptOutcome{
-		Model:      candidateModel,
-		Backend:    dispatch.backendName,
-		StatusCode: statusCode,
-		Error:      callErr,
-		Duration:   attemptDuration,
-		Discarded:  callErr != nil || statusCode < 200 || statusCode >= 300,
+		Model:            candidateModel,
+		Backend:          dispatch.backendName,
+		StatusCode:       statusCode,
+		Error:            callErr,
+		Duration:         attemptDuration,
+		Discarded:        callErr != nil || statusCode < 200 || statusCode >= 300,
+		ForwardedHeaders: forwardedFallbackHeaders(ctx, orch),
 	}
 
 	if callErr != nil || statusCode < 200 || statusCode >= 300 {
 		attemptOutcome.ErrorMessage = string(resBody)
 		evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 		logging.ComponentWarnEvent("extproc", "fallback_candidate_attempt_failed", map[string]interface{}{
-			"request_id":      ctx.RequestID,
-			"candidate_model": candidateModel,
-			"status":          statusCode,
-			"error":           callErr,
-			"can_fallback":    evalResult.CanFallback,
-			"final_status":    ctx.FallbackRecord.FinalStatus,
+			"request_id":        ctx.RequestID,
+			"candidate_model":   candidateModel,
+			"status":            statusCode,
+			"error":             callErr,
+			"can_fallback":      evalResult.CanFallback,
+			"final_status":      ctx.FallbackRecord.FinalStatus,
+			"forwarded_headers": attemptOutcome.ForwardedHeaders,
 		})
 		return nil, evalResult, fmt.Errorf("candidate %s failed with status %d: %w", candidateModel, statusCode, callErr)
 	}
@@ -556,7 +469,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	}
 
 	if ctx.InflightToken != 0 {
-		inflight.End(primaryModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 	}
 
@@ -564,11 +477,15 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	ctx.VSRSelectedModel = candidateModel
 	ctx.ResponsePath = headers.ResponsePathFallback
 	ctx.UpstreamStatusCode = statusCode
+	ctx.TargetFormat = dispatch.targetFormat
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticResponse = &candidateResponse
+	// The call was buffered, but the client still reads its own stream, which
+	// is rendered with its own stream options.
+	reqCopy.Stream, reqCopy.StreamOptions = origSemanticRequest.Stream, origSemanticRequest.StreamOptions
 	ctx.SemanticRequest = reqCopy
 	ctx.ResponseEnvelope = translated.Envelope
-	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(translated.Diagnostics)
+	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(translated.Diagnostics)
 
 	if isStreaming {
 		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, streamDiags...)
@@ -596,8 +513,12 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		r.settleFallbackCandidateUsage(ctx, attemptDuration)
 		policyPlan.commit()
 		metrics.RecordModelRouting(primaryModel, candidateModel)
-		r.updateRouterReplayStatus(ctx, blockedStatus, false)
 		candidateSucceeded = true
+		if isStreaming {
+			r.updateRouterReplayStatus(ctx, http.StatusOK, true)
+			return r.streamedFallbackRefusal(ctx, policyPlan.refusal), evalResult, nil
+		}
+		r.updateRouterReplayStatus(ctx, blockedStatus, false)
 		return policyPlan.blocked, evalResult, nil
 	}
 	finalBody := policyPlan.finalBody
@@ -638,7 +559,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 					} else {
 						attemptOutcome.Error = validateErr
 						attemptOutcome.Discarded = true
-						r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+						r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 						evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 						return nil, evalResult, fmt.Errorf("finalized fallback stream validation failed: %w", validateErr)
 					}
@@ -646,7 +567,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			} else {
 				attemptOutcome.Error = streamErr
 				attemptOutcome.Discarded = true
-				r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+				r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 				evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 				return nil, evalResult, fmt.Errorf("finalized fallback stream encoding failed: %w", streamErr)
 			}
@@ -655,7 +576,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		if validateErr := engine.ValidateEncodedResponse(finalBody, false); validateErr != nil {
 			attemptOutcome.Error = validateErr
 			attemptOutcome.Discarded = true
-			r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+			r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 			evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 			return nil, evalResult, fmt.Errorf("finalized fallback body wire validation failed: %w", validateErr)
 		}
@@ -693,6 +614,193 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	return immediateResp, evalResult, nil
 }
 
+// logSkippedFallbackCandidate says why a candidate was dropped before its
+// call. The chain's record lists such a candidate as visited, with no attempt.
+func logSkippedFallbackCandidate(
+	ctx *RequestContext, candidateRef *config.ModelRef, prepared fallback.EvaluationResult, err error,
+) {
+	logging.ComponentWarnEvent("extproc", "fallback_candidate_skipped", map[string]interface{}{
+		"request_id":      ctx.RequestID,
+		"candidate_model": candidateModelIdentity(*candidateRef),
+		"error":           err.Error(),
+		"can_fallback":    prepared.CanFallback,
+	})
+}
+
+// fallbackCandidate is a fallback candidate's request, prepared the way the
+// primary dispatch was prepared.
+type fallbackCandidate struct {
+	model    string
+	ref      *config.ModelRef
+	dispatch *providerDispatch
+	request  *llmprotocol.Request
+	body     []byte
+	engine   *protocolcodec.Engine
+}
+
+// prepareFallbackCandidate resolves a candidate's provider dispatch and
+// encodes its request: reasoning, decision and request parameters,
+// capability checks, codec encoding, provider adaptation and the rate limit,
+// as for the primary. buffered asks for a non-streaming response, which the
+// response-phase fallback needs to answer at once, so the call carries none of
+// the client's stream options either; the native gateway keeps the client's
+// streaming mode, and a streamed call asks a Chat backend for its usage as the
+// primary's does.
+func (r *OpenAIRouter) prepareFallbackCandidate(
+	callCtx context.Context,
+	candidateRef *config.ModelRef,
+	ctx *RequestContext,
+	buffered bool,
+) (*fallbackCandidate, fallback.EvaluationResult, error) {
+	candidateModel := candidateModelIdentity(*candidateRef)
+	useReasoning := r.candidateReasoningChoice(ctx, candidateModel)
+	dispatch, err := r.resolveProviderDispatchForCandidate(
+		candidateModel, ctx.VSRSelectedDecisionName, useReasoning, ctx,
+	)
+	if err != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, err
+	}
+	if dispatch.profile.Delegated() {
+		// A candidate the request cannot pay for ends the chain before its
+		// call, and the request answers 401, as for the primary.
+		if _, err := principal.Delegated(ctx.TraceContext); err != nil {
+			return nil, fallback.EvaluationResult{CanFallback: false}, err
+		}
+	}
+
+	requestBase := ctx.FallbackRequest
+	requestAlreadyPrepared := requestBase != nil
+	if requestBase == nil {
+		requestBase = ctx.SemanticRequest
+	}
+	reqCopy, cloneErr := cloneSemanticRequestForReplay(requestBase)
+	if cloneErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, cloneErr
+	}
+	reqCopy.Model = dispatch.upstreamModel
+	if buffered {
+		reqCopy.Stream = false
+		reqCopy.StreamOptions = llmprotocol.StreamOptions{}
+	}
+	if useReasoning {
+		effort := candidateRef.ReasoningEffort
+		if effort == "" {
+			effort = r.getReasoningEffort(ctx.decisionForCandidate(candidateModel), candidateModel)
+		}
+		reqCopy.ReasoningEffort = effort
+		reqCopy.ReasoningMode, reqCopy.ReasoningBudgetTokens = r.candidateReasoningMode(
+			ctx, candidateRef, dispatch.targetFormat, reqCopy.ReasoningBudgetTokens,
+		)
+	} else {
+		reqCopy.ReasoningEffort = ""
+		reqCopy.ReasoningMode = ""
+		reqCopy.ReasoningBudgetTokens = nil
+	}
+
+	if requestAlreadyPrepared {
+		if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+			r.applySemanticReasoningMode(
+				reqCopy, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning,
+				ctx.decisionForCandidate(dispatch.logicalModel),
+			)
+		}
+	} else {
+		if _, decisionErr := r.applyDispatchDecision(reqCopy, dispatch, ctx); decisionErr != nil {
+			return nil, fallback.EvaluationResult{CanFallback: true}, decisionErr
+		}
+		if _, paramsErr := r.applyDispatchRequestParams(reqCopy, ctx); paramsErr != nil {
+			return nil, fallback.EvaluationResult{CanFallback: true}, paramsErr
+		}
+	}
+
+	if err := r.prepareAutomaticDispatch(ctx, reqCopy, dispatch); err != nil {
+		if isContextExpired(callCtx) {
+			return nil, fallback.EvaluationResult{CanFallback: false}, err
+		}
+		return nil, fallback.EvaluationResult{CanFallback: true}, err
+	}
+	if protocolErr := r.rejectDispatchCapabilityMismatch(reqCopy, dispatch, ctx); protocolErr != nil {
+		if isContextExpired(callCtx) {
+			return nil, fallback.EvaluationResult{CanFallback: false}, protocolErr
+		}
+		return nil, fallback.EvaluationResult{CanFallback: true}, protocolErr
+	}
+
+	engine, engineErr := r.protocolEngine()
+	if engineErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
+	}
+
+	// As for the primary, prompt-cache markers go on the provider-bound copy only.
+	dispatchRequest := *reqCopy
+	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, dispatch.targetFormat); policyErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, policyErr
+	}
+	projected, projectionDiagnostics, projectionErr := r.projectRequestForBackendWithDiagnostics(dispatchRequest, dispatch.effectiveBackendModel(), dispatch.targetFormat)
+	if projectionErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
+	}
+	requestBackendStreamUsage(dispatch.targetFormat, &projected)
+	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
+	if encodeErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
+	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
+
+	requestBody := encoded.Body
+	adaptedBody, adaptErr := r.adaptProviderRequest(encoded.Body, dispatch, ctx)
+	if adaptErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, adaptErr
+	}
+	if len(adaptedBody) > 0 {
+		requestBody = adaptedBody
+	}
+
+	if rateLimitResponse := r.applyRateLimit(ctx, candidateModel); rateLimitResponse != nil {
+		logging.ComponentEvent("extproc", "fallback_candidate_rate_limited", map[string]interface{}{
+			"request_id":      ctx.RequestID,
+			"candidate_model": candidateModel,
+		})
+		return nil, fallback.EvaluationResult{
+			CanFallback: true,
+			Reason:      "candidate_rate_limited",
+		}, fmt.Errorf("fallback candidate %q rejected by rate limit", candidateModel)
+	}
+
+	return &fallbackCandidate{
+		model: candidateModel, ref: candidateRef, dispatch: dispatch, request: reqCopy, body: requestBody,
+		engine: engine,
+	}, fallback.EvaluationResult{CanFallback: true}, nil
+}
+
+// candidateReasoningMode is the reasoning mode, and the thinking budget that
+// goes with it, of a candidate with reasoning on. Only the Messages wire
+// carries a mode, and enabled thinking there needs a budget, so a budgetless
+// enabled mode becomes adaptive, as for the primary. Chat Completions and
+// Responses carry none: their provider adapter turns use_reasoning into the
+// backend's own control, and a mode left on the request fails validation
+// before the call.
+func (r *OpenAIRouter) candidateReasoningMode(
+	ctx *RequestContext,
+	candidateRef *config.ModelRef,
+	target llmprotocol.WireFormat,
+	budget *int64,
+) (llmprotocol.ReasoningMode, *int64) {
+	if target != llmprotocol.AnthropicMessagesV1 {
+		return "", budget
+	}
+	mode := candidateRef.ReasoningMode
+	if mode == "" {
+		candidateModel := candidateModelIdentity(*candidateRef)
+		mode = r.getReasoningMode(ctx.decisionForCandidate(candidateModel), candidateModel, true)
+	}
+	if mode == "" {
+		return "", budget
+	}
+	return messagesThinkingBudget(target, llmprotocol.ReasoningMode(mode), budget)
+}
+
 func (r *OpenAIRouter) settleFallbackCandidateUsage(ctx *RequestContext, attemptDuration time.Duration) {
 	if r == nil || ctx == nil {
 		return
@@ -701,6 +809,9 @@ func (r *OpenAIRouter) settleFallbackCandidateUsage(ctx *RequestContext, attempt
 	if !ctx.StartTime.IsZero() {
 		completionLatency = time.Since(ctx.StartTime)
 	}
+	// The answer replaces the failed primary's response headers, so the
+	// candidate's own call time is its first response time.
+	recordNonStreamingFirstResponse(ctx, attemptDuration)
 	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
@@ -726,6 +837,25 @@ func (r *OpenAIRouter) fallbackProviderAuthorizer(
 	provider, providerAuth, err := resolveProviderAuth(profile)
 	if err != nil {
 		return nil, err
+	}
+	if profile.Delegated() {
+		// The same contract as primary dispatch: only the request's delegated
+		// credential, and the attempt fails before the call without it.
+		credential, ok := requestDelegatedCredential(reqCtx)
+		if !ok {
+			return nil, principal.ErrCredentialMissing
+		}
+		if providerAuth.Strategy == "none" || providerAuth.Header == "" {
+			return nil, fmt.Errorf("delegated backend has no auth header to carry the credential")
+		}
+		return func(_ context.Context, request *http.Request) error {
+			value := credential
+			if providerAuth.Prefix != "" {
+				value = providerAuth.Prefix + " " + credential
+			}
+			request.Header.Set(providerAuth.Header, value)
+			return nil
+		}, nil
 	}
 	if providerAuth.Strategy == "none" {
 		return nil, nil
@@ -768,7 +898,7 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 	if err != nil {
 		return nil, 0, err
 	}
-	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.logicalModel)
+	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.effectiveBackendModel())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -782,11 +912,16 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 			timeout = remaining
 		}
 	}
+	tlsConfig, err := providerTLSConfig(dispatch.profile)
+	if err != nil {
+		return nil, 0, err
+	}
 	client, err := connector.New(base, authorize, connector.Options{
 		AttemptTimeout:   timeout,
 		MaxRequestBytes:  16 << 20,
 		MaxResponseBytes: 32 << 20,
 		MaxErrorBytes:    8 << 10,
+		TLSConfig:        tlsConfig,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -803,12 +938,7 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		Query:             query,
 		SuccessStatusCode: http.StatusOK,
 	}
-	reqHeaders := make(map[string]string)
-	if dispatch.profile != nil {
-		for k, v := range dispatch.profile.ExtraHeaders {
-			reqHeaders[k] = v
-		}
-	}
+	reqHeaders := fallbackRequestHeaders(reqCtx, dispatch.profile, orch)
 	resp, err := client.DoRequest(ctx, operation, connector.Request{
 		Body:    body,
 		Headers: reqHeaders,
@@ -824,69 +954,25 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 	return resp.Body, resp.StatusCode, nil
 }
 
-// buildFallbackImmediateResponse constructs the terminal HTTP 200 response with observability headers.
+// buildFallbackImmediateResponse constructs the terminal HTTP 200 response. It
+// carries the public set of any routed response, as the native gateway's
+// fallback answer does through the response phases; the trace counts the
+// attempts it took.
 func (r *OpenAIRouter) buildFallbackImmediateResponse(
 	responseBody []byte,
 	contentType string,
 	ctx *RequestContext,
 	extraHeaders ...*core.HeaderValueOption,
 ) *ext_proc.ProcessingResponse {
-	attemptsCount := "1"
-	if ctx.FallbackRecord != nil {
-		attemptsCount = strconv.Itoa(len(ctx.FallbackRecord.Attempts))
-	}
 	if contentType == "" {
 		contentType = "application/json"
 	}
-	setHeaders := []*core.HeaderValueOption{
-		{
-			Header: &core.HeaderValue{
-				Key:      "content-type",
-				RawValue: []byte(contentType),
-			},
-		},
-		{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRSelectedModel,
-				RawValue: []byte(ctx.VSRSelectedModel),
-			},
-		},
-		{
-			Header: &core.HeaderValue{
-				Key:      headers.VSRFallbackAttempts,
-				RawValue: []byte(attemptsCount),
-			},
-		},
-	}
-	setHeaders = append(setHeaders, httputil.KeystoneHeaderOptions(ctx.ResponsePath)...)
-	if ctx.RouterReplayID != "" {
-		setHeaders = append(setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{
-				Key:      headers.RouterReplayID,
-				RawValue: []byte(ctx.RouterReplayID),
-			},
-		})
-	}
-	if ctx != nil && !ctx.SkipProcessing && !ctx.LooperRequest && !ctx.VSRCacheHit && ctx.SemanticRequest != nil {
-		sampling := ctx.SemanticRequest.Sampling
-		if sampling.AutomaticOutput && sampling.AutomaticInputTokens != nil && sampling.MaxOutputTokens != nil &&
-			*sampling.AutomaticInputTokens > 0 && *sampling.MaxOutputTokens > 0 {
-			setHeaders = append(setHeaders,
-				&core.HeaderValueOption{
-					Header: &core.HeaderValue{
-						Key:      headers.VSREffectiveInputTokens,
-						RawValue: []byte(strconv.FormatInt(*sampling.AutomaticInputTokens, 10)),
-					},
-				},
-				&core.HeaderValueOption{
-					Header: &core.HeaderValue{
-						Key:      headers.VSREffectiveMaxOutputTokens,
-						RawValue: []byte(strconv.FormatInt(*sampling.MaxOutputTokens, 10)),
-					},
-				},
-			)
-		}
-	}
+	builder := newResponseHeaderMutationBuilder()
+	builder.addString("content-type", contentType)
+	builder.addKeystone(ctx)
+	builder.addPublicRoutingHeaders(ctx)
+	builder.addWarnings(ctx)
+	setHeaders := builder.setHeaders
 	if len(extraHeaders) > 0 {
 		setHeaders = append(setHeaders, extraHeaders...)
 	}
@@ -1034,6 +1120,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	origPath string,
 	origDiags []llmprotocol.Diagnostic,
 	wasStreaming bool,
+	origTargetFormat llmprotocol.WireFormat,
 ) {
 	if ctx == nil {
 		return
@@ -1042,34 +1129,17 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	ctx.VSRSelectedModel = primaryModel
 	ctx.ResponsePath = origPath
 	ctx.UpstreamStatusCode = primaryStatusCode
+	ctx.TargetFormat = origTargetFormat
 	ctx.ProtocolDiagnostics = origDiags
 	ctx.IsStreamingResponse = wasStreaming
 	ctx.ResponseVendor = ""
 	ctx.SemanticResponse = nil
 	ctx.ResponseEnvelope = llmprotocol.Envelope{}
-	ctx.ResponseVendorExtensions = false
+	ctx.ResponseUnknownFields = false
 	ctx.RequestCostPriced = false
 	ctx.RequestCost = 0
 	ctx.RequestCostCurrency = ""
-	ctx.HallucinationDetected = false
-	ctx.HallucinationConfidence = 0
-	ctx.HallucinationScoreAvailable = false
-	ctx.HallucinationScoreKind = ""
-	ctx.HallucinationSpans = nil
-	ctx.EnhancedHallucinationInfo = nil
-	ctx.UnverifiedFactualResponse = false
-	ctx.ResponseJailbreakDetected = false
-	ctx.ResponseJailbreakType = ""
-	ctx.ResponseJailbreakDecision = nil
-	ctx.ResponseJailbreakConfidence = 0
-	ctx.ResponseJailbreakScoreAvailable = false
-	ctx.VSRMatchedResponseJailbreak = nil
-	ctx.VSRResponseJailbreakType = ""
-	ctx.VSRResponseJailbreakRisk = 0
-	ctx.VSRResponseJailbreakScoreAvailable = false
-	ctx.VSRResponseJailbreakDecision = nil
-	ctx.VSRMatchedHallucination = nil
-	ctx.VSRHallucinationEvidence = nil
+	ctx.ResponseGuard = nil
 	ctx.PrimaryOutputDigest = ""
 	ctx.PrimaryOutputChars = 0
 	r.updateRouterReplayStatus(ctx, primaryStatusCode, wasStreaming)

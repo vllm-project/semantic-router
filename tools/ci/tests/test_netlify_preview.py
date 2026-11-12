@@ -36,6 +36,7 @@ class PreviewTests(unittest.TestCase):
                 "GITHUB_EVENT_NAME": "issue_comment",
                 "GITHUB_REPOSITORY": REPO,
                 "GITHUB_RUN_ID": "123",
+                "GITHUB_RUN_ATTEMPT": "1",
                 "GITHUB_SERVER_URL": "https://github.com",
                 "GITHUB_OUTPUT": str(self.root / "output"),
                 "GITHUB_STEP_SUMMARY": str(self.root / "summary"),
@@ -63,6 +64,8 @@ class PreviewTests(unittest.TestCase):
         self.permission = "write"
         self.pages = {1: []}
         self.run_state = "in_progress"
+        self.comment_pages = {1: []}
+        self.patches = []
         self.posts = []
         self.github = Mock()
         self.github.request.side_effect = self.github_request
@@ -75,6 +78,12 @@ class PreviewTests(unittest.TestCase):
         if method == "POST":
             self.posts.append((endpoint, payload))
             return payload
+        if method == "PATCH":
+            self.patches.append((endpoint, payload))
+            return payload
+        if "/issues/42/comments?" in endpoint:
+            page = int(parse_qs(urlparse(endpoint).query)["page"][0])
+            return self.comment_pages.get(page, [])
         if "/collaborators/" in endpoint:
             return {"permission": self.permission}
         if endpoint.endswith("/pulls/42"):
@@ -364,6 +373,74 @@ class PreviewTests(unittest.TestCase):
         self.assertIn(
             "https://preview.netlify.app", (self.root / "summary").read_text()
         )
+
+    def ready_netlify(self):
+        netlify = Mock()
+        netlify.request.return_value = {
+            "id": "deploy-id",
+            "state": "ready",
+            "required": [],
+            "deploy_ssl_url": "https://preview.netlify.app",
+        }
+        return netlify
+
+    def comment_posts(self):
+        return [p for p in self.posts if p[0] == f"repos/{REPO}/issues/42/comments"]
+
+    def test_publish_comments_the_preview_link_on_the_pr(self):
+        preview.publish(self.github, self.directory, self.ready_netlify())
+        [(_, payload)] = self.comment_posts()
+        self.assertTrue(payload["body"].startswith(preview.COMMENT_MARKER))
+        self.assertIn("https://preview.netlify.app", payload["body"])
+        self.assertIn(SHA[:12], payload["body"])
+        self.assertEqual(self.patches, [])
+
+    def test_publish_updates_its_own_comment_instead_of_adding_one(self):
+        self.comment_pages = {
+            1: [
+                {"id": i, "user": {"login": "someone"}, "body": "hi"}
+                for i in range(100)
+            ],
+            2: [
+                {
+                    "id": 7,
+                    "user": {"login": preview.COMMENT_AUTHOR},
+                    "body": f"{preview.COMMENT_MARKER}\nold link",
+                }
+            ],
+        }
+        preview.publish(self.github, self.directory, self.ready_netlify())
+        self.assertEqual(self.comment_posts(), [])
+        [(endpoint, payload)] = self.patches
+        self.assertEqual(endpoint, f"repos/{REPO}/issues/comments/7")
+        self.assertIn("https://preview.netlify.app", payload["body"])
+
+    def test_publish_never_edits_a_human_comment_with_the_marker(self):
+        self.comment_pages = {
+            1: [
+                {
+                    "id": 9,
+                    "user": {"login": "maintainer"},
+                    "body": preview.COMMENT_MARKER,
+                }
+            ]
+        }
+        preview.publish(self.github, self.directory, self.ready_netlify())
+        self.assertEqual(self.patches, [])
+        self.assertEqual(len(self.comment_posts()), 1)
+
+    def test_comment_failure_still_reports_the_ready_status(self):
+        original = self.github.request.side_effect
+
+        def failing_comments(endpoint, *, method="GET", payload=None):
+            if "/issues/42/comments" in endpoint:
+                raise preview.PreviewError("GitHub API request failed")
+            return original(endpoint, method=method, payload=payload)
+
+        self.github.request.side_effect = failing_comments
+        preview.publish(self.github, self.directory, self.ready_netlify())
+        self.assertEqual(self.posts[-1][1]["state"], "success")
+        self.assertEqual(self.posts[-1][1]["target_url"], "https://preview.netlify.app")
 
 
 class ClientTests(unittest.TestCase):

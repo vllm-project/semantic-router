@@ -30,30 +30,33 @@ func (Profile) JSONSchemaExtend(schema *jsonschema.Schema) {
 
 // Catalog makes every public request, response and worker message reachable by generators.
 type Catalog struct {
-	AssetRequest       DataAssetSpec       `json:"asset_request"`
-	SnapshotRequest    SnapshotSpec        `json:"snapshot_request"`
-	ExperimentRequest  ExperimentSpec      `json:"experiment_request"`
-	ProposalRequest    BindingProposalSpec `json:"proposal_request"`
-	Fixture            Fixture             `json:"fixture"`
-	Asset              DataAsset           `json:"asset"`
-	Snapshot           DataSnapshot        `json:"snapshot"`
-	Upload             Upload              `json:"upload"`
-	Experiment         Experiment          `json:"experiment"`
-	Graph              RunGraph            `json:"graph"`
-	Artifact           Artifact            `json:"artifact"`
-	Variant            ArtifactVariant     `json:"variant"`
-	Evaluation         Evaluation          `json:"evaluation"`
-	Qualification      Qualification       `json:"qualification"`
-	Proposal           BindingProposal     `json:"proposal"`
-	Event              Event               `json:"event"`
-	WorkerRequest      WorkerRequest       `json:"worker_request"`
-	ComparisonRequest  ComparisonRequest   `json:"comparison_request"`
-	ComparisonResponse ComparisonResponse  `json:"comparison_response"`
-	ValidationRequest  ValidationRequest   `json:"validation_request"`
-	ValidationResponse ValidationResponse  `json:"validation_response"`
-	Error              APIError            `json:"error"`
-	EventPage          EventPage           `json:"event_page"`
-	WorkerSubmission   WorkerSubmission    `json:"worker_submission"`
+	AssetRequest       DataAssetSpec        `json:"asset_request"`
+	SnapshotRequest    SnapshotSpec         `json:"snapshot_request"`
+	ExperimentRequest  ExperimentSpec       `json:"experiment_request"`
+	ProposalRequest    BindingProposalSpec  `json:"proposal_request"`
+	Fixture            Fixture              `json:"fixture"`
+	Asset              DataAsset            `json:"asset"`
+	Snapshot           DataSnapshot         `json:"snapshot"`
+	Upload             Upload               `json:"upload"`
+	Experiment         Experiment           `json:"experiment"`
+	Graph              RunGraph             `json:"graph"`
+	Artifact           Artifact             `json:"artifact"`
+	Variant            ArtifactVariant      `json:"variant"`
+	Evaluation         Evaluation           `json:"evaluation"`
+	Qualification      Qualification        `json:"qualification"`
+	Proposal           BindingProposal      `json:"proposal"`
+	Event              Event                `json:"event"`
+	WorkerRequest      WorkerRequest        `json:"worker_request"`
+	ComparisonRequest  ComparisonRequest    `json:"comparison_request"`
+	ComparisonResponse ComparisonResponse   `json:"comparison_response"`
+	ValidationRequest  ValidationRequest    `json:"validation_request"`
+	ValidationResponse ValidationResponse   `json:"validation_response"`
+	Error              APIError             `json:"error"`
+	EventPage          EventPage            `json:"event_page"`
+	WorkerSubmission   WorkerSubmission     `json:"worker_submission"`
+	CapabilityCatalog  CapabilityCatalog    `json:"capability_catalog"`
+	PlanRequest        TrainingPlanRequest  `json:"plan_request"`
+	PlanResponse       TrainingPlanResponse `json:"plan_response"`
 }
 
 // Workers report execution outcomes, not management-only pending/retry states.

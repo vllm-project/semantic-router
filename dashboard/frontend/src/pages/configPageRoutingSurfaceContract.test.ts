@@ -38,6 +38,7 @@ describe('generated Dashboard routing contract', () => {
     expect(ROUTER_CONFIG_EXTENSION.plugins.map((entry) => entry.type)).toEqual(PLUGIN_TYPES)
     expect(DECISION_SIGNAL_TYPES).toContain('projection')
     expect(DECISION_SIGNAL_TYPES).not.toContain('hallucination')
+    expect(ALGORITHM_TYPES).not.toContain('policy')
   })
 
   it('resolves every generated field schema used by management forms', () => {
@@ -62,6 +63,25 @@ describe('generated Dashboard routing contract', () => {
     for (const plugin of PLUGIN_TYPES) {
       expectSameFieldInventory(getPluginFieldSchema(plugin), pluginFieldsFromRouterSchema(plugin))
     }
+  })
+
+  it('offers budget and on_error to executors only', () => {
+    const escalate = getAlgorithmFieldSchema('escalate')
+    expect(escalate.map((field) => field.key)).toEqual(
+      expect.arrayContaining(['budget', 'on_error', 'order', 'accept', 'quality', 'stages']),
+    )
+    const budget = escalate.find((field) => field.key === 'budget')
+    expect(budget?.fields?.map((field) => field.key)).toEqual(['deadline', 'max_calls'])
+    expect(
+      escalate.find((field) => field.key === 'quality')?.fields?.map((field) => field.key),
+    ).toContain('accept')
+    const chat = getAlgorithmFieldSchema('multi_factor')
+    expect(chat.map((field) => field.key)).not.toContain('stages')
+    expect(chat.map((field) => field.key)).not.toContain('budget')
+    expect(chat.map((field) => field.key)).not.toContain('on_error')
+    expect(
+      chat.find((field) => field.key === 'quality')?.fields?.map((field) => field.key),
+    ).toEqual(['index', 'on_missing', 'min_coverage', 'min_score'])
   })
 
   it('keeps transient Dashboard setup state out of the Router contract', () => {

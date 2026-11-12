@@ -38,8 +38,8 @@ func TestExtractSemanticRequestSignals_InlineImageBecomesDataURL(t *testing.T) {
 	if snapshot.FirstImageURL != want {
 		t.Fatalf("FirstImageURL = %q, want inline data URI", snapshot.FirstImageURL)
 	}
-	if snapshot.ImageContentCount != 1 {
-		t.Fatalf("ImageContentCount = %d, want 1", snapshot.ImageContentCount)
+	if snapshot.InputModality.ImageContentCount != 1 {
+		t.Fatalf("ImageContentCount = %d, want 1", snapshot.InputModality.ImageContentCount)
 	}
 }
 
@@ -51,8 +51,8 @@ func TestExtractSemanticRequestSignals_RemoteImageURLStaysUnavailable(t *testing
 	if snapshot.FirstImageURL != "" {
 		t.Fatalf("FirstImageURL = %q, remote URL should remain unavailable to embeddings", snapshot.FirstImageURL)
 	}
-	if snapshot.ImageContentCount != 1 {
-		t.Fatalf("ImageContentCount = %d, want 1 (still counted for input_modality)", snapshot.ImageContentCount)
+	if snapshot.InputModality.ImageContentCount != 1 {
+		t.Fatalf("ImageContentCount = %d, want 1 (still counted for input_modality)", snapshot.InputModality.ImageContentCount)
 	}
 }
 

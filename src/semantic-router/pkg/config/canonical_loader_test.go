@@ -8,7 +8,7 @@ import (
 
 func TestCanonicalProviderDefaultsAreKnownFields(t *testing.T) {
 	raw, err := parseRawConfigMap([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: private-model
@@ -25,18 +25,19 @@ providers:
 
 func TestProviderFeaturedMetadataIsNotAUserModelCardField(t *testing.T) {
 	raw, err := parseRawConfigMap([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: private-model
-routing:
-  modelCards:
+  models:
     - name: private-model
       presentation:
         logo: monogram
         monogram: P
         monochrome: false
         featured: true
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("parse canonical config: %v", err)
@@ -50,21 +51,22 @@ routing:
 
 func TestParseYAMLBytesRejectsUnknownCanonicalField(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: private-model
-routing:
-  modelCards:
+  models:
     - name: private-model
       descriptin: typo
+recipes:
+  - name: default
 `))
 	if err == nil {
 		t.Fatal("expected unknown canonical field to be rejected")
 	}
 	for _, fragment := range []string{
 		`unknown field "descriptin"`,
-		"routing.modelCards",
+		"providers.models",
 		`did you mean "description"`,
 	} {
 		if !strings.Contains(err.Error(), fragment) {
@@ -75,7 +77,7 @@ routing:
 
 func TestParseYAMLBytesRejectsLegacyUserConfigLayout(t *testing.T) {
 	legacyYAML := []byte(`
-version: v0.3
+version: v0.5
 signals:
   keywords:
     - name: urgent_keywords
@@ -106,10 +108,10 @@ providers:
 
 	message := err.Error()
 	for _, fragment := range []string{
-		"deprecated config fields are no longer supported",
-		"providers.default_model",
-		"providers.models[0].endpoints",
-		"vllm-sr config migrate --config old-config.yaml",
+		"signals: removed_section: top-level signals belongs to the layout before config v0.3; run `vllm-sr config migrate` (" + previousReleaseLayout + ")",
+		"decisions: removed_section: top-level decisions belongs to the layout before config v0.3",
+		"providers.default_model: removed_field: providers.default_model belongs to the provider catalog before config v0.3",
+		"providers.models[qwen2.5:3b].endpoints: removed_field: providers.models[qwen2.5:3b].endpoints belongs to the provider catalog before config v0.3",
 	} {
 		if !strings.Contains(message, fragment) {
 			t.Fatalf("expected error to mention %q, got: %s", fragment, message)
@@ -119,7 +121,7 @@ providers:
 
 func TestParseYAMLBytesRejectsTopLevelLegacyRuntimeLayout(t *testing.T) {
 	legacyYAML := []byte(`
-version: v0.3
+version: v0.5
 default_model: qwen2.5:3b
 semantic_cache:
   enabled: false
@@ -132,9 +134,8 @@ semantic_cache:
 
 	message := err.Error()
 	for _, fragment := range []string{
-		"config file must use the canonical v0.3 hierarchy",
-		"unexpected top-level keys: default_model, semantic_cache",
-		"vllm-sr config migrate --config old-config.yaml",
+		"default_model: removed_section: top-level default_model belongs to the layout before config v0.3",
+		"semantic_cache: removed_section: top-level semantic_cache belongs to the layout before config v0.3",
 	} {
 		if !strings.Contains(message, fragment) {
 			t.Fatalf("expected error to mention %q, got: %s", fragment, message)
@@ -144,14 +145,15 @@ semantic_cache:
 
 func TestParseYAMLBytesAllowsRoutingOnlyDefaultModel(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: private-model
-routing:
-  modelCards:
+  models:
     - name: private-model
       description: Metadata-only routing model
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("expected routing-only default model to be valid: %v", err)
@@ -169,7 +171,7 @@ routing:
 
 func TestParseYAMLBytesMaterializesRichCustomModelCard(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: private-model
@@ -179,9 +181,6 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: 127.0.0.1:8000/v1
-routing:
-  modelCards:
-    - name: private-model
       publisher: Acme Research
       presentation:
         logo: https://models.example/acme.svg
@@ -191,6 +190,8 @@ routing:
         type: open_weights
         source: https://models.example/acme-reasoner
         license: Apache-2.0
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("expected rich custom card to be valid: %v", err)
@@ -208,7 +209,7 @@ routing:
 
 func TestParseYAMLBytesRejectsDeprecatedGlobalModulesLayout(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -221,18 +222,17 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:11434
           provider: vllm
-routing:
-  modelCards:
-    - name: qwen2.5:3b
-  decisions:
-    - name: default-route
-      description: fallback
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: qwen2.5:3b
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        description: fallback
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: qwen2.5:3b
 global:
   modules:
     prompt_guard:
@@ -250,7 +250,7 @@ global:
 
 func TestParseYAMLBytesRejectsDeprecatedGlobalModelCatalogEmbeddingsBertLayout(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -263,18 +263,17 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:11434
           provider: vllm
-routing:
-  modelCards:
-    - name: qwen2.5:3b
-  decisions:
-    - name: default-route
-      description: fallback
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: qwen2.5:3b
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        description: fallback
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: qwen2.5:3b
 global:
   model_catalog:
     embeddings:
@@ -295,7 +294,7 @@ global:
 
 func TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -308,22 +307,21 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:11434
           provider: vllm
-routing:
-  modelCards:
-    - name: qwen2.5:3b
-  decisions:
-    - name: support-route
-      description: fallback
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelSelectionAlgorithm:
-        enabled: true
-        method: router_dc
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: support-route
+        description: fallback
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelSelectionAlgorithm:
+          enabled: true
+          method: router_dc
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 global:
   router:
     strategy: priority
@@ -333,14 +331,14 @@ global:
 	if err == nil {
 		t.Fatal("expected deprecated decision modelSelectionAlgorithm field to be rejected")
 	}
-	if !strings.Contains(err.Error(), "routing.decisions[0].modelSelectionAlgorithm") {
+	if !strings.Contains(err.Error(), "recipes[default].decisions[0].modelSelectionAlgorithm") {
 		t.Fatalf("expected error to mention deprecated decision field, got: %v", err)
 	}
 }
 
-func TestParseYAMLBytesParsesNestedCanonicalModelCatalogModules(t *testing.T) {
+func TestParseYAMLBytesParsesNestedCanonicalModelCatalog(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -359,36 +357,23 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:11434
           protocol: http
-routing:
-  modelCards:
-    - name: qwen2.5:3b
       param_size: 3b
+recipes:
+  - name: default
 global:
   router:
-    auto_model_name: auto
     clear_route_cache: false
     streamed_body:
       enabled: true
       max_bytes: 4096
       timeout_sec: 12
   stores:
-    semantic_cache:
-      enabled: false
+    response_cache: {}
   model_catalog:
+    deployments:
+      remote-embed: {provider: openai_embeddings, endpoint: "http://embed:8000/v1", model: e5}
     embeddings:
-      semantic:
-        qwen3_model_path: models/mom-embedding-pro
-        bert_model_path: models/mom-embedding-light
-        use_cpu: true
-        embedding_config:
-          min_score_threshold: 0.6
-    system:
-      prompt_guard: models/custom-jailbreak
-    modules:
-      prompt_guard:
-        enabled: true
-        model_ref: prompt_guard
-        threshold: 0.8
+      default: {deployment: remote-embed}
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -402,26 +387,17 @@ global:
 	if cfg.DefaultReasoningEffort != "low" {
 		t.Fatalf("expected default reasoning effort to be preserved, got %q", cfg.DefaultReasoningEffort)
 	}
-	if cfg.AutoModelName != "auto" {
-		t.Fatalf("expected auto model name override, got %q", cfg.AutoModelName)
-	}
 	if cfg.ClearRouteCache {
 		t.Fatal("expected clear_route_cache override to be false")
 	}
 	if !cfg.StreamedBodyMode || cfg.MaxStreamedBodyBytes != 4096 || cfg.StreamedBodyTimeoutSec != 12 {
 		t.Fatalf("expected streamed body runtime override, got enabled=%v max=%d timeout=%d", cfg.StreamedBodyMode, cfg.MaxStreamedBodyBytes, cfg.StreamedBodyTimeoutSec)
 	}
-	if cfg.Enabled {
+	if cfg.SemanticCache.InUse {
 		t.Fatal("expected semantic cache enabled override to be false")
 	}
-	if cfg.PromptGuard.ModelID != "models/custom-jailbreak" {
-		t.Fatalf("expected prompt guard model to follow system override, got %q", cfg.PromptGuard.ModelID)
-	}
-	if cfg.Qwen3ModelPath != "models/mom-embedding-pro" {
-		t.Fatalf("expected semantic embedding model override, got %q", cfg.Qwen3ModelPath)
-	}
-	if cfg.BertModelPath != "models/mom-embedding-light" {
-		t.Fatalf("expected bert embedding path override, got %q", cfg.BertModelPath)
+	if cfg.EmbeddingDeployment != "remote-embed" {
+		t.Fatalf("expected the embeddings.default override, got %q", cfg.EmbeddingDeployment)
 	}
 	if got := cfg.ModelConfig["qwen2.5:3b"].ReasoningFamily; got != "qwen3" {
 		t.Fatalf("expected provider model reasoning family, got %q", got)
@@ -433,7 +409,7 @@ global:
 
 func TestParseYAMLBytesPreservesGlobalServiceDefaultsForSparseCanonicalOverrides(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -447,30 +423,30 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: qwen3
-      modality: text
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
+recipes:
+  - name: default
+    signals:
+      domains: [{name: general, labels: [other]}]
+    decisions:
+      - name: default_route
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: general
+        modelRefs:
+          - model: qwen3
 global:
   stores:
     memory:
-      enabled: true
       auto_store: true
-  model_catalog:
-    embeddings:
-      semantic:
-        bert_model_path: models/mom-embedding-light
-        use_cpu: true
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -487,7 +463,7 @@ global:
 	if cfg.ResponseAPI.TTLSeconds != 86400 {
 		t.Fatalf("expected response api ttl default to be preserved, got %d", cfg.ResponseAPI.TTLSeconds)
 	}
-	if cfg.RouterReplay.Enabled {
+	if cfg.UsesRouterReplay() {
 		t.Fatal("expected sparse global override to preserve default router_replay.enabled=false")
 	}
 	if cfg.RouterReplay.StoreBackend != "memory" {
@@ -496,98 +472,17 @@ global:
 	if cfg.RouterReplay.TTLSeconds != 2592000 {
 		t.Fatalf("expected router replay ttl default to be preserved, got %d", cfg.RouterReplay.TTLSeconds)
 	}
-	if !cfg.Memory.Enabled || !cfg.Memory.AutoStore {
-		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)
+	if !cfg.Memory.InUse || !cfg.Memory.AutoStore {
+		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.InUse, cfg.Memory.AutoStore)
 	}
 	if got := cfg.Memory.Persistence.Queue; got != 64 {
 		t.Fatalf("expected sparse memory override to preserve default persistence queue 64, got %d", got)
 	}
 }
 
-func TestParseYAMLBytesPreservesDefaultSystemModelsForSparseModuleOverrides(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    model: qwen3
-  models:
-    - name: qwen3
-      provider_model_id: qwen3
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-          provider: vllm
-routing:
-  signals:
-    domains:
-      - name: general
-        description: General requests
-        mmlu_categories: [other]
-  modelCards:
-    - name: qwen3
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          threshold: 0.6
-          use_cpu: true
-          model_ref: domain_classifier
-        pii:
-          threshold: 0.7
-          use_cpu: true
-          model_ref: pii_classifier
-      prompt_guard:
-        enabled: true
-        threshold: 0.7
-        use_cpu: true
-        model_ref: prompt_guard
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes returned error: %v", err)
-	}
-
-	if cfg.CategoryModel.ModelID != "models/Vela-1.0-Encoder-307M-Domain" {
-		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
-	}
-	if cfg.CategoryModel.Variant != CategoryVariantMmBERT32K || cfg.CategoryModel.UseMmBERT32K {
-		t.Fatalf("expected sparse category override to keep canonical mmBERT-32K variant, got variant=%q legacy=%v", cfg.CategoryModel.Variant, cfg.CategoryModel.UseMmBERT32K)
-	}
-	if cfg.PIIModel.ModelID != "models/Vela-1.0-Encoder-307M-PII" {
-		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)
-	}
-	if !cfg.PIIModel.UseMmBERT32K {
-		t.Fatal("expected sparse PII override to keep mmBERT-32K enabled")
-	}
-	if cfg.PromptGuard.ModelID != "models/Vela-1.0-Encoder-307M-Guard" {
-		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
-	}
-	if cfg.PromptGuard.Variant != PromptGuardVariantMmBERT32K {
-		t.Fatal("expected sparse prompt-guard override to keep mmBERT-32K enabled")
-	}
-	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
-		t.Fatal("expected sparse classifier override to preserve default preference contrastive mode")
-	}
-}
-
 func TestParseYAMLBytesPreservesProviderModelPricing(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -607,20 +502,20 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: qwen3
-      modality: text
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
+recipes:
+  - name: default
+    signals:
+      domains: [{name: general, labels: [other]}]
+    decisions:
+      - name: default_route
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: general
+        modelRefs:
+          - model: qwen3
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -649,7 +544,7 @@ routing:
 
 func TestGetModelPricingResolvesProviderModelIDFromCanonicalConfig(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -661,20 +556,20 @@ providers:
         currency: USD
         prompt_per_1m: 1.00
         completion_per_1m: 5.00
-routing:
-  modelCards:
-    - name: claude-haiku
-      modality: ar
-  decisions:
-    - name: default
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: claude-haiku
+recipes:
+  - name: default
+    signals:
+      domains: [{name: general, labels: [other]}]
+    decisions:
+      - name: default
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: general
+        modelRefs:
+          - model: claude-haiku
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -700,7 +595,7 @@ routing:
 
 func TestProviderBackendRefProviderDrivesEndpointTypeForModelIDRewrite(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: gpt-worker
@@ -709,19 +604,18 @@ providers:
       provider_model_id: openai/gpt-5.5
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-routing:
-  modelCards:
-    - name: gpt-worker
-  decisions:
-    - name: default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: gpt-worker
+recipes:
+  - name: default
+    decisions:
+      - name: default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: gpt-worker
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -816,12 +710,13 @@ func TestGetModelPricingResolvesProviderModelID(t *testing.T) {
 
 func TestParseYAMLBytesAppliesCanonicalRouterConfigSource(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults: {}
-routing:
-  signals: {}
+recipes:
+  - name: default
+    signals: {}
 global:
   router:
     config_source: kubernetes
@@ -836,90 +731,9 @@ global:
 	}
 }
 
-func TestParseYAMLBytesAllowsClearingRouterOwnedClassifierDefaults(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners: []
-providers:
-  defaults:
-    model: openai/gpt-oss-20b
-  models:
-    - name: openai/gpt-oss-20b
-      backend_refs:
-        - name: primary
-          provider: vllm
-          endpoint: localhost:8000
-          protocol: http
-          weight: 1
-routing:
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: openai/gpt-oss-20b
-  modelCards:
-    - name: openai/gpt-oss-20b
-global:
-  model_catalog:
-    modules:
-      prompt_guard:
-        enabled: false
-        model_ref: ""
-        model_id: ""
-        jailbreak_mapping_path: ""
-      classifier:
-        domain:
-          model_ref: ""
-          model_id: ""
-          category_mapping_path: ""
-          use_mmbert_32k: false
-        pii:
-          model_ref: ""
-          model_id: ""
-          pii_mapping_path: ""
-          use_mmbert_32k: false
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes returned error: %v", err)
-	}
-
-	if cfg.CategoryModel.ModelID != "" {
-		t.Fatalf("expected domain classifier model to be cleared, got %q", cfg.CategoryModel.ModelID)
-	}
-	if cfg.CategoryMappingPath != "" {
-		t.Fatalf("expected category mapping path to be cleared, got %q", cfg.CategoryMappingPath)
-	}
-	if cfg.CategoryModel.UseMmBERT32K {
-		t.Fatal("expected domain classifier mmBERT-32K default to be disabled")
-	}
-	if cfg.PIIModel.ModelID != "" {
-		t.Fatalf("expected PII classifier model to be cleared, got %q", cfg.PIIModel.ModelID)
-	}
-	if cfg.PIIMappingPath != "" {
-		t.Fatalf("expected PII mapping path to be cleared, got %q", cfg.PIIMappingPath)
-	}
-	if cfg.PIIModel.UseMmBERT32K {
-		t.Fatal("expected PII classifier mmBERT-32K default to be disabled")
-	}
-	if cfg.PromptGuard.Enabled {
-		t.Fatal("expected prompt guard to be disabled")
-	}
-	if cfg.PromptGuard.ModelID != "" {
-		t.Fatalf("expected prompt guard model to be cleared, got %q", cfg.PromptGuard.ModelID)
-	}
-	if cfg.PromptGuard.JailbreakMappingPath != "" {
-		t.Fatalf("expected prompt guard mapping path to be cleared, got %q", cfg.PromptGuard.JailbreakMappingPath)
-	}
-}
-
 func TestParseYAMLBytesParsesCanonicalLoRACatalog(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -932,28 +746,27 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: qwen3
       loras:
         - name: sql-expert
           description: SQL-specialized adapter
         - name: code-review
-  signals:
-    domains:
-      - name: other
-        description: fallback
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3
-          lora_name: sql-expert
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: other
+          description: fallback
+    decisions:
+      - name: default_route
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: qwen3
+            lora_name: sql-expert
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)

@@ -36,8 +36,9 @@ import (
 // ManifestVersion identifies the manifest shape. A change to what Build emits
 // or to how it assigns splits changes this string, because consumers compare
 // numbers across manifests and have to know when that comparison stopped being
-// meaningful.
-const ManifestVersion = "shadow-dataset.v1"
+// meaningful. v2 hashes the input without the model it was sent to, which
+// changes input identity, deduplication and splits against v1.
+const ManifestVersion = "shadow-dataset.v2"
 
 // shadowDispatchSource is the Outcome.Source that the shadow dispatch plugin
 // writes. Outcomes from anything else describe a different experiment.
@@ -415,7 +416,7 @@ func buildExample(rec store.Record) (Example, string) {
 		return Example{}, ExcludeNoPrimaryArm
 	}
 
-	inputDigest := digestOf(rec.RequestBody)
+	inputDigest := digestOf(judgeInput(rec.RequestBody))
 	return Example{
 		ID:          exampleID(inputDigest, primary.Model, rec.ID),
 		InputDigest: inputDigest,

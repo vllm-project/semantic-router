@@ -1,20 +1,31 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+import tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
 from check_cli_wheel import check_wheel  # noqa: E402
-from prepare_dev_package import prepare_version  # noqa: E402
+from prepare_dev_package import (  # noqa: E402
+    development_epoch,
+    prepare_version,
+    record_source_revision,
+)
 from validate_workflows import load_workflows, needs  # noqa: E402
+from workflow_policy_validation import validate_main_publishers  # noqa: E402
+
+COMMIT = "61c9e248d8b055bd4c07e1e80d8b36ec6048dc7c"
 
 
 class DevelopmentVersionTests(unittest.TestCase):
@@ -38,6 +49,40 @@ class DevelopmentVersionTests(unittest.TestCase):
         self.assertEqual(versions[0], versions[1])
         self.assertLess(versions[1], versions[2])
 
+    def test_each_main_commit_sorts_after_its_parent(self) -> None:
+        start = int(datetime(2026, 11, 10, tzinfo=timezone.utc).timestamp())
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def git(*args: str, offset: int = 0) -> None:
+                subprocess.run(
+                    ["git", *args],
+                    cwd=root,
+                    env={
+                        **os.environ,
+                        "GIT_AUTHOR_NAME": "ci",
+                        "GIT_AUTHOR_EMAIL": "ci@example.com",
+                        "GIT_COMMITTER_NAME": "ci",
+                        "GIT_COMMITTER_EMAIL": "ci@example.com",
+                        "GIT_COMMITTER_DATE": f"{start + offset} +0000",
+                        "GIT_CONFIG_GLOBAL": os.devnull,
+                        "GIT_CONFIG_NOSYSTEM": "1",
+                    },
+                    check=True,
+                    capture_output=True,
+                )
+
+            git("init", "-q", "-b", "main")
+            epochs = []
+            # Two merges in one second, a clock one minute behind, then normal time.
+            for offset in (100, 100, 40, 200):
+                git("commit", "-q", "--allow-empty", "-m", str(offset), offset=offset)
+                epochs.append(development_epoch(cwd=root))
+            self.assertEqual([epoch - start for epoch in epochs], [100, 101, 102, 200])
+            git("clone", "-q", "--depth=1", f"file://{root}", "shallow")
+            with self.assertRaisesRegex(ValueError, "complete commit history"):
+                development_epoch(cwd=root / "shallow")
+
     def test_rejects_non_release_base_without_editing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary)
@@ -47,6 +92,25 @@ class DevelopmentVersionTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 prepare_version(project, 0)
             self.assertEqual(path.read_text(encoding="utf-8"), source)
+
+    def test_records_the_commit_the_package_defaults_its_images_to(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            (project / "cli").mkdir()
+            path = project / "cli" / "source_revision.py"
+            shutil.copy(REPO_ROOT / "src/vllm-sr/cli/source_revision.py", path)
+            source = path.read_text(encoding="utf-8")
+            for revision in ("61c9e248d", COMMIT.upper(), ""):
+                with self.subTest(revision=revision), self.assertRaises(ValueError):
+                    record_source_revision(project, revision)
+                self.assertEqual(path.read_text(encoding="utf-8"), source)
+            record_source_revision(project, COMMIT)
+            self.assertEqual(
+                path.read_text(encoding="utf-8"),
+                source.replace('SOURCE_REVISION = ""', f'SOURCE_REVISION = "{COMMIT}"'),
+            )
+            with self.assertRaises(ValueError):
+                record_source_revision(project, COMMIT)
 
 
 class PythonPublisherContractTests(unittest.TestCase):
@@ -61,21 +125,61 @@ class PythonPublisherContractTests(unittest.TestCase):
         publisher = main.jobs["pypi"]
         self.assertEqual(publisher["uses"], "./.github/workflows/pypi-publish.yml")
         self.assertEqual(publisher["with"]["channel"], "dev")
-        for job_name in ("pypi", "images", "helm"):
+        for job_name in ("pypi", "images", "latest", "helm"):
             job = main.jobs[job_name]
             self.assertIn("ci", needs(job))
             self.assertIn("!cancelled()", job["if"])
             self.assertIn("needs.ci.result == 'success'", job["if"])
+
+    def test_main_publishes_a_dev_cli_only_after_its_commit_images(self) -> None:
+        publisher = self.workflows["main.yml"].jobs["pypi"]
+        self.assertIn("images", needs(publisher))
+        self.assertIn("needs.images.result == 'success'", publisher["if"])
+        errors: list[str] = []
+        validate_main_publishers(self.workflows, errors)
+        self.assertEqual(errors, [])
+        for job in (
+            {**publisher, "needs": ["ci"]},
+            {
+                **publisher,
+                "if": publisher["if"].replace("needs.images.result == 'success'", ""),
+            },
+        ):
+            with self.subTest(job=job):
+                errors = []
+                validate_main_publishers(
+                    {"main.yml": SimpleNamespace(jobs={"pypi": job})}, errors
+                )
+                self.assertEqual(len(errors), 1)
+
+    def test_dev_build_path_records_and_checks_its_commit(self) -> None:
+        steps = {
+            step.get("name"): step.get("run", "")
+            for step in self.publisher.jobs["build"]["steps"]
+        }
+        self.assertIn(
+            '--source-revision "$(git rev-parse HEAD)"',
+            steps["Prepare development package version"],
+        )
+        self.assertIn(
+            '--image-tag "$(git rev-parse HEAD)"',
+            steps["Verify installed wheel capabilities"],
+        )
+        implementation = (REPO_ROOT / "tools/ci/package_contract.py").read_text()
+        self.assertIn(
+            'record_source_revision(project, manifest["source_sha"])', implementation
+        )
 
     def test_only_trusted_main_and_release_events_can_publish(self) -> None:
         condition = " ".join(self.publisher.jobs["pypi"]["if"].split())
         self.assertIn("github.repository == 'vllm-project/semantic-router'", condition)
         self.assertIn("github.event_name == 'push'", condition)
         self.assertIn(
-            "inputs.channel == 'dev' && github.ref == 'refs/heads/main'", condition
+            "inputs.channel == 'dev' && inputs.prebuilt-dist && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'",
+            condition,
         )
         self.assertIn(
-            "inputs.channel == 'stable' && startsWith(github.ref, 'refs/tags/v')",
+            "inputs.channel == 'stable' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
             condition,
         )
         self.assertEqual(
@@ -83,7 +187,7 @@ class PythonPublisherContractTests(unittest.TestCase):
         )
         self.assertEqual(
             self.publisher.jobs["testpypi"]["if"],
-            "github.event_name == 'workflow_dispatch' && !inputs.build-only",
+            "github.event_name == 'workflow_dispatch' && !inputs.build-only && inputs.channel != 'dev'",
         )
         callers = {
             workflow.path.name
@@ -122,7 +226,7 @@ class PythonPublisherContractTests(unittest.TestCase):
         package = self.workflows["package-check.yml"]
         self.assertIn("package_contract.py", str(package.jobs))
         implementation = (REPO_ROOT / "tools/ci/package_contract.py").read_text()
-        self.assertIn("check_wheel(wheels[0])", implementation)
+        self.assertIn("check_wheel(wheels[0], image_tag)", implementation)
         self.assertTrue(
             self.workflows["main.yml"].jobs["pypi"]["with"]["prebuilt-dist"]
         )
@@ -346,6 +450,21 @@ class PythonPublisherContractTests(unittest.TestCase):
             channel="preview", version="0.3.0", tag="v0.3.0", snapshot="v0.3"
         )
         self.assertNotEqual(result.returncode, 0)
+
+
+class ProjectMetadataTests(unittest.TestCase):
+    def test_project_links_name_the_repository_and_the_docs_site(self) -> None:
+        pyproject = REPO_ROOT / "src" / "vllm-sr" / "pyproject.toml"
+        urls = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["urls"]
+        self.assertEqual(
+            urls,
+            {
+                "Homepage": "https://vllm-sr.ai",
+                "Documentation": "https://vllm-sr.ai/docs/intro",
+                "Repository": "https://github.com/vllm-project/semantic-router",
+                "Issues": "https://github.com/vllm-project/semantic-router/issues",
+            },
+        )
 
 
 if __name__ == "__main__":

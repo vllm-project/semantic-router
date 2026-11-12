@@ -10,11 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 const (
@@ -31,9 +32,10 @@ const (
 
 func init() {
 	pkgtestcases.Register("dashboard-restart-recovery", pkgtestcases.TestCase{
-		Description: "Dashboard sessions/workflows survive restart while sr-bench owns durable evidence independently",
-		Tags:        []string{"dashboard", "functional", "restart"},
-		Fn:          testDashboardRestartRecovery,
+		Description:         "Dashboard sessions/workflows survive restart while sr-bench owns durable evidence independently",
+		Tags:                []string{"dashboard", "functional", "restart"},
+		MutatesClusterState: true,
+		Fn:                  testDashboardRestartRecovery,
 	})
 }
 

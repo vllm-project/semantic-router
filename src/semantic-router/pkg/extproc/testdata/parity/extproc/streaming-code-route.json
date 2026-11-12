@@ -1,0 +1,221 @@
+[
+  {
+    "requestHeaders": {
+      "response": {
+        "headerMutation": {
+          "removeHeaders": [
+            "x-authz-team-id",
+            "x-authz-tenant-id",
+            "x-authz-user-groups",
+            "x-authz-user-id",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-bench-expected-config-hash",
+            "x-vsr-bench-max-inference-calls",
+            "x-vsr-cache-control",
+            "x-vsr-compression-control",
+            "x-vsr-config-hash",
+            "x-vsr-config-version",
+            "x-vsr-cost",
+            "x-vsr-cost-currency",
+            "x-vsr-debug",
+            "x-vsr-delegated-credential",
+            "x-vsr-internal-auth",
+            "x-vsr-kv-cache-id",
+            "x-vsr-kv-mapper-id",
+            "x-vsr-kv-source-pod",
+            "x-vsr-memory",
+            "x-vsr-outcome-principal",
+            "x-vsr-outcome-source",
+            "x-vsr-protection-release",
+            "x-vsr-replay-id",
+            "x-vsr-response-path",
+            "x-vsr-route-model",
+            "x-vsr-schema-version",
+            "x-vsr-selected-decision",
+            "x-vsr-selected-model",
+            "x-vsr-selected-recipe",
+            "x-vsr-session-id",
+            "x-vsr-skip-processing",
+            "x-vsr-systemone-backend",
+            "x-vsr-trace",
+            "x-vsr-upstream-host",
+            "x-vsr-warnings"
+          ],
+          "setHeaders": [
+            {
+              "header": {
+                "key": "accept-encoding",
+                "value": "identity"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "requestBody": {
+      "response": {
+        "bodyMutation": {
+          "bodyText": "{\"model\":\"general-large-instruct\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a careful senior engineer.\"},{\"role\":\"user\",\"content\":\"Show me golang generics.\"}],\"stream\":true,\"stream_options\":{\"include_usage\":true}}"
+        },
+        "clearRouteCache": true,
+        "headerMutation": {
+          "removeHeaders": [
+            "api-key",
+            "api-subscription-key",
+            "content-length",
+            "ocp-apim-subscription-key",
+            "x-api-key",
+            "x-goog-api-key",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-delegated-credential"
+          ],
+          "setHeaders": [
+            {
+              "appendAction": "OVERWRITE_IF_EXISTS_OR_ADD",
+              "header": {
+                "key": "X-Tenant",
+                "rawValueText": "parity-corpus"
+              }
+            },
+            {
+              "appendAction": "OVERWRITE_IF_EXISTS_OR_ADD",
+              "header": {
+                "key": "Authorization",
+                "rawValueText": "Bearer parity-static-key"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-route-model",
+                "rawValueText": "general-large"
+              }
+            },
+            {
+              "header": {
+                "key": ":path",
+                "rawValueText": "/v1/chat/completions"
+              }
+            },
+            {
+              "append": true,
+              "header": {
+                "key": "x-route-source",
+                "rawValueText": "parity-corpus"
+              }
+            },
+            {
+              "header": {
+                "key": "content-length",
+                "rawValueText": "219"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "modeOverride": {
+      "responseBodyMode": "STREAMED"
+    },
+    "responseHeaders": {
+      "response": {
+        "headerMutation": {
+          "removeHeaders": [
+            "content-length"
+          ],
+          "setHeaders": [
+            {
+              "header": {
+                "key": "x-vsr-schema-version",
+                "rawValueText": "3"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-response-path",
+                "rawValueText": "upstream"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-config-version",
+                "rawValueText": "1"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-selected-recipe",
+                "rawValueText": "default"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-selected-decision",
+                "rawValueText": "code_route"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-selected-model",
+                "rawValueText": "general-large"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "responseBody": {
+      "response": {
+        "bodyMutation": {
+          "bodyText": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
+        }
+      }
+    }
+  },
+  {
+    "responseBody": {
+      "response": {
+        "bodyMutation": {
+          "bodyText": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world.\"},\"finish_reason\":null}]}\n\n"
+        }
+      }
+    }
+  },
+  {
+    "responseBody": {
+      "response": {
+        "bodyMutation": {
+          "bodyText": "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"created\":0,\"id\":\"chatcmpl-parity\",\"model\":\"upstream-model\",\"object\":\"chat.completion.chunk\"}\n\n"
+        }
+      }
+    }
+  },
+  {
+    "responseBody": {
+      "response": {
+        "bodyMutation": {
+          "bodyText": "data: [DONE]\n\n"
+        }
+      }
+    }
+  }
+]

@@ -1,168 +1,176 @@
 ---
 sidebar_position: 3
 title: Use Cases
-description: How semantic routing applies across cloud services, data centers, edge deployments, and enterprise hybrid environments.
+description: Programmable model decisions for agent harnesses across cloud, data center, edge, and enterprise environments.
 ---
+
+import Tabs from '@theme/Tabs'
+import TabItem from '@theme/TabItem'
 
 # Use Cases
 
-Semantic routing is useful anywhere an application should ask for an outcome
-without knowing the physical model topology. The same request contract can sit
-over hosted APIs, a shared data-center fleet, a small edge pool, or a hybrid
-enterprise deployment. What changes is the policy boundary and the system that
-owns model execution.
+Route each model call by task, capability and policy. One stable entrypoint
+lets your harness use hosted APIs, data-center fleets, edge models or a mix,
+without changing its task loop or tools.
 
-The environments below are not mutually exclusive. Many deployments use a
-data-center pool for general traffic, an edge model for private or offline work,
-and selected cloud providers for specialized capabilities.
+- **Inside an agent task:** pick the right model for each call, keep a tool
+  loop on one model, and verify selected answers.
+- **Across environments:** the same policy works for cloud, data-center, edge
+  and hybrid pools.
+- **Reusable patterns:** capability, specialist, objective, recovery and
+  policy-first routing.
 
-This is the practical Mixture-of-Models pattern: clients use a stable virtual
-model identity, a recipe describes the routing behavior, and deployment-specific
-provider bindings connect the recipe's logical model roles to the endpoints
-available in each environment.
+## Decisions inside an agent task
 
-## At a glance
+| Harness need | Router policy | Harness responsibility |
+| --- | --- | --- |
+| A coding or research call needs a different model capability. | Match request signals to a specialist lane, and filter candidates by declared capabilities and context capacity. | Choose the next task step and execute any returned tool calls. |
+| A tool-using session continues across turns. | With session protection configured, keep an eligible model through active tool loops or provider state that can't move. | Supply the conversation and a stable session identity; manage tool results and task state. |
+| A selected call benefits from verification. | Run a configured, bounded escalation, panel or multi-model workflow. | Decide how to use the returned answer in the larger task. |
+| Sensitive work needs an approved execution path. | Apply explicit eligibility and data-handling policy over local or remote backends. | Enforce the same boundary in tools, task storage and other services. |
 
-| Environment | Typical problem | What Semantic Router decides | What remains outside the Router |
+Start with the [agent harness guide](../installation/agent-harness) and the
+[Agent Routing recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md).
+
+## Deployment environments
+
+Most deployments mix environments: a data-center pool for general traffic, an
+edge model for private or offline work, and cloud providers for specialized
+skills. The virtual model name stays stable while each environment's
+endpoints change behind it.
+
+| Environment | Typical problem | What Semantic Router decides | What stays outside the Router |
 | --- | --- | --- | --- |
-| **Cloud** | Several provider APIs differ in capability, cost, latency, and availability. | Which approved provider or virtual objective should handle the request. | Provider capacity, billing, regional service health, and account policy. |
-| **Data center** | A shared accelerator fleet serves models with different strengths and resource profiles. | Which model pool fits the task, policy, and requested objective. | Replica placement, batching, autoscaling, and device scheduling. |
-| **Edge** | Capacity is limited and data may need to remain local or work offline. | Whether a local path is capable and whether remote escalation is allowed. | Device runtime, model packaging, power limits, and network availability. |
-| **Enterprise hybrid** | Workloads cross tenants, regions, trust zones, and internal or external providers. | Which paths are eligible under identity, residency, capability, and routing policy. | Identity issuance, network controls, key management, and data governance. |
+| **Cloud** | Provider APIs differ in capability, cost, latency and availability. | Which approved provider or virtual objective handles the request. | Provider capacity, billing, regional health and account policy. |
+| **Data center** | A shared accelerator fleet serves models with different strengths. | Which model pool fits the task, policy and objective. | Replica placement, batching, autoscaling and device scheduling. |
+| **Edge** | Capacity is limited, and data may need to stay local or work offline. | Whether a local path is capable, and whether remote escalation is allowed. | Device runtime, model packaging, power and network availability. |
+| **Enterprise hybrid** | Workloads cross tenants, regions, trust zones and providers. | Which paths are eligible under identity, residency, capability and policy. | Identity issuance, network controls, key management and data governance. |
 
-## Cloud: one policy over several model services
+<Tabs groupId="use-case-environment">
+<TabItem value="cloud" label="Cloud" default>
 
-Cloud applications often integrate more than one model provider. A provider may
-offer the best vision model, another may be preferred for long context, and a
-smaller hosted model may be the economical default for routine chat.
+**One policy over several model services.** One provider may have the best
+vision model, another the longest context, and a small hosted model the
+cheapest routine chat.
 
-Semantic Router can expose one stable model API while decisions account for:
+The Router exposes one model API while decisions account for:
 
-- task intent, modality, context length, and tool requirements;
+- task intent, modality, context length and tool requirements;
 - provider allowlists and regional or contractual constraints;
-- cost, latency, or quality objectives within the eligible set; and
-- explicit escalation or rejection when pre-routing evidence rules out a path.
+- cost, latency or quality objectives within the eligible set;
+- explicit escalation, or rejection when a path is ruled out.
 
-This keeps provider selection out of application code. It does not make provider
-accounts interchangeable: credentials, quotas, data-use terms, and regional
-availability still need to be managed explicitly.
+**Example:** a document assistant sends ordinary text to an economical model,
+images to a vision-capable provider, and evidence-sensitive questions to a
+verification route. Clients keep requesting the same model name.
 
-**Example:** a document assistant routes ordinary text to an economical model,
-image-bearing requests to a vision-capable provider, and evidence-sensitive
-questions to a verification route. Clients continue to request the same public
-model name.
+:::note
+Provider accounts are not interchangeable. Manage credentials, quotas,
+data-use terms and regional availability explicitly.
+:::
 
-## Data center: match workloads to a shared model fleet
+</TabItem>
+<TabItem value="data-center" label="Data center">
 
-A data center may serve several open or privately fine-tuned models across one
-accelerator fleet. The serving platform knows which replicas are healthy and
-where capacity is available; it usually does not know which model family best
-fits the meaning of a request.
+**Match workloads to a shared fleet.** The serving platform knows which
+replicas are healthy; it usually doesn't know which model fits a request.
 
-Semantic Router adds that model-level decision:
+The Router adds that model-level decision:
 
-- send code, mathematics, language, or domain work to specialist pools;
-- reject candidates that lack the required modality, context, or tool support;
-- reserve larger models or multi-model workflows for requests that justify
-  their additional compute; and
-- expose balanced, fast, economical, or accuracy-first virtual models over the
-  same physical fleet.
+- send code, mathematics, language or domain work to specialist pools;
+- reject candidates that lack the needed modality, context or tool support;
+- keep larger models and multi-model workflows for requests that justify them;
+- expose balanced, fast, economical or accuracy-first virtual models over the
+  same fleet.
 
-The boundary is deliberate: Semantic Router chooses the model or model pool;
-the inference platform chooses a replica and owns batching, cache locality,
-autoscaling, and accelerator scheduling.
+**Example:** an internal platform exposes `assistant-fast` and
+`assistant-accurate`. Both share one provider pool, but their recipes use
+different eligibility rules and selection algorithms.
 
-**Example:** an internal AI platform exposes `assistant-fast` and
-`assistant-accurate`. Both entrypoints share the same provider pool, but their
-isolated recipes use different eligibility rules and selection algorithms.
+:::note
+The Router picks the model or pool. The inference platform still picks the
+replica and owns batching, cache locality, autoscaling and scheduling.
+:::
 
-## Edge: local-first routing under constrained capacity
+</TabItem>
+<TabItem value="edge" label="Edge">
 
-At the edge, privacy, intermittent connectivity, memory, and power can matter
-more than access to the largest model. A useful policy starts with the local
-capabilities and treats remote execution as an explicit choice rather than an
-implicit fallback.
+**Local-first routing under constrained capacity.** At the edge, privacy,
+intermittent connectivity, memory and power can matter more than the largest
+model. Remote execution is an explicit choice, not an implicit fallback.
 
-Semantic Router can:
+The Router can:
 
 - keep sensitive or offline-eligible traffic on a local model;
-- select among small specialists available on the device or local network;
-- block requests that the local pool cannot safely handle; or
+- select among small specialists on the device or local network;
+- block requests the local pool cannot safely handle;
 - escalate selected requests to an approved remote model when policy and
-  connectivity allow it.
+  connectivity allow.
 
-“Local” is not an end-to-end privacy guarantee. Network routes, logs, replay,
-caches, tool calls, and remote fallbacks must follow the same boundary.
+**Example:** a field assistant answers common text locally, sends images to
+an on-premises vision service when connected, and fails closed rather than
+sending protected content to a public endpoint.
 
-**Example:** a field assistant answers common text requests locally, routes
-image requests to an on-premises vision service when connected, and fails
-closed instead of sending protected content to a public endpoint.
+:::warning
+"Local" is not an end-to-end privacy guarantee. Network routes, logs, replay,
+caches, tool calls and remote fallbacks must follow the same boundary.
+:::
 
-## Enterprise: enforce policy across hybrid model access
+</TabItem>
+<TabItem value="enterprise" label="Enterprise hybrid">
 
-Enterprise deployments commonly combine internal models, regional data-center
-pools, edge systems, and approved external providers. The central problem is
-not simply finding the “best” model; it is finding the best path that is allowed
-for this user, tenant, data class, and workload.
+**Enforce policy across hybrid model access.** The question is not only which
+model is best, but which path is allowed for this user, tenant, data class
+and workload.
 
-Semantic Router can make those choices explicit:
+The Router makes those choices explicit:
 
-- use authorization, metadata, and content signals as eligibility constraints;
-- isolate product, tenant, or objective-specific policy in separate recipes;
-- keep regulated traffic within an approved region or local pool;
-- preserve tool, modality, context, and provider compatibility; and
-- record routing outcomes for evaluation or audit when replay is deliberately
-  enabled and protected.
+- authorization, metadata and content signals act as eligibility rules;
+- separate recipes isolate product, tenant or objective policy;
+- regulated traffic stays in an approved region or local pool;
+- tool, modality, context and provider compatibility are preserved;
+- route outcomes are recorded for evaluation or audit, when replay is enabled
+  and protected.
 
-The Router complements identity, network segmentation, secrets management,
-retention policy, and provider governance. It does not replace them, and signal
-detection alone does not enforce a policy unless a decision acts on it.
+**Example:** a company-wide assistant serves every business unit through one
+API. Public questions use approved hosted providers, confidential prompts stay
+on an internal pool, and a restricted recipe removes remote and tool-enabled
+paths for high-sensitivity work.
 
-**Example:** a company-wide assistant uses one API across business units. Public
-questions can use approved hosted providers, confidential prompts stay on an
-internal pool, and a restricted recipe removes remote and tool-enabled paths for
-high-sensitivity workloads.
+:::note
+A signal only reports; a decision must act on it. The Router complements
+identity, network segmentation, secrets management, retention and provider
+governance; it does not replace them.
+:::
+
+</TabItem>
+</Tabs>
 
 ## Patterns that span environments
 
-The same routing patterns appear in all four environments:
-
-### Capability routing
-
-Eliminate models that cannot satisfy the request's modality, context, tool, or
-language requirements before comparing cost or latency.
-
-### Specialist routing
-
-Use semantic and deterministic signals to direct code, mathematics, research,
-or domain-specific work to an appropriate model pool.
-
-### Objective-based virtual models
-
-Expose stable public names for balanced, fast, economical, accuracy-first, or
-private behavior while operators evolve the underlying pool.
-
-### Bounded recovery and orchestration
-
-Escalate on low confidence, compare several answers, or run a bounded workflow
-only where the additional calls have measurable value.
-
-### Policy-first routing
-
-Apply authorization, locality, data handling, and capability constraints before
-an optimization algorithm ranks the remaining candidates.
+| Pattern | What it does | Built from |
+| --- | --- | --- |
+| **Capability routing** | Drops models that can't handle the request's modality, context, tools or language, before comparing cost or latency. | Candidate requirements, `input_modality`, `context` |
+| **Specialist routing** | Sends code, mathematics, research or domain work to a fitting pool. | `domain`, `systemone`, `keyword` signals |
+| **Objective-based virtual models** | Gives stable public names to balanced, fast, economical, accuracy-first or private behavior. | Entrypoints, [MoM V1](mom-model-family#mom-v1) |
+| **Bounded recovery and orchestration** | Escalates on low confidence, compares answers or runs a workflow, only where the extra calls pay off. | `escalate`, `fusion`, `remom`, `workflows` |
+| **Policy-first routing** | Applies authorization, locality, data handling and capability rules before any optimizer ranks candidates. | `authz` signals, decisions |
 
 ## Choosing a starting point
 
-1. Identify the physical model pools and the system that owns their execution.
-2. Define hard eligibility boundaries before quality, latency, or cost goals.
-3. Expose one public entrypoint for each behavior clients should intentionally
-   choose.
+1. Identify the model pools, and the system that runs each one.
+2. Define the hard eligibility boundaries before quality, latency or cost
+   goals.
+3. Expose one public entrypoint for each behavior clients should choose.
 4. Start with a simple decision and static selection.
-5. Add signals or algorithms only when they change an observed routing outcome.
-6. Validate representative requests with probes before changing production
+5. Add signals or algorithms only when they change an observed routing
+   outcome.
+6. Validate representative requests with probes before you change production
    policy.
 
-Continue with the [Routing Pipeline](signal-driven-decisions), or browse the
-[recipe Model Cards](https://github.com/vllm-project/semantic-router/tree/main/config/recipes)
-for complete examples.
+## Next
+
+- [Routing Pipeline](signal-driven-decisions): how the policy layers fit
+  together.
+- [Recipe Model Cards](https://github.com/vllm-project/semantic-router/tree/main/config/recipes):
+  complete examples.

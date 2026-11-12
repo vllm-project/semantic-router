@@ -44,6 +44,7 @@ import {
   EMPTY_PROJECTIONS,
   EMPTY_SCORES,
   ensureProjectionConfig,
+  projectionInputSource,
   type ProjectionDeleteTarget,
   type ProjectionMappingFormState,
   type ProjectionPartitionFormState,
@@ -194,7 +195,7 @@ export default function ConfigPageProjectionsSection({
         section: 'Definition',
         type: 'custom',
         required: true,
-        description: 'Declared domain or embedding signals coordinated by this partition.',
+        description: 'Declared domain signals coordinated by this partition.',
         customRender: (value, onChange) => (
           <ProjectionMembersEditor value={value} onChange={onChange} />
         ),
@@ -684,11 +685,7 @@ export default function ConfigPageProjectionsSection({
     {
       key: 'sources',
       header: 'Sources',
-      render: (row) =>
-        row.inputs
-          ?.map((input) => `${input.type}:${input.name}`)
-          .slice(0, 3)
-          .join(', ') || 'N/A',
+      render: (row) => row.inputs?.map(projectionInputSource).slice(0, 3).join(', ') || 'N/A',
     },
   ]
 

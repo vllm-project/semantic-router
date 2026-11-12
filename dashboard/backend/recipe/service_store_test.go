@@ -17,7 +17,7 @@ func TestServiceReadsActiveObjectAndFailsClosedOnRuntimeDrift(t *testing.T) {
 	defer server.Close()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "runtime-config.yaml")
-	previous := []byte("version: v0.3\n")
+	previous := []byte("version: v0.5\n")
 	if err := os.WriteFile(configPath, previous, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestServiceReadsActiveObjectAndFailsClosedOnRuntimeDrift(t *testing.T) {
 	if err != nil || descriptor.Metadata == nil || descriptor.Metadata.ID != "accuracy" || descriptor.ActivationState != ActivationActive {
 		t.Fatalf("active descriptor = %#v, %v", descriptor, err)
 	}
-	if writeErr := os.WriteFile(configPath, []byte("version: v0.3\n# manual drift\n"), 0o600); writeErr != nil {
+	if writeErr := os.WriteFile(configPath, []byte("version: v0.5\n# manual drift\n"), 0o600); writeErr != nil {
 		t.Fatal(writeErr)
 	}
 	descriptor, err = service.Describe()

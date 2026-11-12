@@ -49,9 +49,51 @@ def run_go(
             for event in events
             if event.get("Action") == "output"
         ]
-        print("".join(failures[-80:]))
+        print(failure_report(events) or "".join(failures[-80:]))
         raise ValueError(f"Go invocation failed; inspect {output}")
     return events
+
+
+def failure_report(events: list[dict]) -> str:
+    """Each failed package's own output and its failed tests' output.
+
+    Packages run concurrently, so the invocation's last output belongs to
+    whichever package finished last. A test binary that exited mid-test
+    leaves its running tests without a result; the report names them.
+    """
+    failed = dict.fromkeys(
+        event.get("Package")
+        for event in events
+        if event.get("Action") == "fail" and not event.get("Test")
+    )
+    sections = []
+    for package in failed:
+        own = [event for event in events if event.get("Package") == package]
+        ended = {
+            event["Test"]: event["Action"]
+            for event in own
+            if event.get("Test") and event.get("Action") in {"pass", "fail", "skip"}
+        }
+        running = [
+            event["Test"]
+            for event in own
+            if event.get("Action") == "run" and event["Test"] not in ended
+        ]
+        shown = {
+            None,
+            *running,
+            *(name for name, action in ended.items() if action == "fail"),
+        }
+        lines = [
+            event.get("Output", "")
+            for event in own
+            if event.get("Action") == "output" and event.get("Test") in shown
+        ]
+        header = f"=== {package_id(package or '')} failed"
+        if running:
+            header += "; its test binary exited while running " + ", ".join(running)
+        sections.append(header + "\n" + "".join(lines[-80:]))
+    return "\n".join(sections)
 
 
 def terminal_cases(events: list[dict], *, roots_only: bool = False) -> list[dict]:
@@ -401,76 +443,9 @@ def execute_unit(output: Path, env: dict[str, str]) -> dict:
     return {"cases": cases, "expected_cases": expected, "excluded_profiles": profiles}
 
 
-def execute_owned(output: Path, env: dict[str, str]) -> dict:
-    excluded, profiles = profile_exclusions()
-    selections = (
-        (
-            ROOT / "candle-binding",
-            ["."],
-            "^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions)$",
-            [],
-        ),
-        (ROOT / "onnx-binding", ["./instance"], "^Test", []),
-        (
-            MODULE,
-            ["./pkg/modelruntime", "./pkg/modeldownload"],
-            "^(TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride|"
-            "TestGlobalEmbeddingViewDoesNotChangeOtherModelFamilies|"
-            "TestImplicitEmbeddingProvisioningFollowsBuildProvider)$",
-            [
-                "-ldflags=-X github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.defaultModelProvider=ort"
-            ],
-        ),
-    )
-    cases, expected = [], []
-    for index, (module, packages, pattern, flags) in enumerate(selections):
-        # Binding modules use their repository-relative module name. Core package
-        # exclusions belong to the unit invocation; these explicit alternate
-        # provider-default cases are mandatory in this owned invocation.
-        skipped = set().union(
-            *(
-                excluded.get(str((module / package).relative_to(ROOT)), set())
-                for package in packages
-            )
-        )
-        skip_flags = (
-            ["-skip", "^(" + "|".join(map(re.escape, sorted(skipped))) + ")$"]
-            if skipped
-            else []
-        )
-        listing = run_go(
-            [*flags, "-list", pattern, *packages],
-            output / f"owned-{index}.inventory.jsonl",
-            env,
-            module=module,
-        )
-        selected = [
-            f"{package_id(event['Package'])}/{event['Output'].strip()}"
-            for event in listing
-            if re.fullmatch(r"Test\w+", event.get("Output", "").strip())
-            and event["Output"].strip() not in skipped
-        ]
-        events = run_go(
-            [*flags, *skip_flags, "-race", "-run", pattern, *packages],
-            output / f"owned-{index}.jsonl",
-            env,
-            module=module,
-        )
-        roots = terminal_cases(events, roots_only=True)
-        require_complete(roots, selected)
-        if any(case["status"] != "passed" for case in terminal_cases(events)):
-            raise ValueError("required owned-native subtest skipped or failed")
-        cases.extend(roots)
-        expected.extend(selected)
-    require_complete(cases, expected)
-    return {"cases": cases, "expected_cases": expected, "excluded_profiles": profiles}
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--mode", choices=("unit", "storage", "owned"), default="storage"
-    )
+    parser.add_argument("--mode", choices=("unit", "storage"), default="storage")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--services", default=",".join(SERVICES))
     args = parser.parse_args()
@@ -486,8 +461,6 @@ def main() -> None:
     env = dict(os.environ)
     if args.mode == "unit":
         evidence = execute_unit(args.output, env)
-    elif args.mode == "owned":
-        evidence = execute_owned(args.output, env)
     else:
         evidence = execute_storage(args.output, env, services)
     evidence.update(

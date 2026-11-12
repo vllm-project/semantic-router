@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -16,29 +17,23 @@ const (
 	MaxMemoryPersistenceDurationSeconds = math.MaxInt64 / int64(time.Second)
 )
 
-// validateMemoryContracts validates the long-term-memory similarity threshold
-// wherever it can be configured: the global memory block
-// (default_similarity_threshold) and each decision's memory plugin
-// (similarity_threshold).
+// validateMemoryContracts validates the global memory store's backend,
+// retrieval defaults, reflection and persistence. A memory source's own
+// bounds are its match block's, which the context plugin validates.
 //
-// The threshold is a cosine similarity, which is bounded by [0.0, 1.0]. A value
-// outside that range is silently accepted today and reaches vector-store
-// retrieval unchanged (the Milvus/Qdrant/Valkey stores fall back to and compare
-// against it without clamping). A threshold > 1.0 can never be reached by any
-// similarity, so memory retrieval never matches despite enabled: true —
-// long-term memory is silently disabled. This mirrors the bound the semantic
-// cache and RAG plugins already enforce (validateSemanticCacheContracts /
-// validateRAGSimilarityThreshold).
+// The default similarity threshold is a cosine similarity, bounded by [0.0,
+// 1.0]: a threshold above 1.0 can never be reached, so memory retrieval would
+// never match despite enabled: true.
 func validateMemoryContracts(cfg *RouterConfig) error {
-	if err := validateGlobalMemoryContracts(cfg); err != nil {
-		return err
-	}
-	return validateDecisionMemoryContracts(cfg)
+	return validateGlobalMemoryContracts(cfg)
 }
 
 func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
+	}
+	if err := validateMemoryBackend(cfg.Memory); err != nil {
+		return err
 	}
 	if err := validateMemorySimilarityThreshold(
 		cfg.Memory.DefaultSimilarityThreshold,
@@ -46,7 +41,36 @@ func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 	); err != nil {
 		return err
 	}
+	if err := validateMemoryRetrievalLimit(cfg.Memory.DefaultRetrievalLimit, "global memory default_retrieval_limit"); err != nil {
+		return err
+	}
+	if err := validateMemoryHybridMode(cfg.Memory.HybridMode, "global.stores.memory.hybrid_mode"); err != nil {
+		return err
+	}
+	if err := validateMemoryReflectionContracts(cfg.Memory.Reflection, "global memory reflection"); err != nil {
+		return err
+	}
 	return validateMemoryPersistence(cfg.Memory.Persistence)
+}
+
+// validateMemoryBackend rejects unknown backends and incomplete backend
+// configuration before runtime construction can silently disable memory.
+func validateMemoryBackend(cfg MemoryConfig) error {
+	switch cfg.Backend {
+	case "", "milvus":
+		return nil
+	case "qdrant":
+		if cfg.Qdrant == nil {
+			return fmt.Errorf("global.stores.memory.qdrant must be configured when backend is %q", cfg.Backend)
+		}
+	case "valkey":
+		if cfg.Valkey == nil {
+			return fmt.Errorf("global.stores.memory.valkey must be configured when backend is %q", cfg.Backend)
+		}
+	default:
+		return fmt.Errorf("global.stores.memory.backend %q is not supported (milvus, qdrant, valkey)", cfg.Backend)
+	}
+	return nil
 }
 
 // Zero values use runtime defaults. Reject invalid resource bounds before any
@@ -75,23 +99,32 @@ func validateMemoryPersistence(cfg MemoryPersistenceConfig) error {
 	return nil
 }
 
-func validateDecisionMemoryContracts(cfg *RouterConfig) error {
-	if cfg == nil {
+// memoryHybridModes are the fusion methods the hybrid scorer implements. Empty
+// selects the default (weighted). Matching is exact because the scorer compares
+// the raw string.
+var memoryHybridModes = []string{"weighted", "rrf"}
+
+// legacyMemoryHybridModes maps retired values to the mode they always ran as.
+var legacyMemoryHybridModes = map[string]string{"rerank": "weighted"}
+
+// validateMemoryHybridMode rejects fusion methods the scorer does not
+// implement. Any value other than "rrf" used to run as weighted without a
+// warning, so a typo silently changed retrieval scoring.
+func validateMemoryHybridMode(mode, field string) error {
+	if mode == "" {
 		return nil
 	}
-	decisions := cfg.Decisions
-	for i := range decisions {
-		decision := &decisions[i]
-		pluginCfg := decision.GetMemoryConfig()
-		if pluginCfg == nil || pluginCfg.SimilarityThreshold == nil {
-			continue
-		}
-		scope := fmt.Sprintf("decision %q memory plugin similarity_threshold", decision.Name)
-		if err := validateMemorySimilarityThreshold(*pluginCfg.SimilarityThreshold, scope); err != nil {
-			return err
+	for _, accepted := range memoryHybridModes {
+		if mode == accepted {
+			return nil
 		}
 	}
-	return nil
+	accepted := `"", "` + strings.Join(memoryHybridModes, `", "`) + `"`
+	if replacement, ok := legacyMemoryHybridModes[mode]; ok {
+		return fmt.Errorf("%s %q is not supported (accepted: %s); use %q, which is how %q has always run",
+			field, mode, accepted, replacement, mode)
+	}
+	return fmt.Errorf("%s %q is not supported (accepted: %s)", field, mode, accepted)
 }
 
 // validateMemorySimilarityThreshold enforces that a configured memory similarity
@@ -101,6 +134,30 @@ func validateDecisionMemoryContracts(cfg *RouterConfig) error {
 func validateMemorySimilarityThreshold(threshold float32, scope string) error {
 	if threshold < 0.0 || threshold > 1.0 {
 		return fmt.Errorf("%s must be between 0.0 and 1.0, got %.2f", scope, threshold)
+	}
+	return nil
+}
+
+// validateMemoryRetrievalLimit rejects a negative retrieval limit: zero
+// means unset (the runtime default), and a negative one would reach the
+// vector stores as an unbounded retrieval ("a non-positive topK means
+// unlimited results").
+func validateMemoryRetrievalLimit(limit int, scope string) error {
+	if limit < 0 {
+		return fmt.Errorf("%s must be greater than 0, got %d", scope, limit)
+	}
+	return nil
+}
+
+func validateMemoryReflectionContracts(reflection MemoryReflectionConfig, scope string) error {
+	if reflection.DedupThreshold < 0.0 || reflection.DedupThreshold > 1.0 {
+		return fmt.Errorf("%s dedup_threshold must be between 0.0 and 1.0, got %.2f", scope, reflection.DedupThreshold)
+	}
+	if reflection.MaxInjectTokens < 0 {
+		return fmt.Errorf("%s max_inject_tokens must not be negative, got %d", scope, reflection.MaxInjectTokens)
+	}
+	if reflection.RecencyDecayDays < 0 {
+		return fmt.Errorf("%s recency_decay_days must not be negative, got %d", scope, reflection.RecencyDecayDays)
 	}
 	return nil
 }

@@ -1,60 +1,10 @@
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../modelCatalogDocument'
-import type { DecisionConditionType, SafetySignal } from '../types/config'
+import bundledCatalog from '../modelCatalogMetadata'
+import type { Listener, SafetySignal, SystemOneSignal } from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
+import type { ModelBindings } from './modelBindings'
 
-export interface ListenerConfig {
-  name: string
-  address: string
-  port: number
-  timeout?: string
-}
-
-export interface VLLMEndpoint {
-  name: string
-  address: string
-  port: number
-  weight: number
-  health_check_path: string
-  protocol?: 'http' | 'https'
-  provider_profile?: string
-  type?: string
-  api_key?: string
-  api_key_env?: string
-}
-
-export interface ModelConfig {
-  model_id: string
-  use_modernbert?: boolean
-  use_mmbert_32k?: boolean
-  threshold: number
-  use_cpu: boolean
-  use_contrastive?: boolean
-  embedding_model?: string
-  category_mapping_path?: string
-  pii_mapping_path?: string
-  jailbreak_mapping_path?: string
-}
-
-export interface MCPCategoryModel {
-  enabled: boolean
-  transport_type: string
-  command?: string
-  args?: string[]
-  env?: Record<string, string>
-  url?: string
-  tool_name?: string
-  threshold: number
-  timeout_seconds?: number
-}
-
-export interface PreferenceModelConfig {
-  use_contrastive?: boolean
-  embedding_model?: string
-  model_id?: string
-  threshold?: number
-  use_cpu?: boolean
-}
+export type ListenerConfig = Listener
 
 export interface ModelScore {
   model: string
@@ -63,14 +13,6 @@ export interface ModelScore {
   reasoning_description?: string
   reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
   reasoning_effort?: string
-}
-
-export interface Category {
-  name: string
-  system_prompt?: string
-  description?: string
-  mmlu_categories?: string[]
-  model_scores?: ModelScore[] | Record<string, number>
 }
 
 export interface ToolFunction {
@@ -116,6 +58,7 @@ export interface ModelPricing {
   prompt_per_1m?: number
   cached_input_per_1m?: number
   cache_write_per_1m?: number
+  cache_write_1h_per_1m?: number
   completion_per_1m?: number
 }
 
@@ -129,6 +72,17 @@ export interface ProviderReliability {
   health_check_path?: string
   health_check_interval?: string
   health_check_timeout?: string
+  connect_timeout?: string
+  total_timeout?: string
+  idle_timeout?: string
+  per_try_timeout?: string
+  first_byte_timeout?: string
+  retriable_status_codes?: number[]
+  retry_back_off_base?: string
+  retry_back_off_max?: string
+  retry_after_max?: string
+  retry_budget_percent?: number
+  retry_budget_min_concurrency?: number
 }
 
 export interface LoRAAdapter {
@@ -136,38 +90,39 @@ export interface LoRAAdapter {
   description?: string
 }
 
-export interface ModelConfigEntry {
-  model_id?: string
-  reasoning_family?: string
-  preferred_endpoints?: string[]
-  access_key?: string
-  pricing?: ModelPricing
-  api_format?: string
-  external_model_ids?: Record<string, string>
-  param_size?: string
-  context_window_size?: number
-  description?: string
-  capabilities?: string[]
-  loras?: LoRAAdapter[]
-  tags?: string[]
-  quality_score?: number
-  modality?: string
+/** A backend's credential, the connection block a deployment uses. */
+export interface BackendRefAuth {
+  // delegated sends the requesting user's credential
+  // (global.services.authz.delegated_credential) instead of a key.
+  credential?: 'delegated'
+  header?: string
+  prefix?: string
+  api_key_env?: string
+  api_key_file?: string
+}
+
+/** How an https backend is verified, by Envoy and by the Router's own calls. */
+export interface BackendRefTLS {
+  // Replaces the system roots for this backend.
+  ca_file?: string
+  server_name?: string
+  cert_file?: string
+  key_file?: string
 }
 
 export interface BackendRefEntry {
   name?: string
+  /** host:port with protocol, or a full URL. */
   endpoint?: string
   protocol?: 'http' | 'https'
   weight?: number
-  base_url?: string
   provider?: string
-  auth_header?: string
-  auth_prefix?: string
-  extra_headers?: Record<string, string>
   api_version?: string
   chat_path?: string
   api_key?: string
-  api_key_env?: string
+  auth?: BackendRefAuth
+  headers?: Record<string, string>
+  tls?: BackendRefTLS
 }
 
 export interface ModelReasoningConfig {
@@ -198,8 +153,6 @@ export interface ProviderModelConfig {
   name: string
   catalog?: string
   reasoning?: ModelReasoningConfig
-  /** @deprecated Use reasoning. */
-  reasoning_family?: string
   provider_model_id?: string
   api_format?: string
   external_model_ids?: Record<string, string>
@@ -218,8 +171,8 @@ export interface ProviderModelConfig {
 export interface ProviderDefaultsConfig {
   model?: string
   reasoning_effort?: string
-  /** @deprecated Reasoning definitions are now catalog-backed or inline on a provider model. */
-  reasoning_families?: Record<string, ReasoningFamily>
+  /** The CA bundle of every https backend whose own tls names none. */
+  tls?: { ca_file: string }
 }
 
 export interface ProvidersConfig {
@@ -254,7 +207,6 @@ export interface RoutingModelCard {
   modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
-  modality?: string
 }
 
 export interface DecisionCondition {
@@ -267,9 +219,8 @@ export interface DecisionCondition {
   conditions?: DecisionCondition[]
 }
 
-export interface DecisionRuleSet {
-  operator?: 'AND' | 'OR' | 'NOT'
-  conditions?: DecisionCondition[]
+// The root is a combination, a single leaf condition, or empty (unconditional).
+export interface DecisionRuleSet extends DecisionCondition {
   on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
@@ -298,12 +249,44 @@ export interface DecisionConfig {
   algorithm?: Record<string, unknown>
   action?: { type: string; destination: string }
   adaptations?: Record<string, unknown>
+  reliability?: Record<string, unknown>
+  fallback?: Record<string, unknown>
   output_contract_spec?: Record<string, unknown>
   candidateIterations?: Array<Record<string, unknown>>
-  emits?: Array<Record<string, unknown>>
+  retention?: Record<string, unknown>
+  output?: DecisionOutputConfig
   tier?: number
   annotations?: Record<string, unknown>
   output_contract?: string
+}
+
+// The media a decision's answers carry: one kind or several, generated or an
+// edit of the media the request provides. Without it a decision answers text.
+export interface DecisionOutputConfig {
+  kind?: DecisionOutputKind | DecisionOutputKind[]
+  action?: 'generate' | 'edit'
+}
+
+export type DecisionOutputKind = 'text' | 'image' | 'audio' | 'video'
+
+// The decision editor edits kind as a list; a single kind is written as the
+// scalar the configuration documents.
+export function decisionOutputForEditor(output?: DecisionOutputConfig): Record<string, unknown> {
+  if (!output) return {}
+  const { kind, ...rest } = output
+  return kind === undefined ? rest : { ...rest, kind: Array.isArray(kind) ? kind : [kind] }
+}
+
+export function decisionOutputFromEditor(value: unknown): DecisionOutputConfig | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { kind, action } = value as { kind?: unknown; action?: unknown }
+  const kinds = (Array.isArray(kind) ? kind : [kind])
+    .filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
+    .map((entry) => entry.trim() as DecisionOutputKind)
+  const output: DecisionOutputConfig = {}
+  if (kinds.length > 0) output.kind = kinds.length === 1 ? kinds[0] : kinds
+  if (action === 'generate' || action === 'edit') output.action = action
+  return Object.keys(output).length > 0 ? output : undefined
 }
 
 export const ROUTING_STRATEGIES = ['priority', 'confidence'] as const
@@ -311,7 +294,7 @@ export type RoutingStrategy = (typeof ROUTING_STRATEGIES)[number]
 export const DEFAULT_ROUTING_STRATEGY: RoutingStrategy = 'priority'
 
 export interface RoutingConfig {
-  model_bindings?: Record<string, Record<string, string>>
+  model_bindings?: ModelBindings
   modelCards?: RoutingModelCard[]
   signals?: ConfigSignals
   projections?: ConfigProjections
@@ -322,10 +305,13 @@ export interface RoutingConfig {
 export interface EntrypointConfig {
   model_names: string[]
   recipe: string
+  api?: 'chat' | 'systemone'
+  /** Marks the entrypoint of the default recipe when there are several recipes. */
+  default?: boolean
 }
 
 export interface RecipeRoutingConfig {
-  model_bindings?: Record<string, Record<string, string>>
+  model_bindings?: ModelBindings
   signals?: ConfigSignals
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
@@ -358,12 +344,13 @@ export interface NormalizedModel {
   loras?: LoRAAdapter[]
   tags?: string[]
   card_override?: RoutingModelCard
-  modality?: string
+  modalities?: { input: string[]; output: string[] }
   pricing?: {
     currency?: string
     prompt_per_1m?: number
     cached_input_per_1m?: number
     cache_write_per_1m?: number
+    cache_write_1h_per_1m?: number
     completion_per_1m?: number
   }
   reliability?: ProviderReliability
@@ -414,7 +401,6 @@ export interface ResponseAPIConfig {
 }
 
 export interface RouterReplayConfig {
-  enabled?: boolean
   store_backend?: string
   ttl_seconds?: number
   async_writes?: boolean
@@ -428,10 +414,9 @@ export interface MemoryMilvusConfig {
 }
 
 export interface MemoryConfig {
-  enabled?: boolean
   auto_store?: boolean
   milvus?: MemoryMilvusConfig
-  embedding_model?: string
+  embedding?: StoreEmbeddingConfig
   default_retrieval_limit?: number
   default_similarity_threshold?: number
   hybrid_search?: boolean
@@ -441,90 +426,19 @@ export interface MemoryConfig {
 }
 
 export interface SemanticCacheConfig {
-  enabled?: boolean
   backend_type?: string
-  similarity_threshold?: number
   max_entries?: number
   ttl_seconds?: number
   eviction_policy?: string
-  embedding_model?: string
+  embedding?: StoreEmbeddingConfig
   redis?: SemanticCacheRedisConfig
   milvus?: VectorStoreMilvusConfig
 }
 
-export interface FactCheckModelModuleConfig {
-  model_id?: string
-  model_ref?: string
-  threshold?: number
-  use_cpu?: boolean
-  use_mmbert_32k?: boolean
-}
-
-export interface HallucinationDetectorModuleConfig {
-  model_id?: string
-  model_ref?: string
-  threshold?: number
-  use_cpu?: boolean
-  min_span_length?: number
-  min_span_confidence?: number
-  context_window_size?: number
-  enable_nli_filtering?: boolean
-  nli_entailment_threshold?: number
-}
-
-export interface NLIExplainerModuleConfig {
-  model_id?: string
-  model_ref?: string
-  threshold?: number
-  use_cpu?: boolean
-}
-
-export interface HallucinationMitigationConfig {
-  enabled?: boolean
-  fact_check_model?: FactCheckModelModuleConfig
-  hallucination_model?: HallucinationDetectorModuleConfig
-  nli_model?: NLIExplainerModuleConfig
-}
-
-export interface FeedbackDetectorConfig {
-  enabled?: boolean
-  model_id?: string
-  threshold?: number
-  use_cpu?: boolean
-  use_mmbert_32k?: boolean
-  use_modernbert?: boolean
-}
-
-export interface EmbeddingOptimizationConfig {
-  backend?: 'candle' | 'openvino' | 'openai_compatible'
-  model_type?: string
-  preload_embeddings?: boolean
-  target_dimension?: number
-  target_layer?: number
-  enable_soft_matching?: boolean
-  top_k?: number
-  min_score_threshold?: number
-}
-
-export interface EmbeddingEndpointConfig {
-  base_url?: string
-  model?: string
-  api_key_env?: string
-  timeout_seconds?: number
-  max_retries?: number
-  max_response_bytes?: number
-  dimensions?: number
-}
-
-export interface EmbeddingModelsConfig {
-  qwen3_model_path?: string
-  gemma_model_path?: string
-  mmbert_model_path?: string
-  multimodal_model_path?: string
-  bert_model_path?: string
-  use_cpu?: boolean
-  embedding_config?: EmbeddingOptimizationConfig
-  endpoint?: EmbeddingEndpointConfig
+/** The embedding of a store indexed with another model than embeddings.default. */
+export interface StoreEmbeddingConfig {
+  deployment?: string
+  dimension?: number
 }
 
 export interface ObservabilityConfig {
@@ -541,11 +455,9 @@ export interface ObservabilityConfig {
 }
 
 export interface LooperConfig {
-  endpoint?: string
-  model_endpoints?: Record<string, string>
   grpc_max_msg_size_mb?: number
+  max_response_bytes_mb?: number
   timeout_seconds?: number
-  retry_count?: number
   headers?: Record<string, string>
 }
 
@@ -614,8 +526,7 @@ export interface VectorStoreConfig {
   backend_type?: string
   file_storage_dir?: string
   max_file_size_mb?: number
-  embedding_model?: string
-  embedding_dimension?: number
+  embedding?: StoreEmbeddingConfig
   ingestion_workers?: number
   ingestion_drain_timeout_seconds?: number
   supported_formats?: string[]
@@ -624,167 +535,30 @@ export interface VectorStoreConfig {
   llama_stack?: LlamaStackVectorStoreConfig
 }
 
-export interface PromptCompressionConfig {
-  enabled?: boolean
-  profile?: string
-  max_tokens?: number
-  min_length?: number
-  skip_signals?: string[]
-  textrank_weight?: number
-  position_weight?: number
-  tfidf_weight?: number
-  novelty_weight?: number
-  position_depth?: number
-  preserve_first_n?: number
-  preserve_last_n?: number
-}
-
-export interface ModalityClassifierConfig {
-  model_path?: string
-  use_cpu?: boolean
-}
-
-export interface ModalityDetectionConfig {
-  method?: string
-  classifier?: ModalityClassifierConfig
-  keywords?: string[]
-  both_keywords?: string[]
-  confidence_threshold?: number
-  lower_threshold_ratio?: number
-}
-
-export interface ModalityDetectorConfig {
-  enabled?: boolean
-  method?: string
-  classifier?: ModalityClassifierConfig
-  keywords?: string[]
-  both_keywords?: string[]
-  confidence_threshold?: number
-  lower_threshold_ratio?: number
-}
-
-export interface ExternalModelEndpointConfig {
-  address?: string
-  port?: number
-  protocol?: string
-  name?: string
-  use_chat_template?: boolean
-  prompt_template?: string
-}
-
-export interface ExternalModelConfig {
-  llm_provider: string
-  model_role: string
-  llm_endpoint?: ExternalModelEndpointConfig
-  llm_model_name?: string
-  llm_timeout_seconds?: number
-  parser_type?: string
-  threshold?: number
-  access_key?: string
-  max_tokens?: number
-  temperature?: number
-}
-
-export interface ToolFilteringWeights {
-  embed?: number
-  lexical?: number
-  tag?: number
-  name?: number
-  category?: number
-}
-
-export interface AdvancedToolFilteringConfig {
-  enabled?: boolean
-  candidate_pool_size?: number
-  min_lexical_overlap?: number
-  min_combined_score?: number
-  weights?: ToolFilteringWeights
-  use_category_filter?: boolean
-  category_confidence_threshold?: number
-  allow_tools?: string[]
-  block_tools?: string[]
-}
-
 export interface CanonicalSystemModels {
-  prompt_guard?: string
-  domain_classifier?: string
-  pii_classifier?: string
-  fact_check_classifier?: string
-  hallucination_detector?: string
-  hallucination_explainer?: string
-  feedback_detector?: string
+  /** The deployment that answers question-type signals without a binding. */
+  decision_model?: { deployment: string }
 }
 
 export interface ModelSelectionConfig {
   enabled?: boolean
-  method?: string
-  router_dc?: {
-    temperature?: number
-    dimension_size?: number
-    min_similarity?: number
-    use_query_contrastive?: boolean
-    use_model_contrastive?: boolean
-    require_descriptions?: boolean
-    use_capabilities?: boolean
-  }
-  automix?: {
-    verification_threshold?: number
-    max_escalations?: number
-    cost_aware_routing?: boolean
-    cost_quality_tradeoff?: number
-    discount_factor?: number
-    use_logprob_verification?: boolean
-  }
-  hybrid?: {
-    experience_weight?: number
-    router_dc_weight?: number
-    automix_weight?: number
-    cost_weight?: number
-    quality_gap_threshold?: number
-    normalize_scores?: boolean
-  }
-  ml?: {
-    models_path?: string
-    embedding_dim?: number
-    knn?: { k?: number; pretrained_path?: string }
-    kmeans?: { num_clusters?: number; efficiency_weight?: number; pretrained_path?: string }
-    svm?: { kernel?: string; gamma?: number; pretrained_path?: string }
-    mlp?: { device?: string; pretrained_path?: string }
-  }
-}
-
-export interface CanonicalClassifierConfig {
-  domain?: ModelConfig & { model_ref?: string; fallback_category?: string }
-  mcp?: MCPCategoryModel
-  pii?: ModelConfig & { model_ref?: string }
-  preference?: {
-    use_contrastive?: boolean
-    embedding_model?: string
-  }
-}
-
-export interface CanonicalHallucinationModuleConfig {
-  enabled?: boolean
-  fact_check?: FactCheckModelModuleConfig
-  detector?: HallucinationDetectorModuleConfig
-  explainer?: NLIExplainerModuleConfig
 }
 
 export interface CanonicalEmbeddingCatalogConfig {
-  semantic?: EmbeddingModelsConfig
+  /** The deployment recall embeds text with. */
+  default?: { deployment: string }
 }
 
 export interface RouterCoreConfig {
   config_source?: string
   strategy?: string
-  auto_model_name?: string
-  auto_model_names?: string[]
-  include_config_models_in_list?: boolean
+  list_backend_models?: boolean
   clear_route_cache?: boolean
   streamed_body?: StreamedBodyConfig
   skip_processing?: { enabled?: boolean }
   model_selection?: ModelSelectionConfig
   learning?: RouterLearningConfig
+  allow_lossy_translation?: string[]
 }
 
 export interface CanonicalServiceGlobalConfig {
@@ -806,37 +580,98 @@ export interface CanonicalStoreGlobalConfig {
   vector_store?: VectorStoreConfig
 }
 
-export interface ToolIntegrationConfig {
-  enabled?: boolean
-  top_k?: number
-  similarity_threshold?: number
-  tools_db_path?: string
-  fallback_to_empty?: boolean
-  advanced_filtering?: AdvancedToolFilteringConfig
-}
-
 export interface CanonicalIntegrationGlobalConfig {
-  tools?: ToolIntegrationConfig
   looper?: LooperConfig
 }
 
-export interface CanonicalModelModulesConfig {
-  prompt_compression?: PromptCompressionConfig
-  prompt_guard?: ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean }
-  classifier?: CanonicalClassifierConfig
-  complexity?: Record<string, unknown>
-  hallucination_mitigation?: CanonicalHallucinationModuleConfig
-  feedback_detector?: FeedbackDetectorConfig & { model_ref?: string }
-  modality_detector?: ModalityDetectorConfig
+/** The API the Router speaks to a deployment. */
+export type ModelDeploymentProvider =
+  | 'model_runtime'
+  | 'systemone'
+  | 'openai_embeddings'
+  | 'openai_chat'
+
+/** A credential read from an environment variable or a file, never written inline. */
+export interface DeploymentAuth {
+  header?: string
+  /** An empty prefix sends the bare key. */
+  prefix?: string
+  api_key_env?: string
+  api_key_file?: string
+}
+
+export interface DeploymentTLS {
+  ca_file?: string
+  server_name?: string
+  cert_file?: string
+  key_file?: string
+  insecure_skip_verify?: boolean
+}
+
+export interface DeploymentLimits {
+  max_request_bytes?: number
+  max_response_bytes?: number
+}
+
+export interface DeploymentCapabilities {
+  /** systemone only. */
+  question_types?: string[]
+  /** systemone only. */
+  presets?: string[]
+  /** openai_embeddings only. */
+  dimensions?: number
+}
+
+export interface ModelReplica {
+  device?: string
+  endpoint?: string
+  /** The served model an attached worker answers with. */
+  model?: string
+}
+
+/**
+ * A model the Router starts (artifact, device, engine arguments, replicas) or
+ * attaches, or a remote API. An attached endpoint and every remote provider
+ * take the connection block: endpoint, model, auth, headers, timeout_ms,
+ * max_retries, tls, limits and capabilities.
+ */
+export interface CanonicalModelDeployment {
+  provider?: ModelDeploymentProvider
+  artifact?: string
+  revision?: string
+  device?: string
+  input?: { max_tokens?: number; overflow?: 'reject' | 'truncate' | 'window' }
+  max_num_seqs?: number
+  max_num_batched_tokens?: number
+  batch_window_ms?: number
+  dtype?: 'auto' | 'float32' | 'bfloat16' | 'float16'
+  enable_shared_context?: boolean
+  max_model_len?: number
+  replicas?: ModelReplica[]
+  public_name?: string
+  endpoint?: string
+  /** The remote model ID; on an attached model_runtime endpoint, the served model. */
+  model?: string
+  /** openai_chat only: how the chat model generates its answer. */
+  generation?: { max_tokens?: number; temperature?: number }
+  auth?: DeploymentAuth
+  /** Non-secret headers; a credential header belongs in auth. */
+  headers?: Record<string, string>
+  timeout_ms?: number
+  max_retries?: number
+  tls?: DeploymentTLS
+  limits?: DeploymentLimits
+  capabilities?: DeploymentCapabilities
 }
 
 export interface CanonicalModelCatalogConfig {
+  bindings?: ModelBindings
+  deployments?: Record<string, CanonicalModelDeployment>
   embeddings?: CanonicalEmbeddingCatalogConfig
   system?: CanonicalSystemModels
-  external?: ExternalModelConfig[]
   kbs?: Array<Record<string, unknown>>
-  modules?: CanonicalModelModulesConfig
   admission?: Record<string, Record<string, unknown>>
+  signal_timeout_ms?: number
 }
 
 export interface RouterLearningConfig {
@@ -853,6 +688,7 @@ export interface RouterLearningConfig {
       headers?: {
         session?: string
         conversation?: string
+        agent?: string
       }
     }
     tuning?: {
@@ -860,6 +696,11 @@ export interface RouterLearningConfig {
       min_turns_before_switch?: number
       switch_margin?: number
       stability_weight?: number
+    }
+    release?: {
+      enabled?: boolean
+      header?: string
+      min_user_turns_between?: number
     }
   }
   state_store?: {
@@ -885,28 +726,24 @@ export interface CanonicalGlobalConfig {
 
 export interface ConfigSignals {
   keywords?: KeywordSignal[]
-  embeddings?: EmbeddingSignal[]
   domains?: DomainSignal[]
   fact_check?: FactCheckSignal[]
   user_feedbacks?: UserFeedbackSignal[]
-  reasks?: ReaskSignal[]
-  preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
   context?: ContextSignal[]
-  structure?: StructureSignal[]
   complexity?: ComplexitySignal[]
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
   safety?: SafetySignal[]
   hallucination?: HallucinationSignal[]
+  refusal?: RefusalSignal[]
+  turn_relation?: TurnRelationSignal[]
   pii?: PIISignal[]
-  kb?: KBSignal[]
   metadata?: MetadataSignal[]
-  classifiers?: ClassifierSignal[]
   conversation?: ConversationSignal[]
-  events?: EventSignal[]
   input_modality?: InputModalitySignal[]
+  systemone?: SystemOneSignal[]
 }
 
 export interface ConfigProjections {
@@ -1058,6 +895,7 @@ export interface SemanticCacheRedisConfig {
 
 export interface KeywordSignal {
   name: string
+  description?: string
   operator: 'AND' | 'OR' | 'all' | 'any'
   keywords: string[]
   case_sensitive?: boolean
@@ -1067,17 +905,9 @@ export interface KeywordSignal {
   bm25_threshold?: number
   ngram_threshold?: number
   ngram_arity?: number
-}
-
-export interface EmbeddingSignal {
-  name: string
-  threshold: number
-  candidates?: string[]
-  image_candidates?: string[]
-  negative_candidates?: string[]
-  negative_image_candidates?: string[]
-  aggregation_method?: string
-  query_modality?: 'text' | 'image' | 'audio'
+  include_history?: boolean
+  count?: NumericPredicate
+  density?: NumericPredicate
 }
 
 export interface MetadataSignal {
@@ -1091,32 +921,14 @@ export interface MetadataSignal {
   }
 }
 
-export interface ClassifierSignal {
-  name: string
-  description?: string
-  type: 'local' | 'llm' | 'sequence_classifier'
-  model?: string
-  model_path?: string
-  labels: string[]
-  instructions?: string
-  disable_rationale?: boolean
-  use_cpu?: boolean
-}
-
 export interface DomainSignal {
   name: string
   description: string
-  mmlu_categories?: string[]
+  labels?: string[]
   model_scores?: ModelScore[]
-}
-
-export interface EventSignal {
-  name: string
-  description?: string
-  event_types?: string[]
-  severities?: string[]
-  action_codes?: string[]
-  temporal?: boolean
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface InputModalitySignal {
@@ -1136,8 +948,6 @@ export interface ProjectionPartition {
 export interface ProjectionScoreInput {
   type: string
   name?: string
-  kb?: string
-  metric?: string
   weight: number
   value_source?: string
   match?: number
@@ -1174,6 +984,10 @@ export interface ProjectionMapping {
 export interface ModalitySignal {
   name: string
   description?: string
+  labels?: string[]
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface Subject {
@@ -1188,44 +1002,49 @@ export interface RoleBindingSignal {
   description?: string
 }
 
-export interface KBSignal {
-  name: string
-  kb: string
-  target: {
-    kind: 'label' | 'group'
-    value: string
-  }
-  match?: 'best' | 'threshold'
-}
-
 export interface FactCheckSignal {
   name: string
   description: string
+  labels?: string[]
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface HallucinationSignal {
   name: string
-  use_nli?: boolean
   description?: string
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
+}
+
+export interface RefusalSignal {
+  name: string
+  description?: string
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface UserFeedbackSignal {
   name: string
   description: string
+  labels?: string[]
+  predicate?: NumericPredicate
+  deployment?: string
+  timeout_ms?: number
 }
 
-export interface ReaskSignal {
+export interface TurnRelationSignal {
   name: string
   description?: string
-  threshold?: number
-  lookback_turns?: number
-}
-
-export interface PreferenceSignal {
-  name: string
-  description: string
-  examples?: string[]
-  threshold?: number
+  /** continue, reask, shift or return; a rule without labels matches nothing itself. */
+  labels?: string[]
+  /** How many turns before the current one the rule reads (default 4). */
+  input?: { previous_turns?: number }
+  deployment?: string
+  timeout_ms?: number
 }
 
 export interface LanguageSignal {
@@ -1243,31 +1062,11 @@ export interface ContextSignal {
   description?: string
 }
 
-export interface StructureSource {
-  type: string
-  pattern?: string
-  keywords?: string[]
-  case_sensitive?: boolean
-  sequences?: string[][]
-}
-
-export interface StructureFeature {
-  type: string
-  source: StructureSource
-}
-
 export interface NumericPredicate {
   gt?: number
   gte?: number
   lt?: number
   lte?: number
-}
-
-export interface StructureSignal {
-  name: string
-  description?: string
-  feature: StructureFeature
-  predicate?: NumericPredicate
 }
 
 export interface ConversationSource {
@@ -1289,36 +1088,33 @@ export interface ConversationSignal {
 
 export interface ComplexitySignal {
   name: string
-  threshold?: number
-  hard_above?: number
-  easy_below?: number
-  hard_below?: number
-  easy_above?: number
-  hard?: { candidates?: string[]; image_candidates?: string[] }
-  easy?: { candidates?: string[]; image_candidates?: string[] }
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  /** easy, medium or hard; a rule without labels matches nothing itself. */
+  labels?: string[]
+  timeout_ms?: number
   description?: string
-  composer?: {
-    operator: 'AND' | 'OR' | 'NOT'
-    conditions: DecisionCondition[]
-  }
 }
 
 export interface JailbreakSignal {
   name: string
-  threshold?: number
-  method?: string
-  include_history?: boolean
-  direction?: 'request' | 'response'
-  jailbreak_patterns?: string[]
-  benign_patterns?: string[]
+  predicate?: NumericPredicate
+  stage?: 'request' | 'response'
+  input?: { history?: boolean }
+  deployment?: string
+  timeout_ms?: number
+  on_unknown?: 'match' | 'no_match'
   description?: string
 }
 
 export interface PIISignal {
   name: string
-  threshold?: number
-  pii_types_allowed?: string[]
-  include_history?: boolean
+  predicate?: NumericPredicate
+  ignore_labels?: string[]
+  input?: { history?: boolean; tool_results?: boolean; request?: boolean }
+  deployment?: string
+  timeout_ms?: number
+  on_unknown?: 'match' | 'no_match'
   description?: string
 }
 
@@ -1335,51 +1131,11 @@ export interface ConfigData {
     records?: EvaluationRecordConfig[]
   }
   routing?: RoutingConfig
+  /** The name and description of the recipe the manager edits as routing. */
+  default_recipe?: { name: string; description?: string }
   entrypoints?: EntrypointConfig[]
   recipes?: RecipeConfig[]
   global?: CanonicalGlobalConfig
-  response_cache?: SemanticCacheConfig
-  /** @deprecated Use response_cache. */
-  semantic_cache?: SemanticCacheConfig
-  tools?: ToolIntegrationConfig
-  prompt_guard?: ModelConfig & { enabled: boolean }
-  vllm_endpoints?: VLLMEndpoint[]
-  classifier?: {
-    category_model?: ModelConfig
-    mcp_category_model?: MCPCategoryModel
-    pii_model?: ModelConfig
-    preference_model?: PreferenceModelConfig
-  }
-  categories?: (Category & { mmlu_categories?: string[] })[]
-  default_reasoning_effort?: string
-  default_model?: string
-  model_config?: Record<string, ModelConfigEntry>
-  reasoning_families?: Record<string, ReasoningFamily>
-  response_api?: ResponseAPIConfig
-  router_replay?: RouterReplayConfig
-  memory?: MemoryConfig
-  hallucination_mitigation?: HallucinationMitigationConfig
-  feedback_detector?: FeedbackDetectorConfig
-  external_models?: ExternalModelConfig[]
-  embedding_models?: EmbeddingModelsConfig
-  api?: APIConfig
-  observability?: ObservabilityConfig
-  looper?: LooperConfig
-  clear_route_cache?: boolean
-  model_selection?: ModelSelectionConfig
-  keyword_rules?: KeywordSignal[]
-  embedding_rules?: EmbeddingSignal[]
-  fact_check_rules?: FactCheckSignal[]
-  user_feedback_rules?: UserFeedbackSignal[]
-  reask_rules?: ReaskSignal[]
-  preference_rules?: PreferenceSignal[]
-  language_rules?: LanguageSignal[]
-  context_rules?: ContextSignal[]
-  structure_rules?: StructureSignal[]
-  complexity_rules?: ComplexitySignal[]
-  jailbreak?: JailbreakSignal[]
-  hallucination?: HallucinationSignal[]
-  pii?: PIISignal[]
 }
 
 export type SignalType = string
@@ -1397,6 +1153,8 @@ export interface DecisionFormState {
   action: Record<string, unknown>
   algorithm?: Record<string, unknown>
   adaptations: Record<string, unknown>
+  reliability: Record<string, unknown>
+  fallback: Record<string, unknown>
   declarative: Record<string, unknown>
 }
 
@@ -1412,18 +1170,6 @@ export function mergeDecisionForSave(
 
 export const formatThreshold = (value: number): string => {
   return `${Math.round(value * 100)}%`
-}
-
-export const normalizeModelScores = (
-  modelScores: ModelScore[] | Record<string, number> | undefined,
-): ModelScore[] => {
-  if (!modelScores) return []
-  if (Array.isArray(modelScores)) return modelScores
-  return Object.entries(modelScores).map(([model, score]) => ({
-    model,
-    score: typeof score === 'number' ? score : 0,
-    use_reasoning: false,
-  }))
 }
 
 export const normalizeEndpointProtocol = (protocol: unknown): Endpoint['protocol'] =>
@@ -1451,12 +1197,8 @@ export const normalizeProviderModelEndpoints = (model: {
 }): Endpoint[] => {
   if (Array.isArray(model.backend_refs) && model.backend_refs.length > 0) {
     return model.backend_refs.map((backend, index) => {
-      const baseURL = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
-      const endpoint =
-        typeof backend.endpoint === 'string' && backend.endpoint.trim()
-          ? backend.endpoint.trim()
-          : baseURL
-      const protocol = backend.protocol || (baseURL.startsWith('https://') ? 'https' : 'http')
+      const endpoint = typeof backend.endpoint === 'string' ? backend.endpoint.trim() : ''
+      const protocol = backend.protocol || (endpoint.startsWith('https://') ? 'https' : 'http')
       return normalizeEndpoint(
         {
           name: backend.name,
@@ -1471,88 +1213,30 @@ export const normalizeProviderModelEndpoints = (model: {
   return normalizeEndpoints(model.endpoints)
 }
 
-export const mergeProviderBackendRefs = (
-  existingRefs: BackendRefEntry[] | undefined,
-  endpoints: Endpoint[],
-  accessKey?: string,
-): BackendRefEntry[] => {
-  const existing = Array.isArray(existingRefs) ? existingRefs : []
-
-  return endpoints.map((ep, index) => {
-    const matched = existing.find((ref) => ref.name === ep.name) || existing[index]
-
-    const merged: BackendRefEntry = {
-      ...(matched || {}),
-      name: ep.name,
-      protocol: ep.protocol,
-      weight: ep.weight,
-    }
-
-    const matchedDisplayEndpoint =
-      typeof matched?.endpoint === 'string' && matched.endpoint.trim()
-        ? matched.endpoint.trim()
-        : typeof matched?.base_url === 'string'
-          ? matched.base_url.trim()
-          : ''
-
-    if (matched?.base_url && !matched?.endpoint) {
-      if (ep.endpoint.trim() && ep.endpoint.trim() !== matchedDisplayEndpoint) {
-        merged.base_url = ep.endpoint.trim()
-      } else {
-        merged.base_url = matched.base_url
-      }
-      delete merged.endpoint
-    } else {
-      merged.endpoint = ep.endpoint
-    }
-
-    if (accessKey?.trim()) {
-      merged.api_key = accessKey.trim()
-      delete merged.api_key_env
-    } else if (!matched?.api_key && matched?.api_key_env) {
-      delete merged.api_key
-    }
-
-    return merged
-  })
-}
-
 export const TABLE_COLUMN_WIDTH = {
   compact: '140px',
   medium: '160px',
 } as const
 
-export type ConfigDecisionConditionType = DecisionConditionType
-
-export const getDefaultModelName = (config: ConfigData | null, isPythonCLI: boolean): string => {
-  if (isPythonCLI) {
-    return config?.providers?.defaults?.model || ''
-  }
-  return config?.default_model || ''
-}
+export const getDefaultModelName = (config: ConfigData | null): string =>
+  config?.providers?.defaults?.model || ''
 
 export const getReasoningFamiliesMap = (
-  config: ConfigData | null,
-  isPythonCLI: boolean,
   catalog: BuiltInModelCatalog | null = bundledCatalog as unknown as BuiltInModelCatalog,
-): Record<string, ReasoningFamily> => {
-  if (isPythonCLI) {
-    return Object.fromEntries(
-      (catalog?.reasoning_families ?? []).map((family) => [
-        family.id,
-        {
-          type: family.type,
-          parameter: family.parameter,
-          activation_parameter: family.activation_parameter,
-          effort_flags: family.effort_flags ? { ...family.effort_flags } : undefined,
-          levels: [...(family.levels ?? [])],
-          default: family.default,
-          modes: family.modes ? [...family.modes] : undefined,
-          default_mode: family.default_mode,
-          disabled: family.disabled,
-        },
-      ]),
-    )
-  }
-  return config?.reasoning_families || {}
-}
+): Record<string, ReasoningFamily> =>
+  Object.fromEntries(
+    (catalog?.reasoning_families ?? []).map((family) => [
+      family.id,
+      {
+        type: family.type,
+        parameter: family.parameter,
+        activation_parameter: family.activation_parameter,
+        effort_flags: family.effort_flags ? { ...family.effort_flags } : undefined,
+        levels: [...(family.levels ?? [])],
+        default: family.default,
+        modes: family.modes ? [...family.modes] : undefined,
+        default_mode: family.default_mode,
+        disabled: family.disabled,
+      },
+    ]),
+  )

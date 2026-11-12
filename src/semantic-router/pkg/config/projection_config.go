@@ -9,7 +9,7 @@ type Projections struct {
 }
 
 // ProjectionPartition declares a mutually exclusive partition over existing
-// domain or embedding signals.
+// domain signals.
 type ProjectionPartition struct {
 	Name        string   `yaml:"name"`
 	Semantics   string   `yaml:"semantics"`
@@ -29,12 +29,12 @@ type ProjectionScore struct {
 type ProjectionScoreInput struct {
 	Type        string  `yaml:"type"`
 	Name        string  `yaml:"name,omitempty"`
-	KB          string  `yaml:"kb,omitempty"`
-	Metric      string  `yaml:"metric,omitempty"`
 	Weight      float64 `yaml:"weight"`
 	ValueSource string  `yaml:"value_source,omitempty"`
-	Match       float64 `yaml:"match,omitempty"`
-	Miss        float64 `yaml:"miss,omitempty"`
+	// Match is the binary value of a matched signal; omitted means 1, so an
+	// explicit 0 stays 0.
+	Match *float64 `yaml:"match,omitempty"`
+	Miss  float64  `yaml:"miss,omitempty"`
 }
 
 // ProjectionCatalogEntry is the canonical public identity for one projection
@@ -57,26 +57,21 @@ func ProjectionCatalog() []ProjectionCatalogEntry {
 
 var supportedProjectionInputTypes = []string{
 	SignalTypeKeyword,
-	SignalTypeEmbedding,
 	SignalTypeDomain,
 	SignalTypeFactCheck,
 	SignalTypeUserFeedback,
-	SignalTypeReask,
-	SignalTypePreference,
 	SignalTypeLanguage,
 	SignalTypeContext,
-	SignalTypeStructure,
 	SignalTypeComplexity,
 	SignalTypeModality,
 	SignalTypeAuthz,
 	SignalTypeJailbreak,
 	SignalTypeSafety,
 	SignalTypePII,
-	SignalTypeKB,
+	SignalTypeTurnRelation,
 	SignalTypeConversation,
-	SignalTypeEvent,
 	SignalTypeInputModality,
-	ProjectionInputKBMetric,
+	SignalTypeSystemOne,
 	SignalTypeProjection,
 }
 

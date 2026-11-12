@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -17,11 +18,6 @@ func init() {
 		Description: "After a routed chat completion, Prometheus exposes llm_session_turn_cost histogram when model pricing is configured",
 		Tags:        []string{"kubernetes", "observability", "metrics", "llm", "pricing"},
 		Fn:          testSessionPricingChatCompletions,
-	})
-	pkgtestcases.Register("session-pricing-response-api", pkgtestcases.TestCase{
-		Description: "After a routed Response API call, Prometheus exposes llm_session_turn_cost histogram when model pricing is configured",
-		Tags:        []string{"kubernetes", "observability", "metrics", "llm", "pricing", "response-api"},
-		Fn:          testSessionPricingResponseAPI,
 	})
 }
 
@@ -51,7 +47,7 @@ func testSessionPricingChatCompletions(
 		"x-authz-user-id": "e2e-pricing-chat-user",
 	}
 	resp, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model: "MoM",
+		Model: "vllm-sr/auto",
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "Say hello in one short sentence for pricing telemetry."},
 		},
@@ -91,60 +87,6 @@ func testSessionPricingChatCompletions(
 
 // testSessionPricingResponseAPI verifies that after a Response API request the
 // llm_session_turn_cost histogram descriptor is exposed in /metrics.
-func testSessionPricingResponseAPI(
-	ctx context.Context,
-	client *kubernetes.Clientset,
-	opts pkgtestcases.TestCaseOptions,
-) error {
-	traffic, err := fixtures.OpenServiceSession(ctx, client, opts)
-	if err != nil {
-		return err
-	}
-	defer traffic.Close()
-
-	metricsSession, err := fixtures.OpenSemanticRouterMetricsSession(ctx, client, opts)
-	if err != nil {
-		return err
-	}
-	defer metricsSession.Close()
-
-	respAPI := fixtures.NewResponseAPIClient(traffic, 60*time.Second)
-
-	_, raw, err := respAPI.Create(ctx, fixtures.ResponseAPIRequest{
-		Model: "MoM",
-		Input: "Say hello in one short sentence for Response API pricing telemetry.",
-	})
-	if err != nil {
-		return fmt.Errorf("response api create: %w", err)
-	}
-	if raw.StatusCode != http.StatusOK {
-		return fmt.Errorf("response api: expected 200, got %d: %s", raw.StatusCode, string(raw.Body))
-	}
-
-	body, err := fetchMetrics(ctx, metricsSession)
-	if err != nil {
-		return err
-	}
-
-	if !strings.Contains(body, "llm_session_turn_cost") {
-		return fmt.Errorf("metrics body missing llm_session_turn_cost after Response API request")
-	}
-	if !strings.Contains(body, "llm_session_turn_prompt_tokens") {
-		return fmt.Errorf("metrics body missing llm_session_turn_prompt_tokens after Response API request")
-	}
-	if !strings.Contains(body, "llm_session_turn_completion_tokens") {
-		return fmt.Errorf("metrics body missing llm_session_turn_completion_tokens after Response API request")
-	}
-
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"response_api_status": raw.StatusCode,
-		})
-	}
-	return nil
-}
-
-// fetchMetrics retrieves the Prometheus /metrics text from the router metrics port.
 func fetchMetrics(ctx context.Context, metricsSession *fixtures.ServiceSession) (string, error) {
 	metricsHTTP := metricsSession.HTTPClient(15 * time.Second)
 	metricsResp, err := fixtures.DoGETRequest(ctx, metricsHTTP, metricsSession.URL("/metrics"))

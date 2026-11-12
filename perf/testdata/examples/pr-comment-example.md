@@ -102,7 +102,7 @@ make perf-compare
 | BenchmarkClassifyCategory | 8,654,321 | -1.27% | |
 | BenchmarkClassifyPII | 10,089,123 | -0.34% | |
 | BenchmarkClassifyJailbreak | 9,823,456 | -0.54% | |
-| BenchmarkCGOOverhead | 3,423,456 | -0.96% | |
+| BenchmarkClassifyRuntimeOverhead | 3,423,456 | -0.96% | |
 | BenchmarkEvaluateDecisions_Single | 229,876 | -2.00% | 🚀 |
 | BenchmarkEvaluateDecisions_Multiple | 342,123 | -1.03% | |
 | BenchmarkEvaluateDecisions_WithKeywords | 265,432 | -0.92% | |

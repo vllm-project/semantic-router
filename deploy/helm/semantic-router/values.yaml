@@ -10,10 +10,26 @@ global:
   imageRegistry: ""
 # -- Number of replicas for the deployment
 replicaCount: 1
+# How client traffic reaches the Router
+gateway:
+  # -- `standalone`: the Router serves the OpenAI-compatible API on
+  # `config.listeners` itself, answers `/health` and `/ready` there, and the
+  # Service exposes each listener's port; no Envoy runs. `extproc`: the Router
+  # serves Envoy's ext_proc gRPC on `service.grpc.port` for a gateway you run
+  # (Envoy Gateway, Envoy AI Gateway, Istio, KServe, llm-d). Releases before
+  # standalone mode deployed `extproc`; set it to keep such an integration.
+  mode: standalone
+  tls:
+    # -- Standalone only. A `kubernetes.io/tls` Secret mounted at
+    # `/app/config/certs`, for listeners whose `tls` names
+    # `cert_file: certs/tls.crt` and `key_file: certs/tls.key`. The Secret is
+    # mounted as a volume, so a rotated certificate reaches new connections
+    # without a restart.
+    secretName: ""
 # Image configuration
 image:
   # -- Image repository
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Image tag (overrides the image tag whose default is the chart appVersion)
@@ -63,9 +79,10 @@ securityContext:
   readOnlyRootFilesystem: true
 # Service configuration
 service:
-  # -- Service type
+  # -- Service type. In standalone mode the Service also exposes every port in
+  # `config.listeners`.
   type: ClusterIP
-  # gRPC service port
+  # ext_proc gRPC service port (extproc mode only)
   grpc:
     # -- gRPC port number
     port: 50051
@@ -101,13 +118,14 @@ ingress:
   annotations: {}
   # kubernetes.io/ingress.class: nginx
   # kubernetes.io/tls-acme: "true"
-  # -- Ingress hosts configuration
+  # -- Ingress hosts configuration. A path without `servicePort` goes to the
+  # first listener without TLS in standalone mode, and to `service.api.port`
+  # in extproc mode.
   hosts:
     - host: semantic-router.local
       paths:
         - path: /
           pathType: Prefix
-          servicePort: 8080
   # -- Ingress TLS configuration
   tls: []
   #  - secretName: semantic-router-tls
@@ -117,7 +135,7 @@ ingress:
 resources:
   # -- Resource limits
   limits:
-    memory: "7Gi"
+    memory: "12Gi"
     cpu: "2"
   # -- Resource requests
   requests:
@@ -169,7 +187,8 @@ tolerations: []
 # Affinity rules
 affinity: {}
 # Extra volumes for custom mounts (e.g., a shared model cache via hostPath).
-# When extraVolumeMounts claims /app/models, it replaces the default model volume.
+# When extraVolumeMounts claims /app/models or /var/lib/vsr, it replaces the
+# chart's model volume or data volume.
 extraVolumes: []
 # Example:
 #   - name: ml-models
@@ -177,8 +196,9 @@ extraVolumes: []
 #       path: /mnt/ml-models
 #       type: DirectoryOrCreate
 
-# Extra volume mounts. A mount at /app/models replaces the default emptyDir/PVC
-# mount; supply its matching volume through extraVolumes.
+# Extra volume mounts. A mount at /app/models or /var/lib/vsr replaces the
+# chart's emptyDir/PVC mount there; supply its matching volume through
+# extraVolumes.
 extraVolumeMounts: []
 # Example:
 #   - name: ml-models
@@ -239,12 +259,32 @@ persistence:
   storageClassName: "standard"
   # -- Access mode
   accessMode: ReadWriteOnce
-  # -- Storage size
+  # -- Storage size of the model volume. The runtime downloads the router's models here on first start; Vela Omni Mini alone takes 4.3 GB.
   size: 10Gi
   # -- Annotations for PVC
   annotations: {}
   # -- Existing claim name (if provided, will use existing PVC instead of creating new one)
   existingClaim: ""
+# The Router's data directory, /var/lib/vsr. The root filesystem is read-only,
+# so this volume is where the Router keeps the files it writes: the vector
+# store's uploaded files (global.stores.vector_store.file_storage_dir,
+# /var/lib/vsr/data by default) and any other local storage path you set under
+# it. A mount at /var/lib/vsr in extraVolumeMounts replaces it.
+data:
+  persistence:
+    # -- Keep the data directory on a PersistentVolumeClaim so it survives Pod
+    # replacement. Off, it is an emptyDir that a new Pod starts empty.
+    enabled: false
+    # -- Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "".
+    storageClassName: ""
+    # -- Access mode. Several Router replicas share the data directory only through ReadWriteMany.
+    accessMode: ReadWriteOnce
+    # -- Storage size of the data directory
+    size: 10Gi
+    # -- Annotations for the PVC
+    annotations: {}
+    # -- Existing claim name (if provided, will use existing PVC instead of creating new one)
+    existingClaim: ""
 # Router runtime feature gates
 router:
   # -- Override config.global.router.skip_processing.enabled when non-null.
@@ -255,6 +295,11 @@ router:
 # `config`, this map atomically replaces chart defaults before Kubernetes
 # integration rewrites.
 configOverride: null
+# -- Optional default judgment deployment reference, for example
+# {deployment: primary}. Artifact, device and revision belong in
+# config.global.model_catalog.deployments. Empty preserves the config's choice.
+# A changed deployment reference is applied to the live config on upgrade.
+decisionModel: {}
 # Runtime management APIs may update the live Router ConfigMap after install.
 configMap:
   # -- Helm values seed config.yaml at install. Change this revision to
@@ -263,15 +308,13 @@ configMap:
   applyValuesRevision: ""
 # Application configuration
 config:
-  version: v0.3
+  version: v0.5
+  # Standalone mode serves these listeners and the Service exposes them;
+  # extproc mode doesn't use them.
   listeners:
-    - name: "grpc-50051"
+    - name: "http-8899"
       address: "0.0.0.0"
-      port: 50051
-      timeout: "300s"
-    - name: "http-8080"
-      address: "0.0.0.0"
-      port: 8080
+      port: 8899
       timeout: "300s"
   providers:
     defaults:
@@ -286,24 +329,23 @@ config:
             endpoint: "replace-with-your-vllm-service:8000"
             protocol: "http"
             weight: 100
-  routing:
-    modelCards:
-      - name: "replace-with-your-model"
-    signals:
-      domains:
-        - name: "general"
-          description: "Catch-all domain"
-          mmlu_categories: ["other"]
-    decisions:
-      - name: "default-route"
-        description: "Default route for every request while you wire real backends."
-        priority: 100
-        rules:
-          operator: "AND"
-          conditions: []
-        modelRefs:
-          - model: "replace-with-your-model"
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        domains:
+          - name: "general"
+            description: "Catch-all domain"
+            labels: ["other"]
+      decisions:
+        - name: "default-route"
+          description: "Default route for every request while you wire real backends."
+          priority: 100
+          rules:
+            operator: "AND"
+            conditions: []
+          modelRefs:
+            - model: "replace-with-your-model"
+              use_reasoning: false
   global:
     services:
       response_api:
@@ -314,7 +356,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true
@@ -339,24 +380,10 @@ config:
             deployment_environment: "development"
     stores:
       response_cache:
-        enabled: true
         backend_type: "memory"
-        similarity_threshold: 0.8
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: "fifo"
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
-    integrations:
-      tools:
-        enabled: true
-        top_k: 3
-        similarity_threshold: 0.2
-        tools_db_path: "config/tools_db.json"
-        fallback_to_empty: true
 # Tools database configuration
 toolsDb:
   - tool:
@@ -464,11 +491,9 @@ toolsDb:
 # When multiple models are specified in modelRefs, use
 # algorithm.type to determine which model handles the request.
 #
-# Supported algorithms:
-#   - knn: K-Nearest Neighbors (semantic similarity)
-#   - kmeans: KMeans clustering (pattern-based routing)
-#   - svm: Support Vector Machine (classification-based)
-#   - mlp: Multi-Layer Perceptron (neural selector)
+# Selectors choose one model before calling it: static, random,
+# multi_factor and systemone. Executors call several and return one
+# response: escalate, fusion, remom, ratings and workflows.
 #
 # Example configuration:
 #
@@ -476,7 +501,7 @@ toolsDb:
 #   routing:
 #     decisions:
 #       - name: "multi_model_routing"
-#         description: "Route to best model using ML"
+#         description: "Let the decision model pick the model"
 #         priority: 100
 #         rules:
 #           operator: "OR"
@@ -484,26 +509,16 @@ toolsDb:
 #             - type: "domain"
 #               name: "general"
 #         algorithm:
-#           type: "knn"       # Per-decision selector choice
+#           type: "systemone"   # Per-decision selector choice
+#           systemone:
+#             instructions: "Which model should answer this request?"
 #         modelRefs:
 #           - model: "model-small"
 #             use_reasoning: false
-#   global:
-#     router:
-#       model_selection:
-#         ml:
-#           knn:
-#             k: 5
-#           kmeans:
-#             num_clusters: 8
-#           svm:
-#             kernel: "rbf"
-#           mlp:
-#             device: "cpu"
-#         - model: "model-medium"
-#           use_reasoning: false
-#         - model: "model-large"
-#           use_reasoning: true
+#           - model: "model-medium"
+#             use_reasoning: false
+#           - model: "model-large"
+#             use_reasoning: true
 #
 # ============================================================================
 
@@ -512,8 +527,6 @@ args:
   - "--secure=false"
 # Environment variables
 env:
-  - name: LD_LIBRARY_PATH
-    value: "/app/lib"
   # The runtime root filesystem is read-only. Keep user and Hugging Face cache
   # state on explicitly writable mounts.
   - name: HOME
@@ -582,8 +595,9 @@ dashboard:
     existingSecretKey: "jwt-secret"
   # -- Extra environment variables for the dashboard container, appended after the
   # chart-managed TARGET_* vars. Use this to set optional integration env the chart
-  # does not expose explicitly (for example OPENCLAW_*, TARGET_ENVOY_URL, or
-  # PROXY_OVERRIDE_ORIGIN) without forking the chart. Standard core/v1 EnvVar list.
+  # does not expose explicitly (for example PROXY_OVERRIDE_ORIGIN, or in extproc
+  # mode TARGET_ENVOY_URL for your gateway) without forking the chart. Standard
+  # core/v1 EnvVar list.
   # Avoid redefining a chart-managed var (TARGET_*, DASHBOARD_JWT_SECRET): it
   # produces a duplicate env key and Kubernetes applies last-wins.
   extraEnv: []
@@ -757,6 +771,10 @@ prometheus:
 grafana:
   image:
     tag: "11.5.1"
+  grafana.ini:
+    live:
+      # -- Comma-separated trusted Dashboard origins (scheme://host[:port], no path). Empty preserves Grafana's default origin checks; do not use "*" to bypass validation.
+      allowed_origins: ""
   sidecar:
     datasources:
       enabled: true

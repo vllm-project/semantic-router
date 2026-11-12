@@ -14,7 +14,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
@@ -80,7 +79,6 @@ type InputPolicy struct {
 // Policy is immutable after decoding. Accessors return copies of mutable data.
 type Policy struct {
 	definition Definition
-	digest     string
 	execution  *Execution
 }
 
@@ -151,7 +149,7 @@ func Decode(data []byte, digest string) (*Policy, error) {
 	if w.BatchOrder != order || w.Tokenization != "Tokenize once without truncation; slice original content token IDs and restore the tokenizer special-token envelope for each window." {
 		return nil, fmt.Errorf("unsupported reference window preparation")
 	}
-	return &Policy{definition: d, digest: digest}, nil
+	return &Policy{definition: d}, nil
 }
 
 // All versioned fields are required, including zero overlap and empty special-token
@@ -210,23 +208,10 @@ func validSHA256(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == 32 && strings.ToLower(value) == value
 }
-func (p *Policy) Digest() string        { return p.digest }
-func (p *Policy) Labels() []string      { return slices.Clone(p.definition.Labels) }
-func (p *Policy) Thresholds() []float32 { return slices.Clone(p.definition.Thresholds) }
+
 func (p *Policy) Window() tasks.TextWindowsRequest {
 	w := p.definition.Input
 	return tasks.TextWindowsRequest{Size: w.WindowTokens, Overlap: w.Overlap}
-}
-func (p *Policy) MaxTokens() int { return p.definition.Input.MaxDocumentTokens }
-
-func (p *Policy) ValidateCapability(c binding.Capability) error {
-	if c.Contract != "label_scores.v1" || !slices.Equal(c.Labels, p.definition.Labels) || c.Limits.EffectiveTokens() != p.MaxTokens() || c.Limits.Overflow != "window" || c.Limits.ForwardTokens() < p.Window().Size {
-		return fmt.Errorf("%w: actual owned head/execution differs from operating point", binding.ErrCapability)
-	}
-	if _, err := p.selectExecution(c.Provider, c.Precision, c.Device); err != nil {
-		return err
-	}
-	return nil
 }
 
 func validateExecutions(executions []Execution, window, version int) error {
@@ -239,6 +224,8 @@ func validateExecutions(executions []Execution, window, version int) error {
 		if execution.WeightsFile != "model.safetensors" {
 			return fmt.Errorf("execution must bind complete model.safetensors weights")
 		}
+		// The provider names are the published sidecar format's execution
+		// declarations; the model runtime reads only the score policy.
 		switch execution.Provider {
 		case "candle":
 			if version != 2 || execution.Precision != "float32" || execution.ONNX != nil {
@@ -285,30 +272,6 @@ func localArtifactPath(path string) bool {
 	return path != "." && filepath.IsLocal(path) && filepath.Clean(path) == path && !strings.Contains(path, "\\")
 }
 
-func (p *Policy) selectExecution(provider, precision, device string) (*Execution, error) {
-	for i := range p.definition.Executions {
-		execution := &p.definition.Executions[i]
-		if execution.Provider != provider || execution.Precision != precision {
-			continue
-		}
-		if provider == "ort" {
-			ep := ""
-			if device == "cpu" {
-				ep = "CPUExecutionProvider"
-			} else if strings.HasPrefix(device, "migraphx:") {
-				ep = "MIGraphXExecutionProvider"
-			} else if strings.HasPrefix(device, "rocm:") {
-				ep = "ROCMExecutionProvider"
-			}
-			if execution.ONNX.ExecutionProvider != ep {
-				continue
-			}
-		}
-		return execution, nil
-	}
-	return nil, fmt.Errorf("%w: deployment has no qualified operating point execution", binding.ErrCapability)
-}
-
 // ONNX returns a copy of the selected graph contract after preparation.
 func (p *Policy) ONNX() *ONNXExecution {
 	if p.execution == nil || p.execution.ONNX == nil {
@@ -317,35 +280,6 @@ func (p *Policy) ONNX() *ONNXExecution {
 	graph := *p.execution.ONNX
 	graph.Artifacts = slices.Clone(graph.Artifacts)
 	return &graph
-}
-
-// Reduce preserves independent scores and requires the exact declared covering
-// windows, including an odd tail. A partial scan can never become a safe result.
-func (p *Policy) Reduce(result tasks.WindowedLabelScores) ([]float32, error) {
-	w := p.definition.Input
-	spans := make([][2]int, len(result.Windows))
-	scores := make([]float32, len(p.definition.Labels))
-	for i, window := range result.Windows {
-		start := i * w.Stride
-		empty := i == 0 && result.ContentTokens == 0
-		if (start >= result.ContentTokens && !empty) || window.Start != start || window.End != min(start+w.ContentTokens, result.ContentTokens) || len(window.Scores) != len(scores) {
-			return nil, fmt.Errorf("%w: windows differ from frozen geometry", binding.ErrInvalidResult)
-		}
-		if err := tasks.ValidateLabelScores(window.Scores); err != nil {
-			return nil, fmt.Errorf("%w: %w", binding.ErrInvalidResult, err)
-		}
-		spans[i] = [2]int{window.Start, window.End}
-		for j, value := range window.Scores {
-			scores[j] = max(scores[j], value)
-		}
-	}
-	if err := tasks.ValidateWindowCoverage(result.ContentTokens, spans, result.Input); err != nil {
-		return nil, fmt.Errorf("%w: %w", binding.ErrInvalidResult, err)
-	}
-	if result.Input.OriginalTokens != result.ContentTokens+len(w.SpecialPrefixIDs)+len(w.SpecialSuffixIDs) || result.Input.OriginalTokens > w.MaxDocumentTokens {
-		return nil, fmt.Errorf("%w: document input budget or special-token envelope differs", binding.ErrInvalidResult)
-	}
-	return scores, nil
 }
 
 // encoding/json accepts duplicate keys by default. Policy identities must have

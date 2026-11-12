@@ -16,7 +16,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MODEL_ID = "llm-semantic-router/Vela-1.0-Encoder-307M-Halu"
+MODEL_ID = "vllm-sr/Vela-1.0-Encoder-307M-Halu"
 REVISION = "ca87531211e414ac21c641b2faa8b8e21619de8f"
 POLICY = {
     "max_input_tokens": 8192,
@@ -175,10 +175,7 @@ def main():
     if args.model.resolve() == args.output.resolve():
         raise ValueError("Keep the immutable source separate from derived artifacts")
     if not args.reference_only:
-        exporter = (
-            Path(__file__).resolve().parents[3]
-            / "onnx-binding/scripts/export_classifier.py"
-        )
+        exporter = Path(__file__).resolve().parents[1] / "onnx/export_classifier.py"
         command = [
             sys.executable,
             str(exporter),

@@ -21,6 +21,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/parity"
 )
 
 func routingTraceRecorder(t *testing.T) *tracetest.SpanRecorder {
@@ -233,6 +235,11 @@ func TestRoutingTraceRoutesAreBoundedAndInternalTrafficIsDistinct(t *testing.T) 
 		{"/v1/responses/private-id/input_items?token=secret", "/v1/responses/{response_id}/input_items", "response_object", false},
 		{"/v1/models/private-model", "/v1/models/{model}", "catalog", false},
 		{"/private-user/path?secret=value", "/{unmatched}", "other", false},
+		{"/openai/deployments/private-deployment/chat/completions?api-version=2024-10-21", "/openai/deployments/{deployment}/chat/completions", "inference", false},
+		{"/openai/v1/chat/completions", "/openai/v1/chat/completions", "inference", false},
+		{"/openai/responses?api-version=2025-04-01-preview", "/openai/responses", "inference", false},
+		{"/openai/v1/responses", "/openai/v1/responses", "inference", false},
+		{"/openai/deployments/private-deployment/embeddings", "/{unmatched}", "other", false},
 	} {
 		t.Run(tc.kind+tc.path, func(t *testing.T) {
 			recorder := routingTraceRecorder(t)
@@ -254,7 +261,7 @@ func TestRoutingTraceRAGErrorOmitsPrivateCause(t *testing.T) {
 	_, span := tracing.StartSpan(t.Context(), tracing.SpanRAGRetrieval)
 	secret := "private-provider?token=fixture-secret&prompt=private-input"
 	ctx := &RequestContext{}
-	if err := handleRAGRetrievalError(ctx, span, &config.RAGPluginConfig{Backend: "external_api", OnFailure: "skip"}, "route", errors.New(secret), .1); err != nil {
+	if err := handleRAGRetrievalError(ctx, span, &config.ContextSource{Type: config.ContextSourceRAG, Backend: "external_api", OnFailure: config.RAGOnFailureSkip}, errors.New(secret), .1); err != nil {
 		t.Fatal(err)
 	}
 	span.End()
@@ -293,8 +300,8 @@ func TestRoutingTraceLocalResponseErrorKeepsProviderStatus(t *testing.T) {
 	}{{"guard block before EOS", 403, false}, {"guard block at EOS", 403, true}, {"decode error", 502, true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			recorder := routingTraceRecorder(t)
-			server := newJailbreakScoreServer(t, 0.95, 0.05)
-			router, ctx := newResponseStageRouter(t, server, "", "block")
+			server := newJailbreakDecider(0.95)
+			router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 			ctx.SourceFormat, ctx.TargetFormat = llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1
 			ctx.StartTime = time.Now()
 			ctx.VSRSelectedModel = "provider-model"
@@ -304,7 +311,7 @@ func TestRoutingTraceLocalResponseErrorKeepsProviderStatus(t *testing.T) {
 			headers := &ext_proc.ProcessingRequest_ResponseHeaders{ResponseHeaders: &ext_proc.HttpHeaders{
 				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "200"}}},
 			}}
-			if err := router.processResponseHeaders(stream, headers, ctx); err != nil {
+			if err := router.processResponseHeaders(stream, &ext_proc.ProcessingRequest{}, headers, ctx); err != nil {
 				t.Fatal(err)
 			}
 			body := []byte(`{"id":"fixture","object":"chat.completion","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"fixture response"},"finish_reason":"stop"}]}`)
@@ -351,7 +358,7 @@ func TestRoutingTraceSkipProcessingPreservesHTTPStatus(t *testing.T) {
 	ctx := &RequestContext{SkipProcessing: true}
 	ctx.TraceContext, ctx.RequestSpan = tracing.StartSpan(t.Context(), tracing.SpanRequest)
 	router := &OpenAIRouter{}
-	if err := router.processResponseHeaders(NewMockStream(nil), &ext_proc.ProcessingRequest_ResponseHeaders{
+	if err := router.processResponseHeaders(NewMockStream(nil), &ext_proc.ProcessingRequest{}, &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{EndOfStream: true, Headers: &core.HeaderMap{
 			Headers: []*core.HeaderValue{{Key: ":status", Value: "503"}},
 		}},
@@ -393,5 +400,39 @@ func TestRoutingTraceSignalEvidencePreservesFinitePresence(t *testing.T) {
 	}
 	if events[1].Attributes[len(events[1].Attributes)-1].Value.AsFloat64() != 0 || events[2].Attributes[len(events[2].Attributes)-1].Value.AsFloat64() != 0 {
 		t.Fatal("real zero evidence was omitted")
+	}
+}
+
+// TestRoutingTraceCountsAzureInferencePathsAsInference runs Chat requests on
+// the Azure OpenAI paths through the ext_proc stream. Each must count as
+// inference in llm_request_outcomes_total, as its /v1 twin does, not as other.
+func TestRoutingTraceCountsAzureInferencePathsAsInference(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(workflowEntrypointConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := parity.NewRecorder(&extprocStreamProcessor{router: newParityRouter(t, cfg)}, routing.DefaultOptions)
+	// The prompt outgrows every context window, so each request ends in a
+	// 422 without an upstream call.
+	messages := `"messages":[{"role":"user","content":"` + strings.Repeat("Summarize these meeting notes carefully. ", 40) + `"}]`
+	for _, tc := range []struct{ path, body string }{
+		{"/v1/chat/completions", `{"model":"vllm-sr/auto",` + messages + `}`},
+		{"/openai/v1/chat/completions", `{"model":"vllm-sr/auto",` + messages + `}`},
+		{"/openai/deployments/vllm-sr/auto/chat/completions?api-version=2024-10-21", `{` + messages + `}`},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			inference := requestOutcomeCount(t, "inference", "client_error")
+			other := requestOutcomeCount(t, "other", "client_error")
+			c := routingFailureCase{name: tc.path, path: tc.path, body: tc.body}
+			got := recorder.Run(context.Background(), c.parityCase())
+			if got.Response == nil || got.Response.Status != 422 {
+				t.Fatalf("response = %+v, want the context-length 422", got.Response)
+			}
+			gotInference, gotOther := requestOutcomeCount(t, "inference", "client_error"), requestOutcomeCount(t, "other", "client_error")
+			if gotInference != inference+1 || gotOther != other {
+				t.Fatalf("client_error outcomes moved inference %v -> %v and other %v -> %v, want inference +1 and other unchanged",
+					inference, gotInference, other, gotOther)
+			}
+		})
 	}
 }

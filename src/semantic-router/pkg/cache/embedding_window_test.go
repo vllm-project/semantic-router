@@ -22,10 +22,10 @@ var _ = Describe("Semantic cache embedding window", func() {
 		})).To(Succeed())
 	}
 	lookup := func(query string) bool {
-		result, err := adapter.LookupSemantic(context.Background(), SemanticLookup{
-			Identity:  CacheIdentity{Partition: CachePartition{RequestModel: "model"}, SemanticQuery: query},
-			Threshold: 0.8,
-		})
+		result, err := semanticHit(adapter.LookupSemantic(context.Background(), SemanticLookup{
+			Identity: CacheIdentity{Partition: CachePartition{RequestModel: "model"}, SemanticQuery: query},
+			Bounds:   atThreshold(0.8),
+		}))
 		Expect(err).NotTo(HaveOccurred())
 		return result.Found
 	}
@@ -37,9 +37,9 @@ var _ = Describe("Semantic cache embedding window", func() {
 			SimilarityThreshold: 0.8,
 			MaxEntries:          100,
 			TTLSeconds:          300,
-			EmbeddingModel:      "bert",
+			EmbeddingDeployment: "qwen3-embedding",
 		})
-		adapter = NewLegacyBackendAdapter(backend, InMemoryCacheType).WithEmbeddingModel("bert").WithEmbeddingProvider(cacheTestEmbeddingProvider())
+		adapter = NewLegacyBackendAdapter(backend, InMemoryCacheType).WithEmbeddingDeployment("qwen3").WithEmbeddingProvider(cacheTestEmbeddingProvider())
 	})
 
 	It("does not serve one long prompt's response to another sharing its prefix", func() {

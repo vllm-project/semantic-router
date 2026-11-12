@@ -22,8 +22,11 @@ func ValidateResponse(response Response, limits Limits) error {
 	blocks := 0
 	outputItems := 0
 	itemIDs := make(map[string]struct{})
-	for _, sequence := range append([][]OutputItem{response.Output}, response.Alternatives...) {
-		if err := validateOutputSequence(sequence, limits, &outputItems, &blocks, itemIDs); err != nil {
+	for index, sequence := range append([][]OutputItem{response.Output}, response.Alternatives...) {
+		// The stop reason is the primary output's, and a limit cuts only the
+		// content it ends on.
+		truncatable := index == 0 && StopsAtOutputLimit(response.StopReason)
+		if err := validateOutputSequence(sequence, limits, truncatable, &outputItems, &blocks, itemIDs); err != nil {
 			return err
 		}
 	}
@@ -106,9 +109,35 @@ func validateResponseOutputCardinality(response Response, limits Limits) error {
 	return nil
 }
 
+// StopsAtOutputLimit reports a stop at the output token limit or the end of the
+// context window, either of which can cut a reply in the middle of a call.
+func StopsAtOutputLimit(reason StopReason) bool {
+	return reason == StopMaxTokens || reason == StopContextWindow
+}
+
+// TruncatedToolCall returns the function call an output limit cut short in the
+// response, the last content of its output: its arguments are the start of a
+// JSON object rather than a whole one. It returns nil for any other response.
+func TruncatedToolCall(response Response, maximumDepth int) *ToolCall {
+	if !StopsAtOutputLimit(response.StopReason) || len(response.Output) == 0 {
+		return nil
+	}
+	contents := response.Output[len(response.Output)-1].Content
+	if len(contents) == 0 {
+		return nil
+	}
+	call := contents[len(contents)-1].ToolCall
+	if call == nil || call.Kind != "" || ValidateJSONObject([]byte(call.Arguments), maximumDepth) == nil ||
+		!truncatedArguments(call.Arguments, maximumDepth) {
+		return nil
+	}
+	return call
+}
+
 func validateOutputSequence(
 	sequence []OutputItem,
 	limits Limits,
+	truncatable bool,
 	outputItems *int,
 	blocks *int,
 	itemIDs map[string]struct{},
@@ -118,7 +147,8 @@ func validateOutputSequence(
 		return NewError(ErrorUpstreamUnavailable, "output_items_limit", "upstream output item limit exceeded", nil)
 	}
 	for index, item := range sequence {
-		if err := validateOutputItem(item, index, limits, blocks, itemIDs); err != nil {
+		last := truncatable && index == len(sequence)-1
+		if err := validateOutputItem(item, index, limits, last, blocks, itemIDs); err != nil {
 			return err
 		}
 	}
@@ -129,6 +159,7 @@ func validateOutputItem(
 	item OutputItem,
 	index int,
 	limits Limits,
+	truncatable bool,
 	blocks *int,
 	itemIDs map[string]struct{},
 ) error {
@@ -148,21 +179,22 @@ func validateOutputItem(
 	if len(item.Content) == 0 {
 		return NewError(ErrorUpstreamUnavailable, "empty_output_item", fmt.Sprintf("upstream output item %d is empty", index), nil)
 	}
-	for _, content := range item.Content {
-		if err := validateOutputContent(item.Role, content, blocks, limits); err != nil {
+	for contentIndex, content := range item.Content {
+		last := truncatable && contentIndex == len(item.Content)-1
+		if err := validateOutputContent(item.Role, content, blocks, limits, last); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateOutputContent(role Role, content Content, blocks *int, limits Limits) error {
+func validateOutputContent(role Role, content Content, blocks *int, limits Limits, truncatable bool) error {
 	if role == RoleAssistant && content.Kind == ContentToolResult ||
 		role == RoleTool && content.Kind != ContentToolResult {
 		return NewError(ErrorUpstreamUnavailable, "invalid_output_role_content", "upstream output role and content do not match", nil)
 	}
 	(*blocks)++
-	if err := validateContent(content, blocks, limits, 0); err != nil {
+	if err := validateContentBlock(content, blocks, limits, 0, truncatable); err != nil {
 		return err
 	}
 	if content.Kind == ContentGeneratedImage && content.GeneratedImage.Status != ImageGenerationCompleted &&
@@ -226,6 +258,7 @@ func ValidateUsage(usage Usage) error {
 	}
 	counts := []TokenCount{
 		usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite,
+		usage.InputCacheWrite5m, usage.InputCacheWrite1h,
 		usage.OutputReasoning, usage.OutputOther, usage.InputTotal, usage.OutputTotal, usage.Total,
 	}
 	hasValue := false
@@ -268,6 +301,7 @@ func validUsageProvenance(provenance UsageProvenance) bool {
 func validateUsageTotals(usage Usage) error {
 	checks := [][2]bool{
 		usageSumStatus(usage.InputTotal, usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite),
+		usageSumStatus(usage.InputCacheWrite, usage.InputCacheWrite5m, usage.InputCacheWrite1h),
 		usageSumStatus(usage.OutputTotal, usage.OutputReasoning, usage.OutputOther),
 		usageSumStatus(usage.Total, usage.InputTotal, usage.OutputTotal),
 	}

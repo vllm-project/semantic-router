@@ -1,333 +1,245 @@
 .section {
   position: relative;
-  padding: var(--site-section-pad) 0;
-  background: transparent;
-  color: var(--site-text);
+  scroll-margin-top: var(--site-header-height);
+  padding: var(--site-section-pad-top, var(--site-section-pad)) 0 var(--site-section-pad);
 }
 
-/* Column layout comes from the global .site-section-intro lockup. */
-.heading {
-  gap: 0.8rem;
-  margin-bottom: var(--site-section-gap);
+.wrap {
+  width: min(100% - 2 * var(--gut), 1280px);
+  margin-inline: auto;
 }
 
-.heading h2 {
-  margin: 0;
-  color: var(--site-text-strong);
-  font-size: var(--site-text-h2);
-  font-weight: var(--site-font-weight-semibold);
-  line-height: 1.18;
-  letter-spacing: -0.025em;
-  text-wrap: balance;
-}
-
-.heading p {
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: var(--site-text-small);
-  line-height: var(--site-leading-relaxed);
-  text-wrap: balance;
-}
-
-/* Player left, playlist right. The playlist rows are compact on purpose here,
- * the way a video player's queue is, rather than being a grid of cards that
- * happen to be small. Nothing is left over to fill. */
-.showcase {
+/* Duo's console: a column of cards beside a surface stage that holds the player. */
+.console {
   display: grid;
-  grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: clamp(240px, 19vw, 280px) minmax(0, 1fr);
   align-items: start;
+  gap: 18px;
 }
 
-.featuredVideo {
+.list {
   display: grid;
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  grid-template-rows: auto auto auto;
-  border: 1px solid var(--site-border);
-  border-radius: 1.25rem;
-  background:
-    radial-gradient(circle at 0% 0%, rgba(48, 162, 255, 0.14), transparent 34%),
-    var(--site-surface);
-  box-shadow: var(--site-shadow-raised);
-  overflow: hidden;
-}
-
-.videoMeta {
-  display: flex;
-  grid-row: 2;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: clamp(1rem, 2vw, 1.5rem);
-}
-
-.playerControls {
-  grid-row: 3;
-}
-
-.videoKind {
-  display: inline-flex;
-  padding: 0.3rem 0.62rem;
-  border: 1px solid var(--site-hover-border);
-  border-radius: 999px;
-  background: var(--site-accent-soft);
-  color: var(--site-accent-strong);
-  font-size: var(--site-text-caption);
-  font-weight: var(--site-font-weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.publisher {
-  color: var(--site-muted);
-  font-size: var(--site-text-caption);
-  font-weight: var(--site-font-weight-semibold);
-}
-
-.videoMeta h3 {
+  gap: 8px;
+  max-height: clamp(520px, 44vw, 640px);
   margin: 0;
-  color: var(--site-text-strong);
-  font-size: clamp(1.2rem, 2.2vw, 1.75rem);
-  line-height: 1.25;
-  letter-spacing: -0.025em;
-  text-wrap: pretty;
-}
-
-.playerFrame {
-  position: relative;
-  grid-row: 1;
-  min-width: 0;
-  aspect-ratio: 16 / 9;
-  background: #000;
-}
-
-.player {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
-
-.playerControls {
-  display: flex;
-  grid-column: 1 / -1;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.7rem;
-  border-top: 1px solid var(--site-border);
-  background: var(--site-surface-soft);
-}
-
-.directionButton {
-  display: inline-flex;
-  gap: 0.45rem;
-  align-items: center;
-  padding: 0.48rem 0.75rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  background: var(--site-surface-alt);
-  color: var(--site-text);
-  cursor: pointer;
-  font: inherit;
-  font-size: var(--site-text-caption);
-  font-weight: var(--site-font-weight-semibold);
-  transition:
-    border-color var(--site-transition-fast),
-    color var(--site-transition-fast),
-    background var(--site-transition-fast);
-}
-
-.directionButton:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-hover-surface-bg-soft);
-  color: var(--site-accent-strong);
-}
-
-.directionButton:focus-visible,
-.videoCard:focus-visible {
-  outline: 2px solid var(--site-accent-strong);
-  outline-offset: 3px;
-}
-
-.videoCount {
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: var(--site-text-caption);
-}
-
-.videoRail {
-  display: grid;
-  grid-column: 2;
-  grid-template-columns: minmax(0, 1fr);
-  align-content: start;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
+  padding: 2px 6px 2px 2px;
+  overflow-y: auto;
   list-style: none;
+  scrollbar-color: var(--hair-2) transparent;
+  scrollbar-width: thin;
 }
 
-.videoRailItem {
-  display: flex;
-  min-width: 0;
-}
-
-.videoPagination {
-  display: flex;
-  grid-column: 2;
+.card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-/* Queue rows: thumbnail beside copy, sized to the playlist column. */
-.videoCard {
-  display: grid;
+  gap: 12px;
   width: 100%;
-  min-width: 0;
-  grid-template-columns: 10rem minmax(0, 1fr);
-  gap: 0.85rem;
-  align-items: start;
-  padding: 0.5rem;
-  border: 1px solid transparent;
-  border-radius: 0.75rem;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
+  padding: 10px 12px 10px 10px;
+  border: 0;
+  border-radius: var(--r-s);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair), 0 1px 2px rgba(40, 32, 20, 0.04);
+  color: var(--ink);
   text-align: left;
-  transition:
-    border-color var(--site-transition-fast),
-    background var(--site-transition-fast);
+  cursor: pointer;
+  transition: box-shadow 0.25s var(--ease), background-color 0.2s;
 }
 
-.videoCard:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-hover-chrome-bg);
+.card:hover {
+  background: var(--surface-hi);
 }
 
-.videoCardActive {
-  border-color: var(--site-hover-border-strong);
-  background: var(--site-accent-soft);
+.card[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 1.5px var(--ember), 0 10px 24px rgba(217, 68, 31, 0.1);
 }
 
-.thumbnail {
-  position: relative;
-  display: block;
-  aspect-ratio: 16 / 9;
-  border-radius: 0.55rem;
-  background: #050505;
-  overflow: hidden;
-}
-
-.thumbnail img {
-  display: block;
-  width: 100%;
-  height: 100%;
+.card img {
+  width: 72px;
+  height: 46px;
+  border-radius: 6px;
   object-fit: cover;
-}
-
-.playMark {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: grid;
-  width: 1.9rem;
-  height: 1.9rem;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.36);
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  color: #fff;
-  font-size: 0.62rem;
-  transform: translate(-50%, -50%);
 }
 
 .cardCopy {
   display: grid;
+  gap: 3px;
   min-width: 0;
-  gap: 0.25rem;
-  align-content: start;
-  padding-top: 0.1rem;
 }
 
 .cardCopy strong {
   display: -webkit-box;
   overflow: hidden;
-  color: var(--site-text-strong);
-  font-size: 0.92rem;
-  font-weight: var(--site-font-weight-semibold);
-  line-height: 1.38;
-  letter-spacing: -0.005em;
+  color: var(--ink);
+  font: 600 15.5px/1.2 var(--serif);
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
-.cardCopy > span {
-  color: var(--site-muted);
-  font-size: 0.78rem;
-  font-weight: var(--site-font-weight-medium);
+.cardCopy span {
+  overflow: hidden;
+  color: var(--muted);
+  font: 500 11px/1.4 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Below the shared nav breakpoint the queue moves under the player and becomes
- * a swipeable strip, since a 21rem side column stops being viable. */
-@media (max-width: 996px) {
-  .showcase {
+.stage {
+  padding: 18px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--r);
+  background: #04060c;
+}
+
+.film {
+  position: absolute;
+  inset: 0;
+}
+
+.player {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+
+.posterButton {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  padding: 0 0 7%;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.playPill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 18px 7px 7px;
+  border-radius: 999px;
+  background: rgba(8, 12, 22, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  font: 500 15px/1 var(--sans);
+  transition: transform 0.3s var(--ease), background-color 0.2s;
+}
+
+.posterButton:hover .playPill,
+.posterButton:focus-visible .playPill {
+  background: rgba(8, 12, 22, 0.7);
+  transform: scale(1.04);
+}
+
+.playIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  color: #04060c;
+  font-size: 13px;
+}
+
+.duration {
+  color: rgba(255, 255, 255, 0.66);
+  font: 500 12.5px/1 var(--mono);
+}
+
+.caption {
+  display: grid;
+  gap: 4px;
+  padding: 16px 6px 4px;
+}
+
+.kind {
+  color: var(--ember-text);
+  font: 600 11.5px/1.4 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.caption h3 {
+  margin: 0;
+  color: var(--ink);
+  font: 500 clamp(22px, 2vw, 28px) / 1.15 var(--serif);
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+}
+
+.publisher {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+@media (max-width: 1100px) {
+  .console {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .featuredVideo,
-  .videoRail,
-  .videoPagination {
-    grid-column: 1;
-  }
-
-  .featuredVideo {
-    grid-row: auto;
-  }
-
-  .videoRail {
-    display: flex;
-    margin-right: calc(var(--gutter) * -1);
-    padding-right: var(--gutter);
+  /* Under the stage, the list becomes a row of cards that scrolls sideways. */
+  .list {
+    grid-row: 2;
+    grid-auto-columns: minmax(240px, 260px);
+    grid-auto-flow: column;
+    max-height: none;
+    margin-inline: calc(var(--gut) * -1);
+    padding: 4px var(--gut) 10px;
     overflow-x: auto;
+    overflow-y: visible;
+    scroll-padding-inline: var(--gut);
     scroll-snap-type: x proximity;
   }
 
-  .videoRailItem {
-    flex: 0 0 min(86vw, 22rem);
+  .list li {
     scroll-snap-align: start;
   }
-
-  .videoPagination {
-    justify-content: center;
-  }
 }
 
-@media (max-width: 768px) {
-  .section {
-    padding: clamp(2.5rem, 7vw, 3.25rem) 0;
+@media (max-width: 600px) {
+  .stage {
+    padding: 10px;
+    border-radius: 22px;
   }
 
-  .videoMeta {
-    padding: 1rem;
+  .posterButton {
+    padding-bottom: 5%;
   }
-}
 
-@media (max-width: 420px) {
-  .directionButton {
-    padding-inline: 0.62rem;
+  .playPill {
+    gap: 9px;
+    padding: 5px 14px 5px 5px;
+    font-size: 13.5px;
+  }
+
+  .playIcon {
+    width: 30px;
+    height: 30px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .directionButton,
-  .videoCard {
+  .playPill,
+  .card {
     transition: none;
-  }
-
-  .videoCard:hover {
-    transform: none;
   }
 }

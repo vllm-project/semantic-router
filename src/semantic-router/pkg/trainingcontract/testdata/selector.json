@@ -1,13 +1,13 @@
 {
   "asset": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "asset_selector",
     "created_at": "2026-09-23T00:00:00Z",
     "name": "selector",
     "target_contract": "selector.model-choice/v1"
   },
   "upload": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "upload_selector",
     "created_at": "2026-09-23T00:00:00Z",
     "handle": "file_selector-data",
@@ -15,7 +15,7 @@
     "size_bytes": 7
   },
   "snapshot": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "snapshot_selector",
     "created_at": "2026-09-23T00:00:00Z",
     "asset_id": "asset_selector",
@@ -50,14 +50,14 @@
     }
   },
   "experiment": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "experiment_selector",
     "created_at": "2026-09-23T00:00:00Z",
     "name": "selector",
     "target_contract": "selector.model-choice/v1"
   },
   "submit": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "idempotency_key": "selector-fixture",
     "spec": {
       "experiment_id": "experiment_selector",
@@ -105,7 +105,7 @@
   },
   "graph": {
     "run": {
-      "schema_version": "semantic-router.training/v1",
+      "schema_version": "semantic-router.training/v2",
       "id": "run_selector",
       "created_at": "2026-09-23T00:00:00Z",
       "spec": {
@@ -156,7 +156,7 @@
     },
     "tasks": [
       {
-        "schema_version": "semantic-router.training/v1",
+        "schema_version": "semantic-router.training/v2",
         "id": "task_selector-train",
         "created_at": "2026-09-23T00:00:00Z",
         "run_id": "run_selector",
@@ -170,7 +170,7 @@
         "status": "succeeded",
         "attempts": [
           {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "id": "attempt_selector-train",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
@@ -182,7 +182,7 @@
         ]
       },
       {
-        "schema_version": "semantic-router.training/v1",
+        "schema_version": "semantic-router.training/v2",
         "id": "task_selector-evaluate",
         "created_at": "2026-09-23T00:00:00Z",
         "run_id": "run_selector",
@@ -199,7 +199,7 @@
         "status": "succeeded",
         "attempts": [
           {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "id": "attempt_selector-evaluate",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
@@ -211,7 +211,7 @@
         ]
       },
       {
-        "schema_version": "semantic-router.training/v1",
+        "schema_version": "semantic-router.training/v2",
         "id": "task_selector-qualify",
         "created_at": "2026-09-23T00:00:00Z",
         "run_id": "run_selector",
@@ -228,7 +228,7 @@
         "status": "succeeded",
         "attempts": [
           {
-            "schema_version": "semantic-router.training/v1",
+            "schema_version": "semantic-router.training/v2",
             "id": "attempt_selector-qualify",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
@@ -253,11 +253,11 @@
     }
   },
   "worker_request": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "run_id": "run_selector",
     "attempt_id": "attempt_selector-train",
     "snapshot": {
-      "schema_version": "semantic-router.training/v1",
+      "schema_version": "semantic-router.training/v2",
       "id": "snapshot_selector",
       "created_at": "2026-09-23T00:00:00Z",
       "asset_id": "asset_selector",
@@ -307,7 +307,7 @@
     }
   },
   "train_result": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "status": "succeeded",
     "artifacts": [
       {
@@ -348,7 +348,7 @@
     ]
   },
   "artifact": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "artifact_selector",
     "created_at": "2026-09-23T00:00:00Z",
     "profile": {
@@ -381,7 +381,7 @@
     }
   },
   "variant": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "variant_selector",
     "created_at": "2026-09-23T00:00:00Z",
     "artifact_id": "artifact_selector",
@@ -398,11 +398,11 @@
     }
   },
   "evaluate_request": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "run_id": "run_selector",
     "attempt_id": "attempt_selector-evaluate",
     "snapshot": {
-      "schema_version": "semantic-router.training/v1",
+      "schema_version": "semantic-router.training/v2",
       "id": "snapshot_selector",
       "created_at": "2026-09-23T00:00:00Z",
       "asset_id": "asset_selector",
@@ -438,7 +438,7 @@
     },
     "inputs": [
       {
-        "schema_version": "semantic-router.training/v1",
+        "schema_version": "semantic-router.training/v2",
         "id": "variant_selector",
         "created_at": "2026-09-23T00:00:00Z",
         "artifact_id": "artifact_selector",
@@ -471,7 +471,7 @@
     }
   },
   "evaluate_result": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "status": "succeeded",
     "evaluations": [
       {
@@ -488,7 +488,7 @@
     ]
   },
   "evaluation": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "evaluation_selector",
     "created_at": "2026-09-23T00:00:00Z",
     "variant_id": "variant_selector",
@@ -517,7 +517,7 @@
     }
   },
   "qualify_result": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "status": "succeeded",
     "qualifications": [
       {
@@ -536,7 +536,7 @@
     ]
   },
   "qualification": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "qualification_selector",
     "created_at": "2026-09-23T00:00:00Z",
     "variant_id": "variant_selector",
@@ -567,7 +567,7 @@
     }
   },
   "proposal": {
-    "schema_version": "semantic-router.training/v1",
+    "schema_version": "semantic-router.training/v2",
     "id": "proposal_selector",
     "created_at": "2026-09-23T00:00:00Z",
     "variant_id": "variant_selector",

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -70,9 +70,9 @@ var capabilityRegistry = []capabilityDefinition{
 	{Name: "routing", Description: "Preview routing behavior without generating an answer."},
 	{Name: "inventory", Description: "Inspect configured and loaded model and classifier resources."},
 	{Name: "observability", Description: "Inspect routing replays, metrics, and management audit; submit outcome evidence."},
-	{Name: "storage", Description: "Manage Router-owned knowledge bases, memories, files, vector stores, cache partitions, and context recovery."},
+	{Name: "storage", Description: "Manage Router-owned memories, files, vector stores, cache partitions, and context recovery."},
 	{Name: "plugins", Description: "Discover recipe-scoped plugin bindings, dependencies, and typed behavior previews."},
-	{Name: "diagnostics", Description: "Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, and rerankers."},
+	{Name: "diagnostics", Description: "Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and rerankers."},
 }
 
 func routeContract(

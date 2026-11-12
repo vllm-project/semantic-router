@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: qwen-2.5-7b
@@ -10,84 +10,22 @@ providers:
       pricing:
         prompt_per_1m: 0.5
         completion_per_1m: 1
+      loras:
+        - name: tech-support
+          description: Technical support specialist
     - name: qwen-2.5-72b
       reasoning:
         family: qwen3
       pricing:
         prompt_per_1m: 3
         completion_per_1m: 6
-routing:
-  modelCards:
-    - name: qwen-2.5-7b
-      loras:
-        - name: tech-support
-          description: Technical support specialist
-    - name: qwen-2.5-72b
       loras:
         - name: advanced-reasoning
           description: Advanced reasoning and problem solving
-  signals:
-    keywords:
-      - name: urgent
-        operator: OR
-        keywords:
-          - urgent
-          - emergency
-          - asap
-        case_sensitive: false
-    embeddings:
-      - name: tech_support
-        threshold: 0.75
-        candidates:
-          - I need help with technical issues
-          - Can you help me troubleshoot this problem?
-          - Something is not working correctly
-        aggregation_method: max
-    domains:
-      - name: computer science
-        description: Computer science and programming
-        mmlu_categories:
-          - computer science
-      - name: math
-        description: Mathematics and quantitative reasoning
-        mmlu_categories:
-          - math
-  decisions:
-    - name: urgent_tech
-      description: Urgent technical support requests - use large model with reasoning
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent
-          - type: embedding
-            name: tech_support
-      modelRefs:
-        - model: qwen-2.5-72b
-          lora_name: advanced-reasoning
-          use_reasoning: true
-          reasoning_effort: high
-      plugins:
-        - type: semantic-cache
-    - name: general_tech
-      description: General technical queries - use small model for efficiency
-      priority: 50
-      rules:
-        operator: OR
-        conditions:
-          - type: embedding
-            name: tech_support
-          - type: domain
-            name: computer science
-      modelRefs:
-        - model: qwen-2.5-7b
-          lora_name: tech-support
-          use_reasoning: false
 global:
   router:
     config_source: kubernetes
-    include_config_models_in_list: false
+    list_backend_models: false
     clear_route_cache: false
     streamed_body:
       enabled: false
@@ -98,8 +36,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           sample_rate: 1
           duration_buckets:
@@ -129,6 +65,8 @@ global:
           detailed_goroutine_tracking: true
     response_api:
       enabled: false
+      ttl_seconds: 0
+      max_responses: 0
     observability:
       tracing:
         enabled: false
@@ -153,104 +91,84 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
-      enabled: false
-      ttl_seconds: 0
-    memory: {}
+      backend_type: memory
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+    memory:
+      default_retrieval_limit: 0
   integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: config/tools_db.json
-      fallback_to_empty: true
-    looper:
-      endpoint: ""
+    looper: {}
   model_catalog:
-    embeddings:
-      semantic:
-        qwen3_model_path: ""
-        gemma_model_path: ""
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-        bert_model_path: ""
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-          preload_embeddings: true
-          target_dimension: 768
-          target_layer: 22
-          enable_soft_matching: true
-          top_k: 1
-          min_score_threshold: 0.5
-    system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      domain_classifier: models/mmbert32k-intent-classifier-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
-    modules:
-      safety:
-        safety:
-          use_cpu: false
-        hazard:
-          use_cpu: false
-      prompt_compression:
-        enabled: false
-        max_tokens: 0
-      prompt_guard:
+    embeddings: {}
+    system: {}
+  plugins:
+    - type: response_cache
+      configuration:
         enabled: true
-        model_id: ""
-        threshold: 0.7
-        use_cpu: true
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        variant: mmbert32k
-        model_ref: prompt_guard
-      classifier:
-        domain:
-          model_id: ""
-          threshold: 0.5
-          use_cpu: true
-          variant: mmbert32k
-          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
-          model_ref: domain_classifier
-        mcp:
-          enabled: false
-          transport_type: ""
-          threshold: 0
-        pii:
-          model_id: ""
-          threshold: 0.9
-          use_cpu: true
-          use_mmbert_32k: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
-          model_ref: pii_classifier
-        preference: {}
-      complexity: {}
-      hallucination_mitigation:
-        fact_check:
-          model_id: ""
-          threshold: 0
-          use_cpu: false
-          use_mmbert_32k: false
-        detector:
-          model_id: ""
-          threshold: 0
-          use_cpu: false
-          enable_nli_filtering: false
-        explainer:
-          model_id: ""
-          threshold: 0
-          use_cpu: false
-      feedback_detector:
-        enabled: false
-        model_id: ""
-        threshold: 0
-        use_cpu: false
-        use_modernbert: false
-        use_mmbert_32k: false
-        feedback_mapping_path: ""
-      modality_detector:
-        enabled: false
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: urgent
+          operator: OR
+          keywords:
+            - urgent
+            - emergency
+            - asap
+          case_sensitive: false
+        - name: tech_support
+          operator: OR
+          keywords:
+            - I need help with technical issues
+            - Can you help me troubleshoot this problem?
+            - Something is not working correctly
+          case_sensitive: false
+      domains:
+        - name: computer science
+          description: Computer science and programming
+        - name: math
+          description: Mathematics and quantitative reasoning
+    decisions:
+      - name: urgent_tech
+        description: Urgent technical support requests - use large model with reasoning
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent
+            - type: keyword
+              name: tech_support
+        modelRefs:
+          - model: qwen-2.5-72b
+            lora_name: advanced-reasoning
+            use_reasoning: true
+            reasoning_effort: high
+        plugins:
+          - type: response_cache
+      - name: general_tech
+        description: General technical queries - use small model for efficiency
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tech_support
+            - type: domain
+              name: computer science
+        modelRefs:
+          - model: qwen-2.5-7b
+            lora_name: tech-support
+            use_reasoning: false

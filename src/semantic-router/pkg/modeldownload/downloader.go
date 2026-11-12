@@ -30,11 +30,6 @@ type ProgressState struct {
 // ProgressReporter receives model download progress updates.
 type ProgressReporter func(ProgressState)
 
-// DownloadModel downloads a model using huggingface-cli
-func DownloadModel(spec ModelSpec, config DownloadConfig) error {
-	return DownloadModelWithProgress(spec, config)
-}
-
 // IsGatedModelError checks if an error indicates a gated model that requires authentication.
 // hfToken is the HF_TOKEN value from the download config; an empty string means no token is set.
 func IsGatedModelError(err error, repoID string, hfToken string) bool {
@@ -72,17 +67,9 @@ func IsGatedModelError(err error, repoID string, hfToken string) bool {
 	return isKnownGated || isAuthError || noToken
 }
 
-// DownloadModelWithProgress downloads a model with real-time progress output
-func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
-	return DownloadModelWithProgressContext(context.Background(), spec, config)
-}
-
 func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, config DownloadConfig) error {
 	if err := ctx.Err(); err != nil {
 		return err
-	}
-	if spec.PreparedArtifact != "" {
-		return provisionPreparedArtifact(ctx, spec)
 	}
 	if err := validateArtifactDownload(spec); err != nil {
 		return err
@@ -181,16 +168,7 @@ func buildDownloadArgs(spec ModelSpec) []string {
 	return args
 }
 
-// EnsureModels ensures all required models are downloaded
-func EnsureModels(specs []ModelSpec, config DownloadConfig) error {
-	return EnsureModelsWithProgress(specs, config, nil)
-}
-
-// EnsureModelsWithProgress ensures all required models are downloaded and reports progress.
-func EnsureModelsWithProgress(specs []ModelSpec, config DownloadConfig, reporter ProgressReporter) error {
-	return EnsureModelsWithProgressContext(context.Background(), specs, config, reporter)
-}
-
+// EnsureModelsWithProgressContext ensures all required models are downloaded and reports progress.
 func EnsureModelsWithProgressContext(
 	ctx context.Context,
 	specs []ModelSpec,

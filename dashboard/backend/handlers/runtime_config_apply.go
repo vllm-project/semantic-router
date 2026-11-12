@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
@@ -47,18 +48,63 @@ func (e *runtimeConfigApplyError) Unwrap() error {
 	return e.applyErr
 }
 
-func applyWrittenConfig(configPath string, configDir string, previousData []byte, restoreOnFailure bool) error {
-	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
+// applyWrittenConfig propagates a written config to the runtime. When the
+// running containers can't take it, the config stays saved as a pending
+// activation and the returned message says how it gets applied.
+// propagateConfig is propagateConfigToRuntime by default; tests override it to
+// simulate what the running containers answer.
+var propagateConfig = propagateConfigToRuntime
+
+func applyWrittenConfig(configPath string, configDir string, previousData []byte, restoreOnFailure bool) (string, error) {
+	err := propagateConfig(configPath, configDir)
+	if restart, ok := asRestartNeeded(err); ok {
+		return recordRestart(configPath, restart.detail)
+	}
+	if err != nil {
 		if !restoreOnFailure || len(previousData) == 0 {
-			return err
+			return "", err
 		}
 		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, previousData); restoreErr != nil {
-			return &runtimeConfigApplyError{applyErr: err, restoreErr: restoreErr}
+			return "", &runtimeConfigApplyError{applyErr: err, restoreErr: restoreErr}
 		}
-		return &runtimeConfigApplyError{applyErr: err}
+		return "", &runtimeConfigApplyError{applyErr: err}
 	}
 
-	return nil
+	return "", nil
+}
+
+// savedConfigWarnings are the Router's warnings about a configuration its
+// validator accepted. A save response lists them only when there are any, so
+// a clean save answers as it always did.
+func savedConfigWarnings(cfg *routerconfig.RouterConfig) []routerconfig.ConfigWarning {
+	return routerconfig.Warnings(cfg)
+}
+
+// writeConfigSavedResponse answers a saved change the runtime applied.
+func writeConfigSavedResponse(w http.ResponseWriter, warnings []routerconfig.ConfigWarning) {
+	response := map[string]any{"status": "success"}
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
+// writeRestartRequiredResponse answers a saved change that waits for
+// `vllm-sr serve`, with the Router's warnings about it.
+func writeRestartRequiredResponse(w http.ResponseWriter, version string, message string, warnings []routerconfig.ConfigWarning) {
+	response := map[string]any{"status": "restart_required", "message": message}
+	if version != "" {
+		response["version"] = version
+	}
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // The config write and runtime propagation are separate operations. A session
@@ -101,13 +147,17 @@ func configActivationDeferred() bool {
 	return ok
 }
 
-func writeDeferredConfigResponse(w http.ResponseWriter) {
+func writeDeferredConfigResponse(w http.ResponseWriter, warnings []routerconfig.ConfigWarning) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	response := map[string]any{
 		"status":  "persisted",
 		"message": "Configuration saved to the Kubernetes ConfigMap. Roll out the Router and Envoy deployments to activate it.",
-	})
+	}
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func writeConfigPersistenceError(w http.ResponseWriter, err error) {
@@ -261,7 +311,12 @@ func restorePreviousRuntimeConfig(configPath string, configDir string, previousD
 	if err := writeConfigAtomically(configPath, previousData); err != nil {
 		return err
 	}
-	return propagateConfigToRuntime(configPath, configDir)
+	err := propagateConfig(configPath, configDir)
+	if _, restart := asRestartNeeded(err); restart {
+		// The running containers kept the config restored here.
+		return nil
+	}
+	return err
 }
 
 func propagateConfigToRuntime(configPath string, configDir string) error {
@@ -276,14 +331,7 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 	}
 
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
-		if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
-			return regenerateAndReloadManagedSplitEnvoyLocally(effectiveConfigPath)
-		}
-		return nil
-	}
-
-	if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
-		return propagateConfigToManagedContainer()
+		return awaitManagedRuntime(effectiveConfigPath)
 	}
 
 	return nil
@@ -295,43 +343,44 @@ func isManagedContainerConfigPath(configPath string) bool {
 	return cleaned == configured || cleaned == legacyManagedContainerConfigPath
 }
 
-func regenerateAndReloadManagedSplitEnvoyLocally(configPath string) error {
-	envoyConfigPath := detectEnvoyConfigPath()
-	if envoyConfigPath == "" {
-		log.Printf("Config propagation: Envoy config path not found, skipping managed Envoy reload")
-		return nil
-	}
-
-	output, err := generateEnvoyConfigWithPython(configPath, envoyConfigPath)
+// awaitManagedRuntime finds out whether the stack's running containers take
+// the synced runtime config. If they can't, it returns the restart needed.
+func awaitManagedRuntime(effectiveConfigPath string) error {
+	runtimeConfig, err := os.ReadFile(effectiveConfigPath)
 	if err != nil {
-		return fmt.Errorf("failed to regenerate Envoy config: %w (output: %s)", err, strings.TrimSpace(output))
+		return fmt.Errorf("read the synced runtime config: %w", err)
 	}
-	log.Printf("Config propagation: %s", strings.TrimSpace(output))
-
-	if err := restartManagedService("envoy", 20*time.Second); err != nil {
-		return fmt.Errorf("failed to restart Envoy in %s: %w", managedContainerNameForService("envoy"), err)
+	envoyChanged, err := refreshManagedSplitEnvoyConfig(effectiveConfigPath)
+	if err != nil {
+		return err
 	}
-
+	if envoyChanged {
+		return &restartNeededError{detail: envoyRestartDetail}
+	}
+	if detail, restart := routerRestartReason(context.Background(), activationDigest(runtimeConfig)); restart {
+		return &restartNeededError{detail: detail}
+	}
 	return nil
 }
 
-func refreshManagedSplitEnvoyConfig(configPath string) error {
-	if !managedRuntimeUsesSplitContainers() {
-		return nil
-	}
-	if getDockerContainerStatus(managedContainerNameForService("envoy")) == "not found" {
-		return nil
+// refreshManagedSplitEnvoyConfig regenerates the Envoy config a split stack
+// mounts and reports whether it changed. Envoy reads it when it starts, so a
+// change waits for `vllm-sr serve` to recreate Envoy.
+func refreshManagedSplitEnvoyConfig(configPath string) (bool, error) {
+	if !managedRuntimeUsesSplitContainers() || !managedStackRunsEnvoy() {
+		return false, nil
 	}
 
 	envoyConfigPath := splitEnvoyConfigPathForRuntimeConfig(configPath)
 	if envoyConfigPath == "" {
-		log.Printf("Config propagation: split Envoy config path not found, skipping setup-time refresh")
-		return nil
+		log.Printf("Config propagation: split Envoy config path not found, skipping the Envoy refresh")
+		return false, nil
 	}
+	previous, previousErr := os.ReadFile(envoyConfigPath)
 
 	output, err := generateEnvoyConfigWithPython(configPath, envoyConfigPath)
 	if err != nil {
-		return fmt.Errorf(
+		return false, fmt.Errorf(
 			"failed to regenerate split Envoy config: %w (output: %s)",
 			err,
 			strings.TrimSpace(output),
@@ -342,30 +391,11 @@ func refreshManagedSplitEnvoyConfig(configPath string) error {
 		log.Printf("Config propagation: %s", trimmed)
 	}
 
-	return nil
-}
-
-func propagateConfigToManagedContainer() error {
-	effectiveConfigPath, err := syncRuntimeConfigInManagedContainer()
+	current, err := os.ReadFile(envoyConfigPath)
 	if err != nil {
-		return err
+		return false, nil
 	}
-
-	return regenerateAndReloadEnvoyInManagedContainer(effectiveConfigPath)
-}
-
-func regenerateAndReloadEnvoyInManagedContainer(configPath string) error {
-	if output, err := generateEnvoyConfigInManagedContainer(configPath); err != nil {
-		return fmt.Errorf("failed to regenerate Envoy config in %s: %w (output: %s)", managedContainerNameForService("envoy"), err, strings.TrimSpace(output))
-	} else {
-		log.Printf("Config propagation: %s", strings.TrimSpace(output))
-	}
-
-	if err := restartManagedService("envoy", 20*time.Second); err != nil {
-		return fmt.Errorf("failed to restart Envoy in %s: %w", managedContainerNameForService("envoy"), err)
-	}
-
-	return nil
+	return previousErr != nil || !bytes.Equal(previous, current), nil
 }
 
 func generateEnvoyConfigWithPython(configPath string, outputPath string) (string, error) {
@@ -428,74 +458,6 @@ func splitEnvoyConfigPathForRuntimeConfig(configPath string) string {
 		return filepath.Join(configDir, "envoy.yaml")
 	}
 	return detectEnvoyConfigPath()
-}
-
-func generateEnvoyConfigInManagedContainer(configPath string) (string, error) {
-	containerName := managedContainerNameForService("envoy")
-	outputPath := defaultEnvoyConfigPath
-	pythonBinary := "python3"
-	if managedRuntimeUsesSplitContainers() {
-		containerName = managedRuntimeSyncContainerName()
-		outputPath = defaultSplitEnvoyConfigPath
-		pythonBinary = dashboardVenvPythonPath
-	}
-	pythonScript := fmt.Sprintf(`
-from cli.config_generator import generate_envoy_config_from_user_config
-from cli.parser import parse_user_config
-
-user_config = parse_user_config(%q)
-generate_envoy_config_from_user_config(user_config, %q)
-print("Regenerated Envoy config: %s")
-`, configPath, outputPath, outputPath)
-
-	return execInManagedContainer(containerName, 30*time.Second, pythonBinary, "-c", pythonScript)
-}
-
-func execInManagedContainer(containerName string, timeout time.Duration, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	if err := validateManagedContainerExecArgs(args); err != nil {
-		return "", err
-	}
-
-	commandArgs := append([]string{"exec", containerName}, args...)
-	// #nosec G204 -- commandArgs are validated against a strict allowlist above and the container name is constant.
-	cmd := exec.CommandContext(ctx, "docker", commandArgs...)
-	output, err := cmd.CombinedOutput()
-	return string(output), err
-}
-
-func validateManagedContainerExecArgs(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("managed container command is required")
-	}
-
-	if isPythonCommand(args[0]) {
-		return validateManagedContainerPythonArgs(args)
-	}
-
-	return fmt.Errorf("unsupported managed container command: %s", args[0])
-}
-
-func validateManagedContainerPythonArgs(args []string) error {
-	if len(args) == 3 && args[1] == "-c" {
-		return nil
-	}
-
-	return fmt.Errorf("unsupported python3 invocation in managed container")
-}
-
-func isPythonCommand(command string) bool {
-	base := strings.ToLower(filepath.Base(strings.TrimSpace(command)))
-	return base != "" && strings.HasPrefix(base, "python")
-}
-
-func restartManagedService(service string, timeout time.Duration) error {
-	if !managedServiceUsesContainerLifecycle(service) {
-		return fmt.Errorf("unsupported managed service restart: %s", service)
-	}
-	return restartOrStartManagedSplitContainerService(service, timeout)
 }
 
 func detectPythonCLIRoot() string {

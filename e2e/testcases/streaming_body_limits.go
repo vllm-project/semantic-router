@@ -41,7 +41,7 @@ func testStreamingBodySizeLimit(ctx context.Context, client *kubernetes.Clientse
 	// Send more than the configured 128 KiB limit through Envoy's STREAMED
 	// ExtProc mode. This is also larger than Envoy's usual body chunk size.
 	body, err := json.Marshal(map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
 			{"role": "user", "content": strings.Repeat("a", 192*1024)},
 		},
@@ -80,7 +80,7 @@ func testStreamingBodyDeadline(ctx context.Context, client *kubernetes.Clientset
 	// The first part exceeds Envoy's usual chunk size, so the router sees a
 	// non-EOS chunk and starts its three-second accumulation deadline. Delay
 	// the final part for six seconds; the total body remains below 128 KiB.
-	first := `{"model":"MoM","messages":[{"role":"user","content":"` + strings.Repeat("a", 80*1024)
+	first := `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"` + strings.Repeat("a", 80*1024)
 	last := `"}]}`
 	if len(first)+len(last) >= streamingE2EMaxBodyBytes {
 		return fmt.Errorf("timed request exceeds the size limit: %d bytes", len(first)+len(last))

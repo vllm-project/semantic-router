@@ -7,14 +7,12 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
 const valuesFile = "e2e/profiles/ai-gateway/values.yaml"
 
 var resourceManifests = []string{
-	"e2e/profiles/ai-gateway/manifests/mock-sequence-classifier.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/base-model-route.yaml",
@@ -32,10 +30,11 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "ai-gateway",
 			SemanticRouterValuesFile: valuesFile,
-			ResourceManifests:        resourceManifests,
-			WaitDeployments: []helpers.DeploymentRef{
-				{Namespace: "default", Name: "mock-sequence-classifier"},
-			},
+			// provider-mocker serves the System One and embedding fixtures,
+			// which the Router prepares as it starts.
+			PrerequisiteManifests: []string{"deploy/kubernetes/hallucination/provider-mocker.yaml"},
+			PrerequisiteWaits:     []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
+			ResourceManifests:     resourceManifests,
 		}),
 	}
 }
@@ -62,7 +61,12 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile.
 func (p *Profile) GetTestCases() []string {
-	return testmatrix.Combine(testmatrix.BaselineRouterContract)
+	return testmatrix.Combine(
+		testmatrix.BaselineRouterContract,
+		// The delegated credential contract is off here; its header must
+		// still never reach the backend (issue #2286 default-disabled behavior).
+		[]string{"delegated-credential-disabled"},
+	)
 }
 
 // GetServiceConfig returns the service configuration for accessing the deployed service.

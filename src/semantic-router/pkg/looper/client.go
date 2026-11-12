@@ -30,14 +30,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 )
 
-// Client handles HTTP requests to OpenAI-compatible endpoints
+// Client sends a Looper's model calls: over HTTP to the Looper endpoint
+// through its connector, or, for a hop client, as hops of a request-graph run.
 type Client struct {
 	connector modelConnector
+	hops      graph.Caller
 	initErr   error
 	endpoint  string
 	headers   map[string]string
+
+	hopTimeout       time.Duration
+	maxResponseBytes int64
 }
 
 // NewClient creates a connector-backed Looper client. Constructor failures are
@@ -160,10 +166,9 @@ func (c *Client) CallModel(
 		*req,
 		ModelTarget{Name: modelName, AccessKey: accessKey},
 		CallOptions{
-			Iteration:   iteration,
-			FusionDepth: fusionDepthFromContext(ctx),
-			Mode:        responseMode(streaming),
-			Logprobs:    logprobs,
+			Iteration: iteration,
+			Mode:      responseMode(streaming),
+			Logprobs:  logprobs,
 		},
 	)
 }
@@ -197,7 +202,12 @@ func (c *Client) callModel(
 	})
 	start := time.Now()
 	headers := c.requestHeaders(ctx, target, options)
-	respBody, err := c.callModelThroughConnector(ctx, body, headers)
+	var respBody []byte
+	if c.hops != nil {
+		respBody, err = c.callModelAsHop(ctx, body, headers, target, options)
+	} else {
+		respBody, err = c.callModelThroughConnector(ctx, body, headers)
+	}
 	if err != nil {
 		return nil, err
 	}

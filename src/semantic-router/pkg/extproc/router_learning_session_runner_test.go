@@ -3,6 +3,7 @@ package extproc
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -18,16 +19,21 @@ func runProtectionScenario(t *testing.T, scenario protectionScenario) []protecti
 	defer sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	cfg := routerLearningProtectionOnlyTestConfig(scenario.Scope)
 	cfg.DefaultModel = "protection-cheap"
-	cfg.ModelConfig = map[string]config.ModelParams{"protection-cheap": {}, "protection-frontier": {}}
+	cfg.ModelConfig = map[string]config.ModelParams{
+		"protection-cheap":    addTestQuality(config.ModelParams{}, 0.2),
+		"protection-frontier": addTestQuality(config.ModelParams{}, 0.9),
+	}
 	cfg.RouterLearning.Protection.Tuning = config.RouterLearningProtectionTuning{
 		MinTurnsBeforeSwitch: extprocIntPtr(0),
 		SwitchMargin:         extprocFloat64Ptr(0.05),
 		StabilityWeight:      extprocFloat64Ptr(0),
+		ProgressGate:         protectionProgressGateTuning(scenario.ProgressGate),
 	}
 	router := &OpenAIRouter{Config: cfg}
 	request := &llmprotocol.Request{}
 	histories := map[string][]llmprotocol.Message{}
 	rows := make([]protectionRow, 0, len(scenario.Steps))
+	scenarioClock := time.Now().UTC().Add(-time.Minute)
 	for turn, step := range scenario.Steps {
 		request.Messages = histories[step.Conversation]
 		for _, message := range step.Messages {
@@ -35,9 +41,25 @@ func runProtectionScenario(t *testing.T, scenario protectionScenario) []protecti
 		}
 		histories[step.Conversation] = request.Messages
 		input := protectionScenarioInput(router, scenario, step, turn, request)
-		rows = append(rows, executeProtectionStep(t, router, input, scenario.ID, step, turn))
+		rows = append(rows, executeProtectionStep(t, router, input, scenario.ID, step, turn, scenarioClock.Add(time.Duration(turn)*time.Second)))
 	}
 	return rows
+}
+
+func protectionProgressGateTuning(gate *protectionProgressGate) *config.ProgressGateTuning {
+	if gate == nil {
+		return nil
+	}
+	enabled := true
+	return &config.ProgressGateTuning{
+		Enabled: &enabled, Mode: gate.Mode, CalibrationID: gate.CalibrationID,
+		WindowSize: extprocIntPtr(gate.WindowSize), WindowTTLSeconds: extprocIntPtr(gate.WindowTTLSeconds),
+		MinWindowOutcomes:         extprocIntPtr(gate.MinWindowOutcomes),
+		MinConsecutiveRegressions: extprocIntPtr(gate.MinConsecutiveRegressions),
+		MinConsecutiveRecoveries:  extprocIntPtr(gate.MinConsecutiveRecoveries),
+		CooldownSeconds:           extprocFloat64Ptr(gate.CooldownSeconds),
+		MaxSwitchesPerWindow:      extprocIntPtr(gate.MaxSwitchesPerWindow),
+	}
 }
 
 func protectionScenarioInput(router *OpenAIRouter, scenario protectionScenario, step protectionStep, turn int, request *llmprotocol.Request) routerLearningInput {
@@ -67,7 +89,7 @@ func protectionScenarioInput(router *OpenAIRouter, scenario protectionScenario, 
 	return routerLearningInput{selCtx: selCtx, baseResult: proposal, selectedModelRef: ref, ctx: ctx}
 }
 
-func executeProtectionStep(t *testing.T, router *OpenAIRouter, input routerLearningInput, scenarioID string, step protectionStep, turn int) protectionRow {
+func executeProtectionStep(t *testing.T, router *OpenAIRouter, input routerLearningInput, scenarioID string, step protectionStep, turn int, outcomeAt time.Time) protectionRow {
 	t.Helper()
 	preflight := router.applyProtectionPreflight(input)
 	decision, protectionErr := router.applyProtectionSwitch(input, preflight, routerLearningDecision{})
@@ -114,6 +136,7 @@ func executeProtectionStep(t *testing.T, router *OpenAIRouter, input routerLearn
 		CacheWarmth: input.selCtx.AgenticSession.CacheWarmth, Category: step.Expected.Category,
 		CandidateCount: len(input.selCtx.CandidateModels),
 	}
+	row.Gate = protectionGateReport(finalResult.SessionPolicy)
 	row.Failures = protectionFailures(row, step.Expected)
 	// The corpus treats each accepted step as a successful dispatch. Commit its
 	// actual result; the next turn is never preloaded with an expected model.
@@ -121,7 +144,32 @@ func executeProtectionStep(t *testing.T, router *OpenAIRouter, input routerLearn
 	if err := commitAgenticSessionDecision(input.ctx); err != nil {
 		t.Fatal(err)
 	}
+	if step.Outcome != "" {
+		sessiontelemetry.RecordTurnOutcome(routingLearningStateKey(input.ctx), sessiontelemetry.TurnOutcome{
+			RequestID: scenarioID + "/" + step.ID,
+			TurnIndex: turn,
+			Model:     finalRef.Model,
+			Category:  sessiontelemetry.TurnOutcomeCategory(step.Outcome),
+			Source:    sessiontelemetry.TurnSourceOutcomeIngest,
+		}, outcomeAt)
+	}
 	return row
+}
+
+func protectionGateReport(policy *selection.SessionPolicyTrace) *protectionGateRow {
+	if policy == nil || policy.SwitchGate == nil {
+		return nil
+	}
+	gate := policy.SwitchGate
+	return &protectionGateRow{
+		Decision: gate.Decision, Reason: gate.Reason, Origin: gate.Origin, Mode: gate.Mode,
+		CalibrationID: gate.CalibrationID, EvidenceVersion: gate.EvidenceVersion,
+		ApplicationReason: gate.ApplicationReason, Applied: gate.Applied, Enforced: gate.Enforced,
+		ColdStart: gate.ColdStart, AttributableCount: gate.AttributableCount,
+		MissingCount: gate.MissingCount, WindowCount: gate.WindowCount,
+		RegressionStreak: gate.RegressionStreak, RecoveryStreak: gate.RecoveryStreak,
+		SwitchesInWindow: gate.SwitchesInWindow,
+	}
 }
 
 func protectionNeutralMessage(message protectionMessage) llmprotocol.Message {

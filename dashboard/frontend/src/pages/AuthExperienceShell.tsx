@@ -1,11 +1,12 @@
-import type { ReactNode } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 
-import ColorBends from '../components/ColorBends'
 import {
   DASHBOARD_COLOR_BENDS_MOTION,
   DASHBOARD_MOTION_COLORS,
 } from '../components/dashboardMotionTheme'
 import styles from './AuthExperienceShell.module.css'
+
+const ColorBends = lazy(() => import('../components/ColorBends'))
 
 interface AuthExperienceShellProps {
   story: ReactNode
@@ -20,11 +21,13 @@ export default function AuthExperienceShell({ story, children }: AuthExperienceS
         data-testid="login-motion-background"
         aria-hidden="true"
       >
-        <ColorBends
-          colors={DASHBOARD_MOTION_COLORS}
-          {...DASHBOARD_COLOR_BENDS_MOTION}
-          transparent
-        />
+        <Suspense fallback={null}>
+          <ColorBends
+            colors={DASHBOARD_MOTION_COLORS}
+            {...DASHBOARD_COLOR_BENDS_MOTION}
+            transparent
+          />
+        </Suspense>
       </div>
       <main className={styles.mainContent}>
         <div className={styles.shell}>

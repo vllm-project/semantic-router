@@ -1,14 +1,39 @@
 """Helpers for assembling Docker run/create commands."""
 
+import functools
+import ipaddress
 import os
+import subprocess
 import sys
 
-from cli.consts import PLATFORM_AMD
+from cli.consts import PLATFORM_ROCM
 from cli.container_images import _normalize_platform
+from cli.terminal import HEADLINE
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 ORDINARY_PORT_MAPPING_LENGTH = 2
+HOST_GATEWAY_ALIAS = "host.docker.internal"
+HOST_GATEWAY_IP_ENV = "VLLM_SR_HOST_GATEWAY_IP"
+DOCKER_BRIDGE_PROBE_TIMEOUT_SECONDS = 10
+RESTART_POLICY_ENV = "VLLM_SR_RESTART_POLICY"
+RESTART_POLICIES = ("no", "on-failure", "unless-stopped", "always")
+
+
+def restart_policy_args():
+    """The `--restart` arguments every long-running stack container receives.
+
+    `vllm-sr serve --restart-policy` sets RESTART_POLICY_ENV for the start; the
+    runtime default (`no`) adds nothing, so containers keep today's behavior.
+    """
+    policy = os.getenv(RESTART_POLICY_ENV, "").strip().lower()
+    if not policy or policy == "no":
+        return []
+    if policy not in RESTART_POLICIES:
+        raise ValueError(
+            f"{RESTART_POLICY_ENV} must be one of {', '.join(RESTART_POLICIES)}; got {policy!r}"
+        )
+    return ["--restart", policy]
 
 
 def build_base_run_command(
@@ -27,13 +52,14 @@ def build_base_run_command(
             f"nofile={nofile_limit}:{nofile_limit}",
         ]
     )
+    cmd.extend(restart_policy_args())
     if network_name:
         cmd.extend(["--network", network_name])
     return cmd
 
 
 def append_amd_gpu_passthrough(cmd, normalized_platform):
-    if normalized_platform != PLATFORM_AMD:
+    if normalized_platform != PLATFORM_ROCM:
         return
 
     passthrough_enabled = os.getenv("VLLM_SR_AMD_GPU_PASSTHROUGH", "1").lower()
@@ -58,12 +84,13 @@ def append_amd_gpu_passthrough(cmd, normalized_platform):
         cmd.extend(["--cap-add", "SYS_PTRACE"])
         cmd.extend(["--security-opt", "seccomp=unconfined"])
         log.info(
-            f"AMD GPU passthrough enabled with devices: {', '.join(mounted_devices)}"
+            f"AMD GPU passthrough enabled with devices: {', '.join(mounted_devices)}",
+            extra=HEADLINE,
         )
 
     if missing_devices:
         log.warning(
-            "Platform 'amd' selected but missing AMD GPU devices on host: "
+            "Platform 'rocm' selected but missing AMD GPU devices on host: "
             f"{', '.join(missing_devices)}. Container may fall back to CPU."
         )
 
@@ -73,10 +100,51 @@ def append_host_gateway(cmd, runtime):
 
     Docker has supported ``--add-host=...:host-gateway`` since 20.10. Podman
     has supported the same magic value since 4.7. Both runtimes use the same
-    flag spelling, so we add it unconditionally for the supported runtimes.
+    flag spelling. ``VLLM_SR_HOST_GATEWAY_IP`` pins the alias to an explicit
+    address instead. Docker derives ``host-gateway`` from its default bridge,
+    so a daemon running without one (``"bridge": "none"``) rejects the flag;
+    the alias is then skipped with a warning rather than failing every start.
     """
-    if runtime in ("docker", "podman"):
-        cmd.append("--add-host=host.docker.internal:host-gateway")
+    if runtime not in ("docker", "podman"):
+        return
+    override = os.getenv(HOST_GATEWAY_IP_ENV, "").strip()
+    if override:
+        cmd.append(f"--add-host={HOST_GATEWAY_ALIAS}:{_host_gateway_ip(override)}")
+        return
+    if runtime == "docker" and not _docker_default_bridge_available():
+        log.warning(
+            "Docker has no default bridge network, so it cannot resolve "
+            f"host-gateway; not mapping {HOST_GATEWAY_ALIAS}. Set "
+            f"{HOST_GATEWAY_IP_ENV}=<host address> to map it explicitly."
+        )
+        return
+    cmd.append(f"--add-host={HOST_GATEWAY_ALIAS}:host-gateway")
+
+
+def _host_gateway_ip(value: str) -> str:
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError as exc:
+        raise ValueError(
+            f"{HOST_GATEWAY_IP_ENV} must be an IP address, got {value!r}"
+        ) from exc
+
+
+@functools.cache
+def _docker_default_bridge_available() -> bool:
+    try:
+        result = subprocess.run(
+            ["docker", "network", "inspect", "bridge", "--format", "{{.Name}}"],
+            capture_output=True,
+            text=True,
+            timeout=DOCKER_BRIDGE_PROBE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+    if result.returncode == 0:
+        return True
+    return "not found" not in (result.stderr or "").lower()
 
 
 def append_custom_dns(cmd):
@@ -142,7 +210,7 @@ def append_env_vars(
 
 def maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu: bool):
     if enable_amd_gpu:
-        append_amd_gpu_passthrough(cmd, _normalize_platform(PLATFORM_AMD))
+        append_amd_gpu_passthrough(cmd, _normalize_platform(PLATFORM_ROCM))
 
 
 def append_nvidia_gpu_passthrough(cmd, runtime: str):
@@ -158,12 +226,17 @@ def append_nvidia_gpu_passthrough(cmd, runtime: str):
         # `--gpus all` only for Docker, which understands the nvidia container
         # toolkit shim natively.
         cmd.extend(["--device", "nvidia.com/gpu=all"])
-        log.info("NVIDIA GPU passthrough enabled via CDI (--device nvidia.com/gpu=all)")
+        log.info(
+            "NVIDIA GPU passthrough enabled via CDI (--device nvidia.com/gpu=all)",
+            extra=HEADLINE,
+        )
         return
 
     cmd.extend(["--gpus", "all"])
     cmd.extend(["--runtime", "nvidia"])
-    log.info("NVIDIA GPU passthrough enabled (--gpus all --runtime nvidia)")
+    log.info(
+        "NVIDIA GPU passthrough enabled (--gpus all --runtime nvidia)", extra=HEADLINE
+    )
 
 
 def maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu: bool, runtime: str):

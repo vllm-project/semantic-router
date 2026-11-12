@@ -25,7 +25,7 @@ func main() {
 		pprofURL       = flag.String("pprof-url", "http://127.0.0.1:6060", "Router pprof base URL (requires observability.profiling)")
 		routerPID      = flag.Int("router-pid", 0, "Router PID; when set on linux, smaps_rollup is captured alongside heap dumps")
 		out            = flag.String("out", "", "Output directory (default soak-results/<RFC3339 timestamp>)")
-		model          = flag.String("model", "MoM", "Model name sent in each chat completion request")
+		model          = flag.String("model", "vllm-sr/auto", "Model name sent in each chat completion request")
 		quick          = flag.Bool("quick", false, "Smoke mode (~9 min): 90s rounds, {8,32} concurrency sweep, 5k IDs; overrides -round-duration/-quiet-gap/-high-card-ids")
 		concurrency    = flag.Int("concurrency", 100, "Concurrency for warmup and every soak round")
 		rounds         = flag.Int("rounds", 3, "Number of fixed-concurrency soak rounds")

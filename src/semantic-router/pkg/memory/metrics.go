@@ -28,7 +28,7 @@ var (
 			Name: "llm_memory_retrieval_total",
 			Help: "The total number of memory retrieval operations",
 		},
-		[]string{"backend", "status", "user_id"},
+		[]string{"backend", "status"},
 	)
 
 	// MemoryRetrievalResults tracks the number of memories returned per query
@@ -83,9 +83,9 @@ var (
 	MemoryStoreSize = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "llm_memory_store_size",
-			Help: "The total number of memories stored (per user if feasible)",
+			Help: "The total number of memories stored",
 		},
-		[]string{"backend", "user_id"},
+		[]string{"backend"},
 	)
 
 	// MemoryCacheHits counts retrieval requests served from Redis hot cache.
@@ -120,7 +120,7 @@ var (
 // =============================================================================
 
 // RecordMemoryRetrieval records a memory retrieval operation with duration and status
-func RecordMemoryRetrieval(backend, operation, status, userID string, duration float64, resultCount int) {
+func RecordMemoryRetrieval(backend, operation, status string, duration float64, resultCount int) {
 	if backend == "" {
 		backend = consts.UnknownLabel
 	}
@@ -130,12 +130,9 @@ func RecordMemoryRetrieval(backend, operation, status, userID string, duration f
 	if status == "" {
 		status = "success"
 	}
-	if userID == "" {
-		userID = consts.UnknownLabel
-	}
 
 	MemoryRetrievalLatency.WithLabelValues(backend, operation).Observe(duration)
-	MemoryRetrievalCount.WithLabelValues(backend, status, userID).Inc()
+	MemoryRetrievalCount.WithLabelValues(backend, status).Inc()
 
 	if resultCount >= 0 {
 		MemoryRetrievalResults.WithLabelValues(backend).Observe(float64(resultCount))
@@ -177,15 +174,11 @@ func RecordMemoryStoreOperation(backend, operation, status string, duration floa
 }
 
 // UpdateMemoryStoreSize updates the total number of memories stored
-func UpdateMemoryStoreSize(backend, userID string, count int) {
+func UpdateMemoryStoreSize(backend string, count int) {
 	if backend == "" {
 		backend = consts.UnknownLabel
 	}
-	if userID == "" {
-		userID = consts.UnknownLabel
-	}
-
-	MemoryStoreSize.WithLabelValues(backend, userID).Set(float64(count))
+	MemoryStoreSize.WithLabelValues(backend).Set(float64(count))
 }
 
 // RecordMemoryCacheHit records a cache hit and optional latency for the cache get.

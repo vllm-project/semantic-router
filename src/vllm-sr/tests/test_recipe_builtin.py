@@ -1,15 +1,17 @@
 """Installed Recipe discovery and explicit binding need no live Router."""
 
+import copy
+import io
 import json
 from pathlib import Path
 
 import pytest
 import yaml
-from cli import builtin_recipes, storage_backends
+from cli import builtin_recipes, builtin_recipes_json, storage_backends
 from cli.builtin_recipes import list_builtin_recipes
-from cli.commands.runtime_kb import _resolve_kb_source_root
 from cli.commands.runtime_support import resolve_effective_config_path
 from cli.config_translator import translate_config_to_helm_values
+from cli.decision_model import decision_model_deployment
 from cli.main import main as cli
 from cli.model_bundle import model_bundle_digest
 from cli.parser import parse_user_config
@@ -17,10 +19,16 @@ from cli.runtime_stack import resolve_runtime_stack
 from cli.storage_secrets import POSTGRES_PASSWORD_PLACEHOLDER
 from click.testing import CliRunner
 
+DEFAULT_ENTRYPOINT = {
+    "model_names": ["vllm-sr/auto"],
+    "recipe": "default",
+    "default": True,
+}
+
 
 def _inputs(tmp_path: Path, recipe_name: str = "balance"):
     providers = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
         "providers": {
             "defaults": {"model": "model-a"},
@@ -39,7 +47,7 @@ def _inputs(tmp_path: Path, recipe_name: str = "balance"):
                 for name, port in (("model-a", 8000), ("model-b", 8001))
             ],
         },
-        "routing": {"modelCards": [{"name": "model-a"}, {"name": "model-b"}]},
+        "recipes": [{"name": "default"}],
     }
     bundle = list_builtin_recipes()["bundles"][0]
     balance = next(item for item in bundle["recipes"] if item["name"] == recipe_name)
@@ -53,6 +61,14 @@ def _inputs(tmp_path: Path, recipe_name: str = "balance"):
     source.write_text(yaml.safe_dump(providers, sort_keys=False))
     binding_file.write_text(yaml.safe_dump(bindings))
     return source, binding_file, bindings
+
+
+def _bundle_decision_model_block():
+    catalog = builtin_recipes._bundle("mom-v1", "latest")[1]["global"]["model_catalog"]
+    return {
+        "deployments": catalog["deployments"],
+        "system": {"decision_model": catalog["system"]["decision_model"]},
+    }
 
 
 def _init(source, bindings, output, extra=(), recipe_name="balance"):
@@ -121,10 +137,14 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
     document = yaml.safe_load(output.read_text())
     assert source.read_bytes() == original
     assert document["providers"] == yaml.safe_load(original)["providers"]
-    assert document["routing"] == yaml.safe_load(original)["routing"]
-    assert [recipe["name"] for recipe in document["recipes"]] == [recipe_name]
+    assert document["recipes"][0] == yaml.safe_load(original)["recipes"][0]
+    assert [recipe["name"] for recipe in document["recipes"]] == [
+        "default",
+        recipe_name,
+    ]
     assert document["entrypoints"] == [
-        {"model_names": [f"my/{recipe_name}"], "recipe": recipe_name}
+        DEFAULT_ENTRYPOINT,
+        {"model_names": [f"my/{recipe_name}"], "recipe": recipe_name},
     ]
     learning = document["global"]["router"]["learning"]
     assert learning == {
@@ -134,15 +154,16 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
     }
     replay = document["global"]["services"]["router_replay"]
     assert replay == {
-        "enabled": True,
         "store_backend": "postgres",
         "ttl_seconds": 604800,
         "async_writes": False,
     }
-    assert (
-        document["recipes"][0]["routing"].get("data_policy", {}).get("replay")
-        is not False
-    )
+    assert document["global"]["plugins"] == [
+        {"type": "router_replay", "configuration": {"enabled": True}}
+    ]
+    assert document["global"]["model_catalog"] == _bundle_decision_model_block()
+    assert decision_model_deployment(document)["artifact"] == "vllm-sr/Vela-2.0-0.8B"
+    assert "data_policy" not in document["recipes"][-1]
     assert (
         parse_user_config(str(output), log_summary=False).global_["router"]["learning"]
         == learning
@@ -153,7 +174,7 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
         ]["learning"]
         == learning
     )
-    for decision in document["recipes"][0]["routing"]["decisions"]:
+    for decision in document["recipes"][-1]["decisions"]:
         assert decision.get("modelRefs", []) == refs[decision["name"]]
     validated = CliRunner().invoke(cli, ["config", "validate", "--config", str(output)])
     assert validated.exit_code == 0, validated.output
@@ -162,7 +183,7 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
     # Follow the same initialization -> local materialization -> storage
     # provisioning boundary as serve, without starting containers in unit tests.
     layout = resolve_runtime_stack()
-    effective = resolve_effective_config_path(output, None, False, None)
+    effective = resolve_effective_config_path(output, None, False)
     runtime = yaml.safe_load(effective.read_text())
     postgres = runtime["global"]["services"]["router_replay"]["postgres"]
     assert postgres == {
@@ -190,7 +211,7 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
 @pytest.mark.parametrize(
     "authored",
     [
-        {"enabled": False},
+        {"plugins": [{"type": "router_replay", "configuration": {"enabled": False}}]},
         {"store_backend": "memory", "ttl_seconds": 0},
         {
             "store_backend": "postgres",
@@ -207,25 +228,31 @@ def test_init_binds_each_recipe_and_validates_without_touching_source(
 def test_init_preserves_authored_replay_settings(tmp_path, authored):
     source, bindings, _ = _inputs(tmp_path, "vault")
     document = yaml.safe_load(source.read_text())
+    authored = dict(authored)
+    plugins = authored.pop("plugins", None)
     document["global"] = {"services": {"router_replay": authored}}
+    if plugins:
+        document["global"]["plugins"] = plugins
     source.write_text(yaml.safe_dump(document))
     output = tmp_path / "initialized.yaml"
     result = _init(source, bindings, output, recipe_name="vault")
     assert result.exit_code == 0, result.output
-    replay = yaml.safe_load(output.read_text())["global"]["services"]["router_replay"]
+    written = yaml.safe_load(output.read_text())["global"]
     expected = {
-        "enabled": True,
         "store_backend": "postgres",
         "ttl_seconds": 604800,
         "async_writes": False,
         **authored,
     }
-    assert replay == expected
-    effective = resolve_effective_config_path(output, None, False, None)
+    assert written["services"]["router_replay"] == expected
+    assert written["plugins"] == (
+        plugins or [{"type": "router_replay", "configuration": {"enabled": True}}]
+    )
+    effective = resolve_effective_config_path(output, None, False)
     runtime = yaml.safe_load(effective.read_text())
     effective_replay = runtime["global"]["services"]["router_replay"]
     assert all(effective_replay[key] == value for key, value in authored.items())
-    if authored.get("enabled") is False:
+    if plugins:
         assert "postgres" not in storage_backends.detect_required_backends(
             runtime, resolve_runtime_stack()
         )
@@ -289,6 +316,37 @@ def test_init_preserves_authored_learning_and_unrelated_global(tmp_path, authore
     )
 
 
+@pytest.mark.parametrize(
+    "authored",
+    [
+        {
+            "deployments": {
+                "judge": {"provider": "model_runtime", "artifact": "vllm-sr/vela3-fast"}
+            },
+            "system": {"decision_model": {"deployment": "judge"}},
+        },
+        {
+            "deployments": {
+                "primary": {
+                    "provider": "model_runtime",
+                    "artifact": "vllm-sr/Vela-2.0-0.3B",
+                }
+            }
+        },
+    ],
+    ids=["explicit-binding", "default-key-deployment"],
+)
+def test_init_keeps_an_authored_decision_model_whole(tmp_path, authored):
+    source, bindings, _ = _inputs(tmp_path)
+    document = yaml.safe_load(source.read_text())
+    document["global"] = {"model_catalog": authored}
+    source.write_text(yaml.safe_dump(document))
+    output = tmp_path / "initialized.yaml"
+    result = _init(source, bindings, output)
+    assert result.exit_code == 0, result.output
+    assert yaml.safe_load(output.read_text())["global"]["model_catalog"] == authored
+
+
 def test_init_second_recipe_keeps_existing_learning_settings(tmp_path):
     source, bindings, _ = _inputs(tmp_path)
     first = tmp_path / "balance.yaml"
@@ -303,7 +361,11 @@ def test_init_second_recipe_keeps_existing_learning_settings(tmp_path):
     assert result.exit_code == 0, result.output
     resolved = yaml.safe_load(second.read_text())
     assert resolved["global"] == document["global"]
-    assert [recipe["name"] for recipe in resolved["recipes"]] == ["balance", "speed"]
+    assert [recipe["name"] for recipe in resolved["recipes"]] == [
+        "default",
+        "balance",
+        "speed",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -344,7 +406,7 @@ def test_explicit_derivative_keeps_remaining_candidate_requirements(tmp_path):
     )
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["excluded_decisions"] == ["agent"]
-    decisions = yaml.safe_load(output.read_text())["recipes"][0]["routing"]["decisions"]
+    decisions = yaml.safe_load(output.read_text())["recipes"][-1]["decisions"]
     assert "agent" not in {decision["name"] for decision in decisions}
     review_lane = next(
         decision for decision in decisions if decision["name"] == "review"
@@ -360,46 +422,6 @@ def test_unknown_exclusion_is_an_error(tmp_path):
     assert result.exit_code != 0
     assert "Unknown excluded decisions" in result.output
     assert not output.exists()
-
-
-def test_init_preserves_config_relative_kb_assets(tmp_path):
-    source, bindings, _ = _inputs(tmp_path)
-    kb_root = tmp_path / "private-kb"
-    kb_root.mkdir()
-    manifest = kb_root / "labels.json"
-    manifest.write_text('{"labels":{"safe":{"exemplars":["hello"]}}}')
-    original_manifest = manifest.read_bytes()
-    document = yaml.safe_load(source.read_text())
-    document["global"] = {
-        "model_catalog": {
-            "kbs": [
-                {
-                    "name": "private-kb",
-                    "source": {"path": "private-kb", "manifest": "labels.json"},
-                }
-            ]
-        }
-    }
-    source.write_text(yaml.safe_dump(document))
-    original_source = source.read_bytes()
-
-    relocated = tmp_path / "derived" / "config.yaml"
-    result = _init(source, bindings, relocated)
-    assert result.exit_code != 0
-    assert "--output must be in the same directory as --config" in result.output
-    assert not relocated.parent.exists()
-
-    sibling = tmp_path / "balance.yaml"
-    result = _init(source, bindings, sibling)
-    assert result.exit_code == 0, result.output
-    assert _resolve_kb_source_root(sibling, "private-kb") == kb_root.resolve()
-    resolved_global = yaml.safe_load(sibling.read_text())["global"]
-    assert resolved_global["model_catalog"] == document["global"]["model_catalog"]
-    assert set(resolved_global) == {"model_catalog", "router", "services"}
-    assert resolved_global["services"]["router_replay"]["store_backend"] == "postgres"
-    assert resolved_global["router"]["learning"]["protection"]["enabled"] is True
-    assert source.read_bytes() == original_source
-    assert manifest.read_bytes() == original_manifest
 
 
 def test_vault_init_needs_no_backend_assignment_for_immediate_guard(tmp_path):
@@ -427,7 +449,7 @@ def test_vault_init_needs_no_backend_assignment_for_immediate_guard(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
-    decisions = yaml.safe_load(output.read_text())["recipes"][0]["routing"]["decisions"]
+    decisions = yaml.safe_load(output.read_text())["recipes"][-1]["decisions"]
     guard = next(decision for decision in decisions if decision["name"] == "guard")
     assert "modelRefs" not in guard
     assert any(plugin["type"] == "fast_response" for plugin in guard["plugins"])
@@ -441,6 +463,7 @@ def test_vault_init_needs_no_backend_assignment_for_immediate_guard(tmp_path):
     )
     assert required["minimum_candidates"] == 0
     assert required["algorithm"] is None
+    assert required["description"] == guard["description"]
 
 
 def test_immediate_guard_rejects_unused_backend_assignments(tmp_path):
@@ -454,52 +477,29 @@ def test_immediate_guard_rejects_unused_backend_assignments(tmp_path):
     assert not output.exists()
 
 
-def test_init_preserves_rule_prototype_overrides_and_operator_global(
-    tmp_path, monkeypatch
-):
+def test_init_preserves_authored_rules_and_operator_global(tmp_path, monkeypatch):
     source, _, _ = _inputs(tmp_path)
     operator = yaml.safe_load(source.read_text())
-    operator["global"] = {
-        "model_catalog": {
-            "modules": {"complexity": {"prototype_scoring": {"max_prototypes": 1}}}
-        }
-    }
+    operator["global"] = {"router": {"learning": {"protection": {"enabled": True}}}}
     source.write_text(yaml.safe_dump(operator))
     original = source.read_bytes()
-    override = {"enabled": False, "best_weight": 0.75, "top_m": 2}
+    reask = {"name": "reask", "labels": ["reask"], "input": {"previous_turns": 2}}
     document = {
         "recipes": [
             {
                 "name": "authored",
-                "routing": {
-                    "signals": {
-                        "embeddings": [
-                            {
-                                "name": "intent",
-                                "threshold": 0.8,
-                                "candidates": ["a", "b"],
-                                "prototype_scoring": override,
-                            }
-                        ],
-                        "complexity": [
-                            {
-                                "name": "difficulty",
-                                "threshold": 0.1,
-                                "hard": {"candidates": ["hard"]},
-                                "easy": {"candidates": ["easy"]},
-                                "prototype_scoring": {},
-                            }
-                        ],
-                    },
-                    "decisions": [
-                        {
-                            "name": "answer",
-                            "priority": 1,
-                            "rules": {"operator": "AND", "conditions": []},
-                            "modelRefs": [],
-                        }
-                    ],
+                "signals": {
+                    "complexity": [{"name": "difficulty", "labels": ["hard"]}],
+                    "turn_relation": [reask],
                 },
+                "decisions": [
+                    {
+                        "name": "answer",
+                        "priority": 1,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [],
+                    }
+                ],
             }
         ]
     }
@@ -516,12 +516,98 @@ def test_init_preserves_rule_prototype_overrides_and_operator_global(
         output=output,
     )
     parsed = parse_user_config(str(output), log_summary=False)
-    signals = parsed.recipes[0].routing.signals
-    assert (
-        signals.embeddings[0].prototype_scoring.model_dump(exclude_none=True)
-        == override
-    )
-    assert signals.complexity[0].prototype_scoring.model_dump(exclude_none=True) == {}
+    signals = parsed.recipes[-1].signals
+    assert signals.complexity[0].labels == ["hard"]
+    assert signals.turn_relation[0].model_dump(exclude_none=True) == {
+        **reask,
+        "input": {"previous_turns": 2},
+    }
     assert yaml.safe_load(output.read_text())["global"] == operator["global"]
     assert source.read_bytes() == original
-    assert document["recipes"][0]["routing"]["decisions"][0]["modelRefs"] == []
+    assert document["recipes"][0]["decisions"][0]["modelRefs"] == []
+
+
+def _compose(source, refs, model_names, config=None):
+    return builtin_recipes.compose_builtin_recipe(
+        "balance",
+        bundle="mom-v1",
+        config=config or builtin_recipes.load_provider_config(source),
+        bindings=refs,
+        model_names=model_names,
+    )
+
+
+def test_compose_publishes_aliases_like_init_without_writing(tmp_path):
+    source, bindings, refs = _inputs(tmp_path)
+    config = builtin_recipes.load_provider_config(source)
+    original = copy.deepcopy(config)
+    composed = _compose(source, refs, ["my/balance", "balance"], config)
+    assert config == original
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "bindings.yaml",
+        "providers.yaml",
+    ]
+    assert composed["entrypoints"] == [
+        DEFAULT_ENTRYPOINT,
+        {"model_names": ["my/balance", "balance"], "recipe": "balance"},
+    ]
+
+    output = tmp_path / "config.yaml"
+    assert _init(source, bindings, output).exit_code == 0
+    assert yaml.safe_load(output.read_text()) == {
+        **composed,
+        "entrypoints": [
+            DEFAULT_ENTRYPOINT,
+            {"model_names": ["my/balance"], "recipe": "balance"},
+        ],
+    }
+
+
+def test_compose_rejects_an_alias_that_names_a_backend_model(tmp_path):
+    source, _, refs = _inputs(tmp_path)
+    with pytest.raises(
+        ValueError,
+        match="Entrypoint model 'model-a' conflicts with a configured backend model",
+    ):
+        _compose(source, refs, ["my/balance", "model-a"])
+
+
+def test_compose_refuses_a_recipe_the_config_already_contains(tmp_path):
+    source, _, refs = _inputs(tmp_path)
+    config = builtin_recipes.load_provider_config(source)
+    config["recipes"] = [{"name": "balance"}]
+    with pytest.raises(ValueError, match="Config already contains recipe 'balance'"):
+        _compose(source, refs, ["my/balance"], config)
+
+
+def test_json_interface_lists_composes_and_reports_rejections(
+    tmp_path, monkeypatch, capsys
+):
+    assert builtin_recipes_json.main(["list"]) == 0
+    assert json.loads(capsys.readouterr().out) == list_builtin_recipes()
+
+    source, _, refs = _inputs(tmp_path, "vault")
+    request = {
+        "config_path": str(source),
+        "bundle": "mom-v1",
+        "recipe": "vault",
+        "bindings": {name: models for name, models in refs.items() if models},
+        "model_names": ["my/vault", "vault"],
+    }
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(request)))
+    assert builtin_recipes_json.main(["compose"]) == 0
+    composed = json.loads(capsys.readouterr().out)
+    assert composed["entrypoints"] == [
+        DEFAULT_ENTRYPOINT,
+        {"model_names": ["my/vault", "vault"], "recipe": "vault"},
+    ]
+
+    request["bindings"]["private"] = [{"model": "invented"}]
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(request)))
+    assert (
+        builtin_recipes_json.main(["compose"])
+        == builtin_recipes_json.REJECTED_EXIT_CODE
+    )
+    assert capsys.readouterr().out.strip() == (
+        "Decision 'private' references unconfigured provider models: ['invented']"
+    )

@@ -1,10 +1,14 @@
 package framework
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
+	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +34,7 @@ type TestReport struct {
 	TotalTests    int          `json:"total_tests"`
 	PassedTests   int          `json:"passed_tests"`
 	FailedTests   int          `json:"failed_tests"`
+	FlakyTests    int          `json:"flaky_tests"`
 
 	// Cluster Information
 	ClusterInfo ClusterInfo `json:"cluster_info"`
@@ -96,13 +101,29 @@ func (rg *ReportGenerator) AddTestResults(results []TestResult) {
 	rg.report.TotalTests = len(results)
 
 	passedCount := 0
+	flakyCount := 0
 	for _, result := range results {
 		if result.Passed {
 			passedCount++
 		}
+		if result.Flaked {
+			flakyCount++
+		}
 	}
 	rg.report.PassedTests = passedCount
 	rg.report.FailedTests = rg.report.TotalTests - passedCount
+	rg.report.FlakyTests = flakyCount
+}
+
+// flakyTestNames lists the tests that only passed after a retry.
+func flakyTestNames(results []TestResult) []string {
+	names := make([]string, 0)
+	for _, result := range results {
+		if result.Flaked {
+			names = append(names, result.Name)
+		}
+	}
+	return names
 }
 
 // SetEnvironment sets environment variables in the report
@@ -254,6 +275,7 @@ func (rg *ReportGenerator) generateMarkdown() string {
 | Total Tests | %d |
 | Passed Tests | %d |
 | Failed Tests | %d |
+| Flaky Tests | %d |
 | Success Rate | %.1f%% |
 
 ### 🔧 Cluster Statistics
@@ -271,7 +293,7 @@ func (rg *ReportGenerator) generateMarkdown() string {
 		statusColor, r.Status, r.Profile,
 		r.Duration, r.ClusterName,
 		r.ExitCode,
-		r.TotalTests, r.PassedTests, r.FailedTests,
+		r.TotalTests, r.PassedTests, r.FailedTests, r.FlakyTests,
 		float64(r.PassedTests)/float64(r.TotalTests)*100,
 		r.ClusterInfo.TotalPods,
 		r.ClusterInfo.RunningPods,
@@ -281,25 +303,45 @@ func (rg *ReportGenerator) generateMarkdown() string {
 	)
 
 	// Add test case results
+	if flaky := flakyTestNames(r.TestResults); len(flaky) > 0 {
+		md += fmt.Sprintf(
+			"\n> ⚠️ **%d test(s) passed only after a retry and are flaky:** %s\n",
+			len(flaky), strings.Join(flaky, ", "),
+		)
+	}
+
+	md += failedAndSlowestMarkdown(r.TestResults)
+
 	md += "\n### 📝 Test Cases\n\n"
 	for _, result := range r.TestResults {
 		status := "✅"
-		if !result.Passed {
+		switch {
+		case !result.Passed:
 			status = "❌"
+		case result.Flaked:
+			status = "⚠️"
 		}
 		errorMsg := ""
 		if result.Error != nil {
 			errorMsg = fmt.Sprintf(" - Error: `%s`", result.Error.Error())
 		}
-		md += fmt.Sprintf("- %s **%s** (%s)%s\n", status, result.Name, result.Duration, errorMsg)
+		flakyNote := ""
+		if result.Flaked {
+			flakyNote = fmt.Sprintf(" - passed on attempt %d", result.Attempts)
+		}
+		priority := ""
+		if result.Priority != "" {
+			priority = strings.ToUpper(result.Priority) + ", "
+		}
+		md += fmt.Sprintf("- %s **%s** (%s%s)%s%s\n", status, result.Name, priority, result.Duration, flakyNote, errorMsg)
 
 		// Add details if available
 		if len(result.Details) > 0 {
 			md += "  <details>\n  <summary>Details</summary>\n\n"
 			md += "  | Metric | Value |\n"
 			md += "  |--------|-------|\n"
-			for key, value := range result.Details {
-				md += fmt.Sprintf("  | %s | %v |\n", key, value)
+			for _, key := range slices.Sorted(maps.Keys(result.Details)) {
+				md += fmt.Sprintf("  | %s | %v |\n", key, result.Details[key])
 			}
 			md += "\n  </details>\n"
 		}
@@ -343,4 +385,40 @@ func (rg *ReportGenerator) generateMarkdown() string {
 // GetReport returns the current report
 func (rg *ReportGenerator) GetReport() *TestReport {
 	return rg.report
+}
+
+// failedAndSlowestMarkdown lists the failed cases with their errors, then the
+// five slowest cases, above the full list, so a reader finds both without
+// scanning every case.
+func failedAndSlowestMarkdown(results []TestResult) string {
+	md := ""
+	for _, result := range results {
+		if result.Passed {
+			continue
+		}
+		if md == "" {
+			md = "\n### ❌ Failed\n\n"
+		}
+		message := "failed"
+		if result.Error != nil {
+			message = result.Error.Error()
+		}
+		md += fmt.Sprintf("- **%s**: `%s`\n", result.Name, message)
+	}
+	slowest := slices.Clone(results)
+	slices.SortStableFunc(slowest, func(a, b TestResult) int {
+		da, _ := time.ParseDuration(a.Duration)
+		db, _ := time.ParseDuration(b.Duration)
+		return cmp.Compare(db, da)
+	})
+	if len(slowest) > 5 {
+		slowest = slowest[:5]
+	}
+	if len(slowest) > 1 {
+		md += "\n### ⏱ Slowest\n\n"
+		for _, result := range slowest {
+			md += fmt.Sprintf("- %s (%s)\n", result.Name, result.Duration)
+		}
+	}
+	return md
 }

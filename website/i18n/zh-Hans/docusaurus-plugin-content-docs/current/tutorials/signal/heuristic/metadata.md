@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/tutorials/signal/heuristic/metadata.md"
@@ -30,21 +31,22 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    metadata:
-      - name: consent-denied
-        key: consent
-        predicate:
-          equals: denied
-      - name: canary-cohort
-        key: cohort
-        predicate:
-          in: [beta, canary]
-      - name: has-workload-class
-        key: workload_class
-        predicate:
-          exists: true
+recipes:
+  - name: default
+    signals:
+      metadata:
+        - name: consent-denied
+          key: consent
+          predicate:
+            equals: denied
+        - name: canary-cohort
+          key: cohort
+          predicate:
+            in: [beta, canary]
+        - name: has-workload-class
+          key: workload_class
+          predicate:
+            exists: true
 ```
 
 必须恰好一个谓词比较器。请求元数据值是字符串，在决策匹配前求值。规则名与键必须已去空白。请求最多接受 32 个条目、128 字节的键和 1024 字节的值。

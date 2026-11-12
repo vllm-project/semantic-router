@@ -2,6 +2,7 @@ package dsl
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -10,21 +11,17 @@ import (
 type typedPluginConfigEmitter func(*strings.Builder, *config.DecisionPlugin)
 
 var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
-	"system_prompt":       emitSystemPromptPluginConfig,
-	"response_cache":      emitResponseCachePluginConfig,
-	"context_compression": emitStructuredPluginConfig,
-	"prompt_cache":        emitStructuredPluginConfig,
-	"router_replay":       emitRouterReplayPluginConfig,
-	"shadow_dispatch":     emitStructuredPluginConfig,
-	"memory":              emitMemoryPluginConfig,
-	"hallucination":       emitHallucinationPluginConfig,
-	"fast_response":       emitFastResponsePluginConfig,
-	"request_params":      emitRequestParamsPluginConfig,
-	"tool_selection":      emitToolSelectionPluginConfig,
-	"tools":               emitToolsPluginConfig,
-	"rag":                 emitRAGPluginConfig,
-	"header_mutation":     emitHeaderMutationPluginConfig,
-	"response_jailbreak":  emitResponseJailbreakPluginConfig,
+	"system_prompt":   emitSystemPromptPluginConfig,
+	"response_cache":  emitResponseCachePluginConfig,
+	"context":         emitStructuredPluginConfig,
+	"prompt_cache":    emitStructuredPluginConfig,
+	"router_replay":   emitRouterReplayPluginConfig,
+	"response_guard":  emitStructuredPluginConfig,
+	"fast_response":   emitFastResponsePluginConfig,
+	"request_params":  emitRequestParamsPluginConfig,
+	"tools":           emitStructuredPluginConfig,
+	"header_mutation": emitHeaderMutationPluginConfig,
+	"masking":         emitStructuredPluginConfig,
 }
 
 func decompilePluginConfig(p *config.DecisionPlugin) string {
@@ -74,78 +71,30 @@ func emitStructuredPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 }
 
 func emitRouterReplayPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.RouterReplayPluginConfig](p)
+	raw, ok := normalizePluginConfigMap(p.Configuration)
 	if !ok {
 		return
 	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
+	// Keep the canonical field order while retaining raw omission, false and
+	// zero; an effective capture struct would erase the inheritance contract.
+	typ := reflect.TypeOf(config.RouterReplayPluginConfig{})
+	for index := 0; index < typ.NumField(); index++ {
+		key := strings.Split(typ.Field(index).Tag.Get("json"), ",")[0]
+		if value, exists := raw[key]; exists {
+			fmt.Fprintf(sb, "    %s: %s\n", key, formatPluginConfigValue(value))
+			delete(raw, key)
+		}
 	}
-	if cfg.MaxRecords != 0 {
-		fmt.Fprintf(sb, "    max_records: %d\n", cfg.MaxRecords)
-	}
-	if cfg.CaptureRequestBody {
-		fmt.Fprintf(sb, "    capture_request_body: true\n")
-	}
-	if cfg.CaptureResponseBody {
-		fmt.Fprintf(sb, "    capture_response_body: true\n")
-	}
-	if cfg.MaxBodyBytes != 0 {
-		fmt.Fprintf(sb, "    max_body_bytes: %d\n", cfg.MaxBodyBytes)
-	}
-	if cfg.MaxToolTraceBytes != 0 {
-		fmt.Fprintf(sb, "    max_tool_trace_bytes: %d\n", cfg.MaxToolTraceBytes)
-	}
-	if cfg.MaxToolTraceSteps != 0 {
-		fmt.Fprintf(sb, "    max_tool_trace_steps: %d\n", cfg.MaxToolTraceSteps)
-	}
-}
-
-func emitMemoryPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.MemoryPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.RetrievalLimit != nil {
-		fmt.Fprintf(sb, "    retrieval_limit: %d\n", *cfg.RetrievalLimit)
-	}
-	if cfg.SimilarityThreshold != nil {
-		fmt.Fprintf(sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
-	}
-	if cfg.AutoStore != nil {
-		fmt.Fprintf(sb, "    auto_store: %v\n", *cfg.AutoStore)
-	}
-}
-
-func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.HallucinationPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.UseNLI {
-		fmt.Fprintf(sb, "    use_nli: true\n")
-	}
-	if cfg.HallucinationAction != "" {
-		fmt.Fprintf(sb, "    hallucination_action: %q\n", cfg.HallucinationAction)
-	}
-	if cfg.UnverifiedFactualAction != "" {
-		fmt.Fprintf(sb, "    unverified_factual_action: %q\n", cfg.UnverifiedFactualAction)
-	}
-	if cfg.IncludeHallucinationDetails {
-		fmt.Fprintf(sb, "    include_hallucination_details: true\n")
-	}
+	writePluginConfigMap(sb, raw, "    ")
 }
 
 func emitFastResponsePluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	cfg, ok := decodePluginConfig[config.FastResponsePluginConfig](p)
 	if !ok {
 		return
+	}
+	if cfg.Enabled != nil {
+		fmt.Fprintf(sb, "    enabled: %v\n", *cfg.Enabled)
 	}
 	if cfg.Message != "" {
 		fmt.Fprintf(sb, "    message: %q\n", cfg.Message)
@@ -172,133 +121,6 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 	if cfg.MaxN != nil {
 		fmt.Fprintf(sb, "    max_n: %d\n", *cfg.MaxN)
-	}
-	if cfg.StripUnknown {
-		fmt.Fprintf(sb, "    strip_unknown: true\n")
-	}
-}
-
-func emitToolSelectionPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.ToolSelectionPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Mode != "" {
-		fmt.Fprintf(sb, "    mode: %q\n", cfg.Mode)
-	}
-	if cfg.ToolsDBPath != "" {
-		fmt.Fprintf(sb, "    tools_db_path: %q\n", cfg.ToolsDBPath)
-	}
-	if cfg.TopK != 0 {
-		fmt.Fprintf(sb, "    top_k: %d\n", cfg.TopK)
-	}
-	if cfg.SimilarityThreshold != nil {
-		fmt.Fprintf(sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
-	}
-	if cfg.Strategy != "" {
-		fmt.Fprintf(sb, "    strategy: %q\n", cfg.Strategy)
-	}
-	if cfg.FallbackToEmpty != nil && *cfg.FallbackToEmpty {
-		fmt.Fprintf(sb, "    fallback_to_empty: true\n")
-	}
-	if cfg.RelevanceThreshold != nil {
-		fmt.Fprintf(sb, "    relevance_threshold: %v\n", *cfg.RelevanceThreshold)
-	}
-	if cfg.PreserveCount != 0 {
-		fmt.Fprintf(sb, "    preserve_count: %d\n", cfg.PreserveCount)
-	}
-}
-
-func emitToolsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Mode != "" {
-		fmt.Fprintf(sb, "    mode: %q\n", cfg.Mode)
-	}
-	if cfg.SemanticSelection != nil {
-		fmt.Fprintf(sb, "    semantic_selection: %v\n", *cfg.SemanticSelection)
-	}
-	if cfg.Strategy != "" {
-		fmt.Fprintf(sb, "    strategy: %q\n", cfg.Strategy)
-	}
-	if len(cfg.AllowTools) > 0 {
-		fmt.Fprintf(sb, "    allow_tools: %s\n", formatStringArray(cfg.AllowTools))
-	}
-	if len(cfg.BlockTools) > 0 {
-		fmt.Fprintf(sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
-	}
-	if cfg.StripToolHistory {
-		fmt.Fprintf(sb, "    strip_tool_history: true\n")
-	}
-	if cfg.DynamicRetrieval != nil {
-		fmt.Fprintf(sb, "    dynamic_retrieval: %s\n", formatPluginConfigValue(dynamicRetrievalConfigMap(cfg.DynamicRetrieval)))
-	}
-}
-
-func emitRAGPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
-	if !ok {
-		return
-	}
-	emitRAGCorePluginConfig(sb, cfg)
-	emitRAGBackendAndFailureConfig(sb, cfg)
-	emitRAGCacheConfig(sb, cfg)
-}
-
-func emitRAGCorePluginConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Backend != "" {
-		fmt.Fprintf(sb, "    backend: %q\n", cfg.Backend)
-	}
-	if cfg.SimilarityThreshold != nil {
-		fmt.Fprintf(sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
-	}
-	if cfg.TopK != nil {
-		fmt.Fprintf(sb, "    top_k: %d\n", *cfg.TopK)
-	}
-	if cfg.MaxContextLength != nil {
-		fmt.Fprintf(sb, "    max_context_length: %d\n", *cfg.MaxContextLength)
-	}
-	if cfg.InjectionMode != "" {
-		fmt.Fprintf(sb, "    injection_mode: %q\n", cfg.InjectionMode)
-	}
-}
-
-func emitRAGBackendAndFailureConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
-	if cfg.Rerank != nil {
-		if cfg.Rerank.TopK == nil {
-			fmt.Fprint(sb, "    rerank: {}\n")
-		} else {
-			fmt.Fprintf(sb, "    rerank: { top_k: %d }\n", *cfg.Rerank.TopK)
-		}
-	}
-	if backendConfig, ok := normalizePluginConfigMap(cfg.BackendConfig); ok && len(backendConfig) > 0 {
-		fmt.Fprintf(sb, "    backend_config: %s\n", formatPluginConfigValue(backendConfig))
-	}
-	if cfg.OnFailure != "" {
-		fmt.Fprintf(sb, "    on_failure: %q\n", cfg.OnFailure)
-	}
-}
-
-func emitRAGCacheConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
-	if cfg.CacheResults {
-		fmt.Fprintf(sb, "    cache_results: true\n")
-	}
-	if cfg.CacheTTLSeconds != nil {
-		fmt.Fprintf(sb, "    cache_ttl_seconds: %d\n", *cfg.CacheTTLSeconds)
-	}
-	if cfg.MinConfidenceThreshold != nil {
-		fmt.Fprintf(sb, "    min_confidence_threshold: %v\n", *cfg.MinConfidenceThreshold)
 	}
 }
 
@@ -329,22 +151,5 @@ func emitHeaderMutationPluginConfig(sb *strings.Builder, p *config.DecisionPlugi
 	}
 	if len(cfg.Delete) > 0 {
 		fmt.Fprintf(sb, "    delete: %s\n", formatStringArray(cfg.Delete))
-	}
-}
-
-func emitResponseJailbreakPluginConfig(
-	sb *strings.Builder,
-	p *config.DecisionPlugin,
-) {
-	cfg, ok := decodePluginConfig[config.ResponseJailbreakPluginConfig](p)
-	if !ok {
-		return
-	}
-	fmt.Fprintf(sb, "    enabled: %t\n", cfg.Enabled)
-	if cfg.Threshold != 0 {
-		fmt.Fprintf(sb, "    threshold: %g\n", cfg.Threshold)
-	}
-	if cfg.Action != "" {
-		fmt.Fprintf(sb, "    action: %q\n", cfg.Action)
 	}
 }

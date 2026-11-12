@@ -1,5 +1,3 @@
-//go:build !windows && cgo
-
 package cache
 
 import (
@@ -10,7 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 )
 
 // Model-backed regression for #2691 through the production in-memory cache
@@ -47,14 +45,14 @@ func prepareMmbert(t *testing.T) embedding.Provider {
 	if modelPath == "" {
 		t.Skip("set VLLM_SR_MMBERT_TEST_MODEL to run the model-backed polarity regression")
 	}
-	provider, err := native.New(nil).Embedding(context.Background(), config.ResolvedModelBinding{
-		Recipe: "cache-regression", Name: "embedding",
-		Binding: config.ModelBinding{Deployment: "mmbert-test", Contract: "embedding.v1", Adapter: "mmbert"},
+	provider, err := servingtest.Managed(t).Embedding(context.Background(), config.ResolvedModelBinding{
+		Recipe: "cache-regression", Name: "embedding", Contract: "embedding.v1",
+		Binding: config.ModelBinding{Deployment: "mmbert-test"},
 		Deployment: config.ModelDeployment{
-			Artifact: modelPath, Provider: "candle", Device: "cpu", Precision: "float32",
+			Artifact: modelPath, Provider: config.ModelRuntimeProvider, Device: "cpu",
 			Input: config.ModelInputBudget{MaxTokens: 512, Overflow: "reject"},
 		},
-	}, mmbertMemoryCacheDimension, mmbertMemoryCacheLayer)
+	}, 256, 6)
 	if err != nil {
 		t.Fatalf("mmbert provider preparation failed for explicit model %s: %v", modelPath, err)
 	}
@@ -74,7 +72,7 @@ func newMmbertCache(t *testing.T, provider embedding.Provider) *InMemoryCache {
 		TTLSeconds:          3600, // 0 means "not cached"; use a long TTL so entries stay live
 		Enabled:             true,
 		EvictionPolicy:      FIFOEvictionPolicyType,
-		EmbeddingModel:      "mmbert",
+		EmbeddingDeployment: "vela-embedding",
 		EmbeddingProvider:   provider,
 	})
 }

@@ -1,7 +1,23 @@
-import { CLAW_MODE_SYSTEM_PROMPT, type Message } from './ChatComponentTypes'
+import {
+  X_CONVERSATION_ID,
+  X_VSR_COST,
+  X_VSR_COST_CURRENCY,
+  X_VSR_DEBUG,
+  X_VSR_REPLAY_ID,
+  X_VSR_RESPONSE_PATH,
+  X_VSR_SCHEMA_VERSION,
+  X_VSR_SELECTED_DECISION,
+  X_VSR_SELECTED_MODEL,
+  X_VSR_SELECTED_RECIPE,
+  X_VSR_SESSION_ID,
+  X_VSR_TRACE,
+  X_VSR_WARNINGS,
+} from '../generated/vsrHeaders'
+import type { Message } from './ChatComponentTypes'
 import { buildPlaygroundUserContent, type PlaygroundAttachment } from './playgroundFileAttachments'
 import { extractTextToolCalls, normalizeToolCallArguments } from './chatToolCallSupport'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
+import { expandRoutingHeaders } from './vsrTrace'
 
 export interface OutboundChatMessage {
   role: string
@@ -28,74 +44,29 @@ export const assertPlaygroundRequestSize = (request: Record<string, unknown>): v
 
 export const buildPlaygroundRequestHeaders = (conversationId: string): Record<string, string> => ({
   'Content-Type': 'application/json',
-  'x-session-id': conversationId,
-  'x-conversation-id': conversationId,
-  'x-vsr-debug': 'true',
+  [X_VSR_SESSION_ID]: conversationId,
+  [X_CONVERSATION_ID]: conversationId,
+  [X_VSR_DEBUG]: 'true',
 })
 
+// The public set of a routed response, and the trace of a caller the Router
+// allows the debug headers.
 const RESPONSE_HEADER_KEYS = [
-  // v0.4 keystone headers (#2203)
-  'x-vsr-schema-version',
-  'x-vsr-response-path',
-  'x-vsr-selected-model',
-  'x-vsr-effective-input-tokens',
-  'x-vsr-effective-max-output-tokens',
-  'x-vsr-selected-algorithm',
-  'x-vsr-selected-decision',
-  'x-vsr-selected-modality',
-  'x-vsr-replay-id',
-  'x-vsr-cache-hit',
-  'x-vsr-selected-reasoning',
-  'x-vsr-learning-methods',
-  'x-vsr-learning-actions',
-  'x-vsr-learning-scopes',
-  'x-vsr-learning-reasons',
-  'x-vsr-fast-response',
-  'x-vsr-response-warnings',
-  'x-vsr-matched-keywords',
-  'x-vsr-matched-embeddings',
-  'x-vsr-matched-domains',
-  'x-vsr-matched-fact-check',
-  'x-vsr-matched-user-feedback',
-  'x-vsr-matched-reask',
-  'x-vsr-matched-preference',
-  'x-vsr-matched-language',
-  'x-vsr-matched-context',
-  'x-vsr-matched-structure',
-  'x-vsr-context-token-count',
-  'x-vsr-matched-complexity',
-  'x-vsr-matched-modality',
-  'x-vsr-matched-authz',
-  'x-vsr-matched-jailbreak',
-  'x-vsr-matched-safety',
-  'x-vsr-matched-hallucination',
-  'x-vsr-matched-pii',
-  'x-vsr-matched-kb',
-  'x-vsr-matched-conversation',
-  'x-vsr-matched-event',
-  'x-vsr-matched-input-modality',
-  'x-vsr-matched-projections',
-  'x-vsr-looper-model',
-  'x-vsr-looper-models-used',
-  'x-vsr-looper-iterations',
-  'x-vsr-looper-algorithm',
-  'x-vsr-looper-latency-ms',
-  'x-vsr-looper-prompt-tokens',
-  'x-vsr-looper-completion-tokens',
-  'x-vsr-looper-total-tokens',
-  'x-vsr-latency-ms',
-  'x-vsr-ttft-ms',
-  'x-vsr-tpot-ms',
-  'x-vsr-retention-drop',
-  'x-vsr-retention-ttl-turns',
-  'x-vsr-retention-keep-current-model',
-  'x-vsr-retention-prefer-prefix',
+  X_VSR_SCHEMA_VERSION,
+  X_VSR_RESPONSE_PATH,
+  X_VSR_SELECTED_RECIPE,
+  X_VSR_SELECTED_DECISION,
+  X_VSR_SELECTED_MODEL,
+  X_VSR_REPLAY_ID,
+  X_VSR_WARNINGS,
+  X_VSR_COST,
+  X_VSR_COST_CURRENCY,
+  X_VSR_TRACE,
 ] as const
 
 export const buildChatMessages = (
   messages: Message[],
   nextUserMessage: string,
-  enableClawMode: boolean,
   nextUserAttachments: PlaygroundAttachment[] = [],
 ): OutboundChatMessage[] => {
   const chatMessages: OutboundChatMessage[] = []
@@ -168,10 +139,6 @@ export const buildChatMessages = (
     }
   }
 
-  if (enableClawMode) {
-    chatMessages.unshift({ role: 'system', content: CLAW_MODE_SYSTEM_PROMPT })
-  }
-
   chatMessages.push({
     role: 'user',
     content: buildPlaygroundUserContent(nextUserMessage, nextUserAttachments),
@@ -216,6 +183,8 @@ export const buildExactChatRequestBody = (
   return result
 }
 
+// collectResponseHeaders returns the display entries of a routed response:
+// its public headers, and the details of its trace.
 export const collectResponseHeaders = (response: Response): Record<string, string> => {
   const headers: Record<string, string> = {}
 
@@ -226,5 +195,5 @@ export const collectResponseHeaders = (response: Response): Record<string, strin
     }
   })
 
-  return headers
+  return expandRoutingHeaders(headers)
 }

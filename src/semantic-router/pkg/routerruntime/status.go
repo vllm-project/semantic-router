@@ -2,6 +2,7 @@ package routerruntime
 
 import (
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -58,7 +59,9 @@ type StartupObservation struct {
 }
 
 type ConfigStatus struct {
-	ActiveHash       string `json:"active_hash,omitempty"`
+	ActiveHash string `json:"active_hash,omitempty"`
+	// ActiveVersion is the version of the configuration snapshot that serves.
+	ActiveVersion    uint64 `json:"active_version,omitempty"`
 	ObservedHash     string `json:"observed_hash,omitempty"`
 	ObservedAttempt  uint64 `json:"observed_attempt"`
 	ActivationStatus string `json:"activation_status,omitempty"`
@@ -77,6 +80,7 @@ type StatusReport struct {
 }
 
 type localStartupWriter struct {
+	mu       sync.Mutex
 	registry *Registry
 	writer   startupstatus.StatusWriter
 }
@@ -88,6 +92,7 @@ type localStartupSnapshot struct {
 
 func cloneStartupState(state startupstatus.State) startupstatus.State {
 	state.PendingModels = slices.Clone(state.PendingModels)
+	state.ModelDeployments = slices.Clone(state.ModelDeployments)
 	if state.EmbeddingProvider != nil {
 		provider := *state.EmbeddingProvider
 		if provider.APIKeyEnvSet != nil {
@@ -108,7 +113,14 @@ func (r *Registry) StartupStatusWriter(writer startupstatus.StatusWriter) startu
 	return &localStartupWriter{registry: r, writer: writer}
 }
 
+// InstanceID identifies this process incarnation across local and persisted status.
+func (r *Registry) InstanceID() string { return r.instanceID }
+
 func (w *localStartupWriter) Write(state startupstatus.State) error {
+	// Preserve the same observation order locally and in the external publisher.
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	state.InstanceID = w.registry.InstanceID()
 	snapshot := cloneStartupState(state)
 	w.registry.mu.Lock()
 	observedAt := time.Now().UTC()
@@ -159,6 +171,9 @@ func (r *Registry) Status() StatusReport {
 		report.Config.ObservedHash = r.config.DocumentHash
 		if active {
 			report.Config.ActiveHash = r.config.DocumentHash
+			if r.configSnapshot != nil {
+				report.Config.ActiveVersion = r.configSnapshot.Version()
+			}
 		}
 	}
 	if r.configActivation.Attempt != 0 {

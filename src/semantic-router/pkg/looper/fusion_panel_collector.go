@@ -18,6 +18,7 @@ package looper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -43,6 +44,7 @@ type fusionPanelCollector struct {
 	ordered    []*ModelResponse
 	attempts   []FusionPanelAttemptEvidence
 	dispatched []bool
+	failures   []error
 	usable     int
 	usage      TokenUsage
 }
@@ -94,7 +96,8 @@ func (c *fusionPanelCollector) recordAttempt(
 	switch {
 	case result.err != nil:
 		evidence.State = fusionPanelErrorState(result.err)
-		evidence.Error = result.err.Error()
+		evidence.Error = modelFailureReason(result.err)
+		c.failures = append(c.failures, result.err)
 	case !isUsableFusionPanelResponse(result.resp):
 		evidence.State = FusionPanelAttemptUnusable
 		evidence.Error = unusableFusionPanelReason
@@ -164,6 +167,7 @@ func (c *fusionPanelCollector) outcome() fusionPanelOutcome {
 		responses:        compactUsableFusionPanelResponses(c.ordered),
 		failedModels:     failedFusionPanelModels(attempts),
 		attempts:         attempts,
+		failures:         errors.Join(c.failures...),
 		usage:            c.usage,
 		dispatchedModels: c.dispatchedPanelModels(),
 	}

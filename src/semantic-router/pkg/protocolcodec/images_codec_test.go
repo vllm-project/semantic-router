@@ -3,8 +3,10 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -215,6 +217,29 @@ func TestImagesCodecEncodeRequestCarriesImagesOptions(t *testing.T) {
 
 // A client explicitly asking for url responses must be rejected: the sink
 // only ever emits b64_json.
+// An Images API client request becomes a first-generation neutral request
+// whose prompt is the user's text; the model it names is the one routing
+// resolves, not the hosted operation's image model.
+func TestImagesCodecDecodeRequestServesTheImagesAPIEntry(t *testing.T) {
+	codec := ImagesCodec{}
+	body := []byte(`{"model":"vllm-sr/auto","prompt":"a lighthouse","n":2,"size":"512x512","quality":"high","output_format":"webp"}`)
+	request, _, _, err := codec.DecodeRequest(body, llmprotocol.Policy{})
+	if err != nil {
+		t.Fatalf("DecodeRequest: %v", err)
+	}
+	if request.Generation != 1 || request.Model != "vllm-sr/auto" || len(request.Messages) != 1 ||
+		request.Messages[0].Role != llmprotocol.RoleUser || request.Messages[0].Content[0].Text != "a lighthouse" {
+		t.Fatalf("decoded request = %+v", request)
+	}
+	options := request.ImageGeneration
+	if options == nil || options.Model != "" || options.Size != "512x512" || options.Quality != "high" || options.OutputFormat != "webp" {
+		t.Fatalf("image options = %+v", options)
+	}
+	if request.CandidateCount == nil || *request.CandidateCount != 2 {
+		t.Fatalf("candidate count = %v, want n", request.CandidateCount)
+	}
+}
+
 func TestImagesCodecDecodeRequestRejectsURLResponseFormat(t *testing.T) {
 	codec := ImagesCodec{}
 	body := []byte(`{"prompt":"a horse","response_format":"url"}`)
@@ -291,7 +316,7 @@ func TestImagesCodecDecodeResponseEmptyData(t *testing.T) {
 func TestImagesCodecEncodeResponseRoundTrip(t *testing.T) {
 	codec := ImagesCodec{}
 	payload := "cHNu" // "psn"
-	response := llmprotocol.Response{Output: []llmprotocol.OutputItem{{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+	response := llmprotocol.Response{CreatedAt: time.Unix(1700000000, 0), Output: []llmprotocol.OutputItem{{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
 		Kind:           llmprotocol.ContentGeneratedImage,
 		GeneratedImage: &llmprotocol.GeneratedImage{Status: llmprotocol.ImageGenerationCompleted, Result: &payload},
 	}}}}}
@@ -305,6 +330,31 @@ func TestImagesCodecEncodeResponseRoundTrip(t *testing.T) {
 	}
 	if len(wire.Data) != 1 || wire.Data[0].B64JSON != payload {
 		t.Fatalf("roundtrip data = %+v, want one %q", wire.Data, payload)
+	}
+	if wire.Created != 1700000000 {
+		t.Fatalf("created = %d, want the response's own creation time", wire.Created)
+	}
+}
+
+// An image_generation_call that failed, or ended without an image, is no image
+// for an Images API client: the reply fails instead of carrying an empty one.
+func TestImagesCodecFailsAnImageTheModelDidNotGenerate(t *testing.T) {
+	engine, err := NewEngine(NewBuiltinRegistry(), llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, item := range map[string]string{
+		"failed":       `{"type":"image_generation_call","id":"ig_1","status":"failed","result":null}`,
+		"null result":  `{"type":"image_generation_call","id":"ig_1","status":"completed","result":null}`,
+		"empty result": `{"type":"image_generation_call","id":"ig_1","status":"completed","result":""}`,
+	} {
+		body := `{"id":"resp_1","object":"response","created_at":1,"model":"omni","status":"completed","error":null,"incomplete_details":null,` +
+			`"output":[` + item + `],"parallel_tool_calls":false,"tool_choice":"auto","tools":[{"type":"image_generation"}]}`
+		translated, err := engine.TranslateResponse(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIImagesV1, []byte(body), nil)
+		var protocolErr *llmprotocol.ProtocolError
+		if !errors.As(err, &protocolErr) || protocolErr.Code != "image_generation_failed" {
+			t.Errorf("%s: images reply = %s, %v; want image_generation_failed", name, translated.Body, err)
+		}
 	}
 }
 
@@ -326,6 +376,47 @@ func TestImagesCodecCapabilitiesEnableCapabilityDrivenSelection(t *testing.T) {
 	})
 	if !set.Contains(required) {
 		t.Fatalf("images capabilities %v must contain required %v", set.Names(), required.Names())
+	}
+}
+
+// vLLM and vLLM-Omni send the HTTP status as an integer error code (e.g.
+// "code":400) rather than a string. The images codec must decode this the
+// same way the Chat and Responses codecs do via openAIErrorCode, instead of
+// failing the whole transport-error decode and masking the backend's
+// message behind a generic invalid-upstream error.
+func TestImagesCodecDecodeTransportErrorAcceptsIntegerCode(t *testing.T) {
+	codec := ImagesCodec{}
+	body := []byte(`{"error":{"message":"quality must be one of ['lossless', 'high'], got 'auto'","type":"Bad Request","param":null,"code":400}}`)
+	transportErr, _, err := codec.DecodeTransportError(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatalf("DecodeTransportError failed on integer code: %v", err)
+	}
+	if transportErr.Error == nil {
+		t.Fatal("expected a decoded protocol error")
+	}
+	if transportErr.Error.Code != "400" {
+		t.Fatalf("code = %q, want %q", transportErr.Error.Code, "400")
+	}
+	wantMessage := "quality must be one of ['lossless', 'high'], got 'auto'"
+	if transportErr.Error.Message != wantMessage {
+		t.Fatalf("message = %q, want %q", transportErr.Error.Message, wantMessage)
+	}
+}
+
+// A string error code (the shape used by OpenAI-style bodies) must keep
+// decoding exactly as before.
+func TestImagesCodecDecodeTransportErrorAcceptsStringCode(t *testing.T) {
+	codec := ImagesCodec{}
+	body := []byte(`{"error":{"message":"bad size","type":"invalid_request_error","code":"invalid_size"}}`)
+	transportErr, _, err := codec.DecodeTransportError(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatalf("DecodeTransportError failed on string code: %v", err)
+	}
+	if transportErr.Error == nil || transportErr.Error.Code != "invalid_size" {
+		t.Fatalf("code = %+v, want invalid_size", transportErr.Error)
+	}
+	if transportErr.Error.Message != "bad size" {
+		t.Fatalf("message = %q, want %q", transportErr.Error.Message, "bad size")
 	}
 }
 

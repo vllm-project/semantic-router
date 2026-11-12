@@ -16,31 +16,67 @@ from pathlib import Path
 import provider_mocker_image as mocker
 
 DUAL = ["linux/amd64", "linux/arm64"]
+ROUTER_DOCKERFILE = "tools/docker/Dockerfile.extproc"
+ATTACHED_DOCKERFILE = "tools/docker/Dockerfile.attached"
 DEFINITIONS = {
     "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
-    "extproc": (".", "tools/docker/Dockerfile.extproc", DUAL),
-    "extproc-rocm": (".", "tools/docker/Dockerfile.extproc-rocm", ["linux/amd64"]),
     mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
+    "model-runtime": ("src/model-runtime", "src/model-runtime/Dockerfile", DUAL),
     "operator": (".", "deploy/operator/Dockerfile", DUAL),
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
-    "vllm-sr": (".", "src/vllm-sr/Dockerfile", DUAL),
-    "vllm-sr-cuda": (".", "src/vllm-sr/Dockerfile.cuda", ["linux/amd64"]),
-    "vllm-sr-rocm": (".", "src/vllm-sr/Dockerfile.rocm", ["linux/amd64"]),
-    "vllm-sr-sim": (".", "src/fleet-sim/Dockerfile", DUAL),
+    "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
+    "vllm-sr-riscv64": (".", ATTACHED_DOCKERFILE, ["linux/riscv64"]),
+    "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, DUAL),
+    "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
+}
+# Router images are one Dockerfile target per accelerator: (target, accelerator).
+ROUTER_BUILDS = {
+    "vllm-sr": ("vllm-sr", "cpu"),
+    "vllm-sr-riscv64": ("vllm-sr-attached", "cpu"),
+    "vllm-sr-cuda": ("vllm-sr", "cuda"),
+    "vllm-sr-rocm": ("vllm-sr", "rocm"),
+}
+# Names the router images were published under before they merged. Each one is
+# pushed with the same digests as its image for one release, then removed.
+PUBLICATION_ALIASES = {
+    "vllm-sr": ["extproc"],
+    "vllm-sr-rocm": ["extproc-rocm"],
 }
 IMAGE_ENV = {
-    "vllm-sr": ["VLLM_SR_IMAGE", "VLLM_SR_ROUTER_IMAGE"],
+    # One router image serves every Kind profile and the CLI stack. The first
+    # variable is the one the E2E framework requires.
+    "vllm-sr": ["E2E_PREBUILT_EXT_PROC_IMAGE", "VLLM_SR_IMAGE", "VLLM_SR_ROUTER_IMAGE"],
     "dashboard": ["VLLM_SR_DASHBOARD_IMAGE"],
-    "extproc": ["E2E_PREBUILT_EXT_PROC_IMAGE"],
     "operator": ["E2E_PREBUILT_OPERATOR_IMAGE"],
     "operator-bundle": ["E2E_PREBUILT_OPERATOR_BUNDLE_IMAGE"],
     mocker.IMAGE: ["E2E_PREBUILT_PROVIDER_MOCKER_IMAGE", "PROVIDER_MOCKER_IMAGE"],
+    "model-runtime": ["E2E_PREBUILT_MODEL_RUNTIME_IMAGE"],
 }
+
+
+def file_digest(stream, digest="sha256"):
+    """Compute digest of a binary file stream with Python 3.10 fallback."""
+    if hasattr(hashlib, "file_digest"):
+        return hashlib.file_digest(stream, digest)
+    hasher = hashlib.new(digest) if isinstance(digest, str) else digest()
+    while chunk := stream.read(65536):
+        hasher.update(chunk)
+    return hasher
 
 
 def sha256(path: Path) -> str:
     with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        return file_digest(stream, "sha256").hexdigest()
+
+
+def run_date() -> str:
+    """The run's publication date: CI_RUN_DATE when the caller set one, else today (UTC)."""
+    date = os.environ.get("CI_RUN_DATE", "")
+    if not date:
+        return datetime.now(timezone.utc).strftime("%Y%m%d")
+    if not re.fullmatch(r"\d{8}", date):
+        raise ValueError("CI_RUN_DATE must be YYYYMMDD")
+    return date
 
 
 def source_sha() -> str:
@@ -99,7 +135,11 @@ def verify(directory: Path, image: str) -> dict:
     context, dockerfile, _ = DEFINITIONS[image]
     if manifest["source_sha"] != source_sha() or manifest["id"] != image:
         raise ValueError("Image belongs to a different source revision or definition")
-    if manifest["context"] != context or manifest["dockerfile"] != dockerfile:
+    if (
+        manifest["context"] != context
+        or manifest["dockerfile"] != dockerfile
+        or manifest.get("target", "") != ROUTER_BUILDS.get(image, ("", ""))[0]
+    ):
         raise ValueError("Image build definition changed")
     if manifest["sha256"] != sha256(archive) or manifest["images"] != oci_images(
         archive
@@ -173,6 +213,9 @@ def publication_tags(
     else:
         raise ValueError("PR artifacts cannot be published")
     if latest:
+        if mode != "release":
+            # latest_tags.py moves it once main's complete image set exists.
+            raise ValueError("only a release publishes latest with its images")
         tags.append("latest")
     return tags
 
@@ -257,13 +300,16 @@ def main() -> None:
     if not args.image:
         parser.error("--image is required")
     context, dockerfile, supported = DEFINITIONS[args.image]
-    platforms = supported if args.multiarch else ["linux/amd64"]
+    target, accelerator = ROUTER_BUILDS.get(args.image, ("", ""))
+    platforms = supported if args.multiarch else supported[:1]
     if args.command == "definition":
         values = {
             "context": context,
             "dockerfile": dockerfile,
+            "target": target,
+            "accelerator": accelerator,
             "platforms": ",".join(platforms),
-            "date": datetime.now(timezone.utc).strftime("%Y%m%d"),
+            "date": run_date(),
         }
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             for key, value in values.items():
@@ -284,6 +330,7 @@ def main() -> None:
             "source_sha": source_sha(),
             "context": context,
             "dockerfile": dockerfile,
+            "target": target,
             "build_args": os.environ["CI_IMAGE_BUILD_ARGS"].splitlines(),
             "mode": args.mode,
             "tag": args.tag,
@@ -325,22 +372,33 @@ def main() -> None:
                     print(json.dumps({"reused_qualified_publication": existing["ref"]}))
                     return
             owner = os.environ["GITHUB_REPOSITORY_OWNER"].lower()
-            for tag in publication_tags(
+            tags = publication_tags(
                 args.image, args.mode, args.tag, args.latest, manifest["date"]
-            ):
-                subprocess.run(
-                    [
-                        "skopeo",
-                        "copy",
-                        "--all",
-                        "--preserve-digests",
-                        "--digestfile",
-                        str(args.directory / "published-digest.txt"),
-                        f"oci-archive:{args.directory / 'image.tar'}",
-                        f"docker://ghcr.io/{owner}/semantic-router/{args.image}:{tag}",
-                    ],
-                    check=True,
-                )
+            )
+            aliases = PUBLICATION_ALIASES.get(args.image, [])
+            for name in [args.image, *aliases]:
+                digest = "published-digest.txt"
+                if name != args.image:
+                    digest = f"published-digest-{name}.txt"
+                for tag in tags:
+                    subprocess.run(
+                        [
+                            "skopeo",
+                            "copy",
+                            "--all",
+                            "--preserve-digests",
+                            "--digestfile",
+                            str(args.directory / digest),
+                            f"oci-archive:{args.directory / 'image.tar'}",
+                            f"docker://ghcr.io/{owner}/semantic-router/{name}:{tag}",
+                        ],
+                        check=True,
+                    )
+            for name in aliases:
+                published = (args.directory / "published-digest.txt").read_text()
+                alias = (args.directory / f"published-digest-{name}.txt").read_text()
+                if alias.strip() != published.strip():
+                    raise ValueError(f"{name} was published with a different digest")
         print(json.dumps(manifest, indent=2))
 
 

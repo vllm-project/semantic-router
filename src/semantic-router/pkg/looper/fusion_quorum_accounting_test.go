@@ -52,7 +52,7 @@ func TestFallbackAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 			Model string `json:"model"`
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		ordinal, _ := strconv.Atoi(r.Header.Get("x-vsr-looper-iteration"))
+		ordinal, _ := strconv.Atoi(r.Header.Get(testHopIteration))
 		mu.Lock()
 		iterations[payload.Model] = ordinal
 		mu.Unlock()
@@ -72,20 +72,20 @@ func TestFallbackAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:                  "judge",
 			AnalysisModels:         panelModels,
 			MaxConcurrent:          1,
 			MinSuccessfulResponses: 2,
 			RoundTimeoutSeconds:    1,
-			OnError:                config.FusionOnErrorSkip,
 			QuorumFailurePolicy:    config.FusionQuorumFailurePolicyFallback,
 			QuorumFallbackTarget:   "backup-model",
 		},
 	}
 
-	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).
+	resp, err := fusionHopsTo(server.URL).
 		Execute(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -163,7 +163,7 @@ func TestSuccessAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 			Model string `json:"model"`
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-		ordinal, _ := strconv.Atoi(r.Header.Get("x-vsr-looper-iteration"))
+		ordinal, _ := strconv.Atoi(r.Header.Get(testHopIteration))
 		recorder.record(payload.Model, ordinal)
 
 		writeCanaryReasoningCompletion(w, payload.Model, "usable answer from "+payload.Model, "")
@@ -172,7 +172,8 @@ func TestSuccessAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:          "judge",
 			AnalysisModels: panelModels,
@@ -180,11 +181,10 @@ func TestSuccessAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 			// panel while the remaining workers are still queued.
 			MaxConcurrent:          1,
 			MinSuccessfulResponses: 1,
-			OnError:                config.FusionOnErrorSkip,
 		},
 	}
 
-	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).
+	resp, err := fusionHopsTo(server.URL).
 		Execute(context.Background(), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -346,7 +346,7 @@ func TestJudgeOrdinalsContinuePanelAttemptSequence(t *testing.T) {
 					Model string `json:"model"`
 				}
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-				ordinal, _ := strconv.Atoi(r.Header.Get("x-vsr-looper-iteration"))
+				ordinal, _ := strconv.Atoi(r.Header.Get(testHopIteration))
 				recorder.record(payload.Model, ordinal)
 
 				switch payload.Model {
@@ -365,18 +365,18 @@ func TestJudgeOrdinalsContinuePanelAttemptSequence(t *testing.T) {
 
 			req := newFusionTestRequest()
 			req.Algorithm = &config.AlgorithmConfig{
-				Type: "fusion",
+				Type:    "fusion",
+				OnError: config.FusionOnErrorSkip,
 				Fusion: &config.FusionAlgorithmConfig{
 					Model:                  "judge",
 					AnalysisModels:         []string{"panel-a", "panel-b"},
 					AnalysisMode:           tt.analysisMode,
 					MaxConcurrent:          2,
 					MinSuccessfulResponses: 1,
-					OnError:                config.FusionOnErrorSkip,
 				},
 			}
 
-			resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).
+			resp, err := fusionHopsTo(server.URL).
 				Execute(context.Background(), req)
 			require.NoError(t, err)
 			require.NotNil(t, resp)

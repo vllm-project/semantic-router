@@ -113,3 +113,41 @@
   - moe
   - long_context
   released_at: '2025-06-30'
+- id: baidu/ernie-4.5-21b-a3b
+  display_name: ERNIE 4.5 21B A3B
+  description: Baidu's open-weight 21B-parameter text MoE model with 3B active parameters.
+  kind: physical
+  publisher: Baidu
+  presentation:
+    logo: package:baidu
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT
+    license: Apache-2.0
+  family: ernie-4.5
+  parameter_size: 21B (3B active)
+  revision: 87db95487941cb39592ee0abca3b9155a6d19c5c
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Baidu
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md
+  tags:
+  - open_weights
+  - moe
+  - long_context
+  - efficient
+  released_at: '2025-06-30'

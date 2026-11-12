@@ -1,0 +1,512 @@
+{
+  "builds": {
+    "before": {
+      "extproc": {
+        "label": "extproc",
+        "source": "1c6d372ec54b45155298f50870429f0c2ed64eaf",
+        "dockerfile": "tools/docker/Dockerfile.extproc",
+        "args": "",
+        "status": 0,
+        "build_seconds": 177.0,
+        "disk_bytes": 3835668389,
+        "raw_bytes": 2290240000,
+        "gzip_bytes": 1505826780,
+        "layers": 12,
+        "load_before": "10.61 10.34 13.65",
+        "load_after": "18.07 13.30 14.17",
+        "finished": "2026-10-04T08:26:42Z"
+      },
+      "vllm-sr": {
+        "label": "vllm-sr",
+        "source": "1c6d372ec54b45155298f50870429f0c2ed64eaf",
+        "dockerfile": "src/vllm-sr/Dockerfile",
+        "args": "",
+        "status": 0,
+        "build_seconds": 105.8,
+        "disk_bytes": 3622080017,
+        "raw_bytes": 2288154112,
+        "gzip_bytes": 1271861337,
+        "layers": 20,
+        "load_before": "14.95 12.84 14.00",
+        "load_after": "51.38 24.41 17.89",
+        "finished": "2026-10-04T08:28:39Z"
+      },
+      "extproc-rocm": {
+        "label": "extproc-rocm",
+        "source": "1c6d372ec54b45155298f50870429f0c2ed64eaf",
+        "dockerfile": "tools/docker/Dockerfile.extproc-rocm",
+        "args": "",
+        "status": 0,
+        "build_seconds": 273.6,
+        "disk_bytes": 23028814519,
+        "raw_bytes": 17401264128,
+        "gzip_bytes": 5571404299,
+        "layers": 17,
+        "load_before": "44.80 23.89 17.79",
+        "load_after": "24.27 30.68 22.76",
+        "finished": "2026-10-04T08:34:09Z"
+      },
+      "vllm-sr-rocm": {
+        "label": "vllm-sr-rocm",
+        "source": "1c6d372ec54b45155298f50870429f0c2ed64eaf",
+        "dockerfile": "src/vllm-sr/Dockerfile.rocm",
+        "args": "",
+        "status": 0,
+        "build_seconds": 310.8,
+        "disk_bytes": 22748973043,
+        "raw_bytes": 17249710080,
+        "gzip_bytes": 5437699382,
+        "layers": 24,
+        "load_before": "37.48 35.43 24.97",
+        "load_after": "26.41 37.08 29.83",
+        "finished": "2026-10-04T08:40:15Z"
+      },
+      "vllm-sr-cuda": {
+        "label": "vllm-sr-cuda",
+        "source": "1c6d372ec54b45155298f50870429f0c2ed64eaf",
+        "dockerfile": "src/vllm-sr/Dockerfile.cuda",
+        "args": "",
+        "status": 0,
+        "build_seconds": 129.5,
+        "disk_bytes": 8582729154,
+        "raw_bytes": 5124384768,
+        "gzip_bytes": 3425609386,
+        "layers": 28,
+        "load_before": "21.81 34.28 29.30",
+        "load_after": "43.98 36.89 30.79",
+        "finished": "2026-10-04T08:42:58Z"
+      }
+    },
+    "after": {
+      "extproc": {
+        "label": "extproc",
+        "source": "30e6c4ca3154205d4af07d59555d2bfb8085af82",
+        "dockerfile": "tools/docker/Dockerfile.extproc",
+        "args": "",
+        "status": 0,
+        "build_seconds": 89.7,
+        "disk_bytes": 3606730685,
+        "raw_bytes": 2276435456,
+        "gzip_bytes": 1270555676,
+        "layers": 14,
+        "load_before": "18.33 19.53 19.03",
+        "load_after": "16.73 18.99 18.90",
+        "finished": "2026-10-04T08:03:28Z"
+      },
+      "vllm-sr": {
+        "label": "vllm-sr",
+        "source": "30e6c4ca3154205d4af07d59555d2bfb8085af82",
+        "dockerfile": "tools/docker/Dockerfile.extproc",
+        "args": "--target vllm-sr",
+        "status": 0,
+        "build_seconds": 86.8,
+        "disk_bytes": 3614284506,
+        "raw_bytes": 2282721792,
+        "gzip_bytes": 1271435499,
+        "layers": 17,
+        "load_before": "16.53 18.88 18.86",
+        "load_after": "17.85 19.39 19.09",
+        "finished": "2026-10-04T08:05:07Z"
+      },
+      "extproc-rocm": {
+        "label": "extproc-rocm",
+        "source": "30e6c4ca3154205d4af07d59555d2bfb8085af82",
+        "dockerfile": "tools/docker/Dockerfile.extproc",
+        "args": "--build-arg ACCELERATOR=rocm",
+        "status": 0,
+        "build_seconds": 341.2,
+        "disk_bytes": 22883670249,
+        "raw_bytes": 15572981248,
+        "gzip_bytes": 7238860262,
+        "layers": 16,
+        "load_before": "17.33 19.23 19.04",
+        "load_after": "16.21 16.55 17.88",
+        "finished": "2026-10-04T08:12:03Z"
+      },
+      "vllm-sr-rocm": {
+        "label": "vllm-sr-rocm",
+        "source": "30e6c4ca3154205d4af07d59555d2bfb8085af82",
+        "dockerfile": "tools/docker/Dockerfile.extproc",
+        "args": "--target vllm-sr --build-arg ACCELERATOR=rocm",
+        "status": 0,
+        "build_seconds": 348.6,
+        "disk_bytes": 22891192970,
+        "raw_bytes": 15579267584,
+        "gzip_bytes": 7239729454,
+        "layers": 19,
+        "load_before": "12.21 15.26 17.33",
+        "load_after": "5.09 11.80 15.59",
+        "finished": "2026-10-04T08:19:06Z"
+      },
+      "vllm-sr-cuda": {
+        "label": "vllm-sr-cuda",
+        "source": "30e6c4ca3154205d4af07d59555d2bfb8085af82",
+        "dockerfile": "tools/docker/Dockerfile.extproc",
+        "args": "--target vllm-sr --build-arg ACCELERATOR=cuda",
+        "status": 0,
+        "build_seconds": 206.7,
+        "disk_bytes": 14024330361,
+        "raw_bytes": 8729972736,
+        "gzip_bytes": 5230300562,
+        "layers": 18,
+        "load_before": "3.85 9.99 14.66",
+        "load_after": "10.67 10.49 13.92",
+        "finished": "2026-10-04T08:23:31Z"
+      }
+    }
+  },
+  "ready": {
+    "after-extproc-2cpu": {
+      "runs": [
+        {
+          "run": 0,
+          "health_seconds": 0.24,
+          "ready_seconds": 22.8,
+          "memory_at_ready": "4.245GiB"
+        },
+        {
+          "run": 1,
+          "health_seconds": 0.23,
+          "ready_seconds": 9.79,
+          "memory_at_ready": "3.017GiB"
+        },
+        {
+          "run": 2,
+          "health_seconds": 0.24,
+          "ready_seconds": 9.25,
+          "memory_at_ready": "3.025GiB"
+        },
+        {
+          "run": 3,
+          "health_seconds": 0.23,
+          "ready_seconds": 9.18,
+          "memory_at_ready": "3.012GiB"
+        },
+        {
+          "run": 4,
+          "health_seconds": 0.23,
+          "ready_seconds": 9.28,
+          "memory_at_ready": "3.009GiB"
+        },
+        {
+          "run": 5,
+          "health_seconds": 0.24,
+          "ready_seconds": 9.15,
+          "memory_at_ready": "3.01GiB"
+        }
+      ],
+      "api_up_median_seconds": 0.235,
+      "run0_ready_seconds": 22.8,
+      "warm_ready_median_seconds": 9.25,
+      "memory_median_gib": 3.01
+    },
+    "after-extproc-32cpu": {
+      "runs": [
+        {
+          "run": 0,
+          "health_seconds": 0.22,
+          "ready_seconds": 4.82,
+          "memory_at_ready": "3.875GiB"
+        },
+        {
+          "run": 1,
+          "health_seconds": 0.23,
+          "ready_seconds": 4.83,
+          "memory_at_ready": "3.874GiB"
+        },
+        {
+          "run": 2,
+          "health_seconds": 0.23,
+          "ready_seconds": 4.75,
+          "memory_at_ready": "3.877GiB"
+        },
+        {
+          "run": 3,
+          "health_seconds": 0.24,
+          "ready_seconds": 4.87,
+          "memory_at_ready": "3.877GiB"
+        },
+        {
+          "run": 4,
+          "health_seconds": 0.24,
+          "ready_seconds": 4.83,
+          "memory_at_ready": "3.876GiB"
+        },
+        {
+          "run": 5,
+          "health_seconds": 0.23,
+          "ready_seconds": 4.86,
+          "memory_at_ready": "3.875GiB"
+        }
+      ],
+      "api_up_median_seconds": 0.23,
+      "run0_ready_seconds": 4.82,
+      "warm_ready_median_seconds": 4.83,
+      "memory_median_gib": 3.88
+    },
+    "after-vllm-sr-2cpu": {
+      "runs": [
+        {
+          "run": 0,
+          "health_seconds": 0.24,
+          "ready_seconds": 22.92,
+          "memory_at_ready": "4.171GiB"
+        },
+        {
+          "run": 1,
+          "health_seconds": 0.23,
+          "ready_seconds": 10.36,
+          "memory_at_ready": "3.01GiB"
+        },
+        {
+          "run": 2,
+          "health_seconds": 0.22,
+          "ready_seconds": 9.41,
+          "memory_at_ready": "3.026GiB"
+        },
+        {
+          "run": 3,
+          "health_seconds": 0.23,
+          "ready_seconds": 9.44,
+          "memory_at_ready": "3.026GiB"
+        },
+        {
+          "run": 4,
+          "health_seconds": 0.23,
+          "ready_seconds": 9.6,
+          "memory_at_ready": "3.01GiB"
+        },
+        {
+          "run": 5,
+          "health_seconds": 0.24,
+          "ready_seconds": 9.7,
+          "memory_at_ready": "3.025GiB"
+        }
+      ],
+      "api_up_median_seconds": 0.23,
+      "run0_ready_seconds": 22.92,
+      "warm_ready_median_seconds": 9.6,
+      "memory_median_gib": 3.02
+    },
+    "after-vllm-sr-32cpu": {
+      "runs": [
+        {
+          "run": 0,
+          "health_seconds": 0.24,
+          "ready_seconds": 5.11,
+          "memory_at_ready": "3.875GiB"
+        },
+        {
+          "run": 1,
+          "health_seconds": 0.23,
+          "ready_seconds": 5.09,
+          "memory_at_ready": "3.877GiB"
+        },
+        {
+          "run": 2,
+          "health_seconds": 0.23,
+          "ready_seconds": 5.1,
+          "memory_at_ready": "3.875GiB"
+        },
+        {
+          "run": 3,
+          "health_seconds": 0.23,
+          "ready_seconds": 4.97,
+          "memory_at_ready": "3.874GiB"
+        },
+        {
+          "run": 4,
+          "health_seconds": 0.23,
+          "ready_seconds": 5.01,
+          "memory_at_ready": "3.877GiB"
+        },
+        {
+          "run": 5,
+          "health_seconds": 0.23,
+          "ready_seconds": 5.02,
+          "memory_at_ready": "3.875GiB"
+        }
+      ],
+      "api_up_median_seconds": 0.23,
+      "run0_ready_seconds": 5.11,
+      "warm_ready_median_seconds": 5.02,
+      "memory_median_gib": 3.88
+    },
+    "before-extproc-2cpu": {
+      "runs": [
+        {
+          "run": 0,
+          "health_seconds": 0.23,
+          "ready_seconds": 37.28,
+          "memory_at_ready": "6.929GiB"
+        },
+        {
+          "run": 1,
+          "health_seconds": 0.24,
+          "ready_seconds": 17.35,
+          "memory_at_ready": "6.68GiB"
+        },
+        {
+          "run": 2,
+          "health_seconds": 0.22,
+          "ready_seconds": 16.98,
+          "memory_at_ready": "6.487GiB"
+        },
+        {
+          "run": 3,
+          "health_seconds": 0.23,
+          "ready_seconds": 16.95,
+          "memory_at_ready": "6.639GiB"
+        },
+        {
+          "run": 4,
+          "health_seconds": 0.24,
+          "ready_seconds": 16.81,
+          "memory_at_ready": "6.102GiB"
+        },
+        {
+          "run": 5,
+          "health_seconds": 0.23,
+          "ready_seconds": 15.75,
+          "memory_at_ready": "6.252GiB"
+        }
+      ],
+      "api_up_median_seconds": 0.23,
+      "run0_ready_seconds": 37.28,
+      "warm_ready_median_seconds": 16.95,
+      "memory_median_gib": 6.49
+    },
+    "before-extproc-32cpu": {
+      "runs": [
+        {
+          "run": 0,
+          "health_seconds": 0.23,
+          "ready_seconds": 13.72,
+          "memory_at_ready": "6.572GiB"
+        },
+        {
+          "run": 1,
+          "health_seconds": 0.23,
+          "ready_seconds": 11.52,
+          "memory_at_ready": "6.105GiB"
+        },
+        {
+          "run": 2,
+          "health_seconds": 0.25,
+          "ready_seconds": 11.21,
+          "memory_at_ready": "6.499GiB"
+        },
+        {
+          "run": 3,
+          "health_seconds": 0.26,
+          "ready_seconds": 11.24,
+          "memory_at_ready": "6.098GiB"
+        },
+        {
+          "run": 4,
+          "health_seconds": 0.23,
+          "ready_seconds": 11.31,
+          "memory_at_ready": "6.484GiB"
+        },
+        {
+          "run": 5,
+          "health_seconds": 0.22,
+          "ready_seconds": 11.29,
+          "memory_at_ready": "6.534GiB"
+        }
+      ],
+      "api_up_median_seconds": 0.23,
+      "run0_ready_seconds": 13.72,
+      "warm_ready_median_seconds": 11.29,
+      "memory_median_gib": 6.48
+    },
+    "before-vllm-sr-2cpu": {
+      "runs": [
+        {
+          "run": 0,
+          "health_seconds": 0.23,
+          "ready_seconds": 37.57,
+          "memory_at_ready": "6.533GiB"
+        },
+        {
+          "run": 1,
+          "health_seconds": 0.23,
+          "ready_seconds": 18.15,
+          "memory_at_ready": "6.747GiB"
+        },
+        {
+          "run": 2,
+          "health_seconds": 0.23,
+          "ready_seconds": 17.57,
+          "memory_at_ready": "6.773GiB"
+        },
+        {
+          "run": 3,
+          "health_seconds": 0.23,
+          "ready_seconds": 17.11,
+          "memory_at_ready": "6.508GiB"
+        },
+        {
+          "run": 4,
+          "health_seconds": 0.29,
+          "ready_seconds": 16.1,
+          "memory_at_ready": "6.099GiB"
+        },
+        {
+          "run": 5,
+          "health_seconds": 0.23,
+          "ready_seconds": 15.48,
+          "memory_at_ready": "6.178GiB"
+        }
+      ],
+      "api_up_median_seconds": 0.23,
+      "run0_ready_seconds": 37.57,
+      "warm_ready_median_seconds": 17.11,
+      "memory_median_gib": 6.51
+    },
+    "before-vllm-sr-32cpu": {
+      "runs": [
+        {
+          "run": 0,
+          "health_seconds": 0.23,
+          "ready_seconds": 12.69,
+          "memory_at_ready": "6.482GiB"
+        },
+        {
+          "run": 1,
+          "health_seconds": 0.23,
+          "ready_seconds": 11.38,
+          "memory_at_ready": "6.534GiB"
+        },
+        {
+          "run": 2,
+          "health_seconds": 0.23,
+          "ready_seconds": 11.14,
+          "memory_at_ready": "6.479GiB"
+        },
+        {
+          "run": 3,
+          "health_seconds": 0.23,
+          "ready_seconds": 10.9,
+          "memory_at_ready": "6.084GiB"
+        },
+        {
+          "run": 4,
+          "health_seconds": 0.23,
+          "ready_seconds": 11.09,
+          "memory_at_ready": "6.513GiB"
+        },
+        {
+          "run": 5,
+          "health_seconds": 0.22,
+          "ready_seconds": 11.11,
+          "memory_at_ready": "6.526GiB"
+        }
+      ],
+      "api_up_median_seconds": 0.23,
+      "run0_ready_seconds": 12.69,
+      "warm_ready_median_seconds": 11.11,
+      "memory_median_gib": 6.51
+    }
+  }
+}

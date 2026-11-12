@@ -25,7 +25,7 @@ All MoM models are:
 #### Domain/Intent Classifier
 
 - **Model ID**: `models/mom-domain-classifier`
-- **HuggingFace**: `LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model`
+- **HuggingFace**: `vllm-sr/lora_intent_classifier_bert-base-uncased_model`
 - **Purpose**: Classify user queries into 14 MMLU categories (math, science, history, etc.)
 - **Architecture**: BERT-base (110M) + LoRA adapters
 - **Use Case**: Route queries to domain-specific models or experts
@@ -33,7 +33,7 @@ All MoM models are:
 #### PII Detector
 
 - **Model ID**: `models/mom-pii-classifier`
-- **HuggingFace**: `LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model`
+- **HuggingFace**: `vllm-sr/lora_pii_detector_bert-base-uncased_model`
 - **Purpose**: Detect 35 types of personally identifiable information
 - **Architecture**: BERT-base (110M) + LoRA adapters
 - **Use Case**: Privacy protection, compliance, data masking
@@ -41,7 +41,7 @@ All MoM models are:
 #### Jailbreak Detector
 
 - **Model ID**: `models/mom-jailbreak-classifier`
-- **HuggingFace**: `LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model`
+- **HuggingFace**: `vllm-sr/lora_jailbreak_classifier_bert-base-uncased_model`
 - **Purpose**: Detect prompt injection and jailbreak attempts
 - **Architecture**: BERT-base (110M) + LoRA adapters
 - **Use Case**: Content safety, prompt security
@@ -49,7 +49,7 @@ All MoM models are:
 #### Feedback Detector
 
 - **Model ID**: `models/mom-feedback-detector`
-- **HuggingFace**: `llm-semantic-router/feedback-detector`
+- **HuggingFace**: `vllm-sr/feedback-detector`
 - **Purpose**: Classify user feedback into 4 types (satisfied, need clarification, wrong answer, want different)
 - **Architecture**: ModernBERT-base (149M)
 - **Use Case**: Adaptive routing, conversation improvement
@@ -88,7 +88,7 @@ All MoM models are:
 #### Halugate Sentinel
 
 - **Model ID**: `models/mom-halugate-sentinel`
-- **HuggingFace**: `LLM-Semantic-Router/halugate-sentinel`
+- **HuggingFace**: `vllm-sr/halugate-sentinel`
 - **Purpose**: First-stage hallucination screening
 - **Architecture**: BERT-base (110M)
 - **Use Case**: Fast hallucination detection, pre-filtering

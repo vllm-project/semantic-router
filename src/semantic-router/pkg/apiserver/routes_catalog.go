@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -151,38 +151,6 @@ func apiClassifyRoutes() []apiRoute {
 			errorResponses(400, 413, 429, 500, 503),
 			jsonBodyFor[BatchClassificationRequest](),
 		),
-		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/nli", Method: "POST", Description: "Natural language inference classification for premise and hypothesis pairs"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleNLIClassification,
-			jsonResponse[services.NLIResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[services.NLIRequest](),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text, image, and audio embeddings"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleEmbeddings,
-			jsonResponse[EmbeddingResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[EmbeddingRequest](),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/similarity", Method: "POST", Description: "Calculate pairwise text similarity"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleSimilarity,
-			jsonResponse[SimilarityResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[SimilarityRequest](),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/similarity/batch", Method: "POST", Description: "Calculate batch text-similarity matches"},
-			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
-			(*ClassificationAPIServer).handleBatchSimilarity,
-			jsonResponse[BatchSimilarityResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 503),
-			jsonBodyFor[BatchSimilarityRequest](),
-		),
 	}
 }
 
@@ -195,7 +163,7 @@ func apiRoutingRoutes() []apiRoute {
 				Description: "Preview configured signals and model selection without generating an answer. Supported native-output requests use backend render APIs to resolve per-candidate capacity; paths requiring execution remain unresolved. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
 				Parameters: []OpenAPIParameter{
 					queryParameter("trace", "Include per-decision routing trace trees.", "boolean"),
-					headerParameter(headers.SRBenchExpectedConfigHash, "Optional lowercase SHA-256 of the active runtime document. Rejects a mismatched generation before evaluating signals.", false),
+					headerParameter(headers.VSRBenchExpectedConfigHash, "Optional lowercase SHA-256 of the active runtime document. Rejects a mismatched generation before evaluating signals.", false),
 				},
 			},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
@@ -228,6 +196,12 @@ func apiInventoryRoutes() []apiRoute {
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleEmbeddingModelsInfo,
 			jsonResponse[embeddingModelsResponse](http.StatusOK, "Successful response"),
+		),
+		managedRoute(
+			EndpointMetadata{Path: apiInventoryModelRuntime, Method: "GET", Description: "Get the model_runtime deployments: process, readiness, restarts and served model cards"},
+			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
+			(*ClassificationAPIServer).handleModelRuntimeInventory,
+			jsonResponse[modelRuntimeInventoryResponse](http.StatusOK, "Successful response"),
 		),
 	}
 }
@@ -332,14 +306,14 @@ func apiContextCompressionRoutes() []apiRoute {
 			EndpointMetadata{Path: apiContextCompressionPath + "/capabilities", Method: "GET", Description: "Get context-compression capabilities"},
 			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleContextCompressionCapabilities,
-			pluginOperationFor(config.DecisionPluginContextCompression, "read"),
+			pluginOperationFor(config.DecisionPluginContext, "read"),
 			jsonResponse[contextcompression.Capabilities](http.StatusOK, "Successful response"),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiContextCompressionPath + "/health", Method: "GET", Description: "Check context-compression runtime health"},
 			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleContextCompressionHealth,
-			pluginOperationFor(config.DecisionPluginContextCompression, "read"),
+			pluginOperationFor(config.DecisionPluginContext, "read"),
 			jsonResponse[compressionHealthResponse](http.StatusOK, "Successful response"),
 			errorResponses(503),
 		),
@@ -347,7 +321,7 @@ func apiContextCompressionRoutes() []apiRoute {
 			EndpointMetadata{Path: apiContextCompressionPath + "/preview", Method: "POST", Description: "Preview context compression without persistence"},
 			routePolicy{Permission: PermCompressionPreview, Sensitivity: SensitivityOperational, AuditAction: AuditActionCompressionPreview},
 			(*ClassificationAPIServer).handleContextCompressionPreview,
-			pluginOperationFor(config.DecisionPluginContextCompression, "preview"),
+			pluginOperationFor(config.DecisionPluginContext, "preview"),
 			jsonResponse[contextCompressionPreviewResponse](http.StatusOK, "Successful response"),
 			errorResponses(400, 500, 502, 503),
 			jsonBodyFor[contextCompressionPreviewRequest](),
@@ -362,7 +336,7 @@ func apiConfigRoutes() []apiRoute {
 func apiRecipeRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
-			EndpointMetadata{Path: apiRecipesPath, Method: "GET", Description: "List the default and named routing recipes with their entrypoints"},
+			EndpointMetadata{Path: apiRecipesPath, Method: "GET", Description: "List the recipes with their entrypoints"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
 			(*ClassificationAPIServer).handleListRecipes,
 			jsonResponse[recipeCollectionResponse](http.StatusOK, "Successful response"),
@@ -448,14 +422,14 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleConfigGet,
 			errorResponses(500),
 			mediaResponse(http.StatusOK, "Canonical configuration document; field schemas are available at /api/v1/config/schema?view=full", "application/json", OpenAPISchema{Type: "object", AdditionalProperties: true}),
-			etagResponseHeaders(http.StatusOK),
+			activeConfigResponseHeaders(http.StatusOK),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiConfigValidatePath, Method: "POST", Description: "Validate and normalize a router config without writing it"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleConfigValidate,
 			jsonResponse[RouterConfigValidateResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 500),
+			errorResponses(400, 422, 500),
 			strictJSONBodyFor[RouterConfigUpdateRequest](),
 		),
 		managedRoute(
@@ -524,71 +498,6 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 	}
 }
 
-func apiKnowledgeBaseRoutes() []apiRoute {
-	return []apiRoute{
-		managedRoute(
-			EndpointMetadata{Path: apiStorageKnowledgeBasesPath, Method: "GET", Description: "List configured knowledge bases"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleListKnowledgeBases,
-			jsonResponse[knowledgeBaseListResponse](http.StatusOK, "Successful response"),
-			errorResponses(500),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiStorageKnowledgeBasesPath, Method: "POST", Description: "Create a managed knowledge base"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionKnowledgeBaseSave},
-			(*ClassificationAPIServer).handleCreateKnowledgeBase,
-			jsonResponse[knowledgeBaseDocument](http.StatusCreated, "Successful response"),
-			errorResponses(400, 500),
-			jsonResponse[knowledgeBaseDocument](http.StatusAccepted, "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart"),
-			jsonResponse[knowledgeBaseDocument](http.StatusServiceUnavailable, "Candidate persisted but runtime activation failed; inspect activation and recover through /api/v1/config"),
-			errorResponse(http.StatusConflict, "Conflict, including CONFIG_ACTIVATION_PENDING or CONFIG_ACTIVATION_FAILED while the saved candidate is not active"),
-			jsonBodyFor[knowledgeBaseUpsertRequest](),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiStorageKnowledgeBasesPath + "/{name}", Method: "GET", Description: "Read a knowledge base"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleGetKnowledgeBase,
-			jsonResponse[knowledgeBaseDocument](http.StatusOK, "Successful response"),
-			errorResponses(404, 500),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiStorageKnowledgeBasesPath + "/{name}/map/metadata", Method: "GET", Description: "Read generated knowledge-base map metadata"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleGetKnowledgeBaseMapMetadata,
-			jsonResponse[knowledgeBaseMapMetadataResponse](http.StatusOK, "Successful response"),
-			errorResponses(404, 500),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiStorageKnowledgeBasesPath + "/{name}/map/data.ndjson", Method: "GET", Description: "Stream generated knowledge-base map data as NDJSON"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleGetKnowledgeBaseMapData,
-			errorResponses(404, 500),
-			mediaResponse(http.StatusOK, "One map point JSON object per line", "application/x-ndjson", OpenAPISchema{Type: "string"}),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiStorageKnowledgeBasesPath + "/{name}", Method: "PUT", Description: "Update a managed knowledge base"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionKnowledgeBaseSave},
-			(*ClassificationAPIServer).handleUpdateKnowledgeBase,
-			jsonResponse[knowledgeBaseDocument](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 500),
-			jsonResponse[knowledgeBaseDocument](http.StatusAccepted, "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart"),
-			jsonResponse[knowledgeBaseDocument](http.StatusServiceUnavailable, "Candidate persisted but runtime activation failed; inspect activation and recover through /api/v1/config"),
-			errorResponse(http.StatusConflict, "Conflict, including CONFIG_ACTIVATION_PENDING or CONFIG_ACTIVATION_FAILED while the saved candidate is not active"),
-			jsonBodyFor[knowledgeBaseUpsertRequest](),
-		),
-		managedRoute(
-			EndpointMetadata{Path: apiStorageKnowledgeBasesPath + "/{name}", Method: "DELETE", Description: "Delete a managed knowledge base"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionKnowledgeBaseDel},
-			(*ClassificationAPIServer).handleDeleteKnowledgeBase,
-			jsonResponse[knowledgeBaseDeleteResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 500),
-			jsonResponse[knowledgeBaseDeleteResponse](http.StatusAccepted, "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart"),
-			jsonResponse[knowledgeBaseDeleteResponse](http.StatusServiceUnavailable, "Candidate persisted but runtime activation failed; inspect activation and recover through /api/v1/config"),
-			errorResponse(http.StatusConflict, "Conflict, including CONFIG_ACTIVATION_PENDING or CONFIG_ACTIVATION_FAILED while the saved candidate is not active"),
-		),
-	}
-}
-
 func apiMemoryRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
@@ -600,11 +509,12 @@ func apiMemoryRoutes() []apiRoute {
 					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
 					queryParameter("type", "Comma-separated memory types: semantic, procedural, or episodic.", "string"),
 					queryParameter("limit", "Maximum results; defaults to 20 and is capped at 100.", "integer"),
+					queryParameter("offset", "Rows to skip after created_at descending, id descending. Best-effort under concurrent writes. Defaults to 0.", "integer"),
 				},
 			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleListMemories,
-			pluginOperationFor(config.DecisionPluginMemory, "read"),
+			pluginOperationFor(config.DecisionPluginContext, "read"),
 			jsonResponse[MemoryListResponse](http.StatusOK, "Successful response"),
 			errorResponses(400, 500, 503),
 		),
@@ -620,7 +530,7 @@ func apiMemoryRoutes() []apiRoute {
 			},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionMemoryDelete},
 			(*ClassificationAPIServer).handleDeleteMemoriesByScope,
-			pluginOperationFor(config.DecisionPluginMemory, "mutation"),
+			pluginOperationFor(config.DecisionPluginContext, "mutation"),
 			jsonResponse[MemoryDeleteResponse](http.StatusOK, "Successful response"),
 			errorResponses(400, 500, 503),
 		),
@@ -635,7 +545,7 @@ func apiMemoryRoutes() []apiRoute {
 			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleGetMemory,
-			pluginOperationFor(config.DecisionPluginMemory, "read"),
+			pluginOperationFor(config.DecisionPluginContext, "read"),
 			jsonResponse[MemoryResponse](http.StatusOK, "Successful response"),
 			errorResponses(400, 404, 500, 503),
 		),
@@ -650,7 +560,7 @@ func apiMemoryRoutes() []apiRoute {
 			},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionMemoryDelete},
 			(*ClassificationAPIServer).handleDeleteMemory,
-			pluginOperationFor(config.DecisionPluginMemory, "mutation"),
+			pluginOperationFor(config.DecisionPluginContext, "mutation"),
 			jsonResponse[MemoryDeleteResponse](http.StatusOK, "Successful response"),
 			errorResponses(400, 404, 500, 503),
 		),
@@ -663,7 +573,7 @@ func apiVectorStoreRoutes() []apiRoute {
 			EndpointMetadata{Path: apiStorageVectorStoresPath, Method: "POST", Description: "Create a vector store"},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleCreateVectorStore,
-			pluginOperationFor(config.DecisionPluginRAG, "mutation"),
+			pluginOperationFor(config.DecisionPluginContext, "mutation"),
 			jsonResponse[vectorstore.VectorStore](http.StatusOK, "Successful response"),
 			errorResponses(400, 500, 503),
 			jsonBodyWithLimitFor[vectorstore.CreateStoreRequest](maxVectorStoreJSONBodySize),
@@ -682,7 +592,7 @@ func apiVectorStoreRoutes() []apiRoute {
 			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleListVectorStores,
-			pluginOperationFor(config.DecisionPluginRAG, "read"),
+			pluginOperationFor(config.DecisionPluginContext, "read"),
 			jsonResponse[objectListResponse[*vectorstore.VectorStore]](http.StatusOK, "Successful response"),
 			errorResponses(400, 503),
 		),
@@ -690,7 +600,7 @@ func apiVectorStoreRoutes() []apiRoute {
 			EndpointMetadata{Path: apiStorageVectorStoresPath + "/{id}", Method: "GET", Description: "Read a vector store"},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleGetVectorStore,
-			pluginOperationFor(config.DecisionPluginRAG, "read"),
+			pluginOperationFor(config.DecisionPluginContext, "read"),
 			jsonResponse[vectorstore.VectorStore](http.StatusOK, "Successful response"),
 			errorResponses(400, 404, 503),
 		),
@@ -698,26 +608,26 @@ func apiVectorStoreRoutes() []apiRoute {
 			EndpointMetadata{Path: apiStorageVectorStoresPath + "/{id}", Method: "POST", Description: "Update a vector store"},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleUpdateVectorStore,
-			pluginOperationFor(config.DecisionPluginRAG, "mutation"),
+			pluginOperationFor(config.DecisionPluginContext, "mutation"),
 			jsonResponse[vectorstore.VectorStore](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 503),
+			errorResponses(400, 404, 500, 503),
 			jsonBodyWithLimitFor[vectorstore.UpdateStoreRequest](maxVectorStoreJSONBodySize),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiStorageVectorStoresPath + "/{id}", Method: "DELETE", Description: "Delete a vector store"},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleDeleteVectorStore,
-			pluginOperationFor(config.DecisionPluginRAG, "mutation"),
+			pluginOperationFor(config.DecisionPluginContext, "mutation"),
 			jsonResponse[objectDeletedResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 503),
+			errorResponses(400, 404, 500, 503),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiStorageVectorStoresPath + "/{id}/search", Method: "POST", Description: "Search a vector store"},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleSearchVectorStore,
-			pluginOperationFor(config.DecisionPluginRAG, "probe"),
+			pluginOperationFor(config.DecisionPluginContext, "probe"),
 			jsonResponse[objectListResponse[vectorstore.SearchResult]](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 500, 503),
+			errorResponses(400, 404, 409, 500, 503),
 			jsonBodyWithLimitFor[SearchRequest](maxVectorStoreJSONBodySize),
 		),
 		managedRoute(
@@ -725,14 +635,14 @@ func apiVectorStoreRoutes() []apiRoute {
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleAttachFile,
 			jsonResponse[vectorstore.VectorStoreFile](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 503),
+			errorResponses(400, 404, 409, 503),
 			jsonBodyWithLimitFor[AttachFileRequest](maxVectorStoreJSONBodySize),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiStorageVectorStoresPath + "/{id}/files", Method: "GET", Description: "List files attached to a vector store"},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleListVectorStoreFiles,
-			pluginOperationFor(config.DecisionPluginRAG, "read"),
+			pluginOperationFor(config.DecisionPluginContext, "read"),
 			jsonResponse[objectListResponse[*vectorstore.VectorStoreFile]](http.StatusOK, "Successful response"),
 			errorResponses(400, 503),
 		),
@@ -782,7 +692,7 @@ func apiFileRoutes() []apiRoute {
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleDeleteFile,
 			jsonResponse[objectDeletedResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 503),
+			errorResponses(400, 404, 500, 503),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiStorageFilesPath + "/{id}/content", Method: "GET", Description: "Download uploaded-file content"},
@@ -805,10 +715,10 @@ func appendAPIRoutes(routes []apiRoute, groups ...[]apiRoute) []apiRoute {
 func apiPluginObservabilityRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
-			EndpointMetadata{Path: apiObservabilityPath + "/plugins/context_compression/stats", Method: "GET", Description: "Get redacted context-compression statistics"},
+			EndpointMetadata{Path: apiObservabilityPath + "/plugins/context/compression/stats", Method: "GET", Description: "Get redacted context-compression statistics"},
 			routePolicy{Permission: PermCompressionRead, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleContextCompressionStats,
-			pluginOperationFor(config.DecisionPluginContextCompression, "read"),
+			pluginOperationFor(config.DecisionPluginContext, "read"),
 			jsonResponse[contextCompressionStatsResponse](http.StatusOK, "Successful response"),
 			errorResponses(503),
 		),
@@ -821,7 +731,7 @@ func apiContextRecoveryRoutes() []apiRoute {
 			EndpointMetadata{Path: apiStoragePath + "/context-recovery/invalidate", Method: "POST", Description: "Invalidate a trusted context-recovery request scope"},
 			routePolicy{Permission: PermCompressionManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCompressionInvalidate},
 			(*ClassificationAPIServer).handleContextCompressionRecoveryInvalidate,
-			pluginOperationFor(config.DecisionPluginContextCompression, "mutation"),
+			pluginOperationFor(config.DecisionPluginContext, "mutation"),
 			jsonResponse[recoveryInvalidationResponse](http.StatusOK, "Successful response"),
 			errorResponses(400, 502, 503),
 			jsonBodyFor[contextCompressionRecoveryInvalidateRequest](),

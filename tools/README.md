@@ -19,6 +19,6 @@ in `deploy/`; router configuration belongs in `config/`. New one-off scripts
 should be placed in the narrowest existing tool family or promoted into a Make
 target when they become part of the supported workflow.
 
-Model training belongs in `src/training/`; binding-specific reference generators
-belong beside their binding, such as `candle-binding/scripts/`. Generated run
-reports and local caches are runtime artifacts, not tool source files.
+Model training belongs in `src/training/`; model-runtime parity and benchmark
+drivers belong in `src/model-runtime/tools/`. Generated run reports and local
+caches are runtime artifacts, not tool source files.

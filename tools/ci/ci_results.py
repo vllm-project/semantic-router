@@ -11,6 +11,12 @@ import subprocess
 from pathlib import Path
 
 from ci_plan import digest
+from execution_targets import (
+    TARGET_FIELDS,
+    execution_observation,
+    observation_errors,
+    target_errors,
+)
 from release_guard_waiver import waiver_evidence_errors
 
 STATUSES = frozenset({"passed", "failed", "skipped"})
@@ -70,7 +76,7 @@ def collection_errors(
 
 def artifact_records(evidence: dict, *, environ: dict | None = None) -> list[dict]:
     records = list(evidence.get("artifacts", []))
-    for name in ("CI_IMAGE_RECEIPTS", "CI_NATIVE_RECEIPTS"):
+    for name in ("CI_IMAGE_RECEIPTS",):
         value = (os.environ if environ is None else environ).get(name)
         if value:
             records.extend(json.loads(Path(value).read_text()))
@@ -98,27 +104,19 @@ def actual_platform() -> str:
 
 
 def execution_errors(
-    verification: dict, evidence: dict, producer_platform: str
+    verification: dict,
+    producer_platform: str,
+    observation: dict | None = None,
+    *,
+    require_actions: bool = False,
 ) -> list[str]:
-    execution = verification.get("execution")
-    if not execution:
-        errors = (
-            []
-            if producer_platform == verification["platform"]
-            else ["receipt producer ran on a different platform"]
-        )
-        if evidence.get("execution"):
-            errors.append("undeclared emulated execution")
-        return errors
-    if (
-        execution.get("mode") != "qemu-user"
-        or execution.get("host_platform") != producer_platform
-        or evidence.get("execution") != execution
-        or verification["platform"] != "linux/riscv64"
-        or verification["native"]
-    ):
-        return ["emulated target, producer platform or artifact contract differs"]
-    return []
+    errors = target_errors(verification)
+    if producer_platform != verification["platform"]:
+        errors.append("receipt producer ran on a different platform")
+    errors.extend(
+        observation_errors(verification, observation, require_actions=require_actions)
+    )
+    return errors
 
 
 def make_receipt(
@@ -142,11 +140,12 @@ def make_receipt(
             errors.append(
                 f"actual {key} {evidence.get(key)!r} differs from planned {verification[key]!r}"
             )
-    errors.extend(execution_errors(verification, evidence, execution_platform))
+    observation = execution_observation(
+        verification, execution_platform, environ=environ
+    )
+    errors.extend(execution_errors(verification, execution_platform, observation))
     artifacts = artifact_records(evidence, environ=environ)
     required = {f"image:{image}" for image in verification["images"]}
-    if verification["native"]:
-        required.add("native:cpu")
     missing = required - {record["id"] for record in artifacts}
     if missing:
         errors.append(f"missing consumed artifact identities: {sorted(missing)}")
@@ -158,14 +157,11 @@ def make_receipt(
         "source_sha": source_sha,
         "contract_sha256": verification["contract_sha256"],
         "inventory": verification["inventory"],
+        **{key: verification[key] for key in TARGET_FIELDS},
+        "execution": observation,
         "runtime": evidence["runtime"],
         "device": evidence["device"],
         "platform": evidence["platform"],
-        **(
-            {"execution": {**verification["execution"]}}
-            if verification.get("execution")
-            else {}
-        ),
         "artifacts": artifacts,
         "evidence": evidence,
         "evidence_sha256": digest(evidence),

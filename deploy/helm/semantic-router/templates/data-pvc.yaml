@@ -1,0 +1,27 @@
+{{- if and .Values.data.persistence.enabled (not .Values.data.persistence.existingClaim) (ne (include "semantic-router.customDataMount" .) "true") }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "semantic-router.dataPvcName" . }}
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: router
+  {{- with .Values.data.persistence.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.data.persistence.accessMode }}
+  {{- if .Values.data.persistence.storageClassName }}
+  {{- if (eq "-" .Values.data.persistence.storageClassName) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.data.persistence.storageClassName }}
+  {{- end }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.data.persistence.size }}
+{{- end }}

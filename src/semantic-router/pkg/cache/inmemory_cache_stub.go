@@ -1,4 +1,4 @@
-//go:build windows || !cgo
+//go:build windows
 
 package cache
 
@@ -24,8 +24,9 @@ type InMemoryCacheOptions struct {
 	UseHNSW             bool
 	HNSWM               int
 	HNSWEfConstruction  int
-	EmbeddingModel      string
-	PolarityGuard       PolarityGuardOptions
+	EmbeddingDeployment string
+	EmbeddingDimension  int
+	EmbeddingLayer      int
 }
 
 // NewInMemoryCache creates a new in-memory cache instance
@@ -85,10 +86,12 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 
 // LookupSimilarWithThreshold returns a request-scoped miss in stub builds.
 func (c *InMemoryCache) LookupSimilarWithThreshold(_ context.Context, model string, query string, threshold float32) (LookupResult, error) {
-	if !c.enabled {
-		return LookupResult{}, nil
-	}
 	return LookupResult{}, nil
+}
+
+// LookupSimilar returns a request-scoped miss in stub builds.
+func (c *InMemoryCache) LookupSimilar(_ context.Context, model string, query string, bounds SimilarityBounds) (SimilarEntries, error) {
+	return SimilarEntries{}, nil
 }
 
 // Close releases all resources

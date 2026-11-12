@@ -79,6 +79,8 @@ const LoginPage: React.FC = () => {
   const navigateAfterAuth = async () => {
     const nextSetupState = await refreshSetupState()
     const target = resolvePostAuthTarget(nextSetupState?.setupMode ?? isFirstServe, from)
+    // Keep the form pending until this navigation unmounts it. Clearing pending
+    // on success lets the authenticated-session redirect bypass the handoff.
     navigate(buildAuthTransitionPath(target), { replace: true })
   }
 
@@ -131,7 +133,6 @@ const LoginPage: React.FC = () => {
       await navigateAfterAuth()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed. Please check credentials.')
-    } finally {
       setPending(false)
     }
   }
@@ -179,7 +180,6 @@ const LoginPage: React.FC = () => {
       await navigateAfterAuth()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Register failed.')
-    } finally {
       setPending(false)
     }
   }

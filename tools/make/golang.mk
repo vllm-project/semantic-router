@@ -14,6 +14,16 @@ config-schema-check: ## Check that generated Router config contracts match Go so
 	@$(LOG_TARGET)
 	@cd src/semantic-router && go run ../../tools/codegen/configschema/main.go --repository-root ../.. --check
 
+headers-generate: ## Generate the header registry export, the Router header reference and the Dashboard header constants
+	@$(LOG_TARGET)
+	@cd src/semantic-router && go run ../../tools/codegen/headers/main.go --repository-root ../..
+	@$(DOCS_PYTHON) tools/docs/generate_header_reference.py
+
+headers-check: ## Check that the header registry export, the Router header reference and the Dashboard header constants match the registry
+	@$(LOG_TARGET)
+	@cd src/semantic-router && go run ../../tools/codegen/headers/main.go --repository-root ../.. --check
+	@$(DOCS_PYTHON) tools/docs/generate_header_reference.py --check
+
 go-lint: ## Run golangci-lint for src/semantic-router
 	@$(LOG_TARGET)
 	@echo "Running golangci-lint for src/semantic-router..."
@@ -21,7 +31,7 @@ go-lint: ## Run golangci-lint for src/semantic-router
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
 		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
 		export PATH="$$GOPATH/bin:$$PATH" && \
-		golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
+		golangci-lint run ./... --config $(GOLANGCI_LINT_CONFIG)
 	@echo "src/semantic-router go module lint passed"
 
 go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix)
@@ -31,12 +41,11 @@ go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
 		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
 		export PATH="$$GOPATH/bin:$$PATH" && \
-		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
+		golangci-lint run ./... --fix --config $(GOLANGCI_LINT_CONFIG)
 	@echo "src/semantic-router go module lint fix applied"
 
-vet: $(if $(CI),rust-ci,rust) ## Run go vet for all Go modules (build Rust library first)
+vet: ## Run go vet for the router module
 	@$(LOG_TARGET)
-	@cd candle-binding && go vet ./...
 	@cd src/semantic-router && go vet ./...
 
 check-perf-go-mod-tidy: ## Check that the performance Go module is tidy
@@ -53,11 +62,6 @@ check-perf-go-mod-tidy: ## Check that the performance Go module is tidy
 check-go-mod-tidy: ## Check go mod tidy for all Go modules
 	@$(LOG_TARGET)
 	@echo "Checking go mod tidy for all Go modules..."
-	@echo "Checking candle-binding..."
-	@cd candle-binding && go mod tidy && \
-		(git diff --exit-code go.mod 2>/dev/null || (echo "ERROR: go.mod file is not tidy in candle-binding. Please run 'go mod tidy' in candle-binding directory and commit the changes." && git diff go.mod && exit 1)) && \
-		(test ! -f go.sum || git diff --exit-code go.sum 2>/dev/null || (echo "ERROR: go.sum file is not tidy in candle-binding. Please run 'go mod tidy' in candle-binding directory and commit the changes." && git diff go.sum && exit 1))
-	@echo "candle-binding go mod tidy check passed"
 	@echo "Checking src/semantic-router..."
 	@cd src/semantic-router && go mod tidy && \
 		if ! git diff --exit-code go.mod go.sum; then \
@@ -67,9 +71,6 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 		fi
 	@echo "src/semantic-router go mod tidy check passed"
 	@$(MAKE) check-perf-go-mod-tidy
-	@echo "Checking shared ONNX module compatibility links..."
-	@test "$$(readlink src/semantic-router/go.onnx.mod)" = go.mod
-	@test "$$(readlink src/semantic-router/go.onnx.sum)" = go.sum
 	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
@@ -119,7 +120,7 @@ generate-api-check: install-controller-gen ## Check generated Kubernetes API cod
 		exit 1; \
 	fi
 
-.PHONY: config-schema-generate config-schema-check check-perf-go-mod-tidy check-go-mod-tidy
+.PHONY: config-schema-generate config-schema-check headers-generate headers-check check-perf-go-mod-tidy check-go-mod-tidy
 
 .PHONY: training-contract-generate training-contract-check
 training-contract-generate: ## Generate the shared training schema and Console types

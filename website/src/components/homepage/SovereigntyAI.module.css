@@ -1,0 +1,281 @@
+.section {
+  position: relative;
+  scroll-margin-top: calc(var(--site-header-height) + 1rem);
+  padding: var(--site-section-pad-top, var(--site-section-pad)) 0 var(--site-section-pad);
+}
+
+.wrap {
+  width: min(100% - 2 * var(--gut), var(--wrap));
+  margin-inline: auto;
+}
+
+.figure {
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+/* The plates widen towards the GPUs, like a stack. */
+.slabs {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.slab {
+  position: relative;
+  display: grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  padding: 22px 26px;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--slab-shadow);
+}
+
+.slab:nth-child(1) {
+  margin-inline: 9%;
+}
+
+.slab:nth-child(2) {
+  margin-inline: 6%;
+}
+
+.slab:nth-child(3) {
+  margin-inline: 3%;
+}
+
+.tag {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font: 600 11.5px/1.3 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tag b {
+  color: var(--ember-text);
+  font: 500 30px/1 var(--serif);
+  letter-spacing: -0.01em;
+}
+
+.main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  min-width: 0;
+}
+
+.slab h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--ink);
+  font: 600 24px/1.15 var(--serif);
+  letter-spacing: -0.005em;
+}
+
+.slab p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.main .request {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  color: var(--ink);
+  font: 600 19px/1.2 var(--serif);
+}
+
+.request > svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px rgba(217, 68, 31, 0.4);
+  color: var(--ember-text);
+  font: 500 12px/1.3 var(--sans);
+}
+
+.verdict.verdictSky {
+  box-shadow: inset 0 0 0 1px rgba(77, 111, 163, 0.45);
+  color: var(--sky-text);
+}
+
+.verdict svg {
+  width: 12px;
+  height: 12px;
+}
+
+.slab.gate {
+  box-shadow: inset 0 0 0 2px rgba(217, 68, 31, 0.5), 0 10px 0 -4px rgba(22, 24, 29, 0.05), 0 18px 36px rgba(40, 32, 20, 0.08);
+}
+
+.gate :global(li) svg {
+  width: 14px;
+  height: 14px;
+  color: var(--ember);
+}
+
+.policy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ok-text);
+  font: 600 11.5px/1.3 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.policy i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--ok);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 16%, transparent);
+}
+
+.halves {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.half {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px 14px;
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1.5px rgba(217, 68, 31, 0.45);
+}
+
+.half.halfSky {
+  box-shadow: inset 0 0 0 1.5px rgba(77, 111, 163, 0.5);
+}
+
+.half b {
+  color: var(--ink);
+  font: 600 20px/1.15 var(--serif);
+  letter-spacing: -0.005em;
+}
+
+.half > span {
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.half :global(ul) {
+  margin-top: 4px;
+}
+
+/* The bottom plate is ink, with a dot texture that fades in towards the right. Its overrides name .slab too: the CSS
+ * minifier may merge a rule with an earlier one, so these must win by specificity, not by source order. */
+.slab.hardware {
+  background: var(--night);
+  color: var(--on-ink);
+  box-shadow: 0 10px 0 -4px rgba(22, 24, 29, 0.18), 0 22px 44px rgba(22, 24, 29, 0.22);
+}
+
+.slab.hardware::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1.3px);
+  background-size: 14px 14px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000);
+  mask-image: linear-gradient(90deg, transparent 30%, #000);
+}
+
+.slab.hardware .tag {
+  color: var(--on-ink-3);
+}
+
+.slab.hardware .tag b {
+  color: var(--ember-hi);
+}
+
+.slab.hardware h3 {
+  color: var(--on-ink);
+}
+
+.slab.hardware p {
+  margin-top: 4px;
+  color: var(--on-ink-2);
+}
+
+.cta {
+  margin: clamp(28px, 3.4vw, 40px) 0 0;
+  text-align: center;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:global([data-theme='dark']) .slab.hardware {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 22px 44px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 900px) {
+  .slab {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .slab:nth-child(n) {
+    margin-inline: 0;
+  }
+
+  .tag {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .tag b {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 600px) {
+  .slab {
+    padding: 18px 16px;
+    border-radius: 18px;
+  }
+
+  .halves {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

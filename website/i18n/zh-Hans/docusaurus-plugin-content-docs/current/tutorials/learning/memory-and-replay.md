@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "aa7b7e7bc1de4d193342e869a952552a4c15552c"
   source_file: "docs/tutorials/learning/memory-and-replay.md"
@@ -40,14 +41,17 @@ translation:
 
 ## 配置 {#configuration}
 
-使用现有服务配置启用路由回放：
+用 `global.plugins` 中的 `router_replay` 插件启用路由回放，服务配置负责它的存储：
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
 此示例使用 Postgres 做持久化。默认 `memory` 后端会在配置重载或重启时丢失记录，即使重载没有重启路由器进程也一样。调优配方时，使用持久化存储可让会话轨迹继续在 API 和 Dashboard 中查看。
@@ -104,6 +108,8 @@ POST /api/v1/observability/outcomes
 ```
 
 `target: model` 结果会更新在线模型经验。`target: route`、`target: policy`、`target: stability`、`target: provider` 和 `target: router` 结果会保留给回放和离线配方学习，除非存在类型化的在线消费者。
+
+模型结果记在实际作答的模型上。fallback 候选模型的回答送达客户端时，该模型是响应头 `x-vsr-selected-model` 中给出的候选模型，而不是请求最初路由到的模型。回答被响应策略拦截的候选模型不算作答。`target_ref` 指向其他模型时返回 `409`。
 
 ## 配方学习命令 {#recipe-learning-command}
 

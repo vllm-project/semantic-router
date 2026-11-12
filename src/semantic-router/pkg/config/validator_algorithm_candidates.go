@@ -59,12 +59,24 @@ func validateDecisionFusionAlgorithm(
 	if err := ValidateFusionAlgorithmConfig(cfg); err != nil {
 		return wrapAlgorithmValidationError(decisionName, "fusion", err)
 	}
+
+	// The effective panel is analysis_models when set, otherwise modelRefs.
+	panelSize := uniqueDecisionModelRefCount(modelRefs)
+	analysisMode := ""
+	if cfg != nil {
+		if len(cfg.AnalysisModels) > 0 {
+			panelSize = uniqueNonEmptyStringCount(cfg.AnalysisModels)
+		}
+		analysisMode = cfg.AnalysisMode
+	}
+	if panelSize > 0 {
+		if err := validateFusionCallBudget(decisionName, panelSize, analysisMode); err != nil {
+			return wrapAlgorithmValidationError(decisionName, "fusion", err)
+		}
+	}
+
 	if cfg == nil || cfg.MinSuccessfulResponses == 0 {
 		return nil
-	}
-	panelSize := uniqueDecisionModelRefCount(modelRefs)
-	if len(cfg.AnalysisModels) > 0 {
-		panelSize = uniqueNonEmptyStringCount(cfg.AnalysisModels)
 	}
 	if panelSize > 0 && cfg.MinSuccessfulResponses > panelSize {
 		return wrapAlgorithmValidationError(

@@ -1,8 +1,6 @@
 package cache
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -28,7 +26,7 @@ func physicalNamespace(cfg CacheConfig) []string {
 }
 
 func namespaceFixture(backend CacheBackendType, dimension int) CacheConfig {
-	cfg := CacheConfig{Enabled: true, BackendType: backend, EmbeddingModel: "mmbert", EmbeddingProvider: storagetest.Vectors{Size: 768}}
+	cfg := CacheConfig{Enabled: true, BackendType: backend, EmbeddingDeployment: "vela-embedding", EmbeddingProvider: storagetest.Vectors{Size: 768}}
 	switch backend {
 	case RedisCacheType:
 		cfg.Redis = &config.RedisConfig{}
@@ -113,57 +111,21 @@ func TestEmbeddingNamespaceIsolatesPhysicalIndexesAndPrefixesBeforeOpening(t *te
 	}
 }
 
-func TestEmbeddingNamespaceLeavesUnsupportedProvidersAndDisabledCachesUntouched(t *testing.T) {
+// A provider without a content identity (a remote endpoint), and a disabled
+// cache, keep the configured namespace.
+func TestEmbeddingNamespaceLeavesRemoteProvidersAndDisabledCachesUntouched(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		cfg := namespaceFixture(RedisCacheType, 768)
 		cfg.Enabled = enabled
-		cfg.EmbeddingModel = "qwen3"
+		cfg.EmbeddingDeployment = "remote-embedding"
 		got, identity, err := PrepareEmbeddingNamespace(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			t.Fatal("unsupported provider resolved")
-			return embedding.ContentIdentity{}, nil
+			if !enabled {
+				t.Fatal("a disabled cache resolved its embedding identity")
+			}
+			return embedding.ContentIdentity{}, embedding.ErrIdentityUnsupported
 		})
 		if err != nil || identity != "" || !reflect.DeepEqual(got, cfg) {
-			t.Fatal("legacy behavior changed")
+			t.Fatal("the configured namespace changed")
 		}
-	}
-}
-
-func TestCandleBERTCacheOpensVersionedNamespace(t *testing.T) {
-	embed := func(context.Context, string) ([]float32, error) {
-		return nil, errors.New("namespace binding ran inference")
-	}
-	for _, backend := range []CacheBackendType{RedisCacheType, ValkeyCacheType, MilvusCacheType, HybridCacheType, QdrantCacheType} {
-		t.Run(string(backend), func(t *testing.T) {
-			prepare := func(runtime string) (CacheConfig, CacheConfig, string) {
-				t.Helper()
-				provider, err := embedding.NewFuncProvider(runtime, 384, embed)
-				if err != nil {
-					t.Fatal(err)
-				}
-				cfg := namespaceFixture(backend, 384)
-				cfg.EmbeddingModel, cfg.EmbeddingProvider = "bert", provider
-				bound, identity, err := PrepareEmbeddingNamespace(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-					return embedding.ResolveNamespaceIdentity(provider, settings)
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				return cfg, bound, identity
-			}
-			legacy, bound, identity := prepare("candle")
-			_, reopened, _ := prepare("candle")
-			if identity == "" || !reflect.DeepEqual(physicalNamespace(bound), physicalNamespace(reopened)) {
-				t.Fatal("Candle BERT namespace is missing or unstable")
-			}
-			for index, name := range physicalNamespace(bound) {
-				if name == physicalNamespace(legacy)[index] {
-					t.Fatalf("upgraded Candle BERT reopened the old index %q", name)
-				}
-			}
-			unchanged, got, identity := prepare("ort")
-			if identity != "" || !reflect.DeepEqual(got, unchanged) {
-				t.Fatal("BERT runtime with unchanged vectors moved to a new namespace")
-			}
-		})
 	}
 }

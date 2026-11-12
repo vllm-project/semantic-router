@@ -1,82 +1,24 @@
 import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
-import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 import {
   mergeRouterFieldSchemas,
   pluginFieldsFromRouterSchema,
   signalFieldsFromRouterSchema,
 } from './routerConfigSchema'
+import { getCuratedPluginFieldSchema } from './dslPluginSchemas'
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
 
-const PII_SIGNAL_FIELDS: FieldSchema[] = [
-  {
-    key: 'threshold',
-    label: 'Threshold',
-    type: 'number',
-    required: true,
-    placeholder: '0.8',
-    description: 'Minimum confidence for PII detection (0.0-1.0)',
-  },
-  {
-    key: 'pii_types_allowed',
-    label: 'PII Types Allowed',
-    type: 'string[]',
-    placeholder: 'e.g. EMAIL_ADDRESS',
-    description: 'PII types to allow through (others trigger signal)',
-  },
-  {
-    key: 'include_history',
-    label: 'Include History',
-    type: 'boolean',
-    description: 'Include conversation history in detection',
-  },
-  { key: 'description', label: 'Description', type: 'string' },
-]
+// getCuratedPluginFieldSchema (the per-plugin switch getPluginFieldSchema
+// below merges router-schema-derived fields on top of) lives in
+// dslPluginSchemas.ts: it grew past this repo's function-length structure
+// cap. resolveCapabilityPluginFieldSchema moved there with it, since it's
+// only ever called from within that switch.
 
-const JAILBREAK_SIGNAL_FIELDS: FieldSchema[] = [
-  {
-    key: 'method',
-    label: 'Method',
-    type: 'select',
-    options: ['classifier', 'contrastive'],
-    description: 'Detection algorithm',
-  },
-  {
-    key: 'direction',
-    label: 'Direction',
-    type: 'select',
-    options: ['request', 'response'],
-    description: 'request (default) scores the prompt; response scores the model output',
-  },
-  {
-    key: 'threshold',
-    label: 'Threshold',
-    type: 'number',
-    required: true,
-    placeholder: '0.9',
-    description: 'Minimum score to trigger (0.0-1.0)',
-  },
-  {
-    key: 'include_history',
-    label: 'Include History',
-    type: 'boolean',
-    description: 'Include conversation history in detection',
-  },
-  { key: 'description', label: 'Description', type: 'string' },
-  {
-    key: 'jailbreak_patterns',
-    label: 'Jailbreak Patterns',
-    type: 'string[]',
-    placeholder: 'Add jailbreak example...',
-    description: 'Contrastive mode: example jailbreak prompts',
-  },
-  {
-    key: 'benign_patterns',
-    label: 'Benign Patterns',
-    type: 'string[]',
-    placeholder: 'Add benign example...',
-    description: 'Contrastive mode: example benign prompts',
-  },
+const NUMERIC_PREDICATE_FIELDS: FieldSchema[] = [
+  { key: 'gt', label: 'Greater Than', type: 'number' },
+  { key: 'gte', label: 'Greater Than or Equal', type: 'number' },
+  { key: 'lt', label: 'Less Than', type: 'number' },
+  { key: 'lte', label: 'Less Than or Equal', type: 'number' },
 ]
 
 function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
@@ -85,6 +27,7 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
   switch (signalType) {
     case 'keyword':
       return [
+        { key: 'description', label: 'Description', type: 'string' },
         {
           key: 'operator',
           label: 'Operator',
@@ -106,66 +49,32 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'bm25_threshold', label: 'BM25 Threshold', type: 'number' },
         { key: 'ngram_threshold', label: 'N-gram Threshold', type: 'number' },
         { key: 'ngram_arity', label: 'N-gram Arity', type: 'number' },
-      ]
-    case 'embedding':
-      return [
         {
-          key: 'threshold',
-          label: 'Threshold',
-          min: -2,
-          max: 2,
+          key: 'include_history',
+          label: 'Include History',
+          type: 'boolean',
+          description: 'Also match earlier user messages, not just the latest one',
+        },
+        {
+          key: 'count',
+          label: 'Count',
+          type: 'object',
           description:
-            'Cosine threshold [-1, 1], or positive-minus-negative margin [-2, 2] when a negative bank is present.',
-          type: 'number',
-          required: true,
-          placeholder: '0.75',
+            'An OR rule with literal or regex keywords matches on how many times they occur.',
+          fields: NUMERIC_PREDICATE_FIELDS,
         },
         {
-          key: 'candidates',
-          label: 'Positive Text Candidates',
-          type: 'string[]',
-          placeholder: 'Add candidate...',
-        },
-        {
-          key: 'image_candidates',
-          label: 'Positive Image Candidates',
-          type: 'string[]',
-          placeholder: './image.png or inline image data',
-        },
-        {
-          key: 'negative_candidates',
-          label: 'Negative Text Candidates',
-          type: 'string[]',
-          placeholder: 'Add contrasting text...',
-        },
-        {
-          key: 'negative_image_candidates',
-          label: 'Negative Image Candidates',
-          type: 'string[]',
-          placeholder: './image.png or inline image data',
-        },
-        {
-          key: 'aggregation_method',
-          label: 'Aggregation',
-          type: 'select',
-          options: ['mean', 'max', 'any'],
-        },
-        {
-          key: 'query_modality',
-          label: 'Query Modality',
-          type: 'select',
-          options: ['text', 'image', 'audio'],
+          key: 'density',
+          label: 'Density',
+          type: 'object',
+          description:
+            'An OR rule with literal or regex keywords matches on occurrences per 1,000 characters. Set count or density, not both.',
+          fields: NUMERIC_PREDICATE_FIELDS,
         },
       ]
     case 'domain':
       return [
         { key: 'description', label: 'Description', type: 'string', required: true },
-        {
-          key: 'mmlu_categories',
-          label: 'MMLU Categories',
-          type: 'string[]',
-          placeholder: 'Add category...',
-        },
         {
           key: 'model_scores',
           label: 'Model Scores',
@@ -185,18 +94,6 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
       return [{ key: 'description', label: 'Description', type: 'string', required: true }]
     case 'user_feedback':
       return [{ key: 'description', label: 'Description', type: 'string', required: true }]
-    case 'reask':
-      return [
-        { key: 'description', label: 'Description', type: 'string' },
-        { key: 'threshold', label: 'Threshold', type: 'number', placeholder: '0.80' },
-        { key: 'lookback_turns', label: 'Lookback Turns', type: 'number', placeholder: '1' },
-      ]
-    case 'preference':
-      return [
-        { key: 'description', label: 'Description', type: 'string', required: true },
-        { key: 'examples', label: 'Examples', type: 'string[]', placeholder: 'Add example...' },
-        { key: 'threshold', label: 'Threshold', type: 'number', placeholder: '0.70' },
-      ]
     case 'language':
       return [
         { key: 'description', label: 'Description', type: 'string' },
@@ -227,157 +124,6 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
         },
         { key: 'description', label: 'Description', type: 'string' },
       ]
-    case 'structure':
-      return [
-        { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'feature',
-          label: 'Feature',
-          type: 'object',
-          required: true,
-          description:
-            'Choose the feature operation and configure its regex, keyword-set, or sequence source.',
-          fields: [
-            {
-              key: 'type',
-              label: 'Feature Type',
-              type: 'select',
-              options: ['exists', 'count', 'density', 'sequence'],
-              required: true,
-            },
-            {
-              key: 'source',
-              label: 'Source',
-              type: 'object',
-              required: true,
-              fields: [
-                {
-                  key: 'type',
-                  label: 'Source Type',
-                  type: 'select',
-                  options: ['regex', 'keyword_set', 'sequence'],
-                  required: true,
-                },
-                { key: 'pattern', label: 'Regex Pattern', type: 'string' },
-                {
-                  key: 'keywords',
-                  label: 'Keywords',
-                  type: 'string[]',
-                  placeholder: 'Add keyword...',
-                },
-                { key: 'case_sensitive', label: 'Case Sensitive', type: 'boolean' },
-                {
-                  key: 'sequences',
-                  label: 'Sequences',
-                  type: 'string[][]',
-                  addLabel: 'Add sequence',
-                  emptyLabel: 'No marker sequences configured.',
-                },
-              ],
-            },
-          ],
-        },
-        {
-          key: 'predicate',
-          label: 'Predicate',
-          type: 'object',
-          description: 'Optional numeric comparison applied to the extracted feature.',
-          fields: [
-            { key: 'gt', label: 'Greater Than', type: 'number' },
-            { key: 'gte', label: 'Greater Than or Equal', type: 'number' },
-            { key: 'lt', label: 'Less Than', type: 'number' },
-            { key: 'lte', label: 'Less Than or Equal', type: 'number' },
-          ],
-        },
-      ]
-    case 'complexity':
-      return [
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          placeholder: '0.1',
-          description:
-            'Symmetric cut point for local prototype scoring: a margin above it is hard, below its negative is easy. Not used with a score.v1 backend; set a boundary pair instead.',
-        },
-        {
-          key: 'hard_above',
-          label: 'Hard Above',
-          type: 'number',
-          placeholder: '0.85',
-          description:
-            'With Easy Below: boundaries for a remote score where a higher value is harder, in the model’s own units. Mutually exclusive with Threshold and with Hard Below / Easy Above.',
-        },
-        {
-          key: 'easy_below',
-          label: 'Easy Below',
-          type: 'number',
-          placeholder: '0.6',
-          description: 'Scores below this are easy; between Easy Below and Hard Above is medium.',
-        },
-        {
-          key: 'hard_below',
-          label: 'Hard Below',
-          type: 'number',
-          placeholder: '0.2',
-          description:
-            'With Easy Above: boundaries for a remote score where a lower value is harder, such as a predicted chance of answering correctly. Requires a score.v1 backend.',
-        },
-        {
-          key: 'easy_above',
-          label: 'Easy Above',
-          type: 'number',
-          placeholder: '0.6',
-          description: 'Scores above this are easy; between Hard Below and Easy Above is medium.',
-        },
-        {
-          key: 'hard',
-          label: 'Hard Examples',
-          type: 'object',
-          description: 'Text and image examples associated with the hard side of the rule.',
-          fields: [
-            {
-              key: 'candidates',
-              label: 'Text Candidates',
-              type: 'string[]',
-              placeholder: 'Add hard example...',
-            },
-            {
-              key: 'image_candidates',
-              label: 'Image Candidates',
-              type: 'string[]',
-              placeholder: 'Add image example...',
-            },
-          ],
-        },
-        {
-          key: 'easy',
-          label: 'Easy Examples',
-          type: 'object',
-          description: 'Text and image examples associated with the easy side of the rule.',
-          fields: [
-            {
-              key: 'candidates',
-              label: 'Text Candidates',
-              type: 'string[]',
-              placeholder: 'Add easy example...',
-            },
-            {
-              key: 'image_candidates',
-              label: 'Image Candidates',
-              type: 'string[]',
-              placeholder: 'Add image example...',
-            },
-          ],
-        },
-        { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'composer',
-          label: 'Composer',
-          type: 'rule',
-          description: 'Optional recursive AND, OR, or NOT composition over other signals.',
-        },
-      ]
     case 'modality':
       return [{ key: 'description', label: 'Description', type: 'string' }]
     case 'authz':
@@ -400,50 +146,8 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'role', label: 'Role', type: 'string', required: true, placeholder: 'premium_tier' },
         { key: 'description', label: 'Description', type: 'string' },
       ]
-    case 'jailbreak':
-      return JAILBREAK_SIGNAL_FIELDS
     case 'hallucination':
-      return [
-        { key: 'use_nli', label: 'Use NLI Explanations', type: 'boolean' },
-        { key: 'description', label: 'Description', type: 'string' },
-      ]
-    case 'pii':
-      return PII_SIGNAL_FIELDS
-    case 'kb':
-      return [
-        {
-          key: 'kb',
-          label: 'Knowledge Base',
-          type: 'string',
-          required: true,
-          placeholder: 'my_kb',
-          description: 'Name of the knowledge base to query',
-        },
-        {
-          key: 'target',
-          label: 'Target',
-          type: 'object',
-          required: true,
-          description: 'Knowledge-base group or label to match.',
-          fields: [
-            {
-              key: 'kind',
-              label: 'Target Kind',
-              type: 'select',
-              options: ['group', 'label'],
-              required: true,
-            },
-            { key: 'value', label: 'Target Value', type: 'string', required: true },
-          ],
-        },
-        {
-          key: 'match',
-          label: 'Match Strategy',
-          type: 'select',
-          options: ['best', 'threshold'],
-          description: 'How to match against the KB',
-        },
-      ]
+      return [{ key: 'description', label: 'Description', type: 'string' }]
     case 'conversation':
       return [
         { key: 'description', label: 'Description', type: 'string' },
@@ -479,7 +183,6 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
                     'assistant_tool_call',
                     'assistant_tool_cycle',
                     'active_tool_loop',
-                    'image_content', // validator_conversation.go:16 -- #3001
                     'flow_tool_state',
                   ],
                   required: true,
@@ -502,32 +205,9 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'predicate',
           label: 'Predicate',
           type: 'object',
-          description: 'Optional numeric comparison for count features.',
-          fields: [
-            { key: 'gt', label: 'Greater Than', type: 'number' },
-            { key: 'gte', label: 'Greater Than or Equal', type: 'number' },
-            { key: 'lt', label: 'Less Than', type: 'number' },
-            { key: 'lte', label: 'Less Than or Equal', type: 'number' },
-          ],
+          description: 'Numeric comparison a count feature requires; exists features take none.',
+          fields: NUMERIC_PREDICATE_FIELDS,
         },
-      ]
-    case 'event':
-      return [
-        { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'event_types',
-          label: 'Event Types',
-          type: 'string[]',
-          placeholder: 'payment_failed',
-        },
-        { key: 'severities', label: 'Severities', type: 'string[]', placeholder: 'critical' },
-        {
-          key: 'action_codes',
-          label: 'Action Codes',
-          type: 'string[]',
-          placeholder: 'TXN_DECLINE',
-        },
-        { key: 'temporal', label: 'Temporal', type: 'boolean' },
       ]
     default:
       return [{ key: 'description', label: 'Description', type: 'string' }]
@@ -539,329 +219,6 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
     signalFieldsFromRouterSchema(signalType),
     getCuratedSignalFieldSchema(signalType),
   )
-}
-
-function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
-  const capabilityFields = resolveCapabilityPluginFieldSchema(pluginType)
-  if (capabilityFields) return capabilityFields
-  switch (pluginType) {
-    case 'memory':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'retrieval_limit',
-          label: 'Retrieval Limit',
-          type: 'number',
-          placeholder: '5',
-          description: 'Max memories to retrieve',
-        },
-        {
-          key: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'number',
-          placeholder: '0.7',
-        },
-        {
-          key: 'auto_store',
-          label: 'Auto Store',
-          type: 'boolean',
-          description: 'Automatically store conversation turns',
-        },
-      ]
-    case 'system_prompt':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'system_prompt',
-          label: 'System Prompt',
-          type: 'string',
-          required: true,
-          placeholder: 'You are a helpful assistant...',
-        },
-        {
-          key: 'mode',
-          label: 'Mode',
-          type: 'select',
-          options: ['', 'replace', 'insert'],
-          description: 'Replace or insert before existing prompt',
-        },
-      ]
-    case 'hallucination':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'use_nli',
-          label: 'Use NLI',
-          type: 'boolean',
-          description: 'Use Natural Language Inference for detection',
-        },
-        {
-          key: 'hallucination_action',
-          label: 'Action',
-          type: 'select',
-          options: ['', 'header', 'body', 'none'],
-          description: 'What to do when hallucination is detected',
-        },
-      ]
-    case 'router_replay':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        { key: 'max_records', label: 'Max Records', type: 'number', placeholder: '10000' },
-        { key: 'capture_request_body', label: 'Capture Request Body', type: 'boolean' },
-        { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
-        { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
-      ]
-    case 'rag':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'backend',
-          label: 'Backend',
-          type: 'string',
-          required: true,
-          placeholder: 'my_vector_store',
-          description: 'Backend name for retrieval',
-        },
-        {
-          key: 'top_k',
-          label: 'Top K',
-          type: 'number',
-          placeholder: '5',
-          description: 'Number of documents to retrieve',
-        },
-        {
-          key: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'number',
-          placeholder: '0.7',
-        },
-        {
-          key: 'injection_mode',
-          label: 'Injection Mode',
-          type: 'select',
-          options: ['', 'tool_role', 'system_prompt'],
-        },
-        {
-          key: 'on_failure',
-          label: 'On Failure',
-          type: 'select',
-          options: ['', 'skip', 'block', 'warn'],
-        },
-      ]
-    case 'header_mutation':
-      return [
-        {
-          key: 'add',
-          label: 'Add Headers',
-          type: 'object[]',
-          description: 'Headers inserted when they are not already present.',
-          addLabel: 'Add header',
-          emptyLabel: 'No headers to add.',
-          itemLabel: 'Header',
-          itemLabelKey: 'name',
-          fields: [
-            { key: 'name', label: 'Header Name', type: 'string', required: true },
-            { key: 'value', label: 'Header Value', type: 'string', required: true },
-          ],
-        },
-        {
-          key: 'update',
-          label: 'Update Headers',
-          type: 'object[]',
-          description: 'Headers overwritten before forwarding the request.',
-          addLabel: 'Add header update',
-          emptyLabel: 'No headers to update.',
-          itemLabel: 'Header',
-          itemLabelKey: 'name',
-          fields: [
-            { key: 'name', label: 'Header Name', type: 'string', required: true },
-            { key: 'value', label: 'Header Value', type: 'string', required: true },
-          ],
-        },
-        {
-          key: 'delete',
-          label: 'Delete Headers',
-          type: 'string[]',
-          placeholder: 'Header name to delete',
-        },
-      ]
-    case 'fast_response':
-      return [
-        {
-          key: 'message',
-          label: 'Message',
-          type: 'string',
-          required: true,
-          placeholder: 'I cannot help with that request.',
-          description: 'The response message returned directly to the client',
-        },
-      ]
-    case 'tools':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'mode',
-          label: 'Mode',
-          type: 'select',
-          options: ['passthrough', 'filtered', 'none'],
-          required: true,
-        },
-        {
-          key: 'semantic_selection',
-          label: 'Semantic Selection',
-          type: 'boolean',
-          description: 'Run semantic tool selection from the global tools database',
-        },
-        {
-          key: 'strip_tool_history',
-          label: 'Strip Tool History',
-          type: 'boolean',
-          description:
-            'With mode none, remove prior tool calls and results from the provider-bound body',
-        },
-        {
-          key: 'allow_tools',
-          label: 'Allow Tools',
-          type: 'string[]',
-          placeholder: 'Tool name to allow',
-        },
-        {
-          key: 'block_tools',
-          label: 'Block Tools',
-          type: 'string[]',
-          placeholder: 'Tool name to block',
-        },
-        {
-          key: 'strategy',
-          label: 'Retrieval Strategy',
-          type: 'string',
-          placeholder: 'default',
-        },
-        {
-          key: 'dynamic_retrieval',
-          label: 'Dynamic Retrieval',
-          type: 'object',
-          fields: [
-            { key: 'enabled', label: 'Enabled', type: 'boolean' },
-            {
-              key: 'strategy',
-              label: 'Strategy',
-              type: 'select',
-              options: ['semantic_only', 'hybrid_history'],
-            },
-            { key: 'history_window', label: 'History Window', type: 'number' },
-            {
-              key: 'weights',
-              label: 'Weights',
-              type: 'object',
-              fields: [
-                { key: 'semantic', label: 'Semantic', type: 'number' },
-                { key: 'history', label: 'History', type: 'number' },
-                { key: 'decision_prior', label: 'Decision Prior', type: 'number' },
-                { key: 'repetition_penalty', label: 'Repetition Penalty', type: 'number' },
-              ],
-            },
-            {
-              key: 'min_history_confidence',
-              label: 'Minimum History Confidence',
-              type: 'number',
-            },
-            {
-              key: 'fallback_on_low_confidence',
-              label: 'Fallback on Low Confidence',
-              type: 'boolean',
-            },
-          ],
-        },
-      ]
-    case 'tool_selection':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'mode',
-          label: 'Mode',
-          type: 'select',
-          options: ['', 'add', 'filter'],
-          description: 'Add tools from a catalog or filter request-provided tools',
-        },
-        {
-          key: 'tools_db_path',
-          label: 'Tools DB Path',
-          type: 'string',
-          placeholder: 'config/tools_db.json',
-        },
-        { key: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
-        {
-          key: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'number',
-          placeholder: '0.7',
-        },
-        {
-          key: 'strategy',
-          label: 'Strategy',
-          type: 'select',
-          options: ['', 'default', 'weighted', 'hybrid_history'],
-        },
-        {
-          key: 'relevance_threshold',
-          label: 'Relevance Threshold',
-          type: 'number',
-          placeholder: '0.5',
-        },
-        { key: 'preserve_count', label: 'Preserve Count', type: 'number', placeholder: '0' },
-      ]
-    case 'request_params':
-      return [
-        {
-          key: 'blocked_params',
-          label: 'Blocked Params',
-          type: 'string[]',
-          placeholder: 'Parameter name to block',
-          description: 'Request body parameters to strip before forwarding',
-        },
-        {
-          key: 'max_tokens_limit',
-          label: 'Max Tokens Limit',
-          type: 'number',
-          placeholder: '4096',
-          description: 'Maximum allowed value for max_tokens',
-        },
-        {
-          key: 'max_n',
-          label: 'Max N',
-          type: 'number',
-          placeholder: '1',
-          description: 'Maximum allowed value for n (number of completions)',
-        },
-        {
-          key: 'strip_unknown',
-          label: 'Strip Unknown',
-          type: 'boolean',
-          description: 'Remove fields not in the OpenAI spec',
-        },
-      ]
-    case 'response_jailbreak':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          placeholder: '0.8',
-          description: 'Minimum classifier score required to flag the response',
-        },
-        {
-          key: 'action',
-          label: 'Action',
-          type: 'select',
-          options: ['', 'block', 'header', 'none'],
-          description: 'Block the response, emit warning headers, or do nothing',
-        },
-      ]
-    default:
-      return [{ key: 'enabled', label: 'Enabled', type: 'boolean' }]
-  }
 }
 
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {

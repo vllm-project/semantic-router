@@ -1,7 +1,7 @@
 - id: vllm-sr/mom-v1-blend
   display_name: MoM V1 Blend
-  description: Balances measured quality, latency, and cost across reasoning, simple,
-    and general requests.
+  description: Spends reasoning only where a request needs it; one decision-model call
+    per request selects one of ten lanes, from thinking off to maximum effort.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -13,7 +13,7 @@
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -36,7 +36,69 @@
   - tools
   - multimodal
   roles:
-  - name: reasoning
+  - name: long_context
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - long_context
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+  - name: vision
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - vision
+    recommended_pool:
+    - zai/glm-5.3-flash
+  - name: recovery
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: agentic
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    - tools
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: facts
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: frontier
+    required: true
+    minimum_candidates: 2
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - zai/glm-5.3-flash
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: code
     required: true
     minimum_candidates: 1
     traits:
@@ -46,16 +108,27 @@
     - deepseek/deepseek-v4-flash
     - deepseek/deepseek-v4-pro
     - zai/glm-5.1
-  - name: simple
+  - name: hard
     required: true
     minimum_candidates: 1
     traits:
     - chat
+    - reasoning
     recommended_pool:
     - deepseek/deepseek-v4-flash
     - deepseek/deepseek-v4-pro
     - zai/glm-5.1
-  - name: medium
+  - name: standard
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: fast
     required: true
     minimum_candidates: 1
     traits:
@@ -82,7 +155,7 @@
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -149,7 +222,7 @@
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -218,7 +291,7 @@
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -303,7 +376,7 @@
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 3.0.0
+  policy_version: 4.0.0
   lifecycle: active
   capabilities:
   - chat

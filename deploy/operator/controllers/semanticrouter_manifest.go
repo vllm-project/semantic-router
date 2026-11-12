@@ -74,28 +74,28 @@ func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRout
 		serviceType = sr.Spec.Service.Type
 	}
 
-	ports := []corev1.ServicePort{
-		{
-			Name:       "grpc",
-			Port:       servicePortOrDefault(sr.Spec.Service.GRPC.Port, DefaultGRPCPort),
-			TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.GRPC.TargetPort, DefaultGRPCPort)),
+	traffic := corev1.ServicePort{
+		Name:       "grpc",
+		Port:       servicePortOrDefault(sr.Spec.Service.GRPC.Port, DefaultGRPCPort),
+		TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.GRPC.TargetPort, DefaultGRPCPort)),
+		Protocol:   corev1.ProtocolTCP,
+	}
+	if gatewayMode == GatewayModeStandalone {
+		traffic = corev1.ServicePort{
+			Name:       DefaultListenerName,
+			Port:       DefaultListenerPort,
+			TargetPort: intstr.FromString(DefaultListenerName),
 			Protocol:   corev1.ProtocolTCP,
-		},
+		}
+	}
+	ports := []corev1.ServicePort{
+		traffic,
 		{
 			Name:       "api",
 			Port:       servicePortOrDefault(sr.Spec.Service.API.Port, DefaultAPIPort),
 			TargetPort: intstr.FromInt32(servicePortOrDefault(sr.Spec.Service.API.TargetPort, DefaultAPIPort)),
 			Protocol:   corev1.ProtocolTCP,
 		},
-	}
-
-	if gatewayMode == "standalone" {
-		ports = append(ports, corev1.ServicePort{
-			Name:       "envoy-http",
-			Port:       8801,
-			TargetPort: intstr.FromInt(8801),
-			Protocol:   corev1.ProtocolTCP,
-		})
 	}
 
 	if sr.Spec.Service.Metrics.Enabled == nil || *sr.Spec.Service.Metrics.Enabled {
@@ -193,8 +193,16 @@ func (r *SemanticRouterReconciler) generateHPA(sr *vllmv1alpha1.SemanticRouter) 
 	}
 }
 
-func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRouter) *networkingv1.Ingress {
+func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) *networkingv1.Ingress {
 	pathType := networkingv1.PathTypePrefix
+	// An omitted servicePort targets the standalone Router's inference
+	// listener, not the api port, whose management API listens on 127.0.0.1
+	// in the Pod. With spec.gateway the Router serves no HTTP inference, and
+	// the default stays the api port, as in the Helm chart.
+	defaultPort := servicePortOrDefault(sr.Spec.Service.API.Port, DefaultAPIPort)
+	if gatewayMode == GatewayModeStandalone {
+		defaultPort = DefaultListenerPort
+	}
 
 	var rules []networkingv1.IngressRule
 	for _, host := range sr.Spec.Ingress.Hosts {
@@ -208,7 +216,7 @@ func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRout
 					Service: &networkingv1.IngressServiceBackend{
 						Name: sr.Name,
 						Port: networkingv1.ServiceBackendPort{
-							Number: path.ServicePort,
+							Number: servicePortOrDefault(path.ServicePort, defaultPort),
 						},
 					},
 				},

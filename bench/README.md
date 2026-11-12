@@ -9,6 +9,38 @@ and are ignored by Git.
 For an interpretation of maintained benchmark coverage, see the
 [benchmarking overview](../website/docs/benchmarking/overview.md).
 
+## Ownership and maintenance checks
+
+These tools measure Router mechanisms or classifier quality, so
+they stay outside sr-bench. The [domain registry](../tools/agent/domains.yaml)
+defines their ownership and selects their checks.
+
+| Harness | Owner | Deterministic check |
+| --- | --- | --- |
+| Router Learning scenarios and profiles | `router-core` | `make test-learning-tools` |
+| Router Memory cold start | `developer-experience` (`router-tools`) | `make test-memory-coldstart`, included in `make go-tools-test` |
+| Grounded fusion's Go `fusioneval` harness | `developer-experience` (`router-tools`) | `make test-fusioneval`, included in `make go-tools-test` |
+| Fault proxy and soak harness | `e2e` (`soak-tools`) | `make test-fault-proxy` and `make soak-test` |
+| Looper fixed-budget experiment contracts | `router-core` (`looper-bench-contracts`) | `make test-looper-tts`, included in `make test-bench-tools` |
+| Hallucination-detector and trajectory evaluation | `evaluation-quality` (`hallucination-bench`) | `make test-hallucination-bench` |
+| Native classifier and artifact evaluation in `src/training/model_eval/` | `training` | `make test-training-contracts` |
+
+The checks above do not qualify live model performance. Router Learning's
+architecture thresholds use `make bench-router-learning`; the
+[production protection gate](../website/docs/benchmarking/agent-routing-protection.md)
+exercises the Router's per-turn contracts.
+
+The reasoning suite, Router Flow's EvalScope path, grounded fusion's Python
+evaluators, and the agent-workflow runners remain available during the
+[sr-bench migration](https://github.com/vllm-project/semantic-router/issues/4255).
+Each moves only after a comparison against the same target demonstrates that
+sr-bench reproduces its measurements. Classifier and artifact evaluation keeps
+its domain-specific metrics and current owners; this migration does not add a
+classifier target to sr-bench. This follows the
+[Router Models](https://github.com/vllm-project/semantic-router/issues/2966) and
+[Evaluation & Quality](https://github.com/vllm-project/semantic-router/issues/2969)
+boundaries without moving another domain's tools.
+
 ## Find the right runner
 
 | Question | Runner |
@@ -24,7 +56,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Do Router Flow arms improve answer quality? | [`router_flow/`](router_flow/README.md) |
 | Does grounding-aware fusion help on DRACO? | [`grounded_fusion/`](grounded_fusion/README.md) |
 | How do hallucination detectors compare? | [`hallucination/`](hallucination/README.md) |
-| What is the signal latency across CPU, GPU, attention, and body modes? | [`cpu-vs-gpu/`](cpu-vs-gpu/README.md) |
+| How fast does the built-in model runtime serve each model on CPU and GPU? | [model runtime records](../src/model-runtime/docs/records/) |
 
 Start with the smallest dataset or `--dry-run` mode supported by the selected
 runner. Run `python <script> --help` or the installed command's `--help` before
@@ -107,18 +139,19 @@ Reasoning is enabled per decision reference, after the evaluated model has been
 merged into the existing configuration:
 
 ```yaml
-routing:
-  decisions:
-    - name: math-reasoning
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: qwen3-14b
-          use_reasoning: true
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: math-reasoning
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: qwen3-14b
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 Supported generated family mappings are `qwen3`, `deepseek`, and `gpt-oss`.
@@ -160,6 +193,33 @@ python bench/agentic_routing_live_benchmark.py \
 For a live comparison, provide both endpoints and set explicit acceptance
 thresholds. `--require-router-diagnostics` checks the maintained `x-vsr-*`
 response-header contract.
+
+The maintained task runner has explicit protocol and continuation modes. Chat
+Completions always uses full message history:
+
+```bash
+python bench/agent_task_live_benchmark.py \
+  --protocol chat \
+  --continuation-mode full-history \
+  --dry-run \
+  --output-dir results/agent-tasks-chat
+```
+
+Native Responses lineage sends only the current turn and chains the returned
+response identifier. The runner resends stable instructions on each request:
+
+```bash
+python bench/agent_task_live_benchmark.py \
+  --protocol responses \
+  --continuation-mode previous-response-id \
+  --dry-run \
+  --output-dir results/agent-tasks-responses
+```
+
+`--continuation-mode previous-response-id` is rejected for Chat Completions,
+so Responses-only fields cannot accidentally enter a Chat request. Each output
+row records the protocol, continuation mode, effective turn identity, response
+lineage, selected model, and normalized token usage.
 
 The related tools are intentionally separate:
 
@@ -235,6 +295,10 @@ python -m pytest \
   bench/grounded_fusion/test_*.py \
   bench/router_flow/real_eval/test_*.py
 ```
+
+`make test-bench-tools` runs the grounded fusion, hallucination, reasoning, Router
+Flow and agent crew tests, which CI runs when those directories change. Each area
+also has its own target, such as `make test-agent-crew`.
 
 When changing a CLI, update its `--help`, tests, and this index only if the
 reader's choice of runner or first command changes. Detailed experiment design

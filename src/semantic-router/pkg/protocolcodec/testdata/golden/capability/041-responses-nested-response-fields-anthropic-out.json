@@ -32,6 +32,10 @@
           {
             "field": "output.status",
             "action": "dropped"
+          },
+          {
+            "field": "usage",
+            "action": "dropped"
           }
         ]
       }
@@ -51,6 +55,10 @@
           },
           {
             "field": "output.status",
+            "action": "dropped"
+          },
+          {
+            "field": "output.async",
             "action": "dropped"
           },
           {

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 
 func TestConfigHashReportsExactCandidateFailureAndRecovery(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("version: v0.3\nrouting: {}\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("version: v0.5\nrecipes: [{name: default}]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	hash, err := configFileHash(path)
@@ -124,15 +125,26 @@ func TestConfigMutationRetriesSameHashAfterFailedActivation(t *testing.T) {
 				}()
 				// Atomic persistence replaces the inode even though the bytes are
 				// identical. Keep watcher preparation delayed until after that.
+				// The waits leave room for a loaded runner; a handler that
+				// returns without persisting ends the first one early.
 				persisted := false
-				deadline := time.Now().Add(2 * time.Second)
+				deadline := time.Now().Add(time.Minute)
+			persist:
 				for time.Now().Before(deadline) {
 					after, statErr := os.Stat(path)
 					if statErr == nil && !os.SameFile(before, after) {
 						persisted = true
 						break
 					}
-					time.Sleep(time.Millisecond)
+					select {
+					case <-done:
+						break persist
+					case <-time.After(time.Millisecond):
+					}
+				}
+				if !persisted {
+					buf := make([]byte, 1<<20)
+					t.Fatalf("mutation did not persist the candidate; goroutines:\n%s", buf[:runtime.Stack(buf, true)])
 				}
 				returnedBeforeRetry := false
 				select {
@@ -151,11 +163,11 @@ func TestConfigMutationRetriesSameHashAfterFailedActivation(t *testing.T) {
 				}
 				select {
 				case <-done:
-				case <-time.After(2 * time.Second):
+				case <-time.After(time.Minute):
 					t.Fatal("mutation did not observe retried activation")
 				}
-				if !persisted || returnedBeforeRetry {
-					t.Fatalf("stale failure completed retried mutation: persisted=%t early=%t body=%s", persisted, returnedBeforeRetry, response.Body.String())
+				if returnedBeforeRetry {
+					t.Fatalf("stale failure completed retried mutation: body=%s", response.Body.String())
 				}
 				var result RouterConfigUpdateResponse
 				if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {

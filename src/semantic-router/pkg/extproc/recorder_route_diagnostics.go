@@ -34,11 +34,6 @@ func buildReplayRouteDiagnostics(
 		SelectionTrace:                 ctx.VSRSelectionTrace.Clone(),
 		FusionQuorum:                   ctx.VSRFusionQuorum,
 		Looper:                         ctx.VSRLooperDiagnostics,
-		PromptHelperModel:              ctx.VSRPromptHelperModel,
-		PromptHelperPromptTokens:       ctx.VSRPromptHelperPromptTokens,
-		PromptHelperCompletionTokens:   ctx.VSRPromptHelperCompletionTokens,
-		PromptHelperTotalTokens:        ctx.VSRPromptHelperTotalTokens,
-		PromptHelperLatencyMs:          ctx.VSRPromptHelperLatencyMs,
 		OriginalModel:                  originalModel,
 		ProposalModel:                  finalModel,
 		SelectedModel:                  finalModel,
@@ -65,6 +60,8 @@ func buildReplayRouteDiagnostics(
 		ContextCompressionQuality:      ctx.ContextCompressionQuality,
 		ContextCompressionFallback:     ctx.ContextCompressionFallback,
 		ContextCompressionCostSaved:    ctx.ContextCompressionCostSaved,
+		RoutingInputSkippedMessages:    ctx.RoutingInput.SkippedMessages,
+		RoutingInputStrippedBlocks:     ctx.RoutingInput.StrippedBlocks,
 		RequestDemandSnapshots:         cloneRequestDemandSnapshots(ctx.RequestDemandSnapshots),
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
@@ -204,5 +201,7 @@ func replayDecisionRanking(trace *decision.RankingTrace) *routerreplay.DecisionR
 		DecidedBy:  trace.DecidedBy,
 		Winner:     trace.Winner,
 		Candidates: trace.Candidates,
+		RunnerUp:   trace.RunnerUp,
+		Reason:     trace.Reason,
 	}
 }

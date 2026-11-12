@@ -7,6 +7,12 @@ status: Proposal
 
 > **Status:** Proposal · **Created:** 2025-10-08
 
+The named-signal, projection and decision pipeline described here is implemented.
+This page preserves the original design motivation and open refinements; use the
+[current signal guide](../tutorials/signal/overview.md) for the supported schema.
+Regex matching is available within keyword rules, and unknown observations have
+explicit decision policies.
+
 ## Problem
 
 No single classifier is ideal for every routing condition. Operators sometimes need an
@@ -107,6 +113,5 @@ evaluation script are available.
 - [Signals, decisions, and model selection](../overview/signal-driven-decisions)
 - [Signal overview](../tutorials/signal/overview)
 - [Keyword signal](../tutorials/signal/heuristic/keyword)
-- [Embedding signal](../tutorials/signal/learned/embedding)
-- [Classifier signal](../tutorials/signal/learned/classifier)
+- [Systemone signal](../tutorials/signal/systemone.md)
 - [Related issue #313](https://github.com/vllm-project/semantic-router/issues/313)

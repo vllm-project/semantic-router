@@ -6,11 +6,13 @@ import (
 	"strings"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -19,15 +21,16 @@ const (
 	semanticRouterPodLabel   = "app=semantic-router"
 
 	restartRecoveryTimeout  = 5 * time.Minute
-	restartRecoveryInterval = 5 * time.Second
+	restartRecoveryInterval = time.Second
 	restartKeyTTLSeconds    = 600
 )
 
 func init() {
 	pkgtestcases.Register("response-api-restart-recovery", pkgtestcases.TestCase{
-		Description: "Response API data stored in Redis survives a semantic-router pod restart",
-		Tags:        []string{"response-api", "functional", "redis", "restart"},
-		Fn:          testResponseAPIRestartRecovery,
+		Description:         "Response API data stored in Redis survives a semantic-router pod restart",
+		Tags:                []string{"response-api", "functional", "redis", "restart"},
+		MutatesClusterState: true,
+		Fn:                  testResponseAPIRestartRecovery,
 	})
 }
 
@@ -122,13 +125,13 @@ func waitForOldPodTerminated(ctx context.Context, client *kubernetes.Clientset, 
 	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
 		_, err := client.CoreV1().Pods(semanticRouterNamespace).Get(ctx, podName, metav1.GetOptions{})
-		if err != nil {
+		if apierrors.IsNotFound(err) {
 			if opts.Verbose {
 				fmt.Printf("[Test] Old pod %s terminated\n", podName)
 			}
 			return nil
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(time.Second)
 	}
 	return fmt.Errorf("old pod %s still exists after 2m", podName)
 }
@@ -157,7 +160,7 @@ func verifyResponseAfterRestart(ctx context.Context, client *kubernetes.Clientse
 		session, err := fixtures.OpenServiceSession(ctx, client, opts)
 		if err != nil {
 			lastErr = err
-			time.Sleep(3 * time.Second)
+			time.Sleep(time.Second)
 			continue
 		}
 
@@ -170,7 +173,7 @@ func verifyResponseAfterRestart(ctx context.Context, client *kubernetes.Clientse
 			if opts.Verbose {
 				fmt.Printf("[Test] GET %s not ready yet: %v — retrying\n", responseID, err)
 			}
-			time.Sleep(3 * time.Second)
+			time.Sleep(time.Second)
 			continue
 		}
 
@@ -200,7 +203,7 @@ func verifyResponseAfterRestart(ctx context.Context, client *kubernetes.Clientse
 }
 
 func extendRedisKeyTTL(ctx context.Context, client *kubernetes.Clientset, responseID string, ttlSeconds int, opts pkgtestcases.TestCaseOptions) error {
-	podName, useCluster, found, err := getRedisPod(ctx, client)
+	podName, useCluster, found, err := getResponseAPIRedisPod(ctx, client, opts.Profile)
 	if err != nil {
 		return err
 	}

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -50,6 +50,8 @@ type InitOptions struct {
 	RemoteExposure  *bool
 	AuthMode        string
 	RuntimeRegistry *routerruntime.Registry
+	// GatewayMode decides which config changes need a restart.
+	GatewayMode config.GatewayMode
 }
 
 // InitWithRuntime starts the API server using the shared runtime registry when
@@ -140,15 +142,17 @@ func StartWithOptions(opts InitOptions) (*Server, error) {
 
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
-		classificationSvc:     liveClassificationSvc,
-		config:                cfg,
-		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(opts.RuntimeRegistry), buildConfigUpdater(opts.RuntimeRegistry, liveClassificationSvc)),
-		runtimeRegistry:       opts.RuntimeRegistry,
-		configPath:            opts.ConfigPath,
-		memoryStore:           memoryStore,
-		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
-		startupStatusConfig:   &cfg.StartupStatus,
+		classificationSvc:   liveClassificationSvc,
+		config:              cfg,
+		runtimeConfig:       newLiveRuntimeConfig(cfg, buildConfigResolver(opts.RuntimeRegistry)),
+		runtimeRegistry:     opts.RuntimeRegistry,
+		configPath:          opts.ConfigPath,
+		gatewayMode:         opts.GatewayMode,
+		memoryStore:         memoryStore,
+		startupStatusConfig: &cfg.StartupStatus,
 	}
+
+	opts.RuntimeRegistry.OnConfigAttempt(apiServer.recordConfigAudit)
 
 	// Create HTTP server with routes
 	apiServer.initRoutingPreviewAdmission(cfg)
@@ -321,24 +325,6 @@ func buildConfigResolver(runtimeRegistry *routerruntime.Registry) func() *config
 	return runtimeRegistry.CurrentConfig
 }
 
-func buildConfigUpdater(
-	runtimeRegistry *routerruntime.Registry,
-	liveClassificationSvc classificationService,
-) func(*config.RouterConfig) {
-	if runtimeRegistry == nil {
-		return func(newCfg *config.RouterConfig) {
-			if liveClassificationSvc != nil {
-				liveClassificationSvc.RefreshRuntimeConfig(newCfg)
-			}
-			config.Replace(newCfg)
-		}
-	}
-	// The persisted document is a candidate. The router watcher publishes the
-	// complete generation after preparation; mutating its borrowed service here
-	// would expose a new API classifier beside the old extproc/cache snapshot.
-	return func(*config.RouterConfig) {}
-}
-
 func classificationServiceForStartup(cfg *config.RouterConfig, registry *routerruntime.Registry) (*services.ClassificationService, io.Closer, error) {
 	service := resolveClassificationService(cfg, registry)
 	created := service == nil && registry == nil
@@ -400,18 +386,7 @@ func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
 }
 
 func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
-	if cfg == nil {
-		return false
-	}
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, decision := range cfg.Decisions {
-		if decision.HasPlugin("memory") {
-			return true
-		}
-	}
-	return false
+	return cfg != nil && cfg.Memory.InUse
 }
 
 // setupRoutes configures all API routes
@@ -425,7 +400,14 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 
 // handleHealth handles health check requests
 func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api"})
+	mode := "unknown"
+	if snapshot := s.activeConfigSnapshot(); snapshot != nil {
+		mode = "engine"
+		if snapshot.Config().RoutingEnabled() {
+			mode = "router"
+		}
+	}
+	s.writeJSONResponse(w, http.StatusOK, healthResponse{Status: "healthy", Service: "classification-api", ServingMode: mode})
 }
 
 // handleReady reports whether router startup has completed enough for traffic.

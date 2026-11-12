@@ -1,0 +1,133 @@
+package apiserver
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
+
+// Standalone mode binds only its listeners at startup; its upstream layer
+// rebuilds provider backends on reload. The hot-reload check says so, and
+// never names Envoy there.
+func TestStandaloneReloadNeedsARestartOnlyForListeners(t *testing.T) {
+	current := minimalDeployTestConfig("route")
+
+	backends := minimalDeployTestConfig("route")
+	backends.VLLMEndpoints[0].Port++
+	if err := validateParsedHotReloadCompatibilityInMode(config.GatewayStandalone, current, backends); err != nil {
+		t.Fatalf("a provider backend change reloads in standalone mode: %v", err)
+	}
+	if err := validateParsedHotReloadCompatibilityInMode(config.GatewayExtProc, current, backends); err == nil ||
+		!strings.Contains(err.Error(), "rendered into Envoy") {
+		t.Fatalf("Envoy renders provider backends in extproc mode, got %v", err)
+	}
+
+	listeners := minimalDeployTestConfig("route")
+	listeners.Listeners[0].Port = 8898
+	err := validateParsedHotReloadCompatibilityInMode(config.GatewayStandalone, current, listeners)
+	if err == nil || !strings.Contains(err.Error(), "standalone mode binds its listeners at startup") {
+		t.Fatalf("a listener change needs a restart in standalone mode, got %v", err)
+	}
+	if strings.Contains(err.Error(), "Envoy") {
+		t.Fatalf("the standalone message names Envoy: %v", err)
+	}
+}
+
+// A standalone Router's management API takes the listener changes its file
+// watcher takes: keys, APIs and identity reload in place, and only what the
+// Router bound at startup needs a restart.
+func TestStandaloneConfigUpdateReloadsListenerKeysInPlace(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		change  func(*config.Listener)
+		restart string
+	}{
+		{name: "api_keys", change: func(l *config.Listener) { l.APIKeys = []string{"rotated-key"} }},
+		{name: "apis", change: func(l *config.Listener) {
+			l.APIs = config.ListenerAPIs{"chat_completions": {Models: []string{"qwen-test"}}}
+		}},
+		{name: "identity", change: func(l *config.Listener) { l.Identity = &config.ListenerIdentity{TrustHeaders: true} }},
+		{name: "port", change: func(l *config.Listener) { l.Port = 8898 }, restart: "listeners[http-8899].port"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configPath := writeDeployTestBaseConfig(t)
+			before, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			candidate, err := config.ParseYAMLBytes(before)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.change(&candidate.Listeners[0])
+			body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(mustMarshalCanonicalConfigYAML(t, candidate))})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPut, apiConfigPath, bytes.NewReader(body))
+			request.Header.Set("If-Match", configDocumentETag(before))
+			response := httptest.NewRecorder()
+			(&ClassificationAPIServer{configPath: configPath, gatewayMode: config.GatewayStandalone}).handleConfigPut(response, request)
+			if tc.restart == "" {
+				if response.Code != http.StatusOK {
+					t.Fatalf("a listener's %s reloads in place, got %d: %s", tc.name, response.Code, response.Body.String())
+				}
+				return
+			}
+			if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "RESTART_REQUIRED") ||
+				!strings.Contains(response.Body.String(), tc.restart) {
+				t.Fatalf("a listener's %s needs a restart at %s, got %d: %s", tc.name, tc.restart, response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+// The validate endpoint returns the warnings the Router logs when it loads
+// the document, so `vllm-sr config validate --endpoint` can print them.
+func TestHandleConfigValidateReturnsLoadWarnings(t *testing.T) {
+	document := strings.Join([]string{
+		"version: v0.5",
+		"listeners:",
+		"  - name: http-8899",
+		"    address: 0.0.0.0",
+		"    port: 8899",
+		"providers:",
+		"  defaults:",
+		"    model: m",
+		"  models:",
+		"    - name: m",
+		"      backend_refs:",
+		"        - endpoint: 127.0.0.1:8000",
+		"recipes:",
+		"  - name: default",
+		"    signals:",
+		"      decision:",
+		"        - name: needs_tools",
+		`          question: {type: noul, instructions: "Does the request need a tool?"}`,
+		"",
+	}, "\n")
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: document})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, apiConfigValidatePath, bytes.NewReader(body))
+	(&ClassificationAPIServer{}).handleConfigValidate(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var got RouterConfigValidateResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.Valid || len(got.Warnings) != 1 || got.Warnings[0].Code != config.CodeRenamedSignalType {
+		t.Fatalf("response = %+v, want one %s warning", got, config.CodeRenamedSignalType)
+	}
+}

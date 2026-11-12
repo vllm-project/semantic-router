@@ -60,8 +60,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `max_batch_size` _integer_ |  | 100 | Optional: \{\} <br /> |
-| `concurrency_threshold` _integer_ |  | 5 | Optional: \{\} <br /> |
-| `max_concurrency` _integer_ |  | 8 | Optional: \{\} <br /> |
 | `metrics` _[BatchMetricsConfig](#batchmetricsconfig)_ |  |  | Optional: \{\} <br /> |
 
 #### BatchMetricsConfig
@@ -81,35 +79,6 @@ _Appears in:_
 | `duration_buckets` _string array_ | Duration buckets for histograms. Stored as strings to avoid float precision issues.<br />Example: ["0.001", "0.005", "0.01", "0.025", "0.05", "0.1", "0.25", "0.5", "1", "2.5", "5", "10", "30"] |  | Optional: \{\} <br /> |
 | `size_buckets` _integer array_ |  |  | Optional: \{\} <br /> |
 
-#### CategoryModelConfig
-
-CategoryModelConfig defines category model configuration
-
-_Appears in:_
-
-- [ClassifierConfig](#classifierconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `model_id` _string_ |  |  | Optional: \{\} <br /> |
-| `use_modernbert` _boolean_ |  |  | Optional: \{\} <br /> |
-| `threshold` _string_ | Classification threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
-| `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
-| `category_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
-
-#### ClassifierConfig
-
-ClassifierConfig defines classifier configuration
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `category_model` _[CategoryModelConfig](#categorymodelconfig)_ |  |  | Optional: \{\} <br /> |
-| `pii_model` _[PIIModelConfig](#piimodelconfig)_ |  |  | Optional: \{\} <br /> |
-
 #### ComplexityCandidates
 
 ComplexityCandidates defines candidate examples for complexity classification
@@ -121,27 +90,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `candidates` _string array_ | List of candidate phrases or examples |  |  |
-
-#### ComplexityModelConfig
-
-ComplexityModelConfig configures how the complexity signal produces its
-score. It mirrors global.model_catalog.modules.complexity in the router
-config and is passed through field for field.
-
-The contract requirement sits here rather than on
-RemoteClassifierBackendConfig because it is a property of this consumer, not
-of the block: complexity reads two response shapes, so guessing wrong would
-surface per request instead of at admission. A consumer that reads one shape
-
-- categories does - keeps the field optional and defaults it.
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote scoring model. Its absence keeps local prototype<br />scoring; when set, the signal never reads the rules' hard/easy<br />candidates. It sits on the module rather than on a rule because routing<br />signals are replaced wholesale per recipe, so a per-rule backend would<br />vanish under any recipe that did not repeat it. |  | Optional: \{\} <br /> |
 
 #### ComplexityRulesConfig
 
@@ -195,18 +143,23 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
-| `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
+| `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing is removed: the router configuration has no top-level routing<br />block. Its fields are the recipe named default under config.recipes. A<br />resource that sets it is refused. |  | Type: object <br />Optional: \{\} <br /> |
+| `recipes` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Recipes contains canonical recipes[]: each recipe's signals,<br />projections, decisions, model_bindings and plugins. It is preserved as<br />objects so the operator passes the router-owned contract through<br />without lagging behind every router schema addition. The fields a<br />recipe named default sets replace the operator's default recipe's. |  | Optional: \{\} <br /> |
+| `entrypoints` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Entrypoints contains canonical entrypoints[]: the public model names of<br />each recipe. Several recipes need them, with exactly one marked<br />default: true. |  | Optional: \{\} <br /> |
+| `plugins` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Plugins contains canonical global.plugins: the default plugins of every<br />decision, which a recipe's and a decision's plugins override. |  | Optional: \{\} <br /> |
+| `models` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Models contains the facts of providers.models[] entries (capabilities,<br />modalities, description, context_window_size, ...), by name; the<br />operator writes each entry's transport from vllmEndpoints. |  | Optional: \{\} <br /> |
+| `decision_model` _[DecisionModelBinding](#decisionmodelbinding)_ | DecisionModel selects the declared deployment that answers default judgment<br />tasks: a model_runtime deployment, or a systemone deployment that a remote<br />System One API serves. Every built-in signal that no binding names follows<br />it. A module threshold the resource does not set comes from the deployment<br />that answers the module: calibrated for a built-in model, 0.5 for a<br />systemone one. Omitted uses the Router's primary deployment. Artifact<br />identity belongs in model_deployments; the reference never infers a model<br />family or alias. |  | Optional: \{\} <br /> |
+| `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility.<br />A remote deployment (provider systemone, openai_embeddings, classify or<br />openai_chat) takes a connection block: endpoint, model, auth,<br />headers, timeout_ms, max_retries, tls, limits and capabilities. Its key<br />never goes in the resource: auth.api_key_env names a spec.env variable<br />that valueFrom.secretKeyRef fills from a Secret. The operator mounts no<br />Secret into the Pod, so auth.api_key_file is not available. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_bindings` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelBindings contains canonical global.model_catalog.bindings: each key<br />is an application signal type whose rules share one answer (domain,<br />fact_check, user_feedback, jailbreak, safety, pii, hallucination,<br />refusal, turn_relation, complexity, modality), and each value names the<br />model_deployments entry that answers it. A rule<br />that asks its own question names its deployment on the rule. A signal no<br />binding names follows decision_model; recipes[].model_bindings binds in<br />its recipe and wins over these. |  | Type: object <br />Optional: \{\} <br /> |
 | `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
-| `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
+| `embedding_models` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | EmbeddingModels is removed: an embedding model is a model deployment,<br />and global.model_catalog.embeddings.default names the one stores embed<br />with (vela-embedding by default). A resource that sets it is refused. |  | Type: object <br />Optional: \{\} <br /> |
 | `response_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | Response cache configuration. |  | Optional: \{\} <br /> |
 | `semantic_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | SemanticCache is the deprecated response-cache field. |  | Optional: \{\} <br /> |
-| `tools` _[ToolsConfig](#toolsconfig)_ | Tools configuration |  | Optional: \{\} <br /> |
-| `prompt_guard` _[PromptGuardConfig](#promptguardconfig)_ | Prompt guard configuration |  | Optional: \{\} <br /> |
-| `classifier` _[ClassifierConfig](#classifierconfig)_ | Classifier configuration |  | Optional: \{\} <br /> |
+| `prompt_guard` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | PromptGuard is removed: the decision model answers jailbreak rules, and<br />a threshold is a jailbreak rule's predicate. A resource that sets it is<br />refused. |  | Type: object <br />Optional: \{\} <br /> |
+| `classifier` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Classifier is removed: the decision model answers domain and pii rules,<br />and a threshold is the rule's predicate. A resource that sets it is<br />refused. |  | Type: object <br />Optional: \{\} <br /> |
 | `complexity_rules` _[ComplexityRulesConfig](#complexityrulesconfig) array_ | Complexity rules for complexity-aware routing |  | Optional: \{\} <br /> |
-| `complexity_model` _[ComplexityModelConfig](#complexitymodelconfig)_ | ComplexityModel says how the complexity signal produces its score.<br />Absent, the signal scores locally against each rule's hard/easy<br />candidates. With a backend, a remote model produces the score and the<br />candidates are never read. Mirrors<br />global.model_catalog.modules.complexity in the router config. |  | Optional: \{\} <br /> |
-| `external_models` _[ExternalModelConfig](#externalmodelconfig) array_ | ExternalModels declares the remote models that classifier backends<br />(`classifier.pii.backend.model`, `complexity_model.backend.model`) and<br />the prompt guard protocol refer to by name. Mirrors<br />global.model_catalog.external[] in the router config field for field;<br />the router's own validator decides whether a backend resolves against it. |  | Optional: \{\} <br /> |
+| `complexity_model` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ComplexityModel is removed: the decision model answers complexity<br />rules. A resource that sets it is refused. |  | Type: object <br />Optional: \{\} <br /> |
+| `external_models` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ExternalModels is removed: a remote model is a model deployment with<br />provider openai_chat, openai_embeddings or systemone. A resource that<br />sets it is refused. |  | Schemaless: \{\} <br />Optional: \{\} <br /> |
 | `strategy` _string_ | Decision routing strategy ("priority" for priority-based matching) |  | Enum: [priority] <br />Optional: \{\} <br /> |
 | `decisions` _[DecisionConfig](#decisionconfig) array_ | Routing decisions based on signals (domain, complexity, etc.) |  | Optional: \{\} <br /> |
 | `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
@@ -232,28 +185,31 @@ _Appears in:_
 | `preferred_endpoints` _string array_ | PreferredEndpoints specifies which vLLM endpoints to prefer for this decision |  | Optional: \{\} <br /> |
 | `plugins` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg) array_ | Plugins contains policy configurations applied after rule matching |  | Optional: \{\} <br /> |
 | `algorithm` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Algorithm configures base model selection for this decision. It is<br />preserved as a router-owned object so supported algorithms can evolve<br />without requiring the operator CRD to duplicate every nested field. |  | Type: object <br />Optional: \{\} <br /> |
+| `reliability` _[DecisionReliabilityConfig](#decisionreliabilityconfig)_ | Reliability overrides the timeouts and retries of the provider model<br />that serves this decision's requests |  | Optional: \{\} <br /> |
+| `fallback` _[DecisionFallbackConfig](#decisionfallbackconfig)_ | Fallback overrides the cross-model fallback policy for this decision's<br />requests, over the recipe's and the router's |  | Optional: \{\} <br /> |
+| `output` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Output declares the media this decision's answers carry, such as<br />\{kind: image, action: generate\}; without it the decision answers in<br />text. The router checks it against the referenced models when it loads<br />the configuration. |  | Type: object <br />Optional: \{\} <br /> |
 
-#### EmbeddingEndpointConfig
+#### DecisionFallbackConfig
 
-EmbeddingEndpointConfig defines an external OpenAI-compatible embedding endpoint.
+DecisionFallbackConfig is a decision's fallback block, with the router
+configuration's field names and meaning. A field left out keeps the
+recipe's or the router's value.
 
 _Appears in:_
 
-- [EmbeddingModelsConfig](#embeddingmodelsconfig)
+- [DecisionConfig](#decisionconfig)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `base_url` _string_ | BaseURL is the base URL for the embedding endpoint, typically ending in /v1. |  | Optional: \{\} <br /> |
-| `model` _string_ | Model is the embedding model name sent to the external provider. |  | Optional: \{\} <br /> |
-| `api_key_env` _string_ | APIKeyEnv names the environment variable containing the provider API key. |  | Optional: \{\} <br /> |
-| `timeout_seconds` _integer_ | TimeoutSeconds is the request timeout for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `max_retries` _integer_ | MaxRetries is the maximum number of retry attempts for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `max_response_bytes` _integer_ | MaxResponseBytes caps the size of each embedding response body. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `dimensions` _integer_ | Dimensions requests a provider-side output dimension when supported. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+| `enabled` _boolean_ | Enabled turns cross-model fallback on or off for this decision |  | Optional: \{\} <br /> |
+| `max_attempts` _integer_ | MaxAttempts bounds the candidates tried, the first one included |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `total_timeout` _string_ | TotalTimeout bounds the whole fallback chain |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `per_attempt_timeout` _string_ | PerAttemptTimeout bounds each candidate's attempt |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retryable_status_codes` _integer array_ | RetryableStatusCodes are the statuses that move on to the next candidate |  | items:Maximum: 599 <br />items:Minimum: 100 <br />Optional: \{\} <br /> |
 
-#### EmbeddingModelsConfig
+#### DecisionModelBinding
 
-EmbeddingModelsConfig defines configuration for embedding models
+DecisionModelBinding selects one canonical model deployment.
 
 _Appears in:_
 
@@ -261,12 +217,44 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `qwen3_model_path` _string_ | Path to Qwen3-Embedding-0.6B model directory<br />Qwen3 provides 32K context and high quality embeddings (1024 dimensions) |  | Optional: \{\} <br /> |
-| `gemma_model_path` _string_ | Path to EmbeddingGemma-300M model directory<br />Gemma provides 8K context and fast embeddings (768 dimensions) |  | Optional: \{\} <br /> |
-| `mmbert_model_path` _string_ | Path to mmBERT 2D Matryoshka embedding model directory<br />Supports layer early exit (3/6/11/22) and dimension reduction (64-768) |  | Optional: \{\} <br /> |
-| `use_cpu` _boolean_ | Use CPU for inference (default: true) | true | Optional: \{\} <br /> |
-| `embedding_config` _[HNSWEmbeddingConfig](#hnswembeddingconfig)_ | Embedding configuration for embedding-based classification |  | Optional: \{\} <br /> |
-| `endpoint` _[EmbeddingEndpointConfig](#embeddingendpointconfig)_ | Endpoint configures an external embedding provider endpoint.<br />The API key should be injected into the semantic router pod environment<br />and referenced by APIKeyEnv rather than stored directly in the CR. |  | Optional: \{\} <br /> |
+| `deployment` _string_ | Deployment is an exact key in model_deployments. |  | MinLength: 1 <br /> |
+
+#### DecisionReliabilityConfig
+
+DecisionReliabilityConfig is a decision's reliability block, with the
+router configuration's field names and meaning. Durations are Go durations
+such as "30s"; "0s" turns a timeout off.
+
+_Appears in:_
+
+- [DecisionConfig](#decisionconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `total_timeout` _string_ | TotalTimeout bounds the whole call: every attempt and the response |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `per_try_timeout` _string_ | PerTryTimeout bounds each attempt until its response starts |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `idle_timeout` _string_ | IdleTimeout bounds the wait for more of a streamed response<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `first_byte_timeout` _string_ | FirstByteTimeout bounds the wait for the first response byte<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retry_count` _integer_ | RetryCount is the number of retries after the first attempt |  | Maximum: 5 <br />Minimum: 0 <br />Optional: \{\} <br /> |
+| `retry_on` _string_ | RetryOn adds retry conditions, with Envoy's names (5xx, reset, ...) |  | Optional: \{\} <br /> |
+| `retriable_status_codes` _integer array_ | RetriableStatusCodes adds statuses retried under retriable-status-codes |  | items:Maximum: 599 <br />items:Minimum: 100 <br />Optional: \{\} <br /> |
+| `retry_back_off_base` _string_ | RetryBackOffBase is the base of the randomized exponential wait between<br />retries (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retry_back_off_max` _string_ | RetryBackOffMax caps that wait (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+| `retry_after_max` _string_ | RetryAfterMax honors a response's Retry-After up to this bound<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+
+#### EmbeddingBinding
+
+EmbeddingBinding names the deployment that embeds a store's vectors, and
+their dimension.
+
+_Appears in:_
+
+- [SemanticCacheConfig](#semanticcacheconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `deployment` _string_ | Deployment is a global.model_catalog deployment; without it the store<br />embeds with embeddings.default. |  | Optional: \{\} <br /> |
+| `dimension` _integer_ | Dimension is the width of the vectors: the deployment's own, or a<br />narrower one its model serves. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### ExporterConfig
 
@@ -281,39 +269,6 @@ _Appears in:_
 | `type` _string_ |  | otlp | Optional: \{\} <br /> |
 | `endpoint` _string_ |  | jaeger:4317 | Optional: \{\} <br /> |
 | `insecure` _boolean_ |  | true | Optional: \{\} <br /> |
-
-#### ExternalModelConfig
-
-ExternalModelConfig is one entry of global.model_catalog.external[]: a
-remote model a classifier backend or the prompt guard can name. Field names
-are the router's YAML keys so the generic typed conversion carries them
-unchanged.
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name is the catalog name a backend block refers to in its model field. |  | MinLength: 1 <br /> |
-| `model_role` _string_ | ModelRole is what the model is used for; classifier backends require<br />"classification", the prompt guard protocol requires "guardrail". |  | MinLength: 1 <br /> |
-| `llm_model_name` _string_ | ModelName is the model identifier the remote service expects, and the<br />value a token_spans.v1 envelope's model member must equal. |  | MinLength: 1 <br /> |
-| `llm_endpoint` _[ExternalModelEndpoint](#externalmodelendpoint)_ | Endpoint is where the remote model is reached. |  |  |
-| `llm_timeout_seconds` _integer_ | TimeoutSeconds bounds one call when the backend block sets no deadline. |  | Minimum: 1 <br />Optional: \{\} <br /> |
-
-#### ExternalModelEndpoint
-
-ExternalModelEndpoint is the address of a remote classification model.
-
-_Appears in:_
-
-- [ExternalModelConfig](#externalmodelconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `address` _string_ |  |  | MinLength: 1 <br /> |
-| `port` _integer_ |  |  | Maximum: 65535 <br />Minimum: 1 <br /> |
-| `protocol` _string_ |  |  | Enum: [http https] <br />Optional: \{\} <br /> |
 
 #### GatewayReference
 
@@ -338,7 +293,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `existingRef` _[GatewayReference](#gatewayreference)_ | ExistingRef references an existing Gateway to use |  | Optional: \{\} <br /> |
+| `existingRef` _[GatewayReference](#gatewayreference)_ | ExistingRef references an existing Gateway that calls the Router over<br />ext_proc. Setting it selects extproc mode. |  | Optional: \{\} <br /> |
 
 #### HNSWCacheConfig
 
@@ -355,24 +310,6 @@ _Appears in:_
 | `hnsw_ef_construction` _integer_ | EfConstruction is the size of dynamic candidate list during construction | 200 | Minimum: 1 <br />Optional: \{\} <br /> |
 | `max_memory_entries` _integer_ | MaxMemoryEntries limits in-memory entries for hybrid backend | 1000 | Minimum: 0 <br />Optional: \{\} <br /> |
 
-#### HNSWEmbeddingConfig
-
-HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
-
-_Appears in:_
-
-- [EmbeddingModelsConfig](#embeddingmodelsconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `backend` _string_ | Backend selects the embedding provider backend. |  | Enum: [candle openvino openai_compatible] <br />Optional: \{\} <br /> |
-| `model_type` _string_ | ModelType specifies which embedding model to use<br />Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual), "remote" (external provider) |  | Enum: [qwen3 gemma mmbert remote] <br />Optional: \{\} <br /> |
-| `preload_embeddings` _boolean_ | PreloadEmbeddings enables precomputing candidate embeddings at startup | true | Optional: \{\} <br /> |
-| `target_dimension` _integer_ | TargetDimension is the embedding dimension to use (default: 768)<br />For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.<br />External providers may use other positive dimensions such as 1024, 1536, or 3072. |  | Minimum: 1 <br />Optional: \{\} <br /> |
-| `target_layer` _integer_ | TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".<br />Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.<br />Evaluate the latency and quality trade-off on representative deployment data. |  | Enum: [3 6 11 22] <br />Optional: \{\} <br /> |
-| `enable_soft_matching` _boolean_ | EnableSoftMatching allows below-threshold matches when no rule meets its threshold. | false | Optional: \{\} <br /> |
-| `min_score_threshold` _string_ | MinScoreThreshold for matching (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
-
 #### ImageSpec
 
 ImageSpec defines the container image configuration
@@ -383,7 +320,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `repository` _string_ | Repository is the container image repository | ghcr.io/vllm-project/semantic-router/extproc | Optional: \{\} <br /> |
+| `repository` _string_ | Repository is the container image repository | ghcr.io/vllm-project/semantic-router/vllm-sr | Optional: \{\} <br /> |
 | `tag` _string_ | Tag is the container image tag | latest | Optional: \{\} <br /> |
 | `pullPolicy` _[PullPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#pullpolicy-v1-core)_ | PullPolicy is the image pull policy | IfNotPresent | Enum: [Always Never IfNotPresent] <br />Optional: \{\} <br /> |
 | `imageRegistry` _string_ | ImageRegistry is an optional registry prefix |  | Optional: \{\} <br /> |
@@ -705,32 +642,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `routes` _[RouteConfig](#routeconfig)_ | Routes configuration for OpenShift Routes |  | Optional: \{\} <br /> |
 
-#### PIIModelConfig
-
-PIIModelConfig defines PII model configuration.
-
-The contract rule sits on the consumer, as on ComplexityModelConfig: the
-shared backend block lists every contract any consumer reads, and each
-consumer narrows it to what it can parse, so a mismatch is refused at
-admission instead of by the router at load.
-
-_Appears in:_
-
-- [ClassifierConfig](#classifierconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `max_sequence_length` _integer_ | MaxSequenceLength is the total tokenized input budget, including special<br />tokens. Omission or zero preserves the 512-token legacy limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `use_mmbert_32k` _boolean_ | UseMmBERT32K selects the local model that supports token windows. |  | Optional: \{\} <br /> |
-| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window scans original content tokens with explicit overlap. Omission or<br />null leaves window selection unchanged; no CRD defaults are injected. |  | Optional: \{\} <br /> |
-| `model_id` _string_ |  |  | Optional: \{\} <br /> |
-| `use_modernbert` _boolean_ |  |  | Optional: \{\} <br /> |
-| `threshold` _string_ | Detection threshold (0.0-1.0). Stored as string to avoid float precision issues. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
-| `use_cpu` _boolean_ |  |  | Optional: \{\} <br /> |
-| `pii_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
-| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend names a remote token classifier speaking token_spans.v1. Its<br />absence keeps local PII inference. The local selectors this replaces are<br />model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit<br />token windows are only supported by the local mmbert32k model. |  | Optional: \{\} <br /> |
-| `on_error` _string_ | OnError selects what a PII backend failure, or a provider-declared<br />truncation, does to the rule that consumed it: allow (default) treats the<br />content as not matching, block matches it as classification_error. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
-
 #### PersistenceSpec
 
 PersistenceSpec defines persistence configuration
@@ -778,43 +689,6 @@ _Appears in:_
 | `periodSeconds` _integer_ | PeriodSeconds between probes |  | Optional: \{\} <br /> |
 | `timeoutSeconds` _integer_ | TimeoutSeconds for probe |  | Optional: \{\} <br /> |
 | `failureThreshold` _integer_ | FailureThreshold for probe |  | Optional: \{\} <br /> |
-
-#### PromptGuardConfig
-
-PromptGuardConfig defines prompt guard configuration.
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend selects a named external classifier and its typed result contract. |  | Optional: \{\} <br /> |
-| `max_sequence_length` _integer_ | MaxSequenceLength limits the total tokenized input, including special<br />tokens. Omission or zero retains the 512-token budget. The model loader<br />validates the requested budget against the loaded model's capacity. |  | Minimum: 0 <br />Optional: \{\} <br /> |
-| `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local mmbert32k variant supports it. |  | Optional: \{\} <br /> |
-| `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Backend. When both are omitted, the operator uses mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
-| `model_id` _string_ |  | models/Vela-1.0-Encoder-307M-Guard | Optional: \{\} <br /> |
-| `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
-| `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
-| `jailbreak_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
-| `positive_labels` _string array_ | PositiveLabels lists the jailbreak_mapping labels that count as unsafe,<br />for a custom backend whose positive class isn't named "jailbreak"<br />(e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset. |  | Optional: \{\} <br /> |
-| `on_error` _string_ | OnError selects what a prompt-guard classifier failure does to the rule<br />that failed to evaluate. "allow" (the default) tolerates the failure and<br />treats the content as not matching; "block" treats it as a positive<br />detection, because an inference failure means the content could not be<br />verified safe. Without this field on the CRD the setting is pruned by the<br />API server and an operator-managed deployment silently fails open. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
-
-#### PromptGuardWindowConfig
-
-PromptGuardWindowConfig scans original content tokens with overlap. The
-native tokenizer also checks that special tokens leave enough content room.
-
-_Appears in:_
-
-- [PIIModelConfig](#piimodelconfig)
-- [PromptGuardConfig](#promptguardconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `size` _integer_ | Size is the inference window budget, including special tokens. |  | Minimum: 1 <br /> |
-| `overlap` _integer_ | Overlap counts content tokens shared by consecutive windows. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 
 #### PrototypeScoringConfig
 
@@ -970,27 +844,6 @@ _Appears in:_
 | `dimension` _integer_ | Dimension of the embedding vectors<br />For BERT: 384, for Qwen3: 1024, for Gemma: 768 |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `metric_type` _string_ | MetricType for vector similarity<br />Options: "COSINE", "IP" (inner product), "L2" (Euclidean) | COSINE | Enum: [COSINE IP L2] <br />Optional: \{\} <br /> |
 
-#### RemoteClassifierBackendConfig
-
-RemoteClassifierBackendConfig is the shared remote-classifier block. How
-the remote is called (protocol), what shape it answers with (contract),
-which catalog entry it is (model) and how long to wait (deadline) are
-independent axes rather than one enumeration. It mirrors the router's
-backend block field for field so the operator passes it through unchanged.
-
-_Appears in:_
-
-- [ComplexityModelConfig](#complexitymodelconfig)
-- [PIIModelConfig](#piimodelconfig)
-- [PromptGuardConfig](#promptguardconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `protocol` _string_ | Protocol is how the remote is called. |  | Enum: [http_classify http_chat] <br /> |
-| `contract` _string_ | Contract is the response shape the signal reads. Complexity reads two -<br />score.v1, one regression number interpreted through each rule's<br />boundaries, and label_distribution.v1, hard/easy/medium probabilities -<br />so the router requires it there rather than guessing per request. PII<br />reads token_spans.v1, entity spans with code-point offsets. Prompt guard<br />http_chat reads label_decision.v1, a verdict without invented probability. |  | Enum: [score.v1 label_distribution.v1 token_spans.v1 label_decision.v1] <br />Optional: \{\} <br /> |
-| `model` _string_ | Model is the name of an entry in the external model catalog. |  | MinLength: 1 <br /> |
-| `deadline_ms` _integer_ | DeadlineMs bounds one remote call. Defaults to the router's value. |  | Minimum: 1 <br />Optional: \{\} <br /> |
-
 #### ResourceConfig
 
 ResourceConfig defines resource configuration for tracing
@@ -1061,7 +914,9 @@ _Appears in:_
 
 #### RuleConditionConfig
 
-RuleConditionConfig references a specific rule by type and name
+RuleConditionConfig is one condition of a decision's rules: a leaf that
+references a rule by type and name, or a subtree that combines its own
+conditions with an operator.
 
 _Appears in:_
 
@@ -1069,8 +924,13 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type specifies the signal or projection type referenced by this condition. |  | Enum: [keyword embedding domain fact_check user_feedback reask preference language context structure complexity modality authz jailbreak pii kb conversation event projection] <br /> |
-| `name` _string_ | Name is the name of the rule to reference |  |  |
+| `type` _string_ | Type specifies the signal or projection type a leaf references: a type<br />the router accepts in decision rules. |  | Enum: [authz complexity context conversation domain fact_check input_modality jailbreak keyword language metadata modality pii projection safety systemone turn_relation user_feedback] <br />Optional: \{\} <br /> |
+| `name` _string_ | Name is the name of the rule a leaf references |  | Optional: \{\} <br /> |
+| `label` _string_ | Label matches one label of the referenced rule (systemone and<br />application signal conditions) |  | Optional: \{\} <br /> |
+| `predicate` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Predicate bounds the referenced rule's score, as \{gt, gte, lt, lte\}.<br />The router checks it when it loads the configuration. |  | Type: object <br />Optional: \{\} <br /> |
+| `on_error` _string_ | OnError resolves a systemone leaf whose model backend fails |  | Enum: [no_match match] <br />Optional: \{\} <br /> |
+| `operator` _string_ | Operator combines a subtree's conditions: "AND", "OR", or "NOT" (unary) |  | Enum: [AND OR NOT] <br />Optional: \{\} <br /> |
+| `conditions` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg) array_ | Conditions are a subtree's conditions, each of this same shape. They<br />are preserved as router-owned objects, since a CRD schema cannot<br />recurse; the router validates them when it loads the configuration. |  | Optional: \{\} <br /> |
 
 #### SamplingConfig
 
@@ -1095,9 +955,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `enabled` _boolean_ | Enabled controls whether semantic caching is active | true | Optional: \{\} <br /> |
+| `enabled` _boolean_ | Enabled, on by default, gives a configuration without decisions a<br />response_cache plugin in config.plugins that caches every request; off,<br />it turns the decisions' response_cache plugins off. | true | Optional: \{\} <br /> |
 | `backend_type` _string_ | BackendType specifies the cache backend to use<br />Options: "memory" (default), "redis", "valkey", "milvus", "qdrant", "hybrid" | memory | Enum: [memory redis valkey milvus qdrant hybrid] <br />Optional: \{\} <br /> |
-| `similarity_threshold` _string_ | Similarity threshold for cache hits (0.0-1.0). Stored as string to avoid float precision issues. | 0.8 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
+| `similarity_threshold` _string_ | SimilarityThreshold (0.0-1.0) is the min_similarity of the response_cache<br />plugin Enabled adds. Stored as string to avoid float precision issues. | 0.8 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `max_entries` _integer_ | MaxEntries is the maximum number of cache entries (for memory/hybrid backends) | 1000 | Optional: \{\} <br /> |
 | `ttl_seconds` _integer_ | TTLSeconds is the time-to-live for cache entries in seconds | 3600 | Optional: \{\} <br /> |
 | `eviction_policy` _string_ | EvictionPolicy for in-memory cache ("fifo", "lru", "lfu") | fifo | Enum: [fifo lru lfu] <br />Optional: \{\} <br /> |
@@ -1105,7 +965,8 @@ _Appears in:_
 | `valkey` _[ValkeyCacheConfig](#valkeycacheconfig)_ | Valkey configuration (required when backend_type is "valkey") |  | Optional: \{\} <br /> |
 | `milvus` _[MilvusCacheConfig](#milvuscacheconfig)_ | Milvus configuration (required when backend_type is "milvus") |  | Optional: \{\} <br /> |
 | `qdrant` _[QdrantCacheConfig](#qdrantcacheconfig)_ | Qdrant configuration (required when backend_type is "qdrant") |  | Optional: \{\} <br /> |
-| `embedding_model` _string_ | EmbeddingModel specifies which embedding model to use for semantic similarity<br />Options: "mmbert" (default), "bert", "qwen3", "gemma" | mmbert | Enum: [bert qwen3 gemma mmbert] <br />Optional: \{\} <br /> |
+| `embedding_model` _string_ | EmbeddingModel is removed: embedding.deployment names the deployment<br />semantic reuse embeds with, embeddings.default without one. A resource<br />that sets it is refused. |  | Optional: \{\} <br /> |
+| `embedding` _[EmbeddingBinding](#embeddingbinding)_ | Embedding names the deployment semantic reuse embeds with, and the<br />width of its vectors. |  | Optional: \{\} <br /> |
 | `hnsw` _[HNSWCacheConfig](#hnswcacheconfig)_ | HNSW configuration for hybrid/in-memory backends |  | Optional: \{\} <br /> |
 
 #### SemanticRouter
@@ -1152,9 +1013,9 @@ _Appears in:_
 | `service` _[ServiceSpec](#servicespec)_ | Service configuration |  | Optional: \{\} <br /> |
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#resourcerequirements-v1-core)_ | Resource requirements |  | Optional: \{\} <br /> |
 | `persistence` _[PersistenceSpec](#persistencespec)_ | Persistence configuration |  | Optional: \{\} <br /> |
-| `config` _[ConfigSpec](#configspec)_ | Configuration overrides merged into the canonical v0.3 config.yaml.<br />Router-wide runtime overrides land under config.global.router/services/stores/<br />integrations/model_catalog, with model-backed modules nested under<br />config.global.model_catalog.modules. Provider defaults land under<br />config.providers.defaults. |  | Optional: \{\} <br /> |
+| `config` _[ConfigSpec](#configspec)_ | Configuration overrides merged into the canonical v0.5 config.yaml.<br />Router-wide runtime overrides land under config.global.router/services/stores/<br />integrations/model_catalog, and the default plugins under<br />config.global.plugins. Provider defaults land under<br />config.providers.defaults. |  | Optional: \{\} <br /> |
 | `toolsDb` _[ToolEntry](#toolentry) array_ | Tools database configuration |  | Optional: \{\} <br /> |
-| `vllmEndpoints` _[VLLMEndpointSpec](#vllmendpointspec) array_ | VLLMEndpoints is a Kubernetes-native backend discovery adapter.<br />It generates canonical config.providers.models[].backend_refs<br />and config.routing.modelCards entries. |  | Optional: \{\} <br /> |
+| `vllmEndpoints` _[VLLMEndpointSpec](#vllmendpointspec) array_ | VLLMEndpoints is a Kubernetes-native backend discovery adapter.<br />It generates canonical config.providers.models[].backend_refs<br />and the loras of those entries. |  | Optional: \{\} <br /> |
 | `autoscaling` _[AutoscalingSpec](#autoscalingspec)_ | Autoscaling configuration |  | Optional: \{\} <br /> |
 | `startupProbe` _[ProbeSpec](#probespec)_ | Probes configuration |  | Optional: \{\} <br /> |
 | `livenessProbe` _[ProbeSpec](#probespec)_ |  |  | Optional: \{\} <br /> |
@@ -1166,8 +1027,8 @@ _Appears in:_
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#toleration-v1-core) array_ | Tolerations |  | Optional: \{\} <br /> |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#affinity-v1-core)_ | Affinity |  | Optional: \{\} <br /> |
 | `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#envvar-v1-core) array_ | Environment variables |  | Optional: \{\} <br /> |
-| `args` _string array_ | Container arguments |  | Optional: \{\} <br /> |
-| `gateway` _[GatewaySpec](#gatewayspec)_ | Gateway integration for reusing existing gateways |  | Optional: \{\} <br /> |
+| `args` _string array_ | Router arguments, after the gateway mode flags the Operator passes<br />(-gateway=standalone -listener-address=0.0.0.0, or -gateway=extproc).<br />The gateway mode follows spec.gateway, so args may not set those flags. |  | MaxItems: 64 <br />items:MaxLength: 4096 <br />Optional: \{\} <br /> |
+| `gateway` _[GatewaySpec](#gatewayspec)_ | Gateway selects what serves client traffic. Omitted, the Router runs<br />standalone: it serves the OpenAI-compatible API on port 8801 itself,<br />with no Envoy, and the Service exposes that port. With existingRef, the<br />Router serves ext_proc gRPC on port 50051 for that Gateway, whose<br />ext_proc policy and routes you manage. |  | Optional: \{\} <br /> |
 | `openshift` _[OpenShiftSpec](#openshiftspec)_ | OpenShift-specific features |  | Optional: \{\} <br /> |
 | `ingress` _[IngressSpec](#ingressspec)_ | Ingress configuration |  | Optional: \{\} <br /> |
 
@@ -1186,7 +1047,7 @@ _Appears in:_
 | `replicas` _integer_ | Replicas is the current number of replicas |  | Optional: \{\} <br /> |
 | `readyReplicas` _integer_ | ReadyReplicas is the number of ready replicas |  | Optional: \{\} <br /> |
 | `phase` _string_ | Phase represents the current phase of the SemanticRouter |  | Optional: \{\} <br /> |
-| `gatewayMode` _string_ | GatewayMode indicates deployment mode: standalone or gateway-integration |  | Optional: \{\} <br /> |
+| `gatewayMode` _string_ | GatewayMode is what serves client traffic: standalone (the Router's own<br />listener on port 8801) or gateway-integration (the Gateway in<br />spec.gateway, with the Router serving ext_proc) |  | Optional: \{\} <br /> |
 | `openshiftFeatures` _[OpenShiftFeaturesStatus](#openshiftfeaturesstatus)_ | OpenShiftFeatures tracks OpenShift-specific feature status |  | Optional: \{\} <br /> |
 
 #### ServiceAccountSpec
@@ -1302,22 +1163,6 @@ _Appears in:_
 | `properties` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ |  |  | Type: object <br />Optional: \{\} <br /> |
 | `required` _string array_ |  |  | Optional: \{\} <br /> |
 
-#### ToolsConfig
-
-ToolsConfig defines tools configuration
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `top_k` _integer_ |  | 3 | Optional: \{\} <br /> |
-| `similarity_threshold` _string_ | Similarity threshold for tool selection (0.0-1.0). Stored as string to avoid float precision issues. | 0.2 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
-| `tools_db_path` _string_ |  | config/tools_db.json | Optional: \{\} <br /> |
-| `fallback_to_empty` _boolean_ |  | true | Optional: \{\} <br /> |
-
 #### TracingConfig
 
 TracingConfig defines tracing configuration
@@ -1363,7 +1208,7 @@ _Appears in:_
 | `model` _string_ | Model name as reported by vLLM (e.g., "Model-A", "llama3-8b") |  | MinLength: 1 <br /> |
 | `catalog` _string_ | Catalog optionally selects a repository built-in Model Card. Model remains<br />the request-facing alias. |  | Optional: \{\} <br /> |
 | `reasoning` _[ModelReasoningSpec](#modelreasoningspec)_ | Reasoning optionally selects a built-in family or defines inline wire<br />behavior for this self-hosted model. Catalog-backed models normally omit it. |  | Optional: \{\} <br /> |
-| `loras` _[LoRAAdapterSpec](#loraadapterspec) array_ | LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards. |  | MaxItems: 50 <br />Optional: \{\} <br /> |
+| `loras` _[LoRAAdapterSpec](#loraadapterspec) array_ | LoRAs declares the LoRA adapters exposed for this logical model: the loras of its providers.models[] entry. |  | MaxItems: 50 <br />Optional: \{\} <br /> |
 | `backend` _[VLLMBackend](#vllmbackend)_ | Backend configuration |  |  |
 | `weight` _integer_ | Weight for load balancing (default: 1) | 1 | Optional: \{\} <br /> |
 

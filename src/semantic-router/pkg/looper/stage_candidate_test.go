@@ -13,7 +13,6 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -48,9 +47,6 @@ func candidateStageClient(t *testing.T) (*Client, *atomic.Int32, <-chan map[stri
 			t.Errorf("decode stage body: %v", err)
 		}
 		bodies <- body
-		if got := r.Header.Get(headers.VSRSelectedRecipe); got != "scoped" {
-			t.Errorf("stage lost recipe: %q", got)
-		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"stage","object":"chat.completion","created":1,"model":"worker","choices":[{"index":0,"message":{"role":"assistant","content":"Agenda summary."},"finish_reason":"stop"}]}`))
 	}))
@@ -146,12 +142,60 @@ func TestLooperCandidateUsesCompleteStageBudgetExactlyOnce(t *testing.T) {
 	}
 }
 
+// A stage whose estimate exceeds the window only by the reserve for tool-call
+// arguments is admitted, and one above the window without it is not.
+func TestLooperCandidateStageRefusesOnlyWithoutReserves(t *testing.T) {
+	client, calls, _ := candidateStageClient(t)
+	base := candidateStageRequest()
+	arguments, err := json.Marshal(map[string]string{"notes": strings.Repeat("agenda ", 1000)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := &openai.ChatCompletionNewParams{
+		Model: "worker", MaxCompletionTokens: openai.Int(16),
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Summarize the meeting agenda."),
+			{OfAssistant: &openai.ChatCompletionAssistantMessageParam{ToolCalls: []openai.ChatCompletionMessageToolCallParam{{
+				ID: "call_1", Function: openai.ChatCompletionMessageToolCallFunctionParam{Name: "agenda", Arguments: string(arguments)},
+			}}}},
+			openai.ToolMessage("done", "call_1"),
+		},
+	}
+	body, err := json.Marshal(stage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	neutral, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	demand := selection.DemandForRequest(&neutral)
+	if demand.InputReserveTokens == 0 {
+		t.Fatal("tool-call arguments carry no reserve")
+	}
+	p := base.ModelParams["worker"]
+	p.Capabilities = []string{"text", "tools"}
+	p.ContextWindowSize = demand.InputTokens - demand.InputReserveTokens + int(*demand.MaxOutputTokens)
+	base.ModelParams["worker"] = p
+	if err := dispatchCandidateStage(client, base, stage, "worker"); err != nil {
+		t.Fatalf("stage refused on the estimate's reserves: %v", err)
+	}
+	p.ContextWindowSize--
+	base.ModelParams["worker"] = p
+	if err := dispatchCandidateStage(client, base, stage, "worker"); !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("stage above the window without reserves accepted: %v", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("connector calls=%d, want 1", calls.Load())
+	}
+}
+
 func TestLooperCandidateChecksToolAndOutputCapabilities(t *testing.T) {
 	for _, raw := range []string{
 		`{"model":"worker","messages":[{"role":"user","content":"Read the meeting agenda."}],"max_completion_tokens":16,"tools":[{"type":"function","function":{"name":"agenda","parameters":{"type":"object"}}}]}`,
 		`{"model":"worker","messages":[{"role":"user","content":"Return an agenda object."}],"max_completion_tokens":16,"response_format":{"type":"json_object"}}`,
 		`{"model":"worker","messages":[{"role":"user","content":"Read the agenda."}],"max_completion_tokens":16,"reasoning_effort":"high"}`,
-		`{"model":"worker","messages":[{"role":"user","content":"Read the agenda."}],"max_completion_tokens":16,"logit_bias":{"1":1}}`,
+		`{"model":"worker","messages":[{"role":"user","content":"Read the agenda."}],"max_completion_tokens":16,"modalities":["text"]}`,
 	} {
 		client, calls, _ := candidateStageClient(t)
 		base := candidateStageRequest()
@@ -183,7 +227,7 @@ func TestLooperCandidateStageOutputOverridesAndPolicyCap(t *testing.T) {
 				_, err = l.callFusionModel(context.Background(), base, base.OriginalRequest, fusionExecutionConfig{MaxCompletionTokens: 48}, "final", false, false, 1, config.FusionModelOverride{})
 			} else {
 				l := newWorkflowsLooper(&config.LooperConfig{}, borrowClient(client))
-				_, err = l.callWorkflowModel(context.Background(), base.OriginalRequest, workflowsExecutionConfig{PlannerModel: "planner", PlannerMaxCompletionTokens: 64, MaxCompletionTokens: 48}, stage, false, 1, base)
+				_, err = l.callWorkflowModel(context.Background(), base.OriginalRequest, workflowsExecutionConfig{PlannerModel: "planner", PlannerMaxCompletionTokens: 64, MaxCompletionTokens: 48}, stage, llmprotocol.TrustedStageAdvisor, false, 1, base)
 			}
 			if err != nil {
 				t.Fatalf("stage failed: %v", err)
@@ -203,7 +247,7 @@ func TestLooperCandidateConfidenceRetainsNativeEvidenceAndRejectsLargeVerifier(t
 	client, calls, bodies := candidateStageClient(t)
 	base := candidateStageRequest()
 	l := newBaseLooper(&config.LooperConfig{}, borrowClient(client))
-	_, _, err := l.startConfidenceModelAttempt(context.Background(), base, base.OriginalRequest, "worker", "candidate", "worker", false, 1, &LogprobsConfig{Enabled: true, TopLogprobs: 9}, "")
+	_, _, err := l.startConfidenceModelAttempt(context.Background(), base, base.OriginalRequest, "worker", "candidate", "worker", llmprotocol.TrustedStageCandidate, false, 1, &LogprobsConfig{Enabled: true, TopLogprobs: 9}, "")
 	if err != nil {
 		t.Fatalf("native confidence evidence rejected: %v", err)
 	}
@@ -213,7 +257,7 @@ func TestLooperCandidateConfidenceRetainsNativeEvidenceAndRejectsLargeVerifier(t
 	}
 	verifier := cloneRequest(base.OriginalRequest)
 	verifier.Messages = []openai.ChatCompletionMessageParamUnion{openai.UserMessage(strings.Repeat("review agenda ", 4096))}
-	_, _, err = l.startConfidenceModelAttempt(context.Background(), base, verifier, "worker", "self_verifier", "verifier", false, 2, nil, "")
+	_, _, err = l.startConfidenceModelAttempt(context.Background(), base, verifier, "worker", "self_verifier", "verifier", llmprotocol.TrustedStageVerifier, false, 2, nil, "")
 	if !errors.Is(err, selection.ErrNoEligibleCandidates) || calls.Load() != 1 {
 		t.Fatalf("large verifier dispatched: %v calls=%d", err, calls.Load())
 	}

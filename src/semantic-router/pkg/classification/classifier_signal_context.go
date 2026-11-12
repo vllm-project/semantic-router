@@ -3,71 +3,29 @@ package classification
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // signalReadiness returns a map indicating whether each signal type's infrastructure is ready.
 // Separated from EvaluateAllSignalsWithContext to keep cyclomatic complexity under the linter limit.
 func (c *Classifier) signalReadiness() map[string]bool {
-	return map[string]bool{
-		config.SignalTypeSafety:        len(c.safetyClassifiers) > 0,
+	ready := map[string]bool{
 		config.SignalTypeKeyword:       c.keywordClassifier != nil,
-		config.SignalTypeEmbedding:     c.keywordEmbeddingClassifier != nil,
-		config.SignalTypeDomain:        c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
-		config.SignalTypeFactCheck:     len(c.Config.FactCheckRules) > 0 && c.factCheckClassifier != nil && c.factCheckClassifier.IsInitialized(),
-		config.SignalTypeUserFeedback:  len(c.Config.UserFeedbackRules) > 0 && c.feedbackDetector != nil && c.feedbackDetector.IsInitialized(),
-		config.SignalTypeReask:         c.reaskClassifier != nil,
-		config.SignalTypePreference:    len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
 		config.SignalTypeLanguage:      len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:       c.contextClassifier != nil,
-		config.SignalTypeStructure:     c.structureClassifier != nil,
-		config.SignalTypeComplexity:    c.isComplexitySignalReady(),
-		config.SignalTypeModality:      len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
-		config.SignalTypeJailbreak:     c.isJailbreakSignalReady(),
-		config.SignalTypePII:           len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
-		config.SignalTypeKB:            len(c.kbClassifiers) > 0,
 		config.SignalTypeConversation:  len(c.Config.ConversationRules) > 0,
-		config.SignalTypeEvent:         c.eventClassifier != nil,
 		config.SignalTypeMetadata:      len(c.Config.MetadataRules) > 0,
-		config.SignalTypeClassifier:    len(c.genericClassifiers) > 0,
 		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
+		config.SignalTypeSystemOne:     len(c.Config.SystemOneRules) > 0,
 	}
-}
-
-// isJailbreakSignalReady keeps the two jailbreak backends independent. The
-// BERT classifier requires Prompt Guard and its model assets; contrastive rules
-// require only their preloaded embedding classifiers. Coupling both paths to
-// IsJailbreakEnabled silently skipped otherwise healthy contrastive rules when
-// the optional Prompt Guard model was disabled.
-// isComplexitySignalReady reports whether any path can produce the signal.
-// Keying only off the local classifier would report a remote-only config as
-// unavailable, and the dispatcher would skip the signal entirely.
-func (c *Classifier) isComplexitySignalReady() bool {
-	return c.complexityScoreBackend != nil ||
-		c.complexityLabelBackend != nil ||
-		c.complexityClassifier != nil
-}
-
-func (c *Classifier) isJailbreakSignalReady() bool {
-	// Response-direction rules are scored from the model's output, so they do
-	// not make the request-stage signal ready on their own.
-	if len(c.Config.RequestJailbreakRules()) == 0 {
-		return false
+	for _, rule := range c.applicationRules {
+		ready[rule.Type] = true
 	}
-
-	requiresBERT := false
-	for _, rule := range c.Config.JailbreakRules {
-		if rule.Method == "contrastive" {
-			if _, ready := c.contrastiveJailbreakClassifiers[rule.Name]; !ready {
-				return false
-			}
-			continue
-		}
-		requiresBERT = true
-	}
-	return !requiresBERT || (c.IsJailbreakEnabled() && c.jailbreakInference != nil)
+	return ready
 }
 
 // textForSignalFunc returns a function that resolves the correct text for a given signal type,
@@ -160,6 +118,12 @@ func (c *Classifier) EvaluateAllSignalsWithRequestFactsForDecisions(
 }
 
 func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, signalScope []config.Decision, signalScopeSet bool) *SignalResults {
+	return c.applyProjections(c.applySignalGroups(c.evaluateBaseSignals(input, signalScope, signalScopeSet)))
+}
+
+// evaluateBaseSignals evaluates the request's signals, without the partitions
+// and projections derived from them.
+func (c *Classifier) evaluateBaseSignals(input SignalEvaluationInput, signalScope []config.Decision, signalScopeSet bool) *SignalResults {
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	switch {
@@ -174,8 +138,10 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 
 	boundedText := textForSignalFunc(input.Text, input.UncompressedText, input.SkipCompressionSignals)
 	textForSignal := func(signalType string) string {
-		if c.hasLongContextClassifier(signalType) {
-			if input.UncompressedText != "" && input.SkipCompressionSignals[signalType] {
+		// The systemone and application signals ask the decision model,
+		// which reads the request as it came.
+		if signalType == systemOneQuestionText {
+			if input.UncompressedText != "" {
 				return input.UncompressedText
 			}
 			return input.Text
@@ -198,20 +164,27 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 		input.RequestFacts.Context = context.Background()
 	}
 
+	// One request stage, one bundle: the model calls of every signal reach each
+	// runtime process as a single /v1/bundle call, before the signals' deadline,
+	// and every question the stage asks one decision model goes in one call.
+	stage, bundle := modelservice.WithBundle(input.RequestFacts.Context, 0)
+	stage, cancel := withSignalDeadline(stage, c.Config.SignalTimeout(), time.Now())
+	defer cancel()
+	input.RequestFacts.Context = stage
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var mediaCache *requestMediaEmbeddingCache
-	if input.ImageURL != "" || input.Audio != "" {
-		mediaCache = newRequestMediaEmbeddingCache()
-	}
-	dispatchers := c.buildSignalDispatchers(input, results, &mu, textForSignal, mediaCache, usedSignals)
+	dispatchers := c.buildSignalDispatchers(input, results, &mu, textForSignal, usedSignals)
 
-	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
+	asks := func(signalType string) []string { return c.signalQuestionDeployments(signalType, usedSignals) }
+	runSignalDispatchers(stage, dispatchers, usedSignals, ready, bundle, asks, &wg)
 
 	wg.Wait()
-	results = c.applySignalGroups(results)
-	results = c.applySignalComposers(results)
-	results = c.applySignalOutputPolicies(results)
-	results = c.applyProjections(results)
+	request := textForSignal(systemOneQuestionText)
+	for _, evidence := range results.PIIEvidence {
+		results.PIIContentVerified = results.PIIContentVerified || evidence.CoversClean("request", request)
+	}
+	if input.ImageURL != "" || input.Audio != "" {
+		results.PIIContentVerified = false
+	}
 	return results
 }

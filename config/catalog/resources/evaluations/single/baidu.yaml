@@ -318,3 +318,131 @@
     verification: imported
     source: https://artificialanalysis.ai/evaluations/aime-2025
     redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    accuracy: 0.66
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-simpleqa@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: openai/simpleqa@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    accuracy: 0.242
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-ifeval@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    accuracy: 0.8
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-aime-2024@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    pass_at_1: 0.279
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-aime-2025@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    pass_at_1: 0.197
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-math-500@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    pass_at_1: 0.872
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-livecodebench-v6@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+    dataset_release: v6
+    problem_window: 2024-08-01_to_2025-05-01
+  metrics:
+    pass_at_1: 0.264
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true

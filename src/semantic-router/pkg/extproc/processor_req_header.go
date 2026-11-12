@@ -21,7 +21,15 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 
 	span := startRequestHeaderSpan(v, ctx)
 
-	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
+	// The skip-processing opt-out would bypass a listener's model allow-list,
+	// so a restricted listener does not honor it.
+	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
+	r.captureDelegatedCredential(ctx)
+	if r.Config != nil {
+		ctx.sessionIDHeaders = r.Config.Headers.SessionIDHeaderNames()
+		ctx.identity = r.Config.Authz.Identity
+	}
+	r.gateDebugHeaders(ctx)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
 		return rejected, nil
@@ -46,15 +54,19 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
 		mutation := buildLooperInternalHeaderRemovalMutation()
-		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
+		r.appendDelegatedCredentialRemoval(mutation)
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
+		// Per-user keys reach a provider only as its credential, which a
+		// skipped request never gets.
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.CredentialResolver.HeadersToStrip()...)
 		if isAzureOpenAIPath(path) {
 			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
 		}
 		response := newContinueRequestHeadersResponse(mutation)
-		if headerValueCI(ctx, headers.SelectedModel) != "" {
-			// A caller-supplied selected-model header may have selected a provider
-			// route before ext_proc ran. Skip-processing does not materialize a
-			// provider path, so remove the untrusted selector and re-evaluate onto
+		if requestCarriesHeader(v, headers.VSRRouteModel) {
+			// A caller-supplied route key may have selected a provider route
+			// before ext_proc ran. Skip-processing does not materialize a
+			// provider path, so remove the untrusted key and re-evaluate onto
 			// the default route, which owns the ingress path-prefix rewrite.
 			response.GetRequestHeaders().GetResponse().ClearRouteCache = true
 		}
@@ -62,16 +74,23 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	}
 
 	detectStreamingExpectation(ctx)
-	if modelsResp, err := r.handleModelsRequestHeaders(method, path); err != nil || modelsResp != nil {
+	if modelsResp, err := r.handleModelsRequestHeaders(method, path, ctx); err != nil || modelsResp != nil {
 		return modelsResp, err
 	}
 	if responseAPIResp, err := r.handleResponseAPIRequestHeaders(method, path, ctx); err != nil || responseAPIResp != nil {
 		return responseAPIResp, err
 	}
-	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
+	validationResp, requiresBody := r.classifyRequestHeaders(method, path)
+	if validationResp != nil {
 		return validationResp, nil
 	}
+	// Envoy sends no body stage after end_of_stream headers, so reject here.
+	if requiresBody && v.RequestHeaders.GetEndOfStream() {
+		return r.rejectBodylessInferenceRequest(ctx), nil
+	}
 	mutation := buildIdentityEncodingRequestMutation()
+	r.appendDelegatedCredentialRemoval(mutation)
+	mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 	if isAzureOpenAIPath(path) {
 		// The Azure client key authenticates to the Router, never to a provider.
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
@@ -109,6 +128,7 @@ func captureRequestHeaders(
 	skipProcessingGateEnabled bool,
 ) (string, string) {
 	requestHeaders := v.RequestHeaders.Headers
+	var acceptEncoding []string
 	for _, header := range requestHeaders.Headers {
 		headerValue := extractHeaderValue(header)
 		ctx.Headers[header.Key] = headerValue
@@ -118,6 +138,13 @@ func captureRequestHeaders(
 		// worry about casing. Internal request authentication runs after all
 		// headers have been captured so header order cannot affect validation.
 		lowerKey := strings.ToLower(header.Key)
+		// Accept-Encoding is a list, so its field lines form one value (RFC 9110
+		// section 5.3) that upstream encoding negotiation judges as a whole.
+		// Other repeated headers keep the last line, as before.
+		if lowerKey == "accept-encoding" {
+			acceptEncoding = append(acceptEncoding, headerValue)
+			ctx.Headers[header.Key] = strings.Join(acceptEncoding, ", ")
+		}
 		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
 		}
@@ -131,7 +158,7 @@ func captureRequestHeaders(
 			ctx.SkipProcessing = true
 		}
 	}
-	authenticateLooperRequestContext(ctx)
+	markLooperHop(ctx)
 
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]
@@ -194,6 +221,17 @@ func detectStreamingExpectation(ctx *RequestContext) {
 	}
 }
 
+// requestCarriesHeader reports whether the client's request carried name,
+// which markLooperHop may since have dropped from the context.
+func requestCarriesHeader(v *ext_proc.ProcessingRequest_RequestHeaders, name string) bool {
+	for _, header := range v.RequestHeaders.GetHeaders().GetHeaders() {
+		if strings.EqualFold(header.GetKey(), name) && extractHeaderValue(header) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func extractHeaderValue(header interface {
 	GetValue() string
 	GetRawValue() []byte
@@ -214,7 +252,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: providerBoundRemovals(),
 	}
 }
 

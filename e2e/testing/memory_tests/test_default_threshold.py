@@ -3,14 +3,27 @@
 import json
 import math
 import os
+import shutil
+import subprocess
 import time
 import uuid
 
-import requests
-
-from memory_tests.base import HTTP_OK, MemoryFeaturesTest
+from memory_tests.base import MemoryFeaturesTest
 
 MIN_ORTHOGONAL_RESIDUAL_NORM = 1e-6
+
+# Memory recall embeds with the vela-embedding deployment at the store's 768
+# dimensions. Its model runtime serves the router alone, over a Unix socket
+# inside the router container.
+EMBEDDING_DEPLOYMENT = "vela-embedding"
+EMBEDDING_DIMENSION = 768
+RUNTIME_EMBEDDINGS = (
+    "socket=$(ls /tmp/vllm-srun-*/vela-embedding-*.sock 2>/dev/null | head -n 1); "
+    '[ -S "$socket" ] || { echo "no vela-embedding runtime socket" >&2; exit 1; }; '
+    'exec curl -sS --unix-socket "$socket" http://runtime/v1/embeddings '
+    "-H 'content-type: application/json' --data-binary @-"
+)
+DETERMINISTIC_EMBEDDINGS = {"1", "true", "yes", "on", "deterministic"}
 
 
 class MemoryDefaultThresholdTest(MemoryFeaturesTest):
@@ -23,7 +36,7 @@ class MemoryDefaultThresholdTest(MemoryFeaturesTest):
     def _unit(vector: list[float]) -> list[float]:
         norm = math.sqrt(sum(value * value for value in vector))
         if norm == 0:
-            raise AssertionError("Embedding API returned a zero-norm vector")
+            raise AssertionError("The model runtime returned a zero-norm vector")
         return [value / norm for value in vector]
 
     @staticmethod
@@ -31,24 +44,44 @@ class MemoryDefaultThresholdTest(MemoryFeaturesTest):
         return sum(a * b for a, b in zip(left, right, strict=True))
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
-        health_url = os.environ.get("ROUTER_HEALTH_ENDPOINT", "")
+        """Embed texts with the model runtime worker memory recall embeds with."""
+        deterministic = os.environ.get("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
+        if deterministic.strip().lower() in DETERMINISTIC_EMBEDDINGS:
+            self.skipTest("deterministic memory embeddings bypass the model runtime")
+        container_runtime = os.environ.get("CONTAINER_RUNTIME", "docker")
+        router_container = os.environ.get("ROUTER_CONTAINER", "")
+        self.assertTrue(router_container, "harness did not export ROUTER_CONTAINER")
         self.assertTrue(
-            health_url.endswith("/ready"),
-            "The memory integration runner must supply the router API readiness URL",
+            shutil.which(container_runtime), "container runtime unavailable"
         )
-        endpoint = health_url.removesuffix("/ready") + "/api/v1/diagnostics/embeddings"
-        response = requests.post(
-            endpoint,
-            json={"model": "mmbert", "dimension": 768, "texts": texts},
+        request = {
+            "model": EMBEDDING_DEPLOYMENT,
+            "input": texts,
+            "dimensions": EMBEDDING_DIMENSION,
+        }
+        result = subprocess.run(
+            [
+                container_runtime,
+                "exec",
+                "-i",
+                router_container,
+                "sh",
+                "-c",
+                RUNTIME_EMBEDDINGS,
+            ],
+            input=json.dumps(request),
+            capture_output=True,
+            text=True,
+            check=False,
             timeout=self.timeout,
         )
-        self.assertEqual(response.status_code, HTTP_OK, response.text)
-        embeddings = response.json().get("embeddings", [])
-        self.assertEqual(len(embeddings), len(texts))
-        for item in embeddings:
-            self.assertEqual(item.get("model_used"), "mmbert")
-            self.assertEqual(len(item.get("embedding", [])), 768)
-        return [self._unit(item["embedding"]) for item in embeddings]
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = sorted(json.loads(result.stdout)["data"], key=lambda item: item["index"])
+        self.assertEqual(len(data), len(texts), result.stdout[:500])
+        for item in data:
+            self.assertFalse(item.get("error"), item.get("error"))
+            self.assertEqual(len(item.get("embedding", [])), EMBEDDING_DIMENSION)
+        return [self._unit(item["embedding"]) for item in data]
 
     def _score_between_defaults(
         self, zero_query: list[float], control_query: list[float]

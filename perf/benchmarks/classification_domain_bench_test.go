@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package benchmarks
 
@@ -7,34 +7,29 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 var (
 	domainOnce sync.Once
-	domainTask *binding.Resolved[string, tasks.LabelDistribution]
-	domainErr  error
+	domainTask *signalClassifier
 )
 
-// Model quality is asserted by the required real-model regression suite. This
-// microbenchmark measures owned Domain inference without an optional gold dataset.
+// Model quality is asserted by the runtime's golden answers. This
+// microbenchmark measures the decision model's Domain question without an
+// optional gold dataset.
 func BenchmarkClassifyDomain(b *testing.B) {
 	domainOnce.Do(func() {
-		spec := benchmarkModel(b, "domain", "label_distribution.v1")
-		domainTask, domainErr = benchmarkRuntime.Sequence(context.Background(), spec)
+		domainTask = newSignalClassifier(b, "perf-decision", benchmarkInput, presets.Domain)
 	})
-	if domainErr != nil {
-		if missingBenchModels(domainErr) {
-			b.Skipf("Failed to initialize domain classifier: %v", domainErr)
-		}
-		b.Fatalf("prepare owned Vela Domain: %v", domainErr)
+	if domainTask == nil {
+		b.Fatal("prepare the decision model: an earlier benchmark stopped while preparing it")
 	}
-	recordModelIdentity(b, "domain")
+	recordModelIdentity(b, "decision")
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := domainTask.Call(context.Background(), "perf", testTexts[i%len(testTexts)]); err != nil {
+		if _, err := domainTask.ask(context.Background(), testTexts[i%len(testTexts)]); err != nil {
 			b.Fatal(err)
 		}
 	}

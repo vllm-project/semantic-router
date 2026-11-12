@@ -10,7 +10,6 @@ import (
 )
 
 const validDSL = `MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 
@@ -106,7 +105,6 @@ ROUTE r1 {
 
 func TestValidateSoftmaxProjectionPartitionDoesNotAddBrowserRuntimeWarning(t *testing.T) {
 	input := js.ValueOf(`MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 
@@ -140,7 +138,6 @@ PROJECTION partition intent_partition {
 
 func TestValidateTestBlocksStillAddBrowserRuntimeWarning(t *testing.T) {
 	input := js.ValueOf(`MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 
@@ -185,57 +182,59 @@ func TestValidateNoArgs(t *testing.T) {
 }
 
 func TestDecompileValidYAML(t *testing.T) {
-	yamlInput := js.ValueOf(`version: v0.3
+	yamlInput := js.ValueOf(`version: v0.5
 providers:
   defaults:
     model: qwen
   models:
     - name: qwen
+      modalities:
+        input: [text]
+        output: [text]
       backend_refs:
         - name: primary
           provider: vllm
           endpoint: localhost:8000
           protocol: http
-routing:
-  modelCards:
-    - name: qwen
-      modality: text
-  signals:
-    keywords:
-      - name: s1
-        operator: any
-        keywords: ["hello"]
-  decisions:
-    - name: r1
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: s1
-      modelRefs:
-        - model: qwen
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/private]
     recipe: private
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: s1
+          operator: any
+          keywords: ["hello"]
+    decisions:
+      - name: r1
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: s1
+        modelRefs:
+          - model: qwen
   - name: private
-    routing:
-      signals:
-        keywords:
-          - name: private-signal
-            operator: any
-            keywords: ["private"]
-      decisions:
-        - name: private-route
-          priority: 10
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: private-signal
-          modelRefs:
-            - model: qwen`)
+    signals:
+      keywords:
+        - name: private-signal
+          operator: any
+          keywords: ["private"]
+    decisions:
+      - name: private-route
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: private-signal
+        modelRefs:
+          - model: qwen`)
 
 	result := decompile(js.Undefined(), []js.Value{yamlInput})
 	str := result.(string)
@@ -276,6 +275,182 @@ func TestDecompileNoArgs(t *testing.T) {
 	json.Unmarshal([]byte(str), &dr)
 	if dr.Error == "" {
 		t.Error("expected error when no args provided")
+	}
+}
+
+const envReferenceConfigPrefix = `version: v0.5
+providers:
+  models:
+    - name: qwen
+      backend_refs:
+        - name: primary
+          provider: vllm
+          endpoint: localhost:8000
+          protocol: http
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+recipes:
+- name: default
+  signals:
+    keywords:
+      - name: docs
+        operator: any
+        keywords: ["docs"]
+  decisions:
+    - name: docs_route
+      priority: 1
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: docs
+      modelRefs:
+        - model: qwen
+      plugins:
+`
+
+func decompileAndRecompile(t *testing.T, yamlSource string) (string, string) {
+	t.Helper()
+	var dr DecompileResult
+	if err := json.Unmarshal([]byte(decompile(js.Undefined(), []js.Value{js.ValueOf(yamlSource)}).(string)), &dr); err != nil {
+		t.Fatalf("failed to unmarshal decompile result: %v", err)
+	}
+	if dr.Error != "" {
+		t.Fatalf("unexpected decompile error: %s", dr.Error)
+	}
+	var cr CompileResult
+	if err := json.Unmarshal([]byte(compile(js.Undefined(), []js.Value{js.ValueOf(dr.DSL)}).(string)), &cr); err != nil {
+		t.Fatalf("failed to unmarshal compile result: %v", err)
+	}
+	if cr.Error != "" {
+		t.Fatalf("unexpected compile error: %s", cr.Error)
+	}
+	return dr.DSL, cr.YAML
+}
+
+func TestDecompileKeepsEnvironmentReferences(t *testing.T) {
+	t.Setenv("UPSTREAM_TOKEN", "token-from-environment")
+	yamlSource := envReferenceConfigPrefix + `        - type: system_prompt
+          configuration:
+            enabled: true
+            system_prompt: "Quote prices in $$USD."
+        - type: header_mutation
+          configuration:
+            add:
+              - name: X-Upstream-Token
+                value: "Bearer ${UPSTREAM_TOKEN}"
+              - name: X-Tenant
+                value: "${TENANT_ID:-default-tenant}"
+`
+
+	dslText, yamlText := decompileAndRecompile(t, yamlSource)
+	for _, want := range []string{"$$USD", "Bearer ${UPSTREAM_TOKEN}", "${TENANT_ID:-default-tenant}"} {
+		if !strings.Contains(dslText, want) {
+			t.Errorf("decompiled DSL lost %q:\n%s", want, dslText)
+		}
+		if !strings.Contains(yamlText, want) {
+			t.Errorf("recompiled YAML lost %q:\n%s", want, yamlText)
+		}
+	}
+	if strings.Contains(dslText, "token-from-environment") {
+		t.Errorf("decompiled DSL contains an environment value:\n%s", dslText)
+	}
+}
+
+func TestDecompileAcceptsRequiredEnvironmentReference(t *testing.T) {
+	yamlSource := envReferenceConfigPrefix + `        - type: context
+          configuration:
+            enabled: true
+            sources:
+              - type: rag
+                backend: openai
+                backend_config:
+                  vector_store_id: vs_docs
+                  api_key: ${OPENAI_API_KEY}
+`
+
+	dslText, yamlText := decompileAndRecompile(t, yamlSource)
+	if !strings.Contains(dslText, `api_key: "${OPENAI_API_KEY}"`) {
+		t.Errorf("decompiled DSL lost the API key reference:\n%s", dslText)
+	}
+	if !strings.Contains(yamlText, "api_key: ${OPENAI_API_KEY}") {
+		t.Errorf("recompiled YAML lost the API key reference:\n%s", yamlText)
+	}
+}
+
+// Each typed value is valid only once its reference takes the default, and the
+// RAG key is valid only as written.
+const typedEnvDefaultsConfig = `version: v0.5
+providers:
+  models:
+    - name: qwen
+      reliability:
+        base_ejection_time: ${EJECTION_TIME:-30s}
+      backend_refs:
+        - name: primary
+          provider: vllm
+          endpoint: ${BACKEND_HOST:-127.0.0.1}:8000
+          protocol: http
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: ${CTX_MIN:-4k}
+    decisions:
+      - name: long_route
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: qwen
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_docs
+                    api_key: ${OPENAI_API_KEY}
+`
+
+func TestDecompileAcceptsTypedEnvironmentDefaults(t *testing.T) {
+	// The Router resolves these with its own environment, not this one.
+	t.Setenv("CTX_MIN", "lots")
+	t.Setenv("EJECTION_TIME", "soon")
+	t.Setenv("BACKEND_HOST", "not a host")
+
+	dslText, yamlText := decompileAndRecompile(t, typedEnvDefaultsConfig)
+	if !strings.Contains(dslText, `min_tokens: "${CTX_MIN:-4k}"`) {
+		t.Errorf("decompiled DSL lost the token count reference:\n%s", dslText)
+	}
+	for _, want := range []string{"min_tokens: ${CTX_MIN:-4k}", "api_key: ${OPENAI_API_KEY}"} {
+		if !strings.Contains(yamlText, want) {
+			t.Errorf("recompiled YAML lost %q:\n%s", want, yamlText)
+		}
+	}
+}
+
+func TestDecompileRejectsInvalidEnvironmentDefault(t *testing.T) {
+	yamlSource := strings.Replace(typedEnvDefaultsConfig, "${CTX_MIN:-4k}", "${CTX_MIN:-lots}", 1)
+
+	var dr DecompileResult
+	if err := json.Unmarshal([]byte(decompile(js.Undefined(), []js.Value{js.ValueOf(yamlSource)}).(string)), &dr); err != nil {
+		t.Fatalf("failed to unmarshal decompile result: %v", err)
+	}
+	if !strings.Contains(dr.Error, "invalid token count format: lots") {
+		t.Errorf("decompile error = %q, want the invalid default", dr.Error)
 	}
 }
 
@@ -354,23 +529,9 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
-func TestConvertDiagnostics(t *testing.T) {
-	result := convertDiagnostics(nil)
-	if len(result) != 0 {
-		t.Errorf("expected 0 diagnostics, got %d", len(result))
-	}
-}
-
 func TestMarshalJSON(t *testing.T) {
 	result := marshalJSON(map[string]string{"key": "value"})
 	if result != `{"key":"value"}` {
 		t.Errorf("unexpected JSON: %s", result)
-	}
-}
-
-func TestJoinErrors(t *testing.T) {
-	result := joinErrors(nil)
-	if result != "[]" {
-		t.Errorf("expected empty array, got: %s", result)
 	}
 }

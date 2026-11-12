@@ -7,33 +7,21 @@ import (
 )
 
 func statusCodeToImmediateResponseCode(statusCode int) typev3.StatusCode {
-	switch statusCode {
-	case http.StatusOK, http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError:
-		return statusCodeToEnum(statusCode)
+	// Immediate responses are final HTTP responses. Check the range before
+	// narrowing to int32, and use Envoy's enum rather than a partial local list.
+	if statusCode >= http.StatusOK && statusCode <= 599 {
+		if _, defined := typev3.StatusCode_name[int32(statusCode)]; defined {
+			return typev3.StatusCode(statusCode)
+		}
 	}
+	return typev3.StatusCode_InternalServerError
+}
 
-	switch statusCode {
-	case http.StatusUnauthorized:
-		return typev3.StatusCode_Unauthorized
-	case http.StatusForbidden:
-		return typev3.StatusCode_Forbidden
-	case http.StatusMethodNotAllowed:
-		return typev3.StatusCode_MethodNotAllowed
-	case http.StatusRequestTimeout:
-		return typev3.StatusCode_RequestTimeout
-	case http.StatusPreconditionFailed:
-		return typev3.StatusCode_PreconditionFailed
-	case http.StatusRequestEntityTooLarge:
-		return typev3.StatusCode_PayloadTooLarge
-	case http.StatusUnprocessableEntity:
-		return typev3.StatusCode_UnprocessableEntity
-	case http.StatusTooManyRequests:
-		return typev3.StatusCode_TooManyRequests
-	case http.StatusBadGateway:
-		return typev3.StatusCode_BadGateway
-	case http.StatusServiceUnavailable:
-		return typev3.StatusCode_ServiceUnavailable
-	default:
-		return typev3.StatusCode_OK
+// An error body must never be paired with a success or redirect status.
+func errorResponseStatusCode(statusCode int) int {
+	code := int(statusCodeToImmediateResponseCode(statusCode))
+	if code < http.StatusBadRequest {
+		return http.StatusInternalServerError
 	}
+	return code
 }

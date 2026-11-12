@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -102,4 +103,28 @@ func TestExtractUserID_UnrelatedHeaderIgnored(t *testing.T) {
 
 	result := extractUserID(ctx)
 	assert.Empty(t, result, "should not use unrelated headers as user ID")
+}
+
+// The response cache's user and team scopes and memory read the identity
+// headers global.services.authz.identity names, as rate limits and the authz
+// signal do; the default x-authz-* names then carry no identity.
+func TestCacheScopeAndMemoryReadTheConfiguredIdentityHeaders(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		Authz: config.AuthzConfig{Identity: config.IdentityConfig{UserIDHeader: "x-jwt-sub", UserGroupsHeader: "x-jwt-groups"}},
+	}}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := newDebugGateRequestHeaders(map[string]string{
+		"x-jwt-sub": "alice", "x-jwt-groups": "research", headers.AuthzUserID: "bob", headers.AuthzUserGroups: "billing",
+	})
+	if _, err := router.handleRequestHeaders(request, ctx); err != nil {
+		t.Fatalf("handleRequestHeaders() error = %v", err)
+	}
+	assert.Equal(t, "alice", extractUserID(ctx), "memory user")
+	for scope, want := range map[string]string{"user": "alice", "team": "research"} {
+		ctx.VSRSelectedDecision = &config.Decision{Name: "scoped", Plugins: []config.DecisionPlugin{{
+			Type:          config.DecisionPluginResponseCache,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "scope": scope}),
+		}}}
+		assert.Equal(t, want, responseCacheScopeIdentity(ctx), "%s cache scope", scope)
+	}
 }

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -38,7 +38,7 @@ func (p *ownedCacheTestProvider) Close() error  { p.closed = true; return nil }
 func TestOwnedCacheProviderPreservesViewContextAndOwnership(t *testing.T) {
 	provider := &ownedCacheTestProvider{}
 	view := embedding.WithOptions(provider, embedding.Options{Layer: 6, Dimension: 256})
-	cache, err := NewCacheBackend(CacheConfig{Enabled: true, EmbeddingModel: "mmbert", EmbeddingProvider: view})
+	cache, err := NewCacheBackend(CacheConfig{Enabled: true, EmbeddingDeployment: "vela-embedding", EmbeddingDimension: 256, EmbeddingLayer: 6, EmbeddingProvider: view})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 )
@@ -25,7 +24,6 @@ func TestLooperInternalResponseProtocolOverHTTP(t *testing.T) {
 		for _, streaming := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s_stream_%t", backendFormat, streaming), func(t *testing.T) {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-					require.Equal(t, "true", request.Header.Get(headers.VSRLooperRequest))
 					ctx := looperTransportContext(backendFormat, streaming)
 					body := extProcResponseFixture(backendFormat)
 					contentType := "application/json"

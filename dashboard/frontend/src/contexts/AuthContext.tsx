@@ -12,6 +12,10 @@ import {
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
 import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
+import {
+  clearDashboardObservations,
+  invalidateDashboardObservations,
+} from '../utils/dashboardObservationCache'
 
 interface AuthContextValue {
   token: string | null
@@ -54,13 +58,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // The server's clearAuthSessionCookie on logout is what actually ends the session.
   const clearSession = useCallback(() => {
+    clearDashboardObservations()
     setToken(null)
     setUser(null)
     setSessionError(null)
   }, [])
 
   const setSession = useCallback((nextToken: string, nextUser?: AuthUser | null) => {
+    clearDashboardObservations()
     const validToken = normalizeAuthToken(nextToken)
+    if (validToken) invalidateDashboardObservations()
     setToken(validToken)
     setUser(validToken ? (nextUser ?? null) : null)
     setSessionError(null)
@@ -78,6 +85,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSessionError(result.message)
         return
       }
+      clearDashboardObservations()
+      invalidateDashboardObservations()
       setUser(result.user)
       setSessionError(null)
     } finally {
@@ -90,6 +99,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     void refreshSession()
   }, [refreshSession])
+
+  useEffect(() => {
+    const changed = () => invalidateDashboardObservations()
+    window.addEventListener('config-deployed', changed)
+    window.addEventListener('instance-deployed', changed)
+    return () => {
+      window.removeEventListener('config-deployed', changed)
+      window.removeEventListener('instance-deployed', changed)
+    }
+  }, [])
 
   useEffect(() => {
     const handleUnauthorized = () => {

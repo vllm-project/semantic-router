@@ -186,9 +186,9 @@ def run_arm(args) -> dict:
             and not fusion.error
         ):
             raise SystemExit(
-                f"[FATAL] sample {s.id}: grounding NOT present in trace -- the NLI backend "
-                "is not wired (enable hallucination_mitigation.nli_model). Aborting so you "
-                "don't measure plain fusion twice."
+                f"[FATAL] sample {s.id}: grounding NOT present in trace -- the decision "
+                "model that answers the hallucination preset is not serving (regenerate the "
+                "config with make_configs). Aborting so you don't measure plain fusion twice."
             )
         rec = grade_sample(judge, s, fusion, args.grade_panel)
         records.append(rec)

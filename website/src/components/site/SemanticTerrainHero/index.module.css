@@ -1,541 +1,185 @@
-.stage {
-  --terrain-model-gap: 2.5rem;
+.masthead {
   position: relative;
   isolation: isolate;
-  display: grid;
-  grid-template-rows: minmax(36rem, 1fr) auto;
-  min-height: calc(100vh - var(--site-header-height));
-  min-height: calc(100svh - var(--site-header-height));
-  overflow: hidden;
-  background: var(--site-bg);
-  color: var(--site-text);
-}
-
-.terrain {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  overflow: hidden;
-  background: var(--site-bg);
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  pointer-events: none;
-  user-select: none;
-}
-
-.terrainCanvas {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  cursor: grab;
-  opacity: 0.74;
-  pointer-events: auto;
-  touch-action: pan-y;
-}
-
-.terrainCanvas[data-dragging='true'] {
-  cursor: grabbing;
-}
-
-.terrainHud,
-.terrainLegend {
-  position: absolute;
-  z-index: 1;
-  pointer-events: none;
-  text-transform: uppercase;
-}
-
-.terrainHud {
-  top: 1.5rem;
-  left: 1.5rem;
-  display: grid;
-  gap: 0.45rem;
-  color: var(--site-muted);
-  font-size: 0.625rem;
-  letter-spacing: 0.1em;
-}
-
-.terrainHud div {
-  display: grid;
-  grid-template-columns: 5.5rem auto;
-  gap: 1rem;
-}
-
-.terrainHud span {
-  color: var(--site-text);
-}
-
-.terrainLegend {
-  right: 1.5rem;
-  bottom: 7.8rem;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.terrainLegendItem {
   display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  color: var(--site-muted);
-  font-size: 0.56rem;
-  letter-spacing: 0.05em;
+  flex-direction: column;
+  min-height: max(660px, 100vh);
+  min-height: max(660px, 100svh);
+  overflow: hidden;
+  background: var(--paper);
 }
 
-.terrainLegendItem > span {
-  width: 0.5rem;
-  height: 0.5rem;
-}
-
-.terrainLegendItem strong {
-  color: var(--site-muted-bright);
-  font-weight: 500;
-}
-
-.terrainCrosshair {
-  position: absolute;
-  top: 48%;
-  left: 70%;
-  width: 2.5rem;
-  height: 2.5rem;
-  transform: translate(-50%, -50%);
-}
-
-.terrainCrosshair::before,
-.terrainCrosshair::after {
-  content: '';
-  position: absolute;
-  background: var(--site-muted);
-}
-
-.terrainCrosshair::before {
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 1px;
-}
-
-.terrainCrosshair::after {
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 1px;
-}
-
-.hero {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  min-height: 0;
-  align-items: center;
-  padding: clamp(2rem, 5vh, 3.5rem) 0 clamp(1.5rem, 4vh, 2.75rem);
-  pointer-events: none;
-}
-
-.heroScrim {
+/* The ocean fills the masthead behind the copy and paints its own ground: porcelain in light, black water at night. */
+.ocean {
   position: absolute;
   z-index: -1;
   inset: 0;
-  background:
-    radial-gradient(circle at 50% 52%, color-mix(in srgb, var(--site-bg) 95%, transparent) 0, color-mix(in srgb, var(--site-bg) 76%, transparent) 28%, transparent 61%),
-    linear-gradient(90deg, color-mix(in srgb, var(--site-bg) 40%, transparent), color-mix(in srgb, var(--site-bg) 18%, transparent) 50%, color-mix(in srgb, var(--site-bg) 40%, transparent));
-  pointer-events: none;
 }
 
-.heroInner {
-  display: grid;
-  width: min(100%, 84rem);
-  gap: clamp(1.5rem, 3.2vh, 2.25rem);
-  margin: 0 auto;
-}
-
-.intro {
-  position: relative;
-  display: grid;
-  gap: 1.1rem;
-  justify-items: start;
-  justify-self: start;
-  pointer-events: auto;
-}
-
-/* The terrain HUD and glyphs run behind the top-left corner; keep the copy on a quiet patch. */
-.intro::before {
+/* Night's black water fades into the dark paper where the masthead meets the next section. */
+:global([data-theme='dark']) .masthead::after {
   content: '';
   position: absolute;
   z-index: -1;
-  inset: -3rem -5rem -2.5rem -6rem;
-  background: radial-gradient(ellipse at 42% 50%, color-mix(in srgb, var(--site-bg) 94%, transparent) 0, color-mix(in srgb, var(--site-bg) 78%, transparent) 48%, transparent 74%);
+  inset: auto 0 0;
+  height: 120px;
+  background: linear-gradient(180deg, rgba(18, 20, 25, 0), var(--paper));
   pointer-events: none;
 }
 
-.stage .title {
+.inner {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: min(100% - 2 * var(--gut), var(--wrap));
+  margin-inline: auto;
+  padding: calc(var(--site-header-height) + clamp(20px, 3.5vh, 44px)) 0 clamp(220px, 34svh, 380px);
+  text-align: center;
+}
+
+.masthead .title {
   margin: 0;
-  color: var(--site-text);
-  font-size: clamp(2.1rem, 3.4vw, 3.15rem);
-  font-weight: 460;
-  letter-spacing: -0.045em;
-  line-height: 1.04;
+  color: var(--ink);
+  font: 500 clamp(60px, 8.6vw, 132px) / 0.92 var(--serif);
+  letter-spacing: -0.034em;
+  text-wrap: balance;
 }
 
-.stage .title .accent {
-  color: var(--site-accent-strong);
-  font-weight: 720;
+/* The accent words in italic, from the fast side's ember into the slow side's indigo. */
+.accent {
+  display: block;
+  padding-right: 0.04em;
+  color: #7a3a5e;
+  font-style: italic;
 }
 
-.nowrap {
-  white-space: nowrap;
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .accent {
+    background: var(--duo-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+.masthead .slogan {
+  max-width: 30em;
+  margin: clamp(22px, 3.4vh, 34px) 0 0;
+  color: #2a2f3a;
+  font: 500 clamp(24px, 2.5vw, 36px) / 1.2 var(--serif);
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+:global([data-theme='dark']) .masthead .slogan {
+  color: var(--ink-2);
+}
+
+.slogan em {
+  color: var(--ember-text);
+  font-style: italic;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.actions .primaryCta,
-.actions .secondaryCta {
-  min-width: 12rem;
-  min-height: 3rem;
-  border-radius: 0.25rem;
-  font-size: 0.73rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-}
-
-/* Match the shared CTA and hover palette in both color modes. */
-.actions .primaryCta {
-  border-color: var(--site-cta-border);
-  background: var(--site-cta-bg);
-  color: var(--site-cta-text);
-  box-shadow: var(--site-cta-shadow);
-}
-
-.actions .primaryCta:hover,
-.actions .primaryCta:focus-visible {
-  border-color: var(--site-cta-border-hover);
-  background: var(--site-cta-bg-hover);
-  color: var(--site-cta-text);
-}
-
-.actions .secondaryCta {
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-glass);
-  color: var(--site-text);
-  box-shadow: none;
-}
-
-.actions .secondaryCta:hover,
-.actions .secondaryCta:focus-visible {
-  border-color: var(--site-hover-border-strong);
-  background: var(--site-hover-surface-bg);
-  color: var(--site-hover-text);
-}
-
-.film {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  margin: 0;
-  overflow: hidden;
-  border: 1px solid var(--site-border-strong);
-  border-radius: 1.25rem;
-  background: #04060c;
-  box-shadow:
-    var(--site-shadow-raised),
-    0 2.5rem 7rem -2.5rem rgba(48, 162, 255, 0.32);
-  pointer-events: auto;
-}
-
-.filmVideo {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  background: #04060c;
-}
-
-/* The poster's title sits in the upper half, so the play control stays low. */
-.filmPlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  padding: 0 0 7%;
-  border: 0;
-  border-radius: inherit;
-  background: transparent;
-  color: #fff;
-  cursor: pointer;
+  gap: 14px;
+  margin-top: clamp(30px, 4.6vh, 44px);
 }
 
-.filmPlayPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.55rem 1.3rem 0.55rem 0.55rem;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 999px;
-  background: rgba(8, 12, 22, 0.42);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  font-size: 0.95rem;
-  font-weight: 620;
-  letter-spacing: 0.01em;
-  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+.masthead .quiet {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 13.5px;
 }
 
-.filmPlayIcon {
-  display: grid;
-  width: 2.6rem;
-  height: 2.6rem;
-  place-items: center;
-  border-radius: 50%;
-  background: #fff;
-  color: #04060c;
+.quiet a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--hair-2);
+  text-underline-offset: 0.2em;
+  transition: color 0.2s, text-decoration-color 0.2s;
 }
 
-.filmPlayIcon svg {
-  width: 1.2rem;
-  height: 1.2rem;
-  margin-left: 0.12rem;
-  fill: currentColor;
+.quiet a:hover,
+.quiet a:focus-visible {
+  color: var(--ink);
+  text-decoration-color: var(--ember);
 }
 
-.filmDuration {
-  color: rgba(255, 255, 255, 0.62);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.8rem;
-  font-weight: 500;
+.duration {
+  font-family: var(--mono);
+  font-size: 12.5px;
 }
 
-.filmPlay:hover .filmPlayPill,
-.filmPlay:focus-visible .filmPlayPill {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(8, 12, 22, 0.62);
-  transform: scale(1.04);
+/* The title is there from the first paint; the lines under it rise. */
+.inner > :not(.title) {
+  animation: rise 1.1s var(--ease) both;
 }
 
-.filmPlay:focus-visible {
-  outline: 2px solid var(--site-accent-strong);
-  outline-offset: -4px;
+.inner > .slogan {
+  animation-delay: 0.15s;
 }
 
-.modelBand {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  gap: 0.75rem;
-  padding: 0.9rem 0 1.15rem;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--site-bg) 16%, transparent), color-mix(in srgb, var(--site-bg) 94%, transparent) 38%);
+.inner > .actions {
+  animation-delay: 0.25s;
 }
 
-.modelBandLabel {
-  justify-self: center;
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.58rem;
-  font-weight: 650;
-  letter-spacing: 0.17em;
-  text-transform: uppercase;
+.inner > .quiet {
+  animation-delay: 0.35s;
 }
 
-.modelViewport {
-  overflow: hidden;
-  width: 100%;
-  padding: 0 1.5rem;
-  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
 
-.modelTrack,
-.modelSequence {
-  display: flex;
-  width: max-content;
-  min-width: max-content;
-  align-items: center;
-  gap: var(--terrain-model-gap);
-}
-
-.modelTrack {
-  animation: terrain-model-scroll 105s linear infinite;
-  will-change: transform;
-}
-
-.modelBand:hover .modelTrack {
-  animation-play-state: paused;
-}
-
-.model {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.75rem;
-  color: var(--site-muted);
-  white-space: nowrap;
-}
-
-.model svg {
-  width: 1.75rem;
-  height: 1.75rem;
-  opacity: 0.82;
-}
-
-.model strong {
-  color: var(--site-muted-bright);
-  font-size: 1rem;
-  font-weight: 570;
-  letter-spacing: -0.01em;
-}
-
-@keyframes terrain-model-scroll {
   to {
-    transform: translate3d(calc(-50% - (var(--terrain-model-gap) / 2)), 0, 0);
+    opacity: 1;
+    transform: none;
   }
 }
 
-@media (max-width: 996px) {
-  .stage {
-    grid-template-rows: minmax(32rem, 1fr) auto;
-  }
-
-  .terrainLegend {
-    display: none;
-  }
-
-  .terrainCrosshair {
-    left: 76%;
-  }
-
-  .hero {
-    padding: 2.25rem 0 2rem;
-  }
+:global(html[lang='zh-Hans']) .masthead .title {
+  font-size: clamp(48px, 7vw, 108px);
+  letter-spacing: 0;
+  line-height: 1.1;
 }
 
-@media (max-width: 640px) {
-  .stage {
-    --terrain-model-gap: 1.6rem;
-    grid-template-rows: minmax(31rem, 1fr) auto;
+:global(html[lang='zh-Hans']) .masthead .slogan {
+  letter-spacing: 0;
+}
+
+@media (max-width: 600px) {
+  .inner {
+    padding: calc(var(--site-header-height) + 36px) 0 clamp(190px, 28svh, 240px);
   }
 
-  .terrainCanvas {
-    opacity: 0.58;
-    pointer-events: none;
+  .masthead .title {
+    font-size: clamp(46px, 13.5vw, 72px);
+    line-height: 0.95;
   }
 
-  .terrainHud {
-    top: 1rem;
-    left: 1rem;
-    opacity: 0.75;
+  :global(html[lang='zh-Hans']) .masthead .title {
+    font-size: clamp(38px, 11vw, 56px);
   }
 
-  .terrainHud div:nth-child(2),
-  .terrainHud div:nth-child(3) {
-    display: none;
-  }
-
-  .terrainCrosshair {
-    top: 22%;
-    left: 82%;
-  }
-
-  .hero {
-    padding: 2rem 0 1.75rem;
-  }
-
-  .stage .title {
-    font-size: clamp(1.95rem, 8.6vw, 2.5rem);
+  .masthead .slogan {
+    font-size: clamp(21px, 6vw, 26px);
   }
 
   .actions {
-    display: grid;
-    width: 100%;
-    grid-template-columns: 1fr;
-  }
-
-  .actions .primaryCta,
-  .actions .secondaryCta {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .heroScrim {
-    background:
-      linear-gradient(180deg, transparent, color-mix(in srgb, var(--site-bg) 64%, transparent) 28%, color-mix(in srgb, var(--site-bg) 96%, transparent) 68%),
-      radial-gradient(circle at 40% 60%, color-mix(in srgb, var(--site-bg) 84%, transparent), transparent 72%);
-  }
-
-  .film {
-    border-radius: 0.9rem;
-  }
-
-  .filmPlay {
-    padding-bottom: 5%;
-  }
-
-  .filmPlayPill {
-    gap: 0.6rem;
-    padding: 0.35rem 0.95rem 0.35rem 0.35rem;
-    font-size: 0.82rem;
-  }
-
-  .filmPlayIcon {
-    width: 2rem;
-    height: 2rem;
-  }
-
-  .filmPlayIcon svg {
-    width: 0.95rem;
-    height: 0.95rem;
-  }
-
-  .modelBand {
-    padding-bottom: 0.95rem;
-  }
-
-  .modelViewport {
-    padding: 0 0.75rem;
-  }
-
-  .model svg {
-    width: 1.5rem;
-    height: 1.5rem;
-  }
-
-  .model strong {
-    font-size: 0.86rem;
-  }
-}
-
-@media (max-height: 800px) and (min-width: 641px) {
-  .stage {
-    grid-template-rows: minmax(29rem, 1fr) auto;
-  }
-
-  .hero {
-    padding-top: 1.75rem;
-    padding-bottom: 1.5rem;
-  }
-
-  .modelBand {
-    gap: 0.45rem;
-    padding-top: 0.55rem;
-    padding-bottom: 0.7rem;
-  }
-
-  .model svg {
-    width: 1.5rem;
-    height: 1.5rem;
-  }
-
-  .model strong {
-    font-size: 0.86rem;
+    flex-direction: column;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .modelTrack {
+  .inner > * {
     animation: none;
   }
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -25,6 +26,38 @@ type RequestIdentity struct {
 // request contract. Transport envelopes and trusted runtime identity are
 // deliberately excluded: neither may become cache persistence state.
 func BuildSemanticRequestIdentity(request llmprotocol.Request) (RequestIdentity, error) {
+	return buildSemanticRequestIdentity(request, SemanticRequestQuery, replaceSemanticRequestQuery)
+}
+
+// RoutedQuery is the semantic query that global.router.routing_input selected.
+type RoutedQuery struct {
+	// Text is the routing text, which a lookup compares by similarity.
+	Text string
+	// MessageIndex is the request message the text came from, or -1.
+	MessageIndex int
+	// Retained is the text cut from that message. A semantic hit must still
+	// match it, like every other message, so recalled context stays part of
+	// the identity.
+	Retained []string
+}
+
+// BuildRoutedRequestIdentity is BuildSemanticRequestIdentity for a request
+// whose semantic query routing_input selected. The exact fingerprint still
+// covers the whole request.
+func BuildRoutedRequestIdentity(request llmprotocol.Request, routed RoutedQuery) (RequestIdentity, error) {
+	return buildSemanticRequestIdentity(request,
+		func(llmprotocol.Request) string { return routed.Text },
+		func(compatible *llmprotocol.Request) bool {
+			return routed.Text != "" && replaceRoutedQuery(compatible, routed)
+		},
+	)
+}
+
+func buildSemanticRequestIdentity(
+	request llmprotocol.Request,
+	queryOf func(llmprotocol.Request) string,
+	replaceQuery func(*llmprotocol.Request) bool,
+) (RequestIdentity, error) {
 	normalized, err := cloneSemanticRequest(request)
 	if err != nil {
 		return RequestIdentity{}, fmt.Errorf("normalize semantic request: %w", err)
@@ -36,14 +69,14 @@ func BuildSemanticRequestIdentity(request llmprotocol.Request) (RequestIdentity,
 	if err != nil {
 		return RequestIdentity{}, err
 	}
-	query := semanticRequestQuery(normalized)
+	query := queryOf(normalized)
 
 	compatible, err := cloneSemanticRequest(normalized)
 	if err != nil {
 		return RequestIdentity{}, fmt.Errorf("normalize compatible semantic request: %w", err)
 	}
 	compatible.Model = ""
-	semanticSafe := replaceSemanticRequestQuery(&compatible)
+	semanticSafe := replaceQuery(&compatible)
 	compatibilityFingerprint, err := fingerprintJSON(compatible)
 	if err != nil {
 		return RequestIdentity{}, err
@@ -83,7 +116,7 @@ func cloneSemanticRequest(request llmprotocol.Request) (llmprotocol.Request, err
 	return cloned, nil
 }
 
-func semanticRequestQuery(request llmprotocol.Request) string {
+func SemanticRequestQuery(request llmprotocol.Request) string {
 	for index := len(request.Messages) - 1; index >= 0; index-- {
 		message := request.Messages[index]
 		if message.Role != llmprotocol.RoleUser {
@@ -125,6 +158,31 @@ func replaceSemanticRequestQuery(request *llmprotocol.Request) bool {
 		return replaced
 	}
 	return false
+}
+
+// replaceRoutedQuery puts the placeholder where the routing text was and keeps
+// the retained text in the routing message.
+func replaceRoutedQuery(request *llmprotocol.Request, routed RoutedQuery) bool {
+	if request == nil || routed.MessageIndex < 0 || routed.MessageIndex >= len(request.Messages) {
+		return false
+	}
+	message := &request.Messages[routed.MessageIndex]
+	if message.Role != llmprotocol.RoleUser {
+		return false
+	}
+	replaced := false
+	for contentIndex := range message.Content {
+		content := &message.Content[contentIndex]
+		if content.Kind != llmprotocol.ContentText {
+			continue
+		}
+		content.Text = semanticQueryPlaceholder
+		if !replaced {
+			content.Text = strings.Join(append([]string{semanticQueryPlaceholder}, routed.Retained...), "\n")
+		}
+		replaced = true
+	}
+	return replaced
 }
 
 // BuildRequestIdentity derives exact and semantic-compatibility fingerprints

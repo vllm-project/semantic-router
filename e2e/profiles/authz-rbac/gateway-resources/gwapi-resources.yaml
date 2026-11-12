@@ -97,8 +97,9 @@ spec:
 ---
 # EnvoyPatchPolicy to add ExtProc filter for semantic-router
 # Also strips client-supplied identity headers before JWT/auth processing
-# SECURITY: Identity headers (x-authz-user-id, x-authz-user-groups) must only come
-# from validated auth backends (JWT, Authorino, etc.), not from client requests.
+# SECURITY: Identity headers (x-authz-user-id, x-authz-user-groups, x-authz-team-id,
+# x-authz-tenant-id) must only come from validated auth backends (JWT, Authorino,
+# etc.), not from client requests.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyPatchPolicy
 metadata:
@@ -122,6 +123,8 @@ spec:
               -- These headers should only be set by validated auth backends (JWT, Authorino, etc.)
               request_handle:headers():remove("x-authz-user-id")
               request_handle:headers():remove("x-authz-user-groups")
+              request_handle:headers():remove("x-authz-team-id")
+              request_handle:headers():remove("x-authz-tenant-id")
             end
     type: type.googleapis.com/envoy.config.listener.v3.Listener
   # Add ExtProc filter for semantic-router
@@ -133,6 +136,11 @@ spec:
         name: semantic-router-extproc
         typedConfig:
           '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          # A decision's reliability block reaches Envoy's router through these
+          # per-request headers; ext_proc may set no other x-envoy-* header.
+          mutation_rules:
+            allow_expression:
+              regex: "^x-envoy-(upstream-rq-timeout-ms|upstream-rq-per-try-timeout-ms|max-retries|retry-on|retriable-status-codes)$"
           allow_mode_override: true
           grpcService:
             envoyGrpc:

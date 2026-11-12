@@ -47,6 +47,118 @@ export const DECISION_ADAPTATIONS_SCHEMA = mergeRouterFieldSchemas(
   DECISION_ADAPTATIONS_OVERRIDES,
 )
 
+const NATIVE_ONLY = 'Honored in standalone mode only; Envoy cannot apply it to one request.'
+const DECISION_RELIABILITY_OVERRIDES: FieldSchema[] = [
+  {
+    key: 'total_timeout',
+    label: 'Total Timeout',
+    type: 'string',
+    placeholder: '600s',
+    description: "Replaces the provider model's route timeout; 0s disables it.",
+  },
+  {
+    key: 'per_try_timeout',
+    label: 'Per-Try Timeout',
+    type: 'string',
+    placeholder: '300s',
+    description: 'Bounds each attempt until its response starts; 0s disables it.',
+  },
+  {
+    key: 'idle_timeout',
+    label: 'Idle Timeout',
+    type: 'string',
+    placeholder: '60s',
+    description: NATIVE_ONLY,
+  },
+  {
+    key: 'first_byte_timeout',
+    label: 'First-Byte Timeout',
+    type: 'string',
+    placeholder: '30s',
+    description: NATIVE_ONLY,
+  },
+  { key: 'retry_count', label: 'Retry Count', type: 'number', min: 0, max: 5 },
+  {
+    key: 'retry_on',
+    label: 'Retry On',
+    type: 'string',
+    placeholder: 'reset,connect-failure',
+    description: "Envoy retry_on conditions, added to the provider model's.",
+  },
+  {
+    key: 'retriable_status_codes',
+    label: 'Retriable Status Codes',
+    type: 'number[]',
+    description: "Added to the provider model's; retried under retriable-status-codes.",
+  },
+  {
+    key: 'retry_back_off_base',
+    label: 'Retry Back-off Base',
+    type: 'string',
+    placeholder: '25ms',
+    description: NATIVE_ONLY,
+  },
+  {
+    key: 'retry_back_off_max',
+    label: 'Retry Back-off Max',
+    type: 'string',
+    placeholder: '250ms',
+    description: NATIVE_ONLY,
+  },
+  {
+    key: 'retry_after_max',
+    label: 'Retry-After Max',
+    type: 'string',
+    placeholder: '30s',
+    description: NATIVE_ONLY,
+  },
+]
+export const DECISION_RELIABILITY_SCHEMA = mergeRouterFieldSchemas(
+  routerConfigFieldsForRef('#/$defs/DecisionReliability'),
+  DECISION_RELIABILITY_OVERRIDES,
+)
+
+const DECISION_FALLBACK_OVERRIDES: FieldSchema[] = [
+  {
+    key: 'enabled',
+    label: 'Enabled',
+    type: 'boolean',
+    description:
+      "Turns cross-model fallback on or off for this decision; unset keeps the recipe's.",
+  },
+  {
+    key: 'max_attempts',
+    label: 'Max Attempts',
+    type: 'number',
+    min: 0,
+    description: 'Attempts across candidates, the first included.',
+  },
+  {
+    key: 'total_timeout',
+    label: 'Total Timeout',
+    type: 'string',
+    placeholder: '30s',
+    description: 'Bounds the whole fallback chain.',
+  },
+  {
+    key: 'per_attempt_timeout',
+    label: 'Per-Attempt Timeout',
+    type: 'string',
+    placeholder: '10s',
+    description: 'Bounds each candidate; it cannot exceed the total timeout.',
+  },
+  {
+    key: 'retryable_status_codes',
+    label: 'Retryable Status Codes',
+    type: 'number[]',
+    description: "Statuses that move on to the next candidate; replaces the recipe's list.",
+  },
+]
+export const DECISION_FALLBACK_SCHEMA = mergeRouterFieldSchemas(
+  routerConfigFieldsForRef('#/$defs/FallbackOverride'),
+  DECISION_FALLBACK_OVERRIDES,
+)
+
 const DECISION_OUTPUT_CONTRACT_OVERRIDES: FieldSchema[] = [
   {
     key: 'type',
@@ -150,33 +262,40 @@ const DECISION_DECLARATIVE_OVERRIDES: FieldSchema[] = [
     ],
   },
   {
-    key: 'emits',
-    label: 'Emits',
-    type: 'object[]',
-    itemLabel: 'Directive',
-    itemLabelKey: 'kind',
+    key: 'retention',
+    label: 'Retention',
+    type: 'object',
     fields: [
-      { key: 'kind', label: 'Kind', type: 'select', options: ['retention'], required: true },
+      { key: 'drop', label: 'Drop', type: 'boolean' },
+      { key: 'ttl_turns', label: 'TTL Turns', type: 'number', min: 0 },
+      { key: 'keep_current_model', label: 'Keep Current Model', type: 'boolean' },
       {
-        key: 'retention',
-        label: 'Retention',
-        type: 'object',
-        fields: [
-          { key: 'drop', label: 'Drop', type: 'boolean' },
-          { key: 'ttl_turns', label: 'TTL Turns', type: 'number', min: 0 },
-          { key: 'keep_current_model', label: 'Keep Current Model', type: 'boolean' },
-          {
-            key: 'prefer_prefix_retention',
-            label: 'Prefer Prefix Retention',
-            type: 'boolean',
-          },
-        ],
+        key: 'prefer_prefix_retention',
+        label: 'Prefer Prefix Retention',
+        type: 'boolean',
       },
+    ],
+  },
+  {
+    key: 'output',
+    label: 'Output',
+    type: 'object',
+    description:
+      'The media the decision answers with; without it the decision answers in text. Every model the decision references must declare what the output needs.',
+    fields: [
+      {
+        key: 'kind',
+        label: 'Kind',
+        type: 'string[]',
+        placeholder: 'image',
+        description: 'text, image, audio or video; several kinds for one model that writes them all.',
+      },
+      { key: 'action', label: 'Action', type: 'select', options: ['generate', 'edit'] },
     ],
   },
   { key: 'annotations', label: 'Annotations', type: 'key-value' },
 ]
-const declarativeKeys = new Set(['candidateIterations', 'emits', 'annotations'])
+const declarativeKeys = new Set(['candidateIterations', 'retention', 'output', 'annotations'])
 export const DECISION_DECLARATIVE_SCHEMA = mergeRouterFieldSchemas(
   routerConfigFieldsForRef('#/$defs/Decision').filter((field) => declarativeKeys.has(field.key)),
   DECISION_DECLARATIVE_OVERRIDES,

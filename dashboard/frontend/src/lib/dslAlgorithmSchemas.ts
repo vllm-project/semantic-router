@@ -39,74 +39,61 @@ const FUSION_INCLUDE_ANALYSIS_FIELD: FieldSchema = {
   description: 'Return structured judge analysis in the Fusion trace',
 }
 
+export function isExecutorAlgorithm(type: string): boolean {
+  return (
+    ROUTER_CONFIG_EXTENSION.algorithms.find((surface) => surface.type === type)?.kind === 'executor'
+  )
+}
+
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
   return mergeRouterFieldSchemas(algorithmFieldsFromRouterSchema(algoType), [
     ...COMMON_ALGORITHM_FIELDS,
+    ...(isExecutorAlgorithm(algoType) ? getExecutorFieldSchema(algoType) : []),
     ...getAlgorithmSpecificFieldSchema(algoType),
   ])
 }
 
+function getExecutorFieldSchema(algoType: string): FieldSchema[] {
+  return [
+    {
+      key: 'budget',
+      label: 'Execution Budget',
+      type: 'object',
+      description:
+        'Deadline and model-call limit for the executor; required when escalate runs System One stages',
+    },
+    {
+      key: 'on_error',
+      label: 'On Error',
+      type: 'select',
+      options: algoType === 'escalate' ? ['', 'last_attempt', 'fail'] : ['', 'skip', 'fail'],
+    },
+  ]
+}
+
 function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
   switch (algoType) {
-    case 'confidence':
+    case 'escalate':
       return [
         {
-          key: 'confidence_method',
-          label: 'Confidence Method',
+          key: 'order',
+          label: 'Order',
           type: 'select',
-          options: ['avg_logprob', 'margin', 'hybrid', 'self_verify', 'automix_entailment'],
-          description: 'How to evaluate model confidence',
+          options: ['', 'size', 'cost'],
+          description: 'Chat: try candidates by size or cost; empty keeps the modelRefs order',
         },
         {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          placeholder: '-1.0',
-          description: 'Confidence threshold for escalation',
-        },
-        {
-          key: 'hybrid_weights',
-          label: 'Hybrid Weights',
+          key: 'accept',
+          label: 'Accept',
           type: 'object',
-          description: 'Weights used only by the hybrid confidence method',
-          fields: [
-            { key: 'logprob_weight', label: 'Logprob Weight', type: 'number', min: 0, max: 1 },
-            { key: 'margin_weight', label: 'Margin Weight', type: 'number', min: 0, max: 1 },
-          ],
-        },
-        { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
-        {
-          key: 'escalation_order',
-          label: 'Escalation Order',
-          type: 'select',
-          options: ['', 'size', 'cost', 'automix'],
-          description: 'How models are ordered for cascade',
+          description:
+            'Chat: exactly one check (confidence, systemone or refusal) that stops at an accepted answer',
         },
         {
-          key: 'cost_quality_tradeoff',
-          label: 'Cost/Quality Tradeoff',
-          type: 'number',
-          placeholder: '0.3',
-          description: '0.0=quality, 1.0=cost (for automix order)',
-        },
-        { key: 'token_filter', label: 'Token Filter', type: 'string' },
-        {
-          key: 'verifier_server_url',
-          label: 'Verifier Server URL',
-          type: 'string',
-          placeholder: 'http://automix-verifier:8080',
-        },
-        {
-          key: 'verifier_timeout_seconds',
-          label: 'Verifier Timeout',
-          type: 'number',
-          placeholder: '60',
-        },
-        {
-          key: 'max_response_bytes',
-          label: 'Max Response Bytes',
-          type: 'number',
-          placeholder: '33554432',
+          key: 'quality',
+          label: 'Quality',
+          type: 'object',
+          description: 'System One: the acceptance gate applied to every stage',
         },
       ]
     case 'ratings':
@@ -118,7 +105,6 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           placeholder: '0 (no limit)',
           description: 'Limit concurrent model calls',
         },
-        { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
       ]
     case 'remom':
       return [
@@ -136,7 +122,7 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           type: 'select',
           options: ['', 'weighted', 'equal', 'round_robin', 'first_only'],
         },
-        { key: 'temperature', label: 'Temperature', type: 'number', placeholder: '1.0' },
+        { key: 'temperature', label: 'Temperature', type: 'number', placeholder: 'request value' },
         {
           key: 'include_reasoning',
           label: 'Include Reasoning',
@@ -197,7 +183,6 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           placeholder: '0 (all calls)',
           description: 'Return from a round after this many successful responses',
         },
-        { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
         {
           key: 'include_intermediate_responses',
           label: 'Include Intermediate',
@@ -322,87 +307,6 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           type: 'boolean',
           description: 'Return plan and worker responses in the Flow trace',
         },
-        { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
-      ]
-    case 'router_dc':
-      return [
-        {
-          key: 'temperature',
-          label: 'Temperature',
-          type: 'number',
-          placeholder: '0.07',
-          description: 'Softmax scaling',
-        },
-        { key: 'dimension_size', label: 'Dimension Size', type: 'number', placeholder: '768' },
-        { key: 'min_similarity', label: 'Min Similarity', type: 'number', placeholder: '0.3' },
-        { key: 'use_query_contrastive', label: 'Query Contrastive', type: 'boolean' },
-        { key: 'use_model_contrastive', label: 'Model Contrastive', type: 'boolean' },
-        { key: 'require_descriptions', label: 'Require Descriptions', type: 'boolean' },
-        { key: 'use_capabilities', label: 'Use Capabilities', type: 'boolean' },
-      ]
-    case 'automix':
-      return [
-        {
-          key: 'verification_threshold',
-          label: 'Verification Threshold',
-          type: 'number',
-          placeholder: '0.7',
-        },
-        { key: 'max_escalations', label: 'Max Escalations', type: 'number', placeholder: '2' },
-        { key: 'cost_aware_routing', label: 'Cost-Aware Routing', type: 'boolean' },
-        {
-          key: 'cost_quality_tradeoff',
-          label: 'Cost/Quality Tradeoff',
-          type: 'number',
-          placeholder: '0.3',
-        },
-        {
-          key: 'discount_factor',
-          label: 'Discount Factor',
-          type: 'number',
-          placeholder: '0.95',
-          description: 'POMDP value iteration',
-        },
-        { key: 'use_logprob_verification', label: 'Logprob Verification', type: 'boolean' },
-      ]
-    case 'hybrid':
-      return [
-        {
-          key: 'experience_weight',
-          label: 'Experience Weight',
-          type: 'number',
-          placeholder: '0.3',
-        },
-        { key: 'router_dc_weight', label: 'RouterDC Weight', type: 'number', placeholder: '0.3' },
-        { key: 'automix_weight', label: 'AutoMix Weight', type: 'number', placeholder: '0.2' },
-        { key: 'cost_weight', label: 'Cost Weight', type: 'number', placeholder: '0.2' },
-        {
-          key: 'quality_gap_threshold',
-          label: 'Quality Gap Threshold',
-          type: 'number',
-          placeholder: '0.1',
-        },
-        { key: 'normalize_scores', label: 'Normalize Scores', type: 'boolean' },
-      ]
-    case 'latency_aware':
-      return [
-        {
-          key: 'tpot_percentile',
-          label: 'TPOT Percentile',
-          type: 'number',
-          required: true,
-          placeholder: '20',
-          description: 'Time Per Output Token (1-100)',
-        },
-        {
-          key: 'ttft_percentile',
-          label: 'TTFT Percentile',
-          type: 'number',
-          required: true,
-          placeholder: '20',
-          description: 'Time To First Token (1-100)',
-        },
-        { key: 'description', label: 'Description', type: 'string' },
       ]
     case 'multi_factor':
       return [
@@ -528,41 +432,6 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           options: ['', 'cheapest', 'first', 'fail'],
         },
       ]
-    case 'prompt':
-      return [
-        {
-          key: 'prompt',
-          label: 'Prompt Selector',
-          type: 'object',
-          required: true,
-          fields: [
-            {
-              key: 'model',
-              label: 'Helper Model',
-              type: 'string',
-              required: true,
-            },
-            {
-              key: 'instructions',
-              label: 'Instructions',
-              type: 'string',
-              required: true,
-            },
-            {
-              key: 'timeout_seconds',
-              label: 'Timeout Seconds',
-              type: 'number',
-              placeholder: '5',
-            },
-          ],
-        },
-        {
-          key: 'on_error',
-          label: 'On Error',
-          type: 'select',
-          options: ['', 'fallback'],
-        },
-      ]
     default:
       return []
   }
@@ -639,7 +508,6 @@ function getFusionFieldSchema(): FieldSchema[] {
       type: 'boolean',
       description: 'Return panel responses in the Fusion trace',
     },
-    { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
     {
       key: 'analysis_template',
       label: 'Analysis Template',
@@ -695,8 +563,8 @@ function getFusionFieldSchema(): FieldSchema[] {
         { key: 'min_score', label: 'Minimum Score', type: 'number', min: 0, max: 1 },
         { key: 'min_keep', label: 'Minimum Responses', type: 'number', min: 0 },
         {
-          key: 'nli_contradiction_penalty',
-          label: 'NLI Contradiction Penalty',
+          key: 'contradiction_penalty',
+          label: 'Contradiction Penalty',
           type: 'number',
           min: 0,
           max: 1,

@@ -2,6 +2,8 @@ package config
 
 import (
 	"reflect"
+	"slices"
+	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
@@ -15,20 +17,12 @@ func assertReferenceConfigRouterGlobalCoverage(t testingT, router map[string]int
 	assertMapCoversStructFields(t, mustMapAt(t, router, "fallback", "circuit_breaker"), reflect.TypeOf(fallback.CircuitBreakerConfig{}), "global.router.fallback.circuit_breaker")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "streamed_body"), reflect.TypeOf(CanonicalStreamedBody{}), "global.router.streamed_body")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "skip_processing"), reflect.TypeOf(SkipProcessingConfig{}), "global.router.skip_processing")
+	assertMapCoversStructFields(t, mustMapAt(t, router, "headers"), reflect.TypeOf(RouterHeadersConfig{}), "global.router.headers")
+	assertMapCoversStructFields(t, mustMapAt(t, router, "headers", "debug_principals"), reflect.TypeOf(DebugPrincipals{}), "global.router.headers.debug_principals")
+	assertMapCoversStructFields(t, mustMapAt(t, router, "routing_input"), reflect.TypeOf(RoutingInputConfig{}), "global.router.routing_input")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, router, "routing_input", "strip_blocks"), reflect.TypeOf(RoutingInputStripBlock{}), "global.router.routing_input.strip_blocks")
 	assertMapCoversStructFields(t, modelSelection, reflect.TypeOf(ModelSelectionConfig{}), "global.router.model_selection")
-	assertReferenceConfigRouterSelectionCoverage(t, modelSelection)
 	assertReferenceConfigRouterLearningCoverage(t, learning)
-}
-
-func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map[string]interface{}) {
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml"), reflect.TypeOf(MLSelectionConfig{}), "global.router.model_selection.ml")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "global.router.model_selection.router_dc")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "global.router.model_selection.automix")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "global.router.model_selection.hybrid")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "knn"), reflect.TypeOf(MLKNNConfig{}), "global.router.model_selection.ml.knn")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "kmeans"), reflect.TypeOf(MLKMeansConfig{}), "global.router.model_selection.ml.kmeans")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "svm"), reflect.TypeOf(MLSVMConfig{}), "global.router.model_selection.ml.svm")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "mlp"), reflect.TypeOf(MLMLPConfig{}), "global.router.model_selection.ml.mlp")
 }
 
 func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string]interface{}) {
@@ -43,6 +37,7 @@ func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string
 	assertMapCoversStructFields(t, identity, reflect.TypeOf(RouterLearningIdentityConfig{}), "global.router.learning.protection.identity")
 	assertMapCoversStructFields(t, identityHeaders, reflect.TypeOf(RouterLearningIdentityHeadersConfig{}), "global.router.learning.protection.identity.headers")
 	assertMapCoversStructFields(t, mustMapAt(t, protection, "tuning"), reflect.TypeOf(RouterLearningProtectionTuning{}), "global.router.learning.protection.tuning")
+	assertMapCoversStructFields(t, mustMapAt(t, protection, "release"), reflect.TypeOf(RouterLearningProtectionReleaseConfig{}), "global.router.learning.protection.release")
 }
 
 func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]interface{}) {
@@ -180,26 +175,26 @@ func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]inte
 	assertReferenceConfigSemanticCacheCoverage(t, mustMapAt(t, stores, "response_cache"))
 	assertReferenceConfigMemoryCoverage(t, mustMapAt(t, stores, "memory"))
 	assertReferenceConfigVectorStoreCoverage(t, mustMapAt(t, stores, "vector_store"))
+	assertReferenceConfigToolSessionsCoverage(t, mustMapAt(t, stores, "tool_sessions"))
+}
+
+func assertReferenceConfigToolSessionsCoverage(t testingT, toolSessions map[string]interface{}) {
+	assertMapCoversStructFields(t, toolSessions, reflect.TypeOf(ToolSessionStoreConfig{}), "global.stores.tool_sessions")
+	assertMapCoversStructFields(t, mustMapAt(t, toolSessions, "redis"), reflect.TypeOf(ToolSessionRedisConfig{}), "global.stores.tool_sessions.redis")
 }
 
 func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[string]interface{}) {
 	assertMapCoversStructFields(t, semanticCache, reflect.TypeOf(responseCacheStoreReference{}), "global.stores.response_cache")
 	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.response_cache.milvus")
-	polarityGuard := mustMapAt(t, semanticCache, "polarity_guard")
-	assertMapCoversStructFields(t, polarityGuard, reflect.TypeOf(PolarityGuardConfig{}), "global.stores.response_cache.polarity_guard")
-	assertMapCoversStructFields(t, mustMapAt(t, polarityGuard, "nli"), reflect.TypeOf(PolarityGuardNLIConfig{}), "global.stores.response_cache.polarity_guard.nli")
 }
 
 type responseCacheStoreReference struct {
-	BackendType         string               `yaml:"backend_type,omitempty"`
-	Enabled             bool                 `yaml:"enabled"`
-	SimilarityThreshold *float32             `yaml:"similarity_threshold,omitempty"`
-	MaxEntries          int                  `yaml:"max_entries,omitempty"`
-	TTLSeconds          int                  `yaml:"ttl_seconds,omitempty"`
-	EvictionPolicy      string               `yaml:"eviction_policy,omitempty"`
-	Milvus              *MilvusConfig        `yaml:"milvus,omitempty"`
-	EmbeddingModel      string               `yaml:"embedding_model,omitempty"`
-	PolarityGuard       *PolarityGuardConfig `yaml:"polarity_guard,omitempty"`
+	BackendType    string            `yaml:"backend_type,omitempty"`
+	MaxEntries     int               `yaml:"max_entries,omitempty"`
+	TTLSeconds     int               `yaml:"ttl_seconds,omitempty"`
+	EvictionPolicy string            `yaml:"eviction_policy,omitempty"`
+	Milvus         *MilvusConfig     `yaml:"milvus,omitempty"`
+	Embedding      *EmbeddingBinding `yaml:"embedding,omitempty"`
 }
 
 func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface{}) {
@@ -221,26 +216,8 @@ func assertReferenceConfigVectorStoreCoverage(t testingT, vectorStore map[string
 }
 
 func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map[string]interface{}) {
-	tools := mustMapAt(t, integrations, "tools")
-
 	assertMapCoversStructFields(t, integrations, reflect.TypeOf(CanonicalIntegrationGlobal{}), "global.integrations")
-	assertMapCoversStructFields(t, tools, reflect.TypeOf(ToolsConfig{}), "global.integrations.tools")
-	assertMapCoversStructFields(t, mustMapAt(t, tools, "advanced_filtering"), reflect.TypeOf(AdvancedToolFilteringConfig{}), "global.integrations.tools.advanced_filtering")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, tools, "advanced_filtering", "hybrid_history"),
-		reflect.TypeOf(HybridHistoryToolRetrievalConfig{}),
-		"global.integrations.tools.advanced_filtering.hybrid_history",
-	)
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, tools, "advanced_filtering", "weights"),
-		reflect.TypeOf(ToolFilteringWeights{}),
-		"global.integrations.tools.advanced_filtering.weights",
-	)
-	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper"), reflect.TypeOf(LooperConfig{}), "global.integrations.looper")
-	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "remom"), reflect.TypeOf(ReMoMRuntimeConfig{}), "global.integrations.looper.remom")
-	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "fusion"), reflect.TypeOf(FusionRuntimeConfig{}), "global.integrations.looper.fusion")
+	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper"), reflect.TypeOf(LooperConfig{}), "global.integrations.looper", "endpoint")
 	flow := mustMapAt(t, integrations, "looper", "flow")
 	assertMapCoversStructFields(t, flow, reflect.TypeOf(FlowRuntimeConfig{}), "global.integrations.looper.flow")
 	assertMapCoversStructFields(t, mustMapAt(t, flow, "state"), reflect.TypeOf(WorkflowStateRuntimeConfig{}), "global.integrations.looper.flow.state")
@@ -249,113 +226,102 @@ func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map
 }
 
 func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[string]interface{}) {
-	assertMapCoversStructFields(t, modelCatalog, reflect.TypeOf(CanonicalModelCatalog{}), "global.model_catalog")
+	// external[] is the deprecated way to declare a remote model: a
+	// deployment with a connection block replaces it.
+	assertMapCoversStructFields(t, modelCatalog, reflect.TypeOf(CanonicalModelCatalog{}), "global.model_catalog", "external")
+	assertReferenceConfigDeploymentCoverage(t, mustMapAt(t, modelCatalog, "deployments"))
+	assertReferenceConfigBindingsBySignalType(t, mustMapAt(t, modelCatalog, "bindings"), "global.model_catalog.bindings")
 	assertReferenceConfigEmbeddingCatalogCoverage(t, mustMapAt(t, modelCatalog, "embeddings"))
-	assertMapCoversStructFields(t, mustMapAt(t, modelCatalog, "system"), reflect.TypeOf(CanonicalSystemModels{}), "global.model_catalog.system")
-	assertReferenceConfigExternalCatalogCoverage(t, mustSliceAt(t, modelCatalog, "external"))
-	assertReferenceConfigKnowledgeBaseCoverage(t, mustSliceAt(t, modelCatalog, "kbs"))
-	assertReferenceConfigModelModuleCoverage(t, mustMapAt(t, modelCatalog, "modules"))
+	// decision_model is the only system line; the others are the deprecated
+	// way to choose a signal's model, which a binding now names.
+	assertMapCoversStructFields(t, mustMapAt(t, modelCatalog, "system"), reflect.TypeOf(CanonicalSystemModels{}), "global.model_catalog.system",
+		"prompt_guard", "pii_classifier", "hallucination_detector")
+}
+
+// assertReferenceConfigDeploymentCoverage requires, across the reference
+// deployments, every deployment field (the managed model_runtime fields and
+// the connection block of an attached runtime and the remote providers),
+// every field of their nested blocks, and every provider, with
+// model_runtime both managed and attached.
+func assertReferenceConfigDeploymentCoverage(t testingT, deployments map[string]interface{}) {
+	items := referenceMapValues(deployments)
+	assertSliceUnionCoversStructFields(t, items, reflect.TypeOf(ModelDeployment{}), "global.model_catalog.deployments")
+	for _, block := range []struct {
+		key string
+		typ reflect.Type
+	}{
+		{"input", reflect.TypeOf(ModelInputBudget{})},
+		{"auth", reflect.TypeOf(DeploymentAuth{})},
+		{"tls", reflect.TypeOf(DeploymentTLS{})},
+		{"limits", reflect.TypeOf(DeploymentLimits{})},
+		{"capabilities", reflect.TypeOf(DeploymentCapabilities{})},
+		{"generation", reflect.TypeOf(DeploymentGeneration{})},
+		{"outlier_detection", reflect.TypeOf(DeploymentOutlierDetection{})},
+	} {
+		assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, items, block.key, "global.model_catalog.deployments"), block.typ, "global.model_catalog.deployments[]."+block.key)
+	}
+	assertSliceUnionCoversStructFields(t, collectNestedSliceItems(t, items, "replicas", "global.model_catalog.deployments"), reflect.TypeOf(ModelReplica{}), "global.model_catalog.deployments[].replicas")
+
+	providers := map[string]bool{}
+	for _, item := range items {
+		deployment := mustMapValue(t, item, "global.model_catalog.deployments")
+		provider := mustStringAt(t, deployment, "provider")
+		if provider == ModelRuntimeProvider {
+			if _, attached := deployment["endpoint"]; attached {
+				provider += " (attached)"
+			}
+		}
+		providers[provider] = true
+	}
+	for _, provider := range []string{ModelRuntimeProvider, ModelRuntimeProvider + " (attached)", SystemOneProvider, OpenAIChatProvider, OpenAIEmbeddingsProvider} {
+		if !providers[provider] {
+			t.Fatalf("global.model_catalog.deployments must declare a %s deployment", provider)
+		}
+	}
+}
+
+// assertReferenceConfigBindingsBySignalType checks that a bindings map names
+// deployments, by name, for signal types whose rules share one answer.
+func assertReferenceConfigBindingsBySignalType(t testingT, bindings map[string]interface{}, path string) {
+	if len(bindings) == 0 {
+		t.Fatalf("%s must bind at least one signal type", path)
+	}
+	for key, value := range bindings {
+		if !slices.Contains(SharedAnswerSignalTypes, key) {
+			t.Fatalf("%s.%s: a binding key is a signal type whose rules share one answer (%v)", path, key, SharedAnswerSignalTypes)
+		}
+		if name, ok := value.(string); !ok || name == "" {
+			t.Fatalf("%s.%s must name a deployment, got %#v", path, key, value)
+		}
+	}
+}
+
+func referenceMapValues(node map[string]interface{}) []interface{} {
+	keys := make([]string, 0, len(node))
+	for key := range node {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	values := make([]interface{}, 0, len(keys))
+	for _, key := range keys {
+		values = append(values, node[key])
+	}
+	return values
 }
 
 func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[string]interface{}) {
 	assertMapCoversStructFields(t, embeddings, reflect.TypeOf(CanonicalEmbeddingModels{}), "global.model_catalog.embeddings")
-	assertMapCoversStructFields(t, mustMapAt(t, embeddings, "semantic"), reflect.TypeOf(EmbeddingModels{}), "global.model_catalog.embeddings.semantic")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, embeddings, "semantic", "embedding_config"),
-		reflect.TypeOf(HNSWConfig{}),
-		"global.model_catalog.embeddings.semantic.embedding_config",
-	)
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, embeddings, "semantic", "embedding_config", "prototype_scoring"),
-		reflect.TypeOf(PrototypeScoringConfig{}),
-		"global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring",
-	)
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, embeddings, "semantic", "endpoint"),
-		reflect.TypeOf(EmbeddingEndpointConfig{}),
-		"global.model_catalog.embeddings.semantic.endpoint",
-	)
 }
 
-func assertReferenceConfigExternalCatalogCoverage(t testingT, external []interface{}) {
-	assertSliceUnionCoversStructFields(t, external, reflect.TypeOf(ExternalModelConfig{}), "global.model_catalog.external")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, external, "llm_endpoint", "global.model_catalog.external"),
-		reflect.TypeOf(ClassifierVLLMEndpoint{}),
-		"global.model_catalog.external[].llm_endpoint",
-	)
-}
-
-func assertReferenceConfigKnowledgeBaseCoverage(t testingT, kbs []interface{}) {
-	assertSliceUnionCoversStructFields(t, kbs, reflect.TypeOf(KnowledgeBaseConfig{}), "global.model_catalog.kbs")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, kbs, "source", "global.model_catalog.kbs"),
-		reflect.TypeOf(KnowledgeBaseSource{}),
-		"global.model_catalog.kbs[].source",
-	)
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, kbs, "prototype_scoring", "global.model_catalog.kbs"),
-		reflect.TypeOf(PrototypeScoringConfig{}),
-		"global.model_catalog.kbs[].prototype_scoring",
-	)
-}
-
-func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]interface{}) {
-	assertMapCoversStructFields(t, modules, reflect.TypeOf(CanonicalModelModules{}), "global.model_catalog.modules")
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_compression"), reflect.TypeOf(PromptCompressionConfig{}), "global.model_catalog.modules.prompt_compression")
-	// Remote backend and local variant are mutually exclusive. The reference
-	// demonstrates the local path.
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "prompt_guard"), reflect.TypeOf(CanonicalPromptGuardModule{}), "global.model_catalog.modules.prompt_guard", "backend")
-	assertReferenceConfigClassifierModuleCoverage(t, mustMapAt(t, modules, "classifier"))
-	assertReferenceConfigComplexityModuleCoverage(t, mustMapAt(t, modules, "complexity"))
-	assertReferenceConfigHallucinationModuleCoverage(t, mustMapAt(t, modules, "hallucination_mitigation"))
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "feedback_detector"), reflect.TypeOf(CanonicalFeedbackDetectorModule{}), "global.model_catalog.modules.feedback_detector")
-	assertMapCoversStructFields(t, mustMapAt(t, modules, "modality_detector"), reflect.TypeOf(ModalityDetectorConfig{}), "global.model_catalog.modules.modality_detector")
-}
-
-func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[string]interface{}) {
-	assertMapCoversStructFields(t, classifier, reflect.TypeOf(CanonicalClassifierModule{}), "global.model_catalog.modules.classifier")
-	// backend and local selectors are mutually exclusive. The canonical local
-	// variant is supplied by defaults, so the exhaustive reference does not need
-	// to force a variant line that users must delete before adding a backend.
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "variant", "use_modernbert", "use_mmbert_32k")
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
-	// pii.backend is the remote token_spans.v1 attachment and is mutually
-	// exclusive with the local use_mmbert_32k path the reference config shows,
-	// same as domain.backend above.
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii", "backend")
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "preference"), reflect.TypeOf(PreferenceModelConfig{}), "global.model_catalog.modules.classifier.preference")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, classifier, "preference", "prototype_scoring"),
-		reflect.TypeOf(PrototypeScoringConfig{}),
-		"global.model_catalog.modules.classifier.preference.prototype_scoring",
-	)
-}
-
-func assertReferenceConfigComplexityModuleCoverage(t testingT, complexity map[string]interface{}) {
-	// backend is the remote path and is mutually exclusive with the local
-	// prototype scoring the exhaustive reference keeps active, the same way
-	// classifier.domain excepts its own backend above. Remote parsing and
-	// validation are covered by classifier_backend_complexity_test.go.
-	assertMapCoversStructFields(t, complexity, reflect.TypeOf(ComplexityModelConfig{}), "global.model_catalog.modules.complexity", "backend")
-	assertMapCoversStructFields(
-		t,
-		mustMapAt(t, complexity, "prototype_scoring"),
-		reflect.TypeOf(PrototypeScoringConfig{}),
-		"global.model_catalog.modules.complexity.prototype_scoring",
-	)
-}
-
-func assertReferenceConfigHallucinationModuleCoverage(t testingT, hallucination map[string]interface{}) {
-	assertMapCoversStructFields(t, hallucination, reflect.TypeOf(CanonicalHallucinationModule{}), "global.model_catalog.modules.hallucination_mitigation")
-	assertMapCoversStructFields(t, mustMapAt(t, hallucination, "fact_check"), reflect.TypeOf(CanonicalFactCheckModule{}), "global.model_catalog.modules.hallucination_mitigation.fact_check")
-	assertMapCoversStructFields(t, mustMapAt(t, hallucination, "detector"), reflect.TypeOf(CanonicalHallucinationDetector{}), "global.model_catalog.modules.hallucination_mitigation.detector")
-	assertMapCoversStructFields(t, mustMapAt(t, hallucination, "explainer"), reflect.TypeOf(CanonicalExplainerModule{}), "global.model_catalog.modules.hallucination_mitigation.explainer")
+// assertReferenceConfigSignalsCompressionCoverage requires the context plugin
+// of global.plugins to write every compress.signals field: the signals read
+// the request before a decision is chosen, so no decision writes them.
+func assertReferenceConfigSignalsCompressionCoverage(t testingT, plugins []interface{}) {
+	for _, item := range plugins {
+		if plugin, ok := item.(map[string]interface{}); ok && plugin["type"] == DecisionPluginContext {
+			assertMapCoversStructFields(t, mustMapAt(t, plugin, "configuration", "compress", "signals"), reflect.TypeOf(PromptCompressionConfig{}), "global.plugins(context).configuration.compress.signals")
+			return
+		}
+	}
+	t.Fatalf("config/config.yaml must include a context plugin in global.plugins")
 }

@@ -1,40 +1,34 @@
 # Rendering fixture: model paths identify maintained artifacts, not installed weights.
 configOverride:
-  version: v0.3
-  listeners: []
+  version: v0.5
+  listeners:
+    - name: http-8899
+      address: 0.0.0.0
+      port: 8899
   providers: {}
-  routing:
-    model_bindings:
-      domain_classifier:
-        deployment: local-domain
-        contract: label_distribution.v1
-        adapter: mmbert
-        mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
   recipes:
+    - name: default
+      model_bindings:
+        domain: local-domain
     - name: private
-      routing:
-        model_bindings:
-          pii_classifier:
-            deployment: local-pii
-            contract: token_spans.v1
-            adapter: mmbert
-            mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
+      model_bindings:
+        pii: local-pii
   global:
     model_catalog:
       deployments:
         local-domain:
-          artifact: models/Vela-1.0-Encoder-307M-Domain
-          provider: candle
+          artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
+          revision: f6354f54adcf38770f635ad903be2b00577f6c11
+          provider: model_runtime
           device: cpu
-          precision: native
           input:
             max_tokens: 512
             overflow: reject
         local-pii:
-          artifact: models/Vela-1.0-Encoder-307M-PII
-          provider: candle
+          artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
+          revision: 6d3300c4bd7975f30a664503f6c725cf1fbbad48
+          provider: model_runtime
           device: cpu
-          precision: native
           input:
             max_tokens: 512
             overflow: reject
@@ -49,3 +43,7 @@ configOverride:
           max_queue: 4
           queue_timeout_ms: 500
           on_overflow: shed
+  entrypoints:
+    - model_names: [vllm-sr/auto]
+      recipe: default
+      default: true

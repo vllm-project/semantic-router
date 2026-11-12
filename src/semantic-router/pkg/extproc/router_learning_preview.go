@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -22,7 +23,7 @@ import (
 type routerLearningPreviewSnapshot struct {
 	CapturedAt      time.Time
 	Seed            int64
-	Experience      map[string]routerLearningModelExperience
+	Experience      map[routerLearningExperienceKey]routerLearningModelExperience
 	Sessions        map[string]previewSession
 	LastModels      map[string]previewLastModel
 	Warmth          map[string]previewWarmth
@@ -49,7 +50,7 @@ type (
 func (r *OpenAIRouter) newLearningPreview(seed int64) (*routerLearningPreviewSnapshot, error) {
 	snapshot := &routerLearningPreviewSnapshot{
 		CapturedAt: time.Now().UTC(), Seed: seed,
-		Experience: map[string]routerLearningModelExperience{}, Sessions: map[string]previewSession{},
+		Experience: map[routerLearningExperienceKey]routerLearningModelExperience{}, Sessions: map[string]previewSession{},
 		LastModels: map[string]previewLastModel{}, Warmth: map[string]previewWarmth{},
 		ProgressWindows: map[string][]sessiontelemetry.TurnOutcome{},
 	}
@@ -132,7 +133,7 @@ func (r *OpenAIRouter) learningExperience(ctx *RequestContext, decision string, 
 	if ctx == nil || ctx.learningPreview == nil {
 		return r.routerLearningRuntimeState().experienceSnapshot(decision, tier, model)
 	}
-	for _, key := range []string{modelExperienceKey(decision, tier, model), modelExperienceKey("", tier, model), modelExperienceKey("", 0, model)} {
+	for _, key := range []routerLearningExperienceKey{modelExperienceKey(decision, tier, model), modelExperienceKey("", tier, model), modelExperienceKey("", 0, model)} {
 		if experience, ok := ctx.learningPreview.Experience[key]; ok {
 			return experience
 		}
@@ -148,8 +149,9 @@ func (r *OpenAIRouter) prepareEvalRequest(input services.EvalModelSelectionInput
 	ctx := &RequestContext{
 		Headers: map[string]string{}, VSRSelectedDecision: decision,
 		SemanticRequest: request, VSRConversationFacts: input.ConversationFacts,
-		VSRContextTokenCount: input.ContextTokenCount,
-		TraceContext:         input.Context,
+		VSRContextTokenCount:    input.ContextTokenCount,
+		VSRContextReserveTokens: input.ContextReserveTokens,
+		TraceContext:            input.Context,
 	}
 	if recipe, ok := r.Config.RecipeByName(input.Recipe); ok {
 		ctx.Routing.SelectRecipe(recipe)
@@ -157,7 +159,11 @@ func (r *OpenAIRouter) prepareEvalRequest(input services.EvalModelSelectionInput
 	seed := int64(0)
 	if input.PreviewContext != nil {
 		cfg := r.Config.RouterLearning.Protection
-		ctx.Headers[cfg.HeaderName("session")] = strings.TrimSpace(input.PreviewContext.SessionID)
+		sessionHeader := cfg.HeaderName("session")
+		if sessionHeader == "" {
+			sessionHeader = headers.VSRSessionID
+		}
+		ctx.Headers[sessionHeader] = strings.TrimSpace(input.PreviewContext.SessionID)
 		ctx.Headers[cfg.HeaderName("conversation")] = strings.TrimSpace(input.PreviewContext.ConversationID)
 		ctx.SessionID = strings.TrimSpace(input.PreviewContext.SessionID)
 		if input.PreviewContext.SamplingSeed != nil {

@@ -37,10 +37,52 @@ var rawParser = participle.MustBuild[rawProgram](
 	participle.UseLookahead(3),
 )
 
+// maxNestingDepth bounds parenthesis nesting before the participle parser
+// runs. The grammar is recursive (BoolFactor -> BoolExprTop -> BoolFactor), so
+// every level costs one stack frame; a 400 KB input with 200k levels ends in an
+// unrecoverable "fatal error: stack overflow" that takes the whole process down.
+// Real policies nest a handful of levels, so the cap stays far above legitimate
+// input while keeping a request from deciding how much stack to burn.
+const maxNestingDepth = 256
+
+// exceedsNestingDepth reports whether parentheses nest deeper than limit.
+// String literals and comments are skipped so their contents cannot trip it.
+func exceedsNestingDepth(input string, limit int) bool {
+	depth := 0
+	for i := 0; i < len(input); i++ {
+		switch input[i] {
+		case '"':
+			for i++; i < len(input) && input[i] != '"'; i++ {
+				if input[i] == '\\' {
+					i++
+				}
+			}
+		case '#':
+			for i < len(input) && input[i] != '\n' {
+				i++
+			}
+		case '(':
+			depth++
+			if depth > limit {
+				return true
+			}
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		}
+	}
+	return false
+}
+
 // Parse tokenizes and parses a DSL source string into a Program AST.
 // If the input has syntax errors, Parse attempts error recovery by
 // splitting the input into top-level blocks and parsing each independently.
 func Parse(input string) (*Program, []error) {
+	if exceedsNestingDepth(input, maxNestingDepth) {
+		return nil, []error{fmt.Errorf("dsl: parentheses nest deeper than %d levels", maxNestingDepth)}
+	}
+
 	raw, err := rawParser.ParseString("", input)
 	if err == nil {
 		return rawToProgram(raw)
@@ -208,9 +250,6 @@ func mergeProgram(dst, src *Program) {
 	if src.CandidateRequirements != nil {
 		dst.CandidateRequirements = src.CandidateRequirements.Clone()
 	}
-	if src.DataPolicy != nil {
-		dst.DataPolicy = src.DataPolicy.Clone()
-	}
 	if src.Strategy != "" {
 		dst.Strategy = src.Strategy
 	}
@@ -285,12 +324,6 @@ func rawToProjectionScore(r *rawProjectionDecl) *ProjectionScoreDecl {
 			if signalName, ok := getStringField(ov.Fields, "name"); ok {
 				input.SignalName = signalName
 			}
-			if kb, ok := getStringField(ov.Fields, "kb"); ok {
-				input.KB = kb
-			}
-			if metric, ok := getStringField(ov.Fields, "metric"); ok {
-				input.Metric = metric
-			}
 			if weight, ok := getFloat64Field(ov.Fields, "weight"); ok {
 				input.Weight = weight
 			}
@@ -298,7 +331,7 @@ func rawToProjectionScore(r *rawProjectionDecl) *ProjectionScoreDecl {
 				input.ValueSource = valueSource
 			}
 			if match, ok := getFloat64Field(ov.Fields, "match"); ok {
-				input.Match = match
+				input.Match = &match
 			}
 			if miss, ok := getFloat64Field(ov.Fields, "miss"); ok {
 				input.Miss = miss
@@ -423,8 +456,10 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			}
 		case item.CandidateFor != nil:
 			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
-		case item.Emit != nil:
-			route.Emits = append(route.Emits, rawToEmitDecl(item.Emit))
+		case item.Retention != nil:
+			route.Retention = rawToRetentionDecl(item.Retention)
+		case item.Output != nil:
+			route.Output = rawToOutputDecl(item.Output)
 		}
 	}
 
@@ -463,16 +498,12 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 // underscore form. Only known inline types are normalized; template names pass
 // through unchanged so "PLUGIN my-template system_prompt {}" keeps its name.
 var knownInlinePluginAliases = map[string]string{
-	"semantic-cache":      "response_cache",
-	"response-cache":      "response_cache",
-	"context-compression": "context_compression",
-	"system-prompt":       "system_prompt",
-	"header-mutation":     "header_mutation",
-	"router-replay":       "router_replay",
-	"shadow-dispatch":     "shadow_dispatch",
-	"fast-response":       "fast_response",
-	"request-params":      "request_params",
-	"response-jailbreak":  "response_jailbreak",
+	"response-cache":  "response_cache",
+	"system-prompt":   "system_prompt",
+	"header-mutation": "header_mutation",
+	"router-replay":   "router_replay",
+	"fast-response":   "fast_response",
+	"request-params":  "request_params",
 }
 
 // normalizePluginName converts known hyphenated plugin type aliases to their

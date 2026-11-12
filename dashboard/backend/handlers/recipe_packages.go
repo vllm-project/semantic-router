@@ -150,8 +150,8 @@ func (h *RecipeHandler) Packages(w http.ResponseWriter, r *http.Request) {
 		writeRecipeJSON(w, http.StatusNotFound, map[string]string{"error": "not_found", "message": "Recipe package route was not found."})
 		return
 	}
-	if r.Method != http.MethodGet {
-		writePackageMethodNotAllowed(w, http.MethodGet)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		writePackageMethodNotAllowed(w, "GET, HEAD")
 		return
 	}
 	if h.packages == nil {
@@ -241,7 +241,7 @@ func (h *RecipeHandler) ActivatePackage(w http.ResponseWriter, r *http.Request) 
 		writePackageError(w, err)
 		return
 	}
-	writeRecipeJSON(w, http.StatusOK, result)
+	writeRecipeJSON(w, activationResultHTTPStatus(result.Status), result)
 }
 
 func (h *RecipeHandler) DeactivatePackage(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +275,16 @@ func (h *RecipeHandler) DeactivatePackage(w http.ResponseWriter, r *http.Request
 		writePackageError(w, err)
 		return
 	}
-	writeRecipeJSON(w, http.StatusOK, result)
+	writeRecipeJSON(w, activationResultHTTPStatus(result.Status), result)
+}
+
+// activationResultHTTPStatus answers 202 for a committed change that waits for
+// `vllm-sr serve`, as a saved config change that needs a restart is answered.
+func activationResultHTTPStatus(status string) int {
+	if status == recipe.ActivationResultRestartRequired {
+		return http.StatusAccepted
+	}
+	return http.StatusOK
 }
 
 func canonicalRecipePackagePath(actual, expected string) bool {

@@ -1,12 +1,37 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+)
 
 type configActivationResponse struct {
 	routerruntime.ConfigActivation
 	Error string `json:"error,omitempty"`
+}
+
+// redactedActivation is an activation as the management boundary serves it:
+// diagnostics are scrubbed of credential values.
+func redactedActivation(activation routerruntime.ConfigActivation) *configActivationResponse {
+	reasons := make([]configsnapshot.Reason, len(activation.Reasons))
+	for i, reason := range activation.Reasons {
+		reason.Message = scrubSecretsInErrorMessage(reason.Message)
+		reasons[i] = reason
+	}
+	if len(reasons) == 0 {
+		reasons = nil
+	}
+	activation.Reasons = reasons
+	return &configActivationResponse{
+		ConfigActivation: activation,
+		Error:            scrubSecretsInErrorMessage(activation.FailureDetail),
+	}
 }
 
 func (s *ClassificationAPIServer) configActivation(hash string) *configActivationResponse {
@@ -17,10 +42,20 @@ func (s *ClassificationAPIServer) configActivation(hash string) *configActivatio
 	if activation.Attempt == 0 || activation.DocumentHash != hash {
 		return nil
 	}
-	return &configActivationResponse{
-		ConfigActivation: activation,
-		Error:            scrubSecretsInErrorMessage(activation.FailureDetail),
+	return redactedActivation(activation)
+}
+
+// lastConfigRejection is the most recent rejected update, which stays
+// visible after later updates succeed.
+func (s *ClassificationAPIServer) lastConfigRejection() *configActivationResponse {
+	if s == nil || s.runtimeRegistry == nil {
+		return nil
 	}
+	rejection, ok := s.runtimeRegistry.LastConfigRejection()
+	if !ok {
+		return nil
+	}
+	return redactedActivation(rejection)
 }
 
 func (s *ClassificationAPIServer) configActivationStatus(hash, active string) string {
@@ -52,4 +87,36 @@ func (s *ClassificationAPIServer) configActivationAfter(hash string, afterAttemp
 		return nil
 	}
 	return activation
+}
+
+// activeConfigSnapshot is the configuration snapshot that serves, or nil
+// before the runtime published one.
+func (s *ClassificationAPIServer) activeConfigSnapshot() *configsnapshot.Snapshot {
+	if s == nil || s.runtimeRegistry == nil {
+		return nil
+	}
+	return s.runtimeRegistry.ConfigSnapshot()
+}
+
+// activeConfigVersion is the version that serves the document with hash, or 0
+// when another document serves.
+func (s *ClassificationAPIServer) activeConfigVersion(hash string) uint64 {
+	snapshot := s.activeConfigSnapshot()
+	if snapshot == nil || hash == "" || snapshot.Hash() != hash {
+		return 0
+	}
+	return snapshot.Version()
+}
+
+// setActiveConfigHeaders names the snapshot that serves. It can differ from a
+// persisted document that is still activating or was rejected.
+func (s *ClassificationAPIServer) setActiveConfigHeaders(w http.ResponseWriter) {
+	snapshot := s.activeConfigSnapshot()
+	if snapshot == nil {
+		return
+	}
+	w.Header().Set(headers.VSRConfigVersion, strconv.FormatUint(snapshot.Version(), 10))
+	if snapshot.Hash() != "" {
+		w.Header().Set(headers.VSRConfigHash, snapshot.Hash())
+	}
 }

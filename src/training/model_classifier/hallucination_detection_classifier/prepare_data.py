@@ -29,7 +29,7 @@ Usage:
         --output-dir ./data
 
 Dependencies:
-    pip install datasets tqdm
+    uv sync --locked  (from this directory; see README.md)
 """
 
 import argparse
@@ -48,7 +48,7 @@ except ImportError:
     print(
         "Warning: 'datasets' library not installed. Cannot download from HuggingFace."
     )
-    print("Install with: pip install datasets")
+    print("Install with: uv sync --locked (from this directory)")
 
 from tqdm import tqdm
 
@@ -161,8 +161,8 @@ def download_dart_e2e_from_huggingface(
     Download DART and E2E datasets from HuggingFace.
 
     These datasets are available at:
-    - llm-semantic-router/dart-halspans
-    - llm-semantic-router/e2e-halspans
+    - vllm-sr/dart-halspans
+    - vllm-sr/e2e-halspans
 
     Returns:
         Tuple of (dart_path, e2e_path) or (None, None) if unavailable
@@ -177,7 +177,7 @@ def download_dart_e2e_from_huggingface(
     # Download DART
     try:
         print("\nDownloading DART from HuggingFace...")
-        dart_ds = load_dataset("llm-semantic-router/dart-halspans", split="train")
+        dart_ds = load_dataset("vllm-sr/dart-halspans", split="train")
 
         dart_samples = []
         for item in tqdm(dart_ds, desc="Processing DART"):
@@ -203,7 +203,7 @@ def download_dart_e2e_from_huggingface(
     # Download E2E
     try:
         print("\nDownloading E2E from HuggingFace...")
-        e2e_ds = load_dataset("llm-semantic-router/e2e-halspans", split="train")
+        e2e_ds = load_dataset("vllm-sr/e2e-halspans", split="train")
 
         e2e_samples = []
         for item in tqdm(e2e_ds, desc="Processing E2E"):

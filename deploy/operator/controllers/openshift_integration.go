@@ -34,17 +34,22 @@ import (
 )
 
 // reconcileRoute creates or deletes OpenShift Route based on config
-func reconcileRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme, sr *vllmv1alpha1.SemanticRouter, isOpenShift bool) error {
+func reconcileRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme, sr *vllmv1alpha1.SemanticRouter, isOpenShift bool, gatewayMode string) error {
 	logger := log.FromContext(ctx)
 
 	// Check if Route creation enabled
 	if sr.Spec.OpenShift == nil || sr.Spec.OpenShift.Routes == nil || !sr.Spec.OpenShift.Routes.Enabled {
-		if !isOpenShift {
-			return nil
+		if isOpenShift {
+			// Delete Route if exists
+			if err := deleteRouteIfExists(ctx, c, sr); err != nil {
+				return err
+			}
 		}
-
-		// Delete Route if exists
-		return deleteRouteIfExists(ctx, c, sr)
+		// No Route is live under this spec, so stop reporting one: the
+		// status field is part of the published CRD surface and must not
+		// outlive the deleted Route.
+		sr.Status.OpenShiftFeatures = nil
+		return nil
 	}
 
 	// Only create on OpenShift
@@ -54,12 +59,19 @@ func reconcileRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme
 	}
 
 	// Create or update Route
-	return createOrUpdateRoute(ctx, c, scheme, sr)
+	return createOrUpdateRoute(ctx, c, scheme, sr, gatewayMode)
 }
 
 // createOrUpdateRoute builds and applies Route
-func createOrUpdateRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme, sr *vllmv1alpha1.SemanticRouter) error {
+func createOrUpdateRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
 	logger := log.FromContext(ctx)
+
+	// The Route targets the port generateIngress defaults to: the standalone
+	// Router's inference listener, or the api port with spec.gateway.
+	targetPort := intstr.FromString("api")
+	if gatewayMode == GatewayModeStandalone {
+		targetPort = intstr.FromString(DefaultListenerName)
+	}
 
 	termination := routev1.TLSTerminationEdge
 	if sr.Spec.OpenShift.Routes.TLS != nil && sr.Spec.OpenShift.Routes.TLS.Termination != "" {
@@ -95,7 +107,7 @@ func createOrUpdateRoute(ctx context.Context, c client.Client, scheme *runtime.S
 				Name: sr.Name,
 			},
 			Port: &routev1.RoutePort{
-				TargetPort: intstr.FromString("api"),
+				TargetPort: targetPort,
 			},
 			TLS: &routev1.TLSConfig{
 				Termination:                   termination,

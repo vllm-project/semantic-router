@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -53,31 +54,35 @@ func testDecisionPriority(ctx context.Context, client *kubernetes.Clientset, opt
 	}
 	defer stopPortForward()
 
-	// Define test cases inline
+	// Define test cases inline. The fake System One answers the domain
+	// question, so each query pins its domain with a marker.
 	testCases := []DecisionPriorityCase{
+		// No urgency word: the baseline profile's urgent_request outranks thinking.
 		{
-			Query:             "Think carefully about this urgent business decision",
+			Query:             "__SYSTEMONE_CHOICE__ business Think carefully about this business decision",
 			ExpectedDecision:  "thinking_decision",
 			ExpectedPriority:  15,
 			MatchingDecisions: []string{"thinking_decision", "business_decision"},
 			Description:       "Query matches both thinking (priority 15) and business (priority 10) - should select higher priority",
 		},
 		{
-			Query:             "I need to think about complex math problems",
+			Query:             "__SYSTEMONE_CHOICE__ math I need to think about complex math problems",
 			ExpectedDecision:  "thinking_decision",
 			ExpectedPriority:  15,
 			MatchingDecisions: []string{"thinking_decision", "math_decision"},
 			Description:       "Query matches thinking (priority 15) and math (priority 10) - should select higher priority",
 		},
+		// No digits: Vela 2.0 can read a bare number as a DATE_TIME span, which a
+		// profile that denies every PII type blocks before any domain decision.
 		{
-			Query:             "What is 2 + 2?",
+			Query:             "__SYSTEMONE_CHOICE__ math How do I solve a quadratic equation?",
 			ExpectedDecision:  "math_decision",
 			ExpectedPriority:  10,
 			MatchingDecisions: []string{"math_decision"},
 			Description:       "Simple math query should match math decision (priority 10)",
 		},
 		{
-			Query:             "Tell me about cellular biology",
+			Query:             "__SYSTEMONE_CHOICE__ biology Tell me about cellular biology",
 			ExpectedDecision:  "biology_decision",
 			ExpectedPriority:  10,
 			MatchingDecisions: []string{"biology_decision"},
@@ -137,7 +142,7 @@ func testSinglePrioritySelection(ctx context.Context, testCase DecisionPriorityC
 
 	// Create chat completion request
 	requestBody := map[string]interface{}{
-		"model": "MoM", // Use Mixture of Models to trigger decision engine
+		"model": "vllm-sr/auto", // Use the default recipe to trigger decision selection
 		"messages": []map[string]string{
 			{"role": "user", "content": testCase.Query},
 		},

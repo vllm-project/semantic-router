@@ -9,10 +9,10 @@ import (
 )
 
 func TestRoutingPoliciesRoundTrip(t *testing.T) {
-	source := `ROUTING {candidate_requirements: {capabilities: declared} data_policy: {replay: false}}
+	source := `ROUTING {candidate_requirements: {capabilities: declared}}
 MODEL local {context_window_size: 8192 max_output_tokens: 1024 capabilities: ["chat"]}
 RECIPE secondary {
- ROUTING {candidate_requirements: {context: known_limits} data_policy: {replay: true}}
+ ROUTING {candidate_requirements: {context: known_limits}}
 }
 ENTRYPOINT {model_names: ["secondary"] recipe: secondary}
 `
@@ -28,34 +28,78 @@ ENTRYPOINT {model_names: ["secondary"] recipe: secondary}
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
-	if !reflect.DeepEqual(cfg.Recipes, again.Recipes) || !reflect.DeepEqual(cfg.CandidateRequirements, again.CandidateRequirements) || !reflect.DeepEqual(cfg.DataPolicy, again.DataPolicy) || again.ModelConfig["local"].MaxOutputTokens != 1024 {
+	if !reflect.DeepEqual(cfg.Recipes, again.Recipes) || !reflect.DeepEqual(cfg.CandidateRequirements, again.CandidateRequirements) || again.ModelConfig["local"].MaxOutputTokens != 1024 {
 		t.Fatalf("DSL roundtrip lost contract:\n%s", text)
 	}
 	ast := ProgramToJSON(DecompileRoutingToAST(cfg))
-	if !reflect.DeepEqual(ast.CandidateRequirements, cfg.CandidateRequirements) || !reflect.DeepEqual(ast.DataPolicy, cfg.DataPolicy) {
+	if !reflect.DeepEqual(ast.CandidateRequirements, cfg.CandidateRequirements) {
 		t.Fatal("builder AST lost policies")
 	}
 	data, err := EmitRoutingYAMLFromConfig(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := config.ParseYAMLBytes(append([]byte("version: v0.3\n"), data...))
+	parsed, err := config.ParseYAMLBytes(append([]byte("version: v0.5\n"), data...))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.DataPolicy.ReplayAllowed() {
-		t.Fatal("YAML lost standing false")
+	if !reflect.DeepEqual(parsed.CandidateRequirements, cfg.CandidateRequirements) {
+		t.Fatal("YAML lost candidate requirements")
 	}
 	if _, crdErr := EmitCRD(cfg, "test", "default"); crdErr == nil {
 		t.Fatal("CRD silently discarded named routing")
 	}
-	defaultOnly, errs := Compile(`ROUTING {candidate_requirements: {context: known_limits} data_policy: {replay: false}}`)
+	defaultOnly, errs := Compile(`ROUTING {candidate_requirements: {context: known_limits}}`)
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
 	crd, err := EmitCRD(defaultOnly, "test", "default")
-	if err != nil || !strings.Contains(string(crd), "candidate_requirements:") || !strings.Contains(string(crd), "replay: false") {
+	if err != nil || !strings.Contains(string(crd), "candidate_requirements:") {
 		t.Fatalf("default CRD lost policy: %v\n%s", err, crd)
+	}
+}
+
+func TestReplayPluginOverridesRoundTrip(t *testing.T) {
+	for _, fields := range []string{
+		"", "enabled: false", "capture_personal_data: false",
+		"capture_request_body: false capture_response_body: false max_tool_trace_bytes: 0 max_tool_trace_steps: 0",
+		"enabled: true capture_personal_data: true max_records: 500 max_body_bytes: 2048",
+	} {
+		t.Run(fields, func(t *testing.T) {
+			cfg, errs := Compile("ROUTE everything {PRIORITY 1 MODEL \"local\" PLUGIN router_replay {" + fields + "}}")
+			if len(errs) > 0 {
+				t.Fatal(errs)
+			}
+			original, err := cfg.Decisions[0].Plugins[0].Configuration.AsStringMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			text, err := DecompileConfig(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			again, errs := Compile(text)
+			if len(errs) > 0 {
+				t.Fatal(errs)
+			}
+			got, err := again.Decisions[0].Plugins[0].Configuration.AsStringMap()
+			if err != nil || !reflect.DeepEqual(got, original) {
+				t.Fatalf("plugin overrides changed: %v\n%s", err, text)
+			}
+			astConfig, errs := CompileAST(DecompileRoutingToAST(cfg))
+			if len(errs) > 0 {
+				t.Fatal(errs)
+			}
+			ast, err := astConfig.Decisions[0].Plugins[0].Configuration.AsStringMap()
+			if err != nil || !reflect.DeepEqual(ast, original) {
+				t.Fatalf("AST overrides changed: %v %+v", err, ast)
+			}
+		})
+	}
+	for _, fields := range []string{`capture_personal_data: "false"`, `capture_request_body: 1`, `enabled: true unknown_field: false`} {
+		if _, errs := Compile("ROUTE invalid {PRIORITY 1 MODEL \"local\" PLUGIN router_replay {" + fields + "}}"); len(errs) == 0 {
+			t.Fatalf("accepted invalid replay override: %s", fields)
+		}
 	}
 }
 
@@ -64,7 +108,8 @@ func TestRoutingPoliciesRejectInvalidDSL(t *testing.T) {
 		`ROUTING {candidate_requirements: {context: bounded}}`,
 		`ROUTING {candidate_requirements: {capability: declared}}`,
 		`ROUTING {candidate_requirements: false}`,
-		`ROUTING {data_policy: {replay: "false"}}`,
+		`ROUTING {data_policy: {replay: false}}`,
+		`ROUTING {strategy: priority data_policy: {replay: false}}`,
 		`ROUTING {data_policy: {replay: false, unknown: 1}}`,
 	} {
 		if _, errs := Compile(source); len(errs) == 0 {
@@ -145,6 +190,38 @@ func TestRequestParamsDefaultRoundTrip(t *testing.T) {
 	for _, value := range []string{"0", "-1", "1.5", `"4096"`} {
 		if _, errs := Compile(strings.Replace(source, "default_max_tokens: 4096", "default_max_tokens: "+value, 1)); len(errs) == 0 {
 			t.Errorf("accepted invalid default %s", value)
+		}
+	}
+}
+
+// A route that turns an inherited fast_response off keeps enabled: false
+// through the DSL, which would otherwise answer every request it routes.
+func TestFastResponseEnabledRoundTrip(t *testing.T) {
+	source := `ROUTE open {
+ PRIORITY 1
+ MODEL "local"
+ PLUGIN fast_response {enabled: false}
+}`
+	cfg, errs := Compile(source)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	output, err := DecompileConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, errs := Compile(output)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	ast := DecompileRoutingToAST(cfg)
+	astCfg, errs := CompileAST(ast)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	for name, decision := range map[string]config.Decision{"compiled": cfg.Decisions[0], "text": again.Decisions[0], "ast": astCfg.Decisions[0]} {
+		if !decision.HasPlugin(config.DecisionPluginFastResponse) || decision.GetFastResponseConfig() != nil {
+			t.Fatalf("%s: fast_response is not turned off: %s", name, output)
 		}
 	}
 }

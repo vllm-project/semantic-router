@@ -28,6 +28,11 @@ jobs:
       BATCH_ID: ${{ fromJSON(inputs.batch).id }}
 
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - name: Require immutable image handoff
         env:
@@ -38,6 +43,9 @@ jobs:
         with:
           show-usage: "true"
           relocate-docker: "true"
+          # Hosted runners have started with about 85G free; below 40G the
+          # cleanup still runs. The batch records its disk use at the end.
+          min-free-gb: "40"
       - name: Load verified image union once
         uses: ./.github/actions/load-ci-images
         with:
@@ -45,6 +53,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+          cache-dependency-path: '**/go.sum'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -60,6 +69,9 @@ jobs:
         run: |
           .venv-agent/bin/python tools/ci/run_e2e_batch.py --batch "$BATCH" \
             --output ".agent-harness/ci/e2e/$BATCH_ID"
+      - name: Record disk use at the end of the batch
+        if: always()
+        run: df -h /
       - name: Finish interrupted profile teardown
         if: always()
         run: |
@@ -71,6 +83,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-result-${{ fromJSON(inputs.batch).id }}
           path: .agent-harness/ci/e2e/${{ fromJSON(inputs.batch).id }}/results/*.json
           include-hidden-files: true
@@ -79,6 +92,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: e2e-evidence-${{ fromJSON(inputs.batch).id }}
           path: |
             .agent-harness/ci/e2e/${{ fromJSON(inputs.batch).id }}/raw/

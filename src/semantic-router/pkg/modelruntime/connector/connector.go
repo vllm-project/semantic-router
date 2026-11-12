@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // Operation describes one static operation in a remote model protocol. An
@@ -42,6 +43,9 @@ type Options struct {
 	MaxResponseBytes int64
 	MaxErrorBytes    int64
 	TLSConfig        *tls.Config
+	// Query is the encoded query of the deployment's endpoint, which every
+	// call carries before its operation's own.
+	Query string
 }
 
 // Request carries one operation payload plus headers that belong to that
@@ -87,6 +91,9 @@ func New(
 	if err := validateOptions(options); err != nil {
 		return nil, err
 	}
+	if _, err := url.ParseQuery(options.Query); err != nil || strings.ContainsAny(options.Query, "?#") {
+		return nil, fmt.Errorf("connector query is not a valid query string")
+	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if options.TLSConfig != nil {
@@ -126,6 +133,16 @@ func isRedirectStatus(statusCode int) bool {
 	default:
 		return false
 	}
+}
+
+func joinQuery(base, operation string) string {
+	switch {
+	case base == "":
+		return operation
+	case operation == "":
+		return base
+	}
+	return base + "&" + operation
 }
 
 func validateOptions(options Options) error {
@@ -264,6 +281,16 @@ func (c *Client) doAttempt(
 	if connectorErr != nil {
 		return Result{}, connectorErr
 	}
+	// Every inference exchange, including retries, shares the caller's ledger.
+	// This transport is separate from modelservice clients and upstream.Set.
+	if operation.Method == http.MethodPost {
+		if err := budget.Consume(attemptCtx); err != nil {
+			if httpRequest.Body != nil {
+				_ = httpRequest.Body.Close()
+			}
+			return Result{}, &Error{Kind: KindBudget, Operation: operation.Name, Attempt: attempt, Cause: err}
+		}
+	}
 	response, err := c.http.Do(httpRequest)
 	if err != nil {
 		return Result{}, &Error{
@@ -289,7 +316,7 @@ func (c *Client) newRequest(
 		target.Path = path.Join(c.baseURL.Path, operation.Path)
 		target.RawPath = ""
 	}
-	target.RawQuery = operation.Query
+	target.RawQuery = joinQuery(c.options.Query, operation.Query)
 	httpRequest, err := http.NewRequestWithContext(ctx, operation.Method, target.String(), bytes.NewReader(request.Body))
 	if err != nil {
 		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Attempt: attempt, Cause: err}
@@ -339,6 +366,7 @@ func (c *Client) readResponse(
 			StatusCode: response.StatusCode,
 			Attempt:    attempt,
 			Retryable:  operation.RetrySafe && retryableStatus(response.StatusCode),
+			RetryAfter: response.Header.Get("Retry-After"),
 			body:       errorBody,
 			truncated:  truncated,
 		}

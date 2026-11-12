@@ -8,9 +8,10 @@ import (
 	"net/url"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -154,7 +155,7 @@ func postChatCompletionsWithReplayHeaders(ctx context.Context, session *fixtures
 	}
 	chat := fixtures.NewChatCompletionsClient(session, 45*time.Second)
 	resp, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
-		Model:    "auto",
+		Model:    "vllm-sr/auto",
 		User:     o.userID,
 		Messages: msgs,
 	}, map[string]string{

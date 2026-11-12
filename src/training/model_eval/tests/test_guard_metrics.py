@@ -12,8 +12,6 @@ import sys
 import unittest
 from pathlib import Path
 
-import yaml
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import guard_metrics
@@ -361,9 +359,9 @@ class IntervalTest(unittest.TestCase):
 class WindowTest(unittest.TestCase):
     """The scan a score belongs to.
 
-    The router keeps the riskiest window of a long document rather than the
-    first 512 tokens of it, so a contract that scores one truncated window
-    reports a number the deployment never reads.
+    A long document is scanned window by window and its riskiest window kept,
+    rather than the first 512 tokens of it, so a contract that scores one
+    truncated window reports a number the scan never reads.
     """
 
     def test_a_document_inside_one_window_reads_as_one_window(self):
@@ -389,41 +387,6 @@ class WindowTest(unittest.TestCase):
         """A window that never advances would scan the head forever."""
         with self.assertRaises(ValueError):
             guard_metrics.token_windows(4096, 512, 510)
-
-    def test_the_shipped_guard_window_scans(self):
-        """The contract and the runtime read the same geometry.
-
-        The values come from the config the router loads, so a change there is
-        a change here rather than a silent disagreement.
-        """
-        config = yaml.safe_load(
-            (Path(__file__).resolve().parents[4] / "config" / "config.yaml").read_text()
-        )
-
-        def guard_window(node):
-            if isinstance(node, dict):
-                if node.get("model_ref") == "prompt_guard" and isinstance(
-                    node.get("window"), dict
-                ):
-                    return node["window"]
-                children = node.values()
-            elif isinstance(node, list):
-                children = node
-            else:
-                return None
-            for child in children:
-                found = guard_window(child)
-                if found:
-                    return found
-            return None
-
-        window = guard_window(config)
-        self.assertIsNotNone(window, "the shipped config carries no guard window")
-        ranges = guard_metrics.token_windows(
-            window["size"] * 2, window["size"], window["overlap"]
-        )
-        self.assertGreater(len(ranges), 1)
-        self.assertEqual(ranges[-1][1], window["size"] * 2)
 
 
 if __name__ == "__main__":

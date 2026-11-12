@@ -24,7 +24,8 @@
       "additionalProperties": false,
       "properties": {
         "request_timeout_seconds": {"type": "number", "minimum": 1, "maximum": 1200},
-        "concurrency": {"type": "integer", "minimum": 1, "maximum": 64}
+        "concurrency": {"type": "integer", "minimum": 1, "maximum": 64},
+        "shards": {"type": "integer", "minimum": 1, "maximum": 16}
       }
     },
     "acceptance": {
@@ -67,6 +68,12 @@
       "type": "object",
       "propertyNames": {"pattern": "^[a-z][a-z0-9_]*:\\S(?:.*\\S)?$"},
       "additionalProperties": {"$ref": "#/$defs/signalValueBounds"}
+    },
+    "signalErrors": {
+      "type": "object",
+      "description": "Exact expected runtime signal-error map. Omitted means no errors; a variant replaces the decision-level expectation.",
+      "propertyNames": {"pattern": "^\\S(?:.*\\S)?$"},
+      "additionalProperties": {"type": "string", "pattern": "^\\S(?:.*\\S)?$"}
     },
     "matchMode": {"enum": ["contains", "exact"]},
     "selectionStatus": {
@@ -288,7 +295,8 @@
         "tags": {"$ref": "#/$defs/stringSet"},
         "notes": {"type": "string"},
         "expected_signals": {"$ref": "#/$defs/signals"},
-        "expected_signal_values": {"$ref": "#/$defs/signalValues"}
+        "expected_signal_values": {"$ref": "#/$defs/signalValues"},
+        "expected_signal_errors": {"$ref": "#/$defs/signalErrors"}
       },
       "oneOf": [
         {"required": ["query"], "not": {"required": ["messages"]}},
@@ -330,6 +338,7 @@
         "expected_alias": {"type": "string", "minLength": 1},
         "expected_signals": {"$ref": "#/$defs/signals"},
         "expected_signal_values": {"$ref": "#/$defs/signalValues"},
+        "expected_signal_errors": {"$ref": "#/$defs/signalErrors"},
         "forbidden_signals": {"$ref": "#/$defs/signals"},
         "signal_match": {"$ref": "#/$defs/matchMode"},
         "robustness": {

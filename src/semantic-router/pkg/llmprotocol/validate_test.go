@@ -40,7 +40,7 @@ func TestCapabilityNamesAndParserStayClosed(t *testing.T) {
 		CapabilityReasoningAdaptive, CapabilityReasoningSignature, CapabilityReasoningDisplay,
 		CapabilityMatchedStopSequence,
 		CapabilityImageGeneration,
-		CapabilitySamplingMinP, CapabilityRepetitionPenalty, CapabilityCacheIsolation,
+		CapabilitySamplingMinP, CapabilitySamplingLogitBias, CapabilityRepetitionPenalty, CapabilityCacheIsolation,
 	)
 	names := all.Names()
 	seen := make(map[string]struct{}, len(names))
@@ -211,7 +211,7 @@ func TestValidateRequestReasoningModesAreUnambiguous(t *testing.T) {
 func TestValidateRequestReasoningDisplayIsModeScoped(t *testing.T) {
 	limits := DefaultPolicy().Limits
 	for _, mode := range []ReasoningMode{ReasoningModeEnabled, ReasoningModeAdaptive} {
-		for _, display := range []string{"summarized", "omitted"} {
+		for _, display := range []string{"summarized", "omitted", "updates"} {
 			request := validSemanticRequest()
 			request.ReasoningMode = mode
 			request.ReasoningDisplay = display

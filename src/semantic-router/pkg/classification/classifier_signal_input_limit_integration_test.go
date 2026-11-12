@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package classification_test
 
@@ -16,8 +16,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
-	ort "github.com/vllm-project/semantic-router/onnx-binding/instance"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
@@ -29,25 +27,20 @@ import (
 func TestSignalInputLimitClassificationEvalAndPreview(t *testing.T) {
 	privateMessage := "input_limit at /private/example.bin: synthetic backend detail"
 	cases := []struct {
-		name    string
-		err     error
-		limited bool
+		name string
+		err  error
 	}{
-		{"candle", fmt.Errorf("%w: %w", binding.ErrInputLimit, &candle.InstanceError{Code: "input_limit", Message: privateMessage}), true},
-		{"ort", fmt.Errorf("%w: %w", binding.ErrInputLimit, &ort.Error{Kind: "input_limit", Message: privateMessage}), true},
-		{"untyped text", errors.New(privateMessage), false},
+		{"typed input limit", fmt.Errorf("%w: %s", binding.ErrInputLimit, privateMessage)},
+		{"untyped text", errors.New(privateMessage)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			classifier, err := classification.NewSignalErrorTestClassifier(tc.err)
 			require.NoError(t, err)
 			service := services.NewClassificationService(classifier, classifier.Config)
-			expected := map[string]string{"jailbreak:guard": "jailbreak_evaluation_failed", "pii:private": "pii_evaluation_failed"}
-			if tc.limited {
-				for key := range expected {
-					expected[key] = "input_limit"
-				}
-			}
+			// A failed model call leaves each rule unknown under one code; the
+			// error's detail stays in the Router's logs.
+			expected := map[string]string{"jailbreak:guard": "systemone_failed", "pii:private": "systemone_failed"}
 			response, err := service.ClassifyIntentForEval(context.Background(), services.IntentRequest{Text: "neutral request", Options: &services.IntentOptions{Trace: true}})
 			require.ErrorIs(t, err, decision.ErrDecisionUnresolved)
 			require.NotNil(t, response)

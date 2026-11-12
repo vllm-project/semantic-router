@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import type {
   APIError, Artifact, ArtifactVariant, BindingProposalSpec, Evaluation, Fixture,
   Profile, Qualification, RunGraph, RunSpec, WorkerResult,
+  CapabilityCatalog, TrainingPlanRequest, TrainingPlanResponse, PlanDiagnostic,
 } from '../generated/trainingContract'
 
 // Python validates these exact JSON documents against the generated schema.
@@ -15,6 +16,13 @@ const [selector, neural] = ['selector', 'neural'].map((name): Fixture => JSON.pa
   ), 'utf8'),
 ))
 const fixtures: Fixture[] = [selector, neural]
+
+const capabilities: CapabilityCatalog = JSON.parse(
+  readFileSync(new URL(
+    '../../../../src/semantic-router/pkg/trainingcontract/testdata/capabilities.json',
+    import.meta.url,
+  ), 'utf8'),
+)
 
 function outputLabels(profile: Profile): string[] {
   switch (profile.target_contract) {
@@ -107,4 +115,67 @@ it('preserves a model layout with multiple files and nested directories', () => 
     'model-00001-of-00002.safetensors',
     'model-00002-of-00002.safetensors',
   ])
+})
+
+it('renders valid choices entirely from the capability catalog', () => {
+  // Selector targets filter to selector trainers
+  const selectorTrainers = capabilities.trainers.filter((t) =>
+    t.supported_targets.includes('selector.model-choice/v1'),
+  )
+  expect(selectorTrainers.length).toBeGreaterThanOrEqual(1)
+  expect(selectorTrainers.map((t) => t.id)).toContain('trainer/selector@v1')
+
+  // Neural targets filter to neural/peft trainers
+  const classifierTrainers = capabilities.trainers.filter((t) =>
+    t.supported_targets.includes('signal.label-scores/v1'),
+  )
+  expect(classifierTrainers.map((t) => t.id)).toContain('trainer/hf-peft@v1')
+
+  // Compatible architectures for hf-peft
+  const peft = capabilities.trainers.find((t) => t.id === 'trainer/hf-peft@v1')!
+  const compatibleArchs = capabilities.architectures.filter((a) =>
+    peft.supported_architectures?.includes(a.id),
+  )
+  expect(compatibleArchs.map((a) => a.id)).toContain('architecture/hf-modernbert@v1')
+
+  // Training hardware is distinct from inference qualification hardware
+  const trainingHw = peft.supported_hardware
+  expect(trainingHw).toContain('hardware/cuda@v1')
+
+  // Router classifiers qualify on the model runtime, which loads the trained checkpoint directly
+  const classifierRuntimes = capabilities.runtimes.filter((r) =>
+    r.supported_targets.includes('signal.label-scores/v1'),
+  )
+  expect(classifierRuntimes.map((r) => r.id)).toEqual(['runtime/model-runtime@v1'])
+  expect(classifierRuntimes[0].supported_hardware).toContain('hardware/cpu@v1')
+  expect(peft.produced_formats.every((f) => classifierRuntimes[0].accepted_formats.includes(f))).toBe(true)
+})
+
+it('types planning requests and responses with stable diagnostic error codes', () => {
+  const planReq: TrainingPlanRequest = {
+    schema_version: 'semantic-router.training/v2',
+    target_contract: 'selector.model-choice/v1',
+    trainer: 'trainer/selector@v1',
+    training_hardware: 'hardware/cpu@v1',
+    training_precision: 'precision/fp32@v1',
+    qualification_targets: [
+      {
+        key: 'native',
+        runtime: 'runtime/native@v1',
+        hardware: 'hardware/cpu@v1',
+        precision: 'precision/fp32@v1',
+      },
+    ],
+  }
+  expect(planReq.target_contract).toBe('selector.model-choice/v1')
+
+  const diagnostic: PlanDiagnostic = {
+    code: 'INCOMPATIBLE_HARDWARE',
+    severity: 'error',
+    field: 'training_hardware',
+    message: 'Hardware not supported',
+    remediation: 'Select compatible hardware',
+  }
+  expect(diagnostic.code).toBe('INCOMPATIBLE_HARDWARE')
+  expectTypeOf<TrainingPlanResponse['valid']>().toEqualTypeOf<boolean>()
 })

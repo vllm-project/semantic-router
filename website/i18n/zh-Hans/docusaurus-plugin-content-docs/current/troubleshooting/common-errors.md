@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 title: 常见错误
 sidebar_label: 常见错误
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/troubleshooting/common-errors.md"
   outdated: false
 ---
@@ -14,14 +15,25 @@ translation:
 ```bash
 vllm-sr status
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # 仅限 --gateway extproc
 vllm-sr config validate --config config.yaml
 ```
 
 下面的示例是片段。把它们加到完整规范配置的对应章节，并校验结果。
 需要穷尽字段上下文时，使用 [config/config.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)。
 
-## Router 无法加载配置
+| 症状 | 跳转到 |
+| --- | --- |
+| Router 无法启动，或拒绝配置文件 | [Router 无法加载配置](#router-cannot-load-the-configuration) |
+| 校验错误提到入口或配方 | [入口与配方校验](#entrypoint-and-recipe-validation) |
+| 请求返回路由错误码 | [请求返回路由错误码](#a-request-returns-a-routing-error-code) |
+| 响应缓存无法启动，或很少命中 | [响应缓存无法启动](#response-cache-cannot-start) |
+| PII 或越狱路由意外匹配 | [PII 路由意外匹配](#a-pii-route-matches-unexpectedly) |
+| 后端没有地址 | [提供方后端没有地址](#provider-backend-has-no-address) |
+| 决策模型或嵌入模型无法加载 | [决策模型或嵌入模型无法加载](#a-decision-or-embedding-model-cannot-load) |
+| 请求在领域信号之后回退 | [领域置信度过低](#domain-confidence-is-too-low) |
+
+## Router 无法加载配置 {#router-cannot-load-the-configuration}
 
 ### `Failed to create ExtProc server`
 
@@ -47,7 +59,106 @@ vllm-sr config validate --config config.yaml
 
 检查容器挂载前，先用 `vllm-sr status` 确认活动工作区。
 
-## 响应缓存无法启动
+## 入口与配方校验 {#entrypoint-and-recipe-validation}
+
+`vllm-sr config validate` 会为常见的多配方接线错误给出修复提示。
+
+### 未知配方 {#unknown-recipe}
+
+```text
+Entrypoint references unknown recipe 'missing-recipe'
+Hint: Change this to the name of a recipe defined under recipes.
+```
+
+错误写法：
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: missing-recipe
+recipes:
+  - name: production
+```
+
+修正后：
+
+```yaml
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+recipes:
+  - name: production
+```
+
+### 配方名重复 {#duplicate-recipe-name}
+
+```text
+Duplicate recipe name 'production'
+Hint: Rename one recipe so every recipe has a unique name.
+```
+
+为每个配方设置不同的 `name`，再更新引用被改名配方的 entrypoint：
+
+```yaml
+recipes:
+  - name: production
+  - name: staging
+entrypoints:
+  - model_names: [my-model]
+    recipe: production
+```
+
+### 默认入口名冲突 {#model-or-reserved-alias-collision}
+
+```text
+Entrypoint model 'vllm-sr/auto' is mapped more than once
+```
+
+`vllm-sr/auto` 默认发布 default 配方，除非显式声明替换它的默认入口。
+把同一名称交给另一个命名配方会产生重复。
+
+错误写法：
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: production
+```
+
+修正后：
+
+```yaml
+entrypoints:
+  - model_names: [customer-production]
+    recipe: production
+```
+
+### 入口名与后端模型冲突 {#looper-alias-names-a-model}
+
+公开 recipe 入口必须使用独立名字。与后端模型同名的入口会被拒绝，
+Fusion、ReMoM 和 Flow 也遵循同一规则，没有单独的隐式分发名字。
+
+如果 `openai/gpt-oss-20b` 是后端模型，请为工作流声明不同的入口：
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: flow
+```
+
+将 `algorithm.type: workflows` 的决策放在 `flow` recipe 中。
+
+## 请求返回路由错误码 {#a-request-returns-a-routing-error-code}
+
+先在[路由错误](../api/router.md#routing-errors)中查到该原因码，再按请求的 `x-request-id` 在 Router 日志中找到 Router 自己的原因：
+
+```bash
+vllm-sr logs router | grep '<x-request-id>'
+```
+
+对于 `no_route`，`entrypoint_routing_no_selection` 日志行会给出模型、配方以及已匹配的决策。Fusion、Flow 和 ReMoM 由 recipe 中的决策选择；先检查 entrypoint 映射和 recipe 规则。
+
+## 响应缓存无法启动 {#response-cache-cannot-start}
 
 ### 必须配置后端
 
@@ -64,7 +175,6 @@ Milvus 示例：
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: milvus
       milvus:
         connection:
@@ -80,7 +190,6 @@ Qdrant 示例：
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: qdrant
       qdrant:
         host: qdrant
@@ -103,7 +212,6 @@ Redis 和 Valkey 使用 `development.auto_create_index`；Milvus 使用 `develop
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: redis
       redis:
         # 从运行时示例补充连接、索引和搜索设置。
@@ -116,27 +224,41 @@ global:
 
 ### 缓存命中异常偏少
 
-先确认决策启用了 `response_cache` 插件，并检查 `x-vsr-cache-hit` 或回放诊断。若嵌入正常但近似重复仍未命中，可在代表性流量上测试更低的相似度阈值：
+先确认该请求启用了 `response_cache` 插件（在 `global.plugins` 或决策的插件中），再检查 `x-vsr-response-path`（命中时为 `cache`）或回放诊断。
+
+语义命中要经过两个阶段：`recall` 找出相似的缓存请求，`same_request` judge 再确认其中一个。若嵌入正常但近似重复仍未命中，可在代表性流量上测试更低的 `recall.min_similarity` 或更低的 `judge.min_score`：
 
 ```yaml
 global:
-  stores:
-    response_cache:
-      similarity_threshold: 0.75
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        semantic:
+          match:
+            recall: {method: embedding, top_k: 3, min_similarity: 0.75}
+            judge: {preset: same_request, min_score: 0.8}
 ```
 
-按决策覆盖应写在插件配置中：
+:::warning 两个阶段都要写
+`match` 块会整体替换缺省值。只写了 `recall` 的块会直接返回最相似的缓存请求，而不询问 judge。
+:::
+
+决策自己的插件会为该决策覆盖它：
 
 ```yaml
-routing:
-  decisions:
-    - name: cached-route
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            semantic:
-              similarity_threshold: 0.70
+recipes:
+  - name: default
+    decisions:
+      - name: cached-route
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {method: embedding, top_k: 3, min_similarity: 0.70}
+                  judge: {preset: same_request, min_score: 0.8}
 ```
 
 降低阈值会增加误匹配风险。上线前先评估答案是否等价，诊断后端时使用管理 API 的响应缓存统计和测试端点。
@@ -164,107 +286,53 @@ global:
 
 仅在本地工作、且可接受重启后丢失已存储响应和会话链时，才使用 `store_backend: memory`。
 
-## PII 路由意外匹配
+## PII 路由意外匹配 {#a-pii-route-matches-unexpectedly}
 
-启用调试日志后，匹配的 PII 规则会包含被拒绝的实体类型：
+预览该请求（`POST /api/v1/routing/preview?trace=true`），或由 `global.router.headers.debug` 允许的调用方带 `x-vsr-debug: true` 发送它：`x-vsr-trace` 的 `signals` 成员会列出匹配的 `pii` 规则。
 
-```text
-[Signal Computation] PII rule "<name>" matched: denied_entities=[<types>]
-```
-
-若该类型按策略应被允许，把它加入该信号的允许名单。若检测器产生低置信度误报，评估更高阈值：
+若该标签按策略应被允许，把它加入规则的 `ignore_labels`。若模型产生低置信度误报，评估更高的 `predicate`：
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: pii-policy
-        threshold: 0.90
-        pii_types_allowed:
-          - GPE
-          - ORGANIZATION
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: pii-policy
+          predicate: {gte: 0.90}
+          ignore_labels:
+            - DATE_TIME
+            - LOCATION
 ```
 
 更改隐私阈值会改变漏报风险。请用带标签的数据集验证，而不是几条手写提示词。
 
-## 越狱路由意外匹配
+## 越狱路由意外匹配 {#a-jailbreak-route-matches-unexpectedly}
 
-对比分类器匹配使用以下开头的调试消息：
+用回放、路由预览，或由 `global.router.headers.debug` 允许的调用方带 `x-vsr-debug: true` 发送的请求，检查匹配的信号（`x-vsr-trace` 的 `signals` 成员）和所选决策。
 
-```text
-[Signal Computation] Contrastive jailbreak rule "<name>" matched
-```
-
-其他越狱分类器不会发出这句原文。用回放或带 `x-vsr-debug: true` 的请求检查匹配信号和所选决策。
-
-要减少误报，对受影响信号评估更高阈值：
+要减少误报，对受影响的规则评估更高的 `predicate`：
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: jailbreak-standard
-        threshold: 0.85
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: jailbreak-standard
+          predicate: {gte: 0.95}
 ```
 
-若某条路由不应依赖越狱检测，从该路由中去掉该条件。全局关闭分类器会改变所有使用它的决策。
+若某条路由不应依赖越狱检测，从该路由中去掉该条件。修改该规则会改变所有读取它的决策。
 
-## MCP 类别分类器无法启动
+## 提供方后端没有地址 {#provider-backend-has-no-address}
 
-这些错误表示传输配置不完整：
+以下校验错误表示后端引用无法解析：
 
 ```text
-command is required for stdio transport
-URL is required for HTTP transport
+providers.models[<model>].backend_refs[<n>] has no endpoint URL
+<path> requires endpoint because provider '<provider>' has no default
 ```
 
-使用一种传输，并在应由 MCP 负责类别分类时禁用本地领域分类器。
-
-Stdio 示例：
-
-```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          enabled: false
-        mcp:
-          enabled: true
-          transport_type: stdio
-          command: /app/bin/category-server
-          tool_name: classify_text
-```
-
-可执行文件及其全部参数必须存在于 Router 运行时内。
-
-Streamable HTTP 示例：
-
-```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          enabled: false
-        mcp:
-          enabled: true
-          transport_type: streamable-http
-          url: http://mcp-server:8080/mcp
-          tool_name: classify_text
-```
-
-从 Router 网络测试该 URL。若服务器暴露的是另一个工具名，精确设置 `tool_name`，或省略它以允许发现已识别的分类工具。
-
-## 提供方后端没有地址
-
-校验错误：
-
-```text
-providers.models[<model>].backend_refs requires endpoint or base_url
-```
-
-表示后端引用无法解析：
+为后端设置 `endpoint`：
 
 ```yaml
 providers:
@@ -279,34 +347,21 @@ providers:
           provider: vllm
 ```
 
-当提供方需要完整 API 根（例如 `https://provider.example/v1`）时，使用 `base_url`。使用 Router 网络可达的主机名；`localhost` 指向 Router 容器自身。
+当提供方需要完整 API 根（例如 `https://provider.example/v1`）时，在 `endpoint` 中写完整 URL。使用 Router 网络可达的主机名；`localhost` 指向 Router 容器自身。
 
-该 API 根中的版本段对每个 Provider ID 都可接受。自身操作路径已带版本的提供方（例如 `anthropic` 和 `minimax`）不会重复它，因此 `https://provider.example/v1` 和 `https://provider.example` 解析到同一上游路径。
+该 API 根中的版本段对每个 provider ID 都可接受。操作路径已带版本的提供方（例如 `anthropic` 和 `minimax`）不会重复它：`https://provider.example/v1` 和 `https://provider.example` 解析到同一上游路径。
 
 端到端检查见[容器连通性](./container-connectivity)。
 
-## 分类器或嵌入模型无法加载
+## 决策模型或嵌入模型无法加载 {#a-decision-or-embedding-model-cannot-load}
 
-模型加载错误因实现而异，但通常包含失败路径：
+每个模型都运行在[模型运行时](../model-runtime/get-started/overview.md)中。模型无法加载时，依赖它的功能返回未知结果，运行时会记录原因。查看 Router 的 `vsr_model_runtime_ready{deployment="..."}` 指标和 Router 日志，或直接询问你自己运行的运行时：
 
-```text
-models directory does not exist: <path>
-<name> model directory does not exist: <path>
-failed to initialize <name> model from <path>: <error>
-failed to load pre-trained model <path>: <error>
+```bash
+curl -s localhost:8100/v1/models
 ```
 
-检查运行时内的路径，而不仅是宿主机上的路径。普通本地工作区把 `models/` 挂到 `/app/models`；受管配方把可变模型状态放在其工作区下，并挂到同一容器路径。
-
-```yaml
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        bert_model_path: /app/models/all-MiniLM-L12-v2
-```
-
-同时确认产物格式、标签映射和已配置的嵌入维度与所选实现匹配。
+每个模型的 `status` 和 `reason` 说明失败原因：下载损坏、缺少 `revision`、私有仓库没有令牌、设备不存在，或模型超出设备容量。[故障排查与 FAQ](../model-runtime/deploy/troubleshooting.md) 列出了每种原因及修复方法。
 
 ## 容器镜像没有匹配的平台
 
@@ -320,20 +375,20 @@ docker buildx imagetools inspect <registry>/<image>:<tag>
 
 若标签是多平台索引，固定其索引摘要，而不是某一架构的子清单。若是单平台，使用发布了所需架构的发行版，或通过已批准的流水线构建并发布镜像。不要把未固定的 `latest` 标签当作长期不可变替代方案。
 
-## 分类置信度过低
+## 领域置信度过低 {#domain-confidence-is-too-low}
 
-若请求在领域分类后频繁回退，先确认已加载的模型和类别映射，再改阈值。然后在带标签流量上评估更低的值：
+若请求在领域信号之后经常回退，先确认由哪个模型回答 `domains` 规则。没有写 `predicate` 的规则使用回答模型的校准阈值（vela3-fast 上为 0.41），否则为 0.5 并给出 `uncalibrated_preset` 警告。然后在带标签流量上评估更低的值：
 
 ```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          threshold: 0.50
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: math
+          predicate: {gte: 0.30}
 ```
 
-降低阈值可能增加错误领域路由。请按所选工作点报告各类别的精确率和召回率。
+降低 predicate 可能增加错误领域路由。请按所选工作点报告各领域的精确率和召回率。
 
 ## 诊断命令
 
@@ -346,7 +401,7 @@ vllm-sr status
 
 # Read component logs without depending on generated container names.
 vllm-sr logs router
-vllm-sr logs envoy
+vllm-sr logs envoy        # 仅限 --gateway extproc
 
 # Check the public listener and model catalog.
 curl -sS http://localhost:8899/v1/models

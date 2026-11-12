@@ -106,3 +106,23 @@ describe('collapsible headers are keyboard operable', () => {
     expect(contents.slice(toggleStart, toggleEnd)).not.toContain('<button')
   })
 })
+
+describe('builder sidebar entries are keyboard operable', () => {
+  const contents = read('./builderPageVisualShell.tsx')
+
+  it('renders the dashboard entry and every entity entry as a button with its current state', () => {
+    expect(contents).not.toMatch(/<(div|li)\b[^>]*\bonClick=/)
+    expect(contents).toMatch(
+      /<button\s+type="button"\s+className=\{homeActive \? styles\.sidebarHomeActive : styles\.sidebarHome\}\s+aria-current=\{homeActive \? 'page' : undefined\}/
+    )
+    expect(contents).toMatch(
+      /<li>\s*<button\s+type="button"\s+className=\{active \? styles\.sidebarItemActive : styles\.sidebarItem\}\s+aria-current=\{active \? 'page' : undefined\}/
+    )
+  })
+
+  it('routes every entity section through the shared sidebar entry', () => {
+    const sections = contents.match(/\?\.map\(\(\w+\) => \(\s*<SidebarEntityItem\b/g) ?? []
+
+    expect(sections).toHaveLength(7)
+  })
+})

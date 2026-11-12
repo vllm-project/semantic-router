@@ -6,128 +6,161 @@ description: How signals, projections, decisions, plugins, algorithms, and model
 
 # Routing Pipeline
 
-Semantic Router separates request understanding, policy, and model execution.
-Each layer answers a different question, which keeps routing rules readable and
-prevents one classifier or optimization score from becoming the whole policy.
+Every routed model call passes through the same stages: understand the
+request, apply policy, then run the chosen model. The recipe that the
+entrypoint selects defines each stage.
+
+- **Signals** name facts about the request.
+- **Projections** combine signals into scores, partitions and bands.
+- **Decisions** apply policy and choose the candidate models.
+- **Algorithms** pick one model or coordinate several.
+- **Plugins** act on the route: rewrite, retrieve, cache or guard.
 
 ```mermaid
 flowchart LR
-    Request["Request"] --> Signals["Signals<br/>What do we know?"]
+    Request["Harness model call"] --> Signals["Signals<br/>What do we know?"]
     Signals --> Projections["Projections<br/>How does evidence combine?"]
     Projections --> Decisions["Decisions<br/>Which route is eligible?"]
     Decisions --> Algorithms["Algorithms<br/>Which candidate or plan?"]
     Algorithms --> Pool["Model pool<br/>Where does it run?"]
-    Decisions --> Plugins["Route plugins<br/>What else should happen?"]
-    Plugins --> Response["Request / response handling"]
+    Decisions --> Plugins["Plugins<br/>What else should happen?"]
+    Plugins --> Response["Request and response handling"]
     Pool --> Response
 ```
 
-## Signals: extract facts
+## Signals: name the facts
 
-A signal gives a name to something detected from the request, conversation,
-identity, or content. Some signals are deterministic, such as a keyword,
-metadata predicate, or context-length band. Others use embeddings or classifier
-models for semantic intent, domain, complexity, PII, or jailbreak detection.
+A signal gives a name to something true about the request, the conversation,
+the caller or the content. Signals describe facts; they never choose a
+backend, so one signal can serve many decisions.
 
-Signals describe facts; they do not choose the backend. The same signal can be
-reused by several decisions inside one recipe.
+| Layer | How it answers | Examples |
+| --- | --- | --- |
+| **The `systemone` primitive** | The decision model answers a question you write in plain language. | "Does this request need a tool call?" |
+| **Application signals** | The decision model answers one of eleven built-in questions. | `domains`, `jailbreak`, `pii`, `complexity` |
+| **Heuristic signals** | Deterministic code, with no model. | `keywords`, `language`, `context`, `role_bindings` |
 
-See the [signal overview](../tutorials/signal/overview) for the maintained
-heuristic and learned families.
+:::tip One call per request
+The Router sends a request's model-judged signals to the decision model
+together, in one call per deployment. [System One](../system-one/overview)
+explains the questions and the models that answer them.
+:::
 
-## Projections: coordinate evidence
+Embeddings serve recall only, for the response cache, memory and RAG; no
+signal reads an embedding. See the [signal overview](../tutorials/signal/overview)
+for every signal type.
 
-Projections turn several signal outputs into a reusable result:
+## Projections: combine evidence
 
-- a **partition** chooses a coherent winner among overlapping matches;
-- a **score** combines weighted inputs; and
-- a **mapping** converts a score into named routing bands.
+A projection turns several signal results into one reusable result:
 
-For example, domain evidence can form one exclusive domain partition while
-complexity, context, and verification evidence form a difficulty score. Several
-decisions can then reference those results without repeating the combination
-logic.
+- a **partition** picks one winner among overlapping matches;
+- a **score** combines weighted inputs;
+- a **mapping** turns a score into named bands.
 
-See [Projections](../tutorials/projection/overview).
+For example, domain evidence can form one exclusive partition, while
+complexity, context and verification evidence form a difficulty score.
+Decisions then reference the result instead of repeating the logic. See
+[Projections](../tutorials/projection/overview).
 
 ## Decisions: apply policy
 
-A decision combines signals and projection outputs with boolean rules. Its
-priority and the recipe's strategy determine which matching route wins. The
-matched decision supplies candidate models, an optional algorithm, and
-route-local plugins.
+A decision combines signal and projection results with `AND`, `OR` and `NOT`.
+When several decisions match, their priority and the recipe's strategy pick
+one. The winner supplies the candidate models, the algorithm, the plugins and
+the output it must produce.
 
-Keep hard requirements visible here. Authorization, local-only processing,
-modality, context capacity, and tool compatibility should make a route eligible
-or ineligible before an optimizer compares cost or latency.
+:::warning Keep hard requirements in decisions
+Authorization, local-only processing, modality, context capacity and tool
+compatibility should make a route eligible or ineligible before any optimizer
+compares cost or latency.
+:::
 
 See [Decisions](../tutorials/decision/overview).
 
 ## Algorithms: select or coordinate models
 
-After a decision matches, its algorithm handles the candidate set.
+After a decision matches, its algorithm handles the candidates:
 
-- **Selection algorithms** choose one candidate using a fixed order, semantic
-  fit, latency, feedback, or another bounded policy.
-- **Looper algorithms** coordinate several calls through a cascade, panel,
-  multi-round process, or workflow.
+| Kind | Types | What it does |
+| --- | --- | --- |
+| **Selectors** | `static`, `random`, `multi_factor`, `systemone` | Pick one candidate before calling it. |
+| **Executors** | `escalate`, `fusion`, `remom`, `ratings`, `workflows` | Call several candidates and return one response. |
 
-When a decision has one candidate, the simplest static behavior is often the
-right choice. Orchestration should be reserved for tasks where its additional
-latency and compute have measured value.
+With one candidate, `static` is usually right. Keep executors for tasks where
+their extra latency and compute have a measured payoff. See
+[Algorithms](../tutorials/algorithm/overview).
 
-See [Algorithms](../tutorials/algorithm/overview).
+## Plugins: act on the route
 
-## Plugins: apply route-specific behavior
+Plugins add behavior to the selected route. Depending on the type, a plugin
+runs before the provider request, during execution or on the response.
+Examples include request parameter limits, context retrieval and
+compression, memory, replay, response caching and response guards.
 
-Plugins add behavior associated with the selected route. Depending on the
-plugin, that behavior may run before the provider request, during execution,
-or while processing the response. Examples include request parameter changes,
-context compression, retrieval, memory, replay, response caching, and response
-controls.
-
-Detection and enforcement are different. For example, a PII signal reports a
-match; the decision and plugin policy determine whether to block, reroute,
-transform, or simply observe it.
+:::note Detection is not enforcement
+A `pii` signal only reports a match. The decision and its plugins decide
+whether to block, reroute, mask or just observe it.
+:::
 
 See [Plugins](../tutorials/plugin/overview).
 
-## Model pools: execute the request
+## Model pools: run the request
 
-Providers bind logical model names to physical inference endpoints. A pool can
-contain local vLLM or Ollama services, Kubernetes-hosted models, or remote
-OpenAI-compatible providers. Semantic Router chooses the model path; the model
-server or backend scheduler executes it and owns replica placement.
+Providers bind model names to inference endpoints: local vLLM or Ollama
+services, Kubernetes-hosted models or remote OpenAI-compatible providers. The
+Router chooses the model; the model server or its scheduler runs it and
+places replicas.
 
-Capability and runtime metadata are useful only within policy boundaries. A
-fast backend is not eligible if it cannot handle the request's modality,
-context, tools, or locality requirement.
+- **Capability first.** A fast backend is not eligible if it can't handle the
+  request's modality, context, tools or locality.
+- **Separate pools.** The decision model has its own
+  [replica pool](component-architecture#scale-a-deployment-through-replicas),
+  which never chooses the chat backend.
 
 ## Recipes keep policies isolated
 
-An entrypoint selects one recipe. That recipe owns its signals, projections,
-decisions, algorithms, plugins, cache namespace, and routing state. Providers,
-stores, and router-owned model assets can be shared without allowing one
-recipe's policy to leak into another.
+An entrypoint selects one recipe. The recipe owns its signals, projections,
+decisions, algorithms, plugins, cache namespace and routing state. Providers,
+stores and the Router's own models can be shared without one recipe's policy
+leaking into another.
 
-Concrete backend model names are direct pass-through requests. They bypass
-recipe signals, decisions, route-local plugins, cache, learning, and session
-routing. If a virtual entrypoint's recipe has no matching decision, the Router
-uses the configured default provider model.
+- **Direct names pass through.** A concrete backend model name skips recipe
+  signals, decisions, plugins, cache, learning and session routing.
+- **No match falls back.** If no decision in the recipe matches, the Router
+  uses the configured default provider model.
 
-See [Virtual Models](../tutorials/global/entrypoints-and-recipes)
-for the complete configuration contract.
+See [Entrypoints and Recipes](../tutorials/global/entrypoints-and-recipes)
+for the configuration contract.
 
-## Workload, Router, and pool
+## Example: a coding call with tools
 
-A useful routing decision joins three views:
+1. A harness sends a conversation, tool definitions and a virtual model name.
+2. The entrypoint selects a recipe, and its signals recognize a coding request
+   and the conversation's facts.
+3. A decision establishes the route; capability and context checks narrow its
+   candidates, and the algorithm selects a model.
+4. Plugins apply tool policy or context compression, when configured.
+5. The response returns to the harness, which executes any tools and takes
+   the next step.
+
+:::note Multi-turn routing
+Configure session identity and protection deliberately. An active tool loop
+or provider state that can't move can restrict model switches, but a model
+that policy excludes is never restored just for continuity. See the
+[agent harness guide](../installation/agent-harness).
+:::
+
+## Workload, Router and pool
+
+A good routing decision joins three views:
 
 | View | Examples |
 | --- | --- |
-| **Workload** | intent, language, complexity, context, tools, modality, identity |
-| **Router policy** | eligibility, priority, objective, plugins, algorithm |
-| **Model pool** | capabilities, locality, health, latency, load, relative cost |
+| **Workload** | Intent, language, complexity, context, tools, modality, identity |
+| **Router policy** | Eligibility, priority, objective, plugins, algorithm |
+| **Model pool** | Capabilities, locality, health, latency, load, relative cost |
 
-The workload says what is needed. Policy says what is allowed and preferred.
-The pool says what is currently available. Keeping these views separate makes
-the system easier to change and evaluate.
+The workload says what is needed, policy says what is allowed and preferred,
+and the pool says what is available now. Keeping them separate makes the
+system easier to change and to evaluate.

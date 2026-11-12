@@ -3,6 +3,10 @@ package recipe
 const (
 	ActivationModeHotSwitch       = "hot_switch"
 	ActivationModeStackRecreation = "stack_recreation"
+	// ActivationResultRestartRequired is the status of an activation or
+	// deactivation that is committed but waits for `vllm-sr serve` to create
+	// the containers anew; the result's message says so.
+	ActivationResultRestartRequired = "restart_required"
 )
 
 // ActivationListener is the public, credential-free listener topology shown

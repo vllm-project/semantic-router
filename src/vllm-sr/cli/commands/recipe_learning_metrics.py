@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 _SUPPORT_REPLAY_LIMIT = 10
+_SWITCH_ACTIONS = frozenset({"allow_switch", "rescue_switch"})
+_RELEASE_SWITCH_ACTION = "release_switch"
+_RELEASE_KEPT_CURRENT_REASON = "release_kept_current"
 
 
 @dataclass
@@ -15,6 +18,7 @@ class DecisionMetrics:
     holds: int = 0
     allows: int = 0
     rescues: int = 0
+    releases: int = 0
     sampled: int = 0
     learning_records: int = 0
     missing_protection_records: int = 0
@@ -44,6 +48,7 @@ class DecisionMetrics:
         switch_rate = self.switches / self.records if self.records else 0.0
         hold_rate = self.holds / self.records if self.records else 0.0
         rescue_rate = self.rescues / self.records if self.records else 0.0
+        release_rate = self.releases / self.records if self.records else 0.0
         learning_coverage = (
             self.learning_records / self.records if self.records else 0.0
         )
@@ -75,6 +80,7 @@ class DecisionMetrics:
             "switch_rate": round(switch_rate, 4),
             "hold_rate": round(hold_rate, 4),
             "rescue_rate": round(rescue_rate, 4),
+            "release_rate": round(release_rate, 4),
             "sampling_rate": (
                 round(self.sampled / self.records, 4) if self.records else 0.0
             ),
@@ -204,14 +210,27 @@ def update_protection_metrics(
     metrics: DecisionMetrics, protection: dict[str, Any], replay_id: str
 ) -> None:
     action = protection.get("action")
-    if action == "hold_current":
+    if is_release(protection):
+        # A harness-requested release resets continuity, so protection tuning
+        # cannot change it; keep it out of the switch and hold rates.
+        metrics.releases += 1
+        append_support(metrics, "releases", replay_id)
+    elif action == "hold_current":
         metrics.holds += 1
         append_support(metrics, "holds", replay_id)
-    elif action in {"allow_switch", "rescue_switch"}:
+    elif action in _SWITCH_ACTIONS:
         metrics.allows += 1
         if action == "rescue_switch":
             metrics.rescues += 1
             append_support(metrics, "rescues", replay_id)
+
+
+def is_release(protection: dict[str, Any]) -> bool:
+    action = protection.get("action")
+    return action == _RELEASE_SWITCH_ACTION or (
+        action == "hold_current"
+        and protection.get("reason") == _RELEASE_KEPT_CURRENT_REASON
+    )
 
 
 def update_outcome_metrics(
@@ -399,9 +418,14 @@ def record_switched(record: dict[str, Any]) -> bool:
         protection = learning.get("protection")
         if isinstance(protection, dict):
             action = str(protection.get("action") or "")
-            if action in {"allow_switch", "rescue_switch"}:
+            if action in _SWITCH_ACTIONS:
                 return True
-            if action in {"establish_baseline", "hold_current", "bypass"}:
+            if action in {
+                "establish_baseline",
+                "hold_current",
+                "bypass",
+                _RELEASE_SWITCH_ACTION,
+            }:
                 return False
         adaptation = learning.get("adaptation")
         if isinstance(adaptation, dict):

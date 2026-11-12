@@ -7,12 +7,44 @@ import (
 	"os"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
-func newValkeyConfig() *config.ValkeyConfig {
+// runtimeEmbedding serves the Vela embedding model from a model runtime this
+// example starts (VLLM_SRUN_COMMAND, else vllm-srun on PATH).
+func runtimeEmbedding(ctx context.Context) (*serving.EmbeddingProvider, func(), error) {
+	deployment, err := config.ImplicitModelRuntimeDeployment("models/Vela-1.0-Encoder-307M-Embedding", true)
+	if err != nil {
+		return nil, nil, err
+	}
+	deployment = deployment.WithDefaults()
+	manager := modelservice.NewManager()
+	lease, err := manager.AcquireDeployments(map[string]config.ModelDeployment{"embedding": deployment})
+	if err != nil {
+		_ = manager.Shutdown(ctx)
+		return nil, nil, err
+	}
+	stop := func() {
+		_ = lease.Close()
+		_ = manager.Shutdown(context.Background())
+	}
+	provider, err := serving.New(lease, nil).Embedding(ctx, config.ResolvedModelBinding{
+		Recipe:     "example",
+		Name:       "embedding",
+		Binding:    config.ModelBinding{Deployment: "embedding", Contract: "embedding.v1"},
+		Deployment: deployment,
+	}, 0, 0)
+	if err != nil {
+		stop()
+		return nil, nil, err
+	}
+	return provider, func() { _ = provider.Close(); stop() }, nil
+}
+
+func newValkeyConfig(dimension int) *config.ValkeyConfig {
 	host := os.Getenv("VALKEY_HOST")
 	if host == "" {
 		host = "localhost"
@@ -31,7 +63,7 @@ func newValkeyConfig() *config.ValkeyConfig {
 	cfg.Index.Name = "semantic_cache_idx"
 	cfg.Index.Prefix = "doc:"
 	cfg.Index.VectorField.Name = "embedding"
-	cfg.Index.VectorField.Dimension = 384
+	cfg.Index.VectorField.Dimension = dimension
 	cfg.Index.VectorField.MetricType = "COSINE"
 	cfg.Index.IndexType = "HNSW"
 	cfg.Index.Params.M = 16
@@ -149,19 +181,21 @@ func main() {
 	fmt.Println("Valkey Cache Backend Example")
 	fmt.Println("============================")
 
-	fmt.Println("\n0. Initializing embedding model...")
-	err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
+	fmt.Println("\n0. Starting the model runtime for embeddings...")
+	embedder, stopRuntime, err := runtimeEmbedding(context.Background())
 	if err != nil {
-		log.Fatalf("Failed to initialize embedding model: %v", err)
+		log.Fatalf("Failed to start the embedding model: %v", err)
 	}
-	fmt.Println("✓ Embedding model initialized")
+	defer stopRuntime()
+	fmt.Println("✓ Embedding model ready")
 
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.ValkeyCacheType,
 		Enabled:             true,
 		SimilarityThreshold: 0.75,
 		TTLSeconds:          3600,
-		Valkey:              newValkeyConfig(),
+		Valkey:              newValkeyConfig(embedder.Dimension()),
+		EmbeddingProvider:   embedder,
 	}
 
 	fmt.Println("\n1. Creating Valkey cache backend...")

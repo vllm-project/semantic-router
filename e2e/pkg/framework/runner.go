@@ -32,6 +32,7 @@ type Runner struct {
 	cluster             *cluster.KindCluster
 	builder             *docker.Builder
 	restConfig          *rest.Config
+	kubeConfig          string
 	reporter            *ReportGenerator
 }
 
@@ -83,7 +84,7 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 
 	buildOpts := docker.BuildOptions{
 		Dockerfile:   "tools/docker/Dockerfile.extproc",
-		Tag:          fmt.Sprintf("ghcr.io/vllm-project/semantic-router/extproc:%s", r.opts.ImageTag),
+		Tag:          fmt.Sprintf("ghcr.io/vllm-project/semantic-router/vllm-sr:%s", r.opts.ImageTag),
 		BuildContext: ".",
 		BuildArgs:    localDockerBuildArgs(),
 	}
@@ -202,39 +203,13 @@ func (r *Runner) runTests(ctx context.Context, kubeClient *kubernetes.Clientset)
 		}
 	}
 
-	// Get test cases to run
-	var testCasesToRun []testcases.TestCase
-	var err error
-
-	if len(r.opts.TestCases) > 0 {
-		// Run specific test cases
-		r.log("Requested test cases: %v", r.opts.TestCases)
-		testCasesToRun, err = testcases.ListByNames(r.opts.TestCases...)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// Run all test cases for the profile
-		profileTestCases := r.profile.GetTestCases()
-		if r.opts.Profile == "envoy-ai-gateway" {
-			profileTestCases, err = testmatrix.BaselineCases(r.opts.BaselineSuite)
-			if err != nil {
-				return nil, err
-			}
-		}
-		r.log("Profile test cases: %v", profileTestCases)
-		testCasesToRun, err = testcases.ListByNames(profileTestCases...)
-		if err != nil {
-			return nil, err
-		}
+	testCasesToRun, err := r.selectTestCases()
+	if err != nil {
+		return nil, err
 	}
-
 	inventory := make([]string, 0, len(testCasesToRun))
 	for _, tc := range testCasesToRun {
 		inventory = append(inventory, tc.Name)
-	}
-	if err := validateCaseInventory(inventory); err != nil {
-		return nil, err
 	}
 	r.reporter.report.ExpectedCases = inventory
 	r.log("Running %d test cases", len(testCasesToRun))
@@ -267,6 +242,61 @@ func (r *Runner) runTests(ctx context.Context, kubeClient *kubernetes.Clientset)
 	return results, nil
 }
 
+// selectTestCases is the run's cases: the requested ones, or the profile's
+// cases in the run's scope. Run calls it before any setup, so a scope that
+// leaves a profile nothing to run stops before the cluster is built.
+func (r *Runner) selectTestCases() ([]testcases.TestCase, error) {
+	var cases []testcases.TestCase
+	var err error
+	if len(r.opts.TestCases) > 0 {
+		r.log("Requested test cases: %v", r.opts.TestCases)
+		cases, err = testcases.ListByNames(r.opts.TestCases...)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		profileTestCases := r.profile.GetTestCases()
+		if r.opts.Profile == "envoy-ai-gateway" {
+			profileTestCases = testmatrix.BaselineCases()
+		}
+		r.log("Profile test cases: %v", profileTestCases)
+		cases, err = testcases.ListByNames(profileTestCases...)
+		if err != nil {
+			return nil, err
+		}
+		cases, err = casesInScope(cases, r.opts.BaselineSuite)
+		if err != nil {
+			return nil, err
+		}
+		if len(cases) == 0 {
+			return nil, fmt.Errorf("profile %s has no case in scope %q", r.profile.Name(), r.opts.BaselineSuite)
+		}
+	}
+	inventory := make([]string, 0, len(cases))
+	for _, tc := range cases {
+		inventory = append(inventory, tc.Name)
+	}
+	if err := validateCaseInventory(inventory); err != nil {
+		return nil, err
+	}
+	return cases, nil
+}
+
+// casesInScope keeps the cases a scope runs, by each case's priority.
+func casesInScope(cases []testcases.TestCase, scope string) ([]testcases.TestCase, error) {
+	kept := make([]testcases.TestCase, 0, len(cases))
+	for _, tc := range cases {
+		in, err := testcases.InScope(tc, scope)
+		if err != nil {
+			return nil, err
+		}
+		if in {
+			kept = append(kept, tc)
+		}
+	}
+	return kept, nil
+}
+
 func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clientset, tc testcases.TestCase) TestResult {
 	r.log("Running test: %s", tc.Name)
 
@@ -277,8 +307,9 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 
 	// Create result to capture details
 	result := TestResult{
-		Name:    tc.Name,
-		Details: make(map[string]interface{}),
+		Name:     tc.Name,
+		Priority: string(tc.EffectivePriority()),
+		Details:  make(map[string]interface{}),
 	}
 
 	opts := testcases.TestCaseOptions{
@@ -287,22 +318,50 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 		Namespace:     "default",
 		Timeout:       "5m",
 		RestConfig:    r.restConfig,
+		KubeConfig:    r.kubeConfig,
 		ServiceConfig: svcConfig,
 		SetDetails: func(details map[string]interface{}) {
 			result.Details = details
 		},
 	}
 
-	err := tc.Fn(ctx, kubeClient, opts)
+	attempts := r.opts.FlakeAttempts
+	if attempts < 1 {
+		attempts = 1
+	}
+	if tc.MutatesClusterState && attempts > 1 {
+		r.log("↻ Not retrying %s: it changes cluster state", tc.Name)
+		attempts = 1
+	}
+
+	var err error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if attempt > 1 {
+			r.log("↻ Retrying test %s (attempt %d/%d)", tc.Name, attempt, attempts)
+		}
+		err = tc.Fn(ctx, kubeClient, opts)
+		result.Attempts = attempt
+		if err == nil {
+			break
+		}
+		if attempt < attempts {
+			r.log("⚠️ Test %s failed on attempt %d/%d: %v", tc.Name, attempt, attempts, err)
+		}
+	}
+
 	duration := time.Since(start)
 
 	result.Passed = err == nil
 	result.Error = err
+	result.Flaked = result.Passed && result.Attempts > 1
 	result.Duration = duration.String()
 
-	if err != nil {
+	switch {
+	case err != nil:
 		r.log("❌ Test %s failed: %v", tc.Name, err)
-	} else {
+	case result.Flaked:
+		r.log("⚠️ Test %s passed on attempt %d/%d — flaky (%s)", tc.Name, result.Attempts, attempts, duration)
+	default:
 		r.log("✅ Test %s passed (%s)", tc.Name, duration)
 	}
 
@@ -316,24 +375,40 @@ func (r *Runner) printResults(results []TestResult) {
 
 	passed := 0
 	failed := 0
+	flaked := 0
 
 	for _, result := range results {
 		status := "✅ PASSED"
-		if !result.Passed {
+		switch {
+		case !result.Passed:
 			status = "❌ FAILED"
 			failed++
-		} else {
+		case result.Flaked:
+			status = "⚠️ FLAKY"
+			passed++
+			flaked++
+		default:
 			passed++
 		}
 
 		fmt.Printf("%s - %s (%s)\n", status, result.Name, result.Duration)
+		if result.Flaked {
+			fmt.Printf("  Passed on attempt %d after failing earlier\n", result.Attempts)
+		}
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
+		}
+		if !result.Passed && os.Getenv("GITHUB_ACTIONS") == "true" {
+			fmt.Println(failureAnnotation(r.profile.Name(), result))
 		}
 	}
 
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Printf("Total: %d | Passed: %d | Failed: %d\n", len(results), passed, failed)
+	fmt.Printf("Total: %d | Passed: %d | Failed: %d", len(results), passed, failed)
+	if flaked > 0 {
+		fmt.Printf(" | Flaky: %d", flaked)
+	}
+	fmt.Println()
 	fmt.Println(strings.Repeat("=", 80))
 }
 
@@ -535,7 +610,22 @@ func prebuiltFixtureImage(dockerfile string) string {
 		return os.Getenv("E2E_PREBUILT_PROVIDER_MOCKER_IMAGE")
 	case "dashboard/backend/Dockerfile":
 		return os.Getenv("VLLM_SR_DASHBOARD_IMAGE")
+	case "src/model-runtime/Dockerfile":
+		return os.Getenv("E2E_PREBUILT_MODEL_RUNTIME_IMAGE")
 	default:
 		return ""
 	}
+}
+
+// failureAnnotation is a GitHub Actions error line for a failed case, so it
+// shows in the check run with its profile and case name instead of only in
+// the job log.
+func failureAnnotation(profile string, result TestResult) string {
+	message := "failed"
+	if result.Error != nil {
+		message = result.Error.Error()
+	}
+	escape := strings.NewReplacer("%", "%25", "\r", "%0D", "\n", "%0A").Replace
+	title := strings.NewReplacer(",", "%2C", ":", "%3A").Replace(escape(profile + " / " + result.Name))
+	return fmt.Sprintf("::error title=E2E %s::%s", title, escape(message))
 }

@@ -5,7 +5,7 @@ import tsparser from '@typescript-eslint/parser'
 
 export default [
   {
-    ignores: ['.docusaurus', 'build'],
+    ignores: ['.docusaurus', '.venv', 'build'],
   },
   stylistic.configs['recommended-flat'],
   {

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型配置模式
 description: 在编写 YAML 之前，比较受支持的目录、自定义、推理、provider 和副本组合。
 translation:
@@ -20,8 +21,8 @@ translation:
 | 使用不带 Router 生成推理控制的私有模型 | 省略 | 省略 | 与 `name` 不同时设置 | 设置 Provider 和端点。 |
 | 使用已知内置家族的私有模型 | 省略 | `family: <built-in-id>` | 可选 | 设置兼容的 Provider 和端点。 |
 | 使用具有独特推理控制的私有模型 | 省略 | 完整内联定义 | 可选 | 设置兼容的 Provider 和端点。 |
-| 为私有模型添加路由元数据 | 省略 | 可选 | 可选 | 在别名下添加 `routing.modelCards`。 |
-| 为目录模型添加本地元数据 | Canonical Model Card ID | 省略；继承 | 取决于 Provider | 在目录 ID 下添加 `routing.modelCards`。 |
+| 为私有模型添加路由元数据 | 省略 | 可选 | 可选 | 在别名下添加 `providers.models`。 |
+| 为目录模型添加本地元数据 | Canonical Model Card ID | 省略；继承 | 取决于 Provider | 在目录支持的别名上设置元数据。 |
 | 对相同副本做负载均衡 | 任一 | 由模型身份决定 | 一个有效 ID | 将同构目标放入同一个 `backend_refs` 列表。 |
 | 跨不同 Provider 或协议路由 | 每个契约配置一个 Model | 按 Model 决定 | 按 Provider 决定 | 在同一决策中使用单独别名。 |
 
@@ -32,7 +33,7 @@ translation:
   catalog: openai/gpt-5.6-sol
   backend_refs:
     - provider: openai
-      api_key_env: OPENAI_API_KEY
+      auth: {api_key_env: OPENAI_API_KEY}
 ```
 
 ## 带运维部署名称的目录模型
@@ -43,8 +44,8 @@ translation:
   provider_model_id: my-production-deployment
   backend_refs:
     - provider: microsoft-foundry
-      base_url: https://example.services.ai.azure.com
-      api_key_env: FOUNDRY_API_KEY
+      endpoint: https://example.services.ai.azure.com
+      auth: {api_key_env: FOUNDRY_API_KEY}
 ```
 
 ## 自定义透传模型
@@ -95,7 +96,7 @@ translation:
 - `catalog` 与任何 `providers.models[].reasoning` 块同时出现；
 - `reasoning.family` 与内联推理字段同时出现；
 - 内联定义缺少 `type` 或 `parameter`；
-- Model Card 覆盖以目录支持别名命名，而不是其 canonical `catalog` ID；
+- 以目录支持别名的 `catalog` ID 命名的第二个 `providers.models` 条目（请改为在别名上设置元数据）；
 - 自定义 Model Card 的名称与自定义 Model 别名不同；
 - 决策的 effort 或 mode 不被 Model 家族或 Provider 映射支持；以及
 - 同一副本池内存在异构的 Provider、协议、凭据、原生 ID、路径或 TLS 语义。

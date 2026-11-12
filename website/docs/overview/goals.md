@@ -1,88 +1,77 @@
 ---
 sidebar_position: 1
 title: Why Semantic Routing
-description: Why heterogeneous model fleets need a decision layer between applications and inference backends.
+description: Why agent harnesses need a programmable decision layer over heterogeneous models and compute.
 ---
 
 # Why Semantic Routing
 
-There is no single best model for every request. Models differ in reasoning,
-latency, price, language, context length, modality, tool use, deployment
-location, and safety profile. The pool also changes as models are upgraded,
-scaled, or temporarily unavailable.
+Models differ in reasoning, speed, price, context length, modality, tools,
+location and safety, and the pool changes with every upgrade or outage.
+Semantic Router gives harnesses one stable model API and moves model choice
+into a policy you can read, test and change.
 
-Without a routing layer, every application has to understand those differences.
-Model choice becomes client-side conditionals, policy is copied across services,
-and a backend change can require an application release.
+- **One stable API.** Harnesses call a public model name; operators change the
+  pool behind it.
+- **Hard rules first.** Identity, data location, modality and context limits
+  remove ineligible models before cost or latency is compared.
+- **Plain-language judgments.** One decision model answers the policy's
+  questions about each request, so rules read as questions, not code.
+- **Measured change.** Replay, evaluation and metrics show whether a policy
+  change helped.
 
-Semantic routing moves that decision into the serving path.
+## The problems it solves
 
-## The problems it addresses
+| Problem | Without a routing layer | With Semantic Router |
+| --- | --- | --- |
+| **Model choice is coupled to the harness** | Every integration hard-codes its models. | Public entrypoints decouple the name a harness calls from the models behind it. |
+| **Constraints and preferences are mixed** | A cheap model can win even when it is not allowed. | Decisions remove invalid paths first; algorithms rank only what remains. |
+| **One rule is not enough** | Keywords miss intent, and a model's guess can override an authorization rule. | Signals keep each kind of evidence separate; decisions compose them. |
+| **The pool keeps changing** | Upgrades, scaling and outages break routing code. | Health, latency and load inform selection without becoming the policy. |
+| **Some answers need several models** | Escalation and review are ad hoc retries. | Escalation and orchestration are explicit, bounded steps of a route. |
 
-### Model choice leaks into applications
-
-An application should express what it needs, not maintain a list of model
-endpoints. Stable public model names let the routing policy and physical pool
-change without changing every client.
-
-### Constraints and preferences get mixed together
-
-Some requirements are non-negotiable: authorization, privacy, data residency,
-modality, context capacity, or tool compatibility. Others are objectives to
-optimize, such as quality, latency, and cost. A useful router eliminates invalid
-paths first and ranks only the remaining candidates.
-
-### One routing rule is not enough
-
-Keywords can express a hard policy but cannot capture every semantic intent.
-A classifier can recognize intent but should not override an authorization
-boundary. Runtime metrics can choose a healthy replica but do not understand
-the task. Semantic Router keeps these responsibilities separate, then composes
-them into one decision.
-
-### The physical pool is dynamic
-
-Routing is both a semantic and a systems problem. The request describes the
-workload; the model pool contributes capacity, health, latency, and placement.
-The Router must connect those two views without making either one the entire
-policy.
-
-### Some answers require collaboration
-
-Selecting one model is often enough. Other tasks benefit from escalation,
-verification, parallel opinions, or a bounded workflow. These are distinct
-execution patterns and should be explicit rather than hidden behind retries in
-application code.
+Routing is both a semantic and a systems problem. The request says what the
+work needs; the pool says what is available. The Router joins the two views
+without letting either one become the whole policy.
 
 ## Design goals
 
-vLLM Semantic Router is designed around five goals:
-
-1. **One stable API over many backends.** Clients use a public entrypoint while
-   operators manage the pool behind it.
+1. **One stable API over many backends.** Harnesses use a public entrypoint
+   while operators manage the pool behind it.
 2. **Policy that can be read and tested.** Signals, projections, decisions,
-   algorithms, and plugins are named configuration objects rather than
-   scattered conditionals.
+   algorithms and plugins are named configuration objects, not scattered
+   conditionals.
 3. **Hard boundaries before optimization.** Ineligible routes are removed
-   before quality, latency, cost, or load influences selection.
-4. **Selection and orchestration in one system.** A route can choose one model,
-   cascade, compare, or coordinate several models.
-5. **Operational feedback.** Replay, evaluation, metrics, and user feedback
+   before quality, latency, cost or load influence selection.
+4. **Model selection and bounded collaboration.** A route can choose one
+   model, escalate, compare, or coordinate several within configured limits.
+5. **Operational feedback.** Replay, evaluation, metrics and user feedback
    support deliberate policy changes.
 
 ## What Semantic Router is not
 
-- It is not an LLM server. Backends such as vLLM, Ollama, or hosted providers
-  still run the models.
-- It is not only a load balancer. Replica health matters, but request meaning
-  and policy determine which model pool is eligible.
-- It is not a universal quality guarantee. Routing quality depends on the
-  configured models, signals, policy, and evaluation data.
-- It is not a replacement for network, identity, or data-governance controls.
-  It enforces routing policy inside a broader security architecture.
+- **Not the agent harness.** The harness owns the task loop, tool execution
+  and task state. The Router decides each model call.
+- **Not the chat model server.** vLLM, Ollama or hosted providers generate
+  the answers. The built-in model runtime serves only the Router's own
+  decision and embedding models.
+- **Not only a load balancer.** Replica health matters, but request meaning
+  and policy decide which model pool is eligible.
+- **Not a quality guarantee.** Routing is as good as the configured models,
+  signals, policy and evaluation data.
+- **Not a security perimeter.** It enforces routing policy inside a broader
+  architecture of network, identity and data-governance controls.
+
+:::tip Serve decisions without a chat backend
+Applications can also ask the decision model directly, through the
+[System One](../system-one/overview) API.
+:::
 
 ## Next
 
-Read the [System Overview](semantic-router-overview) for the components and
-request lifecycle, then see [Use Cases](use-cases) for concrete routing
-patterns.
+- [System Overview](semantic-router-overview): the components and the request
+  lifecycle.
+- [Use Cases](use-cases): routing patterns for cloud, data-center, edge and
+  enterprise pools.
+- [Connect an agent harness](../installation/agent-harness): integrate your
+  harness.

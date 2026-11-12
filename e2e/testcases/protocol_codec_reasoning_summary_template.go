@@ -45,7 +45,7 @@ func testProtocolCodecReasoningSummaryTemplateResponsesBackend(
 	const marker = "reasoning_summary_template_probe"
 	const sessionID = "reasoning-summary-template-responses"
 	result, err := sendProtocolMatrixRaw(ctx, session, "/v1/responses", map[string]any{
-		"model": "auto", "input": marker, "store": false,
+		"model": "vllm-sr/auto", "input": marker, "store": false,
 		"reasoning": map[string]string{"summary": "auto"},
 	}, false, map[string]string{"x-vsr-test-session-id": sessionID})
 	if err != nil {
@@ -63,7 +63,7 @@ func testProtocolCodecReasoningSummaryTemplateResponsesBackend(
 	if bodyErr := assertResponsesBody(result.Body, protocolCodecResponsesReply); bodyErr != nil {
 		return fmt.Errorf("template Responses summary response: %w", bodyErr)
 	}
-	if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
+	if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
 		return fmt.Errorf("template Responses did not report dropped reasoning.summary: %q", warnings)
 	}
 

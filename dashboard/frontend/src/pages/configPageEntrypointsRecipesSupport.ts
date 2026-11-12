@@ -30,6 +30,14 @@ export function normalizeEntrypointModelNames(value: string | string[]): string[
   return [...new Set(values.map((item) => item.trim()).filter(Boolean))]
 }
 
+export function requireEntrypointModelNames(value: string | string[]): string[] {
+  const modelNames = normalizeEntrypointModelNames(value)
+  if (modelNames.length === 0) {
+    throw new Error('Add at least one request-facing model name.')
+  }
+  return modelNames
+}
+
 export function getRecipeNames(config: ConfigData | null): string[] {
   return [
     ...new Set([
@@ -56,7 +64,7 @@ export function getRecipeByName(
     if (explicitDefault) return explicitDefault
     return {
       name: DEFAULT_RECIPE_NAME,
-      description: 'Top-level routing profile used by vllm-sr/auto.',
+      description: 'Default routing profile. Entrypoints define its public model names.',
       routing: {
         signals: config?.routing?.signals ?? config?.signals,
         projections: config?.routing?.projections ?? config?.projections,
@@ -120,10 +128,7 @@ export function validateEntrypointForm(
   models: NormalizedModel[],
   originalIndex: number | null,
 ): EntrypointConfig {
-  const modelNames = normalizeEntrypointModelNames(form.modelNames)
-  if (modelNames.length === 0) {
-    throw new Error('Add at least one request-facing model name.')
-  }
+  const modelNames = requireEntrypointModelNames(form.modelNames)
 
   const recipe = form.recipe.trim()
   if (!getRecipeNames(config).includes(recipe)) {
@@ -141,53 +146,16 @@ export function validateEntrypointForm(
       (model.loras ?? []).map((lora) => lora.name),
     ),
   )
-  const autoNames = new Set(
-    (
-      config.global?.router?.auto_model_names ?? [
-        'vllm-sr/auto',
-        'auto',
-        config.global?.router?.auto_model_name?.trim() || 'MoM',
-      ]
-    )
-      .map((name) => name.trim())
-      .filter(Boolean),
+  const defaultDeclared = (config.entrypoints ?? []).some(
+    (entrypoint, index) => index !== originalIndex && entrypoint.recipe === DEFAULT_RECIPE_NAME,
   )
-  const directNames = new Set<string>()
-  const looper = (config.global?.integrations?.looper ?? {}) as Record<string, unknown>
-  for (const [family, defaultName] of [
-    ['remom', 'vllm-sr/remom'],
-    ['fusion', 'vllm-sr/fusion'],
-    ['flow', 'vllm-sr/flow'],
-  ] as const) {
-    const familyConfig = looper[family]
-    const modelNames =
-      familyConfig && typeof familyConfig === 'object'
-        ? (familyConfig as Record<string, unknown>).model_names
-        : undefined
-    const customNames = Array.isArray(modelNames)
-      ? modelNames.filter(
-          (name): name is string => typeof name === 'string' && Boolean(name.trim()),
-        )
-      : []
-    if (customNames.length > 0) {
-      customNames.forEach((name) => directNames.add(name.trim()))
-      continue
-    }
-    directNames.add(defaultName)
-  }
-
+  if (!defaultDeclared && recipe !== DEFAULT_RECIPE_NAME) claimedNames.add('vllm-sr/auto')
   for (const modelName of modelNames) {
     if (claimedNames.has(modelName)) {
       throw new Error(`Entrypoint model "${modelName}" is already mapped.`)
     }
     if (physicalNames.has(modelName) || loraNames.has(modelName)) {
       throw new Error(`Entrypoint model "${modelName}" collides with a configured model or LoRA.`)
-    }
-    if (autoNames.has(modelName)) {
-      throw new Error(`Entrypoint model "${modelName}" is reserved as an auto-model alias.`)
-    }
-    if (directNames.has(modelName)) {
-      throw new Error(`Entrypoint model "${modelName}" is reserved for direct router dispatch.`)
     }
   }
 

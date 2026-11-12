@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import type { ConfigData } from './configPageSupport'
 import {
   applyRoutingScopeProjection,
   listRoutingScopes,
   projectConfigForRoutingScope,
+  resolveRoutingScope,
   type RoutingScopedConfigLike,
 } from '../utils/routingScopes'
 
@@ -13,12 +14,8 @@ export function useRoutingScopeManager(config: ConfigData | null) {
     () => listRoutingScopes(config as ConfigData & RoutingScopedConfigLike),
     [config],
   )
-  const [selectedScopeId, setSelectedScopeId] = useState('')
-
-  useEffect(() => {
-    if (routingScopes.some((scope) => scope.id === selectedScopeId)) return
-    setSelectedScopeId(routingScopes[0]?.id ?? '')
-  }, [routingScopes, selectedScopeId])
+  const [choice, setSelectedScopeId] = useState('')
+  const selectedScopeId = resolveRoutingScope(config as ConfigData & RoutingScopedConfigLike, choice)?.id ?? ''
 
   const scopedConfig = useMemo(
     () =>

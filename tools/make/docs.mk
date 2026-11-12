@@ -9,12 +9,24 @@ DOCS_VENV ?= $(CURDIR)/website/.venv
 DOCS_VENV_PYTHON = $(DOCS_VENV)/bin/python
 DOCS_PYTHON ?= $(if $(wildcard $(DOCS_VENV_PYTHON)),$(DOCS_VENV_PYTHON),$(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$(CURDIR)/.venv-agent/bin/python,python3))
 
-.PHONY: docs-cli docs-cli-check docs-cli-test docs-community-check docs-community-test docs-generated-check
+.PHONY: docs-cli docs-cli-check docs-cli-test docs-headers docs-headers-check docs-community-check docs-community-test docs-generated-check docs-model-pages docs-model-pages-check
 docs-cli: ## Generate the CLI command reference from the registered Click command tree
 	@$(DOCS_PYTHON) tools/docs/generate_cli_reference.py
 
 docs-cli-check: ## Reject a stale CLI command reference without rewriting it
 	@$(DOCS_PYTHON) tools/docs/generate_cli_reference.py --check
+
+docs-headers: ## Generate the Router header reference from the header registry export
+	@$(DOCS_PYTHON) tools/docs/generate_header_reference.py
+
+docs-headers-check: ## Reject a stale Router header reference without rewriting it
+	@$(DOCS_PYTHON) tools/docs/generate_header_reference.py --check
+
+docs-model-pages: ## Generate the Supported models pages from the built-in model catalog
+	@$(DOCS_PYTHON) tools/docs/generate_model_pages.py
+
+docs-model-pages-check: ## Reject stale Supported models pages without rewriting them
+	@$(DOCS_PYTHON) tools/docs/generate_model_pages.py --check
 
 docs-cli-test: ## Test command discovery and CLI reference drift detection
 	@$(DOCS_PYTHON) -m unittest discover -s tools/docs/tests -p 'test_*.py'
@@ -27,7 +39,7 @@ docs-community-test: ## Test offline snapshot provenance and stale-refresh rejec
 	@node --test website/scripts/lib/generated-source.test.mjs
 
 docs-generated-check: MODEL_CATALOG_PYTHON = $(DOCS_PYTHON)
-docs-generated-check: model-catalog-generated-check docs-cli-check docs-config-check docs-community-check agent-skill-check ## Check generated website contracts without native builds or rewriting
+docs-generated-check: model-catalog-generated-check docs-cli-check docs-headers-check docs-model-pages-check docs-config-check docs-community-check agent-skill-check ## Check generated website contracts without native builds or rewriting
 
 .PHONY: docs-python-install docs-install docs-build
 docs-python-install: ## Install generated-reference dependencies in an isolated documentation environment
@@ -164,21 +176,21 @@ APISERVER_INDEX_BEGIN := <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 APISERVER_INDEX_END := <!-- END-GENERATED-ENDPOINT-INDEX -->
 
 .PHONY: generated-contract-check generated-contract-generate
-generated-contract-check: training-contract-check config-schema-check api-docs-check agent-skill-check docs-generated-check docs-crd-check ## Check all generated public references without rewriting
+generated-contract-check: training-contract-check config-schema-check headers-check api-docs-check agent-skill-check docs-generated-check docs-crd-check model-runtime-client-check decision-runtime-catalog-check systemone-schemas-check ## Check all generated public references without rewriting
 
 # OpenAPI embeds the config schema: regenerate it before exporting API docs.
-generated-contract-generate: training-contract-generate config-schema-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
+generated-contract-generate: training-contract-generate config-schema-generate headers-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
 	@$(MAKE) api-docs-generate
 	@$(MAKE) agent-skill-sync
-	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd
+	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd model-runtime-client-generate decision-runtime-catalog-generate systemone-schemas-generate
+	@$(MAKE) docs-model-pages
 
 .PHONY: api-docs-openapi
-api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI JSON artifact from the route catalog
+api-docs-openapi: ## Export committed apiserver OpenAPI JSON artifact from the route catalog
 	@$(LOG_TARGET)
 	@mkdir -p $(dir $(APISERVER_OPENAPI_JSON))
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o ../../$(APISERVER_OPENAPI_JSON)
 	@echo "Wrote $(APISERVER_OPENAPI_JSON)"
 
@@ -187,7 +199,6 @@ api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoi
 	@$(LOG_TARGET)
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o /tmp/apiserver-endpoint-index.md
 	@python3 tools/codegen/embed_generated_index.py \
 		--markdown "$(APISERVER_REFERENCE_MD)" \
@@ -196,17 +207,15 @@ api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoi
 		--end "$(APISERVER_INDEX_END)"
 
 .PHONY: api-docs-check
-api-docs-check: $(if $(CI),rust-ci,rust) ## Fail if committed api docs artifacts differ from generator output
+api-docs-check: ## Fail if committed api docs artifacts differ from generator output
 	@$(LOG_TARGET)
 	@TMPDIR_CHECK=$$(mktemp -d) && \
 	trap 'rm -rf "$$TMPDIR_CHECK"' EXIT HUP INT TERM && \
 	cp "$(APISERVER_REFERENCE_MD)" "$$TMPDIR_CHECK/apiserver.md" && \
 	cd src/semantic-router && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format json -o "$$TMPDIR_CHECK/apiserver.openapi.json" && \
 		CGO_ENABLED=1 \
-		$(NATIVE_ENV) \
 		go run ../../$(OPENAPI_GEN)/main.go -format index -o "$$TMPDIR_CHECK/apiserver-endpoint-index.md" && \
 	cd ../.. && \
 	python3 tools/codegen/embed_generated_index.py \

@@ -73,13 +73,13 @@ func TestAutomaticOutputUsesExactRenderedCandidateAndFinalBudgets(t *testing.T) 
 	calls := 0
 	text := "HEAD\n" + strings.Repeat("中文🙂", 9000) + "\nTAIL"
 	r, ctx := automaticFixture(t, text, renderMock(t, &calls, 0, 0))
-	raw, err := json.Marshal(map[string]any{"model": "auto", "messages": []map[string]any{{"role": "user", "content": text}}, "top_k": 20, "min_p": 0, "repetition_penalty": 1, "cache_salt": "arm_cache_namespace"})
+	raw, err := json.Marshal(map[string]any{"model": "vllm-sr/auto", "messages": []map[string]any{{"role": "user", "content": text}}, "top_k": 20, "min_p": 0, "repetition_penalty": 1, "cache_salt": "arm_cache_namespace"})
 	require.NoError(t, err)
 	decoded, rejection := r.prepareProtocolRequest(raw, ctx)
 	require.Nil(t, rejection)
 	require.NotNil(t, decoded)
 	d := ctx.VSRSelectedDecision
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 	require.False(t, ctx.ContextCompressionApplied, "valid non-ASCII input must not be byte-truncated")
 	refs, err := r.decisionEligibleModelRefs(d, ctx)
 	require.NoError(t, err)
@@ -120,7 +120,7 @@ func TestAutomaticOutputDifferentCandidateWindowsPreserveInput(t *testing.T) {
 	wide.ExternalModelIDs = nil
 	r.Config.ModelConfig["wide"] = wide
 	ctx.VSRSelectedDecision.ModelRefs = append(ctx.VSRSelectedDecision.ModelRefs, config.ModelRef{Model: "wide"})
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 	refs, err := r.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
 	require.NoError(t, err)
 	require.Equal(t, []config.ModelRef{{Model: "wide"}}, refs)
@@ -132,7 +132,7 @@ func TestAutomaticOutputConfirmedOverflowUsesConfiguredCompression(t *testing.T)
 	calls := 0
 	original := "HEAD\n" + strings.Repeat("archive text ", 6000) + "\nTAIL"
 	r, ctx := automaticFixture(t, original, renderMock(t, &calls, 0, 0))
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 	require.Equal(t, 2, calls)
 	require.True(t, ctx.ContextCompressionApplied)
 	changed := ctx.SemanticRequest.Messages[0].Content[0].Text
@@ -152,7 +152,7 @@ func TestAutomaticOutputRendererErrorsAndHiddenCapsNeverCompress(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			calls := 0
 			r, ctx := automaticFixture(t, strings.Repeat("中文", 10000), renderMock(t, &calls, tt.reduction, tt.status))
-			err := r.prepareDecisionContextOverflow(ctx, "auto")
+			err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto")
 			require.ErrorIs(t, err, selection.ErrNoEligibleCandidates)
 			wantCalls := 1
 			if tt.status == 400 {
@@ -168,7 +168,7 @@ func TestAutomaticOutputExplicitCallerHasNoRenderCalls(t *testing.T) {
 	calls := 0
 	r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 	ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 	_, err := r.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
 	require.NoError(t, err)
 	name := ctx.VSRSelectedDecision.ModelRefs[0].Model
@@ -188,7 +188,7 @@ func TestAutomaticOutputBlockedCallerBudgetUsesRenderer(t *testing.T) {
 			r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 			ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
 			setAutomaticBlockedParams(t, ctx, []string{field})
-			require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+			require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 			refs, err := r.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
 			require.NoError(t, err)
 			require.Len(t, refs, 1)
@@ -214,7 +214,7 @@ func TestAutomaticOutputBlockedCallerBudgetRejectsInvalidPolicyBeforeRender(t *t
 	r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 	ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
 	setAutomaticBlockedParams(t, ctx, []string{"max_tokens", "messages"})
-	err := r.prepareDecisionContextOverflow(ctx, "auto")
+	err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto")
 	require.ErrorContains(t, err, "required semantic field")
 	require.Equal(t, 0, calls)
 	require.Nil(t, ctx.AutomaticCandidateDemands)
@@ -251,7 +251,7 @@ func TestAutomaticOutputCapabilityFilterAndFastResponse(t *testing.T) {
 	fast, err := config.NewStructuredPayload(map[string]any{"status_code": 200, "body": "ready"})
 	require.NoError(t, err)
 	ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, config.DecisionPlugin{Type: "fast_response", Configuration: fast})
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 	require.Equal(t, 1, calls)
 }
 
@@ -278,7 +278,7 @@ func TestAutomaticOutputExactlyFullWindowUsesOneTokenProbe(t *testing.T) {
 			t.Fatal("unbounded render calls")
 		}
 	})
-	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
 	require.Equal(t, 3, calls)
 	require.True(t, ctx.ContextCompressionApplied)
 }
@@ -297,7 +297,7 @@ func TestAutomaticOutputUnsupportedProviderAndMultipleBackends(t *testing.T) {
 			profile.Type = "openai"
 			r.Config.ProviderProfiles["provider"] = profile
 		}
-		require.ErrorIs(t, r.prepareDecisionContextOverflow(ctx, "auto"), selection.ErrNoEligibleCandidates)
+		require.ErrorIs(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"), selection.ErrNoEligibleCandidates)
 		require.Equal(t, 0, calls)
 	}
 }
@@ -327,7 +327,7 @@ func TestAutomaticOutputVLLMDefaultSamplingSerialization(t *testing.T) {
 				}
 				require.NoError(t, json.NewEncoder(w).Encode(output))
 			})
-			err := r.prepareDecisionContextOverflow(ctx, "auto")
+			err := r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto")
 			if tt.ok {
 				require.NoError(t, err)
 				for _, demand := range ctx.AutomaticCandidateDemands {

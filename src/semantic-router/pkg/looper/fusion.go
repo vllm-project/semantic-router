@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -47,13 +48,13 @@ type fusionExecutionConfig struct {
 	SynthesisTemplate            string
 	JudgePromptVersion           string
 
-	GroundingEnabled                 bool
-	GroundingReference               string
-	GroundingPolicy                  string
-	GroundingMinScore                float64
-	GroundingMinKeep                 int
-	GroundingNLIContradictionPenalty float64
-	GroundingOnError                 string
+	GroundingEnabled              bool
+	GroundingReference            string
+	GroundingPolicy               string
+	GroundingMinScore             float64
+	GroundingMinKeep              int
+	GroundingContradictionPenalty float64
+	GroundingOnError              string
 }
 
 type FusionAnalysis struct {
@@ -168,8 +169,6 @@ func newFusionQuorumOutcome(
 }
 
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	ctx = contextWithFusionDepth(ctx, 1)
-
 	cfg := l.resolveFusionExecutionConfig(req)
 	if len(cfg.AnalysisModels) == 0 {
 		return nil, fmt.Errorf("fusion analysis_models cannot be empty")
@@ -233,7 +232,7 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 
 func (l *FusionLooper) validateFusionModels(cfg fusionExecutionConfig) error {
 	for _, model := range append(append([]string{}, cfg.AnalysisModels...), cfg.Model) {
-		for _, fusionName := range l.cfg.Fusion.EffectiveModelNames() {
+		for _, fusionName := range l.cfg.EntrypointModels {
 			if model == fusionName {
 				return fmt.Errorf("fusion model %q cannot be used as a judge or analysis model", model)
 			}
@@ -277,8 +276,10 @@ func (l *FusionLooper) callFusionModel(
 		CallOptions{
 			DecisionName: req.DecisionName,
 			Iteration:    iteration,
-			FusionDepth:  1,
 			Mode:         responseMode(streaming),
+			// Panel and analysis calls drop tools above. Only synthesis and the
+			// quorum fallback keep them, and both produce the final answer.
+			ToolStage: llmprotocol.TrustedStageFinal,
 		},
 	)
 }
@@ -355,6 +356,7 @@ func (l *FusionLooper) runFusionFinal(
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}
 	applyJSONActionOutputContract(req.OutputContractSpec, resp, panelResponses)
+	applyReferenceSelectionOutputContract(req.OutputContractSpec, resp, panelResponses)
 	applyFinalOutputContract(req.OutputContractSpec, resp)
 	return resp, nil
 }
@@ -555,7 +557,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 					"role":    "assistant",
 					"content": finalResp.Content,
 				},
-				"finish_reason": "stop",
+				"finish_reason": backendFinishReason(finalResp),
 			},
 		},
 		"usage": usage.Map(),
@@ -623,12 +625,12 @@ func (l *FusionLooper) formatFusionStreamingResponse(
 		err  error
 	)
 	if finalResp.HasToolCalls {
-		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw)
+		body, err = buildStreamingToolCallSSE(id, timestamp, finalResp)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content)
+		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content, backendFinishReason(finalResp))
 	}
 	resp := streamingLooperResponse(body, finalResp.Model, modelsUsed, iterations, "fusion")
 	resp.IntermediateResponses = trace
@@ -641,6 +643,7 @@ func buildFusionStreamingSSE(
 	created int64,
 	model string,
 	content string,
+	finishReason string,
 ) []byte {
 	var body []byte
 	roleChoice := map[string]interface{}{
@@ -660,7 +663,7 @@ func buildFusionStreamingSSE(
 	finalChoice := map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{},
-		"finish_reason": "stop",
+		"finish_reason": finishReason,
 	}
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, finalChoice, nil))
 	return appendSSEDone(body)

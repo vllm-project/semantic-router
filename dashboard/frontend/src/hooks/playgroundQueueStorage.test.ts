@@ -13,7 +13,6 @@ const task = (id: string, conversationId: string, createdAt: number): Playground
   prompt: `prompt ${id}`,
   createdAt,
   requestOptions: {
-    enableClawMode: false,
     enableWebSearch: false,
     model: 'auto',
   },

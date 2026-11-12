@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
 
 function response(status: number, body?: unknown): Response {
@@ -46,9 +46,35 @@ describe('authSession', () => {
     expect(calls).toEqual([
       {
         input: '/api/auth/me',
-        init: { credentials: 'same-origin' },
+        init: { credentials: 'same-origin', signal: expect.any(AbortSignal) },
       },
     ])
+  })
+
+  it('bounds stalled session verification without treating it as a revoked session', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockImplementationOnce(
+          (_url, init) =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+            }),
+        )
+        .mockResolvedValueOnce(
+          response(200, { user: { id: 'user-1', name: 'User', email: 'user@example.test' } }),
+        )
+      const pending = fetchCurrentAuthUser(fetcher)
+      await vi.advanceTimersByTimeAsync(15_000)
+      await expect(pending).resolves.toMatchObject({ status: 'unavailable' })
+      await expect(fetchCurrentAuthUser(fetcher)).resolves.toMatchObject({
+        status: 'authenticated',
+      })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('reports only a definitive unauthorized response as unauthenticated', async () => {

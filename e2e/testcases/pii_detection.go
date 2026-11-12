@@ -16,6 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("pii-detection", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Test PII detection and blocking functionality",
 		Tags:        []string{"kubernetes", "security", "pii"},
 		Fn:          testPIIDetection,
@@ -101,9 +102,10 @@ func testPIIDetection(ctx context.Context, client *kubernetes.Clientset, opts pk
 			correctTests, totalTests, detectionRate)
 	}
 
-	// Return error if detection rate is 0%
-	if correctTests == 0 {
-		return fmt.Errorf("PII detection test failed: 0%% accuracy (0/%d correct)", totalTests)
+	// The profiles answer the PII rule with the System One fixture, whose
+	// spans the cases pin with __PII_SPAN__ markers, so every case must hold.
+	if correctTests != totalTests {
+		return fmt.Errorf("PII detection test failed: %d/%d correct", correctTests, totalTests)
 	}
 
 	return nil
@@ -131,7 +133,7 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 		ExpectedBlocked: testCase.ExpectedBlocked,
 	}
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Question, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.Question, 30*time.Second)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -144,13 +146,13 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 		return result
 	}
 
-	fastResponse := response.Headers.Get("x-vsr-fast-response")
-	selectedDecision := response.Headers.Get("x-vsr-selected-decision")
-	matchedPII := response.Headers.Get("x-vsr-matched-pii")
-	legacyPIIViolation := response.Headers.Get("x-vsr-pii-violation")
-	result.ActuallyBlocked = fastResponse == "true" || legacyPIIViolation == "true"
-	_ = selectedDecision
-	_ = matchedPII
+	// A PII rule blocks with a fast_response decision, which the response
+	// names; its matched rule is in the trace, not on the default surface.
+	result.ActuallyBlocked = response.Headers.Get(responsePathHeader) == "fast_response"
+	if result.ActuallyBlocked && response.Headers.Get("x-vsr-selected-decision") == "" {
+		result.Error = "the fast response names no selected decision"
+		return result
+	}
 
 	if result.ActuallyBlocked {
 		bodyStr := string(response.Body)

@@ -1380,3 +1380,183 @@
     verification: imported
     source: https://benchmarks.duellab.org/model-x-ai-grok-4-5
     redistributable: true
+- id: independent/grok-4-7-high-critpt@1.0.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    score: 0.18
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-high-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    score: 0.77
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-high-omniscience@1.0.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    index: 30.9
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-high-humanitys-last-exam@1.0.0
+  model: xai/grok-4.7
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.423076923076923
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-high-scicode@1.0.0
+  model: xai/grok-4.7
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Grok 4.7 (high)
+    source_model_slug: grok-4-7-high
+    run_kind: independent
+  metrics:
+    score: 0.577546296296296
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7-high
+    redistributable: true
+- id: independent/grok-4-7-critpt@1.0.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    score: 0.177142857142857
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
+    redistributable: true
+- id: independent/grok-4-7-artificial-analysis-long-context-reasoning@1.1.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    score: 0.766666666666667
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
+    redistributable: true
+- id: independent/grok-4-7-omniscience@1.0.0
+  model: xai/grok-4.7
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    index: 32.03333333333333
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
+    redistributable: true
+- id: independent/grok-4-7-humanitys-last-exam@1.0.0
+  model: xai/grok-4.7
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    accuracy: 0.431417979610751
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
+    redistributable: true
+- id: independent/grok-4-7-scicode@1.0.0
+  model: xai/grok-4.7
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Grok 4.7 (xhigh)
+    source_model_slug: grok-4-7
+    run_kind: independent
+  metrics:
+    score: 0.574074074074074
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/grok-4-7
+    redistributable: true

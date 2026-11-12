@@ -1,3 +1,5 @@
+import { withRequestTimeout } from '../utils/boundedRequest'
+
 export interface AuthUser {
   id: string
   email: string
@@ -19,27 +21,32 @@ export async function fetchCurrentAuthUser(
   fetcher: typeof fetch = fetch,
 ): Promise<AuthSessionRefreshResult> {
   try {
-    const response = await fetcher('/api/auth/me', { credentials: 'same-origin' })
+    return await withRequestTimeout<AuthSessionRefreshResult>(async (signal) => {
+      const response = await fetcher('/api/auth/me', { credentials: 'same-origin', signal })
 
-    if (response.status === 401) {
-      return { status: 'unauthenticated' }
-    }
-
-    if (!response.ok) {
-      return {
-        status: 'unavailable',
-        message:
-          response.status === 403
-            ? 'Session verification was denied. Retry or contact your administrator.'
-            : 'Unable to verify your session. Please try again.',
+      if (response.status === 401) {
+        return { status: 'unauthenticated' }
       }
-    }
 
-    const payload = (await response.json()) as { user?: AuthUser | null }
-    if (!payload?.user?.id) {
-      return { status: 'unavailable', message: 'Unable to verify your session. Please try again.' }
-    }
-    return { status: 'authenticated', user: payload.user }
+      if (!response.ok) {
+        return {
+          status: 'unavailable',
+          message:
+            response.status === 403
+              ? 'Session verification was denied. Retry or contact your administrator.'
+              : 'Unable to verify your session. Please try again.',
+        }
+      }
+
+      const payload = (await response.json()) as { user?: AuthUser | null }
+      if (!payload?.user?.id) {
+        return {
+          status: 'unavailable',
+          message: 'Unable to verify your session. Please try again.',
+        }
+      }
+      return { status: 'authenticated', user: payload.user }
+    })
   } catch {
     return {
       status: 'unavailable',

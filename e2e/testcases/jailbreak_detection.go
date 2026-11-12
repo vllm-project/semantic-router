@@ -16,6 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("jailbreak-detection", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Test jailbreak detection and blocking functionality",
 		Tags:        []string{"kubernetes", "security", "jailbreak"},
 		Fn:          testJailbreakDetection,
@@ -36,7 +37,6 @@ type JailbreakResult struct {
 	ExpectedBlocked bool
 	ActuallyBlocked bool
 	DetectedType    string
-	Confidence      string
 	Correct         bool
 	Error           string
 }
@@ -135,10 +135,12 @@ func testJailbreakDetection(ctx context.Context, client *kubernetes.Clientset, o
 	return checkJailbreakAcceptance(results)
 }
 
-// Both prompt attacks and non-attacks must reach 80% accuracy. A request or
-// response-contract error always fails, independently of the model's accuracy.
+// Every prompt attack and every non-attack must be classified as expected:
+// the System One fixture answers them deterministically, so a miss is a broken
+// guard path, not model accuracy. A request or response-contract error always
+// fails.
 func checkJailbreakAcceptance(results []JailbreakResult) error {
-	const minimumClassAccuracy = 0.8
+	const minimumClassAccuracy = 1.0
 	totals, correct := map[bool]int{}, map[bool]int{}
 	for _, result := range results {
 		if result.Error != "" {
@@ -186,7 +188,7 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 		ExpectedBlocked: testCase.ExpectedBlocked,
 	}
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Question, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.Question, 30*time.Second)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -197,15 +199,14 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 		result.Error = err.Error()
 		return result
 	}
-	result.Confidence = response.Headers.Get("x-vsr-jailbreak-confidence")
 
 	result.Correct = result.ActuallyBlocked == result.ExpectedBlocked
 
 	if verbose {
 		if result.Correct {
 			if result.ActuallyBlocked {
-				fmt.Printf("[Test] ✓ Correct: %s (blocked, type=%s, confidence=%s)\n",
-					testCase.Description, result.DetectedType, result.Confidence)
+				fmt.Printf("[Test] ✓ Correct: %s (blocked, decision=%s)\n",
+					testCase.Description, result.DetectedType)
 			} else {
 				fmt.Printf("[Test] ✓ Correct: %s (not blocked)\n", testCase.Description)
 			}
@@ -218,38 +219,42 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 	return result
 }
 
-// These are the Guard-only fast-response decisions in production-stack and
-// multi-endpoint, the two profiles that register this testcase. Immediate
-// responses carry the selected decision, but omit matched-signal headers.
+// These are the Guard-only fast-response decisions in envoy-ai-gateway,
+// production-stack, and multi-endpoint, the profiles that register this
+// testcase. The response path says how the Router answered, and the trace's
+// signals name a jailbreak rule the request matched.
 func observeJailbreakResponse(response *localChatCompletionResponse) (bool, string, error) {
 	decision := strings.TrimSpace(response.Headers.Get("x-vsr-selected-decision"))
 	if response.StatusCode != http.StatusOK {
 		return false, decision, fmt.Errorf("%s", formatUnexpectedChatCompletionStatus(response))
 	}
-	if response.Headers.Get("x-vsr-schema-version") != "2" || decision == "" {
-		return false, decision, fmt.Errorf("jailbreak response lacks the router schema or selected decision")
+	if response.Headers.Get("x-vsr-schema-version") != routerSchemaVersion {
+		return false, decision, fmt.Errorf("jailbreak response lacks the router schema version")
 	}
 	guardDecision := decision == "block_jailbreak" || decision == "block_jailbreak_prod" || decision == "block_jailbreak_dev"
-	fast := response.Headers.Get("x-vsr-fast-response") == "true"
-	matched := strings.TrimSpace(response.Headers.Get("x-vsr-matched-jailbreak")) != ""
-	switch response.Headers.Get("x-vsr-response-path") {
+	matched := matchedSignals(response.Headers, "jailbreak") != ""
+	path := response.Headers.Get(responsePathHeader)
+	switch path {
 	case "fast_response":
-		if !fast {
-			return false, decision, fmt.Errorf("fast-response path lacks its enforcement header")
+		if decision == "" {
+			return false, decision, fmt.Errorf("fast-response path lacks the selected decision")
 		}
 		if matched && !guardDecision {
 			return false, decision, fmt.Errorf("guard matched without selecting the profile's Guard decision")
 		}
 		return guardDecision, decision, nil
 	case "upstream", "cache":
-		if fast || guardDecision || matched {
-			return false, decision, fmt.Errorf("guard match or enforcement header reached an unblocked response path")
+		if path == "cache" && decision == "" {
+			return false, decision, fmt.Errorf("cache path lacks the selected decision")
+		}
+		if guardDecision || matched {
+			return false, decision, fmt.Errorf("guard match reached an unblocked response path")
 		}
 		// A normal selected decision on a validated cache path is an allowed
-		// response. The cache's missing matched-signal headers alone prove nothing.
+		// response. A cache hit's trace names no fresh signal, which alone proves nothing.
 		return false, decision, nil
 	default:
-		return false, decision, fmt.Errorf("unexpected jailbreak response path %q", response.Headers.Get("x-vsr-response-path"))
+		return false, decision, fmt.Errorf("unexpected jailbreak response path %q", path)
 	}
 }
 
@@ -285,7 +290,7 @@ func printJailbreakResults(results []JailbreakResult, totalTests, correctTests i
 		for _, result := range results {
 			if result.ActuallyBlocked {
 				fmt.Printf("  - %s\n", result.Description)
-				fmt.Printf("    Type: %s, Confidence: %s\n", result.DetectedType, result.Confidence)
+				fmt.Printf("    Decision: %s\n", result.DetectedType)
 			}
 		}
 	}

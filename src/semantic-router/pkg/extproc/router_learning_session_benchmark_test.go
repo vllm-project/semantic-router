@@ -74,6 +74,23 @@ func TestRouterLearningSessionCorpusRejectsInvalidInput(t *testing.T) {
 		{"ineligible expectation", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Expected.Model = "unconfigured" }},
 		{"rejection with selected model", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Expected.Rejected = true }},
 		{"unknown category", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Expected.Category = "typo" }},
+		{"unknown outcome", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Outcome = "guess" }},
+		{"invalid progress gate", func(c *protectionCorpus) {
+			for i := range c.Scenarios {
+				if c.Scenarios[i].ProgressGate != nil {
+					c.Scenarios[i].ProgressGate.Mode = "guess"
+					return
+				}
+			}
+		}},
+		{"gate expectation without config", func(c *protectionCorpus) {
+			for i := range c.Scenarios {
+				if c.Scenarios[i].ProgressGate != nil {
+					c.Scenarios[i].ProgressGate = nil
+					return
+				}
+			}
+		}},
 	} {
 		t.Run(mutate.name, func(t *testing.T) {
 			raw, err := json.Marshal(corpus)

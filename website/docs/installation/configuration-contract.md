@@ -64,14 +64,13 @@ that section's self-contained schema, use
 `view=surface&kind=...&name=...` for one registered routing surface, and use
 `view=full` for the complete JSON Schema.
 
-The Dashboard proxies the deployed Router contract at
-`GET /api/router/config/schema`. If that Router endpoint is unavailable, it
-falls back to the schema embedded in the Dashboard build and marks the response
-with `X-Vllm-Sr-Schema-Source: bundled`. The
-**Operate → Platform & Access → Schema Reference** page shows this source and
-warns when the deployed and bundled contracts differ. The Website
-[Configuration Schema Reference](../api/configuration-schema) visualizes the
-current documentation release instead of claiming to represent a deployment.
+Where each view of the schema comes from:
+
+| View | Schema |
+| --- | --- |
+| Dashboard, `GET /api/router/config/schema` | The deployed Router's contract, proxied. If that Router endpoint is unavailable, the schema embedded in the Dashboard build, marked `X-Vllm-Sr-Schema-Source: bundled`. |
+| Dashboard, **Operate → Platform & Access → Schema Reference** | Shows which of the two it uses, and warns when the deployed and bundled contracts differ. |
+| Website, [Configuration Schema Reference](../api/configuration-schema) | The current documentation release, not any deployment. |
 
 An Agent does not need the Dashboard. Query `GET /api/v1` on the Router for the
 compact endpoint inventory, then request one operation with
@@ -100,7 +99,7 @@ configuration, send the authored YAML to `POST /api/v1/config/validate`:
 
 ```json
 {
-  "yaml": "version: v0.3\nrouting: {}\nglobal: {}\n"
+  "yaml": "version: v0.5\nrecipes:\n  - name: default\nglobal: {}\n"
 }
 ```
 
@@ -135,17 +134,20 @@ when `global.router.config_source` is `kubernetes`. Invalid cache, memory,
 embedding, classifier backend, learning, tool-filtering, and admission settings
 fail startup before runtime resources are created.
 
-File-based configuration also validates the complete routing graph at load
-time. Kubernetes defers routing contracts until `IntelligentPool` and
-`IntelligentRoute` have been merged. Reconciliation then rechecks global
-settings and validates routing references, recipe compatibility, and signal
-rules before activating the candidate. Deployment definitions are static;
-routing and recipe bindings are compiled only at the complete-config stage.
-PII and Prompt Guard backend settings, error policies, and window geometry are
-checked during static loading. Window provider and input-budget compatibility
-are checked for each recipe at the complete-config stage.
-Invalid candidates report `ValidationFailed` on the CRDs and leave the active
-configuration in place.
+When the routing graph is validated depends on the source:
+
+- **File-based configuration** validates the complete routing graph at load
+  time.
+- **Kubernetes** defers routing contracts until `IntelligentPool` and
+  `IntelligentRoute` have been merged. Reconciliation then rechecks global
+  settings, and validates routing references, recipe compatibility and signal
+  rules, before activating the candidate. An invalid candidate reports
+  `ValidationFailed` on the CRDs and leaves the active configuration in place.
+
+Either way, deployment definitions are static, and routing and recipe bindings
+are compiled only at the complete-config stage. That's where each recipe's
+signal rules are checked against the deployments they resolve to (question
+types, span capability, input modalities).
 
 Validator registration and stage selection live together in
 `src/semantic-router/pkg/config/validator_dispatch.go`. Register a new global
@@ -164,11 +166,16 @@ An automation or deployment agent should:
    surface references;
 5. omit the bootstrap-only `setup` block and call the semantic validation endpoint;
 6. plan the mutation; apply a hot-reloadable change with the returned
-   `current_etag` in `If-Match`, or use the deployment workflow when listener
-   or provider topology returns `RESTART_REQUIRED` (for local Docker, use the
-   explicit `vllm-sr serve --config <candidate> --replace-active-config`
-   operation after approval);
-7. poll `activation_status` and probe the Envoy data plane before keeping the
+   `current_etag` in `If-Match`. A change the running Router can't take returns
+   `RESTART_REQUIRED`: in standalone mode, a new or removed listener or a
+   listener's new `address`, `port`, `timeout` or `tls` paths (its `api_keys`,
+   `apis` and `identity` reload in place); with
+   `--gateway extproc`, a listener or provider topology change. On local Docker,
+   `vllm-sr config apply` saves such a change and the next `vllm-sr serve`
+   applies it (or, after approval, run the explicit
+   `vllm-sr serve --config <candidate> --replace-active-config`); elsewhere,
+   use the deployment workflow;
+7. poll `activation_status` and probe the data plane before keeping the
    change.
 
 Agents should never infer a field from an example or send unknown keys when a
@@ -176,12 +183,15 @@ schema for the target Router is available.
 
 ## Add or change a field
 
-For a steady-state field, update its Go type, YAML tag, and source comment. Add
-`jsonschema:"required"` only when presence is structurally mandatory; defaults
-and cross-field requirements remain semantic validation. For a discriminated
-routing surface, update the matching Go registry as well. Registry coverage is
-checked against the reflected Go fields, so generation fails if a signal,
-projection, or algorithm payload is added on only one side.
+To add or change a steady-state field:
+
+1. Update its Go type, YAML tag and source comment.
+2. Add `jsonschema:"required"` only when presence is structurally mandatory;
+   defaults and cross-field requirements stay in semantic validation.
+3. For a discriminated routing surface, update the matching Go registry as
+   well. Registry coverage is checked against the reflected Go fields, so
+   generation fails if a signal, projection or algorithm payload is added on
+   only one side.
 
 Keep semantic validation in the Router and platform validation beside the
 deployment code that owns it. Dashboard presentation metadata may improve a
@@ -195,12 +205,13 @@ make config-schema-check
 make check
 ```
 
-The repository tracks exactly one full schema at
-`src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`. The
-generator also emits a small TypeScript import/typing adapter, but no second
-JSON copy. Packaging stages the canonical artifact into wheels and container
-images without writing generated files back into the worktree. CI fails when
-the canonical artifact or adapter is stale.
+- **One schema.** The repository tracks exactly one full schema, at
+  `src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`. The
+  generator also emits a small TypeScript import and typing adapter, but no
+  second JSON copy.
+- **Packaging** stages the canonical artifact into wheels and container images,
+  without writing generated files back into the worktree.
+- **CI** fails when the canonical artifact or the adapter is stale.
 
 `setup.mode` is bootstrap-only Dashboard control-plane metadata, so it is not
 published by the Router schema. The Dashboard removes it at activation; active

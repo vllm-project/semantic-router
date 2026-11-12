@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -14,36 +14,21 @@ import (
 func apiPluginGuardRoutes() []apiRoute {
 	policy := routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational}
 	return []apiRoute{
-		managedRoute(EndpointMetadata{Path: apiPluginsPath + "/response_jailbreak/preview", Method: "POST", Description: "Preview an active binding's response-jailbreak policy; mode=probe explicitly invokes its configured classifier without generation or persistence"}, policy, (*ClassificationAPIServer).handleResponseJailbreakPreview, pluginOperationFor(config.DecisionPluginResponseJailbreak, "preview"), pluginOperationFor(config.DecisionPluginResponseJailbreak, "probe"), strictJSONBodyFor[pluginruntime.ResponseJailbreakPreviewRequest](), jsonResponse[pluginruntime.GuardPreviewResponse](http.StatusOK, "Guard policy and optional classifier evidence"), errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusRequestEntityTooLarge, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusServiceUnavailable, http.StatusGatewayTimeout)),
-		managedRoute(EndpointMetadata{Path: apiPluginsPath + "/hallucination/preview", Method: "POST", Description: "Preview an active binding's hallucination policy and supplied fact-check/context conditions; mode=probe explicitly invokes configured detectors without generation or persistence"}, policy, (*ClassificationAPIServer).handleHallucinationPreview, pluginOperationFor(config.DecisionPluginHallucination, "preview"), pluginOperationFor(config.DecisionPluginHallucination, "probe"), strictJSONBodyFor[pluginruntime.HallucinationPreviewRequest](), jsonResponse[pluginruntime.GuardPreviewResponse](http.StatusOK, "Guard policy and optional grounded detector evidence"), errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusRequestEntityTooLarge, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusServiceUnavailable, http.StatusGatewayTimeout)),
+		managedRoute(EndpointMetadata{Path: apiPluginsPath + "/response_guard/preview", Method: "POST", Description: "Preview what an active binding's response_guard does with an answer; mode=probe reads the guard's request-stage conditions on the question and its response-stage signals on the answer and context, without generation or persistence"}, policy, (*ClassificationAPIServer).handleResponseGuardPreview, pluginOperationFor(config.DecisionPluginResponseGuard, "preview"), pluginOperationFor(config.DecisionPluginResponseGuard, "probe"), strictJSONBodyFor[pluginruntime.ResponseGuardPreviewRequest](), jsonResponse[pluginruntime.ResponseGuardPreviewResponse](http.StatusOK, "Guard action, rule outcomes and the response-stage signals they read"), errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusRequestEntityTooLarge, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusServiceUnavailable, http.StatusGatewayTimeout)),
 	}
 }
 
-func (s *ClassificationAPIServer) handleResponseJailbreakPreview(w http.ResponseWriter, r *http.Request) {
-	var request pluginruntime.ResponseJailbreakPreviewRequest
+func (s *ClassificationAPIServer) handleResponseGuardPreview(w http.ResponseWriter, r *http.Request) {
+	var request pluginruntime.ResponseGuardPreviewRequest
 	if err := s.parseStrictJSONRequest(r, &request); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
-	runPluginPreview(s, w, r, func(ctx context.Context, runtime pluginruntime.Capabilities) (pluginruntime.GuardPreviewResponse, error) {
+	runPluginPreview(s, w, r, func(ctx context.Context, runtime pluginruntime.Capabilities) (pluginruntime.ResponseGuardPreviewResponse, error) {
 		if runtime.Guards == nil {
-			return pluginruntime.GuardPreviewResponse{}, pluginruntime.ErrUnavailable
+			return pluginruntime.ResponseGuardPreviewResponse{}, pluginruntime.ErrUnavailable
 		}
-		return runtime.Guards.PreviewResponseJailbreak(ctx, request)
-	})
-}
-
-func (s *ClassificationAPIServer) handleHallucinationPreview(w http.ResponseWriter, r *http.Request) {
-	var request pluginruntime.HallucinationPreviewRequest
-	if err := s.parseStrictJSONRequest(r, &request); err != nil {
-		s.writeJSONRequestError(w, err)
-		return
-	}
-	runPluginPreview(s, w, r, func(ctx context.Context, runtime pluginruntime.Capabilities) (pluginruntime.GuardPreviewResponse, error) {
-		if runtime.Guards == nil {
-			return pluginruntime.GuardPreviewResponse{}, pluginruntime.ErrUnavailable
-		}
-		return runtime.Guards.PreviewHallucination(ctx, request)
+		return runtime.Guards.PreviewResponseGuard(ctx, request)
 	})
 }
 

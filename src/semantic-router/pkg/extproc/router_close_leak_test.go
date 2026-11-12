@@ -2,19 +2,12 @@ package extproc
 
 import (
 	"context"
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/openai/openai-go"
-	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -29,8 +22,8 @@ func (c *closeTrackingCache) AddEntry(context.Context, string, string, string, [
 	return nil
 }
 
-func (c *closeTrackingCache) LookupSimilarWithThreshold(context.Context, string, string, float32) (cache.LookupResult, error) {
-	return cache.LookupResult{}, nil
+func (c *closeTrackingCache) LookupSimilar(context.Context, string, string, cache.SimilarityBounds) (cache.SimilarEntries, error) {
+	return cache.SimilarEntries{}, nil
 }
 
 func (c *closeTrackingCache) Close() error {
@@ -54,47 +47,6 @@ func TestOpenAIRouterCloseClosesOwnedResources(t *testing.T) {
 
 	if got := fakeCache.closeCount(); got != 1 {
 		t.Fatalf("Cache.Close() called %d times, want 1", got)
-	}
-}
-
-func TestOpenAIRouterOwnsOneLooperConnectorPerGeneration(t *testing.T) {
-	connectionClosed := make(chan struct{}, 1)
-	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"ok"}}]}`))
-	}))
-	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
-		if state == http.StateClosed {
-			select {
-			case connectionClosed <- struct{}{}:
-			default:
-			}
-		}
-	}
-	server.Start()
-	defer server.Close()
-
-	components, err := buildRouterComponents(&config.RouterConfig{
-		Looper: config.LooperConfig{Endpoint: server.URL},
-	})
-	require.NoError(t, err)
-	router := components.buildRouter()
-	client := router.looperModelClient()
-	require.Same(t, components.looperClient, client)
-	require.Same(t, client, router.looperModelClient())
-
-	_, err = client.CallModelWithOptions(
-		context.Background(),
-		openai.ChatCompletionNewParams{},
-		looper.ModelTarget{Name: "model-a"},
-		looper.CallOptions{Iteration: 1},
-	)
-	require.NoError(t, err)
-	require.NoError(t, router.Close())
-
-	select {
-	case <-connectionClosed:
-	case <-time.After(time.Second):
-		t.Fatal("router close did not close the Looper connector's idle connection")
 	}
 }
 
@@ -206,10 +158,6 @@ func (s *closeTrackingSelector) Select(context.Context, *selection.SelectionCont
 }
 
 func (s *closeTrackingSelector) Method() selection.SelectionMethod { return s.method }
-
-func (s *closeTrackingSelector) UpdateFeedback(context.Context, *selection.Feedback) error {
-	return nil
-}
 
 func (s *closeTrackingSelector) Tier() selection.AlgorithmTier { return selection.TierSupported }
 

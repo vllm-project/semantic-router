@@ -1,39 +1,113 @@
 # Docker build files
 
-This directory contains shared development and Router image Dockerfiles:
+This directory contains the Router image and lint toolchain Dockerfiles:
 
 | File | Purpose |
 | --- | --- |
-| `Dockerfile` | CentOS Stream development environment with the project toolchains. |
-| `Dockerfile.extproc` | Multi-architecture ExtProc Router image; Candle is the default binding. |
-| `Dockerfile.extproc-rocm` | AMD ROCm 7.0 Router image with the ONNX Runtime ROCm provider. |
+| `Dockerfile.extproc` | Bundled Router images: the Go router with the built-in model runtime. |
+| `Dockerfile.attached` | Standalone Router with external model-runtime endpoints. |
+| `riscv64/Dockerfile` | Source-built RISC-V GLIDE FFI and Router binary. |
 | `Dockerfile.precommit` | Reproducible lint and agent-harness toolchain used by CI. |
 
-Build from the repository root so each Dockerfile can access all required
-modules:
+`Dockerfile.extproc` builds the three published Router images from one stage
+graph and one target, `vllm-sr`. The router binary is shared; `ACCELERATOR`
+selects the runtime's PyTorch build. Each image serves `vllm-sr serve`, the
+Helm chart and the Operator, in standalone
+or extproc mode:
+
+| Image | `ACCELERATOR` | Platforms |
+| --- | --- | --- |
+| `vllm-sr` | `cpu` (default) | amd64, arm64 |
+| `vllm-sr-rocm` | `rocm` | amd64 |
+| `vllm-sr-cuda` | `cuda` | amd64, arm64 |
+
+For one release, `vllm-sr` is also published as `extproc` and `vllm-sr-rocm`
+as `extproc-rocm`, with the same digests, for deployments that still name the
+former Kubernetes images.
+
+The entrypoint, `/app/start-router.sh`, runs the Router on
+`/app/config/config.yaml` when it gets no arguments or Router flags (the Helm
+chart and the Operator pass `-gateway=...`), and starts the Router of a
+`vllm-sr serve` stack when it gets a config path, as the CLI passes.
+
+Build from the repository root so the Dockerfile can access every module:
 
 ```bash
-docker build -f tools/docker/Dockerfile.extproc \
-  -t semantic-router-extproc:local .
-
-docker build -f tools/docker/Dockerfile.extproc-rocm \
-  -t semantic-router-extproc-rocm:local .
+docker build -f tools/docker/Dockerfile.extproc -t vllm-sr:local .
+docker build -f tools/docker/Dockerfile.extproc --build-arg ACCELERATOR=rocm \
+  -t vllm-sr-rocm:local .
 ```
 
-The ROCm image is x86-64 only and requires the host GPU devices at runtime.
-See the public AMD installation guide for the supported run command and model
-layout.
+CPU images carry CPU-only PyTorch. GPU images take PyTorch from the official
+ROCm or CUDA wheels, which include their user-space GPU libraries, so they
+need only the host's GPU driver and device access at runtime. The router
+process has no native model code: every model runs in the runtime it starts.
 
 ## CI and publication
 
-Pull-request image validation is defined by
-[`docker-validate.yml`](../../.github/workflows/docker-validate.yml). Main,
-nightly, and release publication use
-[`docker-publish.yml`](../../.github/workflows/docker-publish.yml). Those
-workflows are the source of truth for the image matrix, platforms, tags, and
-registry permissions; this README does not duplicate that changing inventory.
+Pull-request builds go through
+[`build-artifacts.yml`](../../.github/workflows/build-artifacts.yml), and
+main, nightly and release publication through
+[`docker-publish.yml`](../../.github/workflows/docker-publish.yml). The image
+definitions (Dockerfile, target, platforms) live in
+[`tools/ci/image_artifacts.py`](../ci/image_artifacts.py); this README does not
+duplicate that inventory.
 
-When editing a Dockerfile, keep dependency-only layers ahead of source copies
-so Rust, Go, and container caches remain reusable. Run the repository's Docker
-validation gate rather than relying on a successful build of only one target
-architecture.
+When editing the Dockerfile, keep dependency-only layers ahead of source
+copies: PyTorch and the runtime's dependencies change rarely, the router binary
+and configuration often.
+
+## External model runtime
+
+The attached Dockerfile supports native amd64 and arm64 builders, and amd64
+builders targeting arm64. ARM64-to-amd64 cross-builds are unsupported; use a
+native amd64 builder for that target. RISC-V uses the separate native build
+runner described in [riscv64/README.md](riscv64/README.md).
+
+The independent `Dockerfile.attached` builds `vllm-sr-attached` for standalone
+deployments with external model-runtime endpoints. It uses the same Router
+source, configuration assets and startup script, without installing PyTorch
+or `vllm-srun`. `Dockerfile.extproc` and its bundled targets are unchanged.
+
+```bash
+docker buildx build --platform linux/amd64 --target vllm-sr-attached \
+  -f tools/docker/Dockerfile.attached -t vllm-sr-attached:local --load .
+```
+
+Supply a canonical configuration with attached runtime endpoints and select
+standalone explicitly, for example with Router arguments `-gateway=standalone`.
+The bundled example configuration does not configure an external runtime.
+External classification and external LLM generation are separate endpoints.
+
+### RISC-V build inputs
+
+The [public native build flow](riscv64/README.md) builds a clean SDK from
+checksummed Go/Rust release archives and a digest-pinned Debian image, then
+builds the standalone Router without importing local compilation caches. It
+also provides a direct-container restart and buffered/SSE smoke test without
+model weights. Docker layer caching is enabled by default; cold builds are an
+explicit option.
+
+RISC-V uses the real source-built GLIDE FFI; see
+[the dependency build instructions](riscv64/valkey-glide/README.md).
+`riscv64/Dockerfile` builds the FFI and Go binary separately from the runtime
+image. Its `router-binary` target exports `/out/router` and can be cross-compiled
+without executing RISC-V userspace programs:
+
+```bash
+docker buildx build --platform linux/riscv64 --target router-binary \
+  -f tools/docker/riscv64/Dockerfile --output type=local,dest=router-output .
+```
+
+For a complete native image, the public runner first builds that binary image,
+then passes it as `ROUTER_BUILD` to `Dockerfile.attached`. Use a native RISC-V
+worker with the Docker buildx driver for this local-image handoff. `GO_IMAGE` and
+`RUST_IMAGE` must provide Go 1.25, Rust 1.90 and native Debian-compatible build
+tools. The default official builder images do not supply RISC-V variants.
+The attached runtime uses Debian trixie by default. Fully qualified local
+builder names require `IMAGE_REGISTRY=`. Pin builder and runtime image digests
+for reproducible builds; the image arguments do not make arbitrary distributions
+compatible. Native builds do not need QEMU.
+
+The new target is not added to the published platform inventory in this change.
+Image publication and native deployment qualification are separate steps.

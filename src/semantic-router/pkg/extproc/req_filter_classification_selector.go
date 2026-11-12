@@ -11,16 +11,15 @@ import (
 )
 
 const (
-	selectionFallbackInvalidContext      = "selector_invalid_context"
-	selectionFallbackUnavailable         = "selector_unavailable"
-	selectionFallbackCancelled           = "selector_cancelled"
-	selectionFallbackTimeout             = "selector_timeout"
-	selectionFallbackInvocation          = "selector_invocation_failed"
-	selectionFallbackInvalidOutput       = "selector_invalid_output"
-	selectionFallbackUndeclaredCandidate = "selector_undeclared_candidate"
-	selectionFallbackError               = "selector_error"
-	selectionFallbackInvalidResult       = "selector_invalid_result"
-	selectionFallbackUnknownModel        = "selector_unknown_model"
+	selectionFallbackInvalidContext = "selector_invalid_context"
+	selectionFallbackUnavailable    = "selector_unavailable"
+	selectionFallbackCancelled      = "selector_cancelled"
+	selectionFallbackTimeout        = "selector_timeout"
+	selectionFallbackInvocation     = "selector_invocation_failed"
+	selectionFallbackInvalidOutput  = "selector_invalid_output"
+	selectionFallbackError          = "selector_error"
+	selectionFallbackInvalidResult  = "selector_invalid_result"
+	selectionFallbackUnknownModel   = "selector_unknown_model"
 )
 
 // selectModelFromCandidates uses the configured selection algorithm to choose
@@ -200,11 +199,7 @@ func (r *OpenAIRouter) selectWithSelector(
 	if learningErr != nil {
 		return nil, string(method), learningErr
 	}
-	ctx.VSRSelectionReasoning = selectionReasoningForDiagnostics(
-		method,
-		result.Reasoning,
-	)
-	recordPromptHelperTelemetry(ctx, result)
+	ctx.VSRSelectionReasoning = boundedSelectionReasoning(result.Reasoning)
 	logSelectionResult(method, result, selectedModel, learningApplied)
 	selection.RecordSelection(
 		string(method),
@@ -217,32 +212,16 @@ func (r *OpenAIRouter) selectWithSelector(
 	return selectedModel, string(method), nil
 }
 
-func recordPromptHelperTelemetry(
-	ctx *RequestContext,
-	result *selection.SelectionResult,
-) {
-	if ctx == nil || result == nil || result.Method != selection.MethodPrompt {
-		return
-	}
-	ctx.VSRPromptHelperModel = result.HelperModel
-	ctx.VSRPromptHelperPromptTokens = result.HelperPromptTokens
-	ctx.VSRPromptHelperCompletionTokens = result.HelperCompletionTokens
-	ctx.VSRPromptHelperTotalTokens = result.HelperTotalTokens
-	ctx.VSRPromptHelperLatencyMs = result.HelperLatencyMs
-}
-
 func selectionFallbackReasonForError(err error) string {
 	switch {
 	case errors.Is(err, context.Canceled):
 		return selectionFallbackCancelled
 	case errors.Is(err, context.DeadlineExceeded):
 		return selectionFallbackTimeout
-	case errors.Is(err, selection.ErrPromptInvalidOutput):
-		return selectionFallbackInvalidOutput
-	case errors.Is(err, selection.ErrPromptUndeclaredCandidate):
-		return selectionFallbackUndeclaredCandidate
-	case errors.Is(err, selection.ErrPromptInvocation):
+	case errors.Is(err, selection.ErrDecisionModelInvocation):
 		return selectionFallbackInvocation
+	case errors.Is(err, selection.ErrDecisionModelAnswer):
+		return selectionFallbackInvalidOutput
 	default:
 		return selectionFallbackError
 	}
@@ -300,16 +279,6 @@ func boundedSelectionReasoning(value string) string {
 		end = index
 	}
 	return value[:end]
-}
-
-func selectionReasoningForDiagnostics(
-	method selection.SelectionMethod,
-	reasoning string,
-) string {
-	if method == selection.MethodPrompt {
-		return "prompt selector selected declared candidate"
-	}
-	return boundedSelectionReasoning(reasoning)
 }
 
 func (r *OpenAIRouter) recordSelectionFallback(

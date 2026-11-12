@@ -2,14 +2,8 @@ import { useMemo } from 'react'
 import { ThinkingOrb } from 'thinking-orbs'
 
 import type { ToolCall, ToolResult } from '../tools'
-import { isOpenClawMCPToolName, parseMCPToolName } from '../tools/mcp'
 
 import styles from './ChatComponent.module.css'
-import {
-  buildClawRequestHighlights,
-  buildClawResultHighlights,
-  truncateHighlight,
-} from './ChatComponentTypes'
 import { OpenWebCard, WebSearchCard } from './ChatComponentWebToolCards'
 import { getToolDisplayName, getToolStatusLabel, getToolSummary } from './chatToolCardPresentation'
 
@@ -49,12 +43,7 @@ export const ToolCard = ({
   onToggle: () => void
 }) => {
   const toolName = toolCall.function.name
-  const parsedMCPTool = parseMCPToolName(toolName)
-  const isClawMCPToolCall = isOpenClawMCPToolName(toolName)
-  const clawToolName = isClawMCPToolCall ? parsedMCPTool?.toolName || '' : ''
-  const displayToolName = getToolDisplayName(clawToolName || toolName)
-  const isClawCreateToolCall =
-    clawToolName === 'claw_create_team' || clawToolName === 'claw_create_worker'
+  const displayToolName = getToolDisplayName(toolName)
   const rawArgs = toolCall.function.arguments || ''
   const parsedArgs = useMemo(() => {
     try {
@@ -65,22 +54,8 @@ export const ToolCard = ({
       return null
     }
   }, [rawArgs])
-  const requestHighlights = useMemo(
-    () =>
-      isClawCreateToolCall ? buildClawRequestHighlights(clawToolName, parsedArgs, rawArgs) : [],
-    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs],
-  )
-  const resultHighlights = useMemo(
-    () =>
-      isClawCreateToolCall
-        ? buildClawResultHighlights(clawToolName, toolResult?.content, parsedArgs, rawArgs)
-        : [],
-    [clawToolName, isClawCreateToolCall, parsedArgs, rawArgs, toolResult?.content],
-  )
-  const showResultHighlights =
-    isClawCreateToolCall && (toolCall.status === 'completed' || toolCall.status === 'failed')
   const statusLabel = getToolStatusLabel(toolCall.status)
-  const summary = getToolSummary(clawToolName || toolName, parsedArgs, isClawMCPToolCall)
+  const summary = getToolSummary(parsedArgs)
   const resultPreview = useMemo(() => buildResultPreview(toolResult), [toolResult])
 
   if (toolName === 'search_web') {
@@ -106,7 +81,7 @@ export const ToolCard = ({
   }
 
   return (
-    <div className={`${styles.webSearchCard} ${isClawMCPToolCall ? styles.mcpToolCard : ''}`}>
+    <div className={styles.webSearchCard}>
       <button
         type="button"
         className={styles.webSearchHeader}
@@ -114,19 +89,14 @@ export const ToolCard = ({
         aria-expanded={isExpanded}
         aria-label={`${isExpanded ? 'Collapse' : 'Expand'} details for ${displayToolName}`}
       >
-        <div className={`${styles.webSearchIcon} ${isClawMCPToolCall ? styles.mcpToolIcon : ''}`}>
-          {isClawMCPToolCall ? (
-            <img src="/openclaw.svg" alt="" aria-hidden="true" />
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-            </svg>
-          )}
+        <div className={styles.webSearchIcon}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+          </svg>
         </div>
         <div className={styles.webSearchInfo}>
           <div className={styles.toolCardHeadingRow}>
             <span className={styles.webSearchTitle}>{displayToolName}</span>
-            {isClawMCPToolCall ? <span className={styles.toolCardBrand}>HireClaw</span> : null}
           </div>
           <span className={styles.webSearchQuery}>{summary}</span>
         </div>
@@ -154,46 +124,6 @@ export const ToolCard = ({
           </svg>
         </div>
       </button>
-      {isExpanded && isClawCreateToolCall ? (
-        <div className={styles.clawToolHighlights}>
-          {requestHighlights.length > 0 && (
-            <div className={styles.clawToolHighlightSection}>
-              <span className={styles.clawToolHighlightHeading}>Request</span>
-              <div className={styles.clawToolHighlightRows}>
-                {requestHighlights.map((item) => (
-                  <div key={`request-${item.label}`} className={styles.clawToolHighlightRow}>
-                    <span className={styles.clawToolHighlightKey}>{item.label}</span>
-                    <span className={styles.clawToolHighlightValue}>{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {showResultHighlights && (resultHighlights.length > 0 || Boolean(toolResult?.error)) && (
-            <div className={styles.clawToolHighlightSection}>
-              <span className={styles.clawToolHighlightHeading}>Result</span>
-              <div className={styles.clawToolHighlightRows}>
-                {resultHighlights.map((item) => (
-                  <div key={`result-${item.label}`} className={styles.clawToolHighlightRow}>
-                    <span className={styles.clawToolHighlightKey}>{item.label}</span>
-                    <span className={styles.clawToolHighlightValue}>{item.value}</span>
-                  </div>
-                ))}
-                {toolResult?.error && (
-                  <div className={styles.clawToolHighlightRow}>
-                    <span className={styles.clawToolHighlightKey}>error</span>
-                    <span
-                      className={`${styles.clawToolHighlightValue} ${styles.clawToolHighlightError}`}
-                    >
-                      {truncateHighlight(toolResult.error, 180)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : null}
       {isExpanded && toolCall.status === 'failed' && toolResult?.error && (
         <div className={styles.webSearchResults}>
           <div className={styles.sourceDetails}>
@@ -205,7 +135,7 @@ export const ToolCard = ({
           </div>
         </div>
       )}
-      {isExpanded && toolCall.status === 'completed' && !isClawCreateToolCall && resultPreview && (
+      {isExpanded && toolCall.status === 'completed' && resultPreview && (
         <div className={styles.webSearchResults}>
           <div className={styles.sourceDetails}>
             <div className={styles.sourceItem}>

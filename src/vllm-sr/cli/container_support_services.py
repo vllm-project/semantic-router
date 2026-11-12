@@ -12,18 +12,97 @@ lifecycle primitives; the dependency runs one way only.
 """
 
 import os
+import subprocess
+import time
 
 from cli.container_observability import (
     _ensure_hidden_config_dir,
     _render_template_copy,
     _run_service_start,
 )
+from cli.container_run_command import restart_policy_args
 from cli.container_runtime import get_container_runtime
-from cli.container_services import _replace_existing_container
+from cli.container_services import _replace_existing_container, container_stop_container
+from cli.grafana_credentials import (
+    CONTAINER_GRAFANA_PASSWORD_PATH,
+    GRAFANA_ADMIN_PASSWORD_FILE_ENV,
+    ensure_grafana_admin_password_file,
+)
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+
+GRAFANA_REKEY_TIMEOUT_SECONDS = 15
+GRAFANA_REKEY_POLL_INTERVAL_SECONDS = 0.5
+
+JAEGER_IMAGE = "docker.io/jaegertracing/all-in-one:1.76.0"
+PROMETHEUS_IMAGE = "docker.io/prom/prometheus:v2.53.0"
+GRAFANA_IMAGE = "docker.io/grafana/grafana:11.5.1"
+
+GRAFANA_LIVE_ALLOWED_ORIGINS_ENV = "GF_LIVE_ALLOWED_ORIGINS"
+_GRAFANA_LIVE_ALLOWED_ORIGINS_PLACEHOLDER = "__GF_LIVE_ALLOWED_ORIGINS__"
+
+
+def rekey_grafana_admin(
+    container_name: str,
+    runtime: str | None = None,
+    *,
+    timeout: int = GRAFANA_REKEY_TIMEOUT_SECONDS,
+) -> tuple[int, str, str]:
+    """Synchronize the persisted Grafana admin password with the mounted file.
+
+    Grafana applies ``GF_SECURITY_ADMIN_PASSWORD__FILE`` only while it creates
+    the database. A reused ``/var/lib/grafana`` volume keeps the old password.
+    The reset reads the mounted file inside the container, so the password is
+    not placed in process arguments or logs.
+    """
+
+    container_runtime = runtime or get_container_runtime()
+    command = [
+        container_runtime,
+        "exec",
+        container_name,
+        "sh",
+        "-c",
+        (
+            "grafana cli --homepath /usr/share/grafana admin reset-admin-password "
+            f"--password-from-stdin < {CONTAINER_GRAFANA_PASSWORD_PATH}"
+        ),
+    ]
+    deadline = time.time() + timeout
+    last_result = (1, "", "timeout waiting to rekey Grafana admin")
+    while time.time() < deadline:
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout,
+            )
+            if result.returncode == 0:
+                log.info(f"Synchronized Grafana admin credential in {container_name}")
+                return (0, result.stdout, result.stderr)
+            last_result = (result.returncode, result.stdout, result.stderr)
+        except subprocess.TimeoutExpired:
+            break
+        except Exception as exc:
+            last_result = (1, "", str(exc))
+        time.sleep(GRAFANA_REKEY_POLL_INTERVAL_SECONDS)
+    return last_result
+
+
+def _grafana_live_allowed_origins() -> str:
+    raw_value = os.getenv(GRAFANA_LIVE_ALLOWED_ORIGINS_ENV, "")
+    if "\r" in raw_value or "\n" in raw_value:
+        raise ValueError(
+            f"{GRAFANA_LIVE_ALLOWED_ORIGINS_ENV} must be a comma-separated "
+            "list on one line"
+        )
+    return ", ".join(
+        origin.strip() for origin in raw_value.split(",") if origin.strip()
+    )
 
 
 def _observability_host_bind_address() -> str:
@@ -59,6 +138,7 @@ def container_start_jaeger(
         "-d",
         "--name",
         container_name,
+        *restart_policy_args(),
         "--network",
         network_name,
         "-e",
@@ -81,7 +161,7 @@ def container_start_jaeger(
         _published_observability_port(stack_layout.jaeger_otlp_port, 4317),
         "-p",
         _published_observability_port(stack_layout.jaeger_ui_port, 16686),
-        "docker.io/jaegertracing/all-in-one:1.76.0",
+        JAEGER_IMAGE,
     ]
     return _run_service_start(cmd, "Jaeger")
 
@@ -129,6 +209,7 @@ def container_start_prometheus(
         "-d",
         "--name",
         container_name,
+        *restart_policy_args(),
         "--network",
         network_name,
         "-v",
@@ -137,7 +218,7 @@ def container_start_prometheus(
         f"{os.path.abspath(prometheus_data_dir)}:/prometheus",
         "-p",
         _published_observability_port(stack_layout.prometheus_port, 9090),
-        "docker.io/prom/prometheus:v2.53.0",
+        PROMETHEUS_IMAGE,
         "--config.file=/etc/prometheus/prometheus.yaml",
         "--storage.tsdb.path=/prometheus/data",
         "--storage.tsdb.retention.time=15d",
@@ -151,18 +232,28 @@ def container_start_grafana(
     stack_layout: RuntimeStackLayout | None = None,
 ):
     """Start Grafana container for visualization."""
+    live_allowed_origins = _grafana_live_allowed_origins()
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
     container_name = stack_layout.grafana_container_name
     network_name = network_name or stack_layout.network_name
     _replace_existing_container(container_name)
 
-    grafana_dir = os.path.join(_ensure_hidden_config_dir(config_dir), "grafana")
+    state_root_dir = config_dir if config_dir is not None else os.getcwd()
+    grafana_dir = os.path.join(_ensure_hidden_config_dir(state_root_dir), "grafana")
     os.makedirs(grafana_dir, exist_ok=True)
 
     template_dir = os.path.join(os.path.dirname(__file__), "templates")
+    grafana_config = os.path.join(grafana_dir, "grafana.serve.ini")
+    _render_template_copy(
+        os.path.join(template_dir, "grafana.serve.ini"),
+        grafana_config,
+        stack_layout,
+        replacements=(
+            (_GRAFANA_LIVE_ALLOWED_ORIGINS_PLACEHOLDER, live_allowed_origins),
+        ),
+    )
     for filename in [
-        "grafana.serve.ini",
         "grafana-datasource.serve.yaml",
         "grafana-datasource-jaeger.serve.yaml",
         "grafana-dashboard.serve.yaml",
@@ -174,22 +265,27 @@ def container_start_grafana(
             stack_layout,
         )
 
+    password_file = ensure_grafana_admin_password_file(
+        state_root_dir, stack_layout=stack_layout
+    )
+
     cmd = [
         runtime,
         "run",
         "-d",
         "--name",
         container_name,
+        *restart_policy_args(),
         "--network",
         network_name,
         "-e",
-        "GF_SECURITY_ADMIN_USER=admin",
-        "-e",
-        "GF_SECURITY_ADMIN_PASSWORD=admin",
+        f"{GRAFANA_ADMIN_PASSWORD_FILE_ENV}={CONTAINER_GRAFANA_PASSWORD_PATH}",
+        "-v",
+        f"{os.path.abspath(password_file)}:{CONTAINER_GRAFANA_PASSWORD_PATH}:ro",
         "-e",
         f"PROMETHEUS_URL={stack_layout.prometheus_container_name}:9090",
         "-v",
-        f"{os.path.abspath(os.path.join(grafana_dir, 'grafana.serve.ini'))}:/etc/grafana/grafana.ini:ro",
+        f"{os.path.abspath(grafana_config)}:/etc/grafana/grafana.ini:ro",
         "-v",
         f"{os.path.abspath(os.path.join(grafana_dir, 'grafana-datasource.serve.yaml'))}:/etc/grafana/provisioning/datasources/datasource.yaml:ro",
         "-v",
@@ -202,6 +298,17 @@ def container_start_grafana(
         f"{container_name}-data:/var/lib/grafana",
         "-p",
         _published_observability_port(stack_layout.grafana_port, 3000),
-        "docker.io/grafana/grafana:11.5.1",
+        GRAFANA_IMAGE,
     ]
-    return _run_service_start(cmd, "Grafana")
+    status = _run_service_start(cmd, "Grafana")
+    if isinstance(status, tuple) and status and status[0] == 0:
+        rekey_status = rekey_grafana_admin(container_name, runtime=runtime)
+        if rekey_status[0] != 0:
+            error_message = (
+                f"Failed to synchronize Grafana admin password for {container_name}: "
+                f"{rekey_status[2].strip() or f'exit code {rekey_status[0]}'}"
+            )
+            log.error(error_message)
+            container_stop_container(container_name)
+            return (rekey_status[0], rekey_status[1], error_message)
+    return status

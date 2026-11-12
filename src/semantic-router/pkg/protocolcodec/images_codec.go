@@ -4,17 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // ImagesCodec is the DALL-E-compatible image-generation dialect
-// (/v1/images/generations) exposed by diffusion backends such as vLLM-Omni.
-// It is a sink dialect: it does not decode arbitrary chat traffic nor stream,
-// its only purpose is to express the hosted image_generation operation and to
-// decode the generated image back into the neutral GeneratedImage output item
-// so upstream images and client responses formats share one representation.
+// (/v1/images/generations): the API of diffusion backends such as vLLM-Omni,
+// and of the Router's Images API entry. It carries only the hosted
+// image_generation operation and the generated image, as the neutral
+// GeneratedImage output item, and never streams.
 type ImagesCodec struct{}
 
 func (ImagesCodec) Format() llmprotocol.WireFormat { return llmprotocol.OpenAIImagesV1 }
@@ -63,15 +63,16 @@ type imagesDataWire struct {
 }
 
 type imagesErrorWire struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Code    string `json:"code"`
+	Message string          `json:"message"`
+	Type    string          `json:"type"`
+	Code    openAIErrorCode `json:"code"`
 }
 
-// DecodeRequest decodes a direct images-dialect client request into the
-// neutral request IR. A non-empty prompt becomes a user text message, and
-// every images request field maps onto the neutral image-generation options
-// so the conversion is lossless.
+// DecodeRequest decodes an Images API client request into the neutral
+// request IR. A non-empty prompt becomes a user text message, and the images
+// request fields map onto the neutral image-generation options. The request's
+// model is the model it calls, which routing resolves, not an image model for
+// the hosted operation.
 func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire imagesRequestWire
 	if err := json.Unmarshal(body, &wire); err != nil {
@@ -85,13 +86,13 @@ func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol
 	}
 	content := llmprotocol.Content{Kind: llmprotocol.ContentText, Text: wire.Prompt}
 	request := llmprotocol.Request{
-		Model: wire.Model,
+		Generation: 1,
+		Model:      wire.Model,
 		Messages: []llmprotocol.Message{{
 			Role:    llmprotocol.RoleUser,
 			Content: []llmprotocol.Content{content},
 		}},
 		ImageGeneration: &llmprotocol.ImageGenerationOptions{
-			Model:             wire.Model,
 			Quality:           wire.Quality,
 			Size:              wire.Size,
 			OutputFormat:      wire.OutputFormat,
@@ -110,7 +111,7 @@ func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol
 }
 
 // EncodeRequest renders a neutral request as a DALL-E images request. The
-// prompt is taken from the last user text block; size comes from the hosted
+// prompt is the text of the last user message; size comes from the hosted
 // image-generation options with a 1024x1024 default. Every other neutral
 // option that the images dialect cannot express fails closed instead of being
 // silently dropped, and the provider model plus b64_json response format are
@@ -245,7 +246,9 @@ func (ImagesCodec) DecodeResponse(body []byte, _ llmprotocol.Policy) (llmprotoco
 }
 
 // EncodeResponse renders a neutral response back to the images dialect,
-// serving clients that call /v1/images/generations through the Router.
+// serving clients that call /v1/images/generations through the Router. The
+// dialect has no failed image, so an image the model did not generate fails
+// the reply.
 func (ImagesCodec) EncodeResponse(response llmprotocol.Response, _ llmprotocol.Envelope, _ llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
 	data := make([]imagesDataWire, 0, len(response.Output))
 	for index := range response.Output {
@@ -253,17 +256,21 @@ func (ImagesCodec) EncodeResponse(response llmprotocol.Response, _ llmprotocol.E
 			if block.Kind != llmprotocol.ContentGeneratedImage || block.GeneratedImage == nil {
 				continue
 			}
-			if block.GeneratedImage.Result == nil {
-				data = append(data, imagesDataWire{})
-				continue
+			image := block.GeneratedImage
+			if image.Status == llmprotocol.ImageGenerationFailed || image.Result == nil || *image.Result == "" {
+				return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "image_generation_failed", "the model did not generate the image", nil)
 			}
-			data = append(data, imagesDataWire{B64JSON: *block.GeneratedImage.Result})
+			data = append(data, imagesDataWire{B64JSON: *image.Result})
 		}
 	}
 	if len(data) == 0 {
 		return nil, nil, unsupportedDownstreamTranslation(fmt.Errorf("images response contains no generated image"))
 	}
-	body, err := json.Marshal(imagesResponseWire{Created: time.Now().Unix(), Data: data})
+	created := time.Now().Unix()
+	if !response.CreatedAt.IsZero() {
+		created = response.CreatedAt.Unix()
+	}
+	body, err := json.Marshal(imagesResponseWire{Created: created, Data: data})
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode images response: %w", err)
 	}
@@ -286,7 +293,7 @@ func (ImagesCodec) DecodeTransportError(body []byte, _ llmprotocol.Policy) (llmp
 			message = wire.Error.Message
 		}
 		if wire.Error.Code != "" {
-			code = wire.Error.Code
+			code = string(wire.Error.Code)
 		}
 	}
 	return llmprotocol.TransportError{
@@ -345,23 +352,24 @@ func (imagesStreamUnsupportedEncoder) Finalize(error) ([][]byte, llmprotocol.Dia
 	return nil, nil, fmt.Errorf("images wire does not support streaming")
 }
 
-// lastUserRequestText returns the last non-empty text block of the last user
-// message, which is the prompt to render for image generation. Content in
-// assistant or tool roles never becomes the prompt, so multi-message
-// conversations cannot steer the image request.
+// lastUserRequestText returns the non-empty text blocks of the last user
+// message joined by spaces, as routing reads them, which is the prompt to
+// render for image generation. Content in assistant or tool roles never
+// becomes the prompt, so multi-message conversations cannot steer the image
+// request.
 func lastUserRequestText(request llmprotocol.Request) (string, bool) {
 	for index := len(request.Messages) - 1; index >= 0; index-- {
 		message := request.Messages[index]
 		if message.Role != llmprotocol.RoleUser {
 			continue
 		}
-		for block := len(message.Content) - 1; block >= 0; block-- {
-			content := message.Content[block]
+		var parts []string
+		for _, content := range message.Content {
 			if content.Kind == llmprotocol.ContentText && content.Text != "" {
-				return content.Text, true
+				parts = append(parts, content.Text)
 			}
 		}
-		return "", false
+		return strings.Join(parts, " "), len(parts) > 0
 	}
 	return "", false
 }

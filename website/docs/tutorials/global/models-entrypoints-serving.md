@@ -1,22 +1,19 @@
 ---
 title: Models, Entrypoints, and Serving
-description: Connect inference backends, compose a Mixture-of-Model, and expose stable OpenAI-compatible model names.
+description: Connect inference backends and expose programmable model entrypoints for agent harnesses.
 ---
 
 # Models, Entrypoints, and Serving
 
 ## Overview
 
-Semantic Router gives applications stable model names while operators can
-change the physical models and routing policy behind them. The Dashboard is the
-fastest path to a working topology; YAML remains available for reviewed,
-version-controlled deployments.
+Connect models, choose a recipe, and publish an entrypoint. Use the Dashboard
+for interactive setup or YAML for version-controlled deployments.
 
 ## What Problem Does It Solve?
 
-Applications should call a durable model name without coupling themselves to a
-provider, endpoint, or checkpoint. Entrypoints keep that public contract stable
-while Recipes and connected Models can evolve independently.
+Keep the harness's model name stable while changing providers, endpoints, or
+routing policy behind it.
 
 The topology has four user-facing objects:
 
@@ -67,7 +64,8 @@ for the supported combinations.
 Open **Build → Mixture-of-Models → Recipes**. A Recipe describes the routing
 logic without embedding provider URLs or credentials. Review its decisions and
 probes, or create a custom Recipe from the Signals, Projections, and Decisions
-you already maintain.
+you already maintain. **Built-in recipes** lists the maintained Recipes
+installed with vLLM-SR; choose **Create model** on one to publish it.
 
 ### 3. Publish a Mixture-of-Model
 
@@ -161,6 +159,8 @@ vllm-sr config migrate --config old-config.yaml
 
 ## Next
 
+- [Connect an agent harness](../../installation/agent-harness) for inference
+  connection settings, budgets, tools, and session continuity.
 - [Configure Models](../../installation/model-configuration) for model identity,
   Provider bindings, custom models, and reasoning.
 - [Virtual Models](entrypoints-and-recipes) for request resolution and isolation.

@@ -131,6 +131,10 @@ func (s *Store) installExtracted(extracted extractedPackage) (PackageSummary, bo
 		return PackageSummary{}, false, wrapPackageError(ErrorActivationFailed, http.StatusInternalServerError, "Recipe package could not be staged.", err)
 	}
 	defer func() { _ = os.RemoveAll(staging) }()
+	// The staged directory becomes the package object the CLI reads.
+	if shareErr := shareStoreDirectory(staging); shareErr != nil {
+		return PackageSummary{}, false, wrapPackageError(ErrorActivationFailed, http.StatusInternalServerError, "Recipe package could not be staged.", shareErr)
+	}
 	if stagingErr := writeStagedFiles(staging, extracted.files); stagingErr != nil {
 		return PackageSummary{}, false, wrapPackageError(ErrorInvalidArchive, http.StatusUnprocessableEntity, "Recipe package could not be staged safely.", stagingErr)
 	}
@@ -175,7 +179,7 @@ func (s *Store) installExtracted(extracted extractedPackage) (PackageSummary, bo
 		}
 		return PackageSummary{}, false, wrapPackageError(ErrorActivationFailed, http.StatusInternalServerError, "Recipe package history could not be updated.", err)
 	}
-	if err := writeJSONAtomically(recordRefPath(s.root, record), record, 0o600); err != nil {
+	if err := writeJSONAtomically(recordRefPath(s.root, record), record); err != nil {
 		return PackageSummary{}, false, wrapPackageError(ErrorActivationFailed, http.StatusInternalServerError, "Recipe package index could not be updated.", err)
 	}
 	active, state, _ := s.activationStatusLocked()
@@ -192,7 +196,7 @@ func (s *Store) writeDigestRecord(record packageRecord) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return writeJSONAtomically(path, record, 0o600)
+	return writeJSONAtomically(path, record)
 }
 
 func (s *Store) readVersionRef(record packageRecord) (packageRecord, bool, error) {
@@ -218,14 +222,11 @@ func writeStagedFiles(directory string, files map[string][]byte) error {
 			return fmt.Errorf("missing %s", spec.name)
 		}
 		path := filepath.Join(directory, spec.name)
-		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, storeFileMode)
 		if err != nil {
 			return err
 		}
-		_, writeErr := file.Write(data)
-		if writeErr == nil {
-			writeErr = file.Sync()
-		}
+		writeErr := writeStoreFile(file, data)
 		if closeErr := file.Close(); writeErr == nil {
 			writeErr = closeErr
 		}

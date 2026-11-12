@@ -26,8 +26,7 @@ const (
 // FlowRuntimeConfig registers direct Router Flow model slugs. Workflow policy
 // lives on routing decisions, not in global runtime config.
 type FlowRuntimeConfig struct {
-	ModelNames []string                   `yaml:"model_names,omitempty" json:"model_names,omitempty"`
-	State      WorkflowStateRuntimeConfig `yaml:"state,omitempty" json:"state,omitempty"`
+	State WorkflowStateRuntimeConfig `yaml:"state,omitempty" json:"state,omitempty"`
 }
 
 // WorkflowsAlgorithmConfig configures Router Flow execution for
@@ -47,7 +46,6 @@ type WorkflowsAlgorithmConfig struct {
 	MinSuccessfulResponses       int                   `yaml:"min_successful_responses,omitempty" json:"min_successful_responses,omitempty"`
 	Temperature                  *float64              `yaml:"temperature,omitempty" json:"temperature,omitempty"`
 	IncludeIntermediateResponses *bool                 `yaml:"include_intermediate_responses,omitempty" json:"include_intermediate_responses,omitempty"`
-	OnError                      string                `yaml:"on_error,omitempty" json:"on_error,omitempty"`
 }
 
 type WorkflowRoleConfig struct {
@@ -71,7 +69,7 @@ type WorkflowPlannerConfig struct {
 
 type WorkflowStateRuntimeConfig struct {
 	StoreBackend string                   `yaml:"store_backend,omitempty" json:"store_backend,omitempty"`
-	TTLSeconds   int                      `yaml:"ttl_seconds,omitempty" json:"ttl_seconds,omitempty"`
+	TTLSeconds   int                      `yaml:"ttl_seconds" json:"ttl_seconds"`
 	File         WorkflowStateFileConfig  `yaml:"file,omitempty" json:"file,omitempty"`
 	Redis        WorkflowStateRedisConfig `yaml:"redis,omitempty" json:"redis,omitempty"`
 }
@@ -105,57 +103,6 @@ func (c WorkflowStateRuntimeConfig) TTL() time.Duration {
 	return time.Duration(c.WithDefaults().TTLSeconds) * time.Second
 }
 
-func DefaultFlowModelNames() []string {
-	return []string{DefaultFlowModelName}
-}
-
-func (c FlowRuntimeConfig) EffectiveModelNames() []string {
-	if len(c.ModelNames) > 0 {
-		return normalizeFlowModelNames(c.ModelNames)
-	}
-	return DefaultFlowModelNames()
-}
-
-func (c *RouterConfig) ExposedFlowModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
-		return nil
-	}
-	if !c.HasFlowDecision() {
-		return nil
-	}
-	return c.Looper.Flow.EffectiveModelNames()
-}
-
-func normalizeFlowModelNames(names []string) []string {
-	seen := make(map[string]bool, len(names))
-	result := make([]string, 0, len(names))
-	for _, name := range names {
-		normalized := strings.TrimSpace(name)
-		if normalized == "" || seen[normalized] {
-			continue
-		}
-		seen[normalized] = true
-		result = append(result, normalized)
-	}
-	return result
-}
-
-func (c *RouterConfig) IsFlowModelName(modelName string) bool {
-	if c == nil {
-		return false
-	}
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	for _, candidate := range c.Looper.Flow.EffectiveModelNames() {
-		if normalized == candidate {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *RouterConfig) HasFlowDecision() bool {
 	if c == nil {
 		return false
@@ -169,11 +116,6 @@ func (c *RouterConfig) HasFlowDecision() bool {
 }
 
 func ValidateFlowRuntimeConfig(cfg FlowRuntimeConfig) error {
-	for i, name := range cfg.ModelNames {
-		if strings.TrimSpace(name) == "" {
-			return fmt.Errorf("model_names[%d] cannot be empty", i)
-		}
-	}
 	return ValidateWorkflowStateRuntimeConfig(cfg.State)
 }
 
@@ -212,7 +154,7 @@ func ValidateWorkflowsAlgorithmConfig(cfg *WorkflowsAlgorithmConfig) error {
 	if cfg.Temperature != nil && *cfg.Temperature < 0 {
 		return fmt.Errorf("temperature must be >= 0 when set")
 	}
-	return validateWorkflowOnError(cfg.OnError)
+	return nil
 }
 
 func validateWorkflowModeAndPlan(cfg *WorkflowsAlgorithmConfig) error {
@@ -311,16 +253,4 @@ func validateWorkflowRoleConfig(index int, role WorkflowRoleConfig) error {
 
 func (c WorkflowFinalConfig) IsZero() bool {
 	return strings.TrimSpace(c.Model) == "" && strings.TrimSpace(c.Prompt) == ""
-}
-
-func validateWorkflowOnError(onError string) error {
-	if strings.TrimSpace(onError) == "" {
-		return nil
-	}
-	switch onError {
-	case WorkflowOnErrorSkip, WorkflowOnErrorFail:
-		return nil
-	default:
-		return fmt.Errorf("on_error must be one of %q or %q, got %q", WorkflowOnErrorSkip, WorkflowOnErrorFail, onError)
-	}
 }

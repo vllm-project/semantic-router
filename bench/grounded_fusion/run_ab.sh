@@ -16,16 +16,15 @@ cd "$REPO"
 PY=.venv-bench/bin/python
 DRACO="${DRACO_PATH:-$HOME/Downloads/draco.json}"
 EXTRA_ARGS=("$@")
-export LD_LIBRARY_PATH="$REPO/candle-binding/target/release:$REPO/ml-binding/target/release:$REPO/nlp-binding/target/release"
 
 start_router() {  # $1 = config path
   pkill -f "bin/router" 2>/dev/null || true; sleep 2
   nohup ./bin/router -config="$1" > /tmp/router_ab.log 2>&1 &
   echo "  router starting ($1)..."
   for _ in $(seq 1 40); do
-    if grep -q "hallucination_nli_initialized" /tmp/router_ab.log 2>/dev/null \
+    if curl -sf http://localhost:8080/ready >/dev/null 2>&1 \
        && lsof -nP -iTCP:50051 -sTCP:LISTEN >/dev/null 2>&1; then
-      echo "  router ready (NLI wired, extproc :50051)"; sleep 2; return 0
+      echo "  router ready (extproc :50051)"; sleep 2; return 0
     fi
     sleep 2
   done

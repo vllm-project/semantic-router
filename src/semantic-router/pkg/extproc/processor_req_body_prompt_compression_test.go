@@ -32,33 +32,31 @@ const (
 )
 
 const promptCompressionDispatchConfigYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: general-model
-    - name: coding-model
-  signals:
-    keywords:
-      - name: refactor_request
-        operator: OR
-        keywords: ["refactor"]
-      - name: dropped_detail
-        operator: OR
-        keywords: ["zanzibar"]
-  decisions:
-    - name: compressed_view
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: refactor_request
-          - operator: NOT
-            conditions:
-              - type: keyword
-                name: dropped_detail
-      modelRefs:
-        - model: coding-model
-          use_reasoning: false
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: refactor_request
+          operator: OR
+          keywords: ["refactor"]
+        - name: dropped_detail
+          operator: OR
+          keywords: ["zanzibar"]
+    decisions:
+      - name: compressed_view
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: refactor_request
+            - operator: NOT
+              conditions:
+                - type: keyword
+                  name: dropped_detail
+        modelRefs:
+          - model: coding-model
+            use_reasoning: false
 providers:
   defaults:
     model: general-model
@@ -74,16 +72,19 @@ providers:
         - endpoint: 127.0.0.1:8001
           provider: vllm
 global:
-  model_catalog:
-    modules:
-      prompt_compression:
+  plugins:
+    - type: context
+      configuration:
         enabled: true
-        max_tokens: 16
+        compress:
+          signals:
+            enabled: true
+            max_tokens: 16
 `
 
 func TestPromptCompressionKeepsChatDispatchPromptAndTools(t *testing.T) {
 	body := mustMarshalCompressionFixture(t, map[string]any{
-		"model": config.DefaultVSRAutoModelName,
+		"model": config.DefaultEntrypointModel,
 		"messages": []any{
 			map[string]any{"role": "system", "content": compressionAgentInstructions},
 			map[string]any{"role": "user", "content": compressionAgentPrompt},
@@ -104,7 +105,7 @@ func TestPromptCompressionKeepsChatDispatchPromptAndTools(t *testing.T) {
 
 func TestPromptCompressionKeepsResponsesDispatchPromptAndTools(t *testing.T) {
 	body := mustMarshalCompressionFixture(t, map[string]any{
-		"model":        config.DefaultVSRAutoModelName,
+		"model":        config.DefaultEntrypointModel,
 		"instructions": compressionAgentInstructions,
 		"input": []any{map[string]any{
 			"type":    "message",
@@ -127,7 +128,7 @@ func dispatchWithPromptCompression(t *testing.T, path string, apiFormat string, 
 	t.Helper()
 	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(promptCompressionDispatchConfigYAML, apiFormat)))
 	require.NoError(t, err)
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	require.NoError(t, err)
 	router := &OpenAIRouter{
 		Config:             cfg,

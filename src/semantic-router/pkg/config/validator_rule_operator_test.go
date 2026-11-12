@@ -108,48 +108,6 @@ func TestNormalizeRuleOperator_NestedInvalidOperatorNamesItsPath(t *testing.T) {
 	}
 }
 
-func TestValidateRuleOperatorContracts_NormalizesDecisionsAndComposers(t *testing.T) {
-	cfg := &RouterConfig{
-		IntelligentRouting: IntelligentRouting{
-			Signals: Signals{
-				ComplexityRules: []ComplexityRule{
-					{
-						Name: "needs_reasoning",
-						Composer: &RuleNode{
-							Operator: "or",
-							Conditions: []RuleNode{
-								{Type: SignalTypeKeyword, Name: "kw"},
-								{Type: SignalTypeDomain, Name: "dom"},
-							},
-						},
-					},
-				},
-			},
-			Decisions: []Decision{
-				{
-					Name: "route",
-					Rules: RuleNode{
-						Conditions: []RuleNode{
-							{Type: SignalTypeKeyword, Name: "kw"},
-							{Type: SignalTypeDomain, Name: "dom"},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	if err := validateRuleOperatorContracts(cfg); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.Decisions[0].Rules.Operator != "AND" {
-		t.Fatalf("expected decision rule operator to default to AND, got %q", cfg.Decisions[0].Rules.Operator)
-	}
-	if cfg.ComplexityRules[0].Composer.Operator != "OR" {
-		t.Fatalf("expected composer operator to normalize to OR, got %q", cfg.ComplexityRules[0].Composer.Operator)
-	}
-}
-
 func TestValidateRuleOperatorContracts_RejectsInvalidDecisionOperator(t *testing.T) {
 	cfg := &RouterConfig{
 		IntelligentRouting: IntelligentRouting{
@@ -347,37 +305,9 @@ func TestValidateRuleOperatorContracts_ShapeCorpusNamesDecisionAndPath(t *testin
 	}
 }
 
-func TestValidateRuleOperatorContracts_ComposerRejectsNotArity(t *testing.T) {
-	cfg := &RouterConfig{
-		IntelligentRouting: IntelligentRouting{
-			Signals: Signals{
-				ComplexityRules: []ComplexityRule{{
-					Name: "needs_reasoning",
-					Composer: &RuleNode{
-						Operator: "NOT",
-						Conditions: []RuleNode{
-							{Type: SignalTypeKeyword, Name: "kw"},
-							{Type: SignalTypeDomain, Name: "dom"},
-						},
-					},
-				}},
-			},
-		},
-	}
-
-	err := validateRuleOperatorContracts(cfg)
-	if err == nil {
-		t.Fatal("expected an error for a multi-child composer NOT")
-	}
-	want := `complexity rule "needs_reasoning": composer: NOT requires exactly one child condition, got 2`
-	if !strings.Contains(err.Error(), want) {
-		t.Fatalf("expected error containing %q, got: %v", want, err)
-	}
-}
-
 func TestParseYAMLBytes_RejectsMultiChildNotInDecisionRules(t *testing.T) {
 	yamlConfig := `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: gpt-worker
@@ -386,36 +316,35 @@ providers:
       provider_model_id: openai/gpt-5.5
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-routing:
-  modelCards:
-    - name: gpt-worker
-  signals:
-    keywords:
-      - name: urgent
-        operator: OR
-        keywords: ["urgent"]
-      - name: billing
-        operator: OR
-        keywords: ["invoice"]
-  decisions:
-    - name: not_urgent_billing
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: billing
-          - operator: NOT
-            conditions:
-              - type: keyword
-                name: urgent
-              - type: keyword
-                name: billing
-      modelRefs:
-        - model: gpt-worker
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: urgent
+          operator: OR
+          keywords: ["urgent"]
+        - name: billing
+          operator: OR
+          keywords: ["invoice"]
+    decisions:
+      - name: not_urgent_billing
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: billing
+            - operator: NOT
+              conditions:
+                - type: keyword
+                  name: urgent
+                - type: keyword
+                  name: billing
+        modelRefs:
+          - model: gpt-worker
+            use_reasoning: false
 `
 	_, err := ParseYAMLBytes([]byte(yamlConfig))
 	if err == nil {

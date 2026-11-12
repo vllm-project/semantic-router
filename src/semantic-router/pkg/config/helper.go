@@ -2,18 +2,13 @@ package config
 
 import (
 	"fmt"
-	"os"
-	"slices"
+	"sort"
 	"strings"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
-const (
-	DefaultAutoModelName    = "MoM"
-	LegacyAutoModelAlias    = "auto"
-	DefaultVSRAutoModelName = "vllm-sr/auto"
-)
+const DefaultEntrypointModel = "vllm-sr/auto"
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
 func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
@@ -76,38 +71,7 @@ func (c *RouterConfig) resolveModelConfigKey(modelName string) (string, bool) {
 	return "", false
 }
 
-// GetEffectiveAutoModelName returns the effective auto model name for automatic model selection
-// Returns the configured AutoModelName if set, otherwise defaults to "MoM"
-// This is the primary model name that triggers automatic routing
-func (c *RouterConfig) GetEffectiveAutoModelName() string {
-	if c.AutoModelName != "" {
-		return c.AutoModelName
-	}
-	return DefaultAutoModelName
-}
-
-func DefaultAutoModelNames() []string {
-	return []string{DefaultVSRAutoModelName, LegacyAutoModelAlias, DefaultAutoModelName}
-}
-
-// EffectiveAutoModelNames returns all request model names that trigger
-// automatic routing. auto_model_names is an explicit allow-list; when omitted,
-// vLLM-SR keeps the new namespaced alias plus legacy auto/MoM compatibility.
-func (c *RouterConfig) EffectiveAutoModelNames() []string {
-	if c == nil {
-		return DefaultAutoModelNames()
-	}
-	if c.AutoModelNames != nil {
-		return normalizeAutoModelNames(c.AutoModelNames)
-	}
-	return normalizeAutoModelNames([]string{
-		DefaultVSRAutoModelName,
-		LegacyAutoModelAlias,
-		c.GetEffectiveAutoModelName(),
-	})
-}
-
-func normalizeAutoModelNames(names []string) []string {
+func normalizeEntrypointNames(names []string) []string {
 	seen := make(map[string]bool, len(names))
 	result := make([]string, 0, len(names))
 	for _, name := range names {
@@ -119,15 +83,6 @@ func normalizeAutoModelNames(names []string) []string {
 		result = append(result, trimmed)
 	}
 	return result
-}
-
-// IsAutoModelName checks if the given model name should trigger automatic model selection.
-func (c *RouterConfig) IsAutoModelName(modelName string) bool {
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	return slices.Contains(c.EffectiveAutoModelNames(), normalized)
 }
 
 // GetCategoryDescriptions returns all category descriptions for similarity matching
@@ -163,11 +118,22 @@ func (c *RouterConfig) GetModelForDecisionIndex(index int) string {
 // lookup through ExternalModelIDs (provider_model_id) when the name is not
 // a direct key in ModelConfig. This handles the case where the Envoy AI
 // Gateway rewrites the model field to the provider model ID.
+//
+// The fallback scans entries in sorted model-name order so a provider model
+// ID claimed by several entries (e.g. the same served model split across
+// endpoint groups) resolves to the same owner on every load instead of
+// following Go's randomized map iteration order.
 func (c *RouterConfig) resolveModelConfig(modelName string) (ModelParams, bool) {
 	if params, ok := c.ModelConfig[modelName]; ok {
 		return params, true
 	}
-	for _, params := range c.ModelConfig {
+	owners := make([]string, 0, len(c.ModelConfig))
+	for name := range c.ModelConfig {
+		owners = append(owners, name)
+	}
+	sort.Strings(owners)
+	for _, name := range owners {
+		params := c.ModelConfig[name]
 		for _, extID := range params.ExternalModelIDs {
 			if extID == modelName {
 				return params, true
@@ -199,19 +165,19 @@ func (c *RouterConfig) GetMostExpensivePricedModel() (modelName string, promptPe
 	return modelName, pricing.PromptPer1M, pricing.CompletionPer1M, pricing.Currency, true
 }
 
-// GetModelAPIFormat returns the explicitly configured wire format for the
-// model, or APIFormatOpenAI when the model has no override.
+// GetModelAPIFormat returns the API the model is reached on, by its canonical
+// name, or APIFormatChatCompletions when the model has no override.
 func (c *RouterConfig) GetModelAPIFormat(modelName string) string {
 	if c == nil || c.ModelConfig == nil {
-		return APIFormatOpenAI
+		return APIFormatChatCompletions
 	}
 	if modelConfig, ok := c.ModelConfig[modelName]; ok && modelConfig.APIFormat != "" {
-		return modelConfig.APIFormat
+		return CanonicalAPIFormat(modelConfig.APIFormat)
 	}
 	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok && baseConfig.APIFormat != "" {
-		return baseConfig.APIFormat
+		return CanonicalAPIFormat(baseConfig.APIFormat)
 	}
-	return APIFormatOpenAI
+	return APIFormatChatCompletions
 }
 
 // GetModelAccessKey returns the access key for the given model.
@@ -226,21 +192,21 @@ func (c *RouterConfig) GetModelAccessKeyForProvider(modelName, provider string) 
 	if c == nil || c.ModelConfig == nil {
 		return ""
 	}
+	// The loader already expanded each key once; it is used as it stands.
 	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		if rawKey := modelConfig.AccessKeys[provider]; rawKey != "" {
-			return os.ExpandEnv(rawKey)
+		if key := modelConfig.AccessKeys[provider]; key != "" {
+			return key
 		}
-		if rawKey := modelConfig.AccessKey; provider == "" && rawKey != "" {
-			expandedKey := os.ExpandEnv(rawKey)
-			return expandedKey
+		if provider == "" && modelConfig.AccessKey != "" {
+			return modelConfig.AccessKey
 		}
 	}
 	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok {
-		if rawKey := baseConfig.AccessKeys[provider]; rawKey != "" {
-			return os.ExpandEnv(rawKey)
+		if key := baseConfig.AccessKeys[provider]; key != "" {
+			return key
 		}
-		if provider == "" && baseConfig.AccessKey != "" {
-			return os.ExpandEnv(baseConfig.AccessKey)
+		if provider == "" {
+			return baseConfig.AccessKey
 		}
 	}
 	return ""
@@ -261,104 +227,6 @@ func (c *RouterConfig) GetModelIndexResult(modelName, index string) (modelcatalo
 	}
 	result, ok := params.IndexResults[index]
 	return cloneCatalogIndexResult(result), ok
-}
-
-// GetDecisionPIIPolicy returns the PII policy for a given decision by looking at
-// the PIIRule signals referenced in the decision's rules tree.
-// If the decision doesn't reference any PII signals, returns a default policy that allows all PII.
-func (d *Decision) GetDecisionPIIPolicy(piiRules []PIIRule) PIIPolicy {
-	// Collect PII signal names referenced in the decision's rules
-	piiSignalNames := collectSignalNames(&d.Rules, "pii")
-	if len(piiSignalNames) == 0 {
-		// No PII signals → allow all PII
-		return PIIPolicy{
-			AllowByDefault: true,
-			PIITypes:       []string{},
-		}
-	}
-
-	// Build a lookup for PIIRules by name
-	rulesByName := make(map[string]*PIIRule, len(piiRules))
-	for i := range piiRules {
-		rulesByName[piiRules[i].Name] = &piiRules[i]
-	}
-
-	// Aggregate PIITypesAllowed from all referenced PIIRules
-	var allAllowed []string
-	for _, name := range piiSignalNames {
-		if rule, ok := rulesByName[name]; ok {
-			allAllowed = append(allAllowed, rule.PIITypesAllowed...)
-		}
-	}
-
-	return PIIPolicy{
-		AllowByDefault: false,
-		PIITypes:       allAllowed,
-	}
-}
-
-// IsDecisionAllowedForPIIType checks if a decision is allowed to process a specific PII type
-func (d *Decision) IsDecisionAllowedForPIIType(piiType string, piiRules []PIIRule) bool {
-	policy := d.GetDecisionPIIPolicy(piiRules)
-
-	// If allow_by_default is true, all PII types are allowed unless explicitly denied
-	if policy.AllowByDefault {
-		return true
-	}
-
-	// If allow_by_default is false, only explicitly allowed PII types are permitted
-	return slices.Contains(policy.PIITypes, piiType)
-}
-
-// IsDecisionAllowedForPIITypes checks if a decision is allowed to process any of the given PII types
-func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PIIRule) bool {
-	for _, piiType := range piiTypes {
-		if !d.IsDecisionAllowedForPIIType(piiType, piiRules) {
-			return false
-		}
-	}
-	return true
-}
-
-// IsPIIClassifierEnabled checks if PII classification is enabled
-func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	modelConfigured := c.PIIModel.ModelID != "" || c.PIIModel.Backend != nil
-	return c.PIIModel.Active() && modelConfigured && c.PIIMappingPath != ""
-}
-
-// IsCategoryClassifierEnabled checks if category classification is enabled
-func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
-	return c.CategoryModel.Active() && c.CategoryModel.ModelID != "" && c.CategoryMappingPath != ""
-}
-
-// IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
-func (c *RouterConfig) IsMCPCategoryClassifierEnabled() bool {
-	return c.Enabled && c.ToolName != ""
-}
-
-// GetPromptGuardConfig returns the prompt guard configuration
-func (c *RouterConfig) GetPromptGuardConfig() PromptGuardConfig {
-	return c.PromptGuard
-}
-
-// IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled
-func (c *RouterConfig) IsPromptGuardEnabled() bool {
-	if !c.PromptGuard.Enabled || c.PromptGuard.JailbreakMappingPath == "" {
-		return false
-	}
-
-	if c.PromptGuard.Backend != nil {
-		backend := c.PromptGuard.Backend
-		contract := RemoteClassifierContractLabelDistribution
-		if backend.Protocol == RemoteClassifierProtocolHTTPChat {
-			contract = RemoteClassifierContractLabelDecision
-		}
-		_, err := ResolveRemoteClassifierBackend(c, backend, ModelRoleGuardrail, contract)
-		return err == nil
-	}
-
-	// For Candle: need model ID
-	return c.PromptGuard.ModelID != ""
 }
 
 // GetEndpointsForModel returns all endpoints that can serve the specified model
@@ -490,34 +358,18 @@ func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
 	return c.IsCacheEnabledForDecisionObject(c.GetDecisionByName(decisionName))
 }
 
-// IsCacheEnabled resolves response_cache policy from a scoped decision.
+// IsCacheEnabledForDecisionObject resolves response_cache policy from a
+// scoped decision: the response_cache plugin it runs (RequestPlugins).
 func (c *RouterConfig) IsCacheEnabledForDecisionObject(decision *Decision) bool {
-	if decision != nil {
-		config := decision.GetResponseCacheConfig()
-		if config != nil {
-			return config.Enabled
-		}
-	}
-	// No explicit response_cache plugin configured for this decision
-	// Return false to respect per-decision plugin scoping
-	return false
+	config := c.ResponseCacheConfig(decision)
+	return config != nil && config.Enabled
 }
 
-// GetCacheSimilarityThresholdForDecision returns the effective cache similarity threshold for a decision
-func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName string) float32 {
-	return c.GetCacheSimilarityThresholdForDecisionObject(c.GetDecisionByName(decisionName))
-}
-
-// GetCacheSimilarityThreshold resolves the threshold from a scoped decision.
-func (c *RouterConfig) GetCacheSimilarityThresholdForDecisionObject(decision *Decision) float32 {
-	if decision != nil {
-		config := decision.GetResponseCacheConfig()
-		if config != nil && config.EffectiveSimilarityThreshold() != nil {
-			return *config.EffectiveSimilarityThreshold()
-		}
-	}
-	// Route policy does not cascade the backend's global threshold.
-	return 0.8
+// ResponseCacheMatch is the match block a request's semantic lookup runs: the
+// semantic.match of the response_cache plugin it runs, nil for the response
+// cache's default.
+func (c *RouterConfig) ResponseCacheMatch(decision *Decision) *MatchConfig {
+	return c.ResponseCacheConfig(decision).SemanticMatch()
 }
 
 // GetCacheTTLSecondsForDecision returns the effective TTL for a decision
@@ -527,15 +379,12 @@ func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
 	return c.GetCacheTTLSecondsForDecisionObject(c.GetDecisionByName(decisionName))
 }
 
-// GetCacheTTLSeconds resolves TTL from a scoped decision.
+// GetCacheTTLSecondsForDecisionObject resolves TTL from a scoped decision:
+// the response_cache plugin it runs, -1 for the store's default TTL.
 func (c *RouterConfig) GetCacheTTLSecondsForDecisionObject(decision *Decision) int {
-	if decision != nil {
-		config := decision.GetResponseCacheConfig()
-		if config != nil && config.TTLSeconds != nil {
-			return *config.TTLSeconds
-		}
+	if config := c.ResponseCacheConfig(decision); config != nil && config.TTLSeconds != nil {
+		return *config.TTLSeconds
 	}
-	// Return -1 to indicate "use global default"
 	return -1
 }
 

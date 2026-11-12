@@ -11,51 +11,46 @@ import (
 )
 
 const entrypointTestConfigYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-    - name: model-b
-      description: privacy tier
-  signals:
-    keywords:
-      - name: route_keyword
-        operator: OR
-        keywords: ["urgent"]
-  decisions:
-    - name: default_route
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: route_keyword
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
+version: v0.5
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: route_keyword
+          operator: OR
+          keywords: ["urgent"]
+    decisions:
+      - name: default_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: route_keyword
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
   - name: privacy
-    routing:
-      signals:
-        keywords:
-          - name: route_keyword
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: route_keyword
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: route_keyword
+          operator: OR
+          keywords: ["ssn"]
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: route_keyword
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
 entrypoints:
   - model_names: ["vllm-sr/privacy"]
     recipe: privacy
-  - model_names: ["vllm-sr/default-alias"]
+  - model_names: ["vllm-sr/auto", "vllm-sr/default-alias"]
     recipe: default
+    default: true
 providers:
   defaults:
     model: model-a
@@ -64,10 +59,12 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
           provider: vllm
+      description: privacy tier
 `
 
 func newEntrypointTestRouter(t *testing.T) *OpenAIRouter {
@@ -119,7 +116,7 @@ func TestRequestModelActsAsAuto(t *testing.T) {
 		model string
 		want  bool
 	}{
-		{model: config.DefaultVSRAutoModelName, want: true},
+		{model: config.DefaultEntrypointModel, want: true},
 		{model: "vllm-sr/privacy", want: true},
 		{model: "vllm-sr/default-alias", want: true},
 		{model: "model-a", want: false},
@@ -154,8 +151,8 @@ func TestDecisionCandidatesForRequest(t *testing.T) {
 	}
 
 	ctx = &RequestContext{}
-	router.resolveEntrypointForRequest(config.DefaultVSRAutoModelName, ctx)
-	if candidates := router.decisionCandidatesForRequest(config.DefaultVSRAutoModelName, ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
+	router.resolveEntrypointForRequest(config.DefaultEntrypointModel, ctx)
+	if candidates := router.decisionCandidatesForRequest(config.DefaultEntrypointModel, ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
 		t.Fatalf("expected the auto model to use default recipe candidates, got %+v", candidates)
 	}
 }
@@ -178,15 +175,12 @@ func TestDirectLooperAliasesResolveOnlyTheirAlgorithm(t *testing.T) {
 			Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmWorkflows},
 		},
 	}
-	router := &OpenAIRouter{Config: &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{Decisions: decisions},
-		Looper: config.LooperConfig{
-			Endpoint: "http://router.test/v1/chat/completions",
-			ReMoM:    config.ReMoMRuntimeConfig{ModelNames: []string{"router/remom"}},
-			Fusion:   config.FusionRuntimeConfig{ModelNames: []string{"router/fusion"}},
-			Flow:     config.FlowRuntimeConfig{ModelNames: []string{"router/flow"}},
-		},
-	}}
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	for i, alias := range []string{"router/remom", "router/fusion", "router/flow"} {
+		recipeName := config.RecipeName(decisions[i].Name)
+		router.Config.Entrypoints = append(router.Config.Entrypoints, config.EntrypointMapping{ModelNames: []string{alias}, Recipe: recipeName})
+		router.Config.Recipes = append(router.Config.Recipes, config.RoutingRecipe{Name: recipeName, Profile: config.RoutingProfile{Decisions: []config.Decision{decisions[i]}}})
+	}
 
 	testCases := []struct {
 		alias        string
@@ -200,7 +194,7 @@ func TestDirectLooperAliasesResolveOnlyTheirAlgorithm(t *testing.T) {
 		t.Run(testCase.alias, func(t *testing.T) {
 			ctx := &RequestContext{}
 			router.resolveEntrypointForRequest(testCase.alias, ctx)
-			if ctx.Routing.SelectedRecipe() == nil || ctx.Routing.SelectedRecipe().Name != config.DefaultRecipeName {
+			if ctx.Routing.SelectedRecipe() == nil || string(ctx.Routing.SelectedRecipe().Name) != testCase.wantDecision {
 				t.Fatalf("direct alias %q did not resolve the default recipe", testCase.alias)
 			}
 			candidates := router.decisionCandidatesForRequest(testCase.alias, ctx)
@@ -224,7 +218,7 @@ func newEntrypointFlowRouter(t *testing.T) *OpenAIRouter {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
@@ -255,14 +249,14 @@ func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
 		{
 			// The privacy signal does not even run for the default recipe.
 			name:         "auto model ignores other recipes' decisions",
-			model:        config.DefaultVSRAutoModelName,
+			model:        config.DefaultEntrypointModel,
 			message:      "my ssn is exposed",
 			wantDecision: "",
 			wantModel:    "model-a",
 		},
 		{
 			name:         "auto model matches the default recipe decision",
-			model:        config.DefaultVSRAutoModelName,
+			model:        config.DefaultEntrypointModel,
 			message:      "this is urgent",
 			wantDecision: "default_route",
 			wantModel:    "model-a",
@@ -322,7 +316,7 @@ func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
 func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 	router := newEntrypointTestRouter(t)
 
-	response, err := router.handleModelsRequest("/v1/models")
+	response, err := router.handleModelsRequest("/v1/models", nil)
 	if err != nil {
 		t.Fatalf("handleModelsRequest failed: %v", err)
 	}
@@ -354,10 +348,9 @@ func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			RouterOptions: config.RouterOptions{
-				AutoModelNames: []string{"router/balanced"},
-			},
+			RouterOptions: config.RouterOptions{},
 			Entrypoints: []config.EntrypointMapping{
+				{ModelNames: []string{"router/balanced"}, Recipe: config.DefaultRecipeName},
 				{ModelNames: []string{"router/flash"}, Recipe: "speed-first"},
 			},
 			Recipes: []config.RoutingRecipe{
@@ -369,7 +362,7 @@ func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 		},
 	}
 
-	response, err := router.handleModelsRequest("/v1/models")
+	response, err := router.handleModelsRequest("/v1/models", nil)
 	if err != nil {
 		t.Fatalf("handleModelsRequest failed: %v", err)
 	}
@@ -409,32 +402,29 @@ func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 // recipe: the flat Decisions field stays empty, which used to trip the
 // "no decisions configured" short-circuit before decision evaluation.
 const entrypointRecipesOnlyConfigYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-    - name: model-b
-      description: privacy tier
+version: v0.5
 recipes:
+  - name: default
   - name: privacy
-    routing:
-      signals:
-        keywords:
-          - name: pii_keywords
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: pii_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: pii_keywords
+          operator: OR
+          keywords: ["ssn"]
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: pii_keywords
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["vllm-sr/privacy"]
     recipe: privacy
 providers:
@@ -445,10 +435,12 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
           provider: vllm
+      description: privacy tier
 `
 
 func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
@@ -456,7 +448,7 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
@@ -478,7 +470,7 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 		},
 		{
 			name:         "auto model keeps the default profile fallback",
-			model:        config.DefaultVSRAutoModelName,
+			model:        config.DefaultEntrypointModel,
 			message:      "my ssn is exposed",
 			wantDecision: "",
 			wantModel:    "model-a",
@@ -514,35 +506,34 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 // declares signals but no decisions. Its traffic must not be routed by the
 // default profile's decisions.
 const entrypointDecisionlessRecipeYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-  signals:
-    keywords:
-      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent"]
-  decisions:
-    - name: default_route
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent_keywords
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
+version: v0.5
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: urgent_keywords
+          operator: OR
+          keywords: ["urgent"]
+    decisions:
+      - name: default_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
   - name: screening
-    routing:
-      signals:
-        keywords:
-          - name: screening_keywords
-            operator: OR
-            keywords: ["screening"]
+    signals:
+      keywords:
+        - name: screening_keywords
+          operator: OR
+          keywords: ["screening"]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["vllm-sr/screening"]
     recipe: screening
 providers:
@@ -553,6 +544,7 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
 `
 
 func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {
@@ -560,7 +552,7 @@ func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
@@ -602,7 +594,7 @@ func TestSemanticCacheScopeStaysRouteLocalForRecipesOnlyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	cfg.SemanticCache.Enabled = true
+	cfg.SemanticCache.InUse = true
 	router := &OpenAIRouter{Config: cfg}
 
 	privacy, ok := cfg.RecipeByName("privacy")
@@ -622,7 +614,7 @@ func TestSemanticCacheScopeStaysRouteLocalForRecipesOnlyConfig(t *testing.T) {
 
 func TestConcreteModelBypassesSemanticCache(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
+		SemanticCache: config.SemanticCache{InUse: true},
 	}}
 	ctx := &RequestContext{}
 	ctx.Routing.SelectPassthrough()

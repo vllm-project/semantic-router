@@ -14,6 +14,18 @@ import click
 _DEFAULT_OUTPUT_WIDTH = 120
 _MIN_OUTPUT_WIDTH = 40
 _MAX_OUTPUT_WIDTH = 160
+# Pass as a log call's ``extra`` to keep an informational line in quiet output.
+HEADLINE = {"headline": True}
+_LOGS = {"quiet": False}
+
+
+def set_quiet_logs(quiet: bool) -> None:
+    """Hide informational CLI logs that are not headlines; warnings and errors still show."""
+    _LOGS["quiet"] = quiet
+
+
+def quiet_logs() -> bool:
+    return _LOGS["quiet"]
 
 
 def echo(message: Any = "", *, err: bool = False, nl: bool = True) -> None:
@@ -105,6 +117,12 @@ class TerminalLogHandler(logging.Handler):
     """Route CLI logs through the same Click-aware terminal contract."""
 
     def emit(self, record: logging.LogRecord) -> None:
+        if (
+            _LOGS["quiet"]
+            and record.levelno < logging.WARNING
+            and not getattr(record, "headline", False)
+        ):
+            return
         try:
             message = self.format(record)
             if record.levelno >= logging.ERROR:

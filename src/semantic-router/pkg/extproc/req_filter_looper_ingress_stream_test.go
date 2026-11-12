@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
@@ -111,9 +113,10 @@ func TestLooperIngressPreservesClientResponseContract(t *testing.T) {
 					}
 					if format != llmprotocol.OpenAIChatV1 {
 						require.NotContains(t, body, `"fusion"`)
-						warning := immediateHeaderValue(response, headers.VSRProtocolWarnings)
+						appendRoutedResponseHeaders(response, ctx)
+						warning := immediateHeaderValue(response, headers.VSRWarnings)
 						if trace {
-							require.Contains(t, warning, "dropped;router_extension_unsupported_protocol;fusion")
+							require.Contains(t, warning, `protocol;action=dropped;reason="router_extension_unsupported_protocol";field="fusion"`)
 						} else {
 							require.NotContains(t, warning, "router_extension")
 						}
@@ -142,13 +145,14 @@ func TestRatingsResponsesIngressPreservesCapabilityGate(t *testing.T) {
 				request, rejected := router.prepareProtocolRequest(looperIngressBody(t, ctx.SourceFormat, stream), ctx)
 				require.Nil(t, rejected)
 				refs := []config.ModelRef{{Model: "panel-a"}, {Model: "panel-b"}}
-				decision := &config.Decision{Name: "ratings-ingress", ModelRefs: refs[:candidates], Algorithm: &config.AlgorithmConfig{Type: "ratings", Ratings: &config.RatingsAlgorithmConfig{OnError: "fail"}}}
+				decision := &config.Decision{Name: "ratings-ingress", ModelRefs: refs[:candidates], Algorithm: &config.AlgorithmConfig{Type: "ratings", OnError: "fail", Ratings: &config.RatingsAlgorithmConfig{}}}
 				response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
 				require.NoError(t, err)
 				if candidates == 2 {
 					require.EqualValues(t, 502, response.GetImmediateResponse().GetStatus().GetCode())
 					require.Nil(t, ctx.SemanticResponse)
-					runner, runnerErr := router.createLooper(decision, ctx)
+					runner, runnerErr := looper.FactoryWithClientAndWorkflowState(
+						&router.Config.Looper, decision.Algorithm.Type, router.looperModelClient(), nil)
 					require.NoError(t, runnerErr)
 					internal, internalError := router.buildLooperRequest(request, decision, ctx)
 					require.Nil(t, internalError)
@@ -174,6 +178,138 @@ func TestRatingsResponsesIngressPreservesCapabilityGate(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A Looper stream reports the run's usage to a Messages client, which cannot
+// ask for it, and to a Chat client that asks for it, whatever the executor.
+func TestLooperStreamReportsTheRunUsage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Model string `json:"model"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		writeFusionReplayCompletion(w, request.Model, []map[string]interface{}{{
+			"index": 0, "message": map[string]interface{}{"role": "assistant", "content": "A useful answer"}, "finish_reason": "stop",
+			"logprobs": map[string]interface{}{"content": []map[string]interface{}{{"token": "A", "logprob": -0.1, "bytes": []int{65}, "top_logprobs": []interface{}{}}}},
+		}}, map[string]int64{"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3})
+	}))
+	defer server.Close()
+	for _, executor := range []struct {
+		decision *config.Decision
+		calls    int64
+	}{
+		{&config.Decision{Name: "ingress-escalate", ModelRefs: []config.ModelRef{{Model: "panel-a"}}, Algorithm: &config.AlgorithmConfig{
+			Type: config.DecisionAlgorithmEscalate, Escalate: &config.EscalateAlgorithmConfig{},
+		}}, 1},
+		{&config.Decision{Name: "ingress-fusion", Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmFusion, Fusion: &config.FusionAlgorithmConfig{
+			Model: "judge", AnalysisModels: []string{"panel-a", "panel-b"}, AnalysisMode: config.FusionAnalysisModeNone,
+		}}}, 3},
+	} {
+		for _, client := range []struct {
+			format       llmprotocol.WireFormat
+			includeUsage bool
+		}{{llmprotocol.AnthropicMessagesV1, false}, {llmprotocol.OpenAIChatV1, true}, {llmprotocol.OpenAIChatV1, false}} {
+			t.Run(fmt.Sprintf("%s/%s/include_usage_%t", executor.decision.Algorithm.Type, client.format, client.includeUsage), func(t *testing.T) {
+				router, ctx, _ := quorumFallbackRouter(server.URL)
+				ctx.SourceFormat = client.format
+				ctx.TraceContext = context.Background()
+				var raw map[string]interface{}
+				require.NoError(t, json.Unmarshal(looperIngressBody(t, client.format, true), &raw))
+				if client.includeUsage {
+					raw["stream_options"] = map[string]bool{"include_usage": true}
+				}
+				body, err := json.Marshal(raw)
+				require.NoError(t, err)
+				request, rejected := router.prepareProtocolRequest(body, ctx)
+				require.Nil(t, rejected)
+				_, err = router.extractRequestSignalSnapshot(ctx)
+				require.NoError(t, err)
+				response, err := router.handleLooperExecution(context.Background(), request, executor.decision, ctx)
+				require.NoError(t, err)
+				var usage []map[string]interface{}
+				for _, line := range strings.Split(string(response.GetImmediateResponse().GetBody()), "\n") {
+					var event struct {
+						Type  string                 `json:"type"`
+						Usage map[string]interface{} `json:"usage"`
+					}
+					if payload, ok := strings.CutPrefix(line, "data: {"); ok && json.Unmarshal([]byte("{"+payload), &event) == nil &&
+						event.Usage != nil && event.Type != "message_start" {
+						usage = append(usage, event.Usage)
+					}
+				}
+				switch {
+				case client.format == llmprotocol.AnthropicMessagesV1:
+					require.Len(t, usage, 1)
+					require.EqualValues(t, 2*executor.calls, usage[0]["input_tokens"])
+					require.EqualValues(t, executor.calls, usage[0]["output_tokens"])
+				case client.includeUsage:
+					require.Len(t, usage, 1)
+					require.EqualValues(t, executor.calls, usage[0]["completion_tokens"])
+					require.EqualValues(t, 3*executor.calls, usage[0]["total_tokens"])
+				default:
+					require.Empty(t, usage, "Chat streams carry usage only when the client asks")
+				}
+			})
+		}
+	}
+}
+
+// An escalate candidate that streams forwards the backend's stream, whose
+// chunks name the model as the backend reports it, as an OpenAI snapshot does.
+// The run's usage chunk must name the same model, or the client codec rejects
+// the stream as one that changed model.
+func TestLooperStreamKeepsTheBackendReportedModel(t *testing.T) {
+	const reported = "panel-a-2026-01-01"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		if strings.Contains(string(raw), "A useful answer") {
+			writeFusionReplayCompletion(w, reported, []map[string]interface{}{{"index": 0, "message": map[string]interface{}{"role": "assistant", "content": `{"confidence":0.95,"reason":"grounded"}`}, "finish_reason": "stop"}}, map[string]int64{"prompt_tokens": 4, "completion_tokens": 3, "total_tokens": 7})
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, chunk := range []string{
+			`{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"` + reported + `","choices":[{"index":0,"delta":{"role":"assistant","content":"A useful answer"},"finish_reason":null}]}`,
+			`{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"` + reported + `","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+			`{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"` + reported + `","choices":[],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`,
+		} {
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", chunk)
+		}
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+	gte := 0.5
+	decision := &config.Decision{Name: "ingress-escalate", ModelRefs: []config.ModelRef{{Model: "panel-a"}}, Algorithm: &config.AlgorithmConfig{
+		Type: config.DecisionAlgorithmEscalate, Escalate: &config.EscalateAlgorithmConfig{
+			Accept: &config.EscalateAccept{Confidence: &config.EscalateConfidence{Method: config.ConfidenceMethodSelfVerify, GTE: &gte}},
+		},
+	}}
+	for _, client := range []struct {
+		format       llmprotocol.WireFormat
+		includeUsage bool
+	}{{llmprotocol.AnthropicMessagesV1, false}, {llmprotocol.OpenAIChatV1, true}, {llmprotocol.OpenAIChatV1, false}} {
+		t.Run(fmt.Sprintf("%s/include_usage_%t", client.format, client.includeUsage), func(t *testing.T) {
+			router, ctx, _ := quorumFallbackRouter(server.URL)
+			ctx.SourceFormat = client.format
+			ctx.TraceContext = context.Background()
+			var raw map[string]interface{}
+			require.NoError(t, json.Unmarshal(looperIngressBody(t, client.format, true), &raw))
+			if client.includeUsage {
+				raw["stream_options"] = map[string]bool{"include_usage": true}
+			}
+			body, err := json.Marshal(raw)
+			require.NoError(t, err)
+			request, rejected := router.prepareProtocolRequest(body, ctx)
+			require.Nil(t, rejected)
+			_, err = router.extractRequestSignalSnapshot(ctx)
+			require.NoError(t, err)
+			response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
+			require.NoError(t, err)
+			immediate := response.GetImmediateResponse()
+			require.EqualValues(t, 200, immediate.GetStatus().GetCode(), string(immediate.GetBody()))
+			require.Contains(t, string(immediate.GetBody()), "A useful answer")
+		})
 	}
 }
 

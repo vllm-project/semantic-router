@@ -25,8 +25,6 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/api/auth/me", expected: true},
 		{path: "/api/status", expected: false},
 		{path: "/embedded/grafana/", expected: true},
-		{path: "/embedded/wizmap/", expected: true},
-		{path: "/embedded/wizmap/assets/index.js", expected: false},
 	}
 
 	for _, tc := range testCases {
@@ -190,7 +188,6 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/status", expected: PermTopologyRead},
 		{method: http.MethodGet, path: "/embedded/grafana/", expected: PermLogsRead},
-		{method: http.MethodGet, path: "/embedded/wizmap/", expected: PermConfigRead},
 		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/models/catalog", expected: PermConfigRead},
@@ -206,22 +203,12 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodGet, path: "/api/router/config/deployments", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/router/api/v1/storage/response-cache/stats", expected: PermConfigRead},
 		{method: http.MethodPost, path: "/api/router/api/v1/storage/response-cache/invalidate", expected: PermConfigWrite},
-		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context_compression/preview", expected: PermEvalRun},
+		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context/compression/preview", expected: PermEvalRun},
 		{method: http.MethodPost, path: "/api/router/api/v1/storage/context-recovery/invalidate", expected: PermConfigWrite},
-		{method: http.MethodGet, path: "/api/openclaw/teams", expected: PermOpenClawRead},
-		{method: http.MethodPost, path: "/api/openclaw/teams", expected: PermOpenClaw},
-		{method: http.MethodGet, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
-		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClaw},
-		{method: http.MethodGet, path: "/api/openclaw/rooms/room-1/ws", expected: PermOpenClaw},
-		{method: http.MethodGet, path: "/api/openclaw/token", expected: PermOpenClaw},
-		{method: http.MethodGet, path: "/embedded/openclaw/worker-1/", expected: PermOpenClaw},
 		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermInferenceRun},
 		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", expected: PermFeedbackSubmit},
 		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays", expected: PermReplayRead},
 		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays/record-1", expected: PermReplayRead},
-		{method: http.MethodGet, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigWrite},
-		{method: http.MethodDelete, path: "/api/router/api/v1/storage/knowledge-bases/example", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/recipe", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/probes", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/packages", expected: PermConfigRead},
@@ -470,14 +457,14 @@ func TestRouterGatewayRejectsUndeclaredMethodAndPathBeforePermissionFallback(t *
 		allowed      bool
 		permission   string
 	}{
-		{http.MethodPost, "/api/router/api/v1/diagnostics/models/rerank", true, PermEvalRun},
-		{http.MethodGet, "/api/router/api/v1/plugins/rag/bindings", true, PermConfigRead},
-		{http.MethodPost, "/api/router/api/v1/plugins/rag/preview", true, PermEvalRun},
+		{http.MethodPost, "/api/router/api/v1/diagnostics/models/embeddings", true, PermEvalRun},
+		{http.MethodGet, "/api/router/api/v1/plugins/context/bindings", true, PermConfigRead},
+		{http.MethodPost, "/api/router/api/v1/plugins/context/preview", true, PermEvalRun},
 		{http.MethodGet, "/api/router/api/v1/observability/audit", true, PermReplayRead},
 		{http.MethodPost, "/api/router/api/v1/storage/response-cache/flush", true, PermConfigWrite},
 		{http.MethodPatch, "/api/router/api/v1/config", false, ""},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/id/extra", false, ""},
-		{http.MethodPost, "/api/router/api/v1/plugins/rag/bindings", false, ""},
+		{http.MethodPost, "/api/router/api/v1/plugins/context/bindings", false, ""},
 		{http.MethodGet, "/api/router/api/v1/response-cache/stats", false, ""},
 		{http.MethodPost, "/api/router/v1/chat/completions/suffix", false, ""},
 	} {
@@ -501,10 +488,10 @@ func TestAuthenticateRouterGatewayEnforcesProbePermissionAndDefaultDeny(t *testi
 		method, path               string
 		readerStatus, writerStatus int
 	}{
-		{http.MethodGet, "/api/router/api/v1/plugins/rag/bindings", http.StatusNoContent, http.StatusNoContent},
+		{http.MethodGet, "/api/router/api/v1/plugins/context/bindings", http.StatusNoContent, http.StatusNoContent},
 		{http.MethodGet, "/api/router/api/v1/observability/audit", http.StatusNoContent, http.StatusNoContent},
-		{http.MethodPost, "/api/router/api/v1/diagnostics/models/rerank", http.StatusForbidden, http.StatusNoContent},
-		{http.MethodPost, "/api/router/api/v1/plugins/rag/preview", http.StatusForbidden, http.StatusNoContent},
+		{http.MethodPost, "/api/router/api/v1/diagnostics/models/embeddings", http.StatusForbidden, http.StatusNoContent},
+		{http.MethodPost, "/api/router/api/v1/plugins/context/preview", http.StatusForbidden, http.StatusNoContent},
 		{http.MethodPost, "/api/router/api/v1/storage/response-cache/flush", http.StatusForbidden, http.StatusNoContent},
 		{http.MethodPatch, "/api/router/api/v1/config", http.StatusForbidden, http.StatusForbidden},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/id/extra", http.StatusForbidden, http.StatusForbidden},
@@ -533,7 +520,7 @@ func TestAuthenticateRouterRetrievalRequiresResourceReadInAdditionToEvaluation(t
 	}
 	called := false
 	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true; w.WriteHeader(http.StatusNoContent) }))
-	for _, plugin := range []string{"rag", "tools", "tool_selection"} {
+	for _, plugin := range []string{"context", "tools"} {
 		path := "/api/router/api/v1/plugins/" + plugin + "/preview"
 		if got := RequiredPermissions(http.MethodPost, path); !reflect.DeepEqual(got, []string{PermEvalRun, PermConfigRead}) {
 			t.Fatalf("incomplete retrieval permissions: %v", got)

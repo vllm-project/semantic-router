@@ -1,10 +1,10 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,21 +16,33 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      - name: default_decision
-        description: Default catch-all decision
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-    signals: {}
-    modelCards:
-      - name: openai/gpt-oss-20b
+  recipes:
+    - name: default
+      decisions:
+        - name: default_decision
+          description: Default catch-all decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+      signals: {}
   global:
+    model_catalog:
+      deployments:
+        # provider-mocker's embedding fixture (see its README) stands in for
+        # the embedding model, so the Router downloads none.
+        fixture-embedding:
+          provider: openai_embeddings
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1
+          model: e2e/fixture-embedding
+          timeout_ms: 5000
+          capabilities:
+            dimensions: 256
+      embeddings:
+        default: {deployment: fixture-embedding}
     router:
       strategy: priority
     services:
@@ -42,8 +54,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: false
@@ -53,14 +63,9 @@ config:
         tracing:
           enabled: false
     stores:
-      response_cache:
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
       vector_store:
         enabled: true
         backend_type: memory
-        embedding_model: mmbert
         metadata_store: postgres
         metadata_postgres:
           host: postgres.default.svc.cluster.local
@@ -74,25 +79,6 @@ config:
           conn_max_lifetime: 300
           table_name: vector_store_registry
     integrations: {}
-    model_catalog:
-      kbs: []
-      modules:
-        prompt_guard:
-          enabled: false
-          model_ref: ""
-          model_id: ""
-          jailbreak_mapping_path: ""
-        classifier:
-          domain:
-            model_ref: ""
-            model_id: ""
-            category_mapping_path: ""
-            use_mmbert_32k: false
-          pii:
-            model_ref: ""
-            model_id: ""
-            pii_mapping_path: ""
-            use_mmbert_32k: false
 resources:
   limits:
     cpu: '2'
@@ -100,3 +86,9 @@ resources:
   requests:
     cpu: 500m
     memory: 2Gi
+# Uploaded files stay at the default file_storage_dir, /var/lib/vsr/data, on
+# the data volume's claim, so the restart test can read them back.
+data:
+  persistence:
+    enabled: true
+    size: 1Gi

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -52,7 +52,7 @@ func TestValkeyCacheEmbeddingModel(t *testing.T) {
 		TTLSeconds:          3600,
 	})
 	assert.NoError(t, err)
-	assert.Empty(t, cache.embeddingModel)
+	assert.Empty(t, cache.embeddingDeployment)
 
 	cache, err = NewValkeyCache(ValkeyCacheOptions{
 		EmbeddingProvider:   cacheTestEmbeddingProvider(),
@@ -60,10 +60,10 @@ func TestValkeyCacheEmbeddingModel(t *testing.T) {
 		Config:              valkeyConfig,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          3600,
-		EmbeddingModel:      "qwen3",
+		EmbeddingDeployment: "qwen3-embedding",
 	})
 	assert.NoError(t, err)
-	assert.Empty(t, cache.embeddingModel)
+	assert.Empty(t, cache.embeddingDeployment)
 }
 
 func TestValkeyCacheGetStats(t *testing.T) {

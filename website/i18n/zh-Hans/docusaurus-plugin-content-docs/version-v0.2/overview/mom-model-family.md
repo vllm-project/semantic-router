@@ -32,7 +32,7 @@ MoM 家族由专门构建的模型组成，用于处理路由管道中的特定�
 #### 领域/意图分类器 (Domain/Intent Classifier)
 
 - **模型 ID**: `models/mom-domain-classifier`
-- **HuggingFace**: `LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model`
+- **HuggingFace**: `vllm-sr/lora_intent_classifier_bert-base-uncased_model`
 - **用途**：将用户查询分类为 14 个 MMLU 类别（数学、科学、历史等）
 - **架构**：BERT-base (110M) + LoRA 适配器
 - **用例**：将查询路由到特定领域的模型或专家
@@ -40,7 +40,7 @@ MoM 家族由专门构建的模型组成，用于处理路由管道中的特定�
 #### PII 检测器 (PII Detector)
 
 - **模型 ID**: `models/mom-pii-classifier`
-- **HuggingFace**: `LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model`
+- **HuggingFace**: `vllm-sr/lora_pii_detector_bert-base-uncased_model`
 - **用途**：检测 35 种类型的个人身份信息
 - **架构**：BERT-base (110M) + LoRA 适配器
 - **用例**：隐私保护、合规性、数据脱敏
@@ -48,7 +48,7 @@ MoM 家族由专门构建的模型组成，用于处理路由管道中的特定�
 #### Jailbreak Detector
 
 - **模型 ID**: `models/mom-jailbreak-classifier`
-- **HuggingFace**: `LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model`
+- **HuggingFace**: `vllm-sr/lora_jailbreak_classifier_bert-base-uncased_model`
 - **用途**：检测 prompt injection 和 jailbreak 尝试
 - **架构**：BERT-base (110M) + LoRA 适配器
 - **用例**：内容安全、prompt 安全
@@ -56,7 +56,7 @@ MoM 家族由专门构建的模型组成，用于处理路由管道中的特定�
 #### 反馈检测器 (Feedback Detector)
 
 - **模型 ID**: `models/mom-feedback-detector`
-- **HuggingFace**: `llm-semantic-router/feedback-detector`
+- **HuggingFace**: `vllm-sr/feedback-detector`
 - **用途**：将用户反馈分类为 4 种类型（满意、需要澄清、错误答案、想要不同的答案）
 - **架构**：ModernBERT-base (149M)
 - **用例**：自适应路由、对话改进
@@ -95,7 +95,7 @@ MoM 家族由专门构建的模型组成，用于处理路由管道中的特定�
 #### Halugate Sentinel
 
 - **模型 ID**: `models/mom-halugate-sentinel`
-- **HuggingFace**: `LLM-Semantic-Router/halugate-sentinel`
+- **HuggingFace**: `vllm-sr/halugate-sentinel`
 - **用途**：第一阶段 hallucination 筛查
 - **架构**：BERT-base (110M)
 - **用例**：快速 hallucination 检测、预过滤

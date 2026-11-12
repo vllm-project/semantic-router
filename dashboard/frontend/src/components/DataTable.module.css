@@ -188,6 +188,12 @@
   min-width: 220px;
 }
 
+.scrollingActions .actionsColumn,
+.scrollingActions .actionsCell {
+  position: static;
+  box-shadow: none;
+}
+
 .tr:hover .actionsCell,
 .trSelected .actionsCell {
   background: #18181b;

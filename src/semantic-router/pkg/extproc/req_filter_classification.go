@@ -30,7 +30,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	}
 
 	signalInput := r.prepareSignalEvaluationInput(history)
-	signalInput.requestFacts.Context = ctx.TraceContext
+	compressSignalEvaluationInput(&signalInput, ctx.Routing.SelectedRecipe().SignalsCompression())
+	observePromptCompression(ctx, signalInput.compression.outcome, signalInput.compression.elapsed)
+	signalInput.requestFacts.Context = selectionRequestContext(ctx)
 	ctx.VSRConversationFacts = signalInput.conversationFacts
 	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
 		signalInput.requestFacts.ContextHasNonText
@@ -87,15 +89,15 @@ func (r *OpenAIRouter) prepareDecisionEvaluation(
 }
 
 func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig, ctx *RequestContext) selection.Selector {
-	if method == selection.MethodHybrid && algorithm != nil && algorithm.Hybrid != nil {
-		return r.newDecisionHybridSelector(algorithm.Hybrid, ctx)
-	}
 	if method == selection.MethodMultiFactor && algorithm != nil {
 		return r.newDecisionMultiFactorSelector(algorithm.MultiFactor)
 	}
-	if method == selection.MethodPrompt && algorithm != nil &&
-		algorithm.Prompt != nil {
-		return r.newDecisionPromptSelector(*algorithm.Prompt)
+	if method == selection.MethodSystemOne && algorithm != nil &&
+		algorithm.SystemOne != nil {
+		return r.newDecisionModelSelector(*algorithm.SystemOne)
+	}
+	if selector := r.extensionAlgorithmSelector(method, algorithm, ctx); selector != nil {
+		return selector
 	}
 	registry := r.modelSelectorForRequest(ctx)
 	if registry == nil {
@@ -124,57 +126,6 @@ func (r *OpenAIRouter) newDecisionMultiFactorSelector(decisionCfg *config.MultiF
 		selector.InitializeFromConfig(r.Config.ModelConfig)
 	}
 	return selector
-}
-
-func (r *OpenAIRouter) newDecisionHybridSelector(decisionCfg *config.HybridSelectionConfig, ctx *RequestContext) selection.Selector {
-	var cfg *selection.HybridConfig
-	if r != nil && r.Config != nil {
-		cfg = buildHybridSelectionConfig(r.Config, decisionCfg)
-	} else {
-		cfg = selection.DefaultHybridConfig()
-	}
-
-	eloSelector, routerDCSelector, autoMixSelector := r.hybridComponentSelectors(r.modelSelectorForRequest(ctx))
-
-	selector := selection.NewHybridSelectorWithComponents(cfg, eloSelector, routerDCSelector, autoMixSelector)
-	r.applyHybridModelCosts(selector)
-	if r != nil && r.LookupTable != nil {
-		selector.SetLookupTable(r.LookupTable)
-	}
-	return selector
-}
-
-// hybridComponentSelectors resolves the underlying elo/routerDC/autoMix selectors
-// that the hybrid selector composes, when they are registered on the router.
-func (r *OpenAIRouter) hybridComponentSelectors(registry *selection.Registry) (*selection.EloSelector, *selection.RouterDCSelector, *selection.AutoMixSelector) {
-	if registry == nil {
-		return nil, nil, nil
-	}
-	var eloSelector *selection.EloSelector
-	var routerDCSelector *selection.RouterDCSelector
-	var autoMixSelector *selection.AutoMixSelector
-	if selector, ok := registry.Get(selection.MethodElo); ok {
-		eloSelector, _ = selector.(*selection.EloSelector)
-	}
-	if selector, ok := registry.Get(selection.MethodRouterDC); ok {
-		routerDCSelector, _ = selector.(*selection.RouterDCSelector)
-	}
-	if selector, ok := registry.Get(selection.MethodAutoMix); ok {
-		autoMixSelector, _ = selector.(*selection.AutoMixSelector)
-	}
-	return eloSelector, routerDCSelector, autoMixSelector
-}
-
-// applyHybridModelCosts seeds per-model prompt pricing into the hybrid selector.
-func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector) {
-	if r == nil || r.Config == nil || r.Config.ModelConfig == nil {
-		return
-	}
-	for model, params := range r.Config.ModelConfig {
-		if params.Pricing.PromptPer1M > 0 {
-			selector.SetModelCost(model, params.Pricing.PromptPer1M)
-		}
-	}
 }
 
 func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
@@ -222,14 +173,10 @@ func (r *OpenAIRouter) buildSelectionContext(
 	modelRefs []config.ModelRef,
 	decisionName string,
 	query string,
-	algorithm *config.AlgorithmConfig,
 	categoryName string,
 	candidateIterations []config.CandidateIterationConfig,
 	reqCtx *RequestContext,
 ) *selection.SelectionContext {
-	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
-	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
-
 	sessionID, userID, conversationHistory := r.extractSessionContext(reqCtx)
 	var recipeName config.RecipeName
 	if reqCtx != nil {
@@ -238,24 +185,20 @@ func (r *OpenAIRouter) buildSelectionContext(
 	inputTokens, expectedOutputTokens := selectionTokenBudget(reqCtx)
 
 	return &selection.SelectionContext{
-		Query:                      query,
-		DecisionName:               decisionName,
-		RecipeName:                 recipeName,
-		CategoryName:               categoryName,
-		CandidateModels:            modelRefs,
-		CandidateIterations:        candidateIterations,
-		InputTokens:                inputTokens,
-		ExpectedOutputTokens:       expectedOutputTokens,
-		CostWeight:                 costWeight,
-		QualityWeight:              qualityWeight,
-		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
-		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
-		UserID:                     userID,
-		SessionID:                  sessionID,
-		SessionStateKey:            sessiontelemetry.RoutingSessionKey(recipeName, sessionID),
-		AgenticSession:             r.buildAgenticSessionContext(reqCtx, modelRefs, sessionID, userID),
-		ConversationHistory:        conversationHistory,
-		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
+		Query:                query,
+		DecisionName:         decisionName,
+		RecipeName:           recipeName,
+		CategoryName:         categoryName,
+		CandidateModels:      modelRefs,
+		CandidateIterations:  candidateIterations,
+		InputTokens:          inputTokens,
+		ExpectedOutputTokens: expectedOutputTokens,
+		UserID:               userID,
+		SessionID:            sessionID,
+		SessionStateKey:      sessiontelemetry.RoutingSessionKey(recipeName, sessionID),
+		AgenticSession:       r.buildAgenticSessionContext(reqCtx, modelRefs, sessionID, userID),
+		ConversationHistory:  conversationHistory,
+		CacheAffinityCtx:     r.buildCacheAffinityContext(reqCtx, modelRefs),
 	}
 }
 
@@ -340,6 +283,8 @@ func (r *OpenAIRouter) buildAgenticSessionContextForKey(
 		MemoryCost:                  snapshot.CumulativeCost,
 		MemoryEstimatedCacheSavings: snapshot.CumulativeEstimatedCacheSavings,
 		MemoryCacheAccountingSource: snapshot.LastCacheAccountingSource,
+		MemoryUserTurnCount:         snapshot.UserTurnCount,
+		MemoryLastReleaseUserTurn:   snapshot.LastReleaseUserTurn,
 		LastDecisionName:            snapshot.LastDecisionName,
 		LastDecisionReason:          snapshot.LastDecisionReason,
 		HistoryTokens:               reqCtx.HistoryTokenCount,
@@ -467,32 +412,6 @@ func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) sel
 
 // getSelectionWeights returns cost and quality weights based on algorithm config.
 // Uses per-decision config only (aligned with looper pattern).
-func (r *OpenAIRouter) getSelectionWeights(algorithm *config.AlgorithmConfig) (float64, float64) {
-	// Check per-decision algorithm config
-	if algorithm != nil {
-		if algorithm.AutoMix != nil && algorithm.AutoMix.CostQualityTradeoff > 0 {
-			cost := algorithm.AutoMix.CostQualityTradeoff
-			return cost, 1.0 - cost
-		}
-		if algorithm.Hybrid != nil && algorithm.Hybrid.CostWeight > 0 {
-			cost := algorithm.Hybrid.CostWeight
-			return cost, 1.0 - cost
-		}
-	}
-
-	// Default: equal weighting (0.5 cost, 0.5 quality)
-	return 0.5, 0.5
-}
-
-// getLatencyAwarePercentiles extracts TPOT/TTFT percentile settings for latency_aware selection.
-// Returns (0, 0) when latency_aware is not configured for the decision.
-func (r *OpenAIRouter) getLatencyAwarePercentiles(algorithm *config.AlgorithmConfig) (int, int) {
-	if algorithm == nil || algorithm.LatencyAware == nil {
-		return 0, 0
-	}
-	return algorithm.LatencyAware.TPOTPercentile, algorithm.LatencyAware.TTFTPercentile
-}
-
 // extractSessionContext extracts session ID, user ID, and conversation history from the RequestContext.
 func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, userID string, conversationHistory []string) {
 	if ctx == nil {

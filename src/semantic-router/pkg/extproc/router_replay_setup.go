@@ -14,7 +14,7 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 	backend := resolveReplayStoreBackend(cfg.RouterReplay)
 	if usesSharedReplayStorage(backend) {
 		recorders, replayRecorder, err := initializeSharedReplayRecorders(cfg, backend)
-		shareReplayOutcomeQueue(recorders)
+		shareReplayOutcomeQueueWithFallback(recorders, replayRecorder)
 		return recorders, replayRecorder, replayRecorder != nil, err
 	}
 
@@ -23,19 +23,42 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 		return nil, nil, false, err
 	}
 
-	shareReplayOutcomeQueue(replayRecorders)
-	return replayRecorders, nil, false, nil
+	var globalRecorder *routerreplay.Recorder
+	if policy := preDecisionReplayPolicy(cfg); policy != nil {
+		globalRecorder, err = createReplayRecorder("global", backend, policy, &cfg.RouterReplay)
+		if err != nil {
+			_ = closeReplayRecorders(nil, replayRecorders, false)
+			return nil, nil, false, fmt.Errorf("failed to initialize global replay recorder: %w", err)
+		}
+	}
+	shareReplayOutcomeQueueWithFallback(replayRecorders, globalRecorder)
+	return replayRecorders, globalRecorder, false, nil
 }
 
-func shareReplayOutcomeQueue(recorders map[string]*routerreplay.Recorder) {
+// preDecisionReplayPolicy sizes the store for requests without a decision. A
+// recipe's defaults layer its own plugins over the global ones, so a recipe
+// can record before a decision when the global plugins do not. Each request
+// still captures under its own recipe's policy.
+func preDecisionReplayPolicy(cfg *config.RouterConfig) *config.RouterReplayPluginConfig {
+	policy := cfg.EffectiveRouterReplayConfig(nil)
+	for i := 0; policy == nil && i < len(cfg.Recipes); i++ {
+		policy = config.RouterReplayPolicyOf(cfg.Recipes[i].Profile.DefaultPlugins)
+	}
+	return policy
+}
+
+func shareReplayOutcomeQueueWithFallback(recorders map[string]*routerreplay.Recorder, fallback *routerreplay.Recorder) {
 	// A failed initialization and a config with no replay decisions both arrive
 	// here empty; neither should allocate a queue and its writer context.
-	if len(recorders) == 0 {
+	if len(recorders) == 0 && fallback == nil {
 		return
 	}
 	group := make([]*routerreplay.Recorder, 0, len(recorders))
 	for _, recorder := range recorders {
 		group = append(group, recorder)
+	}
+	if fallback != nil {
+		group = append(group, fallback)
 	}
 	routerreplay.ShareOutcomeQueue(group...)
 }
@@ -85,6 +108,16 @@ func initializeSharedReplayRecorders(
 		sharedStore    store.Storage
 		replayRecorder *routerreplay.Recorder
 	)
+
+	// Global capture also covers direct requests and failures before a decision.
+	if policy := cfg.EffectiveRouterReplayConfig(nil); policy != nil {
+		storage, err := createSharedReplayStore(backend, &cfg.RouterReplay)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to initialize global replay store: %w", err)
+		}
+		sharedStore = storage
+		replayRecorder = createSharedReplayRecorder(sharedStore, policy)
+	}
 
 	for _, ref := range cfg.RoutingDecisionRefs() {
 		decision := ref.Decision

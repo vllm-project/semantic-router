@@ -9,9 +9,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -22,14 +23,14 @@ func init() {
 	})
 }
 
-// The jailbreak classifier scores at most its sequence limit of tokens, so one
-// classification call only ever saw the start of a long prompt (#3204). This
-// drives the endpoint with a jailbreak the profile already blocks on the
-// routing path, placed after enough benign text to fall outside that window.
-// The filler is scored on its own first: every chunk of it reads as benign to
-// the shipped model, so a detection on the combined text can only come from
-// the trailing prompt. No mocked backend reproduces this; the truncation lives
-// in the tokenizer.
+// A model reads at most its sequence limit of tokens, so a call that sent only
+// the start of a long prompt would miss its end (#3204). This drives the
+// endpoint with a jailbreak the profile already blocks on the routing path,
+// placed after enough benign text to fall outside any one window. The filler
+// is scored on its own first and reads as benign, so a detection on the
+// combined text can only come from the trailing prompt: the profile's System
+// One fixture reads all of what it is sent, and finds it only if the Router
+// sends the whole text.
 func testSecurityLongText(
 	ctx context.Context,
 	client *kubernetes.Clientset,

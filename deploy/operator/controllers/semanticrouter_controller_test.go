@@ -18,21 +18,25 @@ package controllers
 
 import (
 	"context"
+	"strings"
 	"testing"
 
-	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
@@ -88,12 +92,12 @@ func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
 		t.Fatalf("failed to parse generated YAML: %v", err)
 	}
 
-	if len(parsed.Routing.ModelCards) != 1 {
-		t.Fatalf("expected one generated modelCard, got %#v", parsed.Routing.ModelCards)
+	if len(parsed.Providers.Models) != 1 {
+		t.Fatalf("expected one generated provider model, got %#v", parsed.Providers.Models)
 	}
 	assertGeneratedBackendTarget(t, parsed)
 
-	modelCard := parsed.Routing.ModelCards[0]
+	modelCard := parsed.Providers.Models[0]
 	if len(modelCard.LoRAs) != 1 {
 		t.Fatalf("expected one generated LoRA adapter, got %#v", modelCard.LoRAs)
 	}
@@ -436,6 +440,244 @@ func TestUpdateStatus(t *testing.T) {
 	}
 }
 
+func TestUpdateStatusClearsStaleProgressingOnZeroReady(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+
+	sr := &vllmv1alpha1.SemanticRouter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "default",
+		},
+		Spec: vllmv1alpha1.SemanticRouterSpec{},
+	}
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "default",
+		},
+		Status: appsv1.DeploymentStatus{
+			Replicas:      3,
+			ReadyReplicas: 1,
+		},
+	}
+
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, deployment).WithStatusSubresource(sr, deployment).Build()
+	r := &SemanticRouterReconciler{Client: cl, Scheme: s}
+	key := types.NamespacedName{Name: "test", Namespace: "default"}
+
+	getSR := func(t *testing.T) *vllmv1alpha1.SemanticRouter {
+		t.Helper()
+		got := &vllmv1alpha1.SemanticRouter{}
+		if err := cl.Get(context.Background(), key, got); err != nil {
+			t.Fatalf("get SemanticRouter: %v", err)
+		}
+		return got
+	}
+	patchDeploymentReady := func(t *testing.T, ready int32) {
+		t.Helper()
+		current := &appsv1.Deployment{}
+		if err := cl.Get(context.Background(), key, current); err != nil {
+			t.Fatalf("get Deployment: %v", err)
+		}
+		patched := current.DeepCopy()
+		patched.Status.ReadyReplicas = ready
+		if err := cl.Status().Patch(context.Background(), patched, client.MergeFrom(current)); err != nil {
+			t.Fatalf("patch Deployment readyReplicas=%d: %v", ready, err)
+		}
+	}
+	runUpdateStatus := func(t *testing.T) *vllmv1alpha1.SemanticRouter {
+		t.Helper()
+		current := getSR(t)
+		if err := r.updateStatus(context.Background(), current, current.DeepCopy()); err != nil {
+			t.Fatalf("updateStatus: %v", err)
+		}
+		return getSR(t)
+	}
+	conditionMessages := func(conditions []metav1.Condition) []string {
+		msgs := make([]string, 0, len(conditions))
+		for _, c := range conditions {
+			msgs = append(msgs, c.Type+":"+c.Message)
+		}
+		return msgs
+	}
+
+	// Seed: 1/3 ready leaves Progressing=True with the partial count.
+	partial := runUpdateStatus(t)
+	if partial.Status.Phase != "Progressing" {
+		t.Fatalf("1/3 seed: phase=%q, want Progressing", partial.Status.Phase)
+	}
+	progressing := meta.FindStatusCondition(partial.Status.Conditions, typeProgressingSemanticRouter)
+	if progressing == nil || progressing.Status != metav1.ConditionTrue {
+		t.Fatalf("1/3 seed: missing Progressing=True: %+v", partial.Status.Conditions)
+	}
+	if progressing.Message != "1/3 replicas ready" {
+		t.Fatalf("1/3 seed: Progressing message=%q, want %q", progressing.Message, "1/3 replicas ready")
+	}
+
+	t.Run("partial_to_zero_clears_stale_progressing", func(t *testing.T) {
+		patchDeploymentReady(t, 0)
+		got := runUpdateStatus(t)
+
+		if got.Status.ReadyReplicas != 0 {
+			t.Errorf("ReadyReplicas=%d, want 0", got.Status.ReadyReplicas)
+		}
+		if got.Status.Phase != "Pending" {
+			t.Errorf("Phase=%q, want Pending", got.Status.Phase)
+		}
+		available := meta.FindStatusCondition(got.Status.Conditions, typeAvailableSemanticRouter)
+		if available == nil || available.Status != metav1.ConditionFalse || available.Message != "No replicas are ready" {
+			t.Errorf("Available condition: %+v", available)
+		}
+		if meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter) != nil {
+			t.Errorf("Progressing should be removed at 0 ready, got conditions %v", conditionMessages(got.Status.Conditions))
+		}
+		for _, msg := range conditionMessages(got.Status.Conditions) {
+			if strings.Contains(msg, "1/3 replicas ready") {
+				t.Errorf("stale partial-ready count survived in condition %q", msg)
+			}
+		}
+	})
+
+	t.Run("partial_to_all_ready_clears_progressing", func(t *testing.T) {
+		// Re-seed 1/3 so this case does not depend on the zero-ready branch.
+		patchDeploymentReady(t, 1)
+		if seed := runUpdateStatus(t); meta.FindStatusCondition(seed.Status.Conditions, typeProgressingSemanticRouter) == nil {
+			t.Fatal("re-seed 1/3 did not restore Progressing")
+		}
+
+		patchDeploymentReady(t, 3)
+		got := runUpdateStatus(t)
+
+		if got.Status.ReadyReplicas != 3 {
+			t.Errorf("ReadyReplicas=%d, want 3", got.Status.ReadyReplicas)
+		}
+		if got.Status.Phase != "Running" {
+			t.Errorf("Phase=%q, want Running", got.Status.Phase)
+		}
+		available := meta.FindStatusCondition(got.Status.Conditions, typeAvailableSemanticRouter)
+		if available == nil || available.Status != metav1.ConditionTrue || available.Reason != "AllReplicasReady" {
+			t.Errorf("Available condition: %+v", available)
+		}
+		if meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter) != nil {
+			t.Errorf("Progressing should be removed when all replicas are ready, got %v", conditionMessages(got.Status.Conditions))
+		}
+	})
+
+	t.Run("zero_to_partial_sets_progressing", func(t *testing.T) {
+		patchDeploymentReady(t, 0)
+		if seed := runUpdateStatus(t); seed.Status.Phase != "Pending" {
+			t.Fatalf("zero seed: phase=%q, want Pending", seed.Status.Phase)
+		}
+
+		patchDeploymentReady(t, 1)
+		got := runUpdateStatus(t)
+
+		if got.Status.Phase != "Progressing" {
+			t.Errorf("Phase=%q, want Progressing", got.Status.Phase)
+		}
+		progressing := meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter)
+		if progressing == nil || progressing.Status != metav1.ConditionTrue {
+			t.Fatalf("expected Progressing=True after 0->1/3, got %v", conditionMessages(got.Status.Conditions))
+		}
+		if progressing.Message != "1/3 replicas ready" {
+			t.Errorf("Progressing message=%q, want %q", progressing.Message, "1/3 replicas ready")
+		}
+	})
+}
+
+func TestUpdateStatusClearsStaleProgressingOnDeploymentNotFound(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+	key := types.NamespacedName{Name: "test", Namespace: "default"}
+
+	assertNoProgressing := func(t *testing.T, got *vllmv1alpha1.SemanticRouter) {
+		t.Helper()
+		if got.Status.Phase != "Pending" {
+			t.Errorf("Phase=%q, want Pending", got.Status.Phase)
+		}
+		available := meta.FindStatusCondition(got.Status.Conditions, typeAvailableSemanticRouter)
+		if available == nil || available.Status != metav1.ConditionFalse || available.Reason != "DeploymentNotFound" {
+			t.Errorf("Available condition: %+v", available)
+		}
+		if p := meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter); p != nil {
+			t.Errorf("Progressing should be removed when the Deployment is missing, got %+v", p)
+		}
+	}
+
+	t.Run("initial_reconciling_cleared", func(t *testing.T) {
+		sr := &vllmv1alpha1.SemanticRouter{
+			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+		}
+		meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
+			Type:    typeProgressingSemanticRouter,
+			Status:  metav1.ConditionTrue,
+			Reason:  "Reconciling",
+			Message: "Starting reconciliation",
+		})
+		cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr).WithStatusSubresource(sr).Build()
+		r := &SemanticRouterReconciler{Client: cl, Scheme: s}
+
+		current := &vllmv1alpha1.SemanticRouter{}
+		if err := cl.Get(context.Background(), key, current); err != nil {
+			t.Fatalf("get SemanticRouter: %v", err)
+		}
+		if err := r.updateStatus(context.Background(), current, current.DeepCopy()); err != nil {
+			t.Fatalf("updateStatus: %v", err)
+		}
+		got := &vllmv1alpha1.SemanticRouter{}
+		if err := cl.Get(context.Background(), key, got); err != nil {
+			t.Fatalf("get SemanticRouter: %v", err)
+		}
+		assertNoProgressing(t, got)
+	})
+
+	t.Run("deleted_mid_rollout_clears_partial_count", func(t *testing.T) {
+		sr := &vllmv1alpha1.SemanticRouter{
+			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+		}
+		deployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+			Status:     appsv1.DeploymentStatus{Replicas: 3, ReadyReplicas: 1},
+		}
+		cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, deployment).WithStatusSubresource(sr, deployment).Build()
+		r := &SemanticRouterReconciler{Client: cl, Scheme: s}
+
+		run := func(t *testing.T) *vllmv1alpha1.SemanticRouter {
+			t.Helper()
+			current := &vllmv1alpha1.SemanticRouter{}
+			if err := cl.Get(context.Background(), key, current); err != nil {
+				t.Fatalf("get SemanticRouter: %v", err)
+			}
+			if err := r.updateStatus(context.Background(), current, current.DeepCopy()); err != nil {
+				t.Fatalf("updateStatus: %v", err)
+			}
+			got := &vllmv1alpha1.SemanticRouter{}
+			if err := cl.Get(context.Background(), key, got); err != nil {
+				t.Fatalf("get SemanticRouter: %v", err)
+			}
+			return got
+		}
+
+		seed := run(t)
+		if p := meta.FindStatusCondition(seed.Status.Conditions, typeProgressingSemanticRouter); p == nil || p.Message != "1/3 replicas ready" {
+			t.Fatalf("1/3 seed: Progressing=%+v", p)
+		}
+		if err := cl.Delete(context.Background(), deployment); err != nil {
+			t.Fatalf("delete Deployment: %v", err)
+		}
+		got := run(t)
+		assertNoProgressing(t, got)
+		for _, c := range got.Status.Conditions {
+			if strings.Contains(c.Message, "1/3 replicas ready") {
+				t.Errorf("stale partial-ready count survived in condition %s: %q", c.Type, c.Message)
+			}
+		}
+	})
+}
+
 func TestUpdateStatusPreservesReconcileDerivedFields(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = scheme.AddToScheme(s)
@@ -680,7 +922,7 @@ func TestGenerateIngress(t *testing.T) {
 		},
 	}
 
-	ing := r.generateIngress(sr)
+	ing := r.generateIngress(sr, GatewayModeStandalone)
 
 	if ing == nil {
 		t.Fatal("generateIngress() returned nil")
@@ -696,6 +938,68 @@ func TestGenerateIngress(t *testing.T) {
 
 	if ing.Spec.Rules[0].Host != "example.com" {
 		t.Errorf("expected host 'example.com', got '%s'", ing.Spec.Rules[0].Host)
+	}
+
+	// servicePort is optional: an omitted port must target the Router's
+	// inference listener instead of serialising an empty backend port the API
+	// server rejects (#4414).
+	if got := ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number; got != DefaultListenerPort {
+		t.Errorf("omitted servicePort: backend port = %d, want %d", got, DefaultListenerPort)
+	}
+}
+
+func TestGenerateIngressOmittedServicePortFollowsGatewayMode(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = vllmv1alpha1.AddToScheme(s)
+
+	r := &SemanticRouterReconciler{
+		Scheme: s,
+	}
+
+	tests := []struct {
+		name        string
+		mode        string
+		apiPort     int32
+		servicePort int32
+		setPort     bool
+		wantPort    int32
+	}{
+		{name: "standalone omitted port targets the listener", mode: GatewayModeStandalone, apiPort: 9000, wantPort: DefaultListenerPort},
+		{name: "standalone explicit port wins", mode: GatewayModeStandalone, servicePort: 9090, setPort: true, wantPort: 9090},
+		{name: "gateway omitted port follows custom api port", mode: GatewayModeIntegration, apiPort: 9000, wantPort: 9000},
+		{name: "gateway omitted port defaults to DefaultAPIPort", mode: GatewayModeIntegration, wantPort: DefaultAPIPort},
+		{name: "gateway explicit port wins over api port", mode: GatewayModeIntegration, apiPort: 9000, servicePort: 9090, setPort: true, wantPort: 9090},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := vllmv1alpha1.IngressPath{Path: "/", PathType: "Prefix"}
+			if tt.setPort {
+				path.ServicePort = tt.servicePort
+			}
+			sr := &vllmv1alpha1.SemanticRouter{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+				Spec: vllmv1alpha1.SemanticRouterSpec{
+					Service: vllmv1alpha1.ServiceSpec{
+						API: vllmv1alpha1.PortSpec{Port: tt.apiPort},
+					},
+					Ingress: vllmv1alpha1.IngressSpec{
+						Hosts: []vllmv1alpha1.IngressHost{
+							{Host: "example.com", Paths: []vllmv1alpha1.IngressPath{path}},
+						},
+					},
+				},
+			}
+
+			ing := r.generateIngress(sr, tt.mode)
+			if ing == nil {
+				t.Fatal("generateIngress() returned nil")
+			}
+			got := ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number
+			if got != tt.wantPort {
+				t.Errorf("backend port = %d, want %d", got, tt.wantPort)
+			}
+		})
 	}
 }
 
@@ -787,7 +1091,7 @@ func TestGenerateVolumes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			volumes := r.generateVolumes(tt.sr, "gateway-integration")
+			volumes := r.generateVolumes(tt.sr)
 
 			if len(volumes) != tt.expectedVolume {
 				t.Errorf("expected %d volumes, got %d", tt.expectedVolume, len(volumes))
@@ -934,7 +1238,7 @@ func TestReconcileIngress(t *testing.T) {
 	}
 
 	// Test ingress creation
-	err := r.reconcileIngress(context.Background(), sr)
+	err := r.reconcileIngress(context.Background(), sr, GatewayModeStandalone)
 	if err != nil {
 		t.Fatalf("reconcileIngress() failed: %v", err)
 	}

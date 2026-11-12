@@ -5,29 +5,45 @@ import {
   resolveBuilderRoutingScope,
 } from './builderPageRoutingScopeSupport'
 
-describe('recipe standing policies', () => {
-  it('keeps a policy-only global scope visible and isolated', () => {
+describe('recipe routing policies', () => {
+  it('keeps default candidate requirements visible and isolated', () => {
     const secondary: ASTProgram = {
       signals: [],
       routes: [],
       plugins: [],
-      dataPolicy: { replay: true },
     }
     const ast: ASTProgram = {
       signals: [],
       routes: [],
       plugins: [],
       candidateRequirements: { capabilities: 'declared' },
-      dataPolicy: { replay: false },
       recipes: [{ name: 'secondary', program: secondary, pos: { Line: 1, Column: 1 } }],
     }
     expect(chooseDefaultBuilderRoutingScope(ast)).toBe('global')
-    expect(resolveBuilderRoutingScope(ast, 'recipe:secondary')?.dataPolicy).toEqual({
-      replay: true,
-    })
     expect(
       resolveBuilderRoutingScope(ast, 'recipe:secondary')?.candidateRequirements,
     ).toBeUndefined()
-    expect(resolveBuilderRoutingScope(ast, 'global')?.dataPolicy).toEqual({ replay: false })
+    expect(resolveBuilderRoutingScope(ast, 'global')?.candidateRequirements).toEqual({
+      capabilities: 'declared',
+    })
+  })
+
+  it('keeps an explicit default strategy visible without assigning it to a named recipe', () => {
+    const ast: ASTProgram = {
+      signals: [],
+      routes: [],
+      plugins: [],
+      strategy: 'confidence',
+      recipes: [
+        {
+          name: 'secondary',
+          program: { signals: [], routes: [], plugins: [] },
+          pos: { Line: 1, Column: 1 },
+        },
+      ],
+    }
+    expect(chooseDefaultBuilderRoutingScope(ast)).toBe('global')
+    expect(resolveBuilderRoutingScope(ast, 'global')?.strategy).toBe('confidence')
+    expect(resolveBuilderRoutingScope(ast, 'recipe:secondary')?.strategy).toBeUndefined()
   })
 })

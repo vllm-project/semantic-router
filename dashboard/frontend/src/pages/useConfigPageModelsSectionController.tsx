@@ -103,9 +103,7 @@ function useModelFormActions(props: ConfigPageModelsSectionProps, catalog: Built
         if (!props.config) return
         const submitted = modelFormDataForSave(data)
         validateModelStructuredFields(submitted)
-        await props.saveConfig(
-          buildEditedModelConfig(props.config, model, submitted, props.isPythonCLI),
-        )
+        await props.saveConfig(buildEditedModelConfig(props.config, model, submitted))
       },
       'edit',
     )
@@ -120,9 +118,7 @@ function useModelFormActions(props: ConfigPageModelsSectionProps, catalog: Built
         const submitted = modelFormDataForSave(data)
         validateModelStructuredFields(submitted)
         const modelName = validateNewModelName(submitted.model_name, props.models)
-        await props.saveConfig(
-          buildAddedModelConfig(props.config, modelName, submitted, props.isPythonCLI),
-        )
+        await props.saveConfig(buildAddedModelConfig(props.config, modelName, submitted))
       },
       'add',
     )
@@ -136,9 +132,6 @@ function useModelFormActions(props: ConfigPageModelsSectionProps, catalog: Built
   }
   const connect = async (input: ConnectedModelInput) => {
     if (!props.config) return
-    if (!props.isPythonCLI) {
-      throw new Error('Quick connect requires the canonical providers.models configuration.')
-    }
     await props.saveConfig(buildConnectedModelsConfig(props.config, props.models, input))
   }
   return { add, edit, view, connect }
@@ -165,9 +158,7 @@ function useModelDeletion(
     setPending(true)
     setError(null)
     try {
-      await props.saveConfig(
-        buildDeletedModelsConfig(props.config, props.models, names, props.isPythonCLI),
-      )
+      await props.saveConfig(buildDeletedModelsConfig(props.config, props.models, names))
       setSelectedKeys((current) => {
         const next = new Set(current)
         for (const modelName of names) next.delete(modelName)
@@ -248,7 +239,7 @@ function useEvaluationRecordInventory(
 }
 
 export function useConfigPageModelsSectionController(props: ConfigPageModelsSectionProps) {
-  const { catalog, error: catalogError } = useBuiltInModelCatalog()
+  const { catalog, error: catalogError, ready, loading, retry } = useBuiltInModelCatalog()
   const filters = useModelInventoryFilters(props)
   const forms = useModelFormActions(props, catalog)
   const deletion = useModelDeletion(props, filters.referenceCounts)
@@ -269,7 +260,7 @@ export function useConfigPageModelsSectionController(props: ConfigPageModelsSect
     forms,
     deletion,
     reasoning,
-    evaluations,
+    evaluations: { ...evaluations, ready, loading, retry },
     connect: { open: connectOpen, setOpen: setConnectOpen, catalog, catalogError },
     liveVerification,
     toggleExpand,

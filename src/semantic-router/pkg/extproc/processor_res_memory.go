@@ -7,7 +7,7 @@ import (
 
 	"github.com/openai/openai-go"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -89,11 +89,12 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 	reservation.Start(memoryPersistenceJob{
 		extractor:         r.MemoryExtractor,
 		codecs:            r.ProtocolCodecs,
+		allowedLossy:      r.Config.AllowLossyTranslation,
 		sessionID:         sessionID,
 		userID:            userID,
 		userMessage:       currentUserMessage,
 		assistantResponse: currentAssistantResponse,
-		history:           history,
+		history:           historyBeforeCurrentTurn(history),
 	}.run)
 }
 
@@ -102,6 +103,7 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 type memoryPersistenceJob struct {
 	extractor         *memory.MemoryExtractor
 	codecs            *protocolcodec.Registry
+	allowedLossy      []string
 	sessionID         string
 	userID            string
 	userMessage       string
@@ -110,7 +112,7 @@ type memoryPersistenceJob struct {
 }
 
 func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceOutcome, error) {
-	extractorHistory, historyErr := memoryHistoryForExtractor(job.codecs, job.history)
+	extractorHistory, historyErr := memoryHistoryForExtractor(job.codecs, job.allowedLossy, job.history)
 	if historyErr != nil {
 		return memory.PersistenceOutcome{
 			Status:   "extraction_failed",
@@ -165,16 +167,17 @@ func (r *OpenAIRouter) recordUnscheduledResponseMemoryStore(
 // suppressedResponseMemoryStore is the single enablement and response-stage
 // policy ladder: every path that owes a receipt reports the same verdict.
 func (r *OpenAIRouter) suppressedResponseMemoryStore(ctx *RequestContext) (string, string, bool) {
-	switch {
-	case r.MemoryExtractor == nil:
+	if r.MemoryExtractor == nil {
 		return "disabled", "no_extractor", true
-	case !r.responseMemoryAutoStoreEnabled(ctx):
+	}
+	if !r.responseMemoryAutoStoreEnabled(ctx) {
 		return "disabled", "auto_store_off", true
-	case ctx.ResponseJailbreakDetected:
-		if ctx.ResponseJailbreakType == classification.JailbreakClassificationErrorType {
-			return "policy_blocked", "jailbreak_unverified", true
-		}
+	}
+	switch matched, unverified := ctx.ResponseGuard.jailbreakFinding(); {
+	case matched:
 		return "policy_blocked", "response_jailbreak", true
+	case unverified:
+		return "policy_blocked", "jailbreak_unverified", true
 	}
 	return "", "", false
 }
@@ -185,8 +188,12 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 	if r == nil || r.Config == nil || ctx == nil || retentionDropsResponseContent(ctx) {
 		return false
 	}
-	memoryConfig, enabled := r.resolveMemoryPluginConfig(ctx)
-	if !enabled || (memoryConfig != nil && memoryConfig.AutoStore != nil && !*memoryConfig.AutoStore) {
+	source := config.ContextPluginOf(requestPlugins(r.Config, ctx)).Source(config.ContextSourceMemory)
+	if _, _, optedOut := r.memoryOptOut(ctx); source == nil || optedOut {
+		return false
+	}
+	auto := source.AutoStore()
+	if auto != nil && !*auto {
 		return false
 	}
 	if state := ctx.ResponseObjectState; state != nil && state.AutoStore != nil {
@@ -195,20 +202,21 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 	if requestAutoStore, ok := extractRequestAutoStore(ctx); ok {
 		return requestAutoStore
 	}
-	if memoryConfig != nil && memoryConfig.AutoStore != nil {
-		return *memoryConfig.AutoStore
+	if auto != nil {
+		return *auto
 	}
 	return r.Config.Memory.AutoStore
 }
 
 func memoryHistoryForExtractor(
 	codecs *protocolcodec.Registry,
+	allowedLossy []string,
 	history []llmprotocol.Message,
 ) ([]openai.ChatCompletionMessageParamUnion, error) {
 	if len(history) == 0 {
 		return nil, nil
 	}
-	engine, err := protocolEngineFor(codecs)
+	engine, err := protocolEngineFor(codecs, allowedLossy)
 	if err != nil {
 		return nil, err
 	}

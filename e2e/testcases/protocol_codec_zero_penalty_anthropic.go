@@ -35,7 +35,7 @@ func testProtocolCodecZeroPenaltyAnthropic(ctx context.Context, client *kubernet
 
 	sessionID := "anthropic-zero-penalty-" + uuid.NewString()
 	result, requestErr := sendProtocolMatrixRaw(ctx, session, "/v1/chat/completions", map[string]any{
-		"model": "MoM", "max_tokens": 32, "frequency_penalty": 0, "presence_penalty": 0,
+		"model": "vllm-sr/auto", "max_tokens": 32, "frequency_penalty": 0, "presence_penalty": 0,
 		"messages": []map[string]string{{"role": "user", "content": "Anthropic zero penalty probe"}},
 	}, false, map[string]string{"x-vsr-test-session-id": sessionID})
 	if requestErr != nil {

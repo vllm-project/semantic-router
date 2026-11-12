@@ -10,7 +10,7 @@
 #     Endpoints that require the legacy api-key header are not supported.
 #
 # This config is intentionally not referenced by the default local-dev flow.
-version: v0.3
+version: v0.5
 
 listeners:
   - name: "remote-embedding-smoke-http"
@@ -39,93 +39,53 @@ providers:
           endpoint: "host.docker.internal:18001/v1"
           protocol: "http"
 
-routing:
-  modelCards:
-    - name: "billing-model"
-      modality: "text"
-    - name: "default-model"
-      modality: "text"
-  signals:
-    embeddings:
-      - name: "billing_support"
-        threshold: 0.35
-        aggregation_method: max
-        candidates:
-          - billing invoice payment subscription charge refund account balance
-          - pricing plan renewal credit card receipt usage cost
-  decisions:
-    - name: "billing-route"
-      description: "Route billing and subscription prompts using remote embedding signal"
-      priority: 200
-      rules:
-        operator: "AND"
-        conditions:
-          - type: embedding
-            name: billing_support
-      modelRefs:
-        - model: "billing-model"
-          use_reasoning: false
-    - name: "default-route"
-      description: "Fallback route for remote embedding smoke validation"
-      priority: 10
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "default-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: billing_support
+          question:
+            type: noul
+            instructions: 'Is the request about any of these: billing invoice payment subscription charge refund account balance; pricing plan renewal credit card receipt usage cost?'
+    decisions:
+      - name: "billing-route"
+        description: "Route billing and subscription prompts using remote embedding signal"
+        priority: 200
+        rules:
+          operator: "AND"
+          conditions:
+            - type: systemone
+              name: billing_support
+        modelRefs:
+          - model: "billing-model"
+            use_reasoning: false
+      - name: "default-route"
+        description: "Fallback route for remote embedding smoke validation"
+        priority: 10
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "default-model"
+            use_reasoning: false
 
 global:
   services:
     response_api:
       enabled: false
-    router_replay:
-      enabled: false
     startup_status:
       store_backend: file
-  stores:
-    response_cache:
-      enabled: false
   model_catalog:
-    embeddings:
-      semantic:
-        mmbert_model_path: ""
-        qwen3_model_path: ""
-        gemma_model_path: ""
-        bert_model_path: ""
-        multimodal_model_path: ""
-        use_cpu: true
-        embedding_config:
-          backend: openai_compatible
-          model_type: remote
-          preload_embeddings: false
-          target_dimension: 1536
-        endpoint:
-          base_url: https://api.openai.com/v1
-          model: text-embedding-3-small
+    deployments:
+      remote-embedding:
+        provider: openai_embeddings
+        endpoint: https://api.openai.com/v1
+        model: text-embedding-3-small
+        auth:
           api_key_env: OPENAI_API_KEY
-          timeout_seconds: 10
-          max_retries: 1
+        timeout_ms: 10000
+        max_retries: 1
+        capabilities:
           dimensions: 1536
-    modules:
-      prompt_guard:
-        enabled: false
-        model_ref: ""
-        model_id: ""
-        jailbreak_mapping_path: ""
-      classifier:
-        domain:
-          model_ref: ""
-          model_id: ""
-          category_mapping_path: ""
-          use_mmbert_32k: false
-        pii:
-          model_ref: ""
-          model_id: ""
-          pii_mapping_path: ""
-          use_mmbert_32k: false
-      feedback_detector:
-        enabled: false
-        model_ref: ""
-        model_id: ""
-        use_mmbert_32k: false
+    embeddings:
+      default: {deployment: remote-embedding}

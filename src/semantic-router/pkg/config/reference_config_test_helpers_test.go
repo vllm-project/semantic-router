@@ -47,7 +47,7 @@ func referenceConfigRepoRoot(t testingT) string {
 func assertPluginConfigCoverage(t testingT, plugins []map[string]interface{}, typ reflect.Type, pluginType string) {
 	t.Helper()
 	configs := collectChildMapsFromSlice(t, plugins, "configuration", "plugins("+pluginType+")")
-	assertSliceUnionCoversStructFields(t, configs, typ, "routing.decisions[].plugins[type="+pluginType+"].configuration")
+	assertSliceUnionCoversStructFields(t, configs, typ, "recipes[default].decisions[].plugins[type="+pluginType+"].configuration")
 }
 
 func collectRuleCoverage(t testingT, rule map[string]interface{}, operators map[string]bool, signalTypes map[string]bool) {
@@ -199,7 +199,11 @@ func collectYAMLFields(t testingT, typ reflect.Type, fields map[string]bool, ski
 
 		name, inline := parseYAMLTag(field, tag)
 		if inline {
-			collectYAMLFields(t, indirectType(field.Type), fields, skipSet)
+			// An inline map holds registered extension blocks, which have no
+			// fixed names to cover.
+			if indirectType(field.Type).Kind() == reflect.Struct {
+				collectYAMLFields(t, indirectType(field.Type), fields, skipSet)
+			}
 			continue
 		}
 		if name == "" {

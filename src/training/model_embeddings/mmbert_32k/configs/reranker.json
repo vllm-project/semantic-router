@@ -2,7 +2,7 @@
   "schema_version": 1,
   "family": "reranker",
   "artifact": {
-    "repo_id": "llm-semantic-router/mmbert-rerank-32k-2d-matryoshka",
+    "repo_id": "vllm-sr/mmbert-rerank-32k-2d-matryoshka",
     "revision": "8022697d37c2602f06eff94cd6d83bb9f6ab1001"
   },
   "data_source": {
@@ -11,7 +11,7 @@
     "reported_training_pairs": 1569864
   },
   "train_arguments": {
-    "model_name": "llm-semantic-router/mmbert-32k-yarn",
+    "model_name": "vllm-sr/mmbert-32k-yarn",
     "model_revision": "72a23a6640489471eb4ff7ad3ec5bc80af8a27de",
     "train_data": "${MMBERT32K_BGE_DATA}",
     "output_dir": "${MMBERT32K_RERANKER_OUTPUT}",

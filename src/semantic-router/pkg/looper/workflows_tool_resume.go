@@ -8,6 +8,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func validateWorkflowStepResumeState(state *workflowPendingToolState) error {
@@ -52,6 +53,21 @@ func validateWorkflowFinalResumeState(state *workflowPendingToolState, cfg workf
 	return nil
 }
 
+// clearReportedUsage drops the usage of the calls a pending state carries.
+// The turn that made each call reported it, so a resumed turn reports only
+// the calls it makes.
+func clearReportedUsage(state *workflowPendingToolState) {
+	responses := append([]*ModelResponse{state.PlannerResp}, state.CurrentStepResponses...)
+	for _, result := range state.StepResults {
+		responses = append(responses, result.responses...)
+	}
+	for _, resp := range responses {
+		if resp != nil {
+			resp.Usage = TokenUsage{}
+		}
+	}
+}
+
 func (l *WorkflowsLooper) callWorkflowAgentAfterTool(
 	ctx context.Context,
 	req *Request,
@@ -68,7 +84,7 @@ func (l *WorkflowsLooper) callWorkflowAgentAfterTool(
 	if err != nil {
 		return nil, nil, err
 	}
-	resp, err := l.callWorkflowModel(ctx, agentReq, cfg, state.Model, true, state.Iteration+1, req)
+	resp, err := l.callWorkflowModel(ctx, agentReq, cfg, state.Model, llmprotocol.TrustedStageCandidate, true, state.Iteration+1, req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("workflow tool resume failed for model %q: %w", state.Model, err)
 	}
@@ -126,9 +142,9 @@ func (l *WorkflowsLooper) finishCurrentWorkflowStepAfterResume(
 
 	for modelIndex := state.ModelIndex + 1; modelIndex < len(step.Models); modelIndex++ {
 		modelName := step.Models[modelIndex]
-		nextResp, callErr := l.callWorkflowModel(ctx, state.StepRequest, cfg, modelName, true, workflowResumeModelIteration(state, modelIndex), req)
+		nextResp, callErr := l.callWorkflowModel(ctx, state.StepRequest, cfg, modelName, llmprotocol.TrustedStageCandidate, true, workflowResumeModelIteration(state, modelIndex), req)
 		if callErr != nil {
-			currentFailed = append(currentFailed, FusionFailedModel{Model: modelName, Error: callErr.Error()})
+			currentFailed = append(currentFailed, FusionFailedModel{Model: modelName, Error: modelFailureReason(callErr)})
 			if cfg.OnError == config.WorkflowOnErrorFail {
 				return nil, nil, fmt.Errorf("workflow step %q failed for model %q: %w", step.ID, modelName, callErr)
 			}
@@ -244,13 +260,13 @@ func (l *WorkflowsLooper) finishResumedWorkflow(
 ) (*Response, bool, error) {
 	original := extractOriginalContent(originalRequest)
 	finalResp, interrupt, err := l.synthesizeWorkflowFinal(ctx, req, cfg, state.Plan, original, results, state.PlannerResp, state.WorkerModels)
-	if err != nil {
+	if finalResp, err = workflowFinalOrFallback(req, cfg, results, finalResp, err); err != nil {
 		return nil, false, err
 	}
 	if interrupt != nil {
 		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg, claim)
 	}
-	applyFinalOutputContract(req.OutputContractSpec, finalResp)
+	applyWorkflowOutputContract(req.OutputContractSpec, finalResp, results)
 	summary := summarizeWorkflowExecution(cfg, state.PlannerResp, results, finalResp)
 	trace := buildWorkflowTrace(cfg, state.WorkerModels, state.Plan, results, summary.failed)
 	var out *Response
@@ -270,7 +286,7 @@ func (l *WorkflowsLooper) finishResumedWorkflowFinal(
 	originalRequest *openai.ChatCompletionNewParams,
 	finalResp *ModelResponse,
 ) (*Response, error) {
-	applyFinalOutputContract(req.OutputContractSpec, finalResp)
+	applyWorkflowOutputContract(req.OutputContractSpec, finalResp, state.StepResults)
 	summary := summarizeWorkflowExecution(cfg, state.PlannerResp, state.StepResults, finalResp)
 	trace := buildWorkflowTrace(cfg, state.WorkerModels, state.Plan, state.StepResults, summary.failed)
 	trace.FinalToolTrajectory = workflowToolTurnTraces(state.ToolTrajectory)

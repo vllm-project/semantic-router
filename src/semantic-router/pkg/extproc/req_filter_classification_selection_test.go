@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -57,13 +56,6 @@ func (s cancellationSelector) Method() selection.SelectionMethod {
 	return selection.MethodStatic
 }
 
-func (s cancellationSelector) UpdateFeedback(
-	context.Context,
-	*selection.Feedback,
-) error {
-	return nil
-}
-
 func (s cancellationSelector) Tier() selection.AlgorithmTier {
 	return selection.TierSupported
 }
@@ -78,10 +70,6 @@ func (s selectionResultSelector) Select(ctx context.Context, selCtx *selection.S
 
 func (s selectionResultSelector) Method() selection.SelectionMethod {
 	return selection.MethodStatic
-}
-
-func (s selectionResultSelector) UpdateFeedback(ctx context.Context, feedback *selection.Feedback) error {
-	return nil
 }
 
 func (s selectionResultSelector) Tier() selection.AlgorithmTier {
@@ -165,7 +153,7 @@ func TestSelectionEvidenceReasoningReachesRouteDiagnostics(t *testing.T) {
 	if err != nil || selected == nil || selected.Model != "model-b" {
 		t.Fatalf("selection = %#v, %v", selected, err)
 	}
-	diagnostics := buildReplayRouteDiagnostics(requestContext, "auto", selected.Model, "test", 0, 0)
+	diagnostics := buildReplayRouteDiagnostics(requestContext, "vllm-sr/auto", selected.Model, "test", 0, 0)
 	if diagnostics.SelectionReasoning != reasoning {
 		t.Fatalf("selection reasoning = %q", diagnostics.SelectionReasoning)
 	}
@@ -190,23 +178,6 @@ func TestSelectionResultPreservesSelectedCandidateEffort(t *testing.T) {
 	}
 	if selected == nil || selected.ReasoningEffort != "high" {
 		t.Fatalf("selected candidate = %+v, want high effort", selected)
-	}
-}
-
-func TestPromptSelectionDoesNotResolveBaseModelThroughLoRAAlias(t *testing.T) {
-	candidates := []config.ModelRef{
-		{Model: "model-b", LoRAName: "model-a"},
-		{Model: "model-a"},
-	}
-	selected := selectedModelRefFromResult(
-		&selection.SelectionContext{CandidateModels: candidates},
-		&selection.SelectionResult{
-			SelectedModel: "model-a",
-			Method:        selection.MethodPrompt,
-		},
-	)
-	if selected == nil || selected.Model != "model-a" || selected.LoRAName != "" {
-		t.Fatalf("selected = %#v, want base model-a candidate", selected)
 	}
 }
 
@@ -333,56 +304,6 @@ func TestSelectModelFromCandidatesPreservesConfiguredAlgorithmForSingleCandidate
 	}
 }
 
-func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.T) {
-	cfg := config.DefaultGlobalConfig()
-	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
-		"current":  {Description: "general chat"},
-		"frontier": {Description: "coding specialist"},
-	}
-
-	modelSelectionCfg := buildModelSelectionConfig(&cfg)
-	registry := selection.NewFactory(modelSelectionCfg).
-		WithModelConfig(cfg.BackendModels.ModelConfig).
-		WithEmbeddingFunc(func(text string, _ selection.EmbeddingConfig) ([]float32, error) {
-			lower := strings.ToLower(text)
-			switch {
-			case strings.Contains(lower, "coding"):
-				return []float32{1, 0}, nil
-			case strings.Contains(lower, "general"):
-				return []float32{0, 1}, nil
-			default:
-				return []float32{0.5, 0.5}, nil
-			}
-		}, selection.EmbeddingConfig{}).
-		CreateAll()
-
-	router := &OpenAIRouter{
-		Config:        &cfg,
-		ModelSelector: registry,
-	}
-
-	selector := router.selectorForDecisionMethod(selection.MethodHybrid, &config.AlgorithmConfig{
-		Type: "hybrid",
-		Hybrid: &config.HybridSelectionConfig{
-			ExperienceWeight: 0.6,
-			RouterDCWeight:   0.4,
-		},
-	}, nil)
-
-	result, err := selector.Select(context.Background(), &selection.SelectionContext{
-		Query:           "need help with coding",
-		DecisionName:    "hybrid_route",
-		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
-	})
-	if err != nil {
-		t.Fatalf("Select returned error: %v", err)
-	}
-	wantWeights := fmt.Sprintf("weights=[elo:%.2f, dc:%.2f, am:%.2f, cost:%.2f]", 0.6, 0.4, 0.2, 0.2)
-	if !strings.Contains(result.Reasoning, wantWeights) {
-		t.Fatalf("expected decision-scoped hybrid weights in reasoning, got %q", result.Reasoning)
-	}
-}
-
 func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *testing.T) {
 	qualityPolicy := &config.AlgorithmConfig{
 		Type: "multi_factor",
@@ -410,7 +331,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *tes
 		{Name: "cost", Algorithm: costPolicy},
 	}
 
-	registry := selection.NewFactory(buildModelSelectionConfig(&cfg)).
+	registry := selection.NewFactory().
 		WithModelConfig(cfg.BackendModels.ModelConfig).
 		CreateAll()
 	router := &OpenAIRouter{Config: &cfg, ModelSelector: registry}
@@ -466,7 +387,6 @@ func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) 
 		[]config.ModelRef{{Model: "model-a"}},
 		"agentic",
 		"query",
-		nil,
 		"",
 		nil,
 		reqCtx,
@@ -507,7 +427,6 @@ func TestBuildSelectionContextMarksUserAfterToolResultAsToolLoop(t *testing.T) {
 		[]config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
 		"agentic",
 		"continue after tool output",
-		nil,
 		"",
 		nil,
 		reqCtx,
@@ -533,7 +452,6 @@ func TestBuildSelectionContextMarksPreviousResponseIDAsNonPortableContext(t *tes
 		[]config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
 		"agentic",
 		"continue response",
-		nil,
 		"",
 		nil,
 		reqCtx,

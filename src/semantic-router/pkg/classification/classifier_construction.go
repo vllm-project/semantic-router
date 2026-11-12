@@ -1,8 +1,6 @@
 package classification
 
 import (
-	"fmt"
-	"runtime"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -19,7 +17,6 @@ type classifierOptionBuilder struct {
 	ownsEmbeddingSet bool
 	options          []option
 	providerInitOnce sync.Once
-	provider         embedding.Provider
 	providerErr      error
 }
 
@@ -27,38 +24,21 @@ func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *cla
 	return &classifierOptionBuilder{cfg: cfg, options: options}
 }
 
-func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]option, error) {
+func (b *classifierOptionBuilder) build() ([]option, error) {
 	if err := b.prepareEmbeddingSet(); err != nil {
 		return nil, err
 	}
-	if b.cfg.RoutingScope == config.DefaultRecipeName && !b.cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
+	if b.cfg.IsDefaultRecipe(b.cfg.RoutingScope) && !b.cfg.IsRecipeReachableForRouting(b.cfg.RoutingScope) {
 		return b.options, nil
 	}
 	steps := []func() (option, error){
 		b.buildKeywordClassifierOption,
-		b.buildEmbeddingClassifierOption,
 		b.buildContextClassifierOption,
-		b.buildStructureClassifierOption,
-		b.buildReaskClassifierOption,
-		b.buildComplexityClassifierOption,
-		b.buildContrastiveJailbreakClassifiersOption,
 		b.buildAuthzClassifierOption,
-		b.buildKBClassifiersOption,
-		b.buildEventClassifierOption,
-		b.buildGenericClassifiersOption,
-		b.buildModalityClassifierOption,
-		b.buildSafetyClassifiersOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	b.options = append(b.options, parallelOptions...)
 	if err != nil {
-		return nil, err
-	}
-	if err := b.addCategoryClassifier(categoryMapping); err != nil {
-		return nil, err
-	}
-	b.addMCPCategoryClassifier()
-	if err := b.addComplexityBackend(); err != nil {
 		return nil, err
 	}
 	return b.options, nil
@@ -110,49 +90,10 @@ func (b *classifierOptionBuilder) closePending() {
 	_ = classifier.Close()
 }
 
-func classifierBuildParallelism(stepCount int) int {
-	if stepCount <= 1 {
-		return 1
-	}
-	backend := embeddingBackendOverride()
-	if backend == "" || backend == "candle" {
-		return 1
-	}
-	parallelism := runtime.NumCPU()
-	if parallelism <= 0 {
-		parallelism = 1
-	}
-	if parallelism > stepCount {
-		parallelism = stepCount
-	}
-	return parallelism
-}
-
-func (b *classifierOptionBuilder) initMultiModalIfNeeded(reason string) error {
-	_, err := b.embeddingProviderForModel("multimodal", 0, 0)
-	if err != nil {
-		return fmt.Errorf("%s: %w", reason, err)
-	}
-	return nil
-}
-
-func (b *classifierOptionBuilder) defaultEmbeddingModelType() string {
-	modelType := b.cfg.EmbeddingConfig.ModelType
-	if modelType == "" {
-		return "qwen3"
-	}
-	return modelType
-}
-
 func (c *Classifier) logHeuristicClassifierInitialization() {
 	if c.contextClassifier != nil {
 		logging.ComponentEvent("classifier", "context_classifier_initialized", map[string]interface{}{
 			"rules": len(c.contextClassifier.rules),
-		})
-	}
-	if c.structureClassifier != nil {
-		logging.ComponentEvent("classifier", "structure_classifier_initialized", map[string]interface{}{
-			"rules": len(c.structureClassifier.rules),
 		})
 	}
 }

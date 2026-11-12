@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -18,17 +18,17 @@ import (
 
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
-	classificationSvc     classificationService
-	previewAdmissionOnce  sync.Once
-	previewAdmission      admission.Admissioner
-	configMu              sync.RWMutex
-	config                *config.RouterConfig
-	runtimeConfig         *liveRuntimeConfig
-	runtimeRegistry       *routerruntime.Registry
-	configPath            string // path to the router config file (for read/update/rollback)
-	memoryStore           memory.Store
-	knowledgeBaseMapCache *knowledgeBaseMapCache
-	startupStateLoader    func() *startupstatus.State
+	classificationSvc    classificationService
+	previewAdmissionOnce sync.Once
+	previewAdmission     admission.Admissioner
+	configMu             sync.RWMutex
+	config               *config.RouterConfig
+	runtimeConfig        *liveRuntimeConfig
+	runtimeRegistry      *routerruntime.Registry
+	configPath           string // path to the router config file (for read/update/rollback)
+	gatewayMode          config.GatewayMode
+	memoryStore          memory.Store
+	startupStateLoader   func() *startupstatus.State
 	// The startup-status writer is created once during process bootstrap. Keep
 	// its storage contract stable across live config swaps so /ready does not
 	// start reading from a different backend after a successful reload.
@@ -93,7 +93,7 @@ type (
 type BatchClassificationRequest struct {
 	Recipe   string                 `json:"recipe,omitempty"`
 	Texts    []string               `json:"texts"`
-	TaskType string                 `json:"task_type,omitempty"` // "intent", "pii", "security", or "all"
+	TaskType string                 `json:"task_type,omitempty"` // "intent" (default), "pii", "security", or "all" (intent fields plus pii and security objects)
 	Options  *ClassificationOptions `json:"options,omitempty"`
 }
 
@@ -103,6 +103,29 @@ type BatchClassificationResult struct {
 	Confidence       float64            `json:"confidence"`
 	ProcessingTimeMs int64              `json:"processing_time_ms"`
 	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
+	// PII and Security are only set for task_type "all".
+	PII      *BatchPIIResult      `json:"pii,omitempty"`
+	Security *BatchSecurityResult `json:"security,omitempty"`
+}
+
+// BatchPIIResult is the PII detection outcome for one text in an "all" batch.
+// Confidence is null when the model did not report scores, mirroring the
+// encoding of classification.PIIResult.
+type BatchPIIResult struct {
+	HasPII          bool     `json:"has_pii"`
+	PIITypes        []string `json:"pii_types,omitempty"`
+	Confidence      *float32 `json:"confidence"`
+	ScoresAvailable *bool    `json:"scores_available,omitempty"`
+}
+
+// BatchSecurityResult is the jailbreak detection outcome for one text in an
+// "all" batch. Confidence is null when the model did not report scores,
+// mirroring the encoding of classification.SecurityResult.
+type BatchSecurityResult struct {
+	IsJailbreak     bool     `json:"is_jailbreak"`
+	ThreatType      string   `json:"threat_type"`
+	Confidence      *float32 `json:"confidence"`
+	ScoresAvailable *bool    `json:"scores_available,omitempty"`
 }
 
 // BatchClassificationResponse represents the response from batch classification
@@ -126,88 +149,6 @@ type ClassificationOptions struct {
 	ReturnProbabilities bool    `json:"return_probabilities,omitempty"`
 	ConfidenceThreshold float64 `json:"confidence_threshold,omitempty"`
 	IncludeExplanation  bool    `json:"include_explanation,omitempty"`
-}
-
-// EmbeddingRequest represents a request for embedding generation
-type EmbeddingRequest struct {
-	Recipe          string   `json:"recipe,omitempty"`
-	Texts           []string `json:"texts,omitempty"`
-	Audios          []string `json:"audios,omitempty"`           // Inline base64 WAV, up to 30 seconds; original rate and channels preserved
-	Images          []string `json:"images,omitempty"`           // Inline base64 image data URIs (data:image/...;base64,...); encoded via the multi-modal model
-	Model           string   `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
-	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
-	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
-	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, default 0.5 (only used when model="auto")
-	SequenceLength  int      `json:"sequence_length,omitempty"`  // Optional, auto-detected if not provided
-}
-
-// EmbeddingResult represents a single embedding result
-type EmbeddingResult struct {
-	Text             string    `json:"text"`
-	Modality         string    `json:"modality,omitempty"` // "image" for image inputs; empty for text (backward compatible)
-	Embedding        []float32 `json:"embedding"`
-	Dimension        int       `json:"dimension"`
-	ModelUsed        string    `json:"model_used"`
-	ProcessingTimeMs int64     `json:"processing_time_ms"`
-}
-
-// EmbeddingResponse represents the response from embedding generation
-type EmbeddingResponse struct {
-	Recipe                string            `json:"recipe,omitempty"`
-	Embeddings            []EmbeddingResult `json:"embeddings"`
-	TotalCount            int               `json:"total_count"`
-	TotalProcessingTimeMs int64             `json:"total_processing_time_ms"`
-	AvgProcessingTimeMs   float64           `json:"avg_processing_time_ms"`
-}
-
-// SimilarityRequest represents a request to calculate similarity between two texts
-type SimilarityRequest struct {
-	Recipe          string  `json:"recipe,omitempty"`
-	Text1           string  `json:"text1"`
-	Text2           string  `json:"text2"`
-	Model           string  `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
-	Dimension       int     `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
-	TargetLayer     int     `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
-	QualityPriority float32 `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
-	LatencyPriority float32 `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
-}
-
-// SimilarityResponse represents the response of a similarity calculation
-type SimilarityResponse struct {
-	Recipe           string  `json:"recipe,omitempty"`
-	ModelUsed        string  `json:"model_used"`         // "qwen3", "gemma", or "unknown"
-	Similarity       float32 `json:"similarity"`         // Cosine similarity score (-1.0 to 1.0)
-	ProcessingTimeMs float32 `json:"processing_time_ms"` // Processing time in milliseconds
-}
-
-// BatchSimilarityRequest represents a request to find top-k similar candidates for a query
-type BatchSimilarityRequest struct {
-	Recipe          string   `json:"recipe,omitempty"`
-	Query           string   `json:"query"`                      // Query text
-	Candidates      []string `json:"candidates"`                 // Array of candidate texts
-	TopK            int      `json:"top_k,omitempty"`            // Max number of matches to return (0 = return all)
-	Model           string   `json:"model,omitempty"`            // Prepared model alias; auto selects among the current recipe's providers
-	Dimension       int      `json:"dimension,omitempty"`        // Target dimension: 0 (default) selects the loaded model output; other values require model support
-	TargetLayer     int      `json:"target_layer,omitempty"`     // Target layer for early exit (mmbert only): 3, 6, 11, 22 (0=full)
-	QualityPriority float32  `json:"quality_priority,omitempty"` // 0.0-1.0, only for "auto" model
-	LatencyPriority float32  `json:"latency_priority,omitempty"` // 0.0-1.0, only for "auto" model
-}
-
-// BatchSimilarityMatch represents a single match in batch similarity matching
-type BatchSimilarityMatch struct {
-	Index      int     `json:"index"`      // Index of the candidate in the input array
-	Similarity float32 `json:"similarity"` // Cosine similarity score
-	Text       string  `json:"text"`       // The matched candidate text
-}
-
-// BatchSimilarityResponse represents the response of batch similarity matching
-type BatchSimilarityResponse struct {
-	Recipe           string                 `json:"recipe,omitempty"`
-	Matches          []BatchSimilarityMatch `json:"matches"`            // Top-k matches, sorted by similarity (descending)
-	TotalCandidates  int                    `json:"total_candidates"`   // Total number of candidates processed
-	ModelUsed        string                 `json:"model_used"`         // "qwen3", "gemma", or "unknown"
-	ProcessingTimeMs float32                `json:"processing_time_ms"` // Processing time in milliseconds
 }
 
 // EndpointInfo represents information about an API endpoint

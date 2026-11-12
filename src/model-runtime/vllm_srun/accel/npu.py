@@ -1,0 +1,124 @@
+"""Ascend NPU accelerator (``torch.npu``): reference kernels plus measured fused ops. Unvalidated."""
+
+from __future__ import annotations
+
+from contextlib import AbstractContextManager, nullcontext
+from typing import Any
+
+import torch
+
+from ..engines.native.encoder import graph_module
+from ..plugins.base import Accelerator, DeviceInfo
+from . import npu_fla, npu_fused
+from .kernels import Kernel, KernelSet, reference_kernels
+
+# Errors after which the process's NPU context stays unusable (the gpu.py precedent).
+NPU_FAULT_MARKERS = (
+    "NPU error",
+    "Device error",
+)
+
+_FALLBACK_NAME = "AscendNPU"
+
+
+def _npu() -> Any:
+    """``torch.npu`` once the ``torch_npu`` extension registered it, else ``None``."""
+    npu = getattr(torch, "npu", None)
+    if npu is None:
+        try:
+            import torch_npu  # noqa: F401  (registers torch.npu)
+        except Exception:
+            return None
+        npu = getattr(torch, "npu", None)
+    return npu
+
+
+class NPUAccelerator(Accelerator):
+    name = "npu"
+    validated = False
+
+    def available(self) -> bool:
+        npu = _npu()
+        return bool(npu is not None and npu.is_available())
+
+    def devices(self) -> list[DeviceInfo]:
+        if not self.available():
+            return []
+        npu = _npu()
+        devices = []
+        for index in range(npu.device_count()):
+            properties = npu.get_device_properties(index)
+            try:
+                free_memory = npu.mem_get_info(index)[0]
+            except Exception:
+                free_memory = None
+            devices.append(
+                DeviceInfo(
+                    accelerator="npu",
+                    index=index,
+                    name=getattr(properties, "name", _FALLBACK_NAME),
+                    total_memory=getattr(properties, "total_memory", None),
+                    free_memory=free_memory,
+                    bf16=bool(npu.is_bf16_supported()),
+                    arch=npu_fused.soc_name(getattr(properties, "name", None)),
+                )
+            )
+        return devices
+
+    def torch_device(self, device: DeviceInfo) -> torch.device:
+        return torch.device("npu", device.index or 0)
+
+    def kernels(self, device: DeviceInfo) -> KernelSet:
+        kernels = reference_kernels(device.label)
+        # Exact only where the fused ops were measured (the rocm.py precedent);
+        # other SoCs run the reference kernels until measured.
+        if device.arch in npu_fused.MEASURED_EXACT:
+            for name, fn in npu_fused.available_wrappers().items():
+                kernels.register(Kernel(name, fn, "torch-npu-fused", exact=True))
+        # The fla-npu Ascend C chunk: approximate (1-2 bf16 ulp, two equally
+        # correct rounding paths). Off by default everywhere: the released
+        # BF16 decision packages keep exact kernels, and the quantized d3
+        # accuracy record for this combination is pending -- registration
+        # needs the FLA_NPU_APPROXIMATE opt-in on top of the measured SoC and
+        # the family's approximate consent (the record's consent verdict).
+        if device.arch in npu_fla.MEASURED and npu_fla.opted_in():
+            wrapper = npu_fla.available_wrapper()
+            if wrapper is not None:
+                kernels.register(
+                    Kernel(
+                        "chunk_gated_delta_rule",
+                        npu_fla.chunk_gated_delta_rule,
+                        "fla-npu-ascendc",
+                        exact=False,
+                    )
+                )
+        return kernels
+
+    def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
+        return {
+            "bf16_autocast": True,
+            # Graph capture (the encoder's bucketed graphs) once torch_npu's
+            # NPUGraph APIs registered; torch.cuda's are not mapped on npu.
+            "graphs": _npu() is not None and graph_module("npu") is not None,
+            "triton": False,
+        }
+
+    def autocast(
+        self, device: DeviceInfo, dtype: str | None
+    ) -> AbstractContextManager[Any]:
+        if dtype is None:
+            return nullcontext()
+        return torch.autocast(device_type="npu", dtype=getattr(torch, dtype))
+
+    def synchronize(self, device: DeviceInfo) -> None:
+        _npu().synchronize(device.index or 0)
+
+    def device_fault(self, error: BaseException) -> bool:
+        """Device errors poison the context; running out of memory fails only the batch."""
+        if isinstance(error, torch.OutOfMemoryError):
+            return False
+        if isinstance(error, getattr(torch, "AcceleratorError", ())):
+            return True
+        return isinstance(error, RuntimeError) and any(
+            marker in str(error) for marker in NPU_FAULT_MARKERS
+        )

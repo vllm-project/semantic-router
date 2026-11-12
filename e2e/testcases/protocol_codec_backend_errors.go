@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func testProtocolCodecChatBackendToolLifecycle(
@@ -36,7 +37,10 @@ func testProtocolCodecAnthropicBackendToolLifecycle(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecToolLifecycle(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	if err := runProtocolCodecToolLifecycle(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1"); err != nil {
+		return err
+	}
+	return runAnthropicNoneParallelControl(ctx, client, opts)
 }
 
 func testProtocolCodecChatBackendErrorMatrix(
@@ -60,7 +64,7 @@ func testProtocolCodecAnthropicBackendErrorMatrix(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-	return runProtocolCodecErrorMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1")
+	return runProtocolCodecErrorMatrix(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1")
 }
 
 func runProtocolCodecErrorMatrix(

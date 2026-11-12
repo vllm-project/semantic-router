@@ -15,7 +15,7 @@ import (
 
 const (
 	// configSetupModeOn is the shape the CLI writes on first run.
-	configSetupModeOn = `version: v0.3
+	configSetupModeOn = `version: v0.5
 listeners:
   - name: http-8801
     address: 0.0.0.0
@@ -28,7 +28,7 @@ setup:
 
 	// configActivated is the same file after activation strips the setup block,
 	// which is what handlers.SetupActivateHandler writes.
-	configActivated = `version: v0.3
+	configActivated = `version: v0.5
 listeners:
   - name: http-8801
     address: 0.0.0.0
@@ -36,7 +36,7 @@ listeners:
     timeout: 300s
 `
 
-	configSetupModeExplicitlyOff = `version: v0.3
+	configSetupModeExplicitlyOff = `version: v0.5
 setup:
   mode: false
 `

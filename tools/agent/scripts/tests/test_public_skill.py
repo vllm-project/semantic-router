@@ -118,10 +118,14 @@ class PublicSkillTests(unittest.TestCase):
             {path.name for path in source_refs},
             {
                 "configuration-loop.md",
+                "http-configuration-plan.md",
                 "deployment-loop.md",
+                "maintenance.md",
+                "optimization.md",
                 "route-verification.md",
                 "sr-bench.md",
                 "recipe-tuning.md",
+                "troubleshooting.md",
             },
         )
         # Specialized references may be discovered through another reference;

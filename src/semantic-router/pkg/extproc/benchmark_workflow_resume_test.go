@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -36,9 +37,6 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 			var mu sync.Mutex
 			var dispatched []string
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if got := r.Header.Get(headers.SRBenchExpectedConfigHash); got != hash {
-					t.Errorf("model dispatch config binding = %q, want %q", got, hash)
-				}
 				var payload struct {
 					Model    string                   `json:"model"`
 					Messages []map[string]interface{} `json:"messages"`
@@ -87,7 +85,7 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 				defer cancel()
 				reqCtx := &RequestContext{
 					TraceContext: ctx, SourceFormat: llmprotocol.OpenAIChatV1,
-					Headers:             map[string]string{headers.SRBenchExpectedConfigHash: hash},
+					Headers:             map[string]string{headers.VSRBenchExpectedConfigHash: hash, headers.VSRDebug: "true"},
 					VSRSelectedDecision: &decision, ExpectStreamingResponse: streaming,
 				}
 				if precondition := router.benchmarkConfigPrecondition(reqCtx); precondition != nil {
@@ -100,7 +98,7 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 				if immediateStatus(resp) != http.StatusOK {
 					t.Fatalf("workflow request failed: %s", immediateBody(resp))
 				}
-				router.bindBenchmarkConfigResponse(resp, reqCtx)
+				appendRoutedResponseHeaders(resp, reqCtx)
 				return resp
 			}
 			pause := route(workflowChatBody(streaming))
@@ -112,8 +110,10 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 			// a resumed aggregate is proof of complete request-local accounting.
 			assertBenchmarkWorkflowReceipt(t, resume, hash, "verifier-model")
 			if !streaming {
+				// Each turn reports the calls it made: the resumed turn does not
+				// bill the preparation step again.
 				assertWorkflowBufferedUsage(t, pause, 2, tc.cached)
-				assertWorkflowBufferedUsage(t, resume, 3, tc.cached)
+				assertWorkflowBufferedUsage(t, resume, 2, tc.cached)
 			}
 			mu.Lock()
 			defer mu.Unlock()
@@ -125,7 +125,7 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 	}
 }
 
-func assertWorkflowBufferedUsage(t *testing.T, resp *ext_proc.ProcessingResponse, cumulativeCalls, cached int64) {
+func assertWorkflowBufferedUsage(t *testing.T, resp *ext_proc.ProcessingResponse, calls, cached int64) {
 	t.Helper()
 	var body struct {
 		Usage looper.TokenUsage `json:"usage"`
@@ -134,9 +134,9 @@ func assertWorkflowBufferedUsage(t *testing.T, resp *ext_proc.ProcessingResponse
 		t.Fatal(err)
 	}
 	usage := body.Usage
-	if usage.PromptTokens != 100*cumulativeCalls || usage.CompletionTokens != 10*cumulativeCalls ||
-		usage.TotalTokens != 110*cumulativeCalls || usage.CachedInputTokens != cached*cumulativeCalls ||
-		usage.CacheWriteTokens != 20*cumulativeCalls {
+	if usage.PromptTokens != 100*calls || usage.CompletionTokens != 10*calls ||
+		usage.TotalTokens != 110*calls || usage.CachedInputTokens != cached*calls ||
+		usage.CacheWriteTokens != 20*calls {
 		t.Fatalf("workflow aggregate lost cache buckets: %+v", usage)
 	}
 }
@@ -162,15 +162,17 @@ func TestBenchmarkUsageWorkflowHistoricalUsageFailsClosed(t *testing.T) {
 
 func assertBenchmarkWorkflowReceipt(t *testing.T, resp *ext_proc.ProcessingResponse, hash, selected string) {
 	t.Helper()
-	values := make(map[string]string)
-	for _, option := range resp.GetImmediateResponse().GetHeaders().GetSetHeaders() {
-		values[option.GetHeader().GetKey()] = string(option.GetHeader().GetRawValue())
+	set := resp.GetImmediateResponse().GetHeaders().GetSetHeaders()
+	trace := traceOf(t, set)
+	if trace[headers.TraceConfigHash] != `"`+hash+`"` || headerValuesByName(set)[headers.VSRSelectedModel] != selected {
+		t.Fatalf("incorrect generation/model identity: %v", trace)
 	}
-	if values[headers.VSRConfigHash] != hash || values[headers.VSRSelectedModel] != selected {
-		t.Fatalf("incorrect generation/model identity: %v", values)
+	usage, err := strconv.Unquote(trace[headers.TraceModelUsage])
+	if err != nil {
+		t.Fatal(err)
 	}
 	var receipt benchmarkUsageReceipt
-	if err := json.Unmarshal([]byte(values[headers.VSRModelUsage]), &receipt); err != nil {
+	if err := json.Unmarshal([]byte(usage), &receipt); err != nil {
 		t.Fatal(err)
 	}
 	if receipt.Version != 1 || receipt.Complete || len(receipt.Calls) != 0 {

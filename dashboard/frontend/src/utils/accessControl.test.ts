@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  canAccessMLSetup,
   canAccessDashboardPath,
   canAccessReplayFlowDetails,
   canDeployConfig,
   canManageMCP,
-  canManageOpenClaw,
   canManageUsers,
   canRunEvaluation,
   canSubmitFeedback,
@@ -34,15 +32,15 @@ describe('config write access', () => {
     const emptyAdmin = { role: 'admin', permissions: [] }
 
     expect(canAccessReplayFlowDetails(explicitReader)).toBe(false)
-    expect(canAccessMLSetup(explicitReader)).toBe(false)
+    expect(canManageMCP(explicitReader)).toBe(false)
     expect(canAccessReplayFlowDetails(emptyAdmin)).toBe(false)
-    expect(canAccessMLSetup(emptyAdmin)).toBe(false)
+    expect(canManageMCP(emptyAdmin)).toBe(false)
   })
 
   it('uses legacy role fallback only when permissions are absent', () => {
     expect(canAccessReplayFlowDetails({ role: 'write' })).toBe(true)
     expect(canAccessReplayFlowDetails({ role: 'read' })).toBe(false)
-    expect(canAccessMLSetup({ role: 'admin' })).toBe(true)
+    expect(canManageMCP({ role: 'admin' })).toBe(true)
     expect(canAccessReplayFlowDetails({ role: 'read', permissions: ['replay.read'] })).toBe(false)
     expect(
       canAccessReplayFlowDetails({
@@ -50,10 +48,12 @@ describe('config write access', () => {
         permissions: ['config.write', 'replay.read'],
       }),
     ).toBe(true)
-    expect(canAccessMLSetup({ role: 'read', permissions: ['mlpipeline.manage'] })).toBe(true)
+    expect(canManageMCP({ role: 'read', permissions: ['mcp.manage'] })).toBe(true)
   })
 
   it('maps dashboard routes to their backend read permissions', () => {
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/api/router/docs')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['tools.use'] }, '/api/router/docs')).toBe(false)
     expect(canAccessDashboardPath({ permissions: ['topology.read'] }, '/status')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/status')).toBe(false)
     expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/logs')).toBe(true)
@@ -68,6 +68,10 @@ describe('config write access', () => {
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/config/mcp')).toBe(false)
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/models')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/models')).toBe(false)
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/decision-model')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['topology.read'] }, '/decision-model')).toBe(
+      false,
+    )
     expect(canAccessDashboardPath({ role: 'read' }, '/topology')).toBe(true)
     expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(true)
   })
@@ -81,7 +85,6 @@ describe('config write access', () => {
     expect(canRunEvaluation({ permissions: ['evaluation.write'] })).toBe(false)
     expect(canManageMCP({ permissions: ['mcp.manage'] })).toBe(true)
     expect(canManageMCP({ permissions: ['mcp.read'] })).toBe(false)
-    expect(canManageOpenClaw({ permissions: ['openclaw.manage'] })).toBe(true)
   })
 
   it('shows feedback controls to all default roles but honors explicit permissions', () => {

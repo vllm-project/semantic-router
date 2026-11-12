@@ -100,8 +100,13 @@ type RetrieveOptions struct {
 	// Limit is the maximum number of results to return (default: 5)
 	Limit int
 
-	// Threshold is the minimum similarity score (range 0.0 to 1.0, default: 0.70)
+	// Threshold is the minimum similarity score, a cosine. Unless
+	// ThresholdSet, zero or less takes the store's default_similarity_threshold.
 	Threshold float32
+
+	// ThresholdSet says the caller wrote Threshold, so a bound of zero or
+	// less applies as written.
+	ThresholdSet bool
 
 	// HybridSearch enables BM25 + n-gram re-ranking on top of vector search
 	HybridSearch bool
@@ -116,8 +121,16 @@ type RetrieveOptions struct {
 	AdaptiveThreshold bool
 }
 
+// minSimilarity is the least similarity a retrieval keeps: the caller's
+// Threshold, else the store's default.
+func (o RetrieveOptions) minSimilarity(storeDefault float32) float32 {
+	if o.ThresholdSet || o.Threshold > 0 {
+		return o.Threshold
+	}
+	return storeDefault
+}
+
 // DefaultMemoryConfig returns a default memory configuration.
-// EmbeddingModel is intentionally omitted - let router auto-detect from embedding_models config.
 func DefaultMemoryConfig() config.MemoryConfig {
 	return config.MemoryConfig{
 		Milvus: config.MemoryMilvusConfig{
@@ -128,7 +141,11 @@ func DefaultMemoryConfig() config.MemoryConfig {
 	}
 }
 
-// ListOptions configures memory listing (non-semantic, filter-based retrieval)
+// ListOptions configures memory listing (non-semantic, filter-based retrieval).
+// Pages are ordered by created_at descending, then id descending.
+// Offset pagination is best-effort: a write or delete between pages can duplicate
+// or skip a row. Total is the match count observed by that read, not a snapshot
+// shared with the next page.
 type ListOptions struct {
 	// UserID filters memories to this user only (required)
 	UserID string
@@ -138,6 +155,10 @@ type ListOptions struct {
 
 	// Limit is the maximum number of results to return (default: 20, max: 100)
 	Limit int
+
+	// Offset skips this many matches after the stable order is applied.
+	// Negative values are rejected.
+	Offset int
 }
 
 // ListResult contains the memories returned by a List operation
@@ -145,11 +166,14 @@ type ListResult struct {
 	// Memories is the list of memories returned
 	Memories []*Memory `json:"memories"`
 
-	// Total is the total number of matching memories
+	// Total is the match count observed by this read. It can change before the next page.
 	Total int `json:"total"`
 
 	// Limit is the limit that was applied
 	Limit int `json:"limit"`
+
+	// Offset is the offset that was applied
+	Offset int `json:"offset"`
 }
 
 // MemoryFilter is the interface for post-retrieval, pre-injection memory

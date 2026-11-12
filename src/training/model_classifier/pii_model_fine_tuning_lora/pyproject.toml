@@ -1,0 +1,24 @@
+[project]
+name = "vllm-sr-pii-fine-tuning-lora"
+version = "0.0.0"
+description = "Environment for the PII token classifier scripts under src/training/model_classifier/pii_model_fine_tuning_lora"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "accelerate>=0.28,<2",
+    "datasets>=2.19,<5",
+    "numpy>=1.24,<3",
+    "peft>=0.10,<1",
+    "requests>=2.31,<3",
+    "safetensors>=0.4,<1",
+    "scikit-learn>=1.4,<2",
+    # 0.23 changes the overflow windows that tests/test_window_evaluation.py checks.
+    "tokenizers>=0.21,<0.23",
+    "torch>=2.2,<3",
+    "transformers>=4.48,<6",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10"]
+
+[tool.uv]
+package = false

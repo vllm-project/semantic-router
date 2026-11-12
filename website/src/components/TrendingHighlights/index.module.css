@@ -1,0 +1,152 @@
+/* A quiet strip on the paper: a small label, then text rows of date, source and title, each row a link. */
+.strip {
+  padding: clamp(28px, 3vw, 40px) 0;
+}
+
+.stripWrap {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 32px;
+  width: min(100% - 2 * var(--gut), var(--wrap));
+  margin-inline: auto;
+}
+
+.strip .stripLabel {
+  margin: 0;
+  padding-top: 9px;
+  color: var(--ember-text);
+  font: 600 12px/1.4 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rows li + li {
+  border-top: 1px solid var(--hair);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 9.5rem 14rem minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 18px;
+  padding: 7px 2px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.row:hover,
+.row:focus-visible {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.date,
+.source {
+  overflow: hidden;
+  color: var(--muted);
+  font: 500 12px/1.45 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowTitle {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row:hover .rowTitle,
+.row:focus-visible .rowTitle {
+  color: var(--ember-text);
+}
+
+.arrow {
+  color: var(--muted);
+  font-size: 13px;
+  transition: transform 0.3s var(--ease);
+}
+
+.row:hover .arrow {
+  transform: translate(2px, -2px);
+}
+
+.more {
+  border-top: 1px solid var(--hair);
+}
+
+.more summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 2px 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  list-style: none;
+  cursor: pointer;
+}
+
+.more summary::-webkit-details-marker {
+  display: none;
+}
+
+.more summary::after {
+  content: '\203A';
+  font-size: 1.3em;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 0.3s var(--ease);
+}
+
+.more[open] summary::after {
+  transform: rotate(-90deg);
+}
+
+.more summary:hover {
+  color: var(--ember-text);
+}
+
+.more[open] .rows {
+  margin-top: 6px;
+  border-top: 1px solid var(--hair);
+}
+
+@media (max-width: 900px) {
+  .stripWrap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .strip .stripLabel {
+    padding-top: 0;
+  }
+
+  .row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .rowTitle {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+
+  .arrow {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrow,
+  .more summary::after {
+    transition: none;
+  }
+}

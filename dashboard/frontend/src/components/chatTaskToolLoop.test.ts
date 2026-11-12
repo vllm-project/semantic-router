@@ -80,7 +80,6 @@ describe('runToolLoop', () => {
       prompt: 'Research this deeply.',
       createdAt: 1,
       requestOptions: {
-        enableClawMode: false,
         enableWebSearch: true,
         model: 'vllm-sr/blend',
       },
@@ -140,7 +139,7 @@ describe('runToolLoop', () => {
     expect(fetchMock).toHaveBeenCalledTimes(7)
     for (const [, requestInit] of fetchMock.mock.calls as [string, RequestInit][]) {
       expect(requestInit.headers).toMatchObject({
-        'x-session-id': 'conversation-1',
+        'x-vsr-session-id': 'conversation-1',
         'x-conversation-id': 'conversation-1',
       })
     }

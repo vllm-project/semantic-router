@@ -49,13 +49,13 @@ func (e *resolvingEvaluator) Evaluate(_ context.Context, request EvalRequest) (j
 func TestRecipeDigestCrossLanguageGolden(t *testing.T) {
 	files := map[string][]byte{
 		"metadata": []byte("schema_version: vllm-sr/recipe-metadata/v1\nid: fixture\n"),
-		"config":   []byte("version: v0.3\n"),
+		"config":   []byte("version: v0.5\n"),
 		"probes":   []byte("schema_version: v1\ndecisions: []\n"),
 		"dsl":      []byte("MODEL fixture\n"),
 		"readme":   []byte("# Fixture\n"),
 	}
 
-	const expected = "sha256:b461747f69f276aea124f9d0907e373f9f201245f635d840276765dd6829ef7b"
+	const expected = "sha256:7fc4723f68b489bd2d44c4a2faaa6927ec31b759ff20e6fd76765c31fdd6ccd9"
 	if got := digestRecipe(files); got != expected {
 		t.Fatalf("digestRecipe() = %q, want %q", got, expected)
 	}
@@ -104,7 +104,7 @@ func assertManagedRecipeDescriptor(t *testing.T, service *Service, directory str
 	if descriptor.Metadata == nil || descriptor.Metadata.ID != "test-recipe" {
 		t.Fatalf("metadata = %#v", descriptor.Metadata)
 	}
-	if descriptor.Counts.UnifiedModels != 1 || descriptor.Counts.Recipes != 1 || descriptor.Counts.Decisions != 1 || descriptor.Counts.Probes != 2 {
+	if descriptor.Counts.UnifiedModels != 2 || descriptor.Counts.Recipes != 2 || descriptor.Counts.Decisions != 1 || descriptor.Counts.Probes != 2 {
 		t.Fatalf("counts = %#v", descriptor.Counts)
 	}
 	if descriptor.Digests.Recipe == "" || strings.Contains(descriptor.README, directory) {
@@ -281,12 +281,16 @@ func TestServiceValidationResolvesModelFreeProbeAgainstActiveRecipe(t *testing.T
 		t.Fatalf("ReadFile(probes.yaml): %v", err)
 	}
 	writeFile(t, dir, "probes.yaml", strings.Replace(string(probes), "    model: vllm-sr/mom-test-v1\n", "", 1))
-	writeFile(t, dir, "config.yaml", `version: v0.3
+	writeFile(t, dir, "config.yaml", `version: v0.5
 recipes:
+  - name: default
   - name: balanced
-    routing:
-      decisions:
-        - name: decision-a
+    decisions:
+      - name: decision-a
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `)
 
 	evaluator := &resolvingEvaluator{model: "vllm-sr/mom-test-v1"}
@@ -300,46 +304,23 @@ recipes:
 	}
 }
 
-func TestProjectConfigDistinguishesOmittedAndExplicitAutoModels(t *testing.T) {
-	testCases := []struct {
-		name       string
-		routerYAML string
-		want       []string
+func TestProjectConfigUsesEffectiveEntrypoints(t *testing.T) {
+	for _, tc := range []struct {
+		name, source string
+		want         []string
 	}{
-		{
-			name: "omitted stays model free",
-			want: nil,
-		},
-		{
-			name:       "omitted uses configured model name",
-			routerYAML: "    auto_model_name: legacy-mom\n",
-			want:       []string{"legacy-mom"},
-		},
-		{
-			name:       "explicit list ignores legacy",
-			routerYAML: "    auto_model_name: legacy-mom\n    auto_model_names: [first, second]\n",
-			want:       []string{"first", "second"},
-		},
-		{
-			name:       "explicit empty ignores legacy",
-			routerYAML: "    auto_model_name: legacy-mom\n    auto_model_names: []\n",
-			want:       []string{},
-		},
-		{
-			name:       "explicit null ignores legacy",
-			routerYAML: "    auto_model_name: legacy-mom\n    auto_model_names: null\n",
-			want:       []string{},
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			projection, err := projectConfig([]byte("version: v0.3\nglobal:\n  router:\n" + testCase.routerYAML))
+		{"omitted", "", []string{"vllm-sr/auto"}},
+		{"empty", "entrypoints: []\n", []string{"vllm-sr/auto"}},
+		{"explicit", "entrypoints:\n  - model_names: [first, second]\n    recipe: default\n", []string{"first", "second"}},
+		{"named", "entrypoints:\n  - model_names: [support]\n    recipe: support\n", []string{"vllm-sr/auto"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			projection, err := projectConfig([]byte("version: v0.5\n" + tc.source))
 			if err != nil {
-				t.Fatalf("projectConfig(): %v", err)
+				t.Fatal(err)
 			}
-			if !slices.Equal(projection.autoModels, testCase.want) {
-				t.Fatalf("auto models = %v, want %v", projection.autoModels, testCase.want)
+			if !slices.Equal(projection.defaultModels, tc.want) {
+				t.Fatalf("defaults=%v want %v", projection.defaultModels, tc.want)
 			}
 		})
 	}
@@ -347,18 +328,18 @@ func TestProjectConfigDistinguishesOmittedAndExplicitAutoModels(t *testing.T) {
 
 func TestServiceRoundRobinsOnlyModelLessDefaultProbes(t *testing.T) {
 	dir := writeManagedRecipe(t)
-	writeFile(t, dir, "config.yaml", `version: v0.3
-global:
-  router:
-    auto_model_names: [auto-one, auto-two]
+	writeFile(t, dir, "config.yaml", `version: v0.5
 entrypoints:
+  - model_names: [auto-one, auto-two]
+    recipe: default
+    default: true
   - model_names: [named-model]
     recipe: balanced
 recipes:
+  - name: default
   - name: balanced
-    routing:
-      decisions:
-        - name: decision-a
+    decisions:
+      - name: decision-a
 `)
 	writeFile(t, dir, "probes.yaml", `schema_version: v1
 name: test-recipe
@@ -443,7 +424,7 @@ func TestServiceActionsRejectStaleRecipeDigest(t *testing.T) {
 
 func TestServiceUnmanagedConfiguration(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "config.yaml", "version: v0.3\nrouting: {}\n")
+	writeFile(t, dir, "config.yaml", "version: v0.5\nrecipes:\n  - name: default\n")
 	service := NewService(Options{Directory: dir})
 	descriptor, err := service.Describe()
 	if err != nil {
@@ -678,18 +659,18 @@ tags: [test, routing]
 links:
   source: https://example.com/source
 `)
-	writeFile(t, dir, "config.yaml", `version: v0.3
-global:
-  router:
-    auto_model_names: []
+	writeFile(t, dir, "config.yaml", `version: v0.5
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/mom-test-v1]
     recipe: balanced
 recipes:
+  - name: default
   - name: balanced
-    routing:
-      decisions:
-        - name: decision-a
+    decisions:
+      - name: decision-a
 `)
 	writeFile(t, dir, "recipe.dsl", "RECIPE test {}\n")
 	writeFile(t, dir, "README.md", "# Test Recipe\n")

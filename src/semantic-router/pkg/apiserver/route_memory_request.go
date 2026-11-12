@@ -1,15 +1,17 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
 const maxMemoryListLimit = 100
@@ -30,6 +32,9 @@ func (s *ClassificationAPIServer) acquireMemoryStore(w http.ResponseWriter) (mem
 		if ok {
 			return store, release, true
 		}
+		status := s.runtimeRegistry.MemoryStatus()
+		s.writeMemoryUnavailableResponse(w, status)
+		return nil, nil, false
 	} else if s != nil && s.memoryStore != nil {
 		return s.memoryStore, func() {}, true
 	}
@@ -38,19 +43,44 @@ func (s *ClassificationAPIServer) acquireMemoryStore(w http.ResponseWriter) (mem
 	return nil, nil, false
 }
 
+func (s *ClassificationAPIServer) writeMemoryUnavailableResponse(w http.ResponseWriter, status routerruntime.MemoryStatus) {
+	var msg string
+	switch status.Reason {
+	case routerruntime.MemoryReasonDisabledByConfig:
+		msg = "Memory store is disabled in configuration. Enable memory in configuration."
+	case routerruntime.MemoryReasonBackendUnavailable:
+		if status.Backend != "" {
+			msg = fmt.Sprintf("Memory backend %q is unavailable. Check backend connectivity.", status.Backend)
+		} else {
+			msg = "Memory backend is unavailable. Check backend connectivity."
+		}
+	case routerruntime.MemoryReasonStarting:
+		msg = "Memory store is not yet initialized. Router is still starting."
+	default:
+		msg = "Memory store is not configured or not yet initialized. Enable memory in configuration."
+	}
+	s.writeErrorResponse(w, http.StatusServiceUnavailable, "MEMORY_NOT_AVAILABLE", msg)
+}
+
 // extractUserID extracts the user_id with priority: auth header > query param fallback.
 //
-// Priority 1: x-authz-user-id header injected by the external auth service.
+// Priority 1: the user id header injected by the external auth service,
+// global.services.authz.identity.user_id_header (x-authz-user-id by default).
 // Priority 2: user_id query parameter for development/testing without a full auth stack.
 func (s *ClassificationAPIServer) extractUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	var identity config.IdentityConfig
+	if cfg := s.currentConfig(); cfg != nil {
+		identity = cfg.Authz.Identity
+	}
+	userHeader := identity.GetUserIDHeader()
 	var userID string
-	if h := r.Header.Get(headers.AuthzUserID); h != "" {
+	if h := r.Header.Get(userHeader); h != "" {
 		userID = h
 	} else if q := r.URL.Query().Get("user_id"); q != "" {
 		userID = q
 	} else {
 		s.writeErrorResponse(w, http.StatusUnauthorized, "MISSING_USER_ID",
-			"User identity required. Set the auth header (x-authz-user-id) via your auth layer, "+
+			"User identity required. Set the auth header ("+userHeader+") via your auth layer, "+
 				"or user_id query parameter for development")
 		return "", false
 	}
@@ -117,4 +147,22 @@ func (s *ClassificationAPIServer) parseMemoryListLimit(w http.ResponseWriter, li
 		return maxMemoryListLimit, true
 	}
 	return limit, true
+}
+
+func (s *ClassificationAPIServer) parseMemoryListOffset(w http.ResponseWriter, offsetStr string) (int, bool) {
+	if offsetStr == "" {
+		return 0, true
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_OFFSET",
+			"offset must be a non-negative integer")
+		return 0, false
+	}
+	if offset > 100_000 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_OFFSET",
+			"offset exceeds maximum of 100000")
+		return 0, false
+	}
+	return offset, true
 }

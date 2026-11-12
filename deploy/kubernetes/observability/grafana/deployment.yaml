@@ -37,6 +37,10 @@ spec:
               value: "false"
             - name: GF_PATHS_PROVISIONING
               value: /etc/grafana/provisioning
+            # Patch with trusted external Dashboard origins when a proxy rewrites Host.
+            # Empty preserves Grafana's default origin checks.
+            - name: GF_LIVE_ALLOWED_ORIGINS
+              value: ""
           ports:
             - name: http
               containerPort: 3000

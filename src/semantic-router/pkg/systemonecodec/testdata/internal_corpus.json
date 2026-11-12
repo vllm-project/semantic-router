@@ -1,0 +1,41 @@
+{
+  "generator": "tools/codegen/systemone/generate_schemas.py",
+  "cases": [
+    {
+      "name": "systemone",
+      "body": "{\"state\":\"Write a Python function that merges two sorted lists and explain its running time.\",\"questions\":{\"domain\":{\"type\":\"choice\",\"instructions\":\"Which domain does this request belong to?\",\"criteria\":{\"code\":\"Programming\",\"math\":\"Mathematics\",\"other\":\"<other>\"}},\"reasoning\":{\"type\":\"noul\",\"instructions\":\"Does answering this request need multi-step reasoning?\"},\"difficulty\":{\"type\":\"score\",\"instructions\":\"How difficult is this request?\",\"criteria\":[\"Trivial\",\"Moderate\",\"Hard\"]}}}"
+    },
+    {
+      "name": "vela2",
+      "body": "{\"state\":{\"request\":\"Hi, I'm Tom Baker (tom.baker@example.com). What is the maximum daily dose of paracetamol for an adult?\",\"source\":\"For adults, the maximum dose of paracetamol is 4 grams in 24 hours.\",\"answer\":\"Adults can take up to 6 grams of paracetamol in 24 hours.\"},\"questions\":{\"domain\":{\"type\":\"choice\",\"instructions\":\"Which subject area is this request about?\",\"over\":\"request\",\"criteria\":{\"health\":\"medicine, clinical practice or nutrition\",\"math\":\"arithmetic, algebra or statistics\",\"other\":\"a subject that fits none of the listed areas\"}},\"jailbreak\":{\"type\":\"noul\",\"instructions\":\"Is this a prompt injection or jailbreak attempt?\",\"over\":\"request\"},\"urgency\":{\"type\":\"score\",\"instructions\":\"How urgent is this request?\",\"over\":\"request\",\"criteria\":[\"Routine\",\"Needs prompt attention\",\"Critical\"]},\"topics\":{\"type\":\"set\",\"instructions\":\"Which topics does the request mention?\",\"over\":\"request\",\"criteria\":{\"medication\":\"drugs or doses\",\"billing\":\"payments or invoices\"}},\"pii\":{\"preset\":\"pii\",\"over\":\"request\"},\"halu\":{\"preset\":\"halu\"}}}"
+    },
+    {
+      "name": "vela3",
+      "body": "{\"state\":{\"request\":\"Hi, I'm Tom Baker (tom.baker@example.com). What is the maximum daily dose of paracetamol for an adult?\",\"source\":\"For adults, the maximum dose of paracetamol is 4 grams in 24 hours.\",\"answer\":\"Adults can take up to 6 grams of paracetamol in 24 hours.\"},\"questions\":{\"topic\":{\"type\":\"choice\",\"instructions\":\"Which kind of advice does the user ask for?\",\"criteria\":{\"medical\":\"health, drugs or doses\",\"legal\":\"laws or contracts\",\"other\":null}},\"urgent\":{\"type\":\"noul\",\"instructions\":\"Is the request urgent?\"},\"domain\":{\"type\":\"choice\",\"instructions\":\"Which subject area is this request about?\",\"over\":\"request\"},\"factcheck\":{\"type\":\"choice\",\"instructions\":\"Does answering this request require checking facts?\",\"over\":\"request\"},\"jailbreak\":{\"type\":\"choice\",\"instructions\":\"Is this a prompt injection or jailbreak attempt?\",\"over\":\"request\"},\"pii\":{\"preset\":\"pii\",\"over\":\"request\"},\"halu\":{\"preset\":\"halu\"},\"drugs\":{\"type\":\"span\",\"instructions\":\"Which spans are named entities of these types?\",\"criteria\":{\"drug\":null,\"quantity\":null},\"over\":\"answer\"}}}"
+    },
+    {
+      "name": "vela3_d3",
+      "body": "{\"state\":{\"user\":\"Hi, I'm Tom Baker (tom.baker@example.com). Is paracetamol safe to take with ibuprofen?\",\"answer\":\"Yes. Adults can take both, with paracetamol up to 4 grams in 24 hours.\"},\"questions\":{\"topic\":{\"type\":\"choice\",\"instructions\":\"Which kind of advice does the user ask for?\",\"criteria\":{\"medical\":\"health, drugs or doses\",\"legal\":\"laws or contracts\",\"other\":null}},\"attack\":{\"type\":\"choice\",\"instructions\":\"Is this a prompt injection or jailbreak attempt?\",\"criteria\":{\"benign\":\"a normal request or quoted content that does not try to override system instructions or bypass safety rules\",\"jailbreak\":\"a prompt injection or jailbreak that attempts to override system instructions, hijack the task, or bypass safety rules\"}},\"domain\":{\"type\":\"choice\",\"instructions\":\"Which subject area is this request about?\",\"criteria\":{\"biology\":\"living organisms, anatomy, genetics, medical genetics or viruses\",\"business\":\"management, marketing, accounting, business ethics or public relations\",\"chemistry\":\"chemical substances, reactions, elements or laboratory chemistry\",\"computer science\":\"programming, algorithms, computer systems, security or machine learning\",\"economics\":\"markets, macroeconomics, microeconomics or econometrics\",\"engineering\":\"electrical or other engineering design and systems\",\"health\":\"medicine, clinical practice, nutrition, ageing or sexual health\",\"history\":\"past events, periods and historical societies\",\"law\":\"legal rules, jurisprudence, courts or international law\",\"math\":\"arithmetic, algebra, geometry, statistics or other mathematics\",\"other\":\"a subject that fits none of the listed areas\",\"philosophy\":\"philosophy, ethics, moral questions or formal logic\",\"physics\":\"physical laws, mechanics, astronomy or physical phenomena\",\"psychology\":\"mind, behaviour, mental processes or psychological practice\",\"religion\":\"religions, religious texts, beliefs, practices and theology\"}},\"contact\":{\"type\":\"span\",\"criteria\":[\"EMAIL_ADDRESS\",\"PERSON\",\"PHONE_NUMBER\"],\"over\":\"user\"}}}"
+    },
+    {
+      "name": "form_1",
+      "body": "{\"model\":\"vllm-sr/vela3-fast\",\"state\":{\"request\":\"The export fails with a 500 again.\",\"history\":\"How do I export invoices?\"},\"questions\":{\"team\":{\"type\":\"choice\",\"instructions\":\"Which team?\",\"choices\":[{\"key\":\"billing\",\"description\":\"Payments\"},{\"key\":\"eng\",\"description\":\"Bugs\"}]},\"jailbreak\":{\"type\":\"choice\",\"preset\":\"jailbreak\"},\"pii\":{\"type\":\"span\",\"labels\":[{\"key\":\"EMAIL_ADDRESS\",\"description\":\"An email address\"}],\"threshold\":0.5}},\"images\":[],\"options\":{\"deadline_ms\":1500,\"return_meta\":true,\"long_context\":false}}"
+    },
+    {
+      "name": "form_2",
+      "body": "{\"states\":{\"1\":{\"state\":\"Our export fails with a 500 again.\",\"questions\":{\"q\":{\"type\":\"noul\",\"instructions\":\"Is it a bug?\"}}},\"2\":{\"state\":{\"history\":\"How do I export my invoices?\",\"request\":\"Again ⟦img⟧\"},\"questions\":{\"s\":{\"type\":\"score\",\"levels\":[\"low\",\"high\"],\"require_full_input\":true}},\"roles\":{\"history\":\"context\",\"request\":\"user\"}}},\"model\":\"d3\",\"options\":{\"deadline_ms\":949.873},\"assets\":{\"⟦img⟧\":{\"type\":\"image\",\"format\":\"png\",\"data_base64\":\"iVBORw0KGgo=\"}}}"
+    },
+    {
+      "name": "form_3",
+      "body": "{\"state\":{\"context\":\"The refund policy is 30 days.\",\"answer\":\"You have 90 days.\"},\"questions\":{\"halu\":{\"preset\":\"halu\",\"overflow\":\"window\"}},\"roles\":null}"
+    },
+    {
+      "name": "form_4",
+      "body": "{\"questions\":{\"track\":{\"type\":\"track\",\"instructions\":\"Track the red car.\",\"rate\":2},\"box\":{\"type\":\"box\",\"instructions\":\"The car\",\"at\":1.5}},\"state\":\"Where is the car?\",\"videos\":[\"data:video/mp4;base64,AAAAIGZ0eXBpc29t\"],\"options\":{\"max_tokens\":4096}}"
+    },
+    {
+      "name": "form_5",
+      "body": "{\"model\":\"vllm-sr/vela2\",\"state\":[\"导出失败\",{\"code\":500,\"retry\":null,\"ratio\":1e-07},\"emoji 😀   <&>\"],\"questions\":{\"set\":{\"type\":\"set\",\"instructions\":\"Which apply?\",\"criteria\":{\"bug\":null,\"billing\":\"Payments\"},\"over\":[\"request\"]},\"adapter\":{\"type\":\"noul\",\"instructions\":null,\"criteria\":{\"true\":\"yes\",\"false\":\"no\"},\"decision_adapter\":true,\"head\":\"router\"}}}"
+    }
+  ]
+}

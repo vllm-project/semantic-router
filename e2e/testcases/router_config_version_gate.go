@@ -35,31 +35,33 @@ providers:
   models:
     - name: local/general
       provider_model_id: my-served-model
+      capabilities: [chat]
       backend_refs:
         - name: primary
           endpoint: host.docker.internal:8000
           protocol: http
           provider: vllm
-routing:
-  strategy: priority
-  modelCards:
-    - name: local/general
-      modality: text
-      capabilities: [chat]
-  decisions:
-    - name: default_answer
-      description: Default route.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local/general
+recipes:
+  - name: default
+    strategy: priority
+    decisions:
+      - name: default_answer
+        description: Default route.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/general
 `
 
-// unsupportedCanonicalVersion is a contract this build must not read. It is a
-// past contract rather than a future one, so the case stays valid after a bump.
-const unsupportedCanonicalVersion = "v0.2"
+// unsupportedCanonicalVersion is a contract this build must not read. It sits
+// below the written contract and outside the removed v0.1-v0.3 forms, so it
+// reaches the gate itself and stays unsupported after a bump.
+const unsupportedCanonicalVersion = "v0.4"
+
+// supportedCanonicalVersion is the contract this build writes.
+const supportedCanonicalVersion = "v0.5"
 
 type routerConfigValidateResponse struct {
 	Valid          bool   `json:"valid"`
@@ -89,7 +91,7 @@ func testRouterConfigVersionGate(
 	httpClient := session.HTTPClient(30 * time.Second)
 	url := session.URL("/api/v1/config/validate")
 
-	supportedVersion, err := validateVersionedDocument(ctx, httpClient, url, "v0.3", opts.Verbose)
+	supportedVersion, err := validateVersionedDocument(ctx, httpClient, url, supportedCanonicalVersion, opts.Verbose)
 	if err != nil {
 		return err
 	}

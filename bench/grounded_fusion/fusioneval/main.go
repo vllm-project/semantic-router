@@ -12,16 +12,18 @@
 //	D  placebo         weight on seeded-random scores — score signal vs any weighting
 //	annotate / filter  optional, behind --arms
 //
-// It wires the REAL candle NLI (the same scorer the router uses) so arm C/D
-// reflect the shipped path. Grading + the KEEP/KILL verdict live in Python
-// (bench/grounded_fusion/grade_only.py + compare_multiarm.py), which read the
-// answers_{arm}.jsonl this driver emits.
+// Arms C, annotate and filter ground with the backends the router itself serves
+// for --router-config (its default recipe through the managed model runtime),
+// so they reflect the shipped path. Grading + the KEEP/KILL verdict live in
+// Python (bench/grounded_fusion/grade_only.py + compare_multiarm.py), which
+// read the answers_{arm}.jsonl this driver emits.
 //
-// Build/run (needs the candle lib + NLI model + a running Ollama):
+// Build/run (needs the model runtime, the router config's grounding models and
+// a running Ollama):
 //
 //	make build-fusioneval
-//	LD_LIBRARY_PATH=$PWD/candle-binding/target/release bin/fusioneval \
-//	  --items items.jsonl --nli-model models/mom-halugate-explainer \
+//	bin/fusioneval \
+//	  --items items.jsonl --router-config config/config.yaml --grounding-reference context \
 //	  --endpoint http://localhost:11435/v1/chat/completions \
 //	  --judge qwen3:14b --panel qwen3:8b,llama3.1:8b,gemma3:12b \
 //	  --arms A,B,C,D --out-dir results
@@ -50,21 +52,20 @@ import (
 )
 
 type options struct {
-	itemsPath   string
-	panelCache  string
-	outDir      string
-	arms        []string
-	judge       string
-	panelModels []string
-	endpoint    string
-	nliModel    string
-	useCPU      bool
-	seed        int64
-	placeboSeed uint64
-	reference   string
-	temperature float64
-	maxTokens   int
-	maxItems    int
+	itemsPath    string
+	panelCache   string
+	outDir       string
+	arms         []string
+	judge        string
+	panelModels  []string
+	endpoint     string
+	routerConfig string
+	seed         int64
+	placeboSeed  uint64
+	reference    string
+	temperature  float64
+	maxTokens    int
+	maxItems     int
 }
 
 // item is one evaluation question. The Python side (datasets.py) owns DRACO
@@ -158,8 +159,7 @@ func parseFlags() options {
 	flag.StringVar(&opt.outDir, "out-dir", "results", "output directory for answers_{arm}.jsonl")
 	flag.StringVar(&opt.judge, "judge", "qwen3:14b", "judge / synthesis model")
 	flag.StringVar(&opt.endpoint, "endpoint", "http://localhost:11435/v1/chat/completions", "OpenAI-compatible chat endpoint (Ollama proxy)")
-	flag.StringVar(&opt.nliModel, "nli-model", "models/mom-halugate-explainer", "candle NLI model path for panel-mode grounding")
-	flag.BoolVar(&opt.useCPU, "use-cpu", true, "run the candle NLI model on CPU")
+	flag.StringVar(&opt.routerConfig, "router-config", "", "router config whose default recipe serves the grounding backends for arms C, annotate and filter")
 	flag.Int64Var(&opt.seed, "seed", 42, "panel generation seed (recorded; determinism depends on the backend)")
 	flag.Uint64Var(&opt.placeboSeed, "placebo-seed", 7, "base seed for the random-weight placebo (arm D)")
 	flag.StringVar(&opt.reference, "grounding-reference", config.FusionGroundingReferencePanel, "grounding reference mode: panel|context|hybrid")
@@ -192,13 +192,18 @@ func run(opt options) error {
 		items = items[:opt.maxItems]
 	}
 
-	// Wire the REAL candle NLI for panel-mode grounding (arms C/D's reference).
-	// Context mode would additionally need the hallucination detector; deferred.
-	nli, nliOwner, err := prepareNLI(opt)
-	if err != nil {
-		return fmt.Errorf("prepare candle NLI model %q: %w", opt.nliModel, err)
+	shipped := &looper.GroundingBackends{}
+	if needsShippedGrounding(opt.arms, opt.reference) {
+		if opt.routerConfig == "" {
+			return fmt.Errorf("--router-config is required for arms C, annotate and filter")
+		}
+		backends, owner, groundingErr := routerGrounding(opt.routerConfig)
+		if groundingErr != nil {
+			return fmt.Errorf("prepare the router's grounding backends: %w", groundingErr)
+		}
+		defer func() { _ = owner.Close() }()
+		shipped = backends
 	}
-	defer func() { _ = nliOwner.Close() }()
 
 	looperCfg := &config.LooperConfig{Endpoint: opt.endpoint}
 	client, err := looper.NewConnectorClient(looperCfg)
@@ -228,7 +233,7 @@ func run(opt options) error {
 
 	// Phase 2: per arm, synthesize every item from its cached panel.
 	for _, arm := range opt.arms {
-		if err := runArm(fusion, client, opt, items, cache, arm, nli); err != nil {
+		if err := runArm(fusion, client, opt, items, cache, arm, shipped); err != nil {
 			return fmt.Errorf("arm %s: %w", arm, err)
 		}
 	}
@@ -236,23 +241,22 @@ func run(opt options) error {
 	return nil
 }
 
-// placeboNLI returns deterministic seeded-random scores: reproducible for a given
-// (seed, premise, hypothesis) but carrying no real signal. Mirrors the in-package
-// test placebo so arm D weights on noise, isolating the score's signal.
-func placeboNLI(seed uint64) looper.NLIClassifyFunc {
-	return func(_ context.Context, premise, hypothesis string) (float32, float32, error) {
+// placeboDetector returns deterministic seeded-random scores: reproducible for a
+// given (seed, context, answer) but carrying no real signal. Mirrors the
+// in-package test placebo so arm D weights on noise, isolating the score's signal.
+func placeboDetector(seed uint64) looper.HallucinationDetectFunc {
+	return func(_ context.Context, contextText, _, answer string) (looper.GroundingEvidence, error) {
 		h := fnv.New64a()
 		var b [8]byte
 		binary.LittleEndian.PutUint64(b[:], seed)
 		_, _ = h.Write(b[:])
-		_, _ = h.Write([]byte(premise))
+		_, _ = h.Write([]byte(contextText))
 		_, _ = h.Write([]byte{0})
-		_, _ = h.Write([]byte(hypothesis))
+		_, _ = h.Write([]byte(answer))
 		// Deterministic seed for the placebo; the uint64->int64 wrap is harmless.
 		r := rand.New(rand.NewSource(int64(h.Sum64()))) //nolint:gosec // deterministic eval seed, overflow harmless
-		entail := float32(r.Float64())
-		contradict := float32(r.Float64() * (1 - float64(entail)))
-		return entail, contradict, nil
+		score := float32(float32(r.Float64()))
+		return looper.GroundingEvidence{Unsupported: true, Spans: []string{"placebo"}, Probability: &score}, nil
 	}
 }
 
@@ -324,7 +328,7 @@ func runArm(
 	items []item,
 	cache map[string]cachedPanelItem,
 	arm string,
-	nli looper.NLIClassifyFunc,
+	shipped *looper.GroundingBackends,
 ) error {
 	outPath := filepath.Join(opt.outDir, fmt.Sprintf("answers_%s.jsonl", arm))
 	done, err := resumeIDs(outPath)
@@ -345,7 +349,7 @@ func runArm(
 		if !ok {
 			return fmt.Errorf("no cached panel for %s", it.ID)
 		}
-		rec := produceArm(fusion, client, opt, it, entry, arm, nli)
+		rec := produceArm(fusion, client, opt, it, entry, arm, shipped)
 		if err := appendJSON(fh, rec); err != nil {
 			return err
 		}
@@ -364,7 +368,7 @@ func produceArm(
 	it item,
 	entry cachedPanelItem,
 	arm string,
-	nli looper.NLIClassifyFunc,
+	shipped *looper.GroundingBackends,
 ) answerRecord {
 	rec := answerRecord{ID: it.ID, Domain: it.Domain, Arm: arm, PanelSHA256: entry.PanelSHA256, Panel: []panelRec{}}
 
@@ -386,15 +390,15 @@ func produceArm(
 	}
 
 	grounding, placebo := armGrounding(arm, opt.reference)
-	armNLI := nli
+	backends := shipped
 	if placebo {
-		armNLI = placeboNLI(itemSeed(opt.placeboSeed, it.ID))
+		backends = &looper.GroundingBackends{Detect: placeboDetector(itemSeed(opt.placeboSeed, it.ID))}
 	}
 
 	req := &looper.Request{
 		OriginalRequest: buildRequest(it.Question, it.Context, opt),
 		DecisionName:    "fusioneval",
-		Grounding:       &looper.GroundingBackends{NLI: armNLI},
+		Grounding:       backends,
 		CachedPanel:     toModelResponses(entry.Panel),
 		Algorithm: &config.AlgorithmConfig{
 			Type: "fusion",
@@ -417,7 +421,7 @@ func produceArm(
 }
 
 // armGrounding maps an arm label to its grounding config and whether the placebo
-// NLI must be selected for this request.
+// detector must be selected for this request.
 func armGrounding(arm, reference string) (cfg *config.FusionGroundingConfig, placebo bool) {
 	switch arm {
 	case "B":

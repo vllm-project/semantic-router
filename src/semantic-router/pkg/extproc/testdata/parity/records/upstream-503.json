@@ -1,0 +1,327 @@
+{
+  "case": "upstream-503",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "header": [
+        {
+          "name": ":method",
+          "value": "POST"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/chat/completions"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "content-length",
+          "value": "94"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-upstream-503"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "accept-encoding",
+              "value": ""
+            }
+          ],
+          "remove": [
+            "x-authz-team-id",
+            "x-authz-tenant-id",
+            "x-authz-user-groups",
+            "x-authz-user-id",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-bench-expected-config-hash",
+            "x-vsr-bench-max-inference-calls",
+            "x-vsr-cache-control",
+            "x-vsr-compression-control",
+            "x-vsr-config-hash",
+            "x-vsr-config-version",
+            "x-vsr-cost",
+            "x-vsr-cost-currency",
+            "x-vsr-debug",
+            "x-vsr-delegated-credential",
+            "x-vsr-internal-auth",
+            "x-vsr-kv-cache-id",
+            "x-vsr-kv-mapper-id",
+            "x-vsr-kv-source-pod",
+            "x-vsr-memory",
+            "x-vsr-outcome-principal",
+            "x-vsr-outcome-source",
+            "x-vsr-protection-release",
+            "x-vsr-replay-id",
+            "x-vsr-response-path",
+            "x-vsr-route-model",
+            "x-vsr-schema-version",
+            "x-vsr-selected-decision",
+            "x-vsr-selected-model",
+            "x-vsr-selected-recipe",
+            "x-vsr-session-id",
+            "x-vsr-skip-processing",
+            "x-vsr-systemone-backend",
+            "x-vsr-trace",
+            "x-vsr-upstream-host",
+            "x-vsr-warnings"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "request_body",
+      "end_of_stream": true,
+      "body": "{\"model\":\"vllm-sr/auto\",\"messages\":[{\"role\":\"user\",\"content\":\"Compile this golang program.\"}]}",
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "X-Tenant",
+              "value": "parity-corpus"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer parity-static-key"
+            },
+            {
+              "name": "x-vsr-route-model",
+              "value": "general-large"
+            },
+            {
+              "name": ":path",
+              "value": "/v1/chat/completions"
+            },
+            {
+              "name": "x-route-source",
+              "value": "parity-corpus",
+              "append": true
+            },
+            {
+              "name": "content-length",
+              "value": "169"
+            }
+          ],
+          "remove": [
+            "api-key",
+            "api-subscription-key",
+            "content-length",
+            "ocp-apim-subscription-key",
+            "x-api-key",
+            "x-goog-api-key",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-delegated-credential"
+          ]
+        },
+        "body": {
+          "body": "{\"model\":\"general-large-instruct\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a careful senior engineer.\"},{\"role\":\"user\",\"content\":\"Compile this golang program.\"}]}"
+        },
+        "clear_route_cache": true
+      }
+    },
+    {
+      "phase": "response_headers",
+      "header": [
+        {
+          "name": ":status",
+          "value": "503"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "content-length",
+          "value": "64"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "x-vsr-schema-version",
+              "value": "3"
+            },
+            {
+              "name": "x-vsr-response-path",
+              "value": "upstream"
+            },
+            {
+              "name": "x-vsr-config-version",
+              "value": "1"
+            },
+            {
+              "name": "x-vsr-selected-recipe",
+              "value": "default"
+            },
+            {
+              "name": "x-vsr-selected-decision",
+              "value": "code_route"
+            },
+            {
+              "name": "x-vsr-selected-model",
+              "value": "general-large"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "phase": "response_body",
+      "end_of_stream": true,
+      "body": "{\"error\":{\"message\":\"backend overloaded\",\"type\":\"server_error\"}}",
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ],
+          "remove": [
+            "content-length"
+          ]
+        },
+        "body": {
+          "body": "{\"error\":{\"type\":\"server_error\",\"code\":null,\"message\":\"backend overloaded\",\"param\":null}}"
+        }
+      }
+    }
+  ],
+  "route": "general-large",
+  "upstream": {
+    "header": [
+      {
+        "name": ":method",
+        "value": "POST"
+      },
+      {
+        "name": ":authority",
+        "value": "localhost:8899"
+      },
+      {
+        "name": ":scheme",
+        "value": "http"
+      },
+      {
+        "name": ":path",
+        "value": "/v1/chat/completions"
+      },
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-forwarded-proto",
+        "value": "http"
+      },
+      {
+        "name": "x-request-id",
+        "value": "parity-upstream-503"
+      },
+      {
+        "name": "accept-encoding",
+        "value": ""
+      },
+      {
+        "name": "x-tenant",
+        "value": "parity-corpus"
+      },
+      {
+        "name": "authorization",
+        "value": "Bearer parity-static-key"
+      },
+      {
+        "name": "x-vsr-route-model",
+        "value": "general-large"
+      },
+      {
+        "name": "x-route-source",
+        "value": "parity-corpus"
+      },
+      {
+        "name": "content-length",
+        "value": "169"
+      }
+    ],
+    "body": "{\"model\":\"general-large-instruct\",\"messages\":[{\"role\":\"system\",\"content\":\"You are a careful senior engineer.\"},{\"role\":\"user\",\"content\":\"Compile this golang program.\"}]}"
+  },
+  "response": {
+    "status": 503,
+    "header": [
+      {
+        "name": "x-vsr-schema-version",
+        "value": "3"
+      },
+      {
+        "name": "x-vsr-response-path",
+        "value": "upstream"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "x-vsr-selected-recipe",
+        "value": "default"
+      },
+      {
+        "name": "x-vsr-selected-decision",
+        "value": "code_route"
+      },
+      {
+        "name": "x-vsr-selected-model",
+        "value": "general-large"
+      },
+      {
+        "name": "content-type",
+        "value": "application/json"
+      }
+    ],
+    "body": "{\"error\":{\"type\":\"server_error\",\"code\":null,\"message\":\"backend overloaded\",\"param\":null}}"
+  },
+  "evidence": {
+    "recipe": "default",
+    "decision": "code_route",
+    "confidence": 1,
+    "model": "general-large",
+    "selection_method": "static",
+    "reasoning_mode": "off",
+    "signals": {
+      "keyword": [
+        "code_keywords"
+      ]
+    }
+  }
+}

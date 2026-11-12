@@ -1,7 +1,5 @@
 package testmatrix
 
-import "fmt"
-
 // RouterSmoke is the smallest shared router check that heavy environments reuse.
 var RouterSmoke = []string{
 	"chat-completions-request",
@@ -16,12 +14,9 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
-	"llm-classifier-distribution-routing",
-	"sequence-classifier-routing",
-	"chat-completions-stress-request",
-	"domain-classify",
+	"domain-routing",
 	"semantic-cache",
-	// NLI polarity tier of the semantic cache (issue #2751)
+	// Polarity guard of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
 	"exact-cache-multilingual-negation",
 	"pii-detection",
@@ -31,18 +26,13 @@ var BaselineRouterContract = []string{
 	"pii-long-text",
 	// A jailbreak past the classifier's sequence limit is still detected (issue #3204)
 	"security-long-text",
-	// A scanned score names the window it came from (issue #3939)
-	"security-window-provenance",
 	"jailbreak-detection",
 	"decision-priority-selection",
-	"plugin-chain-execution",
 	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
 	"plugin-request-mutations",
 	// Provider-bound tool passthrough, filtering, removal, semantic add/filter, and PII precedence (issue #3180)
 	"tool-selection",
-	"rule-condition-logic",
 	"decision-fallback-behavior",
-	"plugin-config-variations",
 	"chat-completions-progressive-stress",
 	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
@@ -51,20 +41,27 @@ var BaselineRouterContract = []string{
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
+	// Unknown names fail even with a global default (issue #4653). The
+	// remote-embedding profile covers no_route without that fallback configured.
+	"unknown-model-error-codes",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
 	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
 	"plugin-short-circuit-no-dispatch",
+	// Streaming dispatch always requests the usage chunk, even for
+	// byte-replay-eligible requests, and the client only sees usage it asked
+	// for (issue #3182)
+	"streaming-usage-settlement",
 	// Session observability
-	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
-	"session-pricing-response-api",
-	// Event signal rule matching and routing (issue #3178)
+	// Keyword routing of event payloads (issue #3178)
 	"event-routing",
 	// Language signal rule matching and routing (issue #3178)
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
+	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
+	"context-safety-overlap",
 	// Canonical version gate accepts the supported contract, rejects others (issue #2469)
 	"router-config-version-gate",
 }
@@ -74,6 +71,10 @@ var DashboardContract = []string{
 	// Core API
 	"dashboard-health",
 	"dashboard-status",
+	// Issue #2794: OpenAPI rendered from the route registration.
+	"dashboard-openapi",
+	// Issue #2794: per-caller capability states with cached dependency probes.
+	"dashboard-capabilities",
 	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
 	"dashboard-route-bound-authorization",
 	// Config endpoints
@@ -83,6 +84,14 @@ var DashboardContract = []string{
 	"dashboard-deploy-invalid-yaml",
 	// A semantically invalid deploy must leave the active config serving (issue #3233)
 	"dashboard-deploy-safe-failure",
+	// Rollback must restore the exact pre-deploy config and ledger both operations (issue #3233)
+	"dashboard-deploy-rollback",
+	// The active projection names the served config by version and hash after deploy and rollback (issue #3233)
+	"dashboard-status-active-config",
+	// Logs state their deployment contract and the audit trail records a rejected deploy (issue #3233)
+	"dashboard-logs-diagnostics",
+	// Anonymous and forged sessions are rejected on logs and deploy without touching state (issue #3233)
+	"dashboard-anonymous-access-denied",
 	// sr-bench execution, final-channel scoring, accounting, idempotency, and cancellation.
 	"dashboard-sr-bench",
 	// Sessions/workflows survive Dashboard restart; independent worker evidence survives its own restart.
@@ -95,6 +104,8 @@ var DashboardContract = []string{
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var ProviderProtocolsContract = []string{
+	"provider-cache-cost-breakdown",
+	"provider-cache-net-savings",
 	"prompt-compression-json-routing",
 	// Chat clients must receive Chat Completions even though the selected
 	// backend speaks Anthropic Messages.
@@ -103,6 +114,9 @@ var ProviderProtocolsContract = []string{
 	"anthropic-chat-cache-control",
 	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
+	// A stop_sequence terminal must project to the generic Chat stop for
+	// clients that cannot carry the matched string (issue #4892)
+	"anthropic-chat-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
 	"anthropic-response-api-buffered",
@@ -112,6 +126,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-buffered-matrix",
 	"protocol-codec-anthropic-backend-streaming-matrix",
 	"protocol-codec-anthropic-response-diagnostics",
+	// Gateway fields in Anthropic usage need no backend setting (issue #5841)
+	"protocol-codec-anthropic-gateway-fields",
 	"protocol-codec-responses-verbosity-anthropic",
 	"protocol-codec-prompt-cache-key-anthropic",
 	"protocol-codec-anthropic-per-message-effort-backend",
@@ -122,6 +138,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
 	"protocol-codec-anthropic-backend-agent-client-replay",
+	// An empty POST fails closed at the Router before any dispatch (issue #4292)
+	"public-listener-empty-body-rejected",
 }
 
 // Combine preserves order while removing duplicate testcase names.
@@ -146,29 +164,8 @@ func Combine(groups ...[]string) []string {
 	return combined
 }
 
-// BaselineStress lists the expensive pressure cases within the canonical inventory.
-var BaselineStress = []string{
-	"chat-completions-stress-request",
-	"chat-completions-progressive-stress",
-}
-
-// BaselineCases selects a qualification scope without a second functional allowlist.
-func BaselineCases(suite string) ([]string, error) {
-	if suite == "full" {
-		return append([]string(nil), BaselineRouterContract...), nil
-	}
-	if suite != "" && suite != "standard" {
-		return nil, fmt.Errorf("unknown baseline suite %q", suite)
-	}
-	stress := make(map[string]bool, len(BaselineStress))
-	for _, name := range BaselineStress {
-		stress[name] = true
-	}
-	var cases []string
-	for _, name := range BaselineRouterContract {
-		if !stress[name] {
-			cases = append(cases, name)
-		}
-	}
-	return cases, nil
+// BaselineCases is the canonical baseline inventory. Which of its cases a
+// scope runs is the cases' own priority (pkg/testcases InScope).
+func BaselineCases() []string {
+	return append([]string(nil), BaselineRouterContract...)
 }

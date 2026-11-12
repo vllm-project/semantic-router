@@ -341,7 +341,7 @@ def run_tests(
                         "cases": result.cases,
                         "success": success,
                         "tests_run": result.testsRun,
-                        "runtime": "candle",
+                        "runtime": "model-runtime",
                         "device": "cpu",
                         "platform": "linux/amd64",
                     },

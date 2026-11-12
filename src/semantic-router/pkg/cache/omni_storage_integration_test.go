@@ -1,5 +1,3 @@
-//go:build !windows && cgo
-
 package cache
 
 import (
@@ -10,23 +8,23 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 )
 
-// Select either prepared Nano or Mini with VELA_OMNI_ARTIFACT. This checks the
-// real provider boundary for cache and memory without requiring a database.
+// Select the pinned Nano or Mini snapshot with VELA_OMNI_ARTIFACT. This checks
+// the real provider boundary for cache and memory without requiring a database.
 func TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity(t *testing.T) {
 	artifact := os.Getenv("VELA_OMNI_ARTIFACT")
 	if artifact == "" {
 		if os.Getenv("REQUIRE_OMNI_TESTS") == "1" {
-			t.Fatal("VELA_OMNI_ARTIFACT must select a prepared artifact")
+			t.Fatal("VELA_OMNI_ARTIFACT must select a Vela Omni snapshot")
 		}
-		t.Skip("set VELA_OMNI_ARTIFACT to select native storage integration")
+		t.Skip("set VELA_OMNI_ARTIFACT to select the Omni storage integration")
 	}
-	provider, err := native.New(nil).Embedding(context.Background(), config.ResolvedModelBinding{
-		Recipe: "storage-test", Name: "embedding",
-		Binding:    config.ModelBinding{Deployment: "omni", Contract: "embedding.v1", Adapter: "vela_omni"},
-		Deployment: config.ModelDeployment{Artifact: artifact, Provider: "ort", Device: "cpu", Precision: "native", Input: config.ModelInputBudget{Overflow: "reject"}},
+	provider, err := servingtest.Managed(t).Embedding(context.Background(), config.ResolvedModelBinding{
+		Recipe: "storage-test", Name: "embedding", Contract: "embedding.v1",
+		Binding:    config.ModelBinding{Deployment: "omni"},
+		Deployment: config.ModelDeployment{Artifact: artifact, Provider: config.ModelRuntimeProvider, Device: "cpu", Input: config.ModelInputBudget{Overflow: "reject"}},
 	}, 0, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -40,13 +38,13 @@ func TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity(t *testing.T) {
 	if size != 384 && size != 768 {
 		t.Fatalf("unexpected published output %d", size)
 	}
-	cache := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingModel: "multimodal", EmbeddingProvider: provider})
+	cache := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingDeployment: "omni", EmbeddingProvider: provider})
 	t.Cleanup(func() { _ = cache.Close() })
 	if validationErr := ValidateBackendEmbedding(context.Background(), cache); validationErr != nil {
 		t.Fatal(validationErr)
 	}
 	cfg := namespaceFixture(RedisCacheType, 0)
-	cfg.EmbeddingModel = "multimodal"
+	cfg.EmbeddingDeployment = "omni"
 	cfg.EmbeddingProvider = provider
 	bound, identity, err := PrepareEmbeddingNamespace(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 		return embedding.ResolveProviderIdentity(provider, settings)
@@ -54,7 +52,7 @@ func TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity(t *testing.T) {
 	if err != nil || identity == "" || bound.Redis.Index.VectorField.Dimension != size || cfg.Redis.Index.VectorField.Dimension != 0 {
 		t.Fatalf("bound size/identity: %+v %s %v", bound.Redis, identity, err)
 	}
-	memoryConfig := memory.EmbeddingConfig{Model: memory.EmbeddingModelMulti, Provider: provider}
+	memoryConfig := memory.EmbeddingConfig{Deployment: "omni", Provider: provider}
 	vector, err := memory.GenerateEmbedding("A Chinese and English memory: 会议时间。", memoryConfig)
 	if err != nil || len(vector) != size {
 		t.Fatalf("memory vector width=%d want=%d err=%v", len(vector), size, err)

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -9,7 +9,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -202,48 +201,10 @@ func TestHandleUploadFileUsesResolvedRuntimeConfig(t *testing.T) {
 	staleCfg := vectorStoreUploadConfig(1, ".pdf")
 	liveCfg := vectorStoreUploadConfig(1, ".txt")
 	apiServer.config = staleCfg
-	apiServer.runtimeConfig = newLiveRuntimeConfig(staleCfg, func() *config.RouterConfig { return liveCfg }, nil)
+	apiServer.runtimeConfig = newLiveRuntimeConfig(staleCfg, func() *config.RouterConfig { return liveCfg })
 
 	rr := uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected live config formats to win, got %d: %s", rr.Code, rr.Body.String())
-	}
-}
-
-func TestHandleUploadFileKeepsActiveConfigUntilGenerationPublication(t *testing.T) {
-	apiServer, _ := newFileUploadServer(t)
-	apiServer.config = vectorStoreUploadConfig(1, ".pdf")
-
-	done := make(chan struct{})
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case <-done:
-				return
-			default:
-				apiServer.publishConfigMutation(vectorStoreUploadConfig(1, ".txt"))
-			}
-		}
-	}()
-	for range 5 {
-		uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
-	}
-	close(done)
-	wg.Wait()
-	apiServer.publishConfigMutation(vectorStoreUploadConfig(1, ".txt"))
-
-	rr := uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("candidate formats applied before publication, got %d: %s", rr.Code, rr.Body.String())
-	}
-	active := vectorStoreUploadConfig(1, ".txt")
-	apiServer.runtimeRegistry.UpdateConfig(active)
-	apiServer.runtimeConfig = newLiveRuntimeConfig(apiServer.config, apiServer.runtimeRegistry.CurrentConfig, nil)
-	rr = uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
-	if rr.Code != http.StatusOK {
-		t.Fatalf("published generation formats did not apply, got %d: %s", rr.Code, rr.Body.String())
 	}
 }

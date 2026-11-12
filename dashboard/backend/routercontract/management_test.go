@@ -18,7 +18,7 @@ func TestManagementPolicyMatchesOnlyCompleteDeclaredMethodPaths(t *testing.T) {
 		if policy.Mutation && (policy.Method == http.MethodGet || policy.Method == http.MethodHead) {
 			t.Fatalf("read mutation: %+v", policy)
 		}
-		path := strings.NewReplacer("{type}", "rag", "{id}", "record-1", "{name}", "example").Replace(policy.Path)
+		path := strings.NewReplacer("{type}", "context", "{id}", "record-1", "{name}", "example").Replace(policy.Path)
 		got, ok := LookupManagement(policy.Method, path)
 		if !ok || !reflect.DeepEqual(got.Permissions, policy.Permissions) || got.Mutation != policy.Mutation {
 			t.Fatalf("policy not addressable: %+v", policy)
@@ -33,17 +33,26 @@ func TestManagementPolicyMatchesOnlyCompleteDeclaredMethodPaths(t *testing.T) {
 		{http.MethodPost, "/api/router/api/v1/config/rollback"},
 		{http.MethodGet, "/api/router/api/v1/response-cache/stats"},
 		{http.MethodPost, "/api/router/api/v1/context-compression/preview"},
-		{http.MethodDelete, "/api/router/api/v1/plugins/rag/bindings"},
+		{http.MethodDelete, "/api/router/api/v1/plugins/context/bindings"},
 		{http.MethodGet, "/api/router/api/v1/plugins/../bindings"},
 		{http.MethodGet, "/api/router/api/v1/plugins/%2e%2e/bindings"},
 		{http.MethodGet, "/api/router/api/v1/plugins//bindings"},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record/extra"},
-		{http.MethodGet, "/api/router/api/v1/plugins/rag/bindings/"},
+		{http.MethodGet, "/api/router/api/v1/plugins/context/bindings/"},
 		{http.MethodPost, "/api/router/api/v1/diagnostics/models/unknown"},
+		{http.MethodPost, "/api/router/api/v1/inventory/model-runtime"},
+		{http.MethodDelete, "/api/router/api/v1/inventory/model-runtime"},
 		{http.MethodGet, "/api/router/API/v1/plugins"},
 	} {
 		if _, ok := LookupManagement(test.method, test.path); ok {
 			t.Fatalf("undeclared route allowed: %+v", test)
 		}
+	}
+}
+
+func TestClassifierInventoryRequiresConfigWrite(t *testing.T) {
+	policy, ok := LookupManagement(http.MethodGet, GatewayPrefix+"/api/v1/inventory/classifier")
+	if !ok || !reflect.DeepEqual(policy.Permissions, []string{configWrite}) || policy.Mutation {
+		t.Fatalf("classifier inventory policy = %+v, found = %v", policy, ok)
 	}
 }

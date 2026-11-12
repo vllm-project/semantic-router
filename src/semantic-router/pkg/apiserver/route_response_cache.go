@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
@@ -95,18 +96,24 @@ func (s *ClassificationAPIServer) handleResponseCacheTest(
 		return
 	}
 	var candidate cache.CacheConfig
-	if err := yaml.Unmarshal(request.Configuration, &candidate); err != nil {
+	var store struct {
+		Embedding *config.EmbeddingBinding `yaml:"embedding"`
+	}
+	if err := yaml.Unmarshal(request.Configuration, &candidate); err != nil || yaml.Unmarshal(request.Configuration, &store) != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CACHE_CONFIG", "Invalid response cache configuration")
 		return
 	}
 	if candidate.Enabled {
-		provider, release, prepareErr := s.acquireResponseCacheEmbedding(candidate.EmbeddingModel)
+		deployment, provider, release, prepareErr := s.acquireResponseCacheEmbedding(store.Embedding)
 		defer release()
 		if prepareErr != nil {
 			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", "Response cache embedding provider is unavailable")
 			return
 		}
-		candidate.EmbeddingProvider = provider
+		candidate.EmbeddingProvider, candidate.EmbeddingDeployment = provider, deployment
+		if store.Embedding != nil {
+			candidate.EmbeddingDimension = store.Embedding.Dimension
+		}
 	}
 	backend, err := cache.NewCacheBackend(candidate)
 	if err != nil {
@@ -131,26 +138,34 @@ func (s *ClassificationAPIServer) handleResponseCacheTest(
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-func (s *ClassificationAPIServer) acquireResponseCacheEmbedding(model string) (embedding.Provider, func(), error) {
+// acquireResponseCacheEmbedding borrows the provider of the deployment a
+// candidate cache embeds with, its binding's or embeddings.default: the live
+// cache's, else the one the default recipe's recall prepared.
+func (s *ClassificationAPIServer) acquireResponseCacheEmbedding(binding *config.EmbeddingBinding) (string, embedding.Provider, func(), error) {
+	deployment := ""
+	if binding != nil {
+		deployment = binding.Deployment
+	}
+	if deployment == "" {
+		cfg := s.currentConfig()
+		if cfg == nil {
+			return "", nil, func() {}, fmt.Errorf("router configuration is unavailable")
+		}
+		deployment = cfg.EmbeddingDeployment
+	}
 	service, release := s.currentResponseCache()
 	if service != nil {
-		if provider, err := service.PreparedEmbedding(model); err == nil {
-			return provider, release, nil
+		if provider, err := service.PreparedEmbedding(deployment); err == nil {
+			return deployment, provider, release, nil
 		}
 	}
 	release()
-	// Legacy configurations can validate a candidate against their existing
-	// default embedding. An explicit global binding must never borrow a recipe
-	// override when its service consumer is unavailable or incompatible.
-	cfg, prepared, release, err := s.acquireEmbeddingRuntime()
-	if cfg != nil && cfg.GlobalModelBindings["embedding"].Deployment != "" {
-		return nil, release, fmt.Errorf("global response cache embedding consumer is unavailable or incompatible")
-	}
+	_, prepared, release, err := s.acquireEmbeddingRuntime()
 	if err != nil {
-		return nil, release, err
+		return deployment, nil, release, err
 	}
-	provider, err := prepared.Get(model, 0, 0)
-	return provider, release, err
+	provider, err := prepared.Get(deployment, 0, 0)
+	return deployment, provider, release, err
 }
 
 func (s *ClassificationAPIServer) handleResponseCacheInvalidate(

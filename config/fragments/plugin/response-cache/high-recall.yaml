@@ -4,9 +4,10 @@ plugin:
     enabled: true
     mode: exact_then_semantic
     scope: tenant
-    semantic:
-      similarity_threshold: 0.92
     ttl_seconds: 86400
+    semantic:
+      match:
+        recall: {top_k: 3, min_similarity: 0.92}
     request_controls:
       enabled: true
       header: x-vsr-cache-control

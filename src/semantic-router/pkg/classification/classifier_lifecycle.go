@@ -4,84 +4,33 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // BuildClassifier creates a classifier without executing runtime initialization.
 // The router assembly path uses this explicit build-then-init split so lifecycle
 // ownership stays visible outside constructor call chains.
-func BuildClassifier(
-	cfg *config.RouterConfig,
-	categoryMapping *CategoryMapping,
-	piiMapping *PIIMapping,
-	jailbreakMapping *JailbreakMapping,
-) (*Classifier, error) {
-	return buildClassifierWithAdmission(cfg, categoryMapping, piiMapping, jailbreakMapping, nil)
+func BuildClassifier(cfg *config.RouterConfig) (*Classifier, error) {
+	return buildClassifier(cfg)
 }
 
-func buildClassifierWithAdmission(
-	cfg *config.RouterConfig,
-	categoryMapping *CategoryMapping,
-	piiMapping *PIIMapping,
-	jailbreakMapping *JailbreakMapping,
-	admissionRegistry *admission.Registry,
-	runtimeOptions ...RecipeRuntimeOptions,
-) (*Classifier, error) {
+func buildClassifier(cfg *config.RouterConfig, runtimeOptions ...RecipeRuntimeOptions) (*Classifier, error) {
 	if cfg != nil && cfg.RoutingScope == "" {
 		cfg = cfg.ConfigForRecipe(cfg.DefaultRecipe())
 	}
-	var runtime *native.Runtime
 	var runtimeOption RecipeRuntimeOptions
 	if len(runtimeOptions) > 0 {
 		runtimeOption = runtimeOptions[0]
-		runtime = runtimeOption.Runtime
 	}
-	models, err := newClassifierModelRuntime(cfg, runtime)
+	models, err := newClassifierModelRuntime(cfg, runtimeOption)
 	if err != nil {
 		return nil, err
 	}
 	cfg = models.cfg
-	routingEnabled := models.recipe != config.DefaultRecipeName || cfg.IsRecipeReachableForRouting(config.DefaultRecipeName)
-	if routingEnabled {
-		categoryMapping, piiMapping, jailbreakMapping, err = models.mappings(categoryMapping, piiMapping, jailbreakMapping)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if validationErr := config.ValidateCategoryModelBackend(cfg); validationErr != nil {
-		return nil, validationErr
-	}
-	if validationErr := config.ValidatePIIModelBackend(cfg); validationErr != nil {
-		return nil, validationErr
-	}
-	var initialOptions []option
-	if routingEnabled {
-		jailbreakInitializer, jailbreakInference, jailbreakErr := buildJailbreakDependencies(cfg, jailbreakMapping, models)
-		if jailbreakErr != nil {
-			return nil, jailbreakErr
-		}
-		piiInitializer, piiInference, piiErr := buildPIIDependencies(cfg, piiMapping, models)
-		if piiErr != nil {
-			if closer, ok := jailbreakInference.(interface{ Close() error }); ok {
-				_ = closer.Close()
-			}
-			return nil, piiErr
-		}
-		initialOptions = []option{
-			withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
-			withPII(piiMapping, piiInitializer, piiInference),
-		}
-	}
-	if admissionRegistry != nil {
-		initialOptions = append(initialOptions, withAdmissionRegistry(admissionRegistry))
-	}
-	builder := newClassifierOptionBuilder(cfg, initialOptions)
+	builder := newClassifierOptionBuilder(cfg, nil)
 	transferred := false
 	defer func() {
 		if !transferred {
@@ -89,10 +38,10 @@ func buildClassifierWithAdmission(
 		}
 	}()
 	builder.models = models
-	if cfg.RoutingScope == "" || cfg.RoutingScope == config.DefaultRecipeName {
+	if cfg.RoutingScope == "" || cfg.IsDefaultRecipe(cfg.RoutingScope) {
 		builder.embeddingSet = runtimeOption.Embeddings
 	}
-	options, err := builder.build(categoryMapping)
+	options, err := builder.build()
 	if err != nil {
 		return nil, err
 	}
@@ -103,24 +52,19 @@ func buildClassifierWithAdmission(
 	classifier.models = models
 	classifier.embeddingSet = builder.embeddingSet
 	classifier.ownsEmbeddingSet = builder.ownsEmbeddingSet
-	classifier.embeddingProvider = builder.provider
 	transferred = true
 	return classifier, nil
 }
 
-// NewClassifier preserves the legacy convenience behavior for existing callers
-// by building the classifier and then explicitly initializing runtime state.
-func NewClassifier(
-	cfg *config.RouterConfig,
-	categoryMapping *CategoryMapping,
-	piiMapping *PIIMapping,
-	jailbreakMapping *JailbreakMapping,
-) (*Classifier, error) {
-	classifier, err := BuildClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
+// NewClassifier builds the classifier and then initializes its runtime state;
+// a classifier that fails to initialize is closed.
+func NewClassifier(cfg *config.RouterConfig, runtimeOptions ...RecipeRuntimeOptions) (*Classifier, error) {
+	classifier, err := buildClassifier(cfg, runtimeOptions...)
 	if err != nil {
 		return nil, err
 	}
 	if err := classifier.InitializeRuntime(); err != nil {
+		_ = classifier.Close()
 		return nil, err
 	}
 	return classifier, nil
@@ -137,16 +81,6 @@ func (c *Classifier) InitializeRuntime() error {
 
 	c.logHeuristicClassifierInitialization()
 	return c.executeRuntimeTasks(c.runtimeTasks())
-}
-
-// InitializeDefaultAPIRuntime initializes only model dependencies owned by
-// default public APIs. It is used when auto/direct aliases are disabled, so the
-// default routing profile itself is unreachable but its APIs remain available.
-func (c *Classifier) InitializeDefaultAPIRuntime() error {
-	if c == nil {
-		return fmt.Errorf("classifier is nil")
-	}
-	return c.executeRuntimeTasks(c.defaultAPIRuntimeTasks())
 }
 
 func (c *Classifier) executeRuntimeTasks(tasks []modelruntime.Task) error {
@@ -176,30 +110,6 @@ func (c *Classifier) executeRuntimeTasks(tasks []modelruntime.Task) error {
 	return nil
 }
 
-func (c *Classifier) defaultAPIRuntimeTasks() []modelruntime.Task {
-	if !c.ownsDefaultAPIConsumer() {
-		return nil
-	}
-
-	tasks := make([]modelruntime.Task, 0, 3)
-	appendTask := func(name string, enabled bool, init func() error) {
-		if !enabled {
-			return
-		}
-		tasks = append(tasks, modelruntime.Task{
-			Name:       name,
-			BestEffort: false,
-			Run: func(context.Context) error {
-				return init()
-			},
-		})
-	}
-	appendTask("classifier.fact_check", c.Config.NeedsFactCheckModelForAPI(), c.initializeFactCheckClassifier)
-	appendTask("classifier.hallucination", c.Config.NeedsHallucinationDetectorForDefaultRuntime(), c.initializeHallucinationDetector)
-	appendTask("classifier.feedback", c.Config.NeedsFeedbackModelForAPI(), c.initializeFeedbackDetector)
-	return tasks
-}
-
 // Close releases the classifier's runtime resources.
 func (c *Classifier) Close() error {
 	if c == nil {
@@ -224,38 +134,11 @@ func (c *Classifier) closeResources() error {
 	if c.ownsEmbeddingSet {
 		closeResource("embeddings", c.embeddingSet)
 	}
-	closeResource("modality classifier", c.modalityInference)
-	closeResource("fact-check classifier", c.factCheckClassifier)
-	closeResource("feedback detector", c.feedbackDetector)
-	closeResource("hallucination detector", c.hallucinationDetector)
-	closeResource("endpoint hallucination detector", c.endpointHallucinationDetector)
-	closeResource("category classifier", c.categoryInference)
-	closeResource("MCP category classifier", c.mcpCategoryInitializer)
-	closeResource("jailbreak classifier", c.jailbreakInference)
-	closeResource("complexity score backend", c.complexityScoreBackend)
-	closeResource("complexity label backend", c.complexityLabelBackend)
-	closeResource("PII classifier", c.piiInference)
-	genericNames := make([]string, 0, len(c.genericClassifiers))
-	for name := range c.genericClassifiers {
-		genericNames = append(genericNames, name)
-	}
-	sort.Strings(genericNames)
-	for _, name := range genericNames {
-		closeResource("generic classifier "+name, c.genericClassifiers[name])
-	}
-	safetyNames := make([]string, 0, len(c.safetyClassifiers))
-	for name := range c.safetyClassifiers {
-		safetyNames = append(safetyNames, name)
-	}
-	sort.Strings(safetyNames)
-	for _, name := range safetyNames {
-		closeResource("safety classifier "+name, c.safetyClassifiers[name])
-	}
 	return errors.Join(closeErrors...)
 }
 
 func (c *Classifier) runtimeTasks() []modelruntime.Task {
-	tasks := make([]modelruntime.Task, 0, 9)
+	tasks := make([]modelruntime.Task, 0, 5)
 	appendTask := func(name string, bestEffort bool, enabled bool, init func() error) {
 		if !enabled {
 			return
@@ -269,46 +152,10 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 		})
 	}
 
-	appendTask("classifier.category", false, c.usesRoutingSignalType(config.SignalTypeDomain) && (c.IsCategoryEnabled() || c.IsMCPCategoryEnabled()), c.initializeConfiguredCategoryRuntime)
-	appendTask("classifier.jailbreak", false, c.usesJailbreakClassifier() && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
-	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
-	appendTask("classifier.safety", false, c.usesRoutingSignalType(config.SignalTypeSafety), c.initializeSafetyClassifiers)
-	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
-	appendTask("classifier.fact_check", false, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
-	appendTask("classifier.hallucination", false, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
-	appendTask("classifier.feedback", false, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
-
-	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
+	appendTask("classifier.systemone", false, len(c.preparedSystemOneRules()) > 0, c.prepareSystemOneSignals)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
 
 	return tasks
-}
-
-func (c *Classifier) usesRoutingSignalType(signalType string) bool {
-	return c != nil && c.Config != nil && c.Config.UsesSignalTypeInReachableRouting(signalType)
-}
-
-// usesJailbreakClassifier also counts the response-stage consumers, which
-// usesRoutingSignalType cannot see: decision rules never name a
-// response-direction rule, and the response_jailbreak plugin is not a rule.
-func (c *Classifier) usesJailbreakClassifier() bool {
-	return c != nil && c.Config != nil && c.Config.UsesJailbreakClassifierInReachableRouting()
-}
-
-func (c *Classifier) ownsDefaultAPIConsumer() bool {
-	return c != nil &&
-		c.Config != nil &&
-		(c.Config.RoutingScope == "" || c.Config.RoutingScope == config.DefaultRecipeName)
-}
-
-func (c *Classifier) initializeConfiguredCategoryRuntime() error {
-	if c.IsCategoryEnabled() {
-		return c.initializeCategoryClassifier()
-	}
-	if c.IsMCPCategoryEnabled() {
-		return c.initializeMCPCategoryClassifier()
-	}
-	return nil
 }
 
 func logRuntimeInitializationEvent(event modelruntime.Event) {

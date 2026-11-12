@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -213,6 +213,9 @@ func (s *ClassificationAPIServer) handleFastResponsePreview(w http.ResponseWrite
 	if err != nil {
 		s.writePluginPreviewError(w, err)
 		return
+	}
+	if !policy.IsEnabled() {
+		policy.Message = "" // the request reaches its model: no fixed text
 	}
 	s.writeJSONResponse(w, http.StatusOK, fastResponsePreviewResponse{Guarantees: pluginruntime.Guarantees{Mode: "preview"}, Message: policy.Message})
 }

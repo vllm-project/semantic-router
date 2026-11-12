@@ -14,7 +14,7 @@ backends are already exposed as Kubernetes services, KServe
 `InferenceService`s, or Llama Stack services.
 
 The Operator does not deploy model servers. It discovers or references them and
-generates the provider bindings used by the Router.
+generates the request backends (`providers.models`) the Router uses.
 
 ## What the Operator manages
 
@@ -23,7 +23,7 @@ generates the provider bindings used by the Router.
 - optional persistent model storage
 - probes, resources, scheduling, autoscaling, and ingress settings
 - OpenShift security defaults and optional Route creation
-- standalone Envoy sidecar or integration with an existing Gateway
+- standalone mode, where the Router serves its own listener, or integration with an existing Gateway
 
 For the top-level field families and links to the installed schema, see the
 [SemanticRouter CRD reference](../../api/semantic-router-crd).
@@ -113,37 +113,41 @@ kubectl get deployment,service \
   -l app.kubernetes.io/instance=my-router
 ```
 
-Send a direct request with the concrete model name, or add canonical routing
-under `spec.config.routing` to expose automatic or policy-driven behavior.
+Send a direct request with the concrete model name, or add canonical recipes
+under `spec.config.recipes` to expose automatic or policy-driven behavior.
 
 ## Add routing policy
 
-`spec.config.routing` accepts the canonical routing object. The example below
-adds a catch-all decision over the discovered model:
+`spec.config.recipes` accepts canonical recipes; the fields of the recipe named
+`default` replace the Operator's default recipe's. `spec.config.entrypoints`
+and `spec.config.plugins` accept canonical `entrypoints` and `global.plugins`,
+and `spec.config.models` states the facts of a discovered model by name. The
+example below adds a catch-all decision over the discovered model:
 
 ```yaml
 spec:
   config:
-    routing:
-      strategy: priority
-      modelCards:
-        - name: local/model
-          modality: text
-          capabilities: [chat]
-      decisions:
-        - name: default-route
-          description: Route unmatched requests to the discovered local model.
-          priority: 1
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/model
+    models:
+      - name: local/model
+        capabilities: [chat]
+    recipes:
+      - name: default
+        strategy: priority
+        decisions:
+          - name: default-route
+            description: Route unmatched requests to the discovered local model.
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: local/model
 ```
 
+`spec.config.routing` is removed; a resource that sets it is refused.
+
 The remaining `spec.config` fields are Operator adapters for shared Router
-settings such as response cache, classifiers, tools, observability, and
-reasoning families. They are translated into canonical `global` and provider
+settings such as the response cache, reasoning effort, API and observability. They are translated into canonical `global` and provider
 sections. Consult the CRD reference rather than copying fields from a local
 `config.yaml` into arbitrary CR paths.
 
@@ -183,23 +187,30 @@ entries under the generated routing model card.
 
 ### Standalone
 
-With no `spec.gateway`, the Operator deploys an Envoy sidecar next to the
-Router. Client traffic enters the Service, Envoy invokes ExtProc, and Envoy
-forwards the transformed request to the selected backend.
+With no `spec.gateway`, the Router runs standalone (`-gateway=standalone`): it
+serves the OpenAI-compatible API itself on its listener `http-8801`, port
+**8801**, routes each request and forwards it to the selected backend. No Envoy
+runs in the Pod. The Pod's probes check `/ready` and `/health` on that
+listener, and the Service exposes it as port 8801 (`http-8801`).
 
 This mode is appropriate when the Router should be self-contained and the
 cluster does not already provide a compatible gateway.
+
+Operator releases before standalone mode ran an Envoy sidecar here and served
+the same Service port 8801. After an Operator upgrade the Router serves that
+port itself, and the Operator deletes the sidecar's `<name>-envoy-config`
+ConfigMap once the rollout completes.
 
 ### Existing Gateway
 
 There are two distinct ways to attach an existing Gateway.
 
-#### Forward HTTP to the Operator's Envoy sidecar
+#### Forward HTTP to the standalone Router
 
 For a Gateway API controller that forwards HTTP, keep the Router in standalone
-mode: **omit `spec.gateway.existingRef`**. The Operator creates its Envoy
-sidecar and exposes the inference listener as Service port **8801**
-(`envoy-http`). Create an `HTTPRoute` targeting that port:
+mode: **omit `spec.gateway.existingRef`**. The Router's inference listener is
+Service port **8801** (`http-8801`). Create an `HTTPRoute` targeting that
+port:
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -231,9 +242,9 @@ namespace; moving the backend Service to another namespace also requires a
 your deployment. The Operator does not create an `HTTPRoute`; you own this
 route's lifecycle.
 
-The traffic path is Gateway → Router Service `envoy-http` → Envoy sidecar →
-ExtProc → selected model backend. The `api` port (8080 by default) serves Router
-management requests and must not be used as the inference route's backend.
+The traffic path is Gateway → Router Service `http-8801` → Router → selected
+model backend. The `api` port (8080 by default) serves Router management
+requests and must not be used as the inference route's backend.
 
 A complete Router and route example is available in
 [`vllm.ai_v1alpha1_semanticrouter_gateway.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml).
@@ -268,11 +279,12 @@ spec:
       namespace: gateway-system
 ```
 
-This mode verifies the Gateway exists and omits the Envoy sidecar. You must
-configure the Gateway's ExtProc policy to call the Router Service's **gRPC port
-50051** (or your configured `service.grpc.port`), plus routes to the actual
-model backends that honor the Router's selection. Referencing a Gateway alone
-does not install those policies or routes. Follow the matching
+This mode verifies the Gateway exists and runs the Router in extproc mode
+(`-gateway=extproc`). You must configure the Gateway's ExtProc policy to call
+the Router Service's **gRPC port 50051** (or your configured
+`service.grpc.port`), plus routes to the actual model backends that honor the
+Router's selection. Referencing a Gateway alone does not install those policies
+or routes. Follow the matching
 [Kubernetes Gateway integration guide](gateways) for its processing modes and
 backend selection contract. Do not point an inference `HTTPRoute` at the Router
 management API; it does not implement `/v1/chat/completions`.
@@ -297,6 +309,11 @@ spec:
 
 Omit the hostname to let OpenShift allocate one, or provide a hostname covered
 by your DNS and certificate configuration.
+
+In standalone mode the Route sends clients to the Router's inference listener,
+Service port 8801 (`http-8801`), and so does a `spec.ingress` path without
+`servicePort`. With `spec.gateway.existingRef` the Router serves no HTTP
+inference port, so send clients through that Gateway.
 
 ## Secrets
 

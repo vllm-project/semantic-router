@@ -281,6 +281,72 @@ func TestValidateIngress(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "explicit service port in range",
+			sr: &SemanticRouter{
+				Spec: SemanticRouterSpec{
+					Ingress: IngressSpec{
+						Hosts: []IngressHost{
+							{
+								Host: "example.com",
+								Paths: []IngressPath{
+									{
+										Path:        "/",
+										PathType:    pathType,
+										ServicePort: 9090,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "negative service port",
+			sr: &SemanticRouter{
+				Spec: SemanticRouterSpec{
+					Ingress: IngressSpec{
+						Hosts: []IngressHost{
+							{
+								Host: "example.com",
+								Paths: []IngressPath{
+									{
+										Path:        "/",
+										PathType:    pathType,
+										ServicePort: -1,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "service port above range",
+			sr: &SemanticRouter{
+				Spec: SemanticRouterSpec{
+					Ingress: IngressSpec{
+						Hosts: []IngressHost{
+							{
+								Host: "example.com",
+								Paths: []IngressPath{
+									{
+										Path:        "/",
+										PathType:    pathType,
+										ServicePort: 65536,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "no hosts",
 			sr: &SemanticRouter{
 				Spec: SemanticRouterSpec{

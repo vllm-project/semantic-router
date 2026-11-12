@@ -79,19 +79,23 @@ func annotateUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOut
 	if !outcome.isSuccessful && outcome.statusCode != 0 {
 		ctx.UpstreamSpan.SetStatus(codes.Error, "upstream request failed")
 	}
-
 }
 
 func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
-	if ctx == nil ||
-		ctx.IsStreamingResponse ||
-		ctx.TTFTRecorded ||
-		ctx.ProcessingStartTime.IsZero() ||
-		ctx.RequestModel == "" {
+	if ctx == nil || ctx.ProcessingStartTime.IsZero() {
+		return
+	}
+	recordNonStreamingFirstResponse(ctx, time.Since(ctx.ProcessingStartTime))
+}
+
+// recordNonStreamingFirstResponse records how long the request's model took
+// to answer a non-streaming response.
+func recordNonStreamingFirstResponse(ctx *RequestContext, elapsed time.Duration) {
+	if ctx.IsStreamingResponse || ctx.TTFTRecorded || ctx.RequestModel == "" {
 		return
 	}
 
-	ttft := time.Since(ctx.ProcessingStartTime).Seconds()
+	ttft := elapsed.Seconds()
 	if ttft <= 0 {
 		return
 	}

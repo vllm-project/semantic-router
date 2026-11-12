@@ -1,0 +1,216 @@
+.section {
+  position: relative;
+  scroll-margin-top: var(--site-header-height);
+  padding: var(--site-section-pad-top, var(--site-section-pad)) 0 var(--site-section-pad);
+}
+
+.wrap {
+  width: min(100% - 2 * var(--gut), 1280px);
+  margin-inline: auto;
+}
+
+/* The organizations as Duo's marks: official logos, unmodified, each on its own surface tile. 24 fill 8, 6 or 3
+ * columns. */
+.organizations {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.organization {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 6rem;
+  padding: 14px 12px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair), 0 1px 2px rgba(40, 32, 20, 0.04);
+}
+
+.organization img {
+  width: min(100%, var(--logo-width));
+  max-width: 8.5rem;
+  max-height: 2.6rem;
+  object-fit: contain;
+}
+
+.organization[data-caption] img {
+  max-height: 2.2rem;
+}
+
+.logoCaption {
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.foundations {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  margin-top: clamp(56px, 6vw, 80px);
+}
+
+.foundationsIntro {
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  max-width: 40rem;
+  text-align: center;
+}
+
+.foundationsIntro :global(.site-label) {
+  margin-bottom: 14px;
+}
+
+.foundationsTitle {
+  margin: 0;
+  color: var(--ink);
+  font: 500 clamp(30px, 3vw, 40px) / 1.05 var(--serif);
+  letter-spacing: -0.01em;
+}
+
+.foundationsIntro .foundationsLede {
+  margin: 12px 0 0;
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1.55;
+  text-wrap: balance;
+}
+
+.projects {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 64rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px 7px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--ink);
+  font: 500 14.5px/1 var(--sans);
+  text-decoration: none;
+  transition: box-shadow 0.2s, transform 0.3s var(--ease);
+}
+
+.project:hover,
+.project:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+  color: var(--ink);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+/* Several of these marks are drawn for white, so each sits on its own light plate in both modes. */
+.projectLogo {
+  display: grid;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #f8fafc;
+}
+
+.projectLogo img {
+  max-width: 22px;
+  max-height: 22px;
+  object-fit: contain;
+}
+
+/* AMD's mark is white on transparent. */
+.project[data-project-id='amd'] .projectLogo img {
+  filter: invert(1);
+}
+
+.projectName {
+  white-space: nowrap;
+}
+
+.projectArrow {
+  color: var(--ember-text);
+  font-size: 13px;
+  transition: transform 0.3s var(--ease);
+}
+
+.project:hover .projectArrow {
+  transform: translate(2px, -2px);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 24px;
+  margin-top: clamp(36px, 4vw, 52px);
+}
+
+.footer p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+:global(html[lang='zh-Hans']) .foundationsTitle {
+  font-size: clamp(26px, 2.6vw, 34px);
+  letter-spacing: 0;
+}
+
+@media (max-width: 1179px) {
+  .organizations {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .organizations {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .organization {
+    min-height: 4.75rem;
+    padding: 10px 8px;
+  }
+
+  .organization img {
+    max-height: 2.1rem;
+  }
+
+  .organization[data-caption] img {
+    max-height: 1.8rem;
+  }
+
+  .logoCaption {
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project,
+  .projectArrow {
+    transition: none;
+  }
+}

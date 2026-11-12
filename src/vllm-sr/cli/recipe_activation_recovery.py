@@ -9,7 +9,6 @@ from contextlib import suppress
 from pathlib import Path
 
 from cli.commands.runtime_paths import (
-    _atomic_write_private_bytes,
     _fsync_directory,
     _runtime_config_filename,
     write_runtime_config_bytes,
@@ -21,6 +20,8 @@ from cli.recipe_activation_recovery_io import (
     _read_bounded_regular_file,
     _require_bounded_regular_file,
     _require_real_directory,
+    _unreadable,
+    write_recipe_store_bytes,
 )
 from cli.recipe_activation_transaction import (
     MAX_ACTIVATION_TRANSACTION_BYTES,
@@ -145,6 +146,10 @@ def _validate_active_recipe_object(store_dir: Path, pointer: dict[str, object]) 
 
     try:
         entries = {entry.name: entry for entry in object_dir.iterdir()}
+    except PermissionError as error:
+        raise _unreadable(
+            object_dir, "The active Recipe object could not be inspected safely."
+        ) from error
     except OSError as error:
         raise RecipeActivationRecoveryError(
             "The active Recipe object could not be inspected safely."
@@ -518,7 +523,7 @@ def _restore_previous_pointer(
         return
 
     encoded = (json.dumps(pointer, indent=2) + "\n").encode("utf-8")
-    _atomic_write_private_bytes(pointer_path, encoded)
+    write_recipe_store_bytes(pointer_path, encoded)
 
 
 def _remove_recovered_transaction(
@@ -537,7 +542,7 @@ def _remove_recovered_transaction(
             if transaction.get("state") == "committing"
             else "rollback_finalizing"
         )
-        _atomic_write_private_bytes(
+        write_recipe_store_bytes(
             journal_path, (json.dumps(transaction, indent=2) + "\n").encode("utf-8")
         )
     try:

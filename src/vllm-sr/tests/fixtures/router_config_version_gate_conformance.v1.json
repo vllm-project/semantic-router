@@ -2,13 +2,13 @@
   "schema_version": "router-config-version-gate-conformance.v1",
   "current_contract": {
     "accepted_versions": [
-      "v0.3"
+      "v0.5"
     ],
     "cases": [
       {
         "id": "supported-version",
         "version_present": true,
-        "version": "v0.3",
+        "version": "v0.5",
         "expected_valid": true
       },
       {
@@ -32,13 +32,13 @@
       {
         "id": "version-padded-supported-version",
         "version_present": true,
-        "version": " v0.3 ",
+        "version": " v0.5 ",
         "expected_valid": false
       },
       {
         "id": "version-older-contract",
         "version_present": true,
-        "version": "v0.2",
+        "version": "v0.3",
         "expected_valid": false
       },
       {
@@ -50,7 +50,7 @@
       {
         "id": "version-unprefixed",
         "version_present": true,
-        "version": "0.3",
+        "version": "0.5",
         "expected_valid": false
       },
       {
@@ -68,7 +68,7 @@
       {
         "id": "version-number",
         "version_present": true,
-        "version": 0.3,
+        "version": 0.5,
         "expected_valid": false
       }
     ]
@@ -76,20 +76,20 @@
   "retained_contract_simulation": {
     "description": "A release that bumps the written contract keeps the outgoing one readable for one cycle. This section simulates that build (accepted_versions has two entries) so the corpus also covers the 'retained' category without needing a real second contract to exist yet.",
     "accepted_versions": [
-      "v0.4",
-      "v0.3"
+      "v0.6",
+      "v0.5"
     ],
     "cases": [
       {
         "id": "written-contract",
         "version_present": true,
-        "version": "v0.4",
+        "version": "v0.6",
         "expected_valid": true
       },
       {
         "id": "retained-outgoing-contract",
         "version_present": true,
-        "version": "v0.3",
+        "version": "v0.5",
         "expected_valid": true
       },
       {
@@ -101,7 +101,7 @@
       {
         "id": "dropped-contract",
         "version_present": true,
-        "version": "v0.2",
+        "version": "v0.3",
         "expected_valid": false
       }
     ]

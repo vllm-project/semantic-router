@@ -1,4 +1,5 @@
-# Model files must be provisioned in the router image or its model volume.
+# The built-in model runtime downloads the pinned Vela 2.0 0.8B release and
+# serves it on CPU; pii rules ask it instead of the default decision model.
 apiVersion: vllm.ai/v1alpha1
 kind: SemanticRouter
 metadata:
@@ -7,24 +8,18 @@ spec:
   replicas: 1
   config:
     model_deployments:
-      local-pii:
-        artifact: models/Vela-1.0-Encoder-307M-PII
-        provider: candle
+      local-vela:
+        artifact: vllm-sr/Vela-2.0-0.8B
+        revision: a778eb2ae2304cfa72fca7e53a19136dea5be012
+        provider: model_runtime
         device: cpu
-        precision: native
-        input:
-          max_tokens: 512
-          overflow: reject
     model_admission:
-      local-pii:
+      local-vela:
         max_concurrency: 2
         max_queue: 8
         queue_timeout_ms: 1000
         on_overflow: shed
-    routing:
-      model_bindings:
-        pii_classifier:
-          deployment: local-pii
-          contract: token_spans.v1
-          adapter: mmbert32k
-          mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
+    recipes:
+      - name: default
+        model_bindings:
+          pii: local-vela

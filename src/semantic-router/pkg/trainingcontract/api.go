@@ -1,7 +1,10 @@
 package trainingcontract
 
+// APIBasePath is the canonical management HTTP prefix for this contract.
+const APIBasePath = "/api/training/v2"
+
 type SubmitRunRequest struct {
-	SchemaVersion  string  `json:"schema_version" jsonschema:"enum=semantic-router.training/v1"`
+	SchemaVersion  string  `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	IdempotencyKey string  `json:"idempotency_key" jsonschema:"minLength=1"`
 	Spec           RunSpec `json:"spec"`
 }
@@ -15,9 +18,9 @@ type ComparisonEntry struct {
 
 // APIError is the JSON body of every non-success management response.
 // HTTP status carries the category; message explains the rejected operation.
-// Code is an open string: v1 may add codes without a contract-version bump.
+// Code is an open string: v2 may add codes without a contract-version bump.
 // Clients must accept unknown codes and use HTTP status and message for generic handling.
-// Well-known codes and their HTTP statuses are documented in training-v1.openapi.yaml.
+// Well-known codes and their HTTP statuses are documented in training-v2.openapi.yaml.
 type APIError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -25,7 +28,7 @@ type APIError struct {
 
 // ValidationRequest validates a proposed run without submitting it.
 type ValidationRequest struct {
-	SchemaVersion string  `json:"schema_version" jsonschema:"enum=semantic-router.training/v1"`
+	SchemaVersion string  `json:"schema_version" jsonschema:"enum=semantic-router.training/v2"`
 	Spec          RunSpec `json:"spec"`
 }
 

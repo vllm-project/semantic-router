@@ -1,0 +1,1 @@
+global.integrations.tools: removed_section: global.integrations.tools is removed; run `vllm-sr config migrate` (tools.select.tools_db_path and match.judge.top_k on the decisions that retrieved tools from it)

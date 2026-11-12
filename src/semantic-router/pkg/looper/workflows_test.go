@@ -23,7 +23,7 @@ func TestWorkflowsDynamicExecutesPlannerBoundedWorkersAndSynthesis(t *testing.T)
 	defer server.Close()
 
 	req := workflowTestRequest()
-	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	resp, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest: req,
 		ModelRefs: []config.ModelRef{
 			{Model: "worker-a"},
@@ -70,7 +70,7 @@ func TestWorkflowsDynamicPlannerStripsToolAndFunctionSchemas(t *testing.T) {
 	server := newWorkflowToolSchemaServer(t)
 	defer server.Close()
 
-	_, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	_, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest: workflowMixedToolSchemasTestRequest(),
 		ModelRefs:       []config.ModelRef{{Model: "worker-a"}},
 		Algorithm: &config.AlgorithmConfig{
@@ -111,7 +111,7 @@ func TestWorkflowsDynamicUsesPlannerTokenBudgetSeparately(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	_, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest: workflowTestRequest(),
 		ModelRefs:       []config.ModelRef{{Model: "worker-a"}},
 		Algorithm: &config.AlgorithmConfig{
@@ -153,7 +153,7 @@ func TestWorkflowsDynamicUsesConfiguredFinalModel(t *testing.T) {
 	})
 	defer server.Close()
 
-	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	resp, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest: workflowTestRequest(),
 		ModelRefs: []config.ModelRef{
 			{Model: "worker-a"},
@@ -211,11 +211,12 @@ func TestWorkflowsParallelStepReturnsAfterQuorum(t *testing.T) {
 	defer server.Close()
 
 	start := time.Now()
-	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	resp, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest: workflowTestRequest(),
 		ModelRefs:       []config.ModelRef{{Model: "worker-a"}, {Model: "worker-b"}},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "workflows",
+			Type:    "workflows",
+			OnError: config.WorkflowOnErrorSkip,
 			Workflows: &config.WorkflowsAlgorithmConfig{
 				Mode: config.WorkflowModeDynamic,
 				Planner: config.WorkflowPlannerConfig{
@@ -226,7 +227,6 @@ func TestWorkflowsParallelStepReturnsAfterQuorum(t *testing.T) {
 				MaxParallel:            2,
 				RoundTimeoutSeconds:    1,
 				MinSuccessfulResponses: 1,
-				OnError:                config.WorkflowOnErrorSkip,
 			},
 		},
 		DecisionName: "flow-quorum-test",
@@ -264,13 +264,14 @@ func TestWorkflowsFinalTimeoutFallsBackToWorkerResponse(t *testing.T) {
 	req.Messages = []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage("Answer the multiple choice question with exactly one letter: A, B, C, or D."),
 	}
-	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	resp, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest:    req,
 		OutputContract:     singleChoiceOutputContractForTest(),
 		OutputContractSpec: singleChoiceOutputContractSpecForTest(),
 		ModelRefs:          []config.ModelRef{{Model: "worker-a"}, {Model: "gpt-final"}},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "workflows",
+			Type:    "workflows",
+			OnError: config.WorkflowOnErrorSkip,
 			Workflows: &config.WorkflowsAlgorithmConfig{
 				Mode: config.WorkflowModeDynamic,
 				Planner: config.WorkflowPlannerConfig{
@@ -279,7 +280,6 @@ func TestWorkflowsFinalTimeoutFallsBackToWorkerResponse(t *testing.T) {
 				MaxSteps:            2,
 				MaxParallel:         1,
 				RoundTimeoutSeconds: 1,
-				OnError:             config.WorkflowOnErrorSkip,
 			},
 		},
 		DecisionName: "flow-final-timeout-test",
@@ -318,7 +318,7 @@ func TestWorkflowsFinalTimeoutUsesSingleChoiceMajorityFallback(t *testing.T) {
 	req.Messages = []openai.ChatCompletionMessageParamUnion{
 		openai.UserMessage("Answer the multiple choice question with exactly one letter: A, B, C, or D."),
 	}
-	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	resp, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest:    req,
 		OutputContract:     singleChoiceOutputContractForTest(),
 		OutputContractSpec: singleChoiceOutputContractSpecForTest(),
@@ -329,7 +329,8 @@ func TestWorkflowsFinalTimeoutUsesSingleChoiceMajorityFallback(t *testing.T) {
 			{Model: "gpt-final"},
 		},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "workflows",
+			Type:    "workflows",
+			OnError: config.WorkflowOnErrorSkip,
 			Workflows: &config.WorkflowsAlgorithmConfig{
 				Mode: config.WorkflowModeDynamic,
 				Planner: config.WorkflowPlannerConfig{
@@ -339,7 +340,6 @@ func TestWorkflowsFinalTimeoutUsesSingleChoiceMajorityFallback(t *testing.T) {
 				MaxParallel:            3,
 				RoundTimeoutSeconds:    1,
 				MinSuccessfulResponses: 3,
-				OnError:                config.WorkflowOnErrorSkip,
 			},
 		},
 		DecisionName: "flow-final-timeout-majority-test",
@@ -364,7 +364,7 @@ func TestWorkflowsStaticExecutesConfiguredRoles(t *testing.T) {
 	defer server.Close()
 
 	includeTrace := true
-	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	resp, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest: workflowTestRequest(),
 		ModelRefs: []config.ModelRef{
 			{Model: "thinker-model"},
@@ -417,7 +417,7 @@ func TestWorkflowsDynamicRejectsPlannerModelOutsideModelRefs(t *testing.T) {
 	})
 	defer server.Close()
 
-	_, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	_, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest: workflowTestRequest(),
 		ModelRefs:       []config.ModelRef{{Model: "worker-a"}},
 		Algorithm: &config.AlgorithmConfig{
@@ -446,14 +446,15 @@ func TestWorkflowsDynamicFallsBackWhenPlannerJSONInvalidAndOnErrorSkip(t *testin
 	})
 	defer server.Close()
 
-	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
+	resp, err := workflowsHopsTo(server.URL).Execute(context.Background(), &Request{
 		OriginalRequest: workflowTestRequest(),
 		ModelRefs: []config.ModelRef{
 			{Model: "worker-a"},
 			{Model: "worker-b"},
 		},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "workflows",
+			Type:    "workflows",
+			OnError: config.WorkflowOnErrorSkip,
 			Workflows: &config.WorkflowsAlgorithmConfig{
 				Mode: config.WorkflowModeDynamic,
 				Planner: config.WorkflowPlannerConfig{
@@ -461,7 +462,6 @@ func TestWorkflowsDynamicFallsBackWhenPlannerJSONInvalidAndOnErrorSkip(t *testin
 				},
 				MaxSteps:    3,
 				MaxParallel: 2,
-				OnError:     config.WorkflowOnErrorSkip,
 			},
 		},
 		DecisionName: "flow-test",

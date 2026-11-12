@@ -57,13 +57,13 @@ func TestFusionLooperMalformedHTTPSuccessDoesNotMeetQuorum(t *testing.T) {
 
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:                  "judge",
 			AnalysisModels:         []string{"panel-a", "panel-b", "panel-c"},
 			MaxConcurrent:          3,
 			MinSuccessfulResponses: 2,
-			OnError:                config.FusionOnErrorSkip,
 		},
 	}
 
@@ -87,6 +87,6 @@ func TestFusionLooperMalformedHTTPSuccessDoesNotMeetQuorum(t *testing.T) {
 		evidence.Attempts[1].State,
 		evidence.Attempts[2].State,
 	})
-	assert.Contains(t, evidence.Attempts[1].Error, "failed to parse response")
-	assert.Contains(t, evidence.Attempts[2].Error, "request failed with status 502")
+	assert.Equal(t, "invalid response", evidence.Attempts[1].Error)
+	assert.Equal(t, "answered 502", evidence.Attempts[2].Error)
 }

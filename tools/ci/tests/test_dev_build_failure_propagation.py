@@ -85,6 +85,29 @@ esac
         self.assertNotIn("Dashboard image built:", result.stdout)
         self.assertNotIn("Development Setup Complete", result.stdout)
 
+    def test_envoy_smoke_failure_stops_split_development_setup(self) -> None:
+        result = self._run_dev_target(
+            """
+case "$1" in
+  rm|build|image) exit 0 ;;
+  run)
+    printf '%s\\n' "$*" >&2
+    exit 49
+    ;;
+  *) exit 0 ;;
+esac
+""",
+            topology="split",
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Router image built:", result.stdout)
+        self.assertIn("run --rm --entrypoint /usr/local/bin/envoy ", result.stderr)
+        self.assertNotIn("Envoy image available:", result.stdout)
+        self.assertNotIn("Dashboard image built:", result.stdout)
+        self.assertNotIn("Installing vLLM-SR CLI", result.stdout)
+        self.assertNotIn("Development Setup Complete", result.stdout)
+
     def _run_dev_target(
         self,
         runtime_body: str,
@@ -105,7 +128,7 @@ esac
                     target,
                     f"CONTAINER_RUNTIME={runtime}",
                     f"VLLM_SR_TOPOLOGY={topology}",
-                    "VLLM_SR_PLATFORM=amd",
+                    "VLLM_SR_PLATFORM=rocm",
                     "ENV=amd",
                     "VLLM_SR_SOURCE_REVISION=test-source-revision",
                     "VLLM_SR_DASHBOARD_VERSION=test-dashboard-version",

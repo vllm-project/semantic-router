@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -33,11 +33,11 @@ func TestMilvusExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 	milvusConfig := milvusExactTestConfig(host, port)
 
 	cache, err := NewMilvusCache(MilvusCacheOptions{
-		EmbeddingProvider: cacheTestEmbeddingProvider(),
-		Enabled:           true,
-		TTLSeconds:        60,
-		EmbeddingModel:    "bert",
-		Config:            milvusConfig,
+		EmbeddingProvider:   cacheTestEmbeddingProvider(),
+		Enabled:             true,
+		TTLSeconds:          60,
+		EmbeddingDeployment: "qwen3-embedding",
+		Config:              milvusConfig,
 	})
 	if err != nil {
 		storagetest.Unavailable(t, "milvus", fmt.Sprintf("Milvus unavailable: %v", err))
@@ -101,7 +101,7 @@ func TestHybridExactCacheIntegrationDelegatesToMilvus(t *testing.T) {
 		EmbeddingProvider:       cacheTestEmbeddingProvider(),
 		Enabled:                 true,
 		TTLSeconds:              60,
-		EmbeddingModel:          "bert",
+		EmbeddingDeployment:     "qwen3-embedding",
 		Milvus:                  milvusConfig,
 		DisableRebuildOnStartup: true,
 	})

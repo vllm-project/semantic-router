@@ -15,7 +15,6 @@ const sidebars: SidebarsConfig = {
   // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
     'intro',
-    'faq',
     {
       type: 'category',
       label: 'Overview',
@@ -23,6 +22,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'overview/goals',
         'overview/semantic-router-overview',
+        'overview/component-architecture',
         'overview/use-cases',
         'overview/signal-driven-decisions',
         'overview/mom-model-family',
@@ -34,12 +34,16 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
+        'installation/agent-harness',
         'installation/agent',
+        'installation/shell-completion',
         {
           type: 'category',
           label: 'Plan a Deployment',
           items: [
             'installation/deployment-options',
+            'installation/deployment-architecture',
+            'installation/gateway-modes',
             'installation/support-matrix',
           ],
         },
@@ -76,6 +80,24 @@ const sidebars: SidebarsConfig = {
           label: 'Signals',
           items: [
             'tutorials/signal/overview',
+            'tutorials/signal/systemone',
+            {
+              type: 'category',
+              label: 'Application',
+              items: [
+                'tutorials/signal/application/domain',
+                'tutorials/signal/application/fact-check',
+                'tutorials/signal/application/user-feedback',
+                'tutorials/signal/application/jailbreak',
+                'tutorials/signal/application/safety',
+                'tutorials/signal/application/pii',
+                'tutorials/signal/application/hallucination',
+                'tutorials/signal/application/refusal',
+                'tutorials/signal/application/turn-relation',
+                'tutorials/signal/application/complexity',
+                'tutorials/signal/application/modality',
+              ],
+            },
             {
               type: 'category',
               label: 'Heuristic',
@@ -86,29 +108,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/input-modality',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
-                'tutorials/signal/heuristic/event',
                 'tutorials/signal/heuristic/metadata',
-                'tutorials/signal/heuristic/structure',
-              ],
-            },
-            {
-              type: 'category',
-              label: 'Learned',
-              items: [
-                'tutorials/signal/learned/classifier',
-                'tutorials/signal/learned/complexity',
-                'tutorials/signal/learned/domain',
-                'tutorials/signal/learned/embedding',
-                'tutorials/signal/learned/modality',
-                'tutorials/signal/learned/fact-check',
-                'tutorials/signal/learned/hallucination',
-                'tutorials/signal/learned/jailbreak',
-                'tutorials/signal/learned/safety',
-                'tutorials/signal/learned/pii',
-                'tutorials/signal/learned/preference',
-                'tutorials/signal/learned/reask',
-                'tutorials/signal/learned/kb',
-                'tutorials/signal/learned/user-feedback',
               ],
             },
           ],
@@ -134,6 +134,7 @@ const sidebars: SidebarsConfig = {
             'tutorials/decision/not',
             'tutorials/decision/composite',
             'tutorials/decision/retention',
+            'tutorials/decision/output',
           ],
         },
         {
@@ -143,26 +144,20 @@ const sidebars: SidebarsConfig = {
             'tutorials/algorithm/overview',
             {
               type: 'category',
-              label: 'Selection',
+              label: 'Selectors',
               items: [
-                'tutorials/algorithm/selection/automix',
-                'tutorials/algorithm/selection/hybrid',
-                'tutorials/algorithm/selection/kmeans',
-                'tutorials/algorithm/selection/knn',
-                'tutorials/algorithm/selection/latency-aware',
-                'tutorials/algorithm/selection/mlp',
-                'tutorials/algorithm/selection/multi-factor',
-                'tutorials/algorithm/selection/prompt',
-                'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
-                'tutorials/algorithm/selection/svm',
+                'tutorials/algorithm/selection/random',
+                'tutorials/algorithm/selection/multi-factor',
+                'tutorials/algorithm/selection/latency-aware',
+                'tutorials/algorithm/selection/systemone',
               ],
             },
             {
               type: 'category',
-              label: 'Looper',
+              label: 'Executors',
               items: [
-                'tutorials/algorithm/looper/confidence',
+                'tutorials/algorithm/looper/escalate',
                 'tutorials/algorithm/looper/fusion',
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
@@ -194,10 +189,9 @@ const sidebars: SidebarsConfig = {
               items: [
                 'tutorials/plugin/fast-response',
                 'tutorials/plugin/header-mutation',
-                'tutorials/plugin/context-compression',
+                'tutorials/plugin/masking',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
-                'tutorials/plugin/tool-selection',
                 'tutorials/plugin/tools',
               ],
             },
@@ -205,10 +199,8 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Retrieval and Memory',
               items: [
-                'tutorials/plugin/memory',
-                'tutorials/plugin/rag',
+                'tutorials/plugin/context',
                 'tutorials/plugin/router-replay',
-                'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
                 'tutorials/plugin/prompt-cache',
               ],
@@ -218,8 +210,7 @@ const sidebars: SidebarsConfig = {
               label: 'Safety and Generation',
               items: [
                 'tutorials/plugin/content-safety',
-                'tutorials/plugin/hallucination',
-                'tutorials/plugin/response-jailbreak',
+                'tutorials/plugin/response-guard',
               ],
             },
           ],
@@ -227,17 +218,27 @@ const sidebars: SidebarsConfig = {
         {
           type: 'category',
           label: 'Shared Services',
-          link: {
-            type: 'doc',
-            id: 'tutorials/global/overview',
-          },
           items: [
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
-            'tutorials/global/vela-models',
           ],
         },
       ],
+    },
+    // System One and Model Runtime follow their folders: a page joins its
+    // section through the folder it lives in and its sidebar_position, and a
+    // folder's _category_.json labels and orders the section.
+    {
+      type: 'category',
+      label: 'System One',
+      collapsed: false,
+      items: [{ type: 'autogenerated', dirName: 'system-one' }],
+    },
+    {
+      type: 'category',
+      label: 'Model Runtime',
+      collapsed: false,
+      items: [{ type: 'autogenerated', dirName: 'model-runtime' }],
     },
     {
       type: 'category',
@@ -253,7 +254,10 @@ const sidebars: SidebarsConfig = {
           },
           items: [
             'installation/configuration-contract',
+            'installation/global-settings',
             'installation/configuration-workflows',
+            'installation/configuration-management',
+            'installation/recipe-lifecycle',
             {
               type: 'category',
               label: 'Models',
@@ -266,6 +270,18 @@ const sidebars: SidebarsConfig = {
                 'installation/custom-models',
                 'installation/model-reasoning',
                 'installation/model-configuration-patterns',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Router Model Catalog',
+              link: {
+                type: 'doc',
+                id: 'installation/choose-a-model-for-a-signal',
+              },
+              items: [
+                'installation/model-catalog',
+                'installation/model-resource-migration',
               ],
             },
           ],
@@ -332,6 +348,7 @@ const sidebars: SidebarsConfig = {
               items: [
                 'installation/amd-rocm',
                 'installation/nvidia-cuda',
+                'installation/ascend-npu',
               ],
             },
           ],
@@ -362,31 +379,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/k8s/operator-operations',
             'installation/upgrade-rollback',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Router Runtime',
-          link: { type: 'doc', id: 'installation/native-backends' },
-          items: [
-            {
-              type: 'category',
-              label: 'Run models',
-              items: [
-                'installation/runtime/in-process',
-                'installation/runtime/openvino',
-                'installation/runtime/external',
-              ],
-            },
-            {
-              type: 'category',
-              label: 'Model guides',
-              items: [
-                'installation/runtime/embeddings',
-                'installation/runtime/safety',
-              ],
-            },
-            'installation/runtime/lifecycle-diagnostics',
+            'installation/migrate-to-v0-5',
           ],
         },
       ],
@@ -404,9 +397,11 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Routing & Selection',
           items: [
+            'proposals/decision-model-first-class',
             'proposals/decision-ranking-semantics',
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
+            'proposals/success-constrained-selection',
             'proposals/prompt-classification-routing',
           ],
         },
@@ -437,8 +432,10 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/open-intelligence-index-and-model-arena',
             'proposals/unified-model-catalog-and-evaluation-index',
+            'proposals/standalone-mode',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
+            'proposals/system-one-api-schemas',
           ],
         },
         {
@@ -462,7 +459,6 @@ const sidebars: SidebarsConfig = {
           collapsed: false,
           items: [
             'training/training-overview',
-            'training/model-catalog',
           ],
         },
         {
@@ -470,15 +466,7 @@ const sidebars: SidebarsConfig = {
           label: 'Embedding Models',
           items: [
             'training/mmbert-32k-models',
-            'training/multimodal-embeddings',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Classifier Models',
-          items: [
-            'training/classifier-models',
-            'training/mmbert-safety-classifier',
+            'training/router-embeddings-huggingface',
           ],
         },
         {
@@ -486,7 +474,6 @@ const sidebars: SidebarsConfig = {
           label: 'Evaluate and Select',
           items: [
             'training/model-performance-eval',
-            'training/ml-model-selection',
           ],
         },
       ],
@@ -500,6 +487,7 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
+        'benchmarking/agent-routing-protection',
         {
           type: 'category',
           label: 'sr-bench 1.0',
@@ -524,6 +512,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'api/cli',
         'api/router',
+        'api/headers',
         'api/configuration-schema',
         'api/apiserver',
         'api/openapi',
@@ -534,25 +523,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Fleet Simulator',
-      collapsed: false,
-      items: [
-        'fleet-sim/overview',
-        'fleet-sim/getting-started',
-        'fleet-sim/use-cases',
-        'fleet-sim/sim-algorithms',
-        'fleet-sim/power-model',
-        'fleet-sim/guide',
-      ],
-    },
-    {
-      type: 'category',
       label: 'Troubleshooting',
       collapsed: false,
       items: [
         'troubleshooting/network-tips',
         'troubleshooting/container-connectivity',
-        'troubleshooting/vsr-headers',
         'troubleshooting/common-errors',
       ],
     },
@@ -567,8 +542,18 @@ const sidebars: SidebarsConfig = {
         'community/documentation',
         'community/translation-guide',
         'community/code-style',
+        {
+          type: 'category',
+          label: 'System One schemas',
+          items: [
+            'community/system-one-schemas/adding-a-schema-codec',
+            'community/system-one-schemas/adding-a-deviation',
+            'community/system-one-schemas/adding-an-extension-field',
+          ],
+        },
       ],
     },
+    'faq',
   ],
 }
 

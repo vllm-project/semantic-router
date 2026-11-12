@@ -31,7 +31,7 @@ configMapGenerator:
 namespace: vllm-semantic-router-system
 
 images:
-- name: ghcr.io/vllm-project/semantic-router/extproc
+- name: ghcr.io/vllm-project/semantic-router/vllm-sr
   newTag: latest
 
 # Add OpenShift-specific labels

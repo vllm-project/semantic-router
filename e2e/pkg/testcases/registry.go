@@ -20,8 +20,56 @@ type TestCase struct {
 	// Tags are optional tags for filtering tests
 	Tags []string
 
+	// Priority says which scopes run the case; empty means P1.
+	Priority Priority
+
+	// MutatesClusterState marks a case that deletes, restarts, or rescales a
+	// workload. Such a case always runs once, because a retry would start from
+	// the state its own failure left behind instead of a fresh cluster.
+	MutatesClusterState bool
+
 	// Fn is the test function to execute
 	Fn func(ctx context.Context, client *kubernetes.Clientset, opts TestCaseOptions) error
+}
+
+// Priority is when a case must run.
+type Priority string
+
+const (
+	// P0 cases guard a contract whose break reaches users or fails open:
+	// refusals, blocks, credential and identity boundaries, and the routed
+	// request itself. Every scope runs them.
+	P0 Priority = "p0"
+	// P1 cases are the per-feature contracts a PR runs when its paths
+	// select their profile. A case without a priority is P1.
+	P1 Priority = "p1"
+	// P2 cases are expensive qualification, such as load stages, that only
+	// the full scope runs.
+	P2 Priority = "p2"
+)
+
+// EffectivePriority is the case's priority, P1 when none is set.
+func (tc TestCase) EffectivePriority() Priority {
+	if tc.Priority == "" {
+		return P1
+	}
+	return tc.Priority
+}
+
+// InScope reports whether a scope runs the case: "p0" runs P0 cases only,
+// "standard" (or empty) runs P0 and P1, and "full" runs every case.
+func InScope(tc TestCase, scope string) (bool, error) {
+	priority := tc.EffectivePriority()
+	switch scope {
+	case "p0":
+		return priority == P0, nil
+	case "", "standard":
+		return priority != P2, nil
+	case "full":
+		return true, nil
+	default:
+		return false, fmt.Errorf("unknown scope %q: want p0, standard or full", scope)
+	}
 }
 
 // TestCaseOptions contains options passed to test cases
@@ -43,6 +91,9 @@ type TestCaseOptions struct {
 
 	// RestConfig is the Kubernetes REST config
 	RestConfig *rest.Config
+
+	// KubeConfig is the path to the cluster's kubeconfig file, for cases that run helm
+	KubeConfig string
 
 	// ServiceConfig contains service-specific configuration
 	ServiceConfig ServiceConfig

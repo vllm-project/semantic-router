@@ -4,6 +4,7 @@ const FOCUSABLE_SELECTOR = [
   'a[href]',
   'area[href]',
   'button:not([disabled])',
+  'summary',
   'input:not([disabled]):not([type="hidden"])',
   'select:not([disabled])',
   'textarea:not([disabled])',
@@ -126,21 +127,30 @@ function activateDialog<T extends HTMLElement>({
   const releaseBodyScrollLock = lockBodyScroll ? acquireBodyScrollLock() : undefined
   activeDialogStack.push(dialogKey)
   const frame = window.requestAnimationFrame(() => focusInitialDialogControl(dialogRef, dialogKey))
-  const handleKeyDown = (event: KeyboardEvent) => {
-    if (!isTopmostDialog(dialogKey)) return
-    if (event.key === 'Escape' && dismissible()) {
-      event.preventDefault()
-      event.stopPropagation()
-      close()
+  const handleEscape = (event: KeyboardEvent) => {
+    if (
+      event.key !== 'Escape' ||
+      event.defaultPrevented ||
+      !isTopmostDialog(dialogKey) ||
+      !dismissible()
+    )
       return
-    }
-    if (event.key === 'Tab') trapDialogFocus(dialogRef, event)
+    event.preventDefault()
+    event.stopPropagation()
+    close()
+  }
+  const handleTab = (event: KeyboardEvent) => {
+    if (event.key === 'Tab' && isTopmostDialog(dialogKey)) trapDialogFocus(dialogRef, event)
   }
 
-  document.addEventListener('keydown', handleKeyDown, true)
+  // Nested controls consume Escape first; Tab still keeps focus inside the modal.
+  document.addEventListener('keydown', handleEscape)
+  document.addEventListener('keydown', handleTab, true)
+
   return () => {
     window.cancelAnimationFrame(frame)
-    document.removeEventListener('keydown', handleKeyDown, true)
+    document.removeEventListener('keydown', handleEscape)
+    document.removeEventListener('keydown', handleTab, true)
     const wasTopmost = isTopmostDialog(dialogKey)
     const stackIndex = activeDialogStack.lastIndexOf(dialogKey)
     if (stackIndex >= 0) activeDialogStack.splice(stackIndex, 1)

@@ -8,123 +8,73 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// retrieveFromMilvus retrieves context from Milvus backend
-func (r *OpenAIRouter) retrieveFromMilvus(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	milvusConfig, err := ragConfig.MilvusBackendConfig()
+// recallFromMilvus recalls documents from a Milvus collection over the
+// response cache's connection.
+func (r *OpenAIRouter) recallFromMilvus(traceCtx context.Context, ctx *RequestContext, source *config.ContextSource, query string, recall config.MatchRecall) ([]match.Scored, error) {
+	milvusConfig, err := source.MilvusBackendConfig()
 	if err != nil {
-		return "", fmt.Errorf("invalid Milvus RAG config: %w", err)
+		return nil, fmt.Errorf("invalid Milvus RAG config: %w", err)
 	}
-
-	// Get Milvus cache instance
 	var milvusCache *cache.MilvusCache
 	if milvusConfig.ReuseCacheConnection && r.Cache != nil {
-		// Try to reuse existing connection
 		if mc, ok := r.Cache.(*cache.MilvusCache); ok {
 			milvusCache = mc
 		}
 	}
-
 	if milvusCache == nil {
-		return "", fmt.Errorf("milvus connection not available (reuse_cache_connection=%v)", milvusConfig.ReuseCacheConnection)
+		return nil, fmt.Errorf("milvus connection not available (reuse_cache_connection=%v)", milvusConfig.ReuseCacheConnection)
 	}
-
-	// Perform similarity search
-	query := ctx.UserContent
-	if query == "" {
-		return "", fmt.Errorf("user content is empty")
-	}
-
-	threshold := float32(0.7) // Default
-	if ragConfig.SimilarityThreshold != nil {
-		threshold = *ragConfig.SimilarityThreshold
-	}
-
-	topK := 5 // Default
-	if ragConfig.TopK != nil {
-		topK = *ragConfig.TopK
-	}
-
-	// Generate one embedding per window of the query, so a long query is not
-	// searched by its opening alone.
-	queryEmbeddings, err := r.ragQueryEmbeddings(traceCtx, query, ctx)
+	queryEmbedding, err := r.ragQueryEmbedding(traceCtx, query, ctx, milvusConfig.Embedding)
 	if err != nil {
 		// Log full error internally but don't expose it to avoid information disclosure
 		logging.Errorf("Failed to generate embedding for RAG query: %v", err)
-		return "", fmt.Errorf("failed to generate embedding")
+		return nil, fmt.Errorf("failed to generate embedding")
 	}
-
-	// Get collection name
-	collectionName := milvusConfig.Collection
-	if collectionName == "" {
-		return "", fmt.Errorf("milvus collection name is required")
+	if milvusConfig.Collection == "" {
+		return nil, fmt.Errorf("milvus collection name is required")
 	}
-
-	// Determine content field
 	contentField := milvusConfig.ContentField
 	if contentField == "" {
 		contentField = "content"
 	}
-
-	// Build filter expression
 	filterExpr := milvusConfig.FilterExpression
 	if filterExpr == "" {
-		// Use contentField for default filter if available
-		if contentField != "" {
-			filterExpr = fmt.Sprintf("%s != \"\"", contentField)
-		}
-		// If no contentField, leave filterExpr empty (no filtering)
-	} else {
+		filterExpr = fmt.Sprintf("%s != \"\"", contentField)
+	} else if validateErr := validateMilvusFilterExpression(filterExpr); validateErr != nil {
 		// Validate filter expression to prevent injection attacks
-		if validateErr := validateMilvusFilterExpression(filterExpr); validateErr != nil {
-			return "", fmt.Errorf("invalid filter expression: %w", validateErr)
-		}
+		return nil, fmt.Errorf("invalid filter expression: %w", validateErr)
 	}
-
-	// Use MilvusCache SearchDocuments method
-	// Pass empty strings/0 for vector field config to use cache defaults
-	// If RAG collection has different config, these can be added to MilvusRAGConfig
-	var hits ragHits
-	for _, queryEmbedding := range queryEmbeddings {
-		windowParts, windowScores, searchErr := milvusCache.SearchDocuments(
-			traceCtx,
-			collectionName,
-			queryEmbedding,
-			threshold,
-			topK,
-			filterExpr,
-			contentField,
-			"", // vectorFieldName - use cache default
-			"", // metricType - use cache default
-			0,  // ef - use cache default
-		)
-		if searchErr != nil {
-			return "", fmt.Errorf("milvus search failed: %w", searchErr)
-		}
-		hits.add(windowParts, windowScores)
+	// Empty vector field, metric and ef use the cache's defaults.
+	contextParts, scores, err := milvusCache.SearchDocuments(
+		traceCtx,
+		milvusConfig.Collection,
+		queryEmbedding,
+		recallThreshold(recall),
+		recall.TopK,
+		filterExpr,
+		contentField,
+		"",
+		"",
+		0,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("milvus search failed: %w", err)
 	}
-	contextParts, scores := hits.top(topK)
+	logging.Infof("Recalled %d documents from Milvus (collection: %s)", len(contextParts), milvusConfig.Collection)
+	return scoredDocuments(contextParts, float64Scores(scores)), nil
+}
 
-	if len(contextParts) == 0 {
-		return "", fmt.Errorf("no results above similarity threshold %.3f", threshold)
+// float64Scores widens a backend's similarity scores.
+func float64Scores(scores []float32) []float64 {
+	widened := make([]float64, len(scores))
+	for index, score := range scores {
+		widened[index] = float64(score)
 	}
-
-	// Combine context parts
-	retrievedContext := strings.Join(contextParts, "\n\n---\n\n")
-
-	// Store best similarity score
-	bestScore := float32(0.0)
-	if len(scores) > 0 {
-		bestScore = scores[0] // Scores are already sorted
-		ctx.RAGSimilarityScore = bestScore
-	}
-
-	logging.Infof("Retrieved %d documents from Milvus (similarity: %.3f, collection: %s)",
-		len(contextParts), bestScore, collectionName)
-
-	return retrievedContext, nil
+	return widened
 }
 
 // validateMilvusFilterExpression validates a Milvus filter expression to prevent injection attacks

@@ -21,10 +21,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
+// redisCacheClient narrows the go-redis surface the cache uses (the FT*
+// search extensions sit outside redis.UniversalClient), so tests can inject
+// a fake without a live Redis.
+type redisCacheClient interface {
+	redis.UniversalClient
+	FTInfo(ctx context.Context, index string) *redis.FTInfoCmd
+	FTDropIndexWithArgs(ctx context.Context, index string, options *redis.FTDropIndexOptions) *redis.StatusCmd
+	FTCreate(ctx context.Context, index string, options *redis.FTCreateOptions, schema ...*redis.FieldSchema) *redis.StatusCmd
+	FTSearchWithArgs(ctx context.Context, index string, query string, options *redis.FTSearchOptions) *redis.FTSearchCmd
+}
+
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
 	embeddingProvider   embedding.Provider
-	client              *redis.Client
+	client              redisCacheClient
 	searchFn            func(context.Context, string, string, *redis.FTSearchOptions) (redis.FTSearchResult, error)
 	config              *config.RedisConfig
 	indexName           string
@@ -35,7 +46,7 @@ type RedisCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingDeployment string
 }
 
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
@@ -46,7 +57,7 @@ type RedisCacheOptions struct {
 	Enabled             bool
 	Config              *config.RedisConfig
 	ConfigPath          string
-	EmbeddingModel      string
+	EmbeddingDeployment string
 
 	// closeClient is a test seam for constructor cleanup.
 	closeClient func(*redis.Client)
@@ -102,8 +113,6 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		Protocol: 2, // Use RESP2 protocol for compatibility
 	})
 
-	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
-
 	cache := &RedisCache{
 		client:              redisClient,
 		config:              redisConfig,
@@ -111,8 +120,8 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
-		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider), 0)),
+		embeddingDeployment: options.EmbeddingDeployment,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, embedding.Options{Dimension: semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider)}),
 	}
 
 	releaseClient := func() { _ = redisClient.Close() }
@@ -244,6 +253,8 @@ func (c *RedisCache) initializeIndex() error {
 func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
+
+func (c *RedisCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
 
 func (c *RedisCache) embeddingDimension() int {
 	if c == nil || c.config == nil {
@@ -567,7 +578,11 @@ func (c *RedisCache) addEntry(ctx context.Context, id string, requestID string, 
 
 	// Set TTL if configured (Redis native TTL)
 	if effectiveTTL > 0 {
-		c.client.Expire(ctx, docKey, time.Duration(effectiveTTL)*time.Second)
+		if expireErr := c.client.Expire(ctx, docKey, time.Duration(effectiveTTL)*time.Second).Err(); expireErr != nil {
+			// The entry is stored but without a native TTL; the read path still
+			// filters by ttl_seconds, yet the key lingers in Redis until deleted.
+			logging.Warnf("RedisCache.addEntry: failed to set TTL for %s: %v", docKey, expireErr)
+		}
 	}
 
 	logging.Debugf("RedisCache.addEntry: successfully added entry to Redis (key: %s, embedding_dim: %d, request_size: %d, response_size: %d, ttl=%d)",

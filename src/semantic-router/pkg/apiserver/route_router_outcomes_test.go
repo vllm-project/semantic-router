@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -25,6 +25,10 @@ func (r *routerOutcomeLearningRuntime) UpdateOutcome(
 ) routerruntime.RouterOutcomeResult {
 	r.last = outcome
 	return routerruntime.RouterOutcomeResult{Updated: 1, Recorded: true}
+}
+
+func (r *routerOutcomeLearningRuntime) ExperienceSnapshots() []routerruntime.RouterExperienceSnapshot {
+	return nil
 }
 
 func TestNormalizeRouterOutcomeRequestIncludesTargetRef(t *testing.T) {

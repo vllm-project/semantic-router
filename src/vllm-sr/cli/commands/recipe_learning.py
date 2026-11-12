@@ -29,10 +29,10 @@ from cli.commands.recipe_learning_metrics import (
     update_experience_counts,
     update_metrics,
 )
+from cli.consts import DEFAULT_API_PORT
 from cli.router_management_client import (
     OBSERVABILITY_REPLAYS_PATH,
     RouterManagementClient,
-    default_management_base_url,
 )
 from cli.terminal import echo
 from cli.utils import get_logger
@@ -56,12 +56,28 @@ def load_replay_records(
 
 
 def fetch_replay_payload(endpoint: str, limit: int, timeout: int) -> Any:
+    """Fetch up to limit records, following next_offset past the Router's page cap.
+
+    The list is newest first, so a record stored between two pages shifts the
+    next one and repeats a record; records are kept once by id."""
     client = RouterManagementClient(endpoint or None, timeout=timeout)
-    return client.request(
-        "GET",
-        OBSERVABILITY_REPLAYS_PATH,
-        params={"limit": str(max(1, min(limit, _MAX_REPLAY_LIMIT)))},
-    ).payload
+    limit = max(1, min(limit, _MAX_REPLAY_LIMIT))
+    records: dict[Any, dict[str, Any]] = {}
+    params = {"limit": str(limit)}
+    offset = 0
+    while True:
+        payload = client.request(
+            "GET", OBSERVABILITY_REPLAYS_PATH, params=params
+        ).payload
+        for record in normalize_replay_payload(payload):
+            records.setdefault(record.get("id") or len(records), record)
+        next_offset = payload.get("next_offset") if isinstance(payload, dict) else None
+        stalled = not isinstance(next_offset, int) or next_offset <= offset
+        if stalled or len(records) >= limit:
+            break
+        offset = next_offset
+        params = {"limit": str(limit - len(records)), "offset": str(offset)}
+    return {"object": "router_replay.list", "data": list(records.values())[:limit]}
 
 
 def normalize_replay_payload(payload: Any) -> list[dict[str, Any]]:
@@ -227,7 +243,8 @@ def write_candidate_recipes(artifact: dict[str, Any], output_dir: Path) -> None:
     default=None,
     help=(
         "Router management base URL (origin or /api/v1). "
-        f"Defaults to {default_management_base_url()} when --replay-file is omitted."
+        f"Defaults to http://localhost:{DEFAULT_API_PORT}, with VLLM_SR_PORT_OFFSET "
+        "added to the port, when --replay-file is omitted."
         " Uses VSR_MGMT_TOKEN for bearer auth when set."
     ),
 )

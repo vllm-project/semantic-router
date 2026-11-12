@@ -39,7 +39,7 @@ describe('DashboardRoutingProfiles', () => {
       }),
     )
 
-    expect(markup).toContain('2 profiles')
+    expect(markup).toContain('3 profiles')
     expect(markup).toContain('vllm-sr/balanced')
     expect(markup).toContain('Balanced objective')
     expect(markup).toContain('View balanced topology')

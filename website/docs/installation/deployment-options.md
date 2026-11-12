@@ -10,9 +10,12 @@ Choose two things independently:
 1. where Semantic Router runs; and
 2. where the model backends run.
 
-The Router does not load or provision the model weights referenced by a custom
-configuration. It sends requests to reachable model endpoints, which can run on
-the same host, in a cluster, or behind a hosted API.
+Chat provider models run behind reachable endpoints on the same host, in a
+cluster, or at a hosted API. vLLM-SR does not provision those generation
+backends. Its own decision and embedding models use managed or attached
+[model-runtime deployments](../model-runtime/deploy/connect-the-router.md).
+For decision serving without Chat backends, start in
+[Engine mode](../model-runtime/get-started/quickstart.md).
 
 ## Choose the Router topology
 
@@ -28,9 +31,15 @@ Gateway and inference-platform integrations do not replace Router policy. They
 connect semantic model selection to infrastructure that owns traffic or model
 lifecycle.
 
+On Docker and Kubernetes alike, the Router serves clients itself by default.
+[Gateway Modes](gateway-modes) explains when to put an Envoy-based gateway in
+front of it instead.
+
 Before committing to a path, check its project-maintained status, recurring
 test evidence, and external ownership boundary in the
-[Deployment Support](support-matrix).
+[Deployment Support](support-matrix). The responsibilities and versioning
+rules every path follows are defined in
+[Deployment Architecture](deployment-architecture).
 
 ## Choose the model backend
 
@@ -44,7 +53,7 @@ test evidence, and external ownership boundary in the
 
 Hardware is an overlay, not a separate Router topology. A GPU-backed model
 server can connect to either a Docker or Kubernetes Router deployment. Keep the
-Router on CPU unless measurements show that its local embeddings or classifiers
+Router on CPU unless measurements show that its decision model or embeddings
 benefit from GPU acceleration.
 
 Test a model endpoint directly before sending traffic through the Router. A

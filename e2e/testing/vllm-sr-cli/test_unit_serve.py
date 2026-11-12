@@ -34,7 +34,7 @@ class TestVllmSRServe(CLITestBase):
 
     def _create_minimal_config(self, port: int = 8888) -> str:
         """Create a lean active config.yaml for testing."""
-        config_content = f"""version: v0.3
+        config_content = f"""version: v0.5
 
 listeners:
   - name: "test-listener"
@@ -55,19 +55,18 @@ providers:
           protocol: "http"
           provider: "vllm"
 
-routing:
-  modelCards:
-    - name: "test-model"
-  decisions:
-    - name: "default_route"
-      description: "Default test route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "test-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default_route"
+        description: "Default test route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "test-model"
+            use_reasoning: false
 """
         config_path = os.path.join(self.test_dir, "config.yaml")
         with open(config_path, "w") as f:
@@ -83,11 +82,14 @@ routing:
 
         # Run serve without creating config.yaml. Use a fake image and never-pull so the
         # command fails after bootstrap instead of waiting on a real container image.
+        # This CPU contract does not require a Docker daemon for auto detection.
         return_code, stdout, stderr = self.run_cli(
             [
                 "serve",
                 "--image",
                 "nonexistent-image:bootstrap",
+                "--platform",
+                "cpu",
                 "--image-pull-policy",
                 "never",
             ],
@@ -135,7 +137,7 @@ routing:
         os.makedirs(subdir)
         config_path = os.path.join(subdir, "custom-config.yaml")
 
-        config_content = """version: v0.3
+        config_content = """version: v0.5
 listeners:
   - name: "test"
     address: "0.0.0.0"
@@ -152,19 +154,18 @@ providers:
           endpoint: "host.docker.internal:8000"
           protocol: "http"
           provider: "vllm"
-routing:
-  modelCards:
-    - name: "test-model"
-  decisions:
-    - name: "default-route"
-      description: "Catch-all route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "test-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "Catch-all route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "test-model"
+            use_reasoning: false
 """
         with open(config_path, "w") as f:
             f.write(config_content)

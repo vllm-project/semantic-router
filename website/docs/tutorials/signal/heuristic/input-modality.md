@@ -7,11 +7,10 @@
 purely structural: the router inspects content-part types in user messages and
 never runs a classifier, embedding model, or any other ML inference.
 
-Input modality is independent of the intended *output* modality (the
-`modality` signal, which distinguishes `AR` from `DIFFUSION` generation) and
-of which payload is embedded for semantic matching (embedding
-`query_modality`). A request may contain several input modalities at once, and
-each configured rule matches independently.
+Input modality is independent of the *output* the request asks for, which
+the [`modality`](../application/modality.md) signal reads. A request may
+contain several input modalities at once, and each configured rule matches
+independently.
 
 ## Key Advantages
 
@@ -26,10 +25,8 @@ each configured rule matches independently.
 
 A common topology sends any request containing an image to a vision-capable
 model while text-only requests continue through normal semantic routing.
-Before this signal, image presence was only reachable through the
-`conversation` signal's `image_content` source, which is hard to discover and
-covers images only. `input_modality` names the concept directly and covers
-all four modalities.
+`input_modality` names what a request carries directly and covers all four
+modalities.
 
 Note that `NOT image_input` is not the same as "text-only": a request with no
 image may still be audio-only or empty. Combine the `text` modality rule with
@@ -38,34 +35,36 @@ negations of the media rules to express text-only precisely.
 ## When to Use
 
 Use `input_modality` when the routing decision depends on what kinds of input
-are present — not on what the media contains. To route on the semantic
-content of an image, use an embedding signal with `query_modality: image`
-instead.
+are present — not on what the media contains. To route on what an image or a
+video shows, ask a [`systemone`](../systemone#read-more-than-the-current-turn)
+question with `input.image` or `input.video` instead; its deployment must read
+that medium, or the configuration is refused with
+`input_modality_unsupported`.
 
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    input_modality:
-      - name: image_input
-        description: Request contains at least one image content part.
-        modality: image
-      - name: audio_input
-        description: Request contains at least one audio content part.
-        modality: audio
-
-  decisions:
-    - name: vision-request
-      description: Send image-bearing requests to the vision pool.
-      priority: 1000
-      rules:
-        operator: AND
-        conditions:
-          - type: input_modality
-            name: image_input
-      modelRefs:
-        - model: vision-model
+recipes:
+  - name: default
+    signals:
+      input_modality:
+        - name: image_input
+          description: Request contains at least one image content part.
+          modality: image
+        - name: audio_input
+          description: Request contains at least one audio content part.
+          modality: audio
+    decisions:
+      - name: vision-request
+        description: Send image-bearing requests to the vision pool.
+        priority: 1000
+        rules:
+          operator: AND
+          conditions:
+            - type: input_modality
+              name: image_input
+        modelRefs:
+          - model: vision-model
 ```
 
 `modality` must be one of `text`, `image`, `audio`, or `video`. Rule names
@@ -95,17 +94,14 @@ the classify/eval APIs.
 
 ## Observability
 
-Matched rules are exposed in the `x-vsr-matched-input-modality` response
-header, the `input_modality` field of classify/eval responses, router-replay
+Matched rules are exposed as `input_modality:<name>` in the `signals` member
+of `x-vsr-trace`, the `input_modality` field of classify/eval responses, router-replay
 records, and the standard per-signal Prometheus metrics
 (`llm_signal_match_total{signal_type="input_modality"}`).
 
 ## Related Signals
 
-- [`modality`](../learned/modality.md) — the intended output modality
-  (`AR`, `DIFFUSION`, `BOTH`).
-- [`embedding`](../learned/embedding.md) with `query_modality: image` —
-  semantic classification of image content.
-- [`conversation`](conversation.md) — request-shape facts; its
-  `image_content` source remains supported and shares the same underlying
-  image count.
+- [`modality`](../application/modality.md) — the output the request asks
+  for: text, an image, text with an image, speech, audio or video.
+- [`conversation`](conversation.md) — request-shape facts such as message
+  counts, tool definitions, and tool loops.

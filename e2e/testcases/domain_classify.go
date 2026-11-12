@@ -11,16 +11,41 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
-	pkgtestcases.Register("domain-classify", pkgtestcases.TestCase{
-		Description: "Test domain classification accuracy and verify VSR decision headers",
+	pkgtestcases.Register("domain-routing", pkgtestcases.TestCase{
+		Description: "Each domain the System One fixture chooses routes the e2e-domain recipe to that domain's decision on its isolated upstream path",
 		Tags:        []string{"kubernetes", "classification", "routing"},
-		Fn:          testDomainClassify,
+		Fn: func(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+			return runDomainClassify(ctx, client, opts, domainRoutingProbes)
+		},
 	})
+}
+
+// domainRoutingProbes asks one corpus question per domain, marked so the
+// fake System One deployment the e2e-domain recipe binds chooses that domain
+// (tools/test/services/provider-mocker/README.md). Model accuracy is measured
+// by the release benchmarks, not here: a real classifier cost about 2 s of
+// CPU per question and turned a routing contract into a model score. A domain
+// whose name has a space cannot be marked and is left out.
+func domainRoutingProbes(cases []DomainClassifyCase) []DomainClassifyCase {
+	seen := map[string]bool{}
+	var probes []DomainClassifyCase
+	for _, c := range cases {
+		if seen[c.Category] || strings.Contains(c.Category, " ") {
+			continue
+		}
+		seen[c.Category] = true
+		probes = append(probes, DomainClassifyCase{
+			Category: c.Category,
+			Question: "__SYSTEMONE_CHOICE__ " + c.Category + " " + c.Question,
+		})
+	}
+	return probes
 }
 
 // DomainClassifyCase represents a test case for domain classification
@@ -48,16 +73,17 @@ func domainFixtureForProfile(profile string) (domainClassificationFixture, error
 	switch profile {
 	case "envoy-ai-gateway":
 		return domainClassificationFixture{model: "e2e-domain", requiredRecipe: "e2e-domain"}, nil
-	case "ml-model-selection", "production-stack":
-		// These profiles own top-level routing and retain their original MoM
-		// request contract. They do not declare the AI Gateway feature recipe.
-		return domainClassificationFixture{model: "MoM"}, nil
 	default:
-		return domainClassificationFixture{}, fmt.Errorf("domain-classify has no fixture contract for profile %q", profile)
+		return domainClassificationFixture{}, fmt.Errorf("domain-routing has no fixture contract for profile %q", profile)
 	}
 }
 
-func testDomainClassify(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+func runDomainClassify(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	pick func([]DomainClassifyCase) []DomainClassifyCase,
+) error {
 	fixture, err := domainFixtureForProfile(opts.Profile)
 	if err != nil {
 		return err
@@ -78,6 +104,7 @@ func testDomainClassify(ctx context.Context, client *kubernetes.Clientset, opts 
 	if err != nil {
 		return fmt.Errorf("failed to load test cases: %w", err)
 	}
+	testCases = pick(testCases)
 
 	// Run classification tests
 	var results []ClassificationResult
@@ -114,9 +141,8 @@ func testDomainClassify(ctx context.Context, client *kubernetes.Clientset, opts 
 			correctTests, totalTests, accuracy)
 	}
 
-	// Return error if accuracy is 0%
-	if correctTests == 0 {
-		return fmt.Errorf("domain classification test failed: 0%% accuracy (0/%d correct)", totalTests)
+	if correctTests != totalTests {
+		return fmt.Errorf("%d of %d domains did not route to their own category", totalTests-correctTests, totalTests)
 	}
 
 	return nil
@@ -164,8 +190,8 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 		return result
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// v0.4 demotes the intermediate decision/signal headers behind x-vsr-debug
-	// (#2205); opt in so the routing assertions below can read them.
+	// The classification details ride in x-vsr-trace, behind x-vsr-debug; opt
+	// in so the routing assertions below can read them.
 	req.Header.Set("x-vsr-debug", "true")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
@@ -201,7 +227,7 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 	}
 
 	// The AI Gateway classifier fixture requires its isolated upstream path.
-	// Other profiles retain their own MoM routing and category assertions.
+	// Other profiles retain their own default routing and category assertions.
 	if fixture.requiredRecipe != "" && (resp.Header.Get("x-vsr-selected-recipe") != fixture.requiredRecipe ||
 		resp.Header.Get("x-vsr-response-path") != "upstream") {
 		result.Error = "classification response did not use the isolated Domain upstream path"
@@ -209,8 +235,8 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 	}
 
 	// Extract VSR headers
-	result.ActualCategory = resp.Header.Get("x-vsr-selected-category")
-	result.ActualReasoning = resp.Header.Get("x-vsr-selected-reasoning")
+	result.ActualCategory = traceValue(resp.Header, "category")
+	result.ActualReasoning = traceValue(resp.Header, "reasoning")
 
 	// Check if classification is correct (only compare category, not reasoning)
 	result.Correct = (result.ActualCategory == expectedCategory)

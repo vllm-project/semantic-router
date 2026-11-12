@@ -20,7 +20,6 @@ func TestVelaReleaseRegistryContracts(t *testing.T) {
 		{"Vela-1.0-Encoder-307M-Shield", PurposeSafety, 2},
 		{"Vela-1.0-Encoder-307M-Hazard", PurposeHazard, 12},
 		{"Vela-1.0-Encoder-307M-Embedding", PurposeEmbedding, 0},
-		{"Vela-1.0-Encoder-307M-Reranker", PurposeReranking, 0},
 		{"Vela-1.0-Encoder-307M-Domain", PurposeDomainClassification, 14},
 		{"Vela-1.0-Encoder-307M-PII", PurposePIIDetection, 35},
 		{"Vela-1.0-Encoder-307M-FactCheck", PurposeHallucinationSentinel, 2},
@@ -29,7 +28,7 @@ func TestVelaReleaseRegistryContracts(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := "models/" + tc.name
-			repo := "llm-semantic-router/" + tc.name
+			repo := "vllm-sr/" + tc.name
 			for _, alias := range []string{path, tc.name} {
 				model := GetModelByPath(alias)
 				if model == nil {
@@ -55,25 +54,17 @@ func TestVelaReleaseRegistryContracts(t *testing.T) {
 	}
 }
 
-func TestVelaShieldIsSelectableWithoutChangingTheSafetyDefault(t *testing.T) {
-	if got := DefaultSystemModels().Safety; got != "models/Vela-1.0-Encoder-307M-Safety" {
-		t.Fatalf("default safety model changed to %q", got)
-	}
-	if got := DefaultGlobalConfig().SafetyModels.Safety.ModelID; got != "models/Vela-1.0-Encoder-307M-Safety" {
-		t.Fatalf("default safety module resolves to %q", got)
-	}
-	shield := GetModelByPath("models/Vela-1.0-Encoder-307M-Shield")
-	if shield == nil || shield.Purpose != PurposeSafety {
-		t.Fatalf("Shield is not registered as a safety model: %+v", shield)
-	}
-	for _, pattern := range velaTrainingArtifactPatterns {
-		if !slices.Contains(shield.DownloadExcludePatterns, pattern) {
-			t.Fatalf("Shield dropped the Vela training-artifact exclusion %q", pattern)
+func TestVela2SignalModelIsAPinnedRuntimeServedRelease(t *testing.T) {
+	for _, alias := range []string{Vela2SignalModel, "Vela-2.0-0.3B"} {
+		model := GetModelByPath(alias)
+		if model == nil || model.LocalPath != Vela2SignalModel || model.RepoID != "vllm-sr/Vela-2.0-0.3B" {
+			t.Fatalf("%q does not resolve to Vela 2.0 0.3B: %+v", alias, model)
 		}
-	}
-	for _, pattern := range []string{"lc/*", "heads/*", "demo.py", "DEMO_OUTPUT.txt"} {
-		if !slices.Contains(shield.DownloadExcludePatterns, pattern) {
-			t.Fatalf("Shield does not exclude %q", pattern)
+		if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(model.Revision) || !model.RuntimeProvisioned || !servedBuiltIn(model) {
+			t.Fatalf("Vela 2.0 0.3B must be a pinned release the runtime serves: %+v", model)
+		}
+		if !model.SharedDeployment || model.MaxContextLength != 8192 {
+			t.Fatalf("Vela 2.0 0.3B runs one shared deployment with 8K input: %+v", model)
 		}
 	}
 }

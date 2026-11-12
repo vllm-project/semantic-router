@@ -23,16 +23,13 @@ func TestRegisterRecipeRoutesPassesStoreToRecipeService(t *testing.T) {
 	directory := filepath.Join("..", "..", "..", "config", "recipes", "accuracy")
 	configPath := filepath.Join(directory, "config.yaml")
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", directory)
-	t.Setenv(recipe.ManagementCredentialEnv, "")
+	token := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	t.Setenv(recipe.ManagementCredentialEnv, token)
 
 	store := recipe.NewStore(recipe.StoreOptions{
 		Root:       filepath.Join(t.TempDir(), "recipe-store"),
 		ConfigPath: configPath,
 	})
-	token, err := store.EnsureManagementCredential()
-	if err != nil {
-		t.Fatalf("EnsureManagementCredential(): %v", err)
-	}
 	configBytes, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("ReadFile(config): %v", err)
@@ -107,7 +104,7 @@ func TestRegisterRecipeRoutesPassesStoreToRecipeService(t *testing.T) {
 func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("version: v0.3\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("version: v0.5\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(config): %v", err)
 	}
 	mux := http.NewServeMux()
@@ -131,7 +128,7 @@ func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
 func TestRegisterRecipePackageRoutesEnforceCanonicalPathsAndMethods(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\nrouting:\n  modelCards: []\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\nrouting:\n  modelCards: []\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
@@ -254,7 +251,7 @@ func assertRecipeActivationStartupRecovery(t *testing.T, cfg *config.Config, wan
 func TestRegisterRecipeRoutesKeepsImportAvailableWhenRuntimeConfigReadonly(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
-	writeCoreRouteTestFile(t, configPath, "version: v0.3\n")
+	writeCoreRouteTestFile(t, configPath, "version: v0.5\n")
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
 	t.Setenv("VLLM_SR_RECIPE_STORE_DIR", filepath.Join(dir, "recipe-store"))
 
@@ -291,24 +288,16 @@ func assertCoreRouteTestFile(t *testing.T, path, want string) {
 	}
 }
 
-func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
+func TestRuntimeConfigCapabilityGuardsLocalWriteRoutes(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	routerAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/storage/knowledge-bases/example" || r.Method != http.MethodPut {
-			t.Fatalf("unexpected KBS proxy request: %s %s", r.Method, r.URL.Path)
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer routerAPI.Close()
-
 	cfg := &config.Config{
 		AbsConfigPath:         configPath,
 		ConfigDir:             dir,
-		RouterAPIURL:          routerAPI.URL,
+		RouterAPIURL:          "http://router.invalid",
 		RuntimeConfigWritable: false,
 		RecipeStoreWritable:   true,
 	}
@@ -350,21 +339,15 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPut, "/api/router/api/v1/storage/knowledge-bases/example", strings.NewReader(`{}`)))
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("KBS proxy status=%d want=%d body=%s", response.Code, http.StatusNoContent, response.Body.String())
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("removed KB proxy status=%d want=%d body=%s", response.Code, http.StatusNotFound, response.Body.String())
 	}
 }
 
 func TestResolveToolsDBPathUsesRouterContractPath(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(`
-version: v0.3
-global:
-  integrations:
-    tools:
-      tools_db_path: "/tmp/custom-tools.json"
-`), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(toolsCatalogConfig("/tmp/custom-tools.json")), 0o644); err != nil {
 		t.Fatalf("WriteFile(config): %v", err)
 	}
 
@@ -392,5 +375,21 @@ func TestResolveToolsDBPathFallsBackWhenRouterContractCannotParse(t *testing.T) 
 	want := filepath.Join(configDir, defaultToolsDBPath)
 	if got != want {
 		t.Fatalf("resolveToolsDBPath() = %q, want %q", got, want)
+	}
+}
+
+func TestRegisterHealthAndSetupRoutesAnswersHealthAndHealthz(t *testing.T) {
+	mux := http.NewServeMux()
+	registerHealthAndSetupRoutes(mux, &config.Config{}, nil)
+
+	for _, path := range []string{"/health", "/healthz"} {
+		recorder := httptest.NewRecorder()
+		mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s: status=%d, want 200", path, recorder.Code)
+		}
+		if !strings.Contains(recorder.Body.String(), `"status":"healthy"`) {
+			t.Fatalf("%s: body=%q, want the health payload", path, recorder.Body.String())
+		}
 	}
 }

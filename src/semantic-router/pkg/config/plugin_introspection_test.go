@@ -12,8 +12,8 @@ func TestDecisionPluginActivationUsesTypedDefaults(t *testing.T) {
 		{&SystemPromptPluginConfig{SystemPrompt: "policy"}, true},
 		{&SystemPromptPluginConfig{Enabled: &enabled}, true},
 		{&SystemPromptPluginConfig{Enabled: &disabled}, false},
-		{&MemoryPluginConfig{}, false},
-		{&MemoryPluginConfig{Enabled: true}, true},
+		{&ContextPluginConfig{}, false},
+		{&ContextPluginConfig{Enabled: true}, true},
 		{&FastResponsePluginConfig{Message: "hello"}, true},
 		{&HeaderMutationPluginConfig{}, true},
 		{&RequestParamsPluginConfig{}, true},
@@ -51,34 +51,26 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 				switch payload.(type) {
 				case *ResponseCachePluginConfig:
 					want = decision.GetResponseCacheConfig().Enabled
-				case *MemoryPluginConfig:
-					want = decision.GetMemoryConfig().Enabled
+				case *ContextPluginConfig:
+					want = decision.GetContextConfig().Enabled
 				case *SystemPromptPluginConfig:
 					want = decision.IsSystemPromptEnabled()
 				case *HeaderMutationPluginConfig:
 					want = decision.GetHeaderMutationConfig() != nil
-				case *HallucinationPluginConfig:
-					want = decision.GetHallucinationConfig().Enabled
+				case *ResponseGuardPluginConfig:
+					want = decision.GetResponseGuardConfig() != nil
 				case *RouterReplayPluginConfig:
 					want = decision.GetRouterReplayConfig().Enabled
-				case *RAGPluginConfig:
-					want = decision.GetRAGConfig().Enabled
 				case *FastResponsePluginConfig:
 					want = decision.GetFastResponseConfig() != nil
 				case *ToolsPluginConfig:
 					want = decision.GetToolsConfig().Enabled
-				case *ToolSelectionPluginConfig:
-					want = decision.GetToolSelectionConfig().Enabled
 				case *RequestParamsPluginConfig:
 					want = decision.GetRequestParamsConfig() != nil
-				case *ResponseJailbreakPluginConfig:
-					want = decision.GetResponseJailbreakConfig().Enabled
-				case *ContextCompressionPluginConfig:
-					want = decision.GetContextCompressionConfig().Enabled
 				case *PromptCachePluginConfig:
 					want = decision.GetPromptCacheConfig().Enabled
-				case *ShadowDispatchPluginConfig:
-					want = decision.GetShadowDispatchConfig().Enabled
+				case *MaskingPluginConfig:
+					want = decision.GetMaskingConfig().Enabled
 				default:
 					t.Fatalf("new plugin %q requires a runtime activation contract assertion", entry.Type)
 				}

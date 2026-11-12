@@ -3,6 +3,8 @@ package helm
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -184,6 +186,21 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 		return "", nil, fmt.Errorf("failed to copy chart to temp dir: %w", err)
 	}
 
+	// Chart.lock pins every dependency, so a build for the same Chart.yaml and
+	// Chart.lock is reused: each profile runs in its own process, and without
+	// this every one re-adds five repositories and downloads the same charts.
+	cached := chartDepsCacheDir(chartRef)
+	if cached != "" {
+		// Replace charts/ as dependency build would, so no archive left in the
+		// source chart sits beside the cached ones.
+		deps := filepath.Join(tmpChart, "charts")
+		if err := os.RemoveAll(deps); err == nil {
+			if err := copyDir(cached, deps); err == nil {
+				return tmpChart, cleanup, nil
+			}
+		}
+	}
+
 	// Ensure required Helm repositories are registered before building dependencies.
 	if err := d.ensureHelmRepos(ctx); err != nil {
 		cleanup()
@@ -195,8 +212,43 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 		cleanup()
 		return "", nil, fmt.Errorf("failed to build chart dependencies: %w", err)
 	}
+	if cached != "" {
+		storeChartDeps(filepath.Join(tmpChart, "charts"), cached)
+	}
 
 	return tmpChart, cleanup, nil
+}
+
+// chartDepsCacheDir names the cache entry for a local chart's built
+// dependencies, keyed by its Chart.yaml and Chart.lock. It is empty when the
+// chart has no lock, since an unpinned build may resolve differently, and
+// when a dependency is a local file:// chart, whose contents the key does not
+// cover.
+func chartDepsCacheDir(chartDir string) string {
+	digest := sha256.New()
+	for _, name := range []string{"Chart.yaml", "Chart.lock"} {
+		data, err := os.ReadFile(filepath.Join(chartDir, name))
+		if err != nil || bytes.Contains(data, []byte("file://")) {
+			return ""
+		}
+		digest.Write(data)
+	}
+	return filepath.Join(os.TempDir(), "semantic-router-e2e-chart-deps", hex.EncodeToString(digest.Sum(nil))[:16])
+}
+
+// storeChartDeps copies built dependencies into the cache. A partial copy is
+// never visible: it is written aside and renamed into place, and any failure
+// only means the next profile builds again.
+func storeChartDeps(built, cached string) {
+	staging := cached + fmt.Sprintf(".tmp-%d", os.Getpid())
+	_ = os.RemoveAll(staging)
+	if err := copyDir(built, staging); err != nil {
+		_ = os.RemoveAll(staging)
+		return
+	}
+	if err := os.Rename(staging, cached); err != nil {
+		_ = os.RemoveAll(staging)
+	}
 }
 
 var requiredHelmRepos = []struct{ name, url string }{
@@ -413,6 +465,15 @@ func (o InstallOptions) Clone() InstallOptions {
 	}
 	return cloned
 }
+
+const (
+	// RouterImageRepository is the Router image the chart deploys.
+	RouterImageRepository = "ghcr.io/vllm-project/semantic-router/vllm-sr"
+	// DevelopmentRouterImage is the chart's default Router image during a
+	// development cycle; release.sh pins the release tag only on the release
+	// commit.
+	DevelopmentRouterImage = RouterImageRepository + ":latest"
+)
 
 var (
 	SemanticRouterRelease = InstallOptions{

@@ -1,0 +1,170 @@
+[
+  {
+    "requestHeaders": {
+      "response": {
+        "headerMutation": {
+          "removeHeaders": [
+            "x-authz-team-id",
+            "x-authz-tenant-id",
+            "x-authz-user-groups",
+            "x-authz-user-id",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-bench-expected-config-hash",
+            "x-vsr-bench-max-inference-calls",
+            "x-vsr-cache-control",
+            "x-vsr-compression-control",
+            "x-vsr-config-hash",
+            "x-vsr-config-version",
+            "x-vsr-cost",
+            "x-vsr-cost-currency",
+            "x-vsr-debug",
+            "x-vsr-delegated-credential",
+            "x-vsr-internal-auth",
+            "x-vsr-kv-cache-id",
+            "x-vsr-kv-mapper-id",
+            "x-vsr-kv-source-pod",
+            "x-vsr-memory",
+            "x-vsr-outcome-principal",
+            "x-vsr-outcome-source",
+            "x-vsr-protection-release",
+            "x-vsr-replay-id",
+            "x-vsr-response-path",
+            "x-vsr-route-model",
+            "x-vsr-schema-version",
+            "x-vsr-selected-decision",
+            "x-vsr-selected-model",
+            "x-vsr-selected-recipe",
+            "x-vsr-session-id",
+            "x-vsr-skip-processing",
+            "x-vsr-systemone-backend",
+            "x-vsr-trace",
+            "x-vsr-upstream-host",
+            "x-vsr-warnings"
+          ],
+          "setHeaders": [
+            {
+              "header": {
+                "key": "accept-encoding",
+                "value": "identity"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "requestBody": {
+      "response": {
+        "bodyMutation": {
+          "bodyText": "{\"model\":\"general-small-instruct\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello again.\"}]}"
+        },
+        "clearRouteCache": true,
+        "headerMutation": {
+          "removeHeaders": [
+            "api-key",
+            "api-subscription-key",
+            "authorization",
+            "content-length",
+            "ocp-apim-subscription-key",
+            "x-api-key",
+            "x-goog-api-key",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-delegated-credential"
+          ],
+          "setHeaders": [
+            {
+              "header": {
+                "key": "x-vsr-route-model",
+                "rawValueText": "general-small"
+              }
+            },
+            {
+              "header": {
+                "key": ":path",
+                "rawValueText": "/v1/chat/completions"
+              }
+            },
+            {
+              "header": {
+                "key": "content-length",
+                "rawValueText": "88"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "responseHeaders": {
+      "response": {
+        "headerMutation": {
+          "setHeaders": [
+            {
+              "header": {
+                "key": "x-vsr-schema-version",
+                "rawValueText": "3"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-response-path",
+                "rawValueText": "upstream"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-config-version",
+                "rawValueText": "1"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-selected-model",
+                "rawValueText": "general-small"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "responseBody": {
+      "response": {
+        "bodyMutation": {
+          "bodyText": "{\"error\":{\"type\":\"rate_limit_error\",\"code\":null,\"message\":\"rate limited\",\"param\":null}}"
+        },
+        "headerMutation": {
+          "removeHeaders": [
+            "content-length"
+          ],
+          "setHeaders": [
+            {
+              "appendAction": "OVERWRITE_IF_EXISTS_OR_ADD",
+              "header": {
+                "key": "content-type",
+                "rawValueText": "application/json"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+]

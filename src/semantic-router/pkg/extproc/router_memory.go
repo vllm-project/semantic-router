@@ -3,6 +3,8 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/qdrant/go-client/qdrant"
@@ -12,24 +14,34 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
-func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, *memory.MemoryExtractor) {
-	if !isMemoryEnabled(cfg) {
-		return nil, nil
+func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, *memory.MemoryExtractor, routerruntime.MemoryStatus, error) {
+	if err := validateMemoryFilterAlgorithms(cfg); err != nil {
+		return nil, nil, routerruntime.MemoryStatus{}, err
+	}
+	backend := cfg.Memory.Backend
+	if backend == "" {
+		backend = "milvus"
+	}
+	if !cfg.UsesMemory() {
+		return nil, nil, routerruntime.MemoryStatus{
+			Reason:  routerruntime.MemoryReasonDisabledByConfig,
+			Backend: backend,
+		}, nil
 	}
 
 	// publishRouterState publishes the store after the candidate commits.
 	memoryStore, err := createMemoryStore(cfg, sets...)
 	if err != nil {
 		logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
-		return nil, nil
+		return nil, nil, routerruntime.MemoryStatus{
+			Reason:  routerruntime.MemoryReasonBackendUnavailable,
+			Backend: backend,
+		}, nil
 	}
 
-	backend := cfg.Memory.Backend
-	if backend == "" {
-		backend = "milvus"
-	}
 	if rc := cfg.Memory.RedisCache; rc != nil && rc.Enabled && rc.Address != "" {
 		logging.Infof("Memory enabled with %s backend and Redis hot cache", backend)
 	} else {
@@ -41,22 +53,51 @@ func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memo
 		logging.Infof("Memory chunk store enabled (direct conversation storage)")
 	}
 
-	return memoryStore, memoryExtractor
+	return memoryStore, memoryExtractor, routerruntime.MemoryStatus{
+		Backend: backend,
+	}, nil
 }
 
-func isMemoryEnabled(cfg *config.RouterConfig) bool {
-	if cfg.Memory.Enabled {
-		return true
-	}
+// legacyMemoryFilterAlgorithms maps retired algorithm names to the filter they
+// always ran as.
+var legacyMemoryFilterAlgorithms = map[string]string{"recency_semantic": "heuristic"}
 
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if memoryConfig := decision.GetMemoryConfig(); memoryConfig != nil && memoryConfig.Enabled {
-			logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", decision.Name)
-			return true
+// validateMemoryFilterAlgorithms rejects reflection algorithms that no filter is
+// registered for. The config package cannot import the registry, so the check
+// runs here once at startup. A decision's effective algorithm is its own
+// override or the global value, so checking both covers every decision.
+func validateMemoryFilterAlgorithms(cfg *config.RouterConfig) error {
+	if err := validateMemoryFilterAlgorithm(cfg.Memory.Reflection.Algorithm, "global.stores.memory.reflection.algorithm"); err != nil {
+		return err
+	}
+	for _, at := range cfg.RoutingDecisionsAt() {
+		source := at.Decision.GetContextConfig().Source(config.ContextSourceMemory)
+		if source == nil || source.Reflection == nil {
+			continue
+		}
+		field := at.Path + ".plugins[context].sources[memory].reflection.algorithm"
+		if err := validateMemoryFilterAlgorithm(source.Reflection.Algorithm, field); err != nil {
+			return err
 		}
 	}
+	return nil
+}
 
-	return false
+func validateMemoryFilterAlgorithm(algorithm, field string) error {
+	if algorithm == "" {
+		return nil
+	}
+	registered := memory.RegisteredFilters()
+	if slices.Contains(registered, algorithm) {
+		return nil
+	}
+	slices.Sort(registered)
+	if replacement, ok := legacyMemoryFilterAlgorithms[algorithm]; ok {
+		return fmt.Errorf("%s %q is not a registered memory filter (registered: %s); use %q, which is how %q has always run",
+			field, algorithm, strings.Join(registered, ", "), replacement, algorithm)
+	}
+	return fmt.Errorf("%s %q is not a registered memory filter (registered: %s)",
+		field, algorithm, strings.Join(registered, ", "))
 }
 
 // createMemoryStore creates a memory store based on configuration.
@@ -133,18 +174,10 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		collectionName = "agentic_memory"
 	}
 
-	embeddingConfig := &memory.EmbeddingConfig{
-		Model:     memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg)),
-		Dimension: cfg.Memory.Milvus.Dimension,
+	embeddingConfig, err := memoryEmbeddingConfig(cfg, sets)
+	if err != nil {
+		return nil, err
 	}
-	if len(sets) > 0 && sets[0] != nil {
-		provider, err := sets[0].Get(string(embeddingConfig.Model), 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		embeddingConfig.Provider = provider
-	}
-
 	dimension, err := memory.StorageDimension(cfg.Memory.Milvus.Dimension, *embeddingConfig)
 	if err != nil {
 		return nil, err
@@ -154,7 +187,7 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	cfg = &copied
 	embeddingConfig.Dimension = dimension
 
-	logging.Infof("Memory: connecting to Milvus at %s, collection=%s, embedding=%s", milvusAddress, collectionName, embeddingConfig.Model)
+	logging.Infof("Memory: connecting to Milvus at %s, collection=%s, embedding=%s", milvusAddress, collectionName, embeddingConfig.Deployment)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -187,7 +220,7 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	}
 
 	logging.Infof("Memory store initialized: backend=milvus, address=%s, collection=%s, embedding=%s",
-		milvusAddress, collectionName, embeddingConfig.Model)
+		milvusAddress, collectionName, embeddingConfig.Deployment)
 
 	return store, nil
 }
@@ -212,20 +245,10 @@ func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		timeout = 10
 	}
 
-	embeddingModel := memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg))
-
-	embeddingConfig := &memory.EmbeddingConfig{
-		Model:     embeddingModel,
-		Dimension: qc.Dimension,
+	embeddingConfig, err := memoryEmbeddingConfig(cfg, sets)
+	if err != nil {
+		return nil, err
 	}
-	if len(sets) > 0 && sets[0] != nil {
-		provider, err := sets[0].Get(string(embeddingConfig.Model), 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		embeddingConfig.Provider = provider
-	}
-
 	dimension, err := memory.StorageDimension(qc.Dimension, *embeddingConfig)
 	if err != nil {
 		return nil, err
@@ -236,7 +259,7 @@ func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	embeddingConfig.Dimension = dimension
 
 	logging.Infof("Memory: connecting to Qdrant at %s:%d, collection=%s, embedding=%s",
-		host, port, qc.Collection, embeddingModel)
+		host, port, qc.Collection, embeddingConfig.Deployment)
 
 	client, err := qdrant.NewClient(&qdrant.Config{
 		Host:   host,
@@ -268,36 +291,22 @@ func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	}
 
 	logging.Infof("Memory store initialized: backend=qdrant, address=%s:%d, collection=%s, embedding=%s",
-		host, port, qc.Collection, embeddingModel)
+		host, port, qc.Collection, embeddingConfig.Deployment)
 
 	return store, nil
 }
 
-func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
-	embeddingModels := cfg.EmbeddingModels
-	embeddingModel := cfg.Memory.EmbeddingModel
-	if embeddingModel != "" {
-		return embeddingModel
+// memoryEmbeddingConfig is the deployment memory embeds with and the width of
+// its vectors, with that deployment's provider from the prepared set.
+func memoryEmbeddingConfig(cfg *config.RouterConfig, sets []*embedding.Set) (*memory.EmbeddingConfig, error) {
+	deployment, dimension := cfg.MemoryEmbedding()
+	embeddingConfig := &memory.EmbeddingConfig{Deployment: deployment, Dimension: dimension}
+	if len(sets) > 0 && sets[0] != nil {
+		provider, err := sets[0].Get(deployment, 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		embeddingConfig.Provider = provider
 	}
-
-	switch {
-	case embeddingModels.BertModelPath != "":
-		logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
-		return "bert"
-	case embeddingModels.MmBertModelPath != "":
-		logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
-		return "mmbert"
-	case embeddingModels.MultiModalModelPath != "":
-		logging.Infof("Memory: Auto-selected multimodal from embedding_models config")
-		return "multimodal"
-	case embeddingModels.Qwen3ModelPath != "":
-		logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
-		return "qwen3"
-	case embeddingModels.GemmaModelPath != "":
-		logging.Infof("Memory: Auto-selected gemma from embedding_models config")
-		return "gemma"
-	default:
-		logging.Warnf("Memory: No embedding models configured, bert will be used but may fail without bert_model_path")
-		return "bert"
-	}
+	return embeddingConfig, nil
 }

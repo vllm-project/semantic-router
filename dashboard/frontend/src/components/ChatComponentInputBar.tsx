@@ -23,13 +23,10 @@ import {
 interface ChatComponentInputBarProps {
   attachments: PlaygroundAttachment[]
   attachFilesDisabled: boolean
-  enableClawMode: boolean
   enableWebSearch: boolean
   inputRef: Ref<HTMLTextAreaElement>
   inputValue: string
   isLoading: boolean
-  isTogglingClawMode: boolean
-  modeToggleDisabled: boolean
   modelOptions: RouterModelOption[]
   modelSelectDisabled: boolean
   selectedModel: string
@@ -42,24 +39,18 @@ interface ChatComponentInputBarProps {
   onRemoveAttachment: (attachmentId: string) => void
   onSend: () => void
   onStop: () => void
-  onToggleClawMode: () => void
-  onToggleClawRoom: () => void
   onToggleWebSearch: () => void
   sendDisabled?: boolean
   sendDisabledReason?: string
-  showClawRoom: boolean
 }
 
 export default function ChatComponentInputBar({
   attachments,
   attachFilesDisabled,
-  enableClawMode,
   enableWebSearch,
   inputRef,
   inputValue,
   isLoading,
-  isTogglingClawMode,
-  modeToggleDisabled,
   modelOptions,
   modelSelectDisabled,
   selectedModel,
@@ -72,12 +63,9 @@ export default function ChatComponentInputBar({
   onRemoveAttachment,
   onSend,
   onStop,
-  onToggleClawMode,
-  onToggleClawRoom,
   onToggleWebSearch,
   sendDisabled = false,
   sendDisabledReason,
-  showClawRoom,
 }: ChatComponentInputBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -235,22 +223,10 @@ export default function ChatComponentInputBar({
               data-testid="playground-attachment-input"
             />
             <ChatComposerAddMenu
-              attachFilesDisabled={attachFilesDisabled || isLoading || isTogglingClawMode}
-              clawModeDisabled={modeToggleDisabled}
-              clawModeEnabled={enableClawMode}
-              clawRoom={
-                showClawRoom
-                  ? {
-                      active: false,
-                      disabled: modeToggleDisabled,
-                      onToggle: onToggleClawRoom,
-                    }
-                  : undefined
-              }
+              attachFilesDisabled={attachFilesDisabled || isLoading}
               onAttachFiles={handleAttachClick}
-              onToggleClawMode={onToggleClawMode}
               onToggleWebSearch={onToggleWebSearch}
-              webSearchDisabled={webSearchDisabled || isLoading || isTogglingClawMode}
+              webSearchDisabled={webSearchDisabled || isLoading}
               webSearchEnabled={enableWebSearch}
             />
             <ChatComposerModelSelect

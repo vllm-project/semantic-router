@@ -19,13 +19,40 @@ interface StructuredModelFieldProps {
   maskSensitive?: boolean
 }
 
-const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
+/** A backend ref as the editor shows it: its auth block as three fields. */
+type EditableBackendRef = Omit<BackendRefEntry, 'auth'> & {
+  auth_header?: string
+  auth_prefix?: string
+  api_key_env?: string
+}
+
+function editableBackendRef({ auth, ...backendRef }: BackendRefEntry): EditableBackendRef {
+  const editable: EditableBackendRef = { ...backendRef }
+  if (auth?.header !== undefined) editable.auth_header = auth.header
+  if (auth?.prefix !== undefined) editable.auth_prefix = auth.prefix
+  if (auth?.api_key_env !== undefined) editable.api_key_env = auth.api_key_env
+  return editable
+}
+
+function backendRefFromEditor({
+  auth_header: header,
+  auth_prefix: prefix,
+  api_key_env: apiKeyEnv,
+  ...backendRef
+}: EditableBackendRef): BackendRefEntry {
+  const auth: NonNullable<BackendRefEntry['auth']> = {}
+  if (header?.trim()) auth.header = header.trim()
+  if (prefix !== undefined) auth.prefix = prefix.trim()
+  if (apiKeyEnv?.trim()) auth.api_key_env = apiKeyEnv.trim()
+  return Object.keys(auth).length > 0 ? { ...backendRef, auth } : backendRef
+}
+
+const backendRefFields: ObjectEditorField<EditableBackendRef>[] = [
   { key: 'name', label: 'Reference name', placeholder: 'local-primary' },
-  { key: 'endpoint', label: 'Endpoint', placeholder: '127.0.0.1:8000', fullWidth: true },
   {
-    key: 'base_url',
-    label: 'Base URL',
-    placeholder: 'https://api.example.com/v1',
+    key: 'endpoint',
+    label: 'Endpoint',
+    placeholder: '127.0.0.1:8000 or https://api.example.com/v1',
     fullWidth: true,
   },
   { key: 'protocol', label: 'Protocol', type: 'select', options: ['http', 'https'] },
@@ -55,11 +82,11 @@ const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
     helpText: 'An explicit empty value disables the provider catalog default prefix.',
   },
   {
-    key: 'extra_headers',
-    label: 'Extra headers',
+    key: 'headers',
+    label: 'Headers',
     type: 'key-value',
     fullWidth: true,
-    emptyValueLabel: 'No extra headers configured.',
+    emptyValueLabel: 'No headers configured.',
   },
 ]
 
@@ -163,6 +190,14 @@ const pricingFields: ObjectEditorField<ModelPricing>[] = [
     placeholder: '0.625',
   },
   {
+    key: 'cache_write_1h_per_1m',
+    label: 'Cache write (1h) / 1M',
+    type: 'number',
+    min: 0,
+    step: 0.0001,
+    placeholder: '1.25',
+  },
+  {
     key: 'completion_per_1m',
     label: 'Completion / 1M',
     type: 'number',
@@ -231,20 +266,45 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
     step: 1,
     placeholder: '50',
   },
+  { key: 'connect_timeout', label: 'Connect timeout', placeholder: '10s' },
+  { key: 'total_timeout', label: 'Total timeout', placeholder: 'listener timeout' },
+  { key: 'idle_timeout', label: 'Stream idle timeout', placeholder: 'listener timeout' },
+  { key: 'per_try_timeout', label: 'Per-try timeout', placeholder: 'none' },
+  { key: 'first_byte_timeout', label: 'First-byte timeout (standalone mode)', placeholder: 'none' },
+  { key: 'retry_back_off_base', label: 'Retry back-off base', placeholder: '25ms' },
+  { key: 'retry_back_off_max', label: 'Retry back-off max', placeholder: '250ms' },
+  { key: 'retry_after_max', label: 'Honor Retry-After up to', placeholder: 'off' },
+  {
+    key: 'retry_budget_percent',
+    label: 'Retry budget percent',
+    type: 'number',
+    min: 0,
+    max: 100,
+    step: 1,
+    placeholder: 'off',
+  },
+  {
+    key: 'retry_budget_min_concurrency',
+    label: 'Retry budget minimum',
+    type: 'number',
+    min: 0,
+    step: 1,
+    placeholder: '3',
+  },
 ]
 
-function backendRefLabel(item: BackendRefEntry, index: number): string {
+function backendRefLabel(item: EditableBackendRef, index: number): string {
   return item.name?.trim() || item.provider?.trim() || `Backend ${index + 1}`
 }
 
-function backendRefDescription(item: BackendRefEntry): string | undefined {
-  return item.endpoint?.trim() || item.base_url?.trim() || 'Target required'
+function backendRefDescription(item: EditableBackendRef): string | undefined {
+  return item.endpoint?.trim() || 'Target required'
 }
 
-function validateBackendRef(item: BackendRefEntry): string[] {
+function validateBackendRef(item: EditableBackendRef): string[] {
   const errors: string[] = []
-  if (!item.endpoint?.trim() && !item.base_url?.trim()) {
-    errors.push('Provide an endpoint or base URL.')
+  if (!item.endpoint?.trim()) {
+    errors.push('Provide an endpoint.')
   }
   if (item.protocol && item.protocol !== 'http' && item.protocol !== 'https') {
     errors.push('Protocol must be HTTP or HTTPS.')
@@ -297,6 +357,31 @@ export function ModelCapabilitiesEditor({
       emptyLabel="No routing capabilities configured."
       itemLabel="Capability"
       placeholder="e.g. tool-use"
+      disabled={disabled}
+      readOnly={readOnly}
+    />
+  )
+}
+
+// Edits one direction of a model's modalities: the media it reads or writes.
+export function ModelModalitiesEditor({
+  value,
+  onChange,
+  disabled,
+  readOnly,
+}: StructuredModelFieldProps) {
+  const modalities = Array.isArray(value)
+    ? value.filter((modality): modality is string => typeof modality === 'string')
+    : normalizeStringList(value)
+
+  return (
+    <StringListEditor
+      value={modalities}
+      onChange={(nextValue) => onChange?.(nextValue)}
+      addLabel="Add modality"
+      emptyLabel="Not declared: the model reads and writes text."
+      itemLabel="Modality"
+      placeholder="e.g. image"
       disabled={disabled}
       readOnly={readOnly}
     />
@@ -422,20 +507,19 @@ export function ModelBackendRefsEditor({
   readOnly,
   maskSensitive,
 }: StructuredModelFieldProps) {
-  const backendRefs = normalizeModelBackendRefs(value)
+  const backendRefs = normalizeModelBackendRefs(value).map(editableBackendRef)
   const visibleBackendRefs =
     maskSensitive && readOnly
       ? backendRefs.map((backendRef) => ({
           ...backendRef,
           endpoint: backendRef.endpoint ? '••••••••' : undefined,
-          base_url: backendRef.base_url ? '••••••••' : undefined,
         }))
       : backendRefs
 
   return (
     <ObjectListEditor
       value={visibleBackendRefs}
-      onChange={(nextValue) => onChange?.(nextValue)}
+      onChange={(nextValue) => onChange?.(nextValue.map(backendRefFromEditor))}
       fields={backendRefFields}
       createItem={(index) => ({
         name: `endpoint-${index + 1}`,

@@ -12,7 +12,7 @@ import (
 func TestHandleCaching_SkipsGlobalCacheWhenDecisionsConfiguredButNoDecisionMatched(t *testing.T) {
 	mockCache := &mockStreamingCache{}
 	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
+		SemanticCache: config.SemanticCache{InUse: true},
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{
 				{
@@ -25,7 +25,7 @@ func TestHandleCaching_SkipsGlobalCacheWhenDecisionsConfiguredButNoDecisionMatch
 	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
 	ctx := &RequestContext{
 		RequestID:       "req-1",
-		SemanticRequest: testNeutralRequest("MoM", "hello"),
+		SemanticRequest: testNeutralRequest("vllm-sr/auto", "hello"),
 	}
 
 	resp, hit := router.handleCaching(ctx, "")
@@ -37,14 +37,15 @@ func TestHandleCaching_SkipsGlobalCacheWhenDecisionsConfiguredButNoDecisionMatch
 
 func TestHandleCaching_UsesGlobalCacheWhenNoDecisionsConfigured(t *testing.T) {
 	mockCache := &mockStreamingCache{}
-	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
-	}
+	cfg := withGlobalPlugins(t, &config.RouterConfig{
+		SemanticCache: config.SemanticCache{InUse: true},
+	}, testPlugin(config.DecisionPluginResponseCache, map[string]interface{}{"enabled": true, "scope": "global"}))
 	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
 	ctx := &RequestContext{
 		RequestID:       "req-1",
-		SemanticRequest: testNeutralRequest("MoM", "hello"),
+		SemanticRequest: testNeutralRequest("vllm-sr/auto", "hello"),
 	}
+	ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
 
 	resp, hit := router.handleCaching(ctx, "")
 	assert.Nil(t, resp)
@@ -57,13 +58,15 @@ func TestHandleCaching_PartitionsNamedRecipeWithoutChangingSemanticQuery(t *test
 	mockCache := &mockStreamingCache{}
 	router := &OpenAIRouter{
 		Cache:  mockCache,
-		Config: &config.RouterConfig{SemanticCache: config.SemanticCache{Enabled: true}},
+		Config: &config.RouterConfig{SemanticCache: config.SemanticCache{InUse: true}},
 	}
 	ctx := &RequestContext{
 		RequestID:       "req-1",
-		SemanticRequest: testNeutralRequest("MoM", "hello"),
+		SemanticRequest: testNeutralRequest("vllm-sr/auto", "hello"),
 	}
-	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy"})
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy", Profile: config.RoutingProfile{
+		DefaultPlugins: []config.DecisionPlugin{testPlugin(config.DecisionPluginResponseCache, map[string]interface{}{"enabled": true, "scope": "global"})},
+	}})
 
 	resp, hit := router.handleCaching(ctx, "")
 	assert.Nil(t, resp)
@@ -80,9 +83,9 @@ func TestResponseCachePartitionIncludesDefaultRecipeAndProtocol(t *testing.T) {
 	ctx := &RequestContext{}
 	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
 
-	partition := semanticCachePartition(ctx, "MoM")
+	partition := semanticCachePartition(ctx, "vllm-sr/auto")
 	assert.Contains(t, partition, "default")
-	assert.Contains(t, partition, "MoM")
+	assert.Contains(t, partition, "vllm-sr/auto")
 	assert.Contains(t, partition, "openai%3Abody")
 }
 
@@ -105,7 +108,7 @@ func TestHandleCaching_ExactHitSkipsSemanticEmbeddingLookup(t *testing.T) {
 	router := &OpenAIRouter{
 		Cache: mockCache,
 		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
+			SemanticCache: config.SemanticCache{InUse: true},
 			IntelligentRouting: config.IntelligentRouting{
 				Decisions: []config.Decision{decision},
 			},
@@ -114,7 +117,7 @@ func TestHandleCaching_ExactHitSkipsSemanticEmbeddingLookup(t *testing.T) {
 	ctx := &RequestContext{
 		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
 		RequestID:           "req-exact",
-		SemanticRequest:     testNeutralRequest("MoM", "hello"),
+		SemanticRequest:     testNeutralRequest("vllm-sr/auto", "hello"),
 		VSRSelectedDecision: &router.Config.Decisions[0],
 	}
 
@@ -148,7 +151,7 @@ func TestHandleCaching_ReplaysExactHitForAnthropicClient(t *testing.T) {
 	router := &OpenAIRouter{
 		Cache: mockCache,
 		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
+			SemanticCache: config.SemanticCache{InUse: true},
 			IntelligentRouting: config.IntelligentRouting{
 				Decisions: []config.Decision{decision},
 			},
@@ -195,7 +198,7 @@ func TestHandleCaching_NoCacheControlSkipsReadsButKeepsWritePath(t *testing.T) {
 	router := &OpenAIRouter{
 		Cache: mockCache,
 		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
+			SemanticCache: config.SemanticCache{InUse: true},
 			IntelligentRouting: config.IntelligentRouting{
 				Decisions: []config.Decision{decision},
 			},
@@ -204,7 +207,7 @@ func TestHandleCaching_NoCacheControlSkipsReadsButKeepsWritePath(t *testing.T) {
 	ctx := &RequestContext{
 		Headers:             map[string]string{"x-vsr-cache-control": "no-cache"},
 		RequestID:           "req-control",
-		SemanticRequest:     testNeutralRequest("MoM", "hello"),
+		SemanticRequest:     testNeutralRequest("vllm-sr/auto", "hello"),
 		VSRSelectedDecision: &router.Config.Decisions[0],
 	}
 
@@ -235,7 +238,7 @@ func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *test
 	router := &OpenAIRouter{
 		Cache: mockCache,
 		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
+			SemanticCache: config.SemanticCache{InUse: true},
 			IntelligentRouting: config.IntelligentRouting{
 				Decisions: []config.Decision{decision},
 			},
@@ -247,7 +250,7 @@ func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *test
 		},
 		RequestID:           "req-1",
 		VSRSelectedDecision: &router.Config.Decisions[0],
-		SemanticRequest:     testNeutralRequest("MoM", "hello"),
+		SemanticRequest:     testNeutralRequest("vllm-sr/auto", "hello"),
 	}
 	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy"})
 
@@ -267,7 +270,7 @@ func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *test
 			"x-authz-user-id": "bob",
 		},
 		RequestID:           "req-2",
-		SemanticRequest:     testNeutralRequest("MoM", "hello"),
+		SemanticRequest:     testNeutralRequest("vllm-sr/auto", "hello"),
 		VSRSelectedDecision: &router.Config.Decisions[0],
 	}
 	bobCtx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy"})

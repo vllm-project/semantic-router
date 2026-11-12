@@ -76,7 +76,6 @@ func discoverKServeBackend(ctx context.Context, c client.Client, namespace strin
 		Name:      inferenceServiceName,
 		Namespace: namespace,
 	}, inferenceService)
-
 	if err != nil {
 		logger.Error(err, "Failed to get InferenceService", "name", inferenceServiceName, "namespace", namespace)
 		return nil, fmt.Errorf("failed to get InferenceService %s/%s: %w", namespace, inferenceServiceName, err)
@@ -119,7 +118,6 @@ func discoverLlamaStackBackend(ctx context.Context, c client.Client, namespace s
 		Namespace:     namespace,
 		LabelSelector: labelSelector,
 	})
-
 	if err != nil {
 		logger.Error(err, "Failed to list services", "namespace", namespace, "labels", discoveryLabels)
 		return nil, fmt.Errorf("failed to list services in namespace %s: %w", namespace, err)

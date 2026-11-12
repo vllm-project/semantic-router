@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 MAKEFILE_PATH = Path(__file__).resolve().parents[1] / "Makefile"
-EXPECTED_ENVOY_IMAGE = "envoyproxy/envoy:v1.35.3"
+EXPECTED_ENVOY_IMAGE = "docker.io/envoyproxy/envoy:v1.35.3"
 
 
 def test_makefile_uses_current_cli_config_commands() -> None:
@@ -55,8 +55,12 @@ def test_envoy_image_default_is_aligned_and_smoke_checked() -> None:
 
     local_makefile = MAKEFILE_PATH.read_text(encoding="utf-8")
     root_makefile = (ROOT / "tools/make/docker.mk").read_text(encoding="utf-8")
-    assert "docker run --rm $(FULL_ENVOY_IMAGE) --version >/dev/null" in local_makefile
     assert (
-        "$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null"
-        in root_makefile
+        "docker run --rm --entrypoint /usr/local/bin/envoy "
+        "$(FULL_ENVOY_IMAGE) --version >/dev/null" in local_makefile
     )
+    smoke_command = (
+        "$(CONTAINER_RUNTIME) run --rm --entrypoint /usr/local/bin/envoy "
+        "$(VLLM_SR_ENVOY_IMAGE) --version >/dev/null"
+    )
+    assert root_makefile.count(smoke_command) == 3

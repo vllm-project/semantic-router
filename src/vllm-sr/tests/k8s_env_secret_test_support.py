@@ -86,5 +86,7 @@ def _patch_deploy_io(
         lambda **_kwargs: events.append("cleanup"),
     )
     monkeypatch.setattr(backend, "_wait_for_pods", lambda: events.append("wait"))
-    monkeypatch.setattr(backend, "_log_k8s_summary", lambda: events.append("summary"))
+    monkeypatch.setattr(
+        backend, "_log_k8s_summary", lambda _port: events.append("summary")
+    )
     return helm_commands

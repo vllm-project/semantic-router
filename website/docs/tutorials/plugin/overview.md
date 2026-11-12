@@ -25,26 +25,27 @@ application middleware or enabling them globally.
 
 Use a plugin when behavior should apply only after a specific route matches.
 Use `global:` instead when every route shares the same service or backing
-store. Plugin entries live under `routing.decisions[].plugins`.
+store. Plugin entries live under `recipes[].decisions[].plugins`.
 
 ## Configuration
 
 ```yaml
-routing:
-  decisions:
-    - name: cached-support
-      description: Reuse cached responses for support requests.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: support-model
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            ttl_seconds: 3600
+recipes:
+  - name: default
+    decisions:
+      - name: cached-support
+        description: Reuse cached responses for support requests.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: support-model
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              ttl_seconds: 3600
 ```
 
 ## Plugin Inventory
@@ -52,23 +53,103 @@ routing:
 | Type | Goal | Shared dependency | Guide |
 |---|---|---|---|
 | `fast_response` | Return a configured response without calling a model | None | [Fast Response](./fast-response) |
-| `system_prompt` | Insert, replace, or append route-specific instructions | None | [System Prompt](./system-prompt) |
-| `header_mutation` | Add, update, or delete downstream headers | None | [Header Mutation](./header-mutation) |
+| `system_prompt` | Insert or replace route-specific instructions | None | [System Prompt](./system-prompt) |
+| `header_mutation` | Add, update, or delete provider-bound headers the Router does not own | None | [Header Mutation](./header-mutation) |
 | `request_params` | Enforce request parameter limits | None | [Request Parameters](./request-params) |
-| `tools` | Allow, block, filter, or remove tools and tool history | Optional global tool catalog | [Tools](./tools) |
-| `tool_selection` | Add tools from a catalog or filter caller tools semantically | Embedding runtime; tool database for `add` mode | [Tool Selection](./tool-selection) |
-| `context_compression` | Reduce large provider-bound tool output or history | Optional embedding runtime and recovery store | [Context Compression](./context-compression) |
+| `tools` | Allow, block or remove tools and tool history; let the decision model filter or add the tools a request needs | Decision model for `select`; a tool catalog for `add` | [Tools](./tools) |
 | `response_cache` | Reuse compatible prior responses | `global.stores.response_cache` | [Response Cache](./response-cache) |
 | `prompt_cache` | Insert Anthropic prompt-cache breakpoints on instructions and tools | None | [Prompt Cache](./prompt-cache) |
-| `memory` | Retrieve and optionally store conversational memory | `global.stores.memory` | [Memory](./memory) |
-| `rag` | Retrieve documents before generation | Configured RAG/vector backend | [RAG](./rag) |
-| `router_replay` | Override replay capture for one route | `global.services.router_replay` | [Router Replay](./router-replay) |
-| `shadow_dispatch` | Observe a secondary model on sampled traffic without touching the live response | Replay record for outcome capture (`router_replay`) | [Shadow Dispatch](./shadow-dispatch) |
-| `hallucination` | Inspect factual support in a response | Hallucination/NLI modules as configured | [Hallucination](./hallucination) |
-| `response_jailbreak` | Screen a generated response for jailbreak content | Prompt-guard runtime | [Response Jailbreak](./response-jailbreak) |
+| `context` | Retrieve documents and memories, compress the request within a budget, and store memories after the response | A RAG backend, `global.stores.memory`, the decision model for the relevance judge | [Context](./context) |
+| `router_replay` | Override replay capture for one route, and shadow a sampled copy to a candidate model | `global.services.router_replay` | [Router Replay](./router-replay) |
+| `response_guard` | Block or annotate an answer on the signals it is checked with | The response-stage signals its rules read | [Response Guard](./response-guard) |
+| `masking` | Replace the personal data a named `pii` rule finds in the provider-bound request with placeholders | A `pii` rule on a deployment that answers span questions | [Masking](./masking) |
 
 [Content Safety](./content-safety) bundles three supported
 plugins, not an additional plugin type.
+
+## Capability Gating
+
+A plugin that acts on request content runs only when the request has that
+content and the selected model can take it:
+
+- **Text.** The `context` plugin acts on text, so it is skipped when the
+  request has no text in its instructions or messages. Every model is assumed
+  to take text, so a model card never gates it.
+- **Other modalities.** A plugin that acts on, say, images is skipped when the
+  model card declares capabilities and omits that modality. A model with no
+  recognized declaration is not gated.
+- **Everything else.** Other plugin types are not gated, and run on
+  configuration alone.
+
+A skip is typed and carries no request content:
+
+| Reason | Meaning |
+|---|---|
+| `request_does_not_require` | The request has nothing for the plugin to act on. |
+| `backend_lacks_capability` | The selected model declares capabilities and omits a modality the plugin acts on. |
+
+A skip is counted in `llm_plugin_execution_total` with status
+`skipped_<reason>`. For a memory source, the same reason appears as the memory outcome
+with status `skipped`. Non-text content such as images is left unchanged
+whether a plugin runs or not.
+
+## Similarity: the `match` Block {#match-block}
+
+Every feature that finds similar items uses the same `match` block:
+
+```yaml
+match:
+  recall: {method: embedding, top_k: 20, min_similarity: 0.3}                # narrows the candidates: embedding | bm25
+  judge:  {preset: relevance, top_k: 6, min_score: 0.5, max_candidates: 64}  # decides with a System One question
+```
+
+A block runs the stages it writes, at least one; an empty block fails to load
+with `match_empty`. A feature that writes no block runs its default (below),
+and a block it writes replaces that default as a whole.
+
+| Stages | Result |
+| --- | --- |
+| `recall` only | Classic embedding or BM25 similarity. |
+| `judge` only | A System One question judges every candidate; suits small, naturally bounded sets. |
+| Both | `recall` narrows the set, and `judge` decides. |
+
+- **`recall`** narrows the candidates by index similarity:
+  - `method: embedding` (the default) compares embeddings in the store's
+    embedding space (`global.model_catalog.embeddings.default` unless the
+    store names its own), and `min_similarity` is a cosine in [-1, 1];
+    `method: bm25` uses the lexical index, needs no model, and
+    `min_similarity` is a BM25 score;
+  - `top_k` bounds the candidates; it is required when they come from an index.
+- **`judge`** asks one System One question about the request and the
+  candidates, in one call, on the decision model or the named `deployment`.
+  A choice judge (`tool_rank`) asks one question whose options are the
+  candidates; a `noul` or `score` judge (`relevance`, `same_request`) asks about
+  each candidate, one batch entry each.
+
+| `judge` field | Meaning |
+| --- | --- |
+| `preset` or `question` | `relevance`, `same_request` or `tool_rank`, or a custom `choice`, `noul` or `score` question. |
+| `top_k`, `min_score`, `min_ratio` | Keep candidates, best first. `min_score` is absolute; `min_ratio` is a fraction of the best score, in (0, 1]. |
+| `on_error` | `skip` (the default) keeps the recall result, or the candidates as they came, when the judge fails or is late. `fail` fails the feature's match. |
+| `timeout_ms` | Bounds the call; else the deployment's `timeout_ms`, else 1000 ms. |
+| `max_candidates` | A hard cap: 255 for a choice judge, and 64 by default, at most 4096, for a judge asked about each candidate. |
+
+Extra candidates never fail a request: the judge reads the first
+`max_candidates`, by recall rank or in the feature's order (most recent
+first). Each truncation adds a `match.judge.truncated` event to the trace
+span and counts in `vsr_match_judge_truncated_total`.
+
+| Feature | Default `match` | Notes |
+|---|---|---|
+| `response_cache.semantic.match` | `recall: {method: embedding, top_k: 3, min_similarity: 0.8}`, `judge: {preset: same_request, min_score: 0.8}` | The judge confirms each recalled hit; a rejected one is a miss. Exact mode stays |
+| `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`, `judge: {preset: relevance, top_k: 6, min_score: 0.5}` | `recall: {method: bm25}` and a judge without recall read a local knowledge base: a `vectorstore` source over the in-memory vector store. A source over an external vector database recalls by `embedding` |
+| `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | The memory store's `default_retrieval_limit` and `default_similarity_threshold` replace the recall defaults. A judge without recall reads the user's newest memories |
+| `context.compress.match` | `recall: {method: bm25}`, `judge: {preset: relevance}` | Each segment of the request is a candidate about the latest user message; BM25 prefilters for the judge's 64; the budget bounds what is kept |
+| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | At most 255 tools; more are truncated, or narrowed by `recall: {method: bm25}`; a block without a judge fails to load |
+
+Every stage is counted in `vsr_match_recall_total` (feature, method, outcome)
+or `vsr_match_judge_total` (feature, preset, outcome), and timed in
+`vsr_match_stage_duration_seconds`.
 
 ## Operational Boundaries
 

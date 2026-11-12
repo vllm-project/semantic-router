@@ -6,48 +6,104 @@ import (
 	"testing"
 )
 
-func TestProjectionRejectsEnvelopeAndLabelledClassifierInputs(t *testing.T) {
-	for _, signalType := range []string{SignalTypeMetadata, SignalTypeClassifier} {
-		if isProjectionInputTypeSupported(signalType) {
-			t.Fatalf("projection input type %q should require an explicit runtime accessor", signalType)
+func systemOneProjectionYAML(input string) []byte {
+	return []byte(`
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: difficulty
+          question:
+            type: noul
+            instructions: Does the request need much reasoning?
+          predicate: {gte: 0.5}
+        - name: needs
+          question:
+            type: set
+            instructions: What does a good answer need?
+            labels:
+              - {key: deliberation, description: careful multi-step reasoning}
+              - {key: tools, description: calling tools}
+        - name: precise_facts
+          question:
+            type: noul
+            instructions: Does the answer depend on exact facts?
+    projections:
+      scores:
+        - name: effort
+          method: weighted_sum
+          inputs:
+            - {type: systemone, name: difficulty, weight: 0.3, value_source: raw}
+            - {type: systemone, name: ` + input + `, weight: 0.4, value_source: raw}
+      mappings:
+        - name: effort_band
+          source: effort
+          outputs:
+            - {name: effort_high, gte: 0.5}
+    decisions:
+      - name: hard
+        rules:
+          operator: AND
+          conditions:
+            - {type: projection, name: effort_high}
+        modelRefs:
+          - model: qwen3-8b
+`)
+}
+
+func TestProjectionInputsReadOneOptionOfASystemOneQuestion(t *testing.T) {
+	for _, input := range []string{"needs:deliberation", "needs", "precise_facts"} {
+		if _, err := ParseRoutingYAMLBytes(systemOneProjectionYAML(input)); err != nil {
+			t.Fatalf("%s: %v", input, err)
+		}
+	}
+	for input, want := range map[string]string{
+		"needs:creativity":   `names "creativity", which is not an option of the set question "needs"`,
+		"precise_facts:true": `names "true", which is not an option of the noul question "precise_facts"`,
+		"missing:tools":      `input systemone("missing:tools") is not declared in the recipe's signals`,
+	} {
+		_, err := ParseRoutingYAMLBytes(systemOneProjectionYAML(input))
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s: want an error containing %q, got %v", input, want, err)
 		}
 	}
 }
 
 func TestParseRoutingYAMLBytesRejectsUnknownProjectionDecisionReference(t *testing.T) {
 	yaml := []byte(`
-routing:
-  signals:
-    keywords:
-      - name: reasoning_markers
-        operator: OR
-        keywords: ["reason carefully"]
-  projections:
-    scores:
-      - name: difficulty_score
-        method: weighted_sum
-        inputs:
-          - type: keyword
-            name: reasoning_markers
-            weight: 0.6
-    mappings:
-      - name: difficulty_band
-        source: difficulty_score
-        method: threshold_bands
-        outputs:
-          - name: balance_medium
-            lt: 0.7
-          - name: balance_reasoning
-            gte: 0.7
-  decisions:
-    - name: bad_route
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: missing_output
-      modelRefs:
-        - model: qwen3-8b
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: reasoning_markers
+          operator: OR
+          keywords: ["reason carefully"]
+    projections:
+      scores:
+        - name: difficulty_score
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: reasoning_markers
+              weight: 0.6
+      mappings:
+        - name: difficulty_band
+          source: difficulty_score
+          method: threshold_bands
+          outputs:
+            - name: balance_medium
+              lt: 0.7
+            - name: balance_reasoning
+              gte: 0.7
+    decisions:
+      - name: bad_route
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: missing_output
+        modelRefs:
+          - model: qwen3-8b
 `)
 
 	_, err := ParseRoutingYAMLBytes(yaml)
@@ -61,38 +117,39 @@ routing:
 
 func TestParseRoutingYAMLBytesRejectsUnknownProjectionScoreInput(t *testing.T) {
 	yaml := []byte(`
-routing:
-  signals:
-    keywords:
-      - name: reasoning_markers
-        operator: OR
-        keywords: ["reason carefully"]
-  projections:
-    scores:
-      - name: difficulty_score
-        method: weighted_sum
-        inputs:
-          - type: keyword
-            name: missing_signal
-            weight: 0.6
-    mappings:
-      - name: difficulty_band
-        source: difficulty_score
-        method: threshold_bands
-        outputs:
-          - name: balance_medium
-            lt: 0.7
-          - name: balance_reasoning
-            gte: 0.7
-  decisions:
-    - name: reasoning_route
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: balance_reasoning
-      modelRefs:
-        - model: qwen3-8b
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: reasoning_markers
+          operator: OR
+          keywords: ["reason carefully"]
+    projections:
+      scores:
+        - name: difficulty_score
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: missing_signal
+              weight: 0.6
+      mappings:
+        - name: difficulty_band
+          source: difficulty_score
+          method: threshold_bands
+          outputs:
+            - name: balance_medium
+              lt: 0.7
+            - name: balance_reasoning
+              gte: 0.7
+    decisions:
+      - name: reasoning_route
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: balance_reasoning
+        modelRefs:
+          - model: qwen3-8b
 `)
 
 	_, err := ParseRoutingYAMLBytes(yaml)
@@ -298,37 +355,41 @@ func TestValidateProjectionInputProjectionRef_InvalidValueSource(t *testing.T) {
 
 func TestParseRoutingYAMLBytesAcceptsRawValueSource(t *testing.T) {
 	yaml := []byte(`
-routing:
-  signals:
-    structure:
-      - name: many_questions
-        operator: OR
-        patterns: ["\\?"]
-  projections:
-    scores:
-      - name: workload_pressure
-        method: weighted_sum
-        inputs:
-          - type: structure
-            name: many_questions
-            weight: 0.5
-            value_source: raw
-    mappings:
-      - name: pressure_band
-        source: workload_pressure
-        method: threshold_bands
-        outputs:
-          - name: high_pressure
-            gte: 2.0
-  decisions:
-    - name: heavy_route
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: high_pressure
-      modelRefs:
-        - model: qwen3-8b
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: many_questions
+          operator: OR
+          method: regex
+          keywords: ["\\?"]
+          count:
+            gte: 1
+    projections:
+      scores:
+        - name: workload_pressure
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: many_questions
+              weight: 0.5
+              value_source: raw
+      mappings:
+        - name: pressure_band
+          source: workload_pressure
+          method: threshold_bands
+          outputs:
+            - name: high_pressure
+              gte: 2.0
+    decisions:
+      - name: heavy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: high_pressure
+        modelRefs:
+          - model: qwen3-8b
 `)
 	cfg, err := ParseRoutingYAMLBytes(yaml)
 	if err != nil {
@@ -342,102 +403,54 @@ routing:
 	}
 }
 
-func TestIsProjectionInputTypeSupported_ConversationEventAndProjection(t *testing.T) {
-	for _, typ := range []string{SignalTypeConversation, SignalTypeEvent, SignalTypeProjection} {
+func TestIsProjectionInputTypeSupported_ConversationAndProjection(t *testing.T) {
+	for _, typ := range []string{SignalTypeConversation, SignalTypeInputModality, SignalTypeProjection} {
 		if !isProjectionInputTypeSupported(typ) {
 			t.Fatalf("expected supported input type %q", typ)
 		}
 	}
 }
 
-func TestParseRoutingYAMLBytesAcceptsEventProjectionScoreInput(t *testing.T) {
-	yaml := []byte(`
-routing:
-  signals:
-    events:
-      - name: critical_payment_event
-        event_types: ["payment_failed"]
-        severities: ["critical"]
-        temporal: true
-  projections:
-    scores:
-      - name: event_risk_score
-        method: weighted_sum
-        inputs:
-          - type: event
-            name: critical_payment_event
-            weight: 1.0
-            value_source: confidence
-    mappings:
-      - name: event_risk_band
-        source: event_risk_score
-        method: threshold_bands
-        outputs:
-          - name: event_risk_high
-            gte: 0.5
-  decisions:
-    - name: event_risk_route
-      rules:
-        operator: AND
-        conditions:
-          - type: event
-            name: critical_payment_event
-          - type: projection
-            name: event_risk_high
-      modelRefs:
-        - model: qwen3-8b
-`)
-	cfg, err := ParseRoutingYAMLBytes(yaml)
-	if err != nil {
-		t.Fatalf("expected valid config with event projection input, got: %v", err)
-	}
-	if len(cfg.EventRules) != 1 || cfg.EventRules[0].Name != "critical_payment_event" {
-		t.Fatalf("event rules = %#v, want critical_payment_event", cfg.EventRules)
-	}
-	if got := cfg.Projections.Scores[0].Inputs[0].Type; got != SignalTypeEvent {
-		t.Fatalf("projection input type = %q, want %q", got, SignalTypeEvent)
-	}
-}
-
 func TestParseRoutingYAMLBytesAcceptsProjectionToProjectionRef(t *testing.T) {
 	yaml := []byte(fmt.Sprintf(`
-routing:
-  signals:
-    keywords:
-      - name: reasoning_markers
-        operator: OR
-        keywords: ["reason carefully"]
-  projections:
-    scores:
-      - name: base_score
-        method: weighted_sum
-        inputs:
-          - type: keyword
-            name: reasoning_markers
-            weight: 0.6
-      - name: derived_score
-        method: weighted_sum
-        inputs:
-          - type: %s
-            name: base_score
-            value_source: score
-            weight: 0.8
-    mappings:
-      - name: derived_band
-        source: derived_score
-        method: threshold_bands
-        outputs:
-          - name: high_derived
-            gte: 0.5
-  decisions:
-    - name: test_route
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: high_derived
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: reasoning_markers
+          operator: OR
+          keywords: ["reason carefully"]
+    projections:
+      scores:
+        - name: base_score
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: reasoning_markers
+              weight: 0.6
+        - name: derived_score
+          method: weighted_sum
+          inputs:
+            - type: %s
+              name: base_score
+              value_source: score
+              weight: 0.8
+      mappings:
+        - name: derived_band
+          source: derived_score
+          method: threshold_bands
+          outputs:
+            - name: high_derived
+              gte: 0.5
+    decisions:
+      - name: test_route
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: high_derived
+        modelRefs:
+          - model: test-model
 `, SignalTypeProjection))
 
 	cfg, err := ParseRoutingYAMLBytes(yaml)
@@ -451,49 +464,50 @@ routing:
 
 func TestParseRoutingYAMLBytesAcceptsConfidenceProjectionRef(t *testing.T) {
 	yaml := []byte(`
-routing:
-  signals:
-    keywords:
-      - name: reasoning_markers
-        operator: OR
-        keywords: ["reason carefully"]
-  projections:
-    scores:
-      - name: base_score
-        method: weighted_sum
-        inputs:
-          - type: keyword
-            name: reasoning_markers
-            weight: 0.6
-      - name: composite_score
-        method: weighted_sum
-        inputs:
-          - type: projection
-            name: high_base
-            value_source: confidence
-            weight: 0.7
-    mappings:
-      - name: base_band
-        source: base_score
-        method: threshold_bands
-        outputs:
-          - name: high_base
-            gte: 0.5
-      - name: composite_band
-        source: composite_score
-        method: threshold_bands
-        outputs:
-          - name: high_composite
-            gte: 0.3
-  decisions:
-    - name: test_route
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: high_composite
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: reasoning_markers
+          operator: OR
+          keywords: ["reason carefully"]
+    projections:
+      scores:
+        - name: base_score
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: reasoning_markers
+              weight: 0.6
+        - name: composite_score
+          method: weighted_sum
+          inputs:
+            - type: projection
+              name: high_base
+              value_source: confidence
+              weight: 0.7
+      mappings:
+        - name: base_band
+          source: base_score
+          method: threshold_bands
+          outputs:
+            - name: high_base
+              gte: 0.5
+        - name: composite_band
+          source: composite_score
+          method: threshold_bands
+          outputs:
+            - name: high_composite
+              gte: 0.3
+    decisions:
+      - name: test_route
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: high_composite
+        modelRefs:
+          - model: test-model
 `)
 
 	cfg, err := ParseRoutingYAMLBytes(yaml)
@@ -507,43 +521,44 @@ routing:
 
 func TestParseRoutingYAMLBytesRejectsUndefinedConfidenceOutput(t *testing.T) {
 	yaml := []byte(`
-routing:
-  signals:
-    keywords:
-      - name: reasoning_markers
-        operator: OR
-        keywords: ["reason carefully"]
-  projections:
-    scores:
-      - name: base_score
-        method: weighted_sum
-        inputs:
-          - type: keyword
-            name: reasoning_markers
-            weight: 0.6
-      - name: composite_score
-        method: weighted_sum
-        inputs:
-          - type: projection
-            name: nonexistent_output
-            value_source: confidence
-            weight: 0.7
-    mappings:
-      - name: base_band
-        source: base_score
-        method: threshold_bands
-        outputs:
-          - name: high_base
-            gte: 0.5
-  decisions:
-    - name: test_route
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: high_base
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: reasoning_markers
+          operator: OR
+          keywords: ["reason carefully"]
+    projections:
+      scores:
+        - name: base_score
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: reasoning_markers
+              weight: 0.6
+        - name: composite_score
+          method: weighted_sum
+          inputs:
+            - type: projection
+              name: nonexistent_output
+              value_source: confidence
+              weight: 0.7
+      mappings:
+        - name: base_band
+          source: base_score
+          method: threshold_bands
+          outputs:
+            - name: high_base
+              gte: 0.5
+    decisions:
+      - name: test_route
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: high_base
+        modelRefs:
+          - model: test-model
 `)
 
 	_, err := ParseRoutingYAMLBytes(yaml)

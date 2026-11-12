@@ -26,22 +26,21 @@ func TestSettingsHandlerReflectsEffectiveReadonlyMode(t *testing.T) {
 	t.Run("keeps config editing available when only the package store is read-only", testSettingsStoreReadonly)
 }
 
-func TestSettingsHandlerReportsSRBenchConfiguration(t *testing.T) {
+func TestSettingsHandlerOmitsFeatureAvailability(t *testing.T) {
 	t.Parallel()
-	authContext := adminSettingsAuthContext("evaluation-admin")
-
-	available := requestSettings(t, &config.Config{
-		SRBenchAvailable: true,
-	}, authContext)
-	if !available.SRBenchAvailable || available.SRBenchUnavailableReason != "" {
-		t.Fatalf("available sr-bench response = %#v", available)
+	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	req = req.WithContext(auth.WithAuthContext(req.Context(), adminSettingsAuthContext("settings-admin")))
+	recorder := httptest.NewRecorder()
+	SettingsHandler(&config.Config{}, activatedResolver(t))(recorder, req)
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
 	}
-
-	unavailable := requestSettings(t, &config.Config{
-		SRBenchUnavailableReason: "sr-bench service is not configured.",
-	}, authContext)
-	if unavailable.SRBenchAvailable || unavailable.SRBenchUnavailableReason != "sr-bench service is not configured." {
-		t.Fatalf("unavailable sr-bench response = %#v", unavailable)
+	// Feature availability moved to /api/v1/capabilities.
+	for _, field := range []string{"srBenchAvailable", "srBenchUnavailableReason", "mlPipelineAvailable", "mlPipelineUnavailableReason"} {
+		if _, ok := body[field]; ok {
+			t.Errorf("settings still report %q", field)
+		}
 	}
 }
 

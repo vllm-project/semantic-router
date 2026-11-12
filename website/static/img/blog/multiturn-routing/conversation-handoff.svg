@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="640" viewBox="0 0 1000 640" role="img" aria-labelledby="title description">
+  <title id="title">A model switch does not repair the transcript</title>
+  <desc id="description">The observed failure schedule uses the small model for turns one to three, followed by the strong model for turns four to six. Turn three fails and remains in the history. Three of sixteen sustained-regression sessions fail the final check. A proposed, unevaluated recovery path verifies or repairs the failed step before continuing.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8" fill="#64748b"/>
+    </marker>
+    <style>
+      text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #162238; }
+      .heading { font-size: 30px; font-weight: 700; }
+      .label { font-size: 22px; font-weight: 650; }
+      .body { font-size: 19px; fill: #344257; }
+      .small { font-size: 17px; fill: #526074; }
+      .line { fill: none; stroke: #64748b; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1000" height="640" rx="24" fill="#ffffff"/>
+  <text x="40" y="54" class="heading">A model switch does not repair the transcript.</text>
+  <text x="40" y="87" class="body">Observed late escalation · six turns · the complete history travels forward</text>
+
+  <text x="96" y="138" class="small">TURN 1</text>
+  <text x="247" y="138" class="small">TURN 2</text>
+  <text x="398" y="138" class="small">TURN 3</text>
+  <text x="549" y="138" class="small">TURN 4</text>
+  <text x="700" y="138" class="small">TURN 5</text>
+  <text x="851" y="138" class="small">TURN 6</text>
+
+  <rect x="63" y="159" width="135" height="90" rx="13" fill="#f4f6f9" stroke="#c3cbd5"/>
+  <text x="91" y="195" class="label">Small</text>
+  <text x="90" y="224" class="small">Store state</text>
+  <rect x="214" y="159" width="135" height="90" rx="13" fill="#f4f6f9" stroke="#c3cbd5"/>
+  <text x="242" y="195" class="label">Small</text>
+  <text x="239" y="224" class="small">Recall state</text>
+  <rect x="365" y="159" width="135" height="90" rx="13" fill="#fff1ec" stroke="#b44c39" stroke-width="2"/>
+  <text x="393" y="195" class="label">Small</text>
+  <text x="388" y="224" font-size="17" fill="#9b3b2c">Failed step</text>
+  <rect x="516" y="159" width="135" height="90" rx="13" fill="#f0ebfa" stroke="#7654bd"/>
+  <text x="539" y="195" class="label">Strong</text>
+  <text x="536" y="224" class="small">Escalation</text>
+  <rect x="667" y="159" width="135" height="90" rx="13" fill="#f0ebfa" stroke="#7654bd"/>
+  <text x="690" y="195" class="label">Strong</text>
+  <text x="693" y="224" class="small">Continue</text>
+  <rect x="818" y="159" width="135" height="90" rx="13" fill="#f0ebfa" stroke="#7654bd"/>
+  <text x="841" y="195" class="label">Strong</text>
+  <text x="834" y="224" class="small">Final check</text>
+
+  <path d="M198 204 H205" class="line"/>
+  <path d="M349 204 H356" class="line"/>
+  <path d="M500 204 H507" class="line"/>
+  <path d="M651 204 H658" class="line"/>
+  <path d="M802 204 H809" class="line"/>
+  <path d="M432 249 V278 H885 V250" fill="none" stroke="#b44c39" stroke-width="2.5"/>
+  <text x="470" y="304" font-size="19" fill="#9b3b2c">Earlier incorrect answer remains in the context</text>
+
+  <rect x="40" y="331" width="920" height="57" rx="12" fill="#fff3ef"/>
+  <text x="61" y="366" class="body">3 of 16 state-retention sessions failed final synthesis after this late switch.</text>
+
+  <text x="40" y="437" class="label">Design alternative: recover the failed state before continuing</text>
+  <text x="40" y="465" class="small">Proposed strategy · not evaluated in this benchmark</text>
+  <rect x="40" y="489" width="245" height="82" rx="13" fill="#f4f6f9" stroke="#c3cbd5"/>
+  <text x="63" y="523" class="body">Identify the failed step</text>
+  <text x="63" y="550" class="small">Outcome + source inputs</text>
+  <rect x="352" y="489" width="300" height="82" rx="13" fill="#e9f6f1" stroke="#16836c"/>
+  <text x="376" y="523" class="body">Verify, repair, or safely replay</text>
+  <text x="376" y="550" class="small">Handle tool side effects explicitly</text>
+  <rect x="719" y="489" width="241" height="82" rx="13" fill="#f0ebfa" stroke="#7654bd"/>
+  <text x="742" y="523" class="body">Continue on strong</text>
+  <text x="742" y="550" class="small">With verified task state</text>
+  <path d="M285 530 H342" class="line"/>
+  <path d="M652 530 H709" class="line"/>
+  <text x="40" y="611" class="small">Transcript portability, task correctness, and KV-cache reuse are separate properties.</text>
+</svg>

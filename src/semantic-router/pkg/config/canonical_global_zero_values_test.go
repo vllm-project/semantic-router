@@ -50,6 +50,69 @@ func TestReconcilePreservesTracingInsecureFalse(t *testing.T) {
 	}
 }
 
+func TestReconcilePreservesResponseAPIZero(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.ResponseAPI.TTLSeconds = 0
+	cfg.ResponseAPI.MaxResponses = 0
+
+	parsed := reconcileRoundTrip(t, cfg)
+	if parsed.ResponseAPI.TTLSeconds != 0 || parsed.ResponseAPI.MaxResponses != 0 {
+		t.Fatalf("response_api = %d/%d, want 0/0",
+			parsed.ResponseAPI.TTLSeconds, parsed.ResponseAPI.MaxResponses)
+	}
+}
+
+func TestReconcilePreservesMemoryRetrievalLimitZero(t *testing.T) {
+	cfg := &RouterConfig{}
+	cfg.Memory.DefaultRetrievalLimit = 0
+
+	parsed := reconcileRoundTrip(t, cfg)
+	if parsed.Memory.DefaultRetrievalLimit != 0 {
+		t.Fatalf("memory.default_retrieval_limit = %d, want 0", parsed.Memory.DefaultRetrievalLimit)
+	}
+}
+
+func TestReconcilePreservesFlowStateTTLZero(t *testing.T) {
+	const doc = `
+version: v0.5
+providers:
+  models:
+    - name: m
+      provider_model_id: m
+      backend_refs:
+        - name: primary
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          weight: 100
+recipes:
+  - name: default
+    strategy: priority
+    decisions:
+      - name: r
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: m
+global:
+  integrations:
+    looper:
+      flow:
+        state:
+          ttl_seconds: 0
+`
+	cfg, err := ParseYAMLBytes([]byte(doc))
+	if err != nil {
+		t.Fatalf("parse source config: %v", err)
+	}
+
+	parsed := reconcileRoundTrip(t, cfg)
+	if parsed.Looper.Flow.State.TTLSeconds != 0 {
+		t.Fatalf("looper.flow.state.ttl_seconds = %d, want 0", parsed.Looper.Flow.State.TTLSeconds)
+	}
+}
+
 func TestReconcilePreservesTracingSamplingRateZero(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.Observability.Tracing.Sampling.Rate = 0
@@ -57,15 +120,5 @@ func TestReconcilePreservesTracingSamplingRateZero(t *testing.T) {
 	parsed := reconcileRoundTrip(t, cfg)
 	if parsed.Observability.Tracing.Sampling.Rate != 0 {
 		t.Fatalf("tracing.sampling.rate = %v, want 0", parsed.Observability.Tracing.Sampling.Rate)
-	}
-}
-
-func TestReconcilePreservesNLIFilteringDisabled(t *testing.T) {
-	cfg := &RouterConfig{}
-	cfg.HallucinationMitigation.HallucinationModel.EnableNLIFiltering = false
-
-	parsed := reconcileRoundTrip(t, cfg)
-	if parsed.HallucinationMitigation.HallucinationModel.EnableNLIFiltering {
-		t.Fatal("hallucination detector enable_nli_filtering = true, want false")
 	}
 }

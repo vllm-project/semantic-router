@@ -1,2 +1,0 @@
-# ONNX protobuf fixtures must retain their bytes through checkout and staging.
-*.onnx binary

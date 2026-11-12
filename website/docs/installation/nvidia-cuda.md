@@ -9,7 +9,7 @@ The model server and Semantic Router are separate services. A common deployment
 keeps the Router on CPU and gives the NVIDIA GPU to vLLM. Use the Router's CUDA
 image when its local embeddings or classifiers also need GPU acceleration.
 
-`--platform nvidia` affects the local Router stack only. It selects the CUDA
+`--platform cuda` selects the execution backend for the Router instance. On Docker it selects the CUDA
 Router image, passes NVIDIA GPUs into the Router container, and changes its
 generated runtime configuration so supported local signal models prefer CUDA.
 It does **not** download a language model or start a vLLM server.
@@ -17,13 +17,12 @@ It does **not** download a language model or start a vLLM server.
 ## Prerequisites
 
 - Linux and an NVIDIA GPU supported by the vLLM release you plan to run;
-- an x86-64 host when using the current Semantic Router CUDA image;
+- an x86-64 or Arm64 host;
 - a GPU of compute capability 7.0 or newer (Volta and later) for the Router
-  image, which compiles its local models for that minimum; build with
-  `CUDA_COMPUTE_CAP=<value>` to target an older or newer floor;
-- an NVIDIA driver, and GPU passthrough into the Router container. The CUDA
-  Router image links the driver library directly, so it does not start without
-  passthrough even when every Router-side model is configured for CPU;
+  image on x86-64, or 8.0 or newer on Arm64, the oldest architecture its
+  PyTorch build (CUDA 12.8) includes;
+- an NVIDIA driver, and GPU passthrough into the Router container for the
+  Router-side models that run on CUDA;
 - Docker and NVIDIA Container Toolkit;
 - enough GPU memory for the vLLM model, KV cache, and any Router-side models;
   and
@@ -110,13 +109,15 @@ providers:
           weight: 1
 ```
 
-This is a provider fragment, not a complete Router config. Add the matching
-model card and route to your existing recipe, or configure the endpoint in the
-Dashboard. The `provider_model_id` must match a model returned by vLLM's
-`/v1/models` endpoint. See [Configuration](configuration) for a complete
-minimal document and
-[Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
-for backend binding and routing policy.
+This is a provider fragment, not a complete Router config:
+
+- **Add** the matching model card and route to your existing recipe, or
+  configure the endpoint in the Dashboard.
+- **Match `provider_model_id`** to a model returned by vLLM's `/v1/models`
+  endpoint.
+- **See** [Configuration](configuration) for a complete minimal document, and
+  [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
+  for backend binding and routing policy.
 
 The example publishes port `8000` on the host for direct testing. Restrict that
 port with host networking controls, or use private service discovery in a
@@ -125,21 +126,55 @@ untrusted network.
 
 ## Run the Router on NVIDIA
 
-If vLLM should own all GPU memory, keep the Router on CPU:
+If vLLM should own all GPU memory, explicitly keep Router-side inference on CPU:
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve --platform cpu --config config.yaml
 ```
 
-To run supported Router-side local embeddings and classifiers on CUDA, use
-`--platform nvidia`. A stable CLI selects the matching published release image
-(for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`). Development CLI builds
-use `:latest` unless an image is specified explicitly:
+Without `--platform cpu`, automatic platform detection can select CUDA on a
+GPU host.
+
+The Router's own models (classifiers, embeddings, decision models) run in the
+[model runtime](../model-runtime/get-started/overview.md). To run them on CUDA, use
+`--platform cuda`: the CUDA image ships the runtime with the CUDA build of
+PyTorch, and deployments with `device: auto` or `device: cuda:0` use the GPU.
+
+CUDA is validated on documented H200, A100 and Tesla T4 workloads:
+
+- **Decision 1.0 and Decision 2.0** meet the recorded performance criteria.
+- **Vela 2.0 0.3B with 32-token inputs** has a known regression on H200: its
+  median latency is about 2.3% slower, with the whole confidence interval on
+  the slower side, while its p95 improves. On a Tesla T4 the same workload is
+  level, but each card is judged on its own, so that doesn't clear the H200
+  result.
+- **Fused kernels** without bit-exact evidence stay out of the exact profile.
+
+Model coverage and measurement environments are in the source-tree records:
+
+- [CUDA image smoke](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-router-image.md)
+- [Goldens](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-golden-answers.md)
+- [Decision 1.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-decision1-performance.md)
+- [Decision 2.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-decision2-performance.md)
+- [Vela 2.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-vela2-performance.md)
+- [Vela 1.0 vs CPU legacy](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-vela1-performance.md)
+
+:::note
+These records don't cover every built-in model, and don't claim that every
+NVIDIA GPU matches the recorded cards; measure other NVIDIA GPUs on your
+hardware. Some performance records used a separate RunPod stack rather than
+the published CUDA image.
+:::
+
+A stable CLI selects the matching published release image
+(for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`), and a development CLI
+build selects the image published from its own `main` commit, tagged with that
+commit's SHA, unless an image is specified explicitly:
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --platform nvidia --config config.yaml
+vllm-sr serve --platform cuda --config config.yaml
 ```
 
 For a source checkout, build the maintained CUDA image first and explicitly
@@ -149,10 +184,10 @@ version otherwise selects the release tag. With the image override,
 companion images:
 
 ```bash
-VLLM_SR_PLATFORM=nvidia make vllm-sr-build
+VLLM_SR_PLATFORM=cuda make vllm-sr-build
 VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest \
   vllm-sr serve \
-  --platform nvidia \
+  --platform cuda \
   --config config.yaml \
   --image-pull-policy ifnotpresent
 ```
@@ -201,16 +236,17 @@ routed request proves the Router, recipe, and backend binding work together.
 
 Configure Docker with `nvidia-ctk`, restart Docker, and repeat NVIDIA's sample
 container command. Debug the container runtime before debugging either vLLM or
-Semantic Router. This is not optional for the CUDA Router image: it links the
-driver library, so without working passthrough the container exits at startup
-with `libcuda.so.1: cannot open shared object file`.
+Semantic Router: without working passthrough, the Router-side models configured
+for CUDA cannot load.
 
 ### The Router uses the CPU
 
-Confirm that `--platform nvidia` selected the `vllm-sr-cuda` image and that
-`VLLM_SR_NVIDIA_PRESERVE_CPU` is not enabled. Check the generated runtime
-configuration and startup logs, not only the source recipe. A recipe without a
-local signal model has nothing to move to CUDA.
+- Confirm that `--platform cuda` selected the `vllm-sr-cuda` image. Check the
+  generated runtime configuration and startup logs, not only the source
+  recipe.
+- A recipe without a local signal model has nothing to move to CUDA.
+- `GET /v1/models` on a runtime, or the Dashboard's model inventory, shows the
+  device each model runs on.
 
 ### vLLM or the Router runs out of GPU memory
 
@@ -229,8 +265,13 @@ service address.
 
 ### Kubernetes does not schedule a GPU
 
-`--platform nvidia` is a local-container shortcut. For Kubernetes, choose the
-CUDA image and configure GPU resources, the NVIDIA device plugin, and node
-placement through Helm values or the Operator. See
-[Configuration Workflows](configuration-workflows#helm) for the deployment
+On Kubernetes, `--platform cuda` selects the CUDA image and GPU resources
+from canonical replica placement:
+
+- **Prerequisites.** The NVIDIA device plugin and matching schedulable nodes
+  must already exist.
+- **Placement.** Configure node placement through Helm values or the
+  Operator. `--platform auto` inspects the selected cluster, not the CLI host.
+
+See [Configuration Workflows](configuration-workflows#helm) for the deployment
 boundary.

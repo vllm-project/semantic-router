@@ -10,22 +10,6 @@ import * as api from './api'
 const MCP_TOOL_PREFIX = 'mcp_'
 const UUID_LIKE_SERVER_KEY = /^[a-f0-9-]+$/i
 
-const SERVER_KEY_BY_ID: Record<string, string> = {
-  [api.OPENCLAW_MCP_SERVER_ID]: api.OPENCLAW_MCP_TOOL_NAMESPACE,
-}
-
-const SERVER_ID_BY_KEY: Record<string, string> = {
-  [api.OPENCLAW_MCP_TOOL_NAMESPACE]: api.OPENCLAW_MCP_SERVER_ID,
-}
-
-function getMCPServerKey(serverId: string): string {
-  return SERVER_KEY_BY_ID[serverId] || serverId
-}
-
-function resolveMCPServerId(serverKey: string): string {
-  return SERVER_ID_BY_KEY[serverKey] || serverKey
-}
-
 /**
  * 从原始 JSON Schema 生成增强的工具描述
  * 
@@ -146,21 +130,6 @@ export function parseMCPToolName(fullName: string): { serverId: string; toolName
     return null
   }
 
-  for (const [serverKey, serverId] of Object.entries(SERVER_ID_BY_KEY)) {
-    const aliasPrefix = `${MCP_TOOL_PREFIX}${serverKey}_`
-    if (fullName.startsWith(aliasPrefix)) {
-      const toolName = fullName.slice(aliasPrefix.length)
-      if (!toolName) {
-        return null
-      }
-
-      return {
-        serverId,
-        toolName,
-      }
-    }
-  }
-
   const remainder = fullName.slice(MCP_TOOL_PREFIX.length)
   const separatorIndex = remainder.indexOf('_')
   if (separatorIndex <= 0 || separatorIndex === remainder.length - 1) {
@@ -173,7 +142,7 @@ export function parseMCPToolName(fullName: string): { serverId: string; toolName
   }
 
   return {
-    serverId: resolveMCPServerId(serverKey),
+    serverId: serverKey,
     toolName: remainder.slice(separatorIndex + 1),
   }
 }
@@ -183,14 +152,6 @@ export function parseMCPToolName(fullName: string): { serverId: string; toolName
  */
 export function isMCPTool(toolName: string): boolean {
   return toolName.startsWith(MCP_TOOL_PREFIX)
-}
-
-/**
- * 检查是否是内建 OpenClaw MCP 工具
- */
-export function isOpenClawMCPToolName(toolName: string): boolean {
-  const parsed = parseMCPToolName(toolName)
-  return Boolean(parsed && parsed.serverId === api.OPENCLAW_MCP_SERVER_ID && parsed.toolName.startsWith('claw_'))
 }
 
 /**
@@ -204,5 +165,5 @@ export function convertMCPTools(tools: MCPTool[]): RegisteredTool[] {
  * 获取 MCP 工具的完整 ID
  */
 export function getMCPToolId(serverId: string, toolName: string): string {
-  return `${MCP_TOOL_PREFIX}${getMCPServerKey(serverId)}_${toolName}`
+  return `${MCP_TOOL_PREFIX}${serverId}_${toolName}`
 }

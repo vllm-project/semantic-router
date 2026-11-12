@@ -15,11 +15,11 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) {
@@ -31,12 +31,12 @@ func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) 
 		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
 	}
 	decision := &config.Decision{
-		Name: "confidence-route",
+		Name: "escalate-route",
 		ModelRefs: []config.ModelRef{
 			{Model: "model-a"},
 			{Model: "model-b"},
 		},
-		Algorithm: &config.AlgorithmConfig{Type: "confidence"},
+		Algorithm: &config.AlgorithmConfig{Type: "escalate"},
 	}
 	request := testNeutralRequest("router-entrypoint", "hello")
 	ctx := &RequestContext{
@@ -52,6 +52,7 @@ func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) 
 	if err != nil {
 		t.Fatalf("handleLooperExecution: %v", err)
 	}
+	appendRoutedResponseHeaders(response, ctx)
 	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_InternalServerError {
 		t.Fatalf("looper failure status = %v, want %v", got, typev3.StatusCode_InternalServerError)
 	}
@@ -77,7 +78,7 @@ func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) 
 	}
 }
 
-func TestHandleConfidencePartialFailurePersistsAccountingWithoutCandidateBody(t *testing.T) {
+func TestHandleEscalatePartialFailurePersistsAccountingWithoutCandidateBody(t *testing.T) {
 	server := newConfidencePartialFailureServer(t)
 	defer server.Close()
 
@@ -92,14 +93,16 @@ func TestHandleConfidencePartialFailurePersistsAccountingWithoutCandidateBody(t 
 		},
 		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
 	}
+	gte := 0.0
 	decision := &config.Decision{
-		Name:      "confidence-partial-route",
+		Name:      "escalate-partial-route",
 		ModelRefs: []config.ModelRef{{Model: "small"}, {Model: "large"}},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "confidence",
-			Confidence: &config.ConfidenceAlgorithmConfig{
-				ConfidenceMethod: "avg_logprob",
-				OnError:          "fail",
+			Type:    "escalate",
+			OnError: "fail",
+			Escalate: &config.EscalateAlgorithmConfig{
+				Order:  config.EscalateOrderSize,
+				Accept: &config.EscalateAccept{Confidence: &config.EscalateConfidence{Method: "avg_logprob", GTE: &gte}},
 			},
 		},
 	}
@@ -117,6 +120,7 @@ func TestHandleConfidencePartialFailurePersistsAccountingWithoutCandidateBody(t 
 	if err != nil {
 		t.Fatalf("handleLooperExecution: %v", err)
 	}
+	appendRoutedResponseHeaders(response, ctx)
 	record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 	assertConfidencePartialFailureReplay(t, response, record, found, ctx.RouterReplayID)
 }
@@ -182,33 +186,37 @@ func assertPartialConfidenceRecord(t *testing.T, record store.Record, found bool
 	assertPartialConfidenceTrace(t, record)
 }
 
+// Neither answer carries logprobs, so neither can be judged: escalate moves
+// on from the small model to the large one and fails with both attempts paid.
 func assertPartialConfidenceUsage(t *testing.T, record store.Record) {
 	t.Helper()
-	if record.PromptTokens == nil || *record.PromptTokens != 5 ||
-		record.CompletionTokens == nil || *record.CompletionTokens != 2 ||
-		record.TotalTokens == nil || *record.TotalTokens != 7 {
-		t.Fatalf("replay usage = prompt %v completion %v total %v, want 5/2/7", record.PromptTokens, record.CompletionTokens, record.TotalTokens)
+	if record.PromptTokens == nil || *record.PromptTokens != 10 ||
+		record.CompletionTokens == nil || *record.CompletionTokens != 4 ||
+		record.TotalTokens == nil || *record.TotalTokens != 14 {
+		t.Fatalf("replay usage = prompt %v completion %v total %v, want 10/4/14", record.PromptTokens, record.CompletionTokens, record.TotalTokens)
 	}
 }
 
 func assertPartialConfidenceTrace(t *testing.T, record store.Record) {
 	t.Helper()
-	if record.SelectionMethod != "confidence" || record.RouteDiagnostics == nil ||
-		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "1 call attempts") ||
-		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "small") {
-		t.Fatalf("replay confidence trace = method %q diagnostics %+v", record.SelectionMethod, record.RouteDiagnostics)
+	if record.SelectionMethod != "escalate" || record.RouteDiagnostics == nil ||
+		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "2 call attempts") ||
+		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "small") ||
+		!strings.Contains(record.RouteDiagnostics.SelectionReasoning, "large") {
+		t.Fatalf("replay escalate trace = method %q diagnostics %+v", record.SelectionMethod, record.RouteDiagnostics)
 	}
 	if strings.Contains(record.ResponseBody, "candidate private answer") {
 		t.Fatalf("replay response body leaked candidate answer: %q", record.ResponseBody)
 	}
 	looperTrace := record.RouteDiagnostics.Looper
-	if looperTrace == nil || len(looperTrace.Attempts) != 1 {
-		t.Fatalf("replay Looper trace = %+v, want one completed attempt", looperTrace)
+	if looperTrace == nil || len(looperTrace.Attempts) != 2 {
+		t.Fatalf("replay Looper trace = %+v, want two completed attempts", looperTrace)
 	}
-	attempt := looperTrace.Attempts[0]
-	if attempt.Ordinal != 1 || attempt.Status != string(looper.AttemptStatusSucceeded) ||
-		attempt.Reason != string(looper.AttemptReasonUnusable) || attempt.Usage.TotalTokens != 7 {
-		t.Fatalf("replay Looper attempt = %+v", attempt)
+	for index, attempt := range looperTrace.Attempts {
+		if attempt.Ordinal != index+1 || attempt.Status != string(looper.AttemptStatusSucceeded) ||
+			attempt.Reason != string(looper.AttemptReasonUnusable) || attempt.Usage.TotalTokens != 7 {
+			t.Fatalf("replay Looper attempt = %+v", attempt)
+		}
 	}
 }
 
@@ -245,6 +253,7 @@ func TestHandleLooperExecutionRecordsFinalModelInReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleLooperExecution: %v", err)
 	}
+	appendRoutedResponseHeaders(response, ctx)
 	record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 	assertFinalLooperReplay(t, response, ctx, record, found)
 }
@@ -309,7 +318,7 @@ func assertReplayAggregateUsage(t *testing.T, record store.Record) {
 	}
 }
 
-func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
+func TestLooperHopReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
 	cfg := looperReplayRecipeConfig()
 	recorders := initializeReplayRecorders(cfg)
 	router := &OpenAIRouter{
@@ -320,25 +329,22 @@ func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T
 	}
 	ctx := &RequestContext{
 		Headers: map[string]string{},
+		Hop:     &routing.Hop{Decision: "shared-route", Recipe: "second-recipe"},
 	}
 
 	requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
 	requestHeaders.RequestHeaders.Headers.Headers = append(
 		requestHeaders.RequestHeaders.Headers.Headers,
 		&core.HeaderValue{Key: headers.RequestID, Value: "looper-internal-recipe"},
-		&core.HeaderValue{Key: headers.VSRLooperRequest, Value: "true"},
-		&core.HeaderValue{Key: headers.VSRInternalAuth, Value: internalauth.Token()},
-		&core.HeaderValue{Key: headers.VSRLooperDecision, Value: "shared-route"},
-		&core.HeaderValue{Key: headers.VSRSelectedRecipe, Value: "second-recipe"},
 	)
 	headerResponse, err := router.handleRequestHeaders(requestHeaders, ctx)
 	if err != nil {
 		t.Fatalf("handleRequestHeaders: %v", err)
 	}
 	if !ctx.LooperRequest {
-		t.Fatal("valid internal token did not authenticate the looper request")
+		t.Fatal("an in-process hop is a Looper request")
 	}
-	for _, internalHeader := range looperInternalContextHeaders {
+	for _, internalHeader := range droppedClientHeaders {
 		if removed := headerResponse.GetRequestHeaders().Response.HeaderMutation.RemoveHeaders; !slices.Contains(removed, internalHeader) {
 			t.Fatalf("request header mutation retained internal header %q", internalHeader)
 		}
@@ -355,7 +361,7 @@ func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T
 	if response == nil || response.GetRequestBody() == nil {
 		t.Fatal("expected looper internal continue response")
 	}
-	for _, internalHeader := range looperInternalContextHeaders {
+	for _, internalHeader := range droppedClientHeaders {
 		if removed := response.GetRequestBody().Response.HeaderMutation.RemoveHeaders; !slices.Contains(removed, internalHeader) {
 			t.Fatalf("physical backend dispatch retained internal header %q", internalHeader)
 		}
@@ -371,7 +377,10 @@ func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T
 
 func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 	cfg := looperReplayRecipeConfig()
-	cfg.RouterReplay.Enabled = false
+	cfg.GlobalPlugins = nil
+	if err := cfg.LayerPlugins(); err != nil {
+		t.Fatal(err)
+	}
 	cfg.Recipes[1].Profile.Decisions[0].Plugins = []config.DecisionPlugin{{
 		Type: config.DecisionPluginFastResponse,
 		Configuration: config.MustStructuredPayload(map[string]interface{}{
@@ -400,8 +409,8 @@ func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 	requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
 	requestHeaders.RequestHeaders.Headers.Headers = append(
 		requestHeaders.RequestHeaders.Headers.Headers,
-		&core.HeaderValue{Key: headers.VSRLooperRequest, Value: "true"},
-		&core.HeaderValue{Key: headers.VSRLooperDecision, Value: "shared-route"},
+		&core.HeaderValue{Key: headers.VSRRouteModel, Value: "forged-route"},
+		&core.HeaderValue{Key: headers.VSRInternalAuth, Value: "forged"},
 		&core.HeaderValue{Key: headers.VSRSelectedRecipe, Value: "second-recipe"},
 	)
 	headerResponse, err := router.handleRequestHeaders(requestHeaders, ctx)
@@ -414,7 +423,7 @@ func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 	if got := ctx.Routing.SelectedRecipe(); got != nil {
 		t.Fatalf("spoofed recipe hydrated routing context: %+v", got)
 	}
-	for _, internalHeader := range looperInternalContextHeaders {
+	for _, internalHeader := range droppedClientHeaders {
 		if removed := headerResponse.GetRequestHeaders().Response.HeaderMutation.RemoveHeaders; !slices.Contains(removed, internalHeader) {
 			t.Fatalf("request header mutation retained internal header %q", internalHeader)
 		}
@@ -492,7 +501,7 @@ func TestHydrateLooperRoutingContextPreservesResolvedRouting(t *testing.T) {
 }
 
 func looperReplayRecipeConfig() *config.RouterConfig {
-	return &config.RouterConfig{
+	cfg := &config.RouterConfig{
 		BackendModels: config.BackendModels{
 			ModelConfig: map[string]config.ModelParams{
 				"model-a": {PreferredEndpoints: []string{"model-backend"}},
@@ -501,8 +510,8 @@ func looperReplayRecipeConfig() *config.RouterConfig {
 				Name: "model-backend", Address: "127.0.0.1", Port: 8000, Type: "vllm", Weight: 1,
 			}},
 		},
+		GlobalPlugins: []config.DecisionPlugin{replayTestPlugin(map[string]interface{}{"enabled": true})},
 		RouterReplay: config.RouterReplayConfig{
-			Enabled:      true,
 			StoreBackend: "memory",
 		},
 		Recipes: []config.RoutingRecipe{
@@ -528,4 +537,8 @@ func looperReplayRecipeConfig() *config.RouterConfig {
 			},
 		},
 	}
+	if err := cfg.LayerPlugins(); err != nil {
+		panic(err)
+	}
+	return cfg
 }

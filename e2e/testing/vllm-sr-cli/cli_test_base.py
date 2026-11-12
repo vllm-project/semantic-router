@@ -9,9 +9,12 @@ Provides common utilities for testing CLI commands including:
 Signed-off-by: vLLM-SR Team
 """
 
+import http.client
+import json
 import os
 import secrets
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
@@ -23,11 +26,28 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 import yaml
+from cli.instance_paths import cli_state_directory
+from cli.instance_setup import controller_request
 from cli.runtime_stack import DEFAULT_STACK_NAME, resolve_runtime_stack
 
 HTTP_STATUS_OK = 200
 AGENT_SMOKE_CONFIG_PATH = (
     Path(__file__).resolve().parents[2] / "config" / "config.agent-smoke.cpu.yaml"
+)
+CONTAINER_RUNTIME_SOCKETS = (
+    "/var/run/docker.sock",
+    "/run/docker.sock",
+    "/run/podman/podman.sock",
+)
+CONTAINER_RUNTIME_CLIS = (
+    "containerd",
+    "crictl",
+    "ctr",
+    "docker",
+    "dockerd",
+    "nerdctl",
+    "podman",
+    "runc",
 )
 
 
@@ -45,7 +65,7 @@ def stack_scoped_test_container_name(stack_name: str, base_name: str) -> str:
 # exist to name Redis and Postgres specifically.
 MANAGED_STORAGE_SERVICES: dict[str, dict[str, object]] = {
     "response_api": {"enabled": True, "store_backend": "redis"},
-    "router_replay": {"enabled": True, "store_backend": "postgres"},
+    "router_replay": {"store_backend": "postgres"},
 }
 
 
@@ -149,8 +169,21 @@ class CLITestBase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        """Clean up after all tests."""
+        """Clean up after all tests; no instance controller or data volume may
+        outlive them."""
+        leaked = cls._stack_controllers()
         cls._cleanup_container()
+        kept = cls._stack_volumes()
+        if leaked:
+            raise AssertionError(
+                "instance controllers outlived the tests of stack "
+                f"{cls.runtime_stack.stack_name}: {[str(path) for _, path in leaked]}"
+            )
+        if kept:
+            raise AssertionError(
+                "data volumes outlived the tests of stack "
+                f"{cls.runtime_stack.stack_name}: {kept}"
+            )
 
     def setUp(self):
         """Set up each test - create temp directory."""
@@ -242,7 +275,15 @@ class CLITestBase(unittest.TestCase):
 
     @classmethod
     def _cleanup_container(cls):
-        """Stop and remove any existing vllm-sr container."""
+        """Stop and remove any existing vllm-sr container.
+
+        The stack's instance controller goes first, as `vllm-sr stop` stops
+        it: `serve` starts it in a session of its own, so removing the
+        containers alone leaves it running. The stack's data volumes go last,
+        once no container mounts them: `vllm-sr stop` keeps them for the next
+        serve, and a test stack never returns.
+        """
+        cls._stop_stack_controllers()
         runtime = cls.container_runtime
         managed_container_names = (
             cls.CONTAINER_NAME,
@@ -260,6 +301,114 @@ class CLITestBase(unittest.TestCase):
             ):
                 with suppress(Exception):
                     cls._run_subprocess(command, timeout=30)
+        for volume in cls._stack_volumes():
+            with suppress(Exception):
+                cls._run_subprocess([runtime, "volume", "rm", volume], timeout=30)
+
+    @classmethod
+    def _stack_volumes(cls) -> list[str]:
+        """The data volumes of this test stack, which `serve` names after its
+        containers.
+
+        Only a class that set up its own test stack has them; the default
+        stack's volumes may hold a developer's own data.
+        """
+        stack = getattr(cls, "runtime_stack", None)
+        if stack is None or stack.stack_name == DEFAULT_STACK_NAME:
+            return []
+        try:
+            listing = cls._run_subprocess(
+                [cls.container_runtime, "volume", "ls", "-q"], timeout=30
+            )
+        except (OSError, subprocess.SubprocessError):
+            return []
+        if listing.returncode != 0:
+            return []
+        prefix = f"{stack.stack_name}-vllm-sr-"
+        return [name for name in listing.stdout.split() if name.startswith(prefix)]
+
+    @classmethod
+    def _stack_controllers(cls) -> list[tuple[int, Path]]:
+        """The running instance controllers of this test stack: (pid, directory).
+
+        Only a class that set up its own test stack has one; the base class's
+        default names are the default stack's, which may be a developer's own.
+        """
+        if getattr(cls, "runtime_stack", None) is None:
+            return []
+        try:
+            listing = subprocess.run(
+                ["ps", "-A", "-o", "pid=,args="],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return []
+        controllers = []
+        for line in listing.splitlines():
+            pid, _, arguments = line.strip().partition(" ")
+            if "cli.instance_controller --directory " not in arguments:
+                continue
+            directory = Path(arguments.rsplit("--directory ", 1)[1].strip())
+            if cls._is_stack_instance(directory):
+                controllers.append((int(pid), directory))
+        return controllers
+
+    @classmethod
+    def _is_stack_instance(cls, directory: Path) -> bool:
+        try:
+            manifest = json.loads((directory / "manifest.json").read_text())
+        except (OSError, ValueError):
+            return False
+        layout = manifest.get("layout") or {}
+        return layout.get("stack_name") == cls.runtime_stack.stack_name
+
+    @classmethod
+    def _stop_stack_controllers(cls) -> None:
+        """Stop this stack's instance controllers, as `vllm-sr stop` does, and
+        remove the state `serve` keeps for them: a test stack never returns,
+        and `vllm-sr stop` keeps that state for the next serve."""
+        if getattr(cls, "runtime_stack", None) is None:
+            return
+        for pid, directory in cls._stack_controllers():
+            try:
+                controller_request(directory, "/shutdown", {"stop": True})
+                signals = (None, signal.SIGTERM, signal.SIGKILL)
+            except (OSError, ValueError, http.client.HTTPException):
+                # Unreachable, or refusing while a mode change is in progress.
+                signals = (signal.SIGTERM, signal.SIGKILL)
+            for signal_number in signals:
+                if signal_number is not None:
+                    with suppress(ProcessLookupError):
+                        os.kill(pid, signal_number)
+                if cls._process_exited(pid, timeout=10):
+                    break
+            shutil.rmtree(directory, ignore_errors=True)
+        try:
+            instances = list((cli_state_directory() / "instances").iterdir())
+        except (OSError, ValueError):
+            instances = []
+        for directory in instances:
+            if cls._is_stack_instance(directory):
+                shutil.rmtree(directory, ignore_errors=True)
+
+    @staticmethod
+    def _process_exited(pid: int, *, timeout: float) -> bool:
+        """Whether *pid* is gone or a zombie its still-running parent keeps."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            state = subprocess.run(
+                ["ps", "-o", "stat=", "-p", str(pid)],
+                capture_output=True,
+                text=True,
+                check=False,
+            ).stdout.strip()
+            if not state or state.startswith("Z"):
+                return True
+            time.sleep(0.1)
+        return False
 
     def _explicit_container_status(self, container_name: str) -> str:
         """Get the status of one managed container."""
@@ -267,6 +416,7 @@ class CLITestBase(unittest.TestCase):
             result = self._run_subprocess(
                 [
                     self.container_runtime,
+                    "container",
                     "inspect",
                     "--format",
                     "{{.State.Status}}",
@@ -375,7 +525,6 @@ class CLITestBase(unittest.TestCase):
         port: int = 8888,
         model_name: str = "test-model",
         endpoint: str = "host.docker.internal:8000",
-        base_url: str | None = None,
         provider: str | None = "vllm",
         api_key_env: str | None = None,
         api_only: bool = False,
@@ -383,25 +532,24 @@ class CLITestBase(unittest.TestCase):
         skip_processing: bool = False,
         looper: bool = False,
     ) -> str:
-        """Write a minimal runnable canonical v0.3 config into the temp workspace.
+        """Write a minimal runnable canonical v0.5 config into the temp workspace.
 
-        *managed_storage* asks for the service backends this CLI provisions
-        locally, which is what makes `serve` start Redis and Postgres.
+        *endpoint* is host:port over http, or a full URL. *managed_storage*
+        asks for the service backends this CLI provisions locally, which is
+        what makes `serve` start Redis and Postgres.
         """
         config_path = Path(self.test_dir) / "config.yaml"
         backend_ref: dict[str, object] = {
             "name": "primary",
             "weight": 100,
+            "endpoint": endpoint,
         }
-        if base_url is not None:
-            backend_ref["base_url"] = base_url
-        else:
-            backend_ref["endpoint"] = endpoint
+        if "://" not in endpoint:
             backend_ref["protocol"] = "http"
         if provider is not None:
             backend_ref["provider"] = provider
         if api_key_env is not None:
-            backend_ref["api_key_env"] = api_key_env
+            backend_ref["auth"] = {"api_key_env": api_key_env}
 
         decision: dict[str, object] = {
             "name": "default-route",
@@ -413,16 +561,16 @@ class CLITestBase(unittest.TestCase):
         if looper:
             decision["algorithm"] = {
                 "type": "remom",
+                "on_error": "fail",
                 "remom": {
                     "breadth_schedule": [1],
                     "model_distribution": "first_only",
                     "min_successful_responses": 1,
-                    "on_error": "fail",
                 },
             }
 
         config = {
-            "version": "v0.3",
+            "version": "v0.5",
             "listeners": [
                 {
                     "name": "test-listener",
@@ -444,10 +592,7 @@ class CLITestBase(unittest.TestCase):
                     }
                 ],
             },
-            "routing": {
-                "modelCards": [{"name": model_name}],
-                "decisions": [decision],
-            },
+            "recipes": [{"name": "default", "decisions": [decision]}],
         }
         if api_only:
             config["global"] = _api_only_global_config()
@@ -455,12 +600,6 @@ class CLITestBase(unittest.TestCase):
             global_config = config.setdefault("global", {})
             global_config.setdefault("router", {})["skip_processing"] = {
                 "enabled": True
-            }
-        if looper:
-            global_config = config.setdefault("global", {})
-            integrations = global_config.setdefault("integrations", {})
-            integrations["looper"] = {
-                "endpoint": f"http://localhost:{port}/v1/chat/completions"
             }
         if managed_storage:
             global_config = config.get("global")
@@ -471,6 +610,9 @@ class CLITestBase(unittest.TestCase):
                 service_key: dict(service_config)
                 for service_key, service_config in MANAGED_STORAGE_SERVICES.items()
             }
+            global_config["plugins"] = [
+                {"type": "router_replay", "configuration": {"enabled": True}}
+            ]
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False),
             encoding="utf-8",
@@ -581,6 +723,7 @@ class CLITestBase(unittest.TestCase):
         result = self._run_subprocess(
             [
                 self.container_runtime,
+                "container",
                 "inspect",
                 "--format",
                 format_string,
@@ -590,11 +733,42 @@ class CLITestBase(unittest.TestCase):
         )
         return result.returncode, result.stdout, result.stderr
 
+    def assert_dashboard_holds_no_container_runtime(self) -> None:
+        """The Dashboard mounts no runtime socket and its image has no container CLI.
+
+        `vllm-sr serve` owns the stack; the Dashboard reads status from HTTP
+        probes and the stack's files, and logs from the spool.
+        """
+        code, mounts, stderr = self.inspect_container(
+            "{{json .Mounts}}", container_name=self.DASHBOARD_CONTAINER_NAME
+        )
+        self.assertEqual(code, 0, stderr)
+        destinations = {mount["Destination"] for mount in json.loads(mounts)}
+        self.assertFalse(destinations & set(CONTAINER_RUNTIME_SOCKETS), destinations)
+        found = self._run_subprocess(
+            [
+                self.container_runtime,
+                "exec",
+                self.DASHBOARD_CONTAINER_NAME,
+                "sh",
+                "-c",
+                'for name in "$@"; do command -v "$name" || true; done',
+                "sh",
+                *CONTAINER_RUNTIME_CLIS,
+            ],
+            timeout=30,
+        )
+        self.assertEqual(found.returncode, 0, found.stderr)
+        self.assertEqual(
+            found.stdout.strip(), "", "the Dashboard image has a container CLI"
+        )
+
     def container_networks(self, container_name: str) -> set[str]:
         """Return the networks *container_name* is currently attached to."""
         result = self._run_subprocess(
             [
                 self.container_runtime,
+                "container",
                 "inspect",
                 "--format",
                 "{{range $name, $_ := .NetworkSettings.Networks}}{{$name}} {{end}}",

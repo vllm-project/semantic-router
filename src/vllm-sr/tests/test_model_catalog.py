@@ -146,7 +146,7 @@ def _load_mutated_catalog(
 
 
 def test_packaged_latest_catalog_is_verified() -> None:
-    assert available_catalog_versions() == ("latest",)
+    assert available_catalog_versions()[0] == "latest"
 
     catalog = load_model_catalog("latest")
 
@@ -158,6 +158,28 @@ def test_packaged_latest_catalog_is_verified() -> None:
     assert all(model.protocols == CATALOG_PROTOCOLS for model in catalog.models)
     assert all(model.compatibility.compatible for model in catalog.models)
     assert all(model.verified for model in catalog.models)
+
+
+def test_packaged_catalog_loader_reads_the_catalog_as_safe_load_does() -> None:
+    text = (
+        model_catalog._model_assets_root()
+        .joinpath("latest", "catalog.yaml")
+        .read_text(encoding="utf-8")
+    )
+    expected = yaml.safe_load(text)
+
+    assert yaml.load(text, Loader=model_catalog._CATALOG_LOADER) == expected
+
+
+def test_native_protocol_does_not_expand_chat_recipe_interfaces() -> None:
+    shared = packaged_model_catalog_document()
+    assert any(
+        protocol["id"] == "vllm-sr/systemone@1" for protocol in shared["protocols"]
+    )
+    assert all(
+        "vllm-sr/systemone@1" not in model.protocols
+        for model in load_model_catalog("latest").models
+    )
 
 
 def test_model_assets_root_supports_shallow_installed_package(
@@ -256,6 +278,19 @@ def test_catalog_evaluates_cli_and_router_versions_independently(
             CatalogComponentVersions(cli="0.5.0-rc.1", router="0.3.0"),
             True,
             "compatible",
+        ),
+        # A PEP 440 dev build precedes its release, as a prerelease does.
+        (
+            CatalogComponentVersions(
+                cli="0.5.0.dev20261007063125", router="0.5.0.dev20261007063125"
+            ),
+            True,
+            "compatible",
+        ),
+        (
+            CatalogComponentVersions(cli="0.3.0.dev1", router="0.3.0"),
+            False,
+            "requires cli >= 0.3.0",
         ),
     ],
 )
