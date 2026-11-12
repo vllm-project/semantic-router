@@ -147,6 +147,7 @@ type Limits struct {
 	ReasoningEffortBytes int
 	StopSequences        int
 	StopBytes            int
+	LogitBiasEntries     int
 	TextBytes            int
 	MediaReferenceBytes  int
 	MediaDataBytes       int
@@ -171,7 +172,7 @@ func DefaultPolicy() Policy {
 			IdentifierBytes: 1024, SchemaBytes: 4 << 20, MetadataBytes: 64 << 10,
 			MetadataEntries: 256, MetadataKeyBytes: 256, MetadataValueBytes: 8 << 10,
 			ToolArgumentsBytes: 4 << 20, ReasoningEffortBytes: 32,
-			StopSequences: 16, StopBytes: 64 << 10, TextBytes: 16 << 20,
+			StopSequences: 16, StopBytes: 64 << 10, LogitBiasEntries: 16_384, TextBytes: 16 << 20,
 			MediaReferenceBytes: 16 << 10, MediaDataBytes: 48 << 20,
 			SSEFrameBytes: 1 << 20, UnfinishedArguments: 4 << 20,
 			Events: 1_000_000, Diagnostics: 64,

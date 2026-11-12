@@ -1,20 +1,20 @@
 [
   {
     "description": "Antonym flip (on/off) must not reuse the cached answer",
-    "original_question": "How do I turn on the lights?",
-    "contradiction": "How do I turn off the lights?",
-    "paraphrase": "How can I turn on the lights?"
+    "original_question": "__EMBED_TOPIC__ polarity-1 How do I turn on the lights?",
+    "contradiction": "__EMBED_TOPIC__ polarity-1 How do I turn off the lights?",
+    "paraphrase": "__EMBED_TOPIC__ polarity-1 How can I turn on the lights?"
   },
   {
     "description": "Antonym flip (enable/disable) must not reuse the cached answer",
-    "original_question": "How do I enable two-factor authentication?",
-    "contradiction": "How do I disable two-factor authentication?",
-    "paraphrase": "How can I enable two-factor authentication?"
+    "original_question": "__EMBED_TOPIC__ polarity-2 How do I enable two-factor authentication?",
+    "contradiction": "__EMBED_TOPIC__ polarity-2 How do I disable two-factor authentication?",
+    "paraphrase": "__EMBED_TOPIC__ polarity-2 How can I enable two-factor authentication?"
   },
   {
     "description": "Antonym flip (on/off, dark mode) must not reuse the cached answer",
-    "original_question": "How to turn on dark mode?",
-    "contradiction": "How to turn off dark mode?",
-    "paraphrase": "How do I turn on dark mode?"
+    "original_question": "__EMBED_TOPIC__ polarity-3 How to turn on dark mode?",
+    "contradiction": "__EMBED_TOPIC__ polarity-3 How to turn off dark mode?",
+    "paraphrase": "__EMBED_TOPIC__ polarity-3 How do I turn on dark mode?"
   }
 ]

@@ -68,7 +68,7 @@ type TeardownOptions struct {
 
 // TestOptions contains options for running tests
 type TestOptions struct {
-	// BaselineSuite selects standard non-stress or full canonical baseline coverage.
+	// BaselineSuite is the case scope: p0, standard or full (see testcases.InScope).
 	BaselineSuite string
 
 	// Profile is the test profile to run
@@ -114,6 +114,9 @@ type TestOptions struct {
 type TestResult struct {
 	// Name is the test case name
 	Name string
+
+	// Priority is the case's priority, such as p0
+	Priority string `json:",omitempty"`
 
 	// Passed indicates if the test passed
 	Passed bool

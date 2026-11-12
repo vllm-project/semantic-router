@@ -97,12 +97,28 @@ func (builder *responseHeaderMutationBuilder) addTrace(ctx *RequestContext) {
 // responseWarnings encodes x-vsr-warnings and counts and logs, once per
 // request, each diagnostic it carries.
 func responseWarnings(ctx *RequestContext) string {
-	value, included := formatWarnings(ctx.ResponseGuard.warnings(), ctx.ProtocolDiagnostics)
+	value, included := formatWarnings(append(scanWarnings(ctx.VSRScanCoverage), ctx.ResponseGuard.warnings()...), ctx.ProtocolDiagnostics)
 	if reported := min(ctx.protocolDiagnosticsReported, included); included > reported {
 		recordProtocolDiagnostics(ctx, ctx.ProtocolDiagnostics[reported:included])
 		ctx.protocolDiagnosticsReported = included
 	}
 	return value
+}
+
+// scanCoverageFull is the scan coverage of a guard rule that read every
+// window of its input; the others are "partial n/m" and "none".
+const scanCoverageFull = "full"
+
+// scanWarnings is scan_partial when a request-stage guard rule read only
+// some of its input's windows, or none; the counts stay in x-vsr-trace and
+// the replay record.
+func scanWarnings(coverage map[string]string) []string {
+	for _, read := range coverage {
+		if read != scanCoverageFull {
+			return []string{headers.WarningScanPartial}
+		}
+	}
+	return nil
 }
 
 // bufferedWarnings is the x-vsr-warnings value the buffered body phase

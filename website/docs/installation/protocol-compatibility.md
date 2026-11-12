@@ -81,11 +81,14 @@ With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server certificate chain and its DNS hostname:
 
 - **One hostname per pool.** The supported Envoy runtime shares its TLS
-  context within a cluster, so an HTTPS replica pool must keep one hostname.
-  Use separate model aliases for different HTTPS hosts.
+  context within a cluster, so an HTTPS replica pool must keep one hostname
+  and one `tls` block. Use separate model aliases for different HTTPS hosts.
 - **No IP literals.** IP-literal HTTPS targets are rejected, instead of
   silently weakening hostname verification.
-- **A CA bundle.** A custom Envoy image used with `vllm-sr serve` must provide
+- **A CA bundle.** A backend's `tls.ca_file`, else
+  `providers.defaults.tls.ca_file`, names the bundle its certificate must
+  chain to; see [Trust a private CA](backend-target-compatibility#trust-a-private-ca).
+  Without either, a custom Envoy image used with `vllm-sr serve` must provide
   the system CA bundle at `/etc/ssl/certs/ca-certificates.crt`. Startup
   validation fails when that trust store is missing, rather than silently
   disabling verification.
@@ -208,6 +211,7 @@ instead of being silently dropped.
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
 | `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
 | `min_p`, repetition penalty, and cache salt | Supported extensions | Not supported | Not supported |
+| Token logit bias (`logit_bias`) | Supported | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
 
@@ -285,6 +289,39 @@ that:
   `content.file`.
 - **Capable models are unaffected.** A model that declares `file_input`, or
   declares no capabilities, still receives the file.
+
+### Sampling controls a backend rejects
+
+Some backends reject a sampling control their wire format defines. A vLLM
+backend that runs speculative decoding, for example, answers any request that
+carries `min_p` or `logit_bias` with HTTP 400. List such controls in the
+model's `unsupported_capabilities`:
+
+```yaml
+providers:
+  models:
+    - name: qwen3-mtp
+      api_format: chat_completions
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
+      backend_refs:
+        - name: mtp-pool
+          endpoint: mtp-server:8000
+          provider: vllm
+```
+
+- **Left out for that model.** A request sent to the model, as the decision's
+  choice or as a fallback candidate, reaches it without the listed fields.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for each field
+  left out, `min_p` or `logit_bias`.
+- **Other models are unaffected.** Another model of the same decision still
+  receives the fields.
+
+The list accepts `sampling_min_p` and `sampling_logit_bias`; any other name
+fails at load. The gateway spreads a model's requests across its
+`backend_refs`, so list a control when any of them rejects it. To remove a
+control for every model a decision routes to, list it in the decision's
+[`request_params`](../tutorials/plugin/request-params) `blocked_params`
+instead.
 
 ### Signed reasoning from Anthropic backends
 
@@ -382,6 +419,13 @@ tools or error translation.
 
 - Public requests are decoded into the neutral contract even when client and
   backend formats match. Unknown or unsupported request fields fail closed.
+- Chat requests accept and don't forward the fields that client libraries add
+  to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
+  which holds the reply fields its message type lacks, and `parsed` and
+  `tool_calls[].function.parsed_arguments`, the openai SDK's own parse
+  results. One that carries a value is reported as `dropped`. Like the other
+  Responses input items, a reasoning item may carry `status`, which the openai
+  SDK's stream helper sets.
 - Backend replies are decoded into the same contract. A reply field that its
   `api_format` does not define is dropped and reported instead of failing the
   reply; see
@@ -428,10 +472,34 @@ tools or error translation.
   `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
+- vLLM's serving metadata never fails a reply, whatever its value:
+  `prompt_logprobs`, `prompt_text`, `prompt_routed_experts`,
+  `kv_transfer_params`, `ec_transfer_params` and `metrics` at the top level of
+  a reply or stream chunk, and `routed_experts` and `weight_versions` in its
+  choices. Chat clients receive them unchanged; a value other than null or
+  empty is reported as `dropped`. In a vLLM-Omni stream, a chunk whose
+  `modality` is not `text` fails with `unsupported_upstream_audio` (or
+  `unsupported_upstream_modality`), because its `delta.content` carries
+  encoded media, not answer text.
 - A Chat provider ends a forced named tool call with `finish_reason: "stop"`.
   Anthropic Messages clients receive `stop_reason: "tool_use"` for a turn that
   ends that way and carries `tool_use` blocks. A turn that ends at the output
   limit, on a stop sequence, or on a refusal keeps that reason.
+- When the output limit cuts a buffered reply inside a tool call, the client
+  gets the reply with the limit stop: `finish_reason: "length"` for Chat, an
+  incomplete response with reason `max_output_tokens` for Responses, and
+  `stop_reason: "max_tokens"` for Anthropic Messages. Chat and Responses
+  clients get the call's arguments as the backend sent them. Because
+  `tool_use.input` must be an object, Messages clients get the members the
+  model completed before the cut, and the Router reports an `approximated`
+  diagnostic for `content.tool_use.input`. Only the reply's last call can be
+  cut. Arguments that don't start a JSON object, or a cut call that more
+  output follows, still fail the reply.
+- A Chat stream chunk can carry several `tool_calls` entries with the same
+  `index`, as vLLM's last chunk does when its tool parser flushes the rest of
+  a call. They continue one call in order, as OpenAI's SDKs join them.
+  Entries with the same index that name different calls fail with
+  `duplicate_stream_tool_index`.
 - An Anthropic `model_context_window_exceeded` stop reaches Chat clients as
   `finish_reason: "length"` and Responses clients as an incomplete response
   with reason `max_output_tokens`, as vLLM reports output that reaches
@@ -454,6 +522,12 @@ tools or error translation.
     requires a limit, and reports `max_tokens` as `generated`. Thinking counts
     toward that limit, and a positive integer in the decision's
     `request_params.default_max_tokens` replaces the 4096.
+- When the output limit ends a streamed tool call inside its arguments, or
+  right after its name with none, the Router passes the partial call on with
+  the limit stop, as the providers do: `max_tokens` for Messages, `length` for
+  Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
+  not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
+  response is not cached, stored, or kept as the replay response body.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../api/headers).

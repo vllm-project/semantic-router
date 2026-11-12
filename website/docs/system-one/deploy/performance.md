@@ -73,19 +73,140 @@ forward pass already running.
 
 ## Long inputs
 
-A rule reads what fits the model's input and drops the rest
-(`coverage: truncate`), unless it reads all of it (`coverage: full`), in windows
-when the input is longer than one forward. `jailbreak`, `safety`, `pii` and
-`hallucination` always read their whole input; text the model could not read
-counts against the request (a jailbreak or personal data), so padding cannot
-carry content past them.
+A long user turn, such as a pasted document, a log or a long tool output, is
+read in one of two ways, by the Router itself, so a local and a remote decision
+model behave the same.
 
-| Model | One decision | Windows |
+**Routing questions read a bounded view.** These are the rules that do not
+read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
+`turn_relation`, `user_feedbacks` and `systemone` rules with
+`coverage: truncate`.
+
+- A turn longer than the deployment's `routing_view` keeps its head and its
+  tail around a marker, `[... 41000 tokens omitted ...]`.
+  The head takes a quarter of the view and the tail the rest, because the
+  request's instruction usually closes the turn.
+- A turn within the view is sent byte for byte as it came.
+
+**Guard rules read the whole input, in windows.** These are `jailbreak`,
+`safety` and `pii`, at the request and at the response stage.
+
+- An input longer than one `scan_window` is split into windows that overlap by
+  `scan_window.overlap`, so text across a cut is read whole by one of them.
+- The windows are read tail first, then the head, then the middle by halves:
+  the window at its middle, then those at its quarters, its eighths and so on,
+  from a starting point that changes with every request. The windows read by
+  any moment are spread over the whole input, so no part of it is predictably
+  left unread. Each window is a call of its own, at most
+  `scan_window.max_parallel` at a time per deployment. The `jailbreak`,
+  `safety` and `pii` rules that read the same input share each window's call,
+  and a window's answers count as soon as it is read.
+- Any window that finds an attack, a harm or personal data flags the input.
+  `pii` spans keep their places in the input, so masking replaces every one.
+- A window that makes a rule match decides it: no unread window can undo a
+  match. When that match alone refuses the request, because a decision with a
+  `fast_response` plugin matches on the rule by itself and no other decision
+  ranks above it, the window ends the request's guard scans: the windows not
+  read yet are not sent, and the request is refused at once instead of at the
+  deadline.
+- One input reads at most 256 windows. An input that needs more of them is
+  read in larger windows instead, up to the largest the model takes (31,744
+  bytes for a 32,768-token validated length), so 256 cover it whole. Only an
+  input longer than 256 of the largest windows, about 7.5 MB, leaves windows
+  unread, and they count as unread.
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/vela3-fast
+        routing_view: {max_tokens: 8192, head_share: 0.25}
+        scan_window: {tokens: 8192, overlap: 512, max_parallel: 4}
+      hosted-decision:
+        provider: systemone
+        endpoint: https://decisions.example.com/v1/systemone
+        model: example-decision-model
+        timeout_ms: 6000
+        routing_view: {max_tokens: 4096}
+        scan_window: {tokens: 4096, overlap: 256}
+```
+
+| Setting | Default | Bounds |
 | --- | --- | --- |
-| vela3-fast | 32,768 tokens | 8,192-token windows for router and span questions |
-| vela3-lite, -mini, -flash, -turbo | Up to 262,144 tokens | 32,768 tokens per span target |
-| d3-turbo | 32,768 tokens per question; 262,144 with long context | No spans |
-| d3-ultra | 131,072 tokens per question | No spans |
+| `routing_view.max_tokens` | 8,192; 4,096 for `provider: systemone` | 256 to 1,048,576 |
+| `routing_view.head_share` | 0.25 | 0 to 1 |
+| `scan_window.tokens` | 8,192; 4,096 for `provider: systemone` | 256 to 1,048,576 |
+| `scan_window.overlap` | 512; 256 for `provider: systemone` | 0 to less than half a window |
+| `scan_window.max_parallel` | 4 | 1 to 64 |
+
+**Views and windows are sized in bytes.** A token of `max_tokens` or
+`scan_window.tokens` counts as four bytes, about what a token of prose takes,
+so the 8,192 default is a 32 KB view. The model's validated length (its card's
+`validated_input_tokens`, else `max_input_tokens`) less 1,024 tokens for the
+question caps both at one byte a token, because a byte-level tokenizer gives no
+byte more than one token. Dense text such as JSON or base64 takes far fewer
+bytes a token than prose, so a view of it holds up to about three times as many
+tokens, but no setting makes a view or a window overrun the model: with a
+32,768-token validated length, neither ever holds more than 31,744 bytes.
+
+**Size them from the deadline.** A call should end well before its deadline,
+which is the rule's or the deployment's `timeout_ms` for a remote API, and the
+signals' deadline for a local model (45 s for a served request by default,
+`global.model_catalog.signal_timeout_ms`). If an API reads R tokens a second and
+takes T seconds to answer the smallest call, a view of up to
+`(timeout - T) × R` tokens answers in time: an API that reads 2,000 tokens a
+second and takes 2 s for the smallest call reads about 8,000 tokens in a 6 s
+timeout, a `max_tokens` of 8,000 for prose, or about 2,700 if turns are often
+JSON or base64. A scan's windows share the deadline: the deployment reads
+`scan_window.max_parallel` of them at a time, the tail and the head first, so
+the windows read when the deadline comes are the ones a partial scan decides
+on. A window not read in time counts as unread, and with `best_effort` the rule
+decides on the windows read. Lower `scan_window.tokens` for a slow API, and
+raise the deadline for inputs you expect to scan in full; more windows in
+flight help only while the model has room to batch them.
+
+**Coverage and failures.** When the deadline ends a scan before every window is
+read, and no window read decides the rule, `on_unscanned` decides:
+`best_effort` (the default) decides on the windows read, `match` matches
+(strict), `no_match` does not, and `unknown` leaves the rule to `on_unknown`. A
+rule's `min_coverage`, a share from 0 to 1 that is off by default, sets how
+much `best_effort` must have read: below it the rule reads as `unknown`, so a
+`jailbreak` or `pii` rule matches by default and the guard refuses what it read
+too little of. When no window is read at all (the model is down, or no window
+answered in time), a `jailbreak` or `pii` rule follows `on_unknown`, which
+matches by default (fail closed), and a `safety` rule is unknown, which its
+decision's `rules.on_unknown` decides.
+
+```yaml
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_attack
+          min_coverage: 0.5
+```
+
+Coverage is reported for every guard rule that read its input in windows:
+
+- `x-vsr-warnings` carries `scan_partial`, for every caller, on a request that
+  was routed while a request-stage guard rule had read only part of its input;
+- `vsr_signal_scan_coverage_total{signal, result}` counts each guard rule's read
+  as `full`, `partial` or `none`, `vsr_signal_scan_coverage_ratio{signal}` gives
+  the share of its windows it read, and `vsr_signal_scan_decided_total{signal}`
+  counts the rules a window decided before the rest was read;
+- the routing preview (`scan_coverage`) and the Router Replay record
+  (`scan_coverage`) give `full`, `partial n/m` or `none` per rule;
+- `x-vsr-trace` carries it as `scan_coverage` for a caller allowed the debug
+  header.
+
+| Model | Validated length per question | Maximum |
+| --- | --- | --- |
+| vela3-fast | 32,768 tokens; its own 8,192-token windows for router and span questions | 32,768 |
+| vela3-lite, -mini, -flash | 262,144 tokens; 32,768 per span target | 262,144 |
+| vela3-turbo, d3-turbo | 32,768 tokens | 262,144 with long context |
+| d3-ultra | 131,072 tokens | 262,144 with long context |
 
 :::warning
 A whole-input scan of a long request on a CPU with few cores can take longer

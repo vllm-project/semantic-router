@@ -31,7 +31,7 @@ Every response of the routing pipeline carries the headers that apply to it: ans
 | `x-vsr-response-path` | v0.4 | How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`. |
 | `x-vsr-config-version` | v0.5 | Version of the configuration snapshot that served the request. |
 | `x-vsr-config-hash` | v0.4 | SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`. |
-| `x-vsr-warnings` | v0.5 | Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. |
+| `x-vsr-warnings` | v0.5 | Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. |
 | `x-vsr-selected-recipe` | v0.4 | Recipe the effective entrypoint selected; omitted for concrete backend models. |
 | `x-vsr-selected-decision` | v0.1 | Decision the decision engine selected; omitted when no decision matched. |
 | `x-vsr-selected-model` | v0.1 | Model alias the Router selected. |
@@ -117,6 +117,7 @@ Highest priority first:
 | `effective_input_tokens` | automatic_output | Rendered input tokens of the final automatic-output dispatch, chat template included. |
 | `effective_max_output_tokens` | automatic_output | Output token limit of the final automatic-output dispatch, reasoning included. |
 | `signals` | signals | Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. |
+| `scan_coverage` | signals | Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. |
 | `context_tokens` | signals | Token count the `context` signal measured. |
 | `category` | classification | Domain category the classifier chose, such as `math`. |
 | `reasoning` | classification | Reasoning mode chosen for the request: `on` or `off`. |
@@ -150,6 +151,7 @@ Projection scores and full projection traces stay in the Router Replay record ra
 
 | Code | Meaning |
 | --- | --- |
+| `scan_partial` | A request-stage guard rule (`jailbreak`, `safety` or `pii`) read only some of a long input's windows, or none, and the request was routed on what it read. |
 | `hallucination` | A `response_guard` rule over a `hallucination` signal flagged the answer. |
 | `unverified_factual` | The answer was factual, but a `hallucination` rule had no context to check it against. |
 | `response_jailbreak` | A `response_guard` rule over a response-stage `jailbreak` signal flagged the answer. |

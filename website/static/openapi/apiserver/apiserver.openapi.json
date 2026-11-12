@@ -21362,6 +21362,13 @@
                               }
                             }
                           },
+                          "scan_coverage": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "selected_model": {
                             "type": "string"
                           },
@@ -26174,6 +26181,13 @@
                             "type": "string"
                           }
                         }
+                      }
+                    },
+                    "scan_coverage": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
                       }
                     },
                     "selected_model": {
@@ -32978,6 +32992,13 @@
                     "routing_decision": {
                       "type": "string"
                     },
+                    "scan_coverage": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "selected_model": {
                       "type": "string"
                     },
@@ -34540,6 +34561,13 @@
                         },
                         "routing_decision": {
                           "type": "string"
+                        },
+                        "scan_coverage": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
                         },
                         "selected_model": {
                           "type": "string"
@@ -47834,6 +47862,9 @@
                         }
                       }
                     },
+                    "instance_id": {
+                      "type": "string"
+                    },
                     "message": {
                       "type": "string"
                     },
@@ -48051,6 +48082,9 @@
                           "type": "string"
                         }
                       }
+                    },
+                    "instance_id": {
+                      "type": "string"
                     },
                     "message": {
                       "type": "string"
