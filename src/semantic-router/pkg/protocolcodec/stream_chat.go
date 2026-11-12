@@ -2,6 +2,7 @@ package protocolcodec
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"sort"
 
@@ -554,18 +555,39 @@ func validateChatStreamChunk(chunk chatChunkWire) error {
 		if err := validateChatChunkChoiceExtensions(choice); err != nil {
 			return err
 		}
-		seenToolIndexes := make(map[int]struct{}, len(choice.Delta.ToolCalls))
-		for _, call := range choice.Delta.ToolCalls {
-			if call.Index < 0 {
-				return invalidProviderResponse("invalid_stream_tool_index", "Chat stream tool index must be non-negative")
-			}
-			if _, duplicate := seenToolIndexes[call.Index]; duplicate {
-				return invalidProviderResponse("duplicate_stream_tool_index", "Chat stream tool indexes must be unique within a chunk")
-			}
-			seenToolIndexes[call.Index] = struct{}{}
+		if err := validateChatChunkToolIndexes(choice.Delta.ToolCalls); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// validateChatChunkToolIndexes lets entries that share an index continue one
+// call, in order, as clients join them: vLLM's last chunk can carry a call's
+// latest fragment and its tool parser's flush of the rest as two entries. Two
+// entries with one index that name different calls fail.
+func validateChatChunkToolIndexes(calls []chatChunkToolCallWire) error {
+	type identity struct{ id, name string }
+	seen := make(map[int]identity, len(calls))
+	for _, call := range calls {
+		if call.Index < 0 {
+			return invalidProviderResponse("invalid_stream_tool_index", "Chat stream tool index must be non-negative")
+		}
+		current := identity{id: call.ID, name: call.Function.Name}
+		if call.Custom != nil {
+			current.name = call.Custom.Name
+		}
+		earlier, repeated := seen[call.Index]
+		if repeated && (conflictingIdentity(earlier.id, current.id) || conflictingIdentity(earlier.name, current.name)) {
+			return invalidProviderResponse("duplicate_stream_tool_index", "Chat stream tool entries with one index name different calls")
+		}
+		seen[call.Index] = identity{id: cmp.Or(earlier.id, current.id), name: cmp.Or(earlier.name, current.name)}
+	}
+	return nil
+}
+
+func conflictingIdentity(earlier, current string) bool {
+	return earlier != "" && current != "" && earlier != current
 }
 
 func validateChatStreamEnvelope(chunk chatChunkWire) error {
