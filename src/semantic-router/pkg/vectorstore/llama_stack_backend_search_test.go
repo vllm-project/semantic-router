@@ -57,7 +57,7 @@ var _ = Describe("LlamaStackBackend search #1", func() {
 })
 
 var _ = Describe("LlamaStackBackend search #2", func() {
-	It("should include ranking_options with rrf ranker for hybrid search", func() {
+	It("should request hybrid mode with the rrf ranker for hybrid search", func() {
 		var receivedBody map[string]interface{}
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +79,7 @@ var _ = Describe("LlamaStackBackend search #2", func() {
 		_, err = b.Search(context.Background(), "my-store", nil, 5, 0, filter)
 		Expect(err).NotTo(HaveOccurred())
 
+		Expect(receivedBody["search_mode"]).To(Equal("hybrid"))
 		Expect(receivedBody).To(HaveKey("ranking_options"))
 		opts, ok := receivedBody["ranking_options"].(map[string]interface{})
 		Expect(ok).To(BeTrue())
@@ -109,6 +110,7 @@ var _ = Describe("LlamaStackBackend search #3", func() {
 		_, err = b.Search(context.Background(), "my-store", nil, 5, 0, filter)
 		Expect(err).NotTo(HaveOccurred())
 
+		Expect(receivedBody).NotTo(HaveKey("search_mode"))
 		Expect(receivedBody).NotTo(HaveKey("ranking_options"))
 	})
 })

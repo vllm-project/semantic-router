@@ -132,19 +132,20 @@ func compileCluster(cfg *config.RouterConfig, alias string, endpoints []config.V
 		spec.Endpoints[0].IPv4Only = true
 	}
 	// Backend pools are homogeneous (the config loader rejects mixed
-	// schemes, base paths, TLS names and headers), so the first endpoint
+	// schemes, base paths, TLS settings and headers), so the first endpoint
 	// speaks for the cluster, as it does in the template.
 	first := spec.Endpoints[0]
-	if first.Scheme == schemeHTTPS {
-		spec.TLS = &TLSSpec{ServerName: first.Host}
-	}
 	profile := cfg.ProviderProfiles[endpoints[0].ProviderProfileName]
+	if first.Scheme == schemeHTTPS {
+		spec.TLS = clusterTLS(first.Host, profile.TLS)
+	}
 	prefix, err := basePath(profile.BaseURL)
 	if err != nil {
 		return ClusterSpec{}, fmt.Errorf("providers.models[%s].backend_refs[0]: %w", alias, err)
 	}
 	spec.PathPrefix = prefix
 	spec.RouteHeaders = routeHeaders(profile.ExtraHeaders)
+	spec.RemoveHeaders = cfg.Authz.Identity.HeaderNames()
 	if err := compileHealth(&spec, reliability); err != nil {
 		return ClusterSpec{}, fmt.Errorf("providers.models[%s].reliability: %w", alias, err)
 	}
@@ -152,6 +153,20 @@ func compileCluster(cfg *config.RouterConfig, alias string, endpoints []config.V
 		return ClusterSpec{}, fmt.Errorf("providers.models[%s].reliability: %w", alias, err)
 	}
 	return spec, nil
+}
+
+// clusterTLS is the TLS session of an https cluster: the backend's tls
+// block, with the endpoint's host as the server name when it names none.
+func clusterTLS(host string, backend *config.DeploymentTLS) *TLSSpec {
+	spec := &TLSSpec{ServerName: host}
+	if backend == nil {
+		return spec
+	}
+	if backend.ServerName != "" {
+		spec.ServerName = backend.ServerName
+	}
+	spec.CAFile, spec.CertFile, spec.KeyFile = backend.CAFile, backend.CertFile, backend.KeyFile
+	return spec
 }
 
 // compilePolicy maps the reliability block's timeouts and retry policy. A

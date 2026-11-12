@@ -102,7 +102,9 @@ configuration reload does not turn `/ready` back to `503`: the previous
 configuration serves until the new one's models are ready. The standalone
 listeners and the ext_proc gRPC port open only once those models are ready, so
 the listener's `/ready` and the gRPC health service never report ready before
-the management `/ready` does.
+the management `/ready` does. With `config_source: kubernetes`, both also wait
+until the first configuration from Kubernetes is active. Both report not ready
+once shutdown begins, while in-flight requests drain.
 
 For a Router with a runtime registry, `/ready` and `/startup-status` report that
 replica's observed startup state. Another replica's shared file or Redis record
@@ -202,9 +204,6 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 | `POST` | `/api/v1/diagnostics/classify/combined` | Run intent, PII, and security classification |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Run a selected classifier over a batch |
 | `POST` | `/api/v1/routing/preview` | Evaluate all configured signals |
-| `POST` | `/api/v1/diagnostics/embeddings` | Generate configured text or image embeddings |
-| `POST` | `/api/v1/diagnostics/similarity` | Compare a text pair |
-| `POST` | `/api/v1/diagnostics/similarity/batch` | Run batch similarity matching |
 
 Names, scores, and matched rules depend on the active recipe. Use the live
 schema for each endpoint's supported input forms.
@@ -220,10 +219,12 @@ configured inference budget. Check the effective model and deployment limits
 before retrying. Other inference failures retain their bounded signal error
 codes; the configured unknown-signal policy determines the route outcome.
 
-Standalone classification, embedding, and similarity diagnostics return
-`400 INVALID_INPUT` when inference reports that a model's input budget was
-exceeded. The error retains the model's limit details; other inference failures
-remain server errors.
+Standalone classification diagnostics return `400 INVALID_INPUT` when
+inference reports that a model's input budget was exceeded. The error retains
+the model's limit details; other inference failures remain server errors.
+Embeddings serve recall only, so the Router has no endpoint that returns them;
+`POST /api/v1/diagnostics/models/embeddings` inspects a prepared embedding
+binding.
 
 ## Diagnose a prepared model binding
 
@@ -366,9 +367,9 @@ connection pools when the providers' backends and the listeners are unchanged.
 A request in standalone mode is served by the version it started on, from routing through
 its fallback chain to the last byte. Such a Router binds its listeners at
 startup, so a change to the set of listeners or to a listener's `address`,
-`port` or `timeout` is rejected with code `restart_required` at that
-listener's path; restart the Router to apply it. Listener `api_keys` change
-without a restart.
+`port`, `timeout` or `tls` is rejected with code `restart_required` at that
+listener's path; restart the Router to apply it. A listener's `api_keys`,
+`apis` and `identity` change without a restart.
 
 The Router records every activation, from any source, in one history of the
 last 10 versions (`-config-history-limit` changes it). Every configuration file
@@ -437,6 +438,10 @@ fields. They exist only on the management listener. `/v1/files` and
 `/v1/vector_stores` are not inference-listener aliases and are not registered
 by the Router API.
 
+Deleting a file first detaches it from every vector store it is attached to,
+so its chunks stop answering searches. If a detach fails, the delete returns
+`500` and the file and its attachments stay, so the delete can be retried.
+
 ## Discover and inspect plugins
 
 `GET /api/v1/plugins` projects the canonical plugin registry, including each
@@ -457,17 +462,16 @@ it does not duplicate their state under a plugin-specific resource tree.
 | Plugin behavior | Operation |
 | --- | --- |
 | `system_prompt`, `request_params`, `header_mutation`, `fast_response` | `POST /api/v1/plugins/{type}/preview` using a typed candidate `configuration` or an active `binding` |
-| `hallucination`, `response_jailbreak` | Preview an active policy and its supplied conditions; `mode: probe` invokes its configured detectors |
-| `rag` | Preview context injection with `supplied_context`; `mode: probe` performs configured retrieval without the RAG result cache |
-| `tools`, `tool_selection` | Preview static tool policy; semantic selection requires explicit `mode: probe` |
-| `context_compression` | Preview retained targets and budgets using the existing compression contract |
-| `response_cache`, `memory` | Operate their resources under `/api/v1/storage` |
-| `router_replay`, `shadow_dispatch` | Inspect recorded outcomes under `/api/v1/observability/replays` |
+| `response_guard` | Read an active guard's rules over a supplied question, context and answer; `mode: probe` invokes the configured models |
+| `context` | Preview a RAG source's context injection with `supplied_context`; `mode: probe` performs configured retrieval without the RAG result cache. Compression has its own preview under `/api/v1/plugins/context/compression` |
+| `tools` | Preview the tools policy; the decision model's tool selection requires explicit `mode: probe` |
+| `response_cache`, memory sources | Operate their resources under `/api/v1/storage` |
+| `router_replay` | Inspect recorded outcomes under `/api/v1/observability/replays` |
 
 The guard, RAG, and tool previews require an explicit
 `binding: {"recipe":"<name>","decision":"<name>"}`. Their default `mode` is
-`preview`; they do not automatically escalate to a probe. A probe may invoke a
-configured local or remote classifier, embedding service, or retrieval backend.
+`preview`; they do not automatically escalate to a probe. A probe may invoke the
+decision model, an embedding deployment, or a retrieval backend.
 RAG previews require `data.read`, tool-policy previews require `config.read`,
 and guard probes require `classify.invoke`. These operations never execute a
 selected tool or generate a provider response. Returned
@@ -520,10 +524,10 @@ and authorization metadata, not request bodies or plugin payloads.
 
 | Method | Path | Use |
 | --- | --- | --- |
-| `GET` | `/api/v1/plugins/context_compression/capabilities` | Runtime capabilities |
-| `GET` | `/api/v1/plugins/context_compression/health` | Runtime health |
-| `GET` | `/api/v1/observability/plugins/context_compression/stats` | Redacted statistics |
-| `POST` | `/api/v1/plugins/context_compression/preview` | Preview compression without persistence |
+| `GET` | `/api/v1/plugins/context/compression/capabilities` | Runtime capabilities |
+| `GET` | `/api/v1/plugins/context/compression/health` | Runtime health |
+| `GET` | `/api/v1/observability/plugins/context/compression/stats` | Redacted statistics |
+| `POST` | `/api/v1/plugins/context/compression/preview` | Preview compression without persistence |
 | `POST` | `/api/v1/storage/context-recovery/invalidate` | Invalidate a trusted recovery scope |
 
 Use `preview` to evaluate what would be retained before enabling compression on
@@ -575,7 +579,7 @@ The former `/api/v1/response-cache/*` and
 `/api/v1/context-compression/*` routes are retired. Clients should rediscover
 operations from `/api/v1` or `/api/v1/plugins`: cache operations now use
 `/api/v1/storage/response-cache/*`; compression capabilities, health, and preview
-use `/api/v1/plugins/context_compression/*`; statistics, recovery invalidation,
+use `/api/v1/plugins/context/compression/*`; statistics, recovery invalidation,
 and audit use the observability/storage paths above. No redirect or legacy
 handler changes a mutation's meaning.
 
@@ -600,7 +604,7 @@ Validate, inspect, apply, version, and roll back Router configuration and Recipe
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/v1/config/recipes` | List the default and named routing recipes with their entrypoints |
+| `GET` | `/api/v1/config/recipes` | List the recipes with their entrypoints |
 | `POST` | `/api/v1/config/recipes/validate` | Validate a recipe mutation without writing or reloading config |
 | `GET` | `/api/v1/config/recipes/{name}` | Read one routing recipe and its entrypoints |
 | `PUT` | `/api/v1/config/recipes/{name}` | Atomically create or replace one routing recipe; requires If-Match |
@@ -650,11 +654,11 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 | `GET` | `/api/v1/observability/replays/dataset/judge-tasks` | Build blinded pairwise judge tasks over the shadow comparison dataset |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |
 | `GET` | `/api/v1/observability/audit` | Page through this Router process's bounded management mutation audit, configuration lifecycle outcomes included; filter by action and resume after a sequence |
-| `GET` | `/api/v1/observability/plugins/context_compression/stats` | Get redacted context-compression statistics |
+| `GET` | `/api/v1/observability/plugins/context/compression/stats` | Get redacted context-compression statistics |
 
 ### storage
 
-Manage Router-owned knowledge bases, memories, files, vector stores, cache partitions, and context recovery.
+Manage Router-owned memories, files, vector stores, cache partitions, and context recovery.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -665,13 +669,6 @@ Manage Router-owned knowledge bases, memories, files, vector stores, cache parti
 | `POST` | `/api/v1/storage/response-cache/invalidate` | Dry-run or invalidate a scoped response-cache partition |
 | `POST` | `/api/v1/storage/response-cache/flush` | Advance a scoped or global response-cache epoch |
 | `POST` | `/api/v1/storage/context-recovery/invalidate` | Invalidate a trusted context-recovery request scope |
-| `GET` | `/api/v1/storage/knowledge-bases` | List configured knowledge bases |
-| `POST` | `/api/v1/storage/knowledge-bases` | Create a managed knowledge base |
-| `GET` | `/api/v1/storage/knowledge-bases/{name}` | Read a knowledge base |
-| `GET` | `/api/v1/storage/knowledge-bases/{name}/map/metadata` | Read generated knowledge-base map metadata |
-| `GET` | `/api/v1/storage/knowledge-bases/{name}/map/data.ndjson` | Stream generated knowledge-base map data as NDJSON |
-| `PUT` | `/api/v1/storage/knowledge-bases/{name}` | Update a managed knowledge base |
-| `DELETE` | `/api/v1/storage/knowledge-bases/{name}` | Delete a managed knowledge base |
 | `GET` | `/api/v1/storage/memories` | List long-term memories |
 | `DELETE` | `/api/v1/storage/memories` | Delete memories by scope |
 | `GET` | `/api/v1/storage/memories/{id}` | Read one long-term memory |
@@ -697,9 +694,9 @@ Discover recipe-scoped plugin bindings, dependencies, and typed behavior preview
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/v1/plugins/context_compression/capabilities` | Get context-compression capabilities |
-| `GET` | `/api/v1/plugins/context_compression/health` | Check context-compression runtime health |
-| `POST` | `/api/v1/plugins/context_compression/preview` | Preview context compression without persistence |
+| `GET` | `/api/v1/plugins/context/compression/capabilities` | Get context-compression capabilities |
+| `GET` | `/api/v1/plugins/context/compression/health` | Check context-compression runtime health |
+| `POST` | `/api/v1/plugins/context/compression/preview` | Preview context compression without persistence |
 | `GET` | `/api/v1/plugins` | Discover every registered recipe-scoped plugin, its schema, bindings, and supported operations |
 | `GET` | `/api/v1/plugins/{type}` | Describe one canonical plugin type and its supported management operations |
 | `GET` | `/api/v1/plugins/{type}/bindings` | Inspect active recipe and decision plugin bindings and published dependency availability; does not probe network health |
@@ -707,11 +704,9 @@ Discover recipe-scoped plugin bindings, dependencies, and typed behavior preview
 | `POST` | `/api/v1/plugins/request_params/preview` | Preview the dispatch parameter policy, including blocked fields, defaults, and caps; no persistence or backend calls |
 | `POST` | `/api/v1/plugins/header_mutation/preview` | Preview ordered Envoy header operations; values require secret_view; no persistence or backend calls |
 | `POST` | `/api/v1/plugins/fast_response/preview` | Preview fixed assistant text before transport encoding; no persistence or backend calls |
-| `POST` | `/api/v1/plugins/response_jailbreak/preview` | Preview an active binding's response-jailbreak policy; mode=probe explicitly invokes its configured classifier without generation or persistence |
-| `POST` | `/api/v1/plugins/hallucination/preview` | Preview an active binding's hallucination policy and supplied fact-check/context conditions; mode=probe explicitly invokes configured detectors without generation or persistence |
-| `POST` | `/api/v1/plugins/rag/preview` | Preview configured RAG context injection using supplied_context; mode=probe retrieves from the configured backend without the RAG result cache or generation |
-| `POST` | `/api/v1/plugins/tools/preview` | Preview the configured tools policy; mode=probe permits semantic tool retrieval but never executes tools |
-| `POST` | `/api/v1/plugins/tool_selection/preview` | Preview the configured tool_selection policy; mode=probe permits configured retrieval and embedding calls but never executes tools |
+| `POST` | `/api/v1/plugins/response_guard/preview` | Preview what an active binding's response_guard does with an answer; mode=probe reads the guard's request-stage conditions on the question and its response-stage signals on the answer and context, without generation or persistence |
+| `POST` | `/api/v1/plugins/context/preview` | Preview the context plugin's rag source injection using supplied_context; mode=probe recalls from the configured backend and judges the documents, without the RAG result cache or generation |
+| `POST` | `/api/v1/plugins/tools/preview` | Preview the configured tools policy; mode=probe also lets the selection ask the decision model, and never executes tools |
 
 ### diagnostics
 
@@ -726,22 +721,15 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, and r
 | `POST` | `/api/v1/diagnostics/classify/user-feedback` | Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different) |
 | `POST` | `/api/v1/diagnostics/classify/combined` | Perform combined classification (intent, PII, and security) |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Batch classification with configurable task_type parameter |
-| `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |
-| `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
-| `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |
 | `POST` | `/api/v1/diagnostics/models/systemone/forward` | Forward a public native inference or discovery request through one active listener grant; requires management authorization and the original listener credentials |
 | `GET` | `/api/v1/instance` | Read the serving frontend capability mode and default native deployment |
 | `GET` | `/api/v1/diagnostics/models/tasks` | List shared judgment task templates, structural model capabilities and binding provenance |
 | `GET` | `/api/v1/diagnostics/models/systemone` | List published model deployments and their native System One question capabilities |
 | `POST` | `/api/v1/diagnostics/models/systemone` | Test native System One questions against a published deployment; preserves choice, score, noul, set, span, usage and metadata; 48 MiB request, 4 MiB response, 30 second deadline |
 | `GET` | `/api/v1/diagnostics/routes/systemone` | List active native recipe entrypoints for operator diagnostics without probing models; availability describes the routing plan, not backend health |
-| `POST` | `/api/v1/diagnostics/routes/systemone` | Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants |
+| `POST` | `/api/v1/diagnostics/routes/systemone` | Run a native recipe using operator classify.invoke permission; signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling; independent of public listener grants |
 | `GET` | `/api/v1/diagnostics/models` | List prepared model bindings in an explicitly selected recipe |
-| `POST` | `/api/v1/diagnostics/models/labels` | Inspect a prepared label distribution; windowed bindings preserve their configured scan |
-| `POST` | `/api/v1/diagnostics/models/label-scores` | Inspect independent label scores using the prepared operating point when configured |
-| `POST` | `/api/v1/diagnostics/models/tokens` | Inspect prepared token spans with original UTF-8 byte offsets and complete configured window scanning |
 | `POST` | `/api/v1/diagnostics/models/embeddings` | Run the explicitly selected prepared embedding binding at its published representation |
-| `POST` | `/api/v1/diagnostics/models/rerank` | Score query-document pairs using the selected prepared relevance binding without running a RAG request; max_batch_size applies (default 100 pairs) |
 <!-- END-GENERATED-ENDPOINT-INDEX -->
 
 ### Testing the Decision Model

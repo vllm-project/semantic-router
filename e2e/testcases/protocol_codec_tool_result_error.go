@@ -88,6 +88,12 @@ func runToolResultErrorPolicy(ctx context.Context, session, provider *fixtures.S
 	return nil
 }
 
+// toolResultErrorRefusal is the message of the Router's refusal of a failed
+// tool result its backend cannot carry: it names the setting that accepts the
+// loss.
+const toolResultErrorRefusal = "translation would lose tool_result.is_error; an operator can accept this loss " +
+	"by listing tool_result.is_error in global.router.allow_lossy_translation"
+
 func assertToolResultErrorRejection(result protocolMatrixHTTPResult, dispatched bool) error {
 	// Messages renders unsupported-feature errors using its native error type
 	// and message, not the internal neutral ProtocolError.Code field.
@@ -102,7 +108,7 @@ func assertToolResultErrorRejection(result protocolMatrixHTTPResult, dispatched 
 		return fmt.Errorf("invalid Messages error response: %w", err)
 	}
 	if result.StatusCode != http.StatusBadRequest || dispatched || wire.Type != "error" ||
-		wire.Error.Type != "invalid_request_error" || wire.Error.Message != "translation would lose tool_result.is_error" {
+		wire.Error.Type != "invalid_request_error" || wire.Error.Message != toolResultErrorRefusal {
 		return fmt.Errorf("failed tool result must be rejected before dispatch: status=%d dispatched=%t body=%s",
 			result.StatusCode, dispatched, truncateString(string(result.Body), 500))
 	}

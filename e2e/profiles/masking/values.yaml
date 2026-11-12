@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,57 +16,101 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
+      # A second model for the session cases, so a held model and a fresh
+      # decision's model differ.
+      - name: openai/mock-model-b
+        backend_refs:
+          - name: provider-mocker-b
+            provider: vllm
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
   # An explicit entrypoint, not a concrete model name. A concrete model goes
   # through handleSpecifiedModelRouting, which bypasses every recipe-local
   # decision and plugin -- masking would never run and the assertions would
   # be testing nothing.
   entrypoints:
+    - model_names: [vllm-sr/auto]
+      recipe: default
+      default: true
     - model_names: ["vllm-sr/masking"]
       recipe: masking
+    - model_names: ["vllm-sr/agent-session"]
+      recipe: agent-session
   recipes:
+    - name: default
+      decisions:
+        # Default-recipe fallback so a request that does not use the masking
+        # entrypoint still routes somewhere.
+        - name: default_route
+          description: Fallback with no masking
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
     - name: masking
       description: Masks detected PII before dispatch on every request
-      routing:
-        strategy: priority
-        signals: {}
-        decisions:
-          # There is no PII signal to gate on: masking calls the classifier
-          # directly at the dispatch boundary (applyMaskingBeforeDispatch)
-          # rather than through a routing-time signal.
-          - name: mask_pii
-            description: Masks detected PII before dispatch
-            priority: 100
-            rules:
-              operator: AND
-              conditions: []
-            modelRefs:
-              - model: openai/mock-model
-                use_reasoning: false
-            plugins:
-              - type: masking
-                configuration:
-                  enabled: true
-                  threshold: 0.5
-                  entity_types: []
-                  placeholders: {}
-  routing:
-    modelCards:
-      - name: openai/mock-model
-    decisions:
-      # Default-recipe fallback so a request that does not use the masking
-      # entrypoint still routes somewhere.
-      - name: default_route
-        description: Fallback with no masking
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/mock-model
-            use_reasoning: false
+      strategy: priority
+      signals:
+        pii:
+          # No decision gates on this rule: masking reads it at the
+          # dispatch boundary (applyMaskingBeforeDispatch), over the
+          # request as it is sent.
+          - name: personal_data
+            predicate:
+              gte: 0.5
+            description: Personal data masked before dispatch.
+      decisions:
+        - name: mask_pii
+          description: Masks detected PII before dispatch
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+          plugins:
+            - type: masking
+              configuration:
+                enabled: true
+                signal: personal_data
+                entity_types: []
+                placeholders: {}
+    # Two decisions that allow the same two models in opposite order, so a
+    # fresh decision on the second turn picks the other model and only
+    # session protection keeps the first one.
+    - name: agent-session
+      signals:
+        keywords:
+          - {name: session_plan, operator: OR, keywords: ["e2e-session-plan"], case_sensitive: false}
+          - {name: session_edit, operator: OR, keywords: ["e2e-session-edit"], case_sensitive: false}
+      decisions:
+        - name: session_plan
+          priority: 100
+          rules: {operator: AND, conditions: [{type: keyword, name: session_plan}]}
+          modelRefs: [{model: openai/mock-model}, {model: openai/mock-model-b}]
+        - name: session_edit
+          priority: 100
+          rules: {operator: AND, conditions: [{type: keyword, name: session_edit}]}
+          modelRefs: [{model: openai/mock-model-b}, {model: openai/mock-model}]
   global:
     router:
       strategy: priority
+      # Session protection at its default tuning, keyed on a header only the
+      # session cases send, so the masking cases are never held.
+      learning:
+        enabled: true
+        adaptation: {enabled: false}
+        protection:
+          enabled: true
+          scope: session
+          identity:
+            headers: {session: x-e2e-agent-session, agent: x-e2e-agent-id}
+          tuning:
+            idle_timeout_seconds: 3
     services:
       # The cross-protocol case sends /v1/responses, which needs the Responses
       # object store enabled or the router answers 404 before any masking runs.
@@ -76,54 +120,22 @@ config:
         ttl_seconds: 86400
         max_responses: 1000
     model_catalog:
-      kbs: []
-      external:
-        # The same remote token_spans.v1 stub the pii-remote-backend profile
-        # uses. No PII model is hosted here either; every span this profile
-        # sees came from this HTTP call.
-        - name: e2e-pii-spans
-          model_role: classification
-          llm_endpoint:
-            address: mock-pii-spans.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_model_name: pii-spans-service
-          llm_timeout_seconds: 5
-      modules:
-        classifier:
-          domain:
-            model_ref: ""
-            model_id: ""
-            category_mapping_path: ""
-          pii:
-            # No local selectors: model_ref and model_id are empty, so the
-            # candle PII path cannot run and every span comes from the remote
-            # backend below -- a detection here is attributable to it.
-            model_ref: ""
-            model_id: ""
-            pii_mapping_path: /app/models/pii-remote-backend/pii_type_mapping.json
-            backend:
-              protocol: http_classify
-              contract: token_spans.v1
-              model: e2e-pii-spans
-              deadline_ms: 5000
-            on_error: block
-        hallucination_mitigation:
-          enabled: false
-
-# The router requires a pii_type_mapping.json on disk even for a remote
-# backend, and the token_spans decoder needs it to resolve labels. Reuses the
-# same stand-in ConfigMap the pii-remote-backend profile applies as a
-# prerequisite -- no need for a second copy or the real model.
-extraVolumes:
-  - name: pii-mapping
-    configMap:
-      name: pii-remote-backend-mapping
-extraVolumeMounts:
-  - name: pii-mapping
-    mountPath: /app/models/pii-remote-backend/pii_type_mapping.json
-    subPath: pii_type_mapping.json
-    readOnly: true
+      deployments:
+        # provider-mocker's System One fixture (see its README), the same one
+        # the pii-remote-backend profile uses. No PII model is hosted here
+        # either; every span this profile sees came from this HTTP call.
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          schema: vllm-sr/4.0
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      # The PII signal asks only the fixture, so a detection here is
+      # attributable to it.
+      bindings:
+        pii: fake-systemone
 
 resources:
   # Same headroom as the other remote-backend profiles: taking the classifier

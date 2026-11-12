@@ -24,7 +24,9 @@ working directory, add this directory to `PYTHONPATH`, or install this package.
 | `POST /v1/images/generations` | Buffered Images with deterministic valid 1×1 PNGs |
 | `GET /health` | Readiness |
 | `GET /v1/models` | Configured model metadata |
-| `POST /classify` | Remote classifier and response guard fixture |
+| `POST /v1/systemone` | System One decisions for the Router's `systemone` deployments |
+| `GET /v1/systemone/models` | The one System One model it lists, `e2e/fake-systemone` |
+| `POST /v1/embeddings` | Deterministic embeddings for the Router's `openai_embeddings` deployments |
 | `GET /debug/last-request` | Last native request per test session |
 
 Images accept `response_format: b64_json` and `n` from 1 to 4. Images streaming,
@@ -35,7 +37,7 @@ exercises response framing and image decoding; it does not simulate image qualit
 inventories and provider extensions. Unknown fields return the native protocol's
 error envelope. Request observation preserves the original JSON, the request path,
 a SHA-256 digest of the `Authorization` header (not the credential) and only the
-`x-vsr-test-session-id` and `x-vsr-e2e-*` headers. Sessions use that header or query
+`x-vsr-test-session-id` and `x-e2e-*` headers. Sessions use that header or query
 parameter and otherwise share `__global__`. Observation and cache state are bounded
 and local to the single service worker.
 
@@ -69,8 +71,55 @@ with `timeout`, `malformed` and `queue` scenarios. POST `/reset` accepts `health
 
 Protocol marker inputs select tool calls (`__mock_tool_call__`), structured schema
 echo (`__mock_structured_output__`), HTTP 429 (`__mock_provider_error__`), incomplete
-SSE (`__mock_incomplete_stream__`) and partial-output errors
-(`__mock_midstream_error__`). Messages also recognizes `__mock_protocol_matrix__`.
+SSE (`__mock_incomplete_stream__`), a Chat stream held after its first chunk until
+`POST /debug/held-stream/{session}/release` (`__mock_held_stream__`; `GET
+/debug/held-stream/{session}` reports `holding`, `released` or `cancelled`) and
+partial-output errors
+(`__mock_midstream_error__`). Messages also recognizes `__mock_protocol_matrix__`
+and `__mock_gateway_fields__`, which adds fields no Messages schema declares: a
+`usage.total_cost` in exponent form and a top-level `gateway_trace_id`.
+
+## System One
+
+`/v1/systemone` answers the questions the Router compiles its application
+signals into, for a `systemone` deployment with
+`endpoint: http://<service>:8000/v1/systemone` and `model: e2e/fake-systemone`.
+It takes a standard request (`state` and `questions`) or a batch (`states`
+alone, answered entry by entry under the same names) and, like the model
+runtime, refuses a body that mixes the two with `invalid_request`.
+It runs no model and reads all of every text; markers in the text a question
+reads pin its answer:
+
+| Input | Answer |
+| --- | --- |
+| `__PII_SPAN__ <LABEL> <word>` | A span question offering `LABEL` (pii) finds it over the first copy of `<word>` |
+| `__SYSTEMONE_CHOICE__ <key>` | A choice question offering `key` (a turn_relation label, say) chooses it |
+| `Ignore all previous instructions` | A choice question offering `jailbreak` chooses it |
+| `__SYSTEMONE_YES__` | A noul question answers true |
+| `__SYSTEMONE_REJECT__` | A noul question about a candidate (a match judge's, such as `same_request`) answers false; any other noul question true |
+| An answer sentence its context lacks | A span question offering `unsupported` (hallucination) finds the first one |
+| `__SYSTEMONE_UNREAD__` | A `require_full_input` question fails with `max_length_exceeded` |
+| `__SYSTEMONE_UNAVAILABLE__` | The call fails with 503 |
+
+A state's images (PNG data URLs) carry markers in their `tEXt` chunks, which
+every question of that state reads with its text. The Router sends a request's
+images only to the questions whose rules read them (`input.image`), so a
+marker in an image reaches exactly those questions.
+
+Otherwise a choice question answers its first option, a noul false and a span
+question nothing. Choice, noul and span are the question types it lists; any
+other fails with `invalid_question`. A failed question carries its error in
+its answer, as a model runtime answers it, and the call's other questions are
+answered.
+
+`/v1/embeddings` serves an `openai_embeddings` deployment with
+`endpoint: http://<service>:8000/v1`, `model: e2e/fixture-embedding` and
+`dimensions: 256`. It runs no model. A text carrying `__EMBED_TOPIC__ <key>`
+embeds as that key alone, so every text of one topic has similarity 1 and a
+cache case pins its hits, and polarity flips that only the lexical guard can
+reject, without depending on a model's paraphrase quality. Any other text
+embeds as its words hashed into 256 buckets: a repeated text matches itself
+exactly and unrelated texts stay apart.
 
 ## Image inputs
 

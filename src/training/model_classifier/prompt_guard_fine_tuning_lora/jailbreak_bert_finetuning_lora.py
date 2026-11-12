@@ -25,29 +25,52 @@ from transformers import (
     set_seed,
 )
 
-# Import common LoRA utilities
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common_lora_utils import (
-    clear_gpu_memory,
-    create_lora_config,
-    log_memory_usage,
-    resolve_model_path,
-    set_gpu_device,
-    setup_logging,
-)
-from jailbreak_provenance import emit_evaluation_manifest, resolve_training_pins
-from jailbreak_training_assets import (
-    DATASET_CONFIGS,
-    LONG_JAILBREAK_PATTERNS,
-    SHORT_JAILBREAK_PATTERNS,
-)
-from jailbreak_training_helpers import (
-    compute_security_metrics,
-    create_security_training_args,
-    log_training_summary,
-    save_training_artifacts,
-    split_training_data,
-)
+if __package__:
+    from ..common_lora_utils import (
+        clear_gpu_memory,
+        create_lora_config,
+        log_memory_usage,
+        resolve_model_path,
+        set_gpu_device,
+        setup_logging,
+    )
+    from .jailbreak_provenance import emit_evaluation_manifest, resolve_training_pins
+    from .jailbreak_training_assets import (
+        DATASET_CONFIGS,
+        LONG_JAILBREAK_PATTERNS,
+        SHORT_JAILBREAK_PATTERNS,
+    )
+    from .jailbreak_training_helpers import (
+        compute_security_metrics,
+        create_security_training_args,
+        log_training_summary,
+        save_training_artifacts,
+        split_training_data,
+    )
+else:
+    # Script execution keeps the parent directory on the path for the shared helpers.
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from common_lora_utils import (
+        clear_gpu_memory,
+        create_lora_config,
+        log_memory_usage,
+        resolve_model_path,
+        set_gpu_device,
+        setup_logging,
+    )
+    from jailbreak_provenance import emit_evaluation_manifest, resolve_training_pins
+    from jailbreak_training_assets import (
+        DATASET_CONFIGS,
+        LONG_JAILBREAK_PATTERNS,
+        SHORT_JAILBREAK_PATTERNS,
+    )
+    from jailbreak_training_helpers import (
+        compute_security_metrics,
+        create_security_training_args,
+        log_training_summary,
+        save_training_artifacts,
+        split_training_data,
+    )
 
 # Setup logging
 logger = setup_logging()

@@ -64,8 +64,6 @@ export interface ReplayRouteDiagnostics {
   hard_lock_reason?: string
   decision_reason?: string
   signal_errors?: Record<string, string>
-  prompt_helper_model?: string
-  prompt_helper_latency_ms?: number
   request_demand_snapshots?: Array<{
     stage: string
     model?: string

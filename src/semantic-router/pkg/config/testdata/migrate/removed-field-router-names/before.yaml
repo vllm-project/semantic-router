@@ -1,0 +1,23 @@
+# The auto model names are the default recipe's entrypoint model names,
+# include_config_models_in_list is list_backend_models, and the Looper makes
+# its model calls in process, so its endpoint goes.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+global:
+  router:
+    auto_model_names: [MoM, vllm-sr/auto]
+    include_config_models_in_list: true
+  integrations:
+    looper:
+      endpoint: http://localhost:8899/v1/chat/completions

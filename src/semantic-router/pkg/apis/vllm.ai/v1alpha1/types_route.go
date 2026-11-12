@@ -41,27 +41,19 @@ type Signals struct {
 	// +kubebuilder:validation:MaxItems=100
 	Keywords []KeywordSignal `json:"keywords,omitempty" yaml:"keywords,omitempty"`
 
-	// Embeddings defines embedding-based signal extraction rules
-	// +optional
-	// +kubebuilder:validation:MaxItems=100
-	Embeddings []EmbeddingSignal `json:"embeddings,omitempty" yaml:"embeddings,omitempty"`
-
-	// Domains defines MMLU domain categories for classification
+	// Domains match the request's subject area. A domain's name is one of
+	// the domain labels (biology, business, chemistry, computer science,
+	// economics, engineering, health, history, law, math, other, philosophy,
+	// physics, psychology).
 	// +optional
 	// +kubebuilder:validation:MaxItems=14
 	Domains []DomainSignal `json:"domains,omitempty" yaml:"domains,omitempty"`
 
-	// FactCheckRules defines fact-check rules for signal classification
-	// Similar to KeywordRules and EmbeddingRules, but based on ML model classification
-	// Each rule has a name that can be referenced in decision conditions
+	// ContextRules match the request's token count.
 	// +optional
 	ContextRules []ContextRule `json:"contextRules,omitempty" yaml:"context_rules,omitempty"`
 
-	// Structure defines request-shape routing signals.
-	// +optional
-	// +kubebuilder:validation:MaxItems=100
-	Structure []StructureSignal `json:"structure,omitempty" yaml:"structure,omitempty"`
-
+	// FactCheckRules match a request whose answer needs fact checking.
 	// +optional
 	FactCheckRules []FactCheckRule `json:"factCheckRules,omitempty" yaml:"fact_check_rules,omitempty"`
 
@@ -69,11 +61,6 @@ type Signals struct {
 	// +optional
 	// +kubebuilder:validation:MaxItems=100
 	Conversation []ConversationSignal `json:"conversation,omitempty" yaml:"conversation,omitempty"`
-
-	// Events defines structured event metadata routing signals.
-	// +optional
-	// +kubebuilder:validation:MaxItems=100
-	Events []EventSignal `json:"events,omitempty" yaml:"events,omitempty"`
 }
 
 // FactCheckRule defines a rule for fact-check signal classification
@@ -118,26 +105,6 @@ type ContextRule struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
-type StructureSignal struct {
-	Name        string            `json:"name" yaml:"name"`
-	Description string            `json:"description,omitempty" yaml:"description,omitempty"`
-	Feature     StructureFeature  `json:"feature" yaml:"feature"`
-	Predicate   *NumericPredicate `json:"predicate,omitempty" yaml:"predicate,omitempty"`
-}
-
-type StructureFeature struct {
-	Type   string          `json:"type" yaml:"type"`
-	Source StructureSource `json:"source" yaml:"source"`
-}
-
-type StructureSource struct {
-	Type          string     `json:"type" yaml:"type"`
-	Pattern       string     `json:"pattern,omitempty" yaml:"pattern,omitempty"`
-	Keywords      []string   `json:"keywords,omitempty" yaml:"keywords,omitempty"`
-	CaseSensitive bool       `json:"caseSensitive,omitempty" yaml:"case_sensitive,omitempty"`
-	Sequences     [][]string `json:"sequences,omitempty" yaml:"sequences,omitempty"`
-}
-
 // ConversationSignal defines a conversation-shape routing signal.
 // It detects multi-turn history, developer instructions, tool presence, and
 // assistant-tool interaction patterns in the request.
@@ -158,18 +125,6 @@ type ConversationCRDFeature struct {
 type ConversationCRDSource struct {
 	Type string `json:"type" yaml:"type"`
 	Role string `json:"role,omitempty" yaml:"role,omitempty"`
-}
-
-// EventSignal defines a structured event metadata routing signal.
-// It detects event types, severities, action codes, and temporal urgency
-// from incident, audit, alert, or workflow payloads in the request.
-type EventSignal struct {
-	Name        string   `json:"name" yaml:"name"`
-	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
-	EventTypes  []string `json:"eventTypes,omitempty" yaml:"event_types,omitempty"`
-	Severities  []string `json:"severities,omitempty" yaml:"severities,omitempty"`
-	ActionCodes []string `json:"actionCodes,omitempty" yaml:"action_codes,omitempty"`
-	Temporal    bool     `json:"temporal,omitempty" yaml:"temporal,omitempty"`
 }
 
 type NumericPredicate struct {
@@ -201,6 +156,11 @@ type KeywordSignal struct {
 	// +kubebuilder:validation:MaxLength=100
 	Name string `json:"name" yaml:"name"`
 
+	// Description provides a human-readable explanation of the rule
+	// +optional
+	// +kubebuilder:validation:MaxLength=500
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
 	// Operator defines the logical operator for keywords (AND/OR)
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=AND;OR
@@ -212,75 +172,25 @@ type KeywordSignal struct {
 	// +kubebuilder:validation:MaxItems=100
 	Keywords []string `json:"keywords" yaml:"keywords"`
 
+	// Method regex matches each keyword as a regular expression; by default
+	// a keyword matches literally, as a word of its own
+	// +optional
+	// +kubebuilder:validation:Enum=regex
+	Method string `json:"method,omitempty" yaml:"method,omitempty"`
+
 	// CaseSensitive specifies whether keyword matching is case-sensitive
 	// +optional
 	// +kubebuilder:default=false
 	CaseSensitive bool `json:"caseSensitive" yaml:"caseSensitive"`
-}
 
-// EmbeddingSignal defines an embedding-based signal extraction rule
-type EmbeddingSignal struct {
-	// Name is the unique identifier for this signal
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=100
-	Name string `json:"name" yaml:"name"`
-
-	// Threshold accepts a cosine score, or positive-minus-negative margin when negatives are configured.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Minimum=-2
-	// +kubebuilder:validation:Maximum=2
-	Threshold float32 `json:"threshold" yaml:"threshold"`
-
-	// Candidates is the list of candidate phrases for semantic matching
+	// Count makes an OR rule match on the number of its keyword occurrences
 	// +optional
-	// +kubebuilder:validation:MaxItems=1000
-	Candidates []string `json:"candidates,omitempty" yaml:"candidates,omitempty"`
+	Count *NumericPredicate `json:"count,omitempty" yaml:"count,omitempty"`
 
-	// ImageCandidates contains local image paths or inline base64 images in the positive bank.
+	// Density makes an OR rule match on its keyword occurrences per 1,000
+	// characters; set Count or Density, not both
 	// +optional
-	// +kubebuilder:validation:MaxItems=1000
-	ImageCandidates []string `json:"imageCandidates,omitempty" yaml:"imageCandidates,omitempty"`
-
-	// NegativeCandidates contains text anchors subtracted from the positive score.
-	// +optional
-	// +kubebuilder:validation:MaxItems=1000
-	NegativeCandidates []string `json:"negativeCandidates,omitempty" yaml:"negativeCandidates,omitempty"`
-
-	// NegativeImageCandidates contains image anchors subtracted from the positive score.
-	// +optional
-	// +kubebuilder:validation:MaxItems=1000
-	NegativeImageCandidates []string `json:"negativeImageCandidates,omitempty" yaml:"negativeImageCandidates,omitempty"`
-
-	// AggregationMethod defines how to aggregate multiple candidate similarities
-	// +optional
-	// +kubebuilder:validation:Enum=mean;max;any
-	// +kubebuilder:default=max
-	AggregationMethod string `json:"aggregationMethod,omitempty" yaml:"aggregationMethod,omitempty"`
-
-	// PrototypeScoring overrides the family's prototype construction and scoring.
-	// An omitted object inherits the family; an empty object uses core defaults.
-	// +optional
-	PrototypeScoring *PrototypeScoringConfig `json:"prototypeScoring,omitempty" yaml:"prototypeScoring,omitempty"`
-
-	// QueryModality declares which modality of the incoming request payload
-	// the query embedding is computed from. Candidates are encoded according to their declared text or image field;
-	// the rule cosine-matches the text-anchor set against a query embedding
-	// produced from the declared modality, all in the shared multimodal
-	// embedding space.
-	//
-	// "text"  (default, backward-compatible): query embedded from request text.
-	// "image": query embedded from an image attachment (base64 data URI or
-	//          path). Requires the multi-modal embedding model to be loaded
-	//          via global.model_catalog.embeddings.semantic with
-	//          embedding_config.model_type=multimodal.
-	// "audio": query embedded from an audio attachment. Same requirement.
-	//
-	// Omitting this field is equivalent to "text" so existing rules behave
-	// identically.
-	// +optional
-	// +kubebuilder:validation:Enum=text;image;audio
-	QueryModality string `json:"queryModality,omitempty" yaml:"queryModality,omitempty"`
+	Density *NumericPredicate `json:"density,omitempty" yaml:"density,omitempty"`
 }
 
 // Decision defines a routing decision based on rule combinations
@@ -443,9 +353,9 @@ type SignalCombination struct {
 
 // SignalCondition defines a single signal condition
 type SignalCondition struct {
-	// Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation/event)
+	// Type defines the type of signal (keyword/domain/fact_check/context/conversation)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context;structure;conversation;event
+	// +kubebuilder:validation:Enum=keyword;domain;fact_check;context;conversation
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference
@@ -491,10 +401,9 @@ type ModelRef struct {
 
 // DecisionPlugin defines a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type is the plugin type. response_cache is canonical; semantic-cache,
-	// semantic_cache, and response-cache are deprecated aliases.
+	// Type is the plugin type.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;masking;memory;prompt_cache;rag;request_params;response-cache;response_cache;response_jailbreak;router_replay;semantic-cache;semantic_cache;shadow_dispatch;system_prompt;tools
+	// +kubebuilder:validation:Enum=context;fast_response;header_mutation;masking;prompt_cache;request_params;response_cache;response_guard;router_replay;system_prompt;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object
@@ -566,9 +475,6 @@ type RouteStatistics struct {
 
 	// Keywords indicates the number of keyword signals
 	Keywords int32 `json:"keywords" yaml:"keywords"`
-
-	// Embeddings indicates the number of embedding signals
-	Embeddings int32 `json:"embeddings" yaml:"embeddings"`
 
 	// Domains indicates the number of domain signals
 	Domains int32 `json:"domains" yaml:"domains"`

@@ -12,7 +12,14 @@ import subprocess
 from pathlib import Path
 from urllib.parse import urlencode
 
-from manual_ci import PAGE_SIZE, GitHubClient, ManualCIError, read_artifact
+from manual_ci import (
+    PAGE_SIZE,
+    GitHubClient,
+    ManualCIError,
+    api_failure,
+    main_contains,
+    read_artifact,
+)
 
 CHECK = "PR Gate"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"
@@ -28,18 +35,14 @@ COMMENT_ITEM_LIMIT = 30
 
 class StatusClient(GitHubClient):
     def write(self, endpoint: str, payload: dict, *, method="POST"):
-        result = subprocess.run(
+        result = self.gh(
             ["gh", "api", endpoint, "--method", method, "--input", "-"],
+            read=False,
             input=json.dumps(payload),
             text=True,
-            capture_output=True,
-            timeout=60,
-            check=False,
         )
         if result.returncode:
-            raise ManualCIError(
-                "Could not publish CI status; check workflow permissions."
-            )
+            raise api_failure(result, "Could not publish CI status")
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 
@@ -313,7 +316,7 @@ def presentation(
     if state in {"awaiting-approval", "legacy", "stale"}:
         lines += [
             "",
-            "Approval applies to this revision only. New commits or a changed merge base require fresh qualification.",
+            "Approval applies to this revision only. New commits require fresh qualification.",
         ]
     return titles[state], "\n".join(lines)
 
@@ -507,7 +510,7 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         jobs = [job for job in jobs if job.get("id") not in publisher_ids]
         report = artifact(client, repo, run, "ci-gate", "gate.json", 256 * 1024)
         state = verdict(run, plan, report, jobs)
-        if state != "failure" and pull.get("merge_commit_sha") != plan["source_sha"]:
+        if state != "failure" and not main_contains(client, repo, plan["base_sha"]):
             state = "stale"
     except (ManualCIError, KeyError, ValueError, TypeError):
         if not checks and not any(job.get("name") == "CI Execution" for job in jobs):

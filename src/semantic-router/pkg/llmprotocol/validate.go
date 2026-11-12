@@ -500,7 +500,7 @@ func validateReasoningEffort(request Request, limits Limits) error {
 
 func validateReasoningDisplay(request Request) error {
 	switch request.ReasoningDisplay {
-	case "", "summarized", "omitted":
+	case "", "summarized", "omitted", "updates":
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_display", "reasoning display mode is invalid", nil)
 	}
@@ -641,6 +641,12 @@ func contentKindIsOneOf(kind ContentKind, candidates ...ContentKind) bool {
 func validateContent(content Content, blocks *int, limits Limits, depth int) error {
 	if limits.ToolResultDepth <= 0 || depth > limits.ToolResultDepth {
 		return NewError(ErrorInvalidRequest, "tool_result_depth", "nested tool result depth exceeded", nil)
+	}
+	if content.ReasoningDetail != nil {
+		if content.Kind != ContentReasoning || content.Text != "" || content.Signature != "" || content.Reasoning != "" || hasNonTextFields(content) || len(content.Citations) != 0 || content.Cache != nil {
+			return NewError(ErrorInvalidRequest, "invalid_reasoning_detail", "continuity block contains unrelated content fields", nil)
+		}
+		return ValidateReasoningDetail(*content.ReasoningDetail, limits)
 	}
 	if err := validateCacheDirective(content.Cache); err != nil {
 		return err

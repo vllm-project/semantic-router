@@ -18,7 +18,7 @@ describe('native auto observations', () => {
   })
   it('groups actual stage outcomes without counting a rejection as an error', () => {
     const item = (stage: string, outcome: string, count: string) => ({
-      metric: { algorithm: 'cascade', model: 'fast', stage, outcome },
+      metric: { algorithm: 'escalate', model: 'fast', stage, outcome },
       value: [0, count],
     })
     expect(
@@ -32,8 +32,8 @@ describe('native auto observations', () => {
       ),
     ).toEqual([
       {
-        label: 'cascade / first · fast',
-        algorithm: 'cascade',
+        label: 'escalate / first · fast',
+        algorithm: 'escalate',
         stage: 'first',
         model: 'fast',
         accepted: 7,

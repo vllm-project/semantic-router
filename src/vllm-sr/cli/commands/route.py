@@ -21,6 +21,7 @@ from cli.routing_preview import build_preview_request
 from cli.terminal import echo
 from cli.url_display import redact_url
 from cli.utils import get_logger
+from cli.vsr_trace import TRACE_HEADER, WARNINGS_HEADER, parse_trace, trace_value
 
 log = get_logger(__name__)
 
@@ -325,10 +326,9 @@ _ROUTING_RECEIPT_HEADERS = (
     "x-vsr-replay-id",
     "x-vsr-selected-recipe",
     "x-vsr-selected-decision",
-    "x-vsr-selected-confidence",
-    "x-vsr-selected-algorithm",
     "x-vsr-selected-model",
     "x-vsr-response-path",
+    WARNINGS_HEADER,
 )
 
 
@@ -339,12 +339,17 @@ def _response_body(response: requests.Response) -> Any:
         return response.text
 
 
-def _routing_receipt_headers(response: requests.Response) -> dict[str, str]:
-    return {
+def _routing_receipt_headers(response: requests.Response) -> dict[str, Any]:
+    receipt: dict[str, Any] = {
         name: value
         for name in _ROUTING_RECEIPT_HEADERS
         if (value := response.headers.get(name))
     }
+    if trace := parse_trace(response.headers.get(TRACE_HEADER)):
+        receipt["trace"] = {
+            name: member.items or member.value for name, member in trace.items()
+        }
+    return receipt
 
 
 def _probe_assertions(
@@ -369,18 +374,29 @@ def _probe_assertions(
     if HTTPStatus.OK <= expected_status < HTTPStatus.MULTIPLE_CHOICES:
         assertions.append(delivery_assertion(response_body))
     expectations = {
-        "x-vsr-selected-recipe": expected_recipe,
-        "x-vsr-selected-decision": expected_decision,
-        "x-vsr-selected-algorithm": expected_algorithm,
-        "x-vsr-selected-model": expected_selected_model,
+        "x-vsr-selected-recipe": (
+            expected_recipe,
+            response.headers.get("x-vsr-selected-recipe", ""),
+        ),
+        "x-vsr-selected-decision": (
+            expected_decision,
+            response.headers.get("x-vsr-selected-decision", ""),
+        ),
+        "trace.algorithm": (
+            expected_algorithm,
+            trace_value(response.headers, "algorithm"),
+        ),
+        "x-vsr-selected-model": (
+            expected_selected_model,
+            response.headers.get("x-vsr-selected-model", ""),
+        ),
     }
-    for header, expected in expectations.items():
+    for field_name, (expected, actual) in expectations.items():
         if expected is None:
             continue
-        actual = response.headers.get(header, "")
         assertions.append(
             {
-                "field": header,
+                "field": field_name,
                 "expected": expected,
                 "actual": actual,
                 "passed": actual == expected,
@@ -436,7 +452,13 @@ def _probe_assertions(
 @click.option(
     "--target", default=None, help="Deployment target used for URL resolution."
 )
-@click.option("--debug/--no-debug", default=True, show_default=True)
+@click.option(
+    "--debug/--no-debug",
+    default=True,
+    show_default=True,
+    help="Ask for x-vsr-trace. The Router sends it only when "
+    "global.router.headers.debug allows this caller.",
+)
 @click.option("--expect-status", type=int, default=HTTPStatus.OK, show_default=True)
 @click.option("--expect-recipe", default=None)
 @click.option("--expect-decision", default=None)

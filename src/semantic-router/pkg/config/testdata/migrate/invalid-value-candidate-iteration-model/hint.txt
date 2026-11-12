@@ -1,0 +1,1 @@
+recipes[default].decisions[support].candidateIterations[0].models[1]: invalid_value: a candidate iteration model names a model providers.models does not declare; run `vllm-sr config migrate` (the iteration without the model, and with no model left, the decision without the iteration; declare the model in providers.models to keep it)

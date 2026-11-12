@@ -58,12 +58,9 @@
                       "tool_calls": [
                         {
                           "custom": {
-                            "input": "*** Begin Patch\n",
-                            "name": "apply_patch"
+                            "input": "*** Begin Patch\n"
                           },
-                          "id": "call_1",
-                          "index": 0,
-                          "type": "custom"
+                          "index": 0
                         }
                       ]
                     },
@@ -85,12 +82,9 @@
                       "tool_calls": [
                         {
                           "custom": {
-                            "input": "*** Add File: hello.txt\n+hi\n*** End Patch\n",
-                            "name": "apply_patch"
+                            "input": "*** Add File: hello.txt\n+hi\n*** End Patch\n"
                           },
-                          "id": "call_1",
-                          "index": 0,
-                          "type": "custom"
+                          "index": 0
                         }
                       ]
                     },

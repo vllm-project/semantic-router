@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -60,7 +61,7 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackendWithDiagnostics(
 	if request.ReasoningDisplay != "" {
 		if request.ReasoningDisplay != "omitted" {
 			return request, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_reasoning_display",
-				"the selected backend cannot produce summarized reasoning", nil)
+				fmt.Sprintf("the selected backend cannot produce thinking display %q", request.ReasoningDisplay), nil)
 		}
 		// The Router enforces omitted on the client response, both buffered
 		// and streaming, instead of relying on a backend display control.
@@ -70,8 +71,12 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackendWithDiagnostics(
 	if changed {
 		projected.Generation++ // The source envelope no longer describes this request.
 	}
-	projected, diagnostics := llmprotocol.ProjectAnthropicCacheDirectives(projected, target)
-	return projected, diagnostics, nil
+	var systemDiagnostics llmprotocol.Diagnostics
+	if r.Config != nil && slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldSystemMessageRole) {
+		projected, systemDiagnostics = llmprotocol.ProjectAnthropicSystemMessages(projected, target)
+	}
+	projected, cacheDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(projected, target)
+	return projected, append(systemDiagnostics, cacheDiagnostics...), nil
 }
 
 func anthropicBackendCanDisableReasoning(family *config.ReasoningFamilyConfig) bool {
@@ -128,10 +133,13 @@ func explicitAnthropicReasoningDisabled(ctx *RequestContext, dispatch *providerD
 		dispatch.targetFormat != llmprotocol.AnthropicMessagesV1
 }
 
-func preserveExplicitAnthropicReasoning(request *llmprotocol.Request, target llmprotocol.WireFormat) bool {
+// preserveExplicitAnthropicReasoningOff keeps an Anthropic client's explicit
+// thinking-off on a Chat or Responses backend, as the Chat path does. Adaptive
+// thinking leaves the choice to the decision on every backend format.
+func preserveExplicitAnthropicReasoningOff(request *llmprotocol.Request, target llmprotocol.WireFormat) bool {
 	return request != nil && request.Trusted.SourceFormat == llmprotocol.AnthropicMessagesV1 &&
 		target != llmprotocol.AnthropicMessagesV1 &&
-		(request.ReasoningMode == llmprotocol.ReasoningModeAdaptive || request.ReasoningMode == llmprotocol.ReasoningModeDisabled)
+		request.ReasoningMode == llmprotocol.ReasoningModeDisabled
 }
 
 func clientResponseMutation(ctx *RequestContext, backend llmprotocol.WireFormat) protocolcodec.ResponseMutation {

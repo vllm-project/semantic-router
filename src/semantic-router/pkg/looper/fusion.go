@@ -356,6 +356,7 @@ func (l *FusionLooper) runFusionFinal(
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}
 	applyJSONActionOutputContract(req.OutputContractSpec, resp, panelResponses)
+	applyReferenceSelectionOutputContract(req.OutputContractSpec, resp, panelResponses)
 	applyFinalOutputContract(req.OutputContractSpec, resp)
 	return resp, nil
 }
@@ -556,7 +557,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 					"role":    "assistant",
 					"content": finalResp.Content,
 				},
-				"finish_reason": "stop",
+				"finish_reason": backendFinishReason(finalResp),
 			},
 		},
 		"usage": usage.Map(),
@@ -624,12 +625,12 @@ func (l *FusionLooper) formatFusionStreamingResponse(
 		err  error
 	)
 	if finalResp.HasToolCalls {
-		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw)
+		body, err = buildStreamingToolCallSSE(id, timestamp, finalResp)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content)
+		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content, backendFinishReason(finalResp))
 	}
 	resp := streamingLooperResponse(body, finalResp.Model, modelsUsed, iterations, "fusion")
 	resp.IntermediateResponses = trace
@@ -642,6 +643,7 @@ func buildFusionStreamingSSE(
 	created int64,
 	model string,
 	content string,
+	finishReason string,
 ) []byte {
 	var body []byte
 	roleChoice := map[string]interface{}{
@@ -661,7 +663,7 @@ func buildFusionStreamingSSE(
 	finalChoice := map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{},
-		"finish_reason": "stop",
+		"finish_reason": finishReason,
 	}
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, finalChoice, nil))
 	return appendSSEDone(body)
