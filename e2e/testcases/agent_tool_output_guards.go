@@ -25,16 +25,19 @@ import (
 // marker, see its README).
 func init() {
 	pkgtestcases.Register("agent-tool-output-guards", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Personal data or an instruction in a coding agent's tool result is blocked before dispatch on Chat, Responses and Messages, buffered and streamed",
 		Tags:        []string{"pii", "jailbreak", "coding-agent", "cross-protocol", "security"},
 		Fn:          testAgentToolOutputGuards,
 	})
 	pkgtestcases.Register("agent-tool-output-unreadable", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "A tool result the Router cannot read as text is blocked by a tool-output rule with on_unscanned: match, buffered and streamed",
 		Tags:        []string{"pii", "coding-agent", "fail-closed"},
 		Fn:          testAgentToolOutputUnreadable,
 	})
 	pkgtestcases.Register("agent-tool-output-fails-closed", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "A tool-output guard whose deployment fails blocks the request instead of passing it on every protocol",
 		Tags:        []string{"pii", "jailbreak", "coding-agent", "cross-protocol", "fail-closed"},
 		Fn:          testAgentToolOutputFailsClosed,
