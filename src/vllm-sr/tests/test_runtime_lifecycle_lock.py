@@ -7,14 +7,18 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
-from cli.pending_activation import heartbeat_file
+from cli.container_backend import ContainerBackend
+from cli.pending_activation import SERVE_WAITING, heartbeat_file
+from cli.runtime_config_lock import acquire_runtime_config_lock
 from cli.runtime_lifecycle_lock import (
     RuntimeLifecycleLockError,
     _resolve_lock_directory,
     acquire_runtime_lifecycle_lock,
 )
+from cli.runtime_stack import STACK_NAME_ENV
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX file lock contract")
 
@@ -199,6 +203,145 @@ def test_takeover_refuses_unverified_holder(private_tmp_path: Path, invalid: str
         process.terminate()
         process.wait(timeout=5)
         process.stderr.close()
+
+
+_INSTALLER_SERVE = """import signal
+import sys
+import time
+from cli.pending_activation import serve_heartbeat, SERVE_WAITING, heartbeat_file
+from cli.runtime_config_lock import acquire_runtime_config_lock
+from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
+
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+lock_root, config, state_root = sys.argv[2:5]
+config_lock = acquire_runtime_config_lock(
+    runtime_config_path=config, state_root_dir=state_root,
+    stack_name='audit-a', timeout_seconds=0,
+)
+with acquire_runtime_lifecycle_lock(
+    runtime='docker', stack_name='audit-a', lock_root=lock_root,
+    command='vllm-sr serve', state='starting',
+    heartbeat_path=heartbeat_file(config),
+):
+    with config_lock.released():
+        with serve_heartbeat(config, interval=60) as set_state:
+            set_state(SERVE_WAITING)
+            while True:
+                time.sleep(1)
+"""
+
+
+def _installer_serve(private_tmp_path: Path):
+    """A background serve waiting for setup, holding both locks the way core does."""
+
+    lock_root = private_tmp_path / "locks"
+    config = private_tmp_path / "runtime-config.yaml"
+    state_root = private_tmp_path / "state"
+    state_root.mkdir()
+    script = private_tmp_path / "vllm-sr"
+    script.write_text(_INSTALLER_SERVE, encoding="utf-8")
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(script),
+            "serve",
+            str(lock_root),
+            str(config),
+            str(state_root),
+        ],
+        env=environment,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    heartbeat = heartbeat_file(config)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            pytest.fail(f"installer serve exited: {process.stderr.read()}")
+        if heartbeat.exists() and SERVE_WAITING in heartbeat.read_text("utf-8"):
+            break
+        time.sleep(0.01)
+    else:
+        pytest.fail("installer serve never reported waiting")
+    return process, lock_root, config, state_root
+
+
+@pytest.fixture
+def installer_serve(private_tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    process, lock_root, config, state_root = _installer_serve(private_tmp_path)
+    monkeypatch.setenv(STACK_NAME_ENV, "audit-a")
+    monkeypatch.setattr(
+        "cli.runtime_lifecycle_lock._default_lock_directory", lambda: lock_root
+    )
+    monkeypatch.setattr("cli.container_backend.get_container_runtime", lambda: "docker")
+    monkeypatch.setattr("cli.container_backend.attach_controller", MagicMock())
+    monkeypatch.setattr("cli.container_backend.stop_managed_controller", MagicMock())
+    try:
+        yield process, config, state_root
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=35)
+        process.stderr.close()
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"),
+    reason="safe process signaling requires Linux pidfd",
+)
+def test_serve_names_stop_for_a_serve_waiting_for_setup(
+    installer_serve, monkeypatch: pytest.MonkeyPatch
+):
+    process, config, state_root = installer_serve
+    start = MagicMock()
+    monkeypatch.setattr("cli.container_backend.start_vllm_sr", start)
+
+    config_lock = acquire_runtime_config_lock(
+        runtime_config_path=config,
+        state_root_dir=state_root,
+        stack_name="audit-a",
+        timeout_seconds=0,
+    )
+    try:
+        started = time.monotonic()
+        with pytest.raises(RuntimeLifecycleLockError) as error:
+            ContainerBackend().deploy(
+                str(config),
+                runtime_config_file=str(config),
+                runtime_config_lock=config_lock,
+            )
+        elapsed = time.monotonic() - started
+    finally:
+        config_lock.close()
+
+    message = str(error.value)
+    assert f"pid {process.pid}" in message
+    assert f"state {SERVE_WAITING}" in message
+    assert "Run `vllm-sr stop`" in message
+    assert "kill -TERM" not in message
+    assert elapsed < 2
+    start.assert_not_called()
+    assert process.poll() is None
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"),
+    reason="safe process signaling requires Linux pidfd",
+)
+def test_stop_ends_a_serve_waiting_for_setup(
+    installer_serve, monkeypatch: pytest.MonkeyPatch
+):
+    process, _config, _state_root = installer_serve
+    stop = MagicMock()
+    monkeypatch.setattr("cli.container_backend.stop_vllm_sr", stop)
+
+    ContainerBackend().teardown()
+
+    assert process.wait(timeout=5) == 0
+    stop.assert_called_once_with()
 
 
 def test_runtime_lifecycle_lock_separates_runtime_and_stack_keys(
