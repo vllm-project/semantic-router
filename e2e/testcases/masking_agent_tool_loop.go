@@ -35,11 +35,13 @@ var maskingEmailPlaceholder = regexp.MustCompile(`\[EMAIL_ADDRESS_\d+\]`)
 
 func init() {
 	pkgtestcases.Register("masking-agent-tool-loop", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "A coding-agent tool loop through Chat (buffered and streamed), Responses and Anthropic reaches the backend with personal data masked in tool output and tool call arguments, the same value under the same placeholder, and every call ID paired",
 		Tags:        []string{"masking", "pii", "cross-protocol", "agent", "functional"},
 		Fn:          testMaskingAgentToolLoop,
 	})
 	pkgtestcases.Register("masking-scan-error-fails-closed", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "A PII deployment error on a tool result behind a clean user turn, on every protocol, or on a Chat user turn returns 503 and dispatches nothing",
 		Tags:        []string{"masking", "pii", "agent", "fail-closed"},
 		Fn:          testMaskingScanErrorFailsClosed,

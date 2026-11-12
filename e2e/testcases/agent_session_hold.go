@@ -28,6 +28,7 @@ const (
 
 func init() {
 	pkgtestcases.Register("agent-session-holds-model", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "On Chat, Responses and Messages, a session keeps the model its first turn got when a later turn selects a decision that allows it, a subagent in it is held on its own model without disturbing the parent, and a request without the session, a new session and a session past its idle timeout get the decision's own model",
 		Tags:        []string{"session", "learning", "agent", "functional"},
 		Fn:          testAgentSessionHoldsModel,
