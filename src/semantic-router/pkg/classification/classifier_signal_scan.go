@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -70,6 +71,8 @@ type guardScan struct {
 	requestAlone bool
 	text         string
 	windows      []scanWindow
+	// size is the bytes of its windows but the last.
+	size int
 	// order is the windows' reading order (scanOrder).
 	order []int
 	// windowState is the state a window's call reads.
@@ -89,10 +92,14 @@ type guardScan struct {
 
 // scanBudget is how a deployment reads a long input: windows of size bytes,
 // or of up to most bytes when the input needs more than maxScanWindows of
-// them, each overlapping the one before by overlap bytes, at most parallel
-// of them in flight.
+// them or readTime is too short for them at the deployment's pace (perCall
+// plus perByte times a window's bytes, in seconds per window read), each
+// overlapping the one before by overlap bytes, at most parallel of them in
+// flight. Without a readTime, windows are not sized to a deadline.
 type scanBudget struct {
 	size, most, overlap, parallel int
+	readTime                      time.Duration
+	perCall, perByte              float64
 }
 
 // guardScanned reports whether a rule reads its input in windows: the
@@ -107,15 +114,18 @@ func guardScanned(asked askedRule) bool {
 
 // scanWindowBudget is how deployment reads a long input: its scan windows'
 // size and overlap in bytes, at most its card's question cap less the
-// reserve; the largest window that cap allows, which a long input's windows
-// may grow to (none larger without a cap, which says what the model takes);
-// and how many windows are in flight at a time.
+// reserve; the largest window a long input's windows may grow to, its
+// scan_window.max_tokens or else that cap (none larger without either, as
+// only they say what the model takes); and how many windows are in flight at
+// a time.
 func (c *Classifier) scanWindowBudget(deployment string) scanBudget {
 	window := c.Config.ModelDeployments[deployment]
 	tokens, overlap := window.ScanWindowTokens()
 	size := c.budgetBytes(deployment, tokens)
 	most := size
-	if card, known := c.deploymentCard(deployment); known && card.QuestionTokens() > 0 {
+	if maxTokens := window.ScanWindowMaxTokens(); maxTokens > 0 {
+		most = max(size, c.budgetBytes(deployment, maxTokens))
+	} else if card, known := c.deploymentCard(deployment); known && card.QuestionTokens() > 0 {
 		most = max(size, c.budgetBytes(deployment, config.MaxModelInputTokens))
 	}
 	return scanBudget{
@@ -130,32 +140,39 @@ func newGuardScan(deployment string, state modelservice.Request, budget scanBudg
 		return nil
 	}
 	text, windowSize, windowState := scanSource(state, budget.size)
-	windows := fittedScanWindows(text, windowSize, budget.most-budget.size+windowSize, min(budget.overlap, windowSize/2-1))
+	windows, size := sizedScanWindows(text, windowSize, budget.most-budget.size+windowSize, min(budget.overlap, windowSize/2-1), budget)
 	// The order's turn comes from crypto/rand: a client that could predict
 	// it could put an attack where the windows read last are.
 	var turn [2]byte
 	_, _ = cryptorand.Read(turn[:])
 	return &guardScan{
-		deployment: deployment, whole: state, text: text, windows: windows, order: scanOrder(len(windows), int(binary.LittleEndian.Uint16(turn[:]))),
+		deployment: deployment, whole: state, text: text, windows: windows, size: size, order: scanOrder(len(windows), int(binary.LittleEndian.Uint16(turn[:]))),
 		windowState: windowState, parallel: budget.parallel, stop: func() {},
 		responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)),
 	}
 }
 
-// fittedScanWindows cuts text into windows of size bytes or, when that takes
-// more than maxScanWindows, into the fewest windows of up to most bytes that
-// do, so the bound leaves no text unread unless even the largest windows
-// cannot cover it.
-func fittedScanWindows(text string, size, most, overlap int) []scanWindow {
+// sizedScanWindows cuts text into windows of size bytes or into larger ones,
+// up to most bytes, and returns them with the size it chose: as few as cover
+// the text in maxScanWindows when windows of size would be more, so the bound
+// leaves no text unread unless even the largest windows cannot cover it; and
+// the smallest at which the budget's pace reads all of them in its time when
+// those would not all be read, the largest when none would.
+func sizedScanWindows(text string, size, most, overlap int, budget scanBudget) ([]scanWindow, int) {
 	windows := scanWindowsOf(text, size, overlap)
-	if len(windows) <= maxScanWindows || most <= size {
-		return windows
+	grown, count := size, len(windows)
+	if count > maxScanWindows && most > size {
+		// A cut moves back to a character and a word boundary, so a window
+		// moves on by at least its size less the overlap and this much.
+		shortfall := overlap + routingViewSnap + utf8.UTFMax
+		grown = min(most, (len(text)+(maxScanWindows-1)*shortfall)/maxScanWindows+1)
+		count = windowCount(len(text), grown, overlap)
 	}
-	// A cut moves back to a character and a word boundary, so a window
-	// moves on by at least its size less the overlap and this much.
-	shortfall := overlap + routingViewSnap + utf8.UTFMax
-	fitted := min(most, (len(text)+(maxScanWindows-1)*shortfall)/maxScanWindows+1)
-	return scanWindowsOf(text, fitted, overlap)
+	grown = budget.pacedSize(len(text), grown, most, overlap, count)
+	if grown == size {
+		return windows, size
+	}
+	return scanWindowsOf(text, grown, overlap), grown
 }
 
 // scanSource is the text a state's windows cover, the window size that
@@ -301,6 +318,11 @@ type scanStopKey struct{}
 type scanStop struct {
 	ctx  context.Context
 	stop context.CancelFunc
+	// budgets are the budgets the stage's scans of each deployment cut their
+	// windows with, fixed at its first scan of the deployment: the scans of
+	// one input cut the same windows, and so share each window's call.
+	mu      sync.Mutex
+	budgets map[string]scanBudget
 }
 
 // withScanStop returns a request stage's context with the stop of its guard
@@ -308,7 +330,8 @@ type scanStop struct {
 func withScanStop(ctx context.Context) (context.Context, context.CancelFunc) {
 	stopped, stop := context.WithCancelCause(context.Background())
 	end := func() { stop(context.Canceled) }
-	return context.WithValue(ctx, scanStopKey{}, &scanStop{ctx: stopped, stop: func() { stop(errScanDecided) }}), end
+	state := &scanStop{ctx: stopped, stop: func() { stop(errScanDecided) }, budgets: map[string]scanBudget{}}
+	return context.WithValue(ctx, scanStopKey{}, state), end
 }
 
 // windowReaders are the work that reads scans' windows, and the function
@@ -320,12 +343,20 @@ func withScanStop(ctx context.Context) (context.Context, context.CancelFunc) {
 // decided a refusing rule, stays unread.
 func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]func(), func()) {
 	ctx, cancel := context.WithCancelCause(ctx)
-	release := func() { cancel(context.Canceled) }
+	unhook := func() bool { return false }
 	stop := func() {}
 	if stage, ok := ctx.Value(scanStopKey{}).(*scanStop); ok {
-		unhook := context.AfterFunc(stage.ctx, func() { cancel(context.Cause(stage.ctx)) })
-		release = func() { unhook(); cancel(context.Canceled) }
+		unhook = context.AfterFunc(stage.ctx, func() { cancel(context.Cause(stage.ctx)) })
 		stop = stage.stop
+	}
+	started := time.Now()
+	release := func() {
+		unhook()
+		elapsed, cause := time.Since(started), context.Cause(ctx)
+		for _, scan := range scans {
+			c.observePace(scan, elapsed, cause)
+		}
+		cancel(context.Canceled)
 	}
 	var readers []func()
 	for _, scan := range scans {

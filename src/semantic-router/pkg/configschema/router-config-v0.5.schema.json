@@ -2382,6 +2382,11 @@
           "type": "integer",
           "maximum": 64,
           "minimum": 1
+        },
+        "max_tokens": {
+          "type": "integer",
+          "maximum": 1048576,
+          "minimum": 256
         }
       },
       "additionalProperties": false,

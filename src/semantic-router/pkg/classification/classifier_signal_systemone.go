@@ -251,8 +251,9 @@ type systemOneCall struct {
 // deployment in one call, a batch with an entry per state when it reads
 // several. A rule that does not read its whole input reads the routing view
 // of its state, and a guard rule whose input is longer than one window reads
-// it in windows: the scans returned, whose windows windowReaders reads.
-func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading) ([]*systemOneCall, []*guardScan) {
+// it in windows: the scans returned, whose windows windowReaders reads,
+// sized to the time ctx leaves them.
+func (c *Classifier) systemOneCalls(ctx context.Context, rules []askedRule, reading systemOneReading) ([]*systemOneCall, []*guardScan) {
 	var calls []*systemOneCall
 	var scans []*guardScan
 	for _, asked := range rules {
@@ -264,7 +265,7 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 		state := reading.state(asked.rule)
 		switch {
 		case guardScanned(asked):
-			if scan := c.guardScanOf(&scans, deployment, state, reading); scan != nil {
+			if scan := c.guardScanOf(ctx, &scans, deployment, state, reading); scan != nil {
 				scan.rules = append(scan.rules, asked)
 				continue
 			}
@@ -286,13 +287,13 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 
 // guardScanOf is the scan of state on deployment among scans, a new one when
 // there is none, or nil when the state fits one window.
-func (c *Classifier) guardScanOf(scans *[]*guardScan, deployment string, state modelservice.Request, reading systemOneReading) *guardScan {
+func (c *Classifier) guardScanOf(ctx context.Context, scans *[]*guardScan, deployment string, state modelservice.Request, reading systemOneReading) *guardScan {
 	for _, scan := range *scans {
 		if scan.deployment == deployment && sameState(scan.whole, state) {
 			return scan
 		}
 	}
-	scan := newGuardScan(deployment, state, c.scanWindowBudget(deployment))
+	scan := newGuardScan(deployment, state, c.scanBudgetFor(ctx, deployment))
 	if scan == nil {
 		return nil
 	}
@@ -385,7 +386,7 @@ func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResul
 			mu.Unlock()
 		}
 	}
-	calls, scans := c.systemOneCalls(rules, reading)
+	calls, scans := c.systemOneCalls(ctx, rules, reading)
 	work := make([]func(), 0, len(calls))
 	for _, call := range calls {
 		work = append(work, func() { c.evaluateSystemOneDeployment(ctx, results, mu, call) })
