@@ -44,6 +44,15 @@ The PR, main, weekly, and explicit qualification entrypoints share one verificat
   artifacts. A trusted status publisher exposes the branch-protection check
   **PR Gate**, including an explicit waiting state for committer authorization.
 
+An E2E case that fails is also a check-run annotation titled with its profile
+and case. Each profile's report, in the job summary, lists its failed cases and
+its five slowest cases above the full list.
+
+E2E Kubernetes jobs skip the hosted runner's toolchain cleanup while the root
+disk has at least 40G free, and record the disk in use when the batch ends.
+Within a job, later profiles reuse the Helm chart dependencies the first one
+built for the same `Chart.lock`.
+
 Display categories, execution workers, and verification identities are separate.
 Catalog IDs identify results even when a display name changes. Job names describe
 the execution boundary; model names and feature cases appear in its report.

@@ -1,10 +1,13 @@
 package framework
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -307,6 +310,8 @@ func (rg *ReportGenerator) generateMarkdown() string {
 		)
 	}
 
+	md += failedAndSlowestMarkdown(r.TestResults)
+
 	md += "\n### 📝 Test Cases\n\n"
 	for _, result := range r.TestResults {
 		status := "✅"
@@ -335,8 +340,8 @@ func (rg *ReportGenerator) generateMarkdown() string {
 			md += "  <details>\n  <summary>Details</summary>\n\n"
 			md += "  | Metric | Value |\n"
 			md += "  |--------|-------|\n"
-			for key, value := range result.Details {
-				md += fmt.Sprintf("  | %s | %v |\n", key, value)
+			for _, key := range slices.Sorted(maps.Keys(result.Details)) {
+				md += fmt.Sprintf("  | %s | %v |\n", key, result.Details[key])
 			}
 			md += "\n  </details>\n"
 		}
@@ -380,4 +385,40 @@ func (rg *ReportGenerator) generateMarkdown() string {
 // GetReport returns the current report
 func (rg *ReportGenerator) GetReport() *TestReport {
 	return rg.report
+}
+
+// failedAndSlowestMarkdown lists the failed cases with their errors, then the
+// five slowest cases, above the full list, so a reader finds both without
+// scanning every case.
+func failedAndSlowestMarkdown(results []TestResult) string {
+	md := ""
+	for _, result := range results {
+		if result.Passed {
+			continue
+		}
+		if md == "" {
+			md = "\n### ❌ Failed\n\n"
+		}
+		message := "failed"
+		if result.Error != nil {
+			message = result.Error.Error()
+		}
+		md += fmt.Sprintf("- **%s**: `%s`\n", result.Name, message)
+	}
+	slowest := slices.Clone(results)
+	slices.SortStableFunc(slowest, func(a, b TestResult) int {
+		da, _ := time.ParseDuration(a.Duration)
+		db, _ := time.ParseDuration(b.Duration)
+		return cmp.Compare(db, da)
+	})
+	if len(slowest) > 5 {
+		slowest = slowest[:5]
+	}
+	if len(slowest) > 1 {
+		md += "\n### ⏱ Slowest\n\n"
+		for _, result := range slowest {
+			md += fmt.Sprintf("- %s (%s)\n", result.Name, result.Duration)
+		}
+	}
+	return md
 }
