@@ -215,18 +215,18 @@ Envoy 无法对单个请求应用空闲超时、首字节超时、退避或 `Ret
 
 ## 对照上下文窗口检查提示 {#check-prompts-against-the-context-window}
 
-Router 会两次对照模型的 `context_window_size` 检查请求：在任何信号运行之前，对照请求能到达的每个模型；在决策之后，对照该决策的候选。它用为每个模型加载的分词器自己为提示计数，不请任何后端计数：
+Router 会两次对照模型的 `context_window_size` 检查请求：从请求到达起，对照请求能到达的每个模型；在决策之后，对照该决策的候选。它在信号运行的同时，用每个模型自己的分词器为提示计数，不请任何后端计数：
 
 ```yaml
 providers:
   models:
-    - name: long-context
+    - name: deepseek-v4.1-flash
       context_window_size: 1048576
-      tokenizer: /opt/vllm-sr/tokenizers/deepseek-v3
+      tokenizer: deepseek-ai/DeepSeek-V4.1-Flash   # 可选 @revision
       backend_refs:
         - name: primary
           provider: vllm
-          endpoint: long-context.example:8000
+          endpoint: deepseek.example:8000
           protocol: http
 global:
   router:
@@ -238,49 +238,37 @@ global:
 
 | 字段 | 默认值 | 作用 |
 | --- | --- | --- |
-| `providers.models[].tokenizer` | 无：由代理分词器计数 | 模型自己的分词器：内置编码（`o200k_base`、`cl100k_base`）、Hugging Face `tokenizer.json` 或包含它的目录（绝对路径，或以 `./`、`../` 开头的路径），或 Hugging Face 仓库 id，即 `org/name` 或 `org/name@revision`。 |
+| `providers.models[].tokenizer` | 模型的 Hugging Face 仓库；没有时由代理分词器计数 | 模型自己的分词器：Hugging Face 仓库 id，即 `org/name` 或 `org/name@revision`；内置编码（`o200k_base`、`cl100k_base`）；或本地的 `tokenizer.json` 或包含它的目录（绝对路径，或以 `./`、`../` 开头的路径）。 |
 | `global.router.context_window.margin` | `0.03` | 用模型自己的分词器计数时，窗口周围的区间，以窗口的比例表示。 |
 | `global.router.context_window.proxy_margin` | `0.30` | 用代理分词器计数时的区间。 |
-| `global.router.context_window.proxy_tokenizer` | `o200k_base` | 为没有指定分词器、或其分词器尚未加载的模型的提示计数。 |
+| `global.router.context_window.proxy_tokenizer` | `o200k_base` | 为没有分词器、或其分词器尚未加载的模型的提示计数。 |
 
-- **分词器。**Router 内置 `o200k_base` 和 `cl100k_base`，并能读取字节级 BPE 的 `tokenizer.json`，即 DeepSeek、Qwen、GLM、MiniMax 和 gpt-oss 发布的那类文件。分词器在 Router 启动时加载。本地文件或目录无需其他设置，见[内置分词器文件](#vendor-tokenizers)。仓库 id 从 Hugging Face 缓存（`HF_HUB_CACHE`，或 `HF_HOME/hub`）读取；缓存中没有时，Router 会在后台把它的 `tokenizer.json` 下载到缓存中一次，受限仓库使用 `HF_TOKEN`，设置了 `HF_HUB_OFFLINE=1` 时不下载。在模型的分词器加载完成之前，或它无法加载时（文件缺失、SentencePiece 分词器），由代理分词器为它计数，日志记为 `tokenizer_unavailable`。
+- **分词器。**大多数模型无需设置 `tokenizer`。模型的目录卡片若在 Hugging Face 上发布开放权重（`distribution.source`），或由 vLLM、SGLang 等自托管引擎以仓库 id 提供服务（`provider_model_id: Qwen/Qwen3-8B`），就用该仓库的分词器计数。只有其他模型，或需要固定版本时，才需指定。Router 只下载仓库中的 `tokenizer.json`，使用与其他模型下载相同的 Hugging Face CLI 和设置（`HF_ENDPOINT`、受限仓库使用的 `HF_TOKEN`、`HF_HOME`、版本），存到同一个模型目录：`models/tokenizers/<org>/<name>`，或 `models/tokenizers/<org>/<name>@<revision>`。下载在 Router 启动时于后台进行，启动和请求都不等待；设置了 `HF_HUB_OFFLINE=1` 时不下载。Router 内置 `o200k_base` 和 `cl100k_base`，并能读取字节级 BPE 的 `tokenizer.json`，即 DeepSeek、Qwen、GLM、MiniMax 和 gpt-oss 发布的那类文件。
+- **分词器加载之前。**模型的分词器下载期间，或无法加载时（无法访问 Hugging Face、受限仓库没有 `HF_TOKEN`、SentencePiece 分词器），由代理分词器为它计数，并使用更宽的区间。日志记为 `tokenizer_pending`、`tokenizer_download_failed` 或 `tokenizer_unavailable`，该分词器的 `llm_context_window_tokenizer_loaded` 为 `0`；分词器加载完成后为 `1`，日志记为 `tokenizer_loaded`。
 - **字节上限。**字节级分词器产生的 token 数从不超过提示的 UTF-8 字节数。字节数加上聊天模板和消息框架的预留后，放得下请求能到达的最宽窗口的请求，不会被计数。
-- **计数。**更长的请求按每个分词器计数一次，分成多段并行，这个计数也用于决策之后的检查。计数覆盖文本、工具调用与结果、工具定义和输出 schema，并为聊天模板给每条消息加几个 token。4 MB 的提示在单核上约需 50 ms。带有图片、音频、视频或文件的请求不计数。
-- **区间。**用模型自己的分词器计数时，计数不超过窗口减去 `margin` 时放得下，达到窗口加上 `margin` 时放不下。代理计数可能与模型自己的计数相差较多：`o200k_base` 对中文文本的计数比某些模型的分词器高出多达四分之一，对英文和代码则略低。因此代理计数使用 `proxy_margin`，只有达到窗口加上 30% 时才拒绝。若计数排除了请求能到达的所有模型，Router 在任何信号读取请求之前，以 `400` 和 `context_length_exceeded` 应答，消息给出最宽的窗口和估算的计数；见[路由错误](../api/router#routing-errors)。计数介于两者之间时，请求继续发往后端，由后端决定；后端的拒绝以 `context_length_exceeded` 到达客户端，回退只会继续到窗口更宽的候选。若配方中有决策压缩上下文，拒绝留给决策之后的检查；若有决策替换客户端的系统提示或丢弃其工具（`none` 工具策略），只有去掉它们后仍超出区间的请求才会被拒绝。
-- **由什么决定。**每个模型的检查在每个请求中记录一次日志 `context_window_checked`，带上计数的种类（`exact` 或 `proxy`）、所用区间和结论（`fits`、`in_band` 或 `exceeds`），并计入 `llm_context_window_checks_total`；拒绝计入 `llm_context_window_refusals_total`，`llm_context_window_margin` 给出两个区间。
+- **计数。**更长的请求从到达起就开始计数，与包括守卫在内的信号同时进行，两者互不等待。每个分词器计数一次，分成多段并行，这个计数也用于决策之后的检查。计数覆盖文本、工具调用与结果、工具定义和输出 schema，并为聊天模板给每条消息加几个 token。4 MB 的提示在单核上约需 50 ms。带有图片、音频、视频或文件的请求不计数。
+- **区间。**用模型自己的分词器计数时，计数不超过窗口减去 `margin` 时放得下，达到窗口加上 `margin` 时放不下。代理计数可能与模型自己的计数相差较多：`o200k_base` 对中文文本的计数比某些模型的分词器高出多达四分之一，对英文和代码则略低。因此代理计数使用 `proxy_margin`，只有达到窗口加上 30% 时才拒绝。若计数排除了请求能到达的所有模型，Router 会取消仍在运行的信号，使守卫停止读取请求，并立即以 `400` 和 `context_length_exceeded` 应答，消息给出最宽的窗口和估算的计数；见[路由错误](../api/router#routing-errors)。计数介于两者之间时，请求继续发往后端，由后端决定；后端的拒绝以 `context_length_exceeded` 到达客户端，回退只会继续到窗口更宽的候选。若配方中有决策压缩上下文，拒绝留给决策之后的检查；若有决策替换客户端的系统提示或丢弃其工具（`none` 工具策略），只有去掉它们后仍超出区间的请求才会被拒绝。
+- **由什么决定。**每个模型的检查在每个请求中记录一次日志 `context_window_checked`，带上计数的种类（`exact` 或 `proxy`）、所用区间和结论（`fits`、`in_band` 或 `exceeds`），并计入 `llm_context_window_checks_total`；拒绝计入 `llm_context_window_refusals_total`，`llm_context_window_margin` 给出两个区间。`context_window_counted` 记录计数用时，以及请求在信号之后等待计数的时间，后者也记入 `llm_context_window_wait_seconds`：约为零。
 - **没有计数时。**带媒体的请求从不因长度被拒绝。它的 token 估算仍会让它避开窗口看起来太小的候选；当估算排除了所有候选时，最宽的候选保留。
 
 token 估算会根据后端报告的提示用量学习每个 token 的字节数比率。这个比率只用于把请求放进配方的[上下文区间](../tutorials/signal/heuristic/context)：它从不拒绝请求。
 
-### 内置分词器文件 {#vendor-tokenizers}
+### 无法访问 Hugging Face 时的分词器 {#tokenizers-without-hugging-face-access}
 
-用本地路径指定每个模型的分词器，Router 就能精确计数，运行时也不需要访问 Hugging Face：
+无法访问 Hugging Face 的 Router 从模型目录读取分词器，与其他模型相同。在能访问的环境中填好这个目录，再交付：
 
-1. 按固定的版本下载每个模型的 `tokenizer.json`，例如使用 Hugging Face CLI：
+1. 把每个分词器下载到 Router 查找的位置，或用 `--download-only` 运行一次 Router，它会连同其他模型一起下载分词器：
 
    ```bash
-   hf download deepseek-ai/DeepSeek-V3 tokenizer.json --revision <commit> --local-dir tokenizers/deepseek-v3
-   hf download Qwen/Qwen3-8B tokenizer.json --revision <commit> --local-dir tokenizers/qwen3-8b
+   hf download deepseek-ai/DeepSeek-V4.1-Flash --include tokenizer.json \
+     --local-dir models/tokenizers/deepseek-ai/DeepSeek-V4.1-Flash
+   hf download Qwen/Qwen3-8B --include tokenizer.json --revision <commit> \
+     --local-dir models/tokenizers/Qwen/Qwen3-8B@<commit>
    ```
 
-2. 让该目录随 Router 一起交付：复制进镜像，或从卷挂载（镜像卷、持久卷或主机路径）。ConfigMap 最多容纳 1 MiB，而一个 `tokenizer.json` 有 5 到 20 MB。
-
-   ```dockerfile
-   FROM ghcr.io/vllm-project/semantic-router/vllm-sr:latest
-   COPY tokenizers/ /opt/vllm-sr/tokenizers/
-   ```
-
-3. 在每个模型上指定该目录，或目录中的文件：
-
-   ```yaml
-   providers:
-     models:
-       - name: deepseek-v3
-         context_window_size: 131072
-         tokenizer: /opt/vllm-sr/tokenizers/deepseek-v3
-   ```
-
-4. 在 Router 启动时检查日志：`tokenizer_loaded` 给出每个分词器及其词表大小，`tokenizer_unavailable` 给出未能加载的分词器，其模型随后由代理分词器计数，并使用更宽的区间。
+2. 把 `models/` 作为 Router 的模型卷交付（镜像中为 `/app/models`），并设置 `HF_HUB_OFFLINE=1`。
+3. 配置保持不变：指定的或推断出的仓库 id 会找到这些文件。存放在别处的分词器也可以用路径指定，如 `tokenizer: /opt/tokenizers/glm/tokenizer.json`。
+4. 在 Router 启动时检查日志：`tokenizer_loaded` 给出每个分词器及其词表大小，`tokenizer_pending` 给出文件缺失的分词器，其模型随后由代理分词器计数，并使用更宽的区间。
 
 ## 回退到另一个模型 {#fall-back-to-another-model}
 
