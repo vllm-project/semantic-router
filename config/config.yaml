@@ -446,6 +446,9 @@ recipes:
           description: Content risk, independent of prompt attacks.
           predicate:
             gte: 0.52
+          # A long input read only in part decides on the windows read once
+          # they are a quarter of them; below that the rule is unknown.
+          min_coverage: 0.25
         - name: unsafe-privacy
           description: Requests that seek or expose private information.
           labels: ["PII/Privacy"]
@@ -540,6 +543,9 @@ recipes:
           # windows read; match matches the request (strict), and unknown
           # leaves the rule to on_unknown.
           on_unscanned: best_effort
+          # best_effort decides only once it has read half the windows;
+          # below that the rule is unknown, which on_unknown decides.
+          min_coverage: 0.5
           # A request none of whose windows the deployment answers matches
           # (fail closed, the default); no_match passes it.
           on_unknown: match
@@ -596,6 +602,7 @@ recipes:
             tool_results: true
             request: false
           deployment: primary
+          min_coverage: 0.5
         # The masking plugin of static_business_route masks what this rule
         # detects in the request as it is sent.
         - name: business_contact_pii

@@ -253,8 +253,7 @@ func (c *Classifier) PIIRuleSpans(ctx context.Context, ruleName string, text str
 	}
 	asked := applicationAsked(c.applicationRules[index])
 	deployment := c.Config.SystemOneRuleDeployment(asked.rule)
-	size, overlap, parallel := c.scanWindowBudget(deployment)
-	if scan := newGuardScan(deployment, modelservice.Request{State: text}, size, overlap, parallel); scan != nil {
+	if scan := newGuardScan(deployment, modelservice.Request{State: text}, c.scanWindowBudget(deployment)); scan != nil {
 		return c.piiScanSpans(ctx, ruleName, text, asked, scan)
 	}
 	call := &systemOneCall{deployment: deployment, request: modelservice.Request{State: text}, rules: []askedRule{asked}}
@@ -282,8 +281,9 @@ func (c *Classifier) PIIRuleSpans(ctx context.Context, ruleName string, text str
 // must be read whole, and their spans count at their places in the text.
 func (c *Classifier) piiScanSpans(ctx context.Context, ruleName, text string, asked askedRule, scan *guardScan) ([]modelservice.Span, error) {
 	scan.rules = []askedRule{asked}
-	readers := c.windowReaders(ctx, []*guardScan{scan})
+	readers, release := c.windowReaders(ctx, []*guardScan{scan})
 	modelservice.Fan(ctx, len(readers), func(i int) { readers[i]() })
+	release()
 	read, reason := scan.answers(asked)
 	if len(read) < len(scan.windows) {
 		return nil, fmt.Errorf("pii rule %q read %d of the text's %d windows: %w: %s", ruleName, len(read), len(scan.windows), modelservice.ErrUnavailable, reason)
