@@ -176,3 +176,45 @@ func TestConfigSecretViewsPreserveDelegatedPolicy(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigSecretViewsAllowSafeAliases(t *testing.T) {
+	for _, shipped := range []bool{false, true} {
+		t.Run(map[bool]string{false: "fixture with secret", true: "shipped mom-v1"}[shipped], func(t *testing.T) {
+			path := writeSecretConfig(t, configSecretFixture)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if shipped {
+				data, err = os.ReadFile(filepath.Join("..", "..", "..", "config", "recipes", "built-in", "v0.4", "mom-v1", "config.yaml"))
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				data = bytes.Replace(data, []byte("    signals:\n"), []byte("    signals:\n      keywords:\n        - name: first\n          operator: OR\n          keywords: &words [hello, world]\n        - name: second\n          operator: OR\n          keywords: *words\n"), 1)
+			}
+			if !bytes.Contains(data, []byte("*")) {
+				t.Fatal("fixture must contain a YAML alias")
+			}
+			if writeErr := os.WriteFile(path, data, 0o600); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+			for _, preview := range []bool{false, true} {
+				response := httptest.NewRecorder()
+				request := requestAs("/", "config.read", "config.write", "config.deploy")
+				if preview {
+					request = httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", strings.NewReader(`{"yaml":"routing: {}\n"}`)).WithContext(request.Context())
+					DeployPreviewHandler(path, false)(response, request)
+				} else {
+					ConfigYAMLHandler(path, false)(response, request)
+				}
+				if response.Code != http.StatusOK {
+					t.Errorf("safe alias preview=%v status=%d: %s", preview, response.Code, response.Body.String())
+				}
+				if strings.Contains(response.Body.String(), configSecretFixture) {
+					t.Error("safe alias view exposed the stored credential")
+				}
+			}
+		})
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 var errConfigSecretReuse = errors.New("redacted credentials must match an existing field; replace or clear credentials when their destination changes")
@@ -24,7 +26,15 @@ func restoreConfigSecrets(existing, updated []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := restoreConfigSecretNode(oldNode, newNode, false, configSecretTargetsChanged(oldNode, newNode), ""); err != nil {
+	oldTargets, err := configSecretComparisonDocument(oldNode)
+	if err != nil {
+		return nil, err
+	}
+	newTargets, err := configSecretComparisonDocument(newNode)
+	if err != nil {
+		return nil, err
+	}
+	if err := restoreConfigSecretNode(oldNode, newNode, false, configSecretTargetsChanged(oldTargets, newTargets, ""), ""); err != nil {
 		return nil, err
 	}
 	return yaml.Marshal(newNode)
@@ -44,7 +54,6 @@ func restoreConfigSecretNode(old, updated *yaml.Node, sensitive, targetChanged b
 	}
 	switch updated.Kind {
 	case yaml.MappingNode:
-		targetChanged = targetChanged || configSecretTargetChanged(old, updated)
 		for i := 0; i+1 < len(updated.Content); i += 2 {
 			key := updated.Content[i].Value
 			if err := restoreConfigSecretNode(mappingValueNode(old, key), updated.Content[i+1], sensitive || configSecretChild(key, path+"."+key), targetChanged, path+"."+key); err != nil {
@@ -93,12 +102,12 @@ var configSecretTargetFields = [...]string{"name", "id", "address", "addresses",
 // Config editors submit a whole document, and some schemas associate a secret
 // with a target in another branch. Without a schema-level association for every
 // supported extension, fail closed: preserve no placeholder if any target changed.
-func configSecretTargetsChanged(old, updated *yaml.Node) bool {
+func configSecretTargetsChanged(old, updated *yaml.Node, path string) bool {
 	if updated == nil {
 		return configSecretContainsTarget(old)
 	}
 	if old == nil || old.Kind != updated.Kind {
-		return configSecretContainsTarget(old)
+		return configSecretContainsTarget(old) || configSecretIntroducesTarget(updated, path)
 	}
 	if configSecretTargetChanged(old, updated) {
 		return true
@@ -107,7 +116,7 @@ func configSecretTargetsChanged(old, updated *yaml.Node) bool {
 	case yaml.MappingNode:
 		for i := 0; i+1 < len(updated.Content); i += 2 {
 			key := updated.Content[i].Value
-			if configSecretTargetsChanged(mappingValueNode(old, key), updated.Content[i+1]) {
+			if configSecretTargetsChanged(mappingValueNode(old, key), updated.Content[i+1], path+"."+key) {
 				return true
 			}
 		}
@@ -119,7 +128,7 @@ func configSecretTargetsChanged(old, updated *yaml.Node) bool {
 		}
 	case yaml.SequenceNode:
 		for i, child := range updated.Content {
-			if configSecretTargetsChanged(matchingConfigSequenceItem(old, child, i), child) {
+			if configSecretTargetsChanged(matchingConfigSequenceItem(old, child, i), child, path) {
 				return true
 			}
 		}
@@ -166,13 +175,9 @@ func isConfigSecretTargetField(candidate string) bool {
 func configSecretTargetChanged(old, updated *yaml.Node) bool {
 	for _, key := range configSecretTargetFields {
 		before, after := mappingValueNode(old, key), mappingValueNode(updated, key)
-		if key == "cluster_addresses" || key == "cluster_mode" {
-			// A newly introduced cluster can redirect an existing password too.
-			// Explicit empty/false defaults do not change the selected target.
-			if defaultConfigSecretClusterTarget(before, key) && defaultConfigSecretClusterTarget(after, key) {
-				continue
-			}
-		} else if before == nil {
+		// Omission and explicit empty defaults select the same destination.
+		// Any non-empty introduction, including an identity, must be compared.
+		if emptyConfigSecretTarget(before, key) && emptyConfigSecretTarget(after, key) {
 			continue
 		}
 		if before == nil || after == nil {
@@ -195,4 +200,87 @@ func defaultConfigSecretClusterTarget(node *yaml.Node, key string) bool {
 		return node.Tag == "!!bool" && node.Value == "false"
 	}
 	return node.Kind == yaml.SequenceNode && len(node.Content) == 0
+}
+
+// Compare effective destinations, but restore credentials only from the original
+// document. Materialized Router defaults must not look like newly chosen targets.
+func configSecretComparisonDocument(node *yaml.Node) (*yaml.Node, error) {
+	version := mappingValueNode(node, "version")
+	if version == nil || version.Value != routerconfig.CanonicalConfigVersion {
+		return node, nil
+	}
+	global := mappingValueNode(node, "global")
+	data, err := yaml.Marshal(struct {
+		Version string     `yaml:"version"`
+		Global  *yaml.Node `yaml:"global,omitempty"`
+	}{version.Value, global})
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := routerconfig.ParseGlobalYAMLBytesWithoutEnvExpansion(data)
+	if err != nil {
+		return nil, err
+	}
+	var effective yaml.Node
+	if err = effective.Encode(routerconfig.CanonicalGlobalFromRouterConfig(parsed)); err != nil {
+		return nil, err
+	}
+	// Preserve explicit overrides and extension fields omitted by the typed view.
+	if global != nil && global.Kind == yaml.MappingNode {
+		if err = mergeMappingNodes(&effective, cloneYAMLNode(global)); err != nil {
+			return nil, err
+		}
+	}
+	comparison := cloneYAMLNode(node)
+	setMappingValueNode(comparison, "global", &effective)
+	return comparison, nil
+}
+
+// A new object's identity alone cannot redirect a stored credential. Its
+// connection fields can, even when the entire branch did not previously exist.
+func configSecretIntroducesTarget(node *yaml.Node, path string) bool {
+	if node == nil {
+		return false
+	}
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key, value := node.Content[i].Value, node.Content[i+1]
+			identity := key == "name" || key == "id"
+			if key == "type" && configSecretRoutingMetadata(path) {
+				identity = true
+			}
+			if !identity && isConfigSecretTargetField(key) && !emptyConfigSecretTarget(value, key) {
+				return true
+			}
+			if configSecretIntroducesTarget(value, path+"."+key) {
+				return true
+			}
+		}
+	} else {
+		for _, child := range node.Content {
+			if configSecretIntroducesTarget(child, path) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func configSecretRoutingMetadata(path string) bool {
+	// Rule and algorithm discriminators do not select a credential destination.
+	// Still inspect their children for endpoints, even in newly added recipes.
+	for strings.HasSuffix(path, ".conditions") {
+		path = strings.TrimSuffix(path, ".conditions")
+	}
+	return path == ".recipes.decisions.rules" || path == ".recipes.decisions.algorithm" ||
+		path == ".recipes.plugins" || path == ".recipes.decisions.plugins"
+}
+
+func emptyConfigSecretTarget(node *yaml.Node, key string) bool {
+	if key == "cluster_addresses" || key == "cluster_mode" {
+		return defaultConfigSecretClusterTarget(node, key)
+	}
+	return node == nil || node.Tag == "!!null" ||
+		(node.Kind == yaml.ScalarNode && node.Tag == "!!str" && node.Value == "") ||
+		(node.Kind == yaml.SequenceNode && len(node.Content) == 0)
 }

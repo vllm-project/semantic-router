@@ -63,7 +63,7 @@ func redactConfigYAML(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if containsAliasNode(doc) {
+	if containsAliasNode(doc) && !configSecretAliasesSafe(doc) {
 		return nil, errConfigSecretReuse
 	}
 	node, err := configSecretDocument(data)
@@ -192,4 +192,87 @@ func sameConfigNode(a, b *yaml.Node) bool {
 	}
 	right, err := yaml.Marshal(b)
 	return err == nil && bytes.Equal(left, right)
+}
+
+// Resolving aliases loses the shared identity between a secret and an innocent
+// field. Identify that sharing first; ordinary aliases need no special masking.
+func configSecretAliasesSafe(root *yaml.Node) bool {
+	secrets := make(map[*yaml.Node]bool)
+	aliases := make(map[*yaml.Node]bool)
+	active := make(map[*yaml.Node]bool)
+	// Bound expansion before decoding: aliases can form cycles or a large DAG.
+	remaining := 100000
+	var visit func(*yaml.Node, bool, string, int) bool
+	visit = func(node *yaml.Node, sensitive bool, path string, depth int) bool {
+		remaining--
+		if node == nil || active[node] || remaining < 0 || depth > 128 {
+			return false
+		}
+		active[node] = true
+		defer delete(active, node)
+		switch node.Kind {
+		case yaml.AliasNode:
+			aliases[node.Alias] = true
+			return visit(node.Alias, sensitive, path, depth+1)
+		case yaml.MappingNode:
+			for i := 0; i+1 < len(node.Content); i += 2 {
+				// Keys can also alias a secret or hide a sensitive field name.
+				keyNode := node.Content[i]
+				if !visit(keyNode, false, "", depth+1) {
+					return false
+				}
+				for keyNode.Kind == yaml.AliasNode {
+					keyNode = keyNode.Alias
+				}
+				key := keyNode.Value
+				childPath := path + "." + key
+				if !visit(node.Content[i+1], sensitive || configSecretChild(key, childPath), childPath, depth+1) {
+					return false
+				}
+			}
+		case yaml.ScalarNode:
+			masked := *node
+			if redactConfigNodeAt(&masked, sensitive, path) {
+				secrets[node] = true
+			}
+		default:
+			for _, child := range node.Content {
+				if !visit(child, sensitive, path, depth+1) {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	if !visit(root, false, "", 0) {
+		return false
+	}
+	// A later sensitive use may taint a target visited earlier as public data.
+	// Inspect all targets only after every context has contributed its secrets.
+	checked := make(map[*yaml.Node]bool)
+	for target := range aliases {
+		if configSecretAliasTouchesSecret(target, secrets, checked) {
+			return false
+		}
+	}
+	return true
+}
+
+func configSecretAliasTouchesSecret(node *yaml.Node, secrets, checked map[*yaml.Node]bool) bool {
+	if node == nil || checked[node] {
+		return false
+	}
+	if secrets[node] {
+		return true
+	}
+	checked[node] = true
+	if configSecretAliasTouchesSecret(node.Alias, secrets, checked) {
+		return true
+	}
+	for _, child := range node.Content {
+		if configSecretAliasTouchesSecret(child, secrets, checked) {
+			return true
+		}
+	}
+	return false
 }

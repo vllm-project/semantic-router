@@ -292,3 +292,105 @@ unrelated:
 		t.Fatal("policy fields or credentials changed on round trip")
 	}
 }
+
+func TestConfigSecretRestorationRejectsIntroducedTargets(t *testing.T) {
+	for _, field := range []string{"endpoint", "base_url", "address"} {
+		for _, branch := range []bool{false, true} {
+			name := field + map[bool]string{false: "/same branch", true: "/new branch"}[branch]
+			t.Run(name, func(t *testing.T) {
+				original := []byte("auth:\n  api_key: " + configSecretFixture + "\n")
+				for _, credential := range []string{redactedConfigSecret, "replacement-fixture", "\"\""} {
+					updated := "auth:\n  api_key: " + credential + "\n"
+					if branch {
+						updated += "upstream:\n"
+					}
+					updated += "  " + field + ": https://different.example.test/v1\n"
+					restored, err := restoreConfigSecrets(original, []byte(updated))
+					if credential == redactedConfigSecret {
+						if !errors.Is(err, errConfigSecretReuse) {
+							t.Fatalf("introduced %s restored the stored key: %v", field, err)
+						}
+					} else if err != nil || bytes.Contains(restored, []byte(configSecretFixture)) {
+						t.Fatalf("explicit replacement/clear retained the old key: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestConfigSecretRedactionAllowsSafeAliases(t *testing.T) {
+	for _, document := range []string{
+		"keywords: &words [hello, world]\ncopy: *words\n",
+		"label: &label public\ncopy: *label\n",
+		"label: &label public\n? *label\n: value\n",
+		"defaults: &defaults {enabled: true}\ncopy: {<<: *defaults}\n",
+		"keywords: &words [hello, world]\ncopy: *words\npassword: " + configSecretFixture + "\n",
+	} {
+		masked, err := redactConfigYAML([]byte(document))
+		if err != nil {
+			t.Errorf("safe alias was rejected: %v", err)
+			continue
+		}
+		if bytes.Contains(masked, []byte(configSecretFixture)) {
+			t.Fatal("safe alias allowed an unrelated password to leak")
+		}
+		before, parseErr := configSecretDocument([]byte(document))
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		redactConfigNode(before, false)
+		after, parseErr := configSecretDocument(masked)
+		if parseErr != nil || !sameConfigNode(before, after) {
+			t.Fatalf("safe aliases changed config semantics: %v", parseErr)
+		}
+	}
+}
+
+func TestConfigSecretRedactionRejectsSensitiveAliases(t *testing.T) {
+	for _, document := range []string{
+		"password: &key credential-fixture\npublic: *key\n",
+		"password: &key credential-fixture\n? *key\n: public\n",
+		"field: &field password\n? *field\n: &key credential-fixture\npublic: *key\n",
+		"public: &key credential-fixture\npassword: *key\n",
+		"public: &keys [credential-fixture]\napi_keys: *keys\n",
+		"auth: &auth {api_key: credential-fixture}\npublic: *auth\n",
+		"public: &auth {token: credential-fixture}\nauth: {<<: *auth}\n",
+		"inner: &key credential-fixture\nouter: &outer {value: *key}\npassword: *outer\n",
+		"endpoint: &url https://user:credential-fixture@example.test/v1\npublic: *url\n",
+		"inner: &key credential-fixture\nouter: &outer {password: *key}\npublic: {<<: *outer}\n",
+		"loop: &loop {nested: *loop}\n",
+		"public: *unknown\n",
+	} {
+		masked, err := redactConfigYAML([]byte(document))
+		if err == nil {
+			t.Errorf("unsafe or invalid alias was accepted (secret visible=%v)", bytes.Contains(masked, []byte("credential-fixture")))
+		}
+	}
+}
+
+func TestConfigSecretRestorationChecksNewBranchTargets(t *testing.T) {
+	original := []byte("credentials:\n  api_key: " + configSecretFixture + "\n")
+	for _, tc := range []struct {
+		name, addition string
+		reject         bool
+	}{
+		{"new sequence", "upstreams:\n  - endpoint: https://different.example.test\n", true},
+		{"new selector", "upstream:\n  type: remote\n", true},
+		{"routing metadata", "recipes:\n  - name: added\n    decisions:\n      - name: rule\n        rules:\n          conditions:\n            - type: domain\n              name: business\n", false},
+		{"plugin target", "recipes:\n  - name: added\n    plugins:\n      - type: test-plugin\n        endpoint: https://different.example.test\n", true},
+		{"nested rule target", "recipes:\n  - name: added\n    decisions:\n      - rules:\n          conditions:\n            - type: domain\n              endpoint: https://different.example.test\n", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			updated := []byte("credentials:\n  api_key: " + redactedConfigSecret + "\n" + tc.addition)
+			restored, err := restoreConfigSecrets(original, updated)
+			if tc.reject {
+				if !errors.Is(err, errConfigSecretReuse) {
+					t.Fatalf("new branch retargeted the credential: %v", err)
+				}
+			} else if err != nil || !bytes.Contains(restored, []byte(configSecretFixture)) {
+				t.Fatalf("new metadata prevented credential preservation: %v", err)
+			}
+		})
+	}
+}

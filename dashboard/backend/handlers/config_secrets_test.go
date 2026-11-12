@@ -204,3 +204,82 @@ func globalSecretEditorHandlers(path string, raw bool) (http.HandlerFunc, http.H
 	}
 	return RouterDefaultsHandler(path), UpdateRouterDefaultsHandler(path, false, filepath.Dir(path))
 }
+
+func TestGlobalConfigEditorRejectsIntroducedRedisAddress(t *testing.T) {
+	for _, raw := range []bool{false, true} {
+		t.Run(map[bool]string{false: "json", true: "yaml"}[raw], func(t *testing.T) {
+			path := writeSecretConfig(t, configSecretFixture)
+			original, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			original = bytes.ReplaceAll(original, []byte("        address: 127.0.0.1:6379\n"), nil)
+			if writeErr := os.WriteFile(path, original, 0o600); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+			_, update := globalSecretEditorHandlers(path, raw)
+			body := []byte("services:\n  response_api:\n    enabled: true\n    store_backend: redis\n    redis:\n      address: different.example.test:6379\n      password: " + redactedConfigSecret + "\n")
+			if !raw {
+				body, err = sigsyaml.YAMLToJSON(body)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			previous := propagateConfig
+			calls := 0
+			propagateConfig = func(string, string) error { calls++; return nil }
+			t.Cleanup(func() { propagateConfig = previous })
+			request := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+			request = request.WithContext(requestAs("/", "config.write").Context())
+			response := httptest.NewRecorder()
+			update(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Errorf("introduced address save status=%d, want 400", response.Code)
+			}
+			saved, readErr := os.ReadFile(path)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if !bytes.Equal(saved, original) || calls != 0 {
+				t.Fatal("rejected target addition persisted or propagated configuration")
+			}
+		})
+	}
+}
+
+func TestGlobalConfigEditorPreservesImplicitRedisTarget(t *testing.T) {
+	for _, raw := range []bool{false, true} {
+		t.Run(map[bool]string{false: "json", true: "yaml"}[raw], func(t *testing.T) {
+			path := writeSecretConfig(t, configSecretFixture)
+			original, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			original = bytes.ReplaceAll(original, []byte("        address: 127.0.0.1:6379\n"), nil)
+			if writeErr := os.WriteFile(path, original, 0o600); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+			read, update := globalSecretEditorHandlers(path, raw)
+			view := httptest.NewRecorder()
+			read(view, requestAs("/", "config.write"))
+			if view.Code != http.StatusOK || bytes.Contains(view.Body.Bytes(), []byte(configSecretFixture)) || !bytes.Contains(view.Body.Bytes(), []byte(redactedConfigSecret)) {
+				t.Fatalf("unexpected masked default view: status=%d", view.Code)
+			}
+			previous := propagateConfig
+			calls := 0
+			propagateConfig = func(string, string) error { calls++; return nil }
+			t.Cleanup(func() { propagateConfig = previous })
+			request := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(view.Body.Bytes()))
+			request = request.WithContext(requestAs("/", "config.write").Context())
+			response := httptest.NewRecorder()
+			update(response, request)
+			saved, readErr := os.ReadFile(path)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if response.Code != http.StatusOK || calls != 1 || !bytes.Contains(saved, []byte(configSecretFixture)) || bytes.Contains(saved, []byte(redactedConfigSecret)) {
+				t.Fatalf("implicit target did not round-trip: status=%d calls=%d", response.Code, calls)
+			}
+		})
+	}
+}
