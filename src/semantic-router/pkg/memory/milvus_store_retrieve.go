@@ -354,15 +354,7 @@ func populateMemoryFromRetrieveMetadata(mem *Memory, metadata map[string]interfa
 	if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
 		mem.LastAccessed = time.Unix(int64(lastAccessed), 0)
 	}
-	if createdByUserID, ok := metadata["created_by_user_id"].(string); ok {
-		mem.CreatedByUserID = createdByUserID
-	}
-	if conversationID, ok := metadata["conversation_id"].(string); ok {
-		mem.ConversationID = conversationID
-	}
-	if createdVia, ok := metadata["created_via"].(string); ok {
-		mem.CreatedVia = createdVia
-	}
+	applyProvenanceMetadata(mem, metadata)
 }
 
 func hybridRerankCandidates(candidates []*RetrieveResult, opts RetrieveOptions) []*RetrieveResult {

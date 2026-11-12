@@ -450,15 +450,13 @@ func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]stri
 	// It is intentionally excluded from the metadata JSON blob to prevent concurrent
 	// recordRetrieval goroutines from overwriting each other's incremented counts.
 	metadata := map[string]interface{}{
-		"user_id":            memory.UserID,
-		"project_id":         memory.ProjectID,
-		"source":             memory.Source,
-		"importance":         memory.Importance,
-		"last_accessed":      memory.LastAccessed.Unix(),
-		"created_by_user_id": memory.CreatedByUserID,
-		"conversation_id":    memory.ConversationID,
-		"created_via":        memory.CreatedVia,
+		"user_id":       memory.UserID,
+		"project_id":    memory.ProjectID,
+		"source":        memory.Source,
+		"importance":    memory.Importance,
+		"last_accessed": memory.LastAccessed.Unix(),
 	}
+	putProvenanceMetadata(metadata, memory)
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
@@ -541,15 +539,7 @@ func valkeyApplyMetadata(mem *Memory, metadata map[string]interface{}) {
 	if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
 		mem.LastAccessed = time.Unix(int64(lastAccessed), 0)
 	}
-	if createdByUserID, ok := metadata["created_by_user_id"].(string); ok {
-		mem.CreatedByUserID = createdByUserID
-	}
-	if conversationID, ok := metadata["conversation_id"].(string); ok {
-		mem.ConversationID = conversationID
-	}
-	if createdVia, ok := metadata["created_via"].(string); ok {
-		mem.CreatedVia = createdVia
-	}
+	applyProvenanceMetadata(mem, metadata)
 }
 
 // valkeyParseMetadata unmarshals a metadata JSON string and applies it to the Memory.

@@ -402,3 +402,29 @@ func TestInMemoryStore_UpdateProvenance(t *testing.T) {
 	assert.Equal(t, update.ConversationID, got.ConversationID)
 	assert.Equal(t, update.CreatedVia, got.CreatedVia)
 }
+
+func TestInMemoryStore_UpdateKeepsProvenanceWhenOmitted(t *testing.T) {
+	ctx := context.Background()
+	store := newTestInMemoryStore()
+	require.NoError(t, store.Store(ctx, &Memory{
+		ID:              "prov-keep",
+		Type:            MemoryTypeSemantic,
+		Content:         "User likes Hawaii vacations",
+		UserID:          "user1",
+		CreatedAt:       time.Now(),
+		CreatedByUserID: "creator-1",
+		ConversationID:  "conv-1",
+		CreatedVia:      "llm_extraction",
+	}))
+
+	require.NoError(t, store.Update(ctx, "prov-keep", &Memory{
+		Content: "User loves Hawaii vacations",
+		Type:    MemoryTypeSemantic,
+	}))
+
+	got, err := store.Get(ctx, "prov-keep")
+	require.NoError(t, err)
+	assert.Equal(t, "creator-1", got.CreatedByUserID)
+	assert.Equal(t, "conv-1", got.ConversationID)
+	assert.Equal(t, "llm_extraction", got.CreatedVia)
+}
