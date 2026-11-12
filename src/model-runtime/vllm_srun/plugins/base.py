@@ -956,6 +956,8 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     batch_invariant: bool = False
     packs_rows: bool = False
     packs_merged_rows: bool = False
+    # Planning can run a forward (a family that generates text while it plans).
+    plans_run_forwards: bool = False
 
     @abstractmethod
     def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]:

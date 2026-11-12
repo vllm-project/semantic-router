@@ -547,9 +547,7 @@ class NativeEngineModel(EngineModel):
         """
         resolver = self.threads_resolver
         if resolver is None:
-            if self.device.type == "cpu":
-                adaptive_threads.CpuTeam.apply(self._cpu_threads)
-            return run()
+            return self._untimed(run)
         count = resolver.pick(tokens)
         if resolver.adopted:
             # The table is final — one pass, nothing left to measure.
@@ -580,6 +578,12 @@ class NativeEngineModel(EngineModel):
         run()
         resolver.record_base(tokens, (time.perf_counter() - started) * 1000.0)
         return result
+
+    def _untimed(self, run: Callable[[], _T]) -> _T:
+        """One pass at the configured count, which the thread resolver never times."""
+        if self.device.type == "cpu":
+            adaptive_threads.CpuTeam.apply(self._cpu_threads)
+        return run()
 
     def _state_once(self) -> models.StateOnceBackbone:
         backbone = self.backbone
@@ -932,8 +936,9 @@ class NativeEngineModel(EngineModel):
                     pad_token_id,
                 )
 
+        # Decoding is not a forward: the thread resolver does not time it.
         with self._backbone_lock:
-            return self._with_threads(ids.numel(), run)
+            return self._untimed(run)
 
     def _forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
@@ -1117,13 +1122,7 @@ class NativeEngineModel(EngineModel):
         count and stay out of the token-size learning.
         """
         if batch.tower is not None:
-            if self.device.type == "cpu":
-                adaptive_threads.CpuTeam.apply(
-                    self.threads_resolver.base
-                    if self.threads_resolver is not None
-                    else self._cpu_threads
-                )
-            return self._encode(batch)
+            return self._untimed(lambda: self._encode(batch))
         return self._with_threads(batch.input_ids.numel(), lambda: self._encode(batch))
 
     def _encode(self, batch: EncoderBatch) -> EncoderOutput:

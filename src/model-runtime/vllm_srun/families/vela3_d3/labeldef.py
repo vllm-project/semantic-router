@@ -12,15 +12,18 @@ from __future__ import annotations
 
 import json
 import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
 from ...plugins.base import EngineModel, LMHeadSpec
-from .span_policy import Definitions
 
 CTX_MAX = 60
 MAX_NEW = 40
 BATCH = 64
+# Generated cache entries kept (label sets, or single labels above CTX_MAX); the
+# least recently used goes first. Request labels are open, so the cache is bounded.
+MAX_CACHED = 4096
 IM_END = "<|im_end|>"
 PROMPT = (
     "You are writing annotation guidelines for named entity recognition.{ctx}\n"
@@ -108,13 +111,19 @@ class LabelDefiner:
         pad_id: int,
         cache: Path | None,
         batch: int = BATCH,
+        max_cached: int = MAX_CACHED,
     ):
         self.engine = engine
         self.tokenizer = tokenizer
         self.pad_id = pad_id
         self.batch = batch
         self.eos = tokenizer.token_to_id(IM_END)
-        self.mem: dict[Any, Any] = load_cache(cache) if cache is not None else {}
+        # The package's label_definitions.json stays; generated entries are an LRU.
+        self.shipped: dict[Any, dict[str, str]] = (
+            load_cache(cache) if cache is not None else {}
+        )
+        self.generated: OrderedDict[Any, dict[str, str] | str] = OrderedDict()
+        self.max_cached = max_cached
         self._lock = threading.Lock()
 
     def define(self, names: list[str], only: set[str]) -> dict[str, str]:
@@ -122,16 +131,28 @@ class LabelDefiner:
         with self._lock:
             return self._define(list(names), only)
 
+    def _cached(self, key: Any) -> Any:
+        if key in self.generated:
+            self.generated.move_to_end(key)
+            return self.generated[key]
+        return self.shipped.get(key)
+
+    def _remember(self, key: Any, value: Any) -> None:
+        self.generated[key] = value
+        self.generated.move_to_end(key)
+        while len(self.generated) > self.max_cached:
+            self.generated.popitem(last=False)
+
     def _define(self, names: list[str], only: set[str]) -> dict[str, str]:
         want = [name for name in names if name in only]
         key = cache_key(names)
         if key is not None:
-            got = dict(self.mem.get(key, {}))
+            got = dict(self._cached(key) or {})
         else:
             got = {
-                name: self.mem[(None, name)]
+                name: text
                 for name in want
-                if (None, name) in self.mem
+                if (text := self._cached((None, name))) is not None
             }
         missing = [name for name in want if not got.get(name)]
         if missing:
@@ -143,9 +164,9 @@ class LabelDefiner:
                 got[name] = text
                 fresh[name] = text
                 if key is None:
-                    self.mem[(None, name)] = text
+                    self._remember((None, name), text)
             if key is not None and fresh:
-                self.mem[key] = {**self.mem.get(key, {}), **fresh}
+                self._remember(key, got)
         return {name: got[name] for name in want if got.get(name)}
 
     def _generate(self, prompts: list[str]) -> list[str]:
@@ -175,12 +196,8 @@ def writer_of(
     tokenizer: Any,
     pad_id: int,
     cache: Path | None,
-) -> Definitions:
-    """The definition callable for ``mode``. ``names`` and anything without an LM head define nothing."""
+) -> LabelDefiner | None:
+    """The definition writer for ``mode``; None for ``names`` and anything without an LM head."""
     if mode not in ("base", "grafted_head") or engine.lm_head is None:
-        return _none
-    return LabelDefiner(engine, tokenizer, pad_id, cache).define
-
-
-def _none(names: list[str], only: set[str]) -> dict[str, str]:
-    return {}
+        return None
+    return LabelDefiner(engine, tokenizer, pad_id, cache)

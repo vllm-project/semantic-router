@@ -40,7 +40,7 @@ from .errors import (
     VerificationError,
     with_reason,
 )
-from .placement import Placement, check_device, device_kind, place
+from .placement import Placement, check_device, device_kind, lm_head_parameters, place
 from .plugins import registry
 from .plugins.base import (
     DEADLINE,
@@ -406,7 +406,8 @@ class ServedModel:
                 )
             package = replace(package, max_input_tokens=limit)
         spec = family.describe(package)
-        parameters = package.loaded_parameters or 0
+        # A grafted LM head loads beside the backbone at the backbone's dtype.
+        parameters = (package.loaded_parameters or 0) + lm_head_parameters(spec)
         budget = config.memory_budget_gib or process.memory_budget_gib
         dtype = self.requested_args.dtype
         placement = place(
@@ -1456,7 +1457,16 @@ class Runtime:
         if not requests:
             return []
         lookups: list[_Lookup | None] = [None] * len(requests)
-        if size is not None and size <= INLINE_PLAN_BYTES:
+        # A served model that runs forwards while planning moves every small request
+        # off the event loop, whichever model it names.
+        if (
+            size is not None
+            and size <= INLINE_PLAN_BYTES
+            and not any(
+                served.model is not None and served.model.plans_run_forwards
+                for served in self.served
+            )
+        ):
             planned = [
                 self._prepare_outcome(surface, body, received, part)
                 for surface, body, part in requests

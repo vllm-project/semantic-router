@@ -6,7 +6,7 @@ from vllm_srun.accel import gpu
 from vllm_srun.accel.cpu import CPUAccelerator
 from vllm_srun.accel.cuda import CUDAAccelerator
 from vllm_srun.accel.rocm import ROCmAccelerator
-from vllm_srun.errors import PlacementError, UnsupportedDeviceError
+from vllm_srun.errors import PackageError, PlacementError, UnsupportedDeviceError
 from vllm_srun.placement import (
     auto_order,
     device_kind,
@@ -20,6 +20,28 @@ from vllm_srun.quantization import FLOAT8, FLOAT8_DEVICES, QuantizedWeights
 SPEC = ModelSpec("tiny", BackboneSpec("qwen3", {}, ()), DtypePolicy(), 1024)
 GPU = torch.cuda.is_available()
 GIB = 1 << 30
+
+
+def test_a_grafted_lm_head_counts_toward_placement(tmp_path):
+    from safetensors.torch import save_file
+    from vllm_srun.placement import lm_head_parameters
+    from vllm_srun.plugins.base import LMHeadSpec
+
+    assert lm_head_parameters(SPEC) == 0
+    tied = replace(SPEC, backbone=replace(SPEC.backbone, lm_head=LMHeadSpec()))
+    assert lm_head_parameters(tied) == 0
+    path = tmp_path / "labeldef_lm_head.safetensors"
+    save_file({"lm_head.weight": torch.zeros(48, 16)}, str(path))
+    grafted = replace(
+        SPEC,
+        backbone=replace(
+            SPEC.backbone, lm_head=LMHeadSpec(tied=False, weight_file=path)
+        ),
+    )
+    assert lm_head_parameters(grafted) == 48 * 16
+    save_file({"other.weight": torch.zeros(2)}, str(path))
+    with pytest.raises(PackageError, match="has no lm_head.weight"):
+        lm_head_parameters(grafted)
 
 
 def test_parse_device():

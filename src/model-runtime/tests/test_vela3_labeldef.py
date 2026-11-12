@@ -119,6 +119,32 @@ def test_a_large_set_is_cached_per_label_without_the_context_line() -> None:
     assert len(engine.calls) == 1
 
 
+def test_generated_definitions_are_a_bounded_lru_and_the_file_stays(
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / "label_definitions.json"
+    cache.write_text(
+        json.dumps(
+            {"sets": [{"labels": ["dose"], "definitions": {"dose": "from the file"}}]}
+        ),
+        encoding="utf-8",
+    )
+    engine = Recording()
+    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=cache, max_cached=2)  # type: ignore[arg-type]
+    for name in ("a", "b"):
+        writer.define([name], {name})
+    writer.define(["a"], {"a"})  # a is now the most recently used
+    writer.define(["c"], {"c"})  # evicts b
+    calls = len(engine.calls)
+    writer.define(["a"], {"a"})
+    assert len(engine.calls) == calls
+    writer.define(["b"], {"b"})
+    assert len(engine.calls) == calls + 1
+    # The package's file is never evicted.
+    assert writer.define(["dose"], {"dose"}) == {"dose": "from the file"}
+    assert len(engine.calls) == calls + 1
+
+
 def test_first_line_strips() -> None:
     assert first_line("  Alpha.\nBeta  ") == "Alpha."
 
