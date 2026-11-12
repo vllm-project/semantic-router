@@ -91,30 +91,60 @@ func deriveSessionIDFromSemanticMessages(messages []llmprotocol.Message, userID 
 	return "cc-" + hex.EncodeToString(hash[:])[:16]
 }
 
-const sessionMessageFingerprintMaxRunes = 100
+// conversationStartRunes bounds how much of the instructions and of the first
+// user message a conversation-start fingerprint reads, so that text a client
+// keeps further into a long system prompt, such as a date or a file listing,
+// cannot change it.
+const conversationStartRunes = 512
 
-// deriveSessionIDFromMessagesStructure builds a session ID from the full message
-// list (roles + truncated content). Used when no stable user ID is available.
-// Prefix "cc-full-" distinguishes IDs from deriveSessionIDFromMessages (cc-).
-func deriveSessionIDFromSemanticStructure(messages []llmprotocol.Message) string {
-	if len(messages) == 0 {
+// deriveConversationStartID fingerprints what every request of one
+// conversation repeats: the leading text of the system and developer
+// instructions and of the first user message, scoped by the authenticated
+// tenant when the gateway names one. Later turns only append messages, so
+// they keep the fingerprint; two conversations that start the same way share
+// it. Prefix "cc-start-" distinguishes IDs from
+// deriveSessionIDFromSemanticMessages (cc-).
+func deriveConversationStartID(request *llmprotocol.Request, tenant string) string {
+	if request == nil {
 		return ""
 	}
-	var b strings.Builder
-	for i := range messages {
-		if i > 0 {
-			b.WriteByte('|')
+	instructions := make([]string, 0, len(request.Instructions))
+	for _, block := range request.Instructions {
+		if text := semanticText(block.Content); text != "" {
+			instructions = append(instructions, text)
 		}
-		b.WriteString(string(messages[i].Role))
-		b.WriteByte(':')
-		content := semanticText(messages[i].Content)
-		if len(content) > sessionMessageFingerprintMaxRunes {
-			content = content[:sessionMessageFingerprintMaxRunes]
-		}
-		b.WriteString(content)
 	}
-	hash := sha256.Sum256([]byte(b.String()))
-	return "cc-full-" + hex.EncodeToString(hash[:])[:16]
+	firstUser := ""
+	for _, message := range request.Messages {
+		if message.Role == llmprotocol.RoleUser {
+			firstUser = semanticText(message.Content)
+			break
+		}
+	}
+	if len(instructions) == 0 && firstUser == "" {
+		return ""
+	}
+	var encoded strings.Builder
+	for _, part := range []string{
+		tenant,
+		leadingRunes(strings.Join(instructions, "\n"), conversationStartRunes),
+		leadingRunes(firstUser, conversationStartRunes),
+	} {
+		fmt.Fprintf(&encoded, "%d:%s\n", len(part), part)
+	}
+	hash := sha256.Sum256([]byte(encoded.String()))
+	return "cc-start-" + hex.EncodeToString(hash[:])[:16]
+}
+
+func leadingRunes(text string, limit int) string {
+	count := 0
+	for index := range text {
+		if count == limit {
+			return text[:index]
+		}
+		count++
+	}
+	return text
 }
 
 // deriveSessionIDFromRequestID returns a deterministic pseudo-session from
