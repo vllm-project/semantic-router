@@ -242,12 +242,13 @@ binding.
 Images must be inline base64 data URIs with an allowed PNG, JPEG, GIF, or WebP
 MIME type. External URLs, filesystem paths, audio, unknown input fields, and mixed
 payload fields are rejected. Payload base64 is validated before inference;
-image decoding errors remain classification errors. The Router never fetches
-an image URL on this path. Image intent requires configured image-query
-embedding rules and an actually prepared image encoder in the selected recipe.
-A text-only model is not an image classifier, even when its provider exposes an
-image method. Unsupported combinations return `400 UNSUPPORTED_INPUT` before
-inference. Existing successful `text` and `messages` requests are unchanged.
+the runtime can report image decoding failures as signal errors. The Router
+never fetches an image URL on this path. Image intent requires a routed
+request-stage System One rule that reads images. Every such rule must use a
+prepared local model-runtime deployment whose model card supports images.
+Unsupported combinations return
+`400 UNSUPPORTED_INPUT` before inference. Existing successful `text` and
+`messages` requests are unchanged.
 
 `/api/v1/diagnostics/classify/batch` accepts either legacy `texts` or typed
 `inputs`, never both, including when a supplied field is empty or null:
@@ -268,13 +269,14 @@ classifier and reject image items with `UNSUPPORTED_INPUT`; they never send
 images to text-only heads. `task_type` defaults to `intent`. As with legacy
 batches, `all` runs all three text tasks and returns intent fields plus nested
 `pii` and `security` objects. Their confidence is `null` when scores are
-unavailable, and categorical security results retain their `decision` details.
+unavailable.
 Legacy `texts` retain the existing successful response shape and text-head
 semantics; typed intent can therefore differ from legacy batch intent when the
 recipe uses signal-driven decisions.
 
-A valid batch returns `200` and exactly one result in each input position.
-Typed results additionally carry their zero-based `index`. An `error` object
+After request validation and runtime setup succeed, a typed batch returns `200`
+and exactly one result in each input position.
+Typed results carry their zero-based `index`. An `error` object
 with `code` and `message` marks an unsuccessful item; its empty category and
 zero confidence are not a classification. Invalid, unsupported, failed,
 canceled, and expired items do not discard successful siblings. Error codes
@@ -284,6 +286,9 @@ unsuccessful items. Unscored intent successes carry `confidence_available: false
 their numeric zero confidence is not a measured score. Typed confidence averages
 and low-confidence counts exclude these unscored results; category counts retain
 them. Runtime errors do not echo input payloads.
+
+Runtime setup failures remain whole-request errors. Legacy `texts` batches also
+report classifier failures as whole-request errors.
 
 Malformed JSON, ambiguous/missing input envelopes, empty arrays, invalid task
 names, unknown recipes, and oversized batches are whole-request errors. Both
