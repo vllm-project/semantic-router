@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from cli.container_backend import ContainerBackend
-from cli.pending_activation import SERVE_WAITING, heartbeat_file
+from cli.pending_activation import SERVE_STARTING, SERVE_WAITING, heartbeat_file
 from cli.runtime_config_lock import acquire_runtime_config_lock
 from cli.runtime_lifecycle_lock import (
     RuntimeLifecycleLockError,
@@ -136,14 +136,22 @@ with acquire_runtime_lifecycle_lock(
         stderr=subprocess.PIPE,
         text=True,
     )
+    expected = SERVE_WAITING if state == "waiting" else SERVE_STARTING
     deadline = time.monotonic() + 5
     heartbeat = heartbeat_file(config)
-    while not heartbeat.exists() and time.monotonic() < deadline:
+    while time.monotonic() < deadline:
         if process.poll() is not None:
             pytest.fail(f"serve holder exited: {process.stderr.read()}")
+        try:
+            if json.loads(heartbeat.read_text("utf-8")).get("state") == expected:
+                return process, lock_root, heartbeat
+        except (OSError, ValueError):
+            pass
         time.sleep(0.01)
-    assert heartbeat.exists()
-    return process, lock_root, heartbeat
+    process.terminate()
+    process.wait(timeout=5)
+    process.stderr.close()
+    pytest.fail(f"serve holder never reported {expected}")
 
 
 @pytest.mark.skipif(
