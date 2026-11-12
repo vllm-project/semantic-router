@@ -40,7 +40,7 @@ def test_a_grafted_lm_head_counts_toward_placement(tmp_path):
     )
     assert lm_head_parameters(grafted) == 48 * 16
     save_file({"other.weight": torch.zeros(2)}, str(path))
-    with pytest.raises(PackageError, match="has no lm_head.weight"):
+    with pytest.raises(PackageError, match=r"has no lm_head\.weight"):
         lm_head_parameters(grafted)
 
 
