@@ -2040,6 +2040,11 @@ TOKENIZER_BUILTINS = ("o200k_base", "cl100k_base")
 _TOKENIZER_HUB_REPO = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)?$"
 )
+# Each part of a revision starts with a letter or digit, so none climbs out of
+# the Hugging Face cache, which keeps a revision under its own name.
+_TOKENIZER_HUB_REVISION = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._+-]*(/[A-Za-z0-9][A-Za-z0-9._+-]*)*$"
+)
 
 
 def validate_tokenizer_spec(value: Optional[str]) -> Optional[str]:
@@ -2057,7 +2062,9 @@ def validate_tokenizer_spec(value: Optional[str]) -> Optional[str]:
     ):
         return value
     repo, _, revision = spec.partition("@")
-    if not _TOKENIZER_HUB_REPO.match(repo) or any(c in revision for c in " \t"):
+    if not _TOKENIZER_HUB_REPO.match(repo) or (
+        revision and not _TOKENIZER_HUB_REVISION.match(revision)
+    ):
         raise ValueError(
             "a tokenizer is a built-in encoding (o200k_base, cl100k_base), "
             "a tokenizer.json path or a Hugging Face repo id"

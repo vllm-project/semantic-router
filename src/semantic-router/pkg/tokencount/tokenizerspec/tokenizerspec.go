@@ -47,7 +47,17 @@ type Spec struct {
 	Revision string
 }
 
-var hubRepo = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)?$`)
+var (
+	hubRepo = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)?$`)
+	// The Hugging Face cache keeps a revision under its own name, so each
+	// part of one starts with a letter or digit: none is empty, "." or "..".
+	hubRevision = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*(/[A-Za-z0-9][A-Za-z0-9._+-]*)*$`)
+)
+
+// validRevision reports a branch, tag or commit name, or none.
+func validRevision(revision string) bool {
+	return revision == "" || hubRevision.MatchString(revision)
+}
 
 // Parse reads a tokenizer spec: a built-in encoding's name, a path to a
 // tokenizer.json (absolute, starting with ./ or ../, or ending in .json), or
@@ -64,7 +74,7 @@ func Parse(raw string) (Spec, error) {
 		return Spec{Kind: File, Value: value}, nil
 	}
 	repo, revision, _ := strings.Cut(value, "@")
-	if !hubRepo.MatchString(repo) || strings.ContainsAny(revision, " \t") {
+	if !hubRepo.MatchString(repo) || !validRevision(revision) {
 		return Spec{}, fmt.Errorf("tokenizer %q is neither a built-in encoding (%s), a tokenizer.json path, nor a Hugging Face repo id",
 			raw, strings.Join(Builtins, ", "))
 	}

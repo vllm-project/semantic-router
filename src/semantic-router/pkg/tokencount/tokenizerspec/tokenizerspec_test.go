@@ -24,7 +24,11 @@ func TestParse(t *testing.T) {
 			t.Errorf("Parse(%q) = %+v, %v; want %+v", tc.raw, got, err, tc.want)
 		}
 	}
-	for _, raw := range []string{"", "  ", "org/model/extra", "has space", "org/model@has space", "-org/model"} {
+	for _, raw := range []string{
+		"", "  ", "org/model/extra", "has space", "org/model@has space", "-org/model",
+		"org/model@../../etc", "org/model@refs/../../x", "org/model@/abs", "org/model@a//b", "org/model@./x",
+		"org/model@..", `org/model@a\b`, "org/model@a\x00b",
+	} {
 		if _, err := Parse(raw); err == nil {
 			t.Errorf("Parse(%q) should fail", raw)
 		}

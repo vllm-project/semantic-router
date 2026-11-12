@@ -39,6 +39,8 @@ def test_the_field_is_the_routers():
         "Qwen/Qwen3-8B",
         "gpt2",
         "zai-org/GLM-4.6@main",
+        "org/model@refs/pr/1",
+        "org/model@v1.0",
     ],
 )
 def test_a_provider_model_names_its_tokenizer(tokenizer):
@@ -49,7 +51,19 @@ def test_a_provider_model_names_its_tokenizer(tokenizer):
 
 
 @pytest.mark.parametrize(
-    "tokenizer", ["", "  ", "org/model/extra", "has space", "-org/model"]
+    "tokenizer",
+    [
+        "",
+        "  ",
+        "org/model/extra",
+        "has space",
+        "-org/model",
+        "org/model@../../etc",
+        "org/model@refs/../../x",
+        "org/model@/abs",
+        "org/model@a//b",
+        "org/model@a\\b",
+    ],
 )
 def test_an_invalid_tokenizer_is_refused(tokenizer):
     with pytest.raises(ValidationError, match="tokenizer"):

@@ -82,7 +82,7 @@ func (h Hub) cachedPath(repo, revision string) (string, bool) {
 	if !commitHash.MatchString(revision) {
 		ref, err := os.ReadFile(filepath.Join(dir, "refs", revision))
 		snapshot = strings.TrimSpace(string(ref))
-		if err != nil || snapshot == "" {
+		if err != nil || !commitHash.MatchString(snapshot) {
 			if revision != "main" {
 				return "", false
 			}
