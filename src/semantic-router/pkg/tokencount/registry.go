@@ -2,6 +2,8 @@ package tokencount
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,7 +95,7 @@ func (r *Registry) start(tokenizer string) *entry {
 		if err != nil {
 			e.err = err
 		} else {
-			e.enc, e.err = r.load(parsed)
+			e.enc, e.err = r.loadRecovered(parsed)
 		}
 		close(e.ready)
 		if e.err != nil {
@@ -109,6 +111,18 @@ func (r *Registry) start(tokenizer string) *entry {
 	return e
 }
 
+// loadRecovered is load with a panic turned into its error, so that a
+// malformed tokenizer leaves its models counting with the proxy instead of
+// stopping the Router.
+func (r *Registry) loadRecovered(tokenizer tokenizerspec.Spec) (enc *Encoding, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			enc, err = nil, fmt.Errorf("the tokenizer failed to load: %v", recovered)
+		}
+	}()
+	return r.load(tokenizer)
+}
+
 func (r *Registry) load(tokenizer tokenizerspec.Spec) (*Encoding, error) {
 	switch tokenizer.Kind {
 	case tokenizerspec.Builtin:
@@ -118,7 +132,7 @@ func (r *Registry) load(tokenizer tokenizerspec.Spec) (*Encoding, error) {
 		if info, err := os.Stat(path); err == nil && info.IsDir() {
 			path = filepath.Join(path, hubFile)
 		}
-		data, err := os.ReadFile(path)
+		data, err := readTokenizerFile(path)
 		if err != nil {
 			return nil, err
 		}
@@ -133,10 +147,40 @@ func (r *Registry) load(tokenizer tokenizerspec.Spec) (*Encoding, error) {
 				return nil, err
 			}
 		}
-		data, err := os.ReadFile(path)
+		data, err := readTokenizerFile(path)
 		if err != nil {
 			return nil, err
 		}
 		return ParseHFTokenizer(tokenizer.Value+"@"+tokenizer.Revision, data)
 	}
+}
+
+// readTokenizerFile reads a tokenizer.json that is a regular file of at most
+// maxTokenizerBytes, as a download is bounded, so that a path to a device, a
+// pipe or a huge file fails to load instead of blocking or exhausting memory.
+// It checks before opening, since opening a pipe waits for a writer.
+func readTokenizerFile(path string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	if info.Size() > maxTokenizerBytes {
+		return nil, fmt.Errorf("%s is larger than %d bytes", path, maxTokenizerBytes)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(io.LimitReader(file, maxTokenizerBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxTokenizerBytes {
+		return nil, fmt.Errorf("%s is larger than %d bytes", path, maxTokenizerBytes)
+	}
+	return data, nil
 }

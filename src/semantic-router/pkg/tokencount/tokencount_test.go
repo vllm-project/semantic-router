@@ -217,7 +217,17 @@ func TestRegistryLoadsEachKindOfSpec(t *testing.T) {
 			t.Fatalf("Lookup(%q) counts nothing", spec)
 		}
 	}
-	for _, spec := range []string{"org/missing", filepath.Join(dir, "missing.json"), "not a spec"} {
+	corrupt := filepath.Join(dir, "corrupt.json")
+	if err := os.WriteFile(corrupt, []byte(`{"model": {"type": "BPE", "vocab": `), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	empty := filepath.Join(dir, "empty")
+	if err := os.Mkdir(empty, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A missing, corrupt or non-regular file, or a directory without a
+	// tokenizer.json, fails to load and leaves its models on the proxy.
+	for _, spec := range []string{"org/missing", filepath.Join(dir, "missing.json"), "not a spec", corrupt, empty, "/dev/null"} {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_, err := registry.Load(ctx, spec)
 		cancel()
