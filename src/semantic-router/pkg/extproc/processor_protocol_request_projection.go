@@ -1,6 +1,10 @@
 package extproc
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+import (
+	"slices"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
 
 // projectRequestForBackend applies portable request projections before model
 // qualification and again before encoding. Only the encoding pass publishes
@@ -20,6 +24,42 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	target llmprotocol.WireFormat,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(request, target)
+	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
+	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, append(verbosityDiagnostics, otherDiagnostics...), err
+	return projected, slices.Concat(verbosityDiagnostics, fileDiagnostics, storeDiagnostics, otherDiagnostics), err
+}
+
+// projectUnstoredRequest sends store: true without it to a backend whose wire
+// format keeps no completions, once the operator accepts that loss.
+func (r *OpenAIRouter) projectUnstoredRequest(
+	request llmprotocol.Request,
+	target llmprotocol.WireFormat,
+) (llmprotocol.Request, llmprotocol.Diagnostics) {
+	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldStore) {
+		return request, nil
+	}
+	if available, ok := r.codecCapabilitiesForFormat(target); ok && available.Supports(llmprotocol.CapabilityRequestStorage) {
+		return request, nil
+	}
+	return llmprotocol.ProjectUnstoredRequest(request, target)
+}
+
+// projectUnreadableFiles sends files as notes to a model that declares its
+// capabilities without file input, once the operator accepts that loss. Both
+// candidate qualification and dispatch project through here, so a model that
+// can read the file is never told it was left out.
+func (r *OpenAIRouter) projectUnreadableFiles(
+	request llmprotocol.Request,
+	model string,
+	target llmprotocol.WireFormat,
+) (llmprotocol.Request, llmprotocol.Diagnostics) {
+	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldUnreadableFile) {
+		return request, nil
+	}
+	declared, annotated := r.declaredModelCapabilities(model)
+	if !annotated || declared.Supports(llmprotocol.CapabilityFileInput) {
+		return request, nil
+	}
+	return llmprotocol.ProjectUnreadableFiles(request, target)
 }

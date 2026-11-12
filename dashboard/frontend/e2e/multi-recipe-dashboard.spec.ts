@@ -3,83 +3,76 @@ import { expect, test } from '@playwright/test'
 import { mockAuthenticatedAppShell } from './support/auth'
 
 const config = {
-  version: 'v0.3',
+  version: 'v0.5',
   providers: {
-    defaults: { default_model: 'model-a' },
+    defaults: { model: 'model-a' },
     models: [{ name: 'model-a' }],
-  },
-  routing: {
-    modelCards: [{ name: 'model-a' }],
-    decisions: [],
   },
   entrypoints: [
     { model_names: ['vllm-sr/balanced'], recipe: 'balanced' },
     { model_names: ['vllm-sr/private'], recipe: 'privacy' },
   ],
   recipes: [
+    { name: 'default', decisions: [] },
     {
       name: 'balanced',
       description: 'Balanced objective',
-      routing: {
-        signals: {
-          keywords: [
-            {
-              name: 'balanced-keyword',
-              operator: 'OR',
-              keywords: ['balanced'],
-              case_sensitive: false,
-            },
-          ],
-        },
-        projections: {
-          scores: [{ name: 'balanced-score', method: 'weighted_sum', inputs: [] }],
-          mappings: [
-            {
-              name: 'balanced-map',
-              source: 'balanced-score',
-              method: 'threshold_bands',
-              outputs: [{ name: 'balanced-standard' }],
-            },
-          ],
-        },
-        decisions: [
+      signals: {
+        keywords: [
           {
-            name: 'balanced-route',
-            description: 'Balanced route',
-            priority: 100,
-            rules: {
-              operator: 'AND',
-              conditions: [{ type: 'keyword', name: 'balanced-keyword' }],
-            },
-            modelRefs: [{ model: 'model-a', use_reasoning: false }],
+            name: 'balanced-keyword',
+            operator: 'OR',
+            keywords: ['balanced'],
+            case_sensitive: false,
           },
         ],
       },
+      projections: {
+        scores: [{ name: 'balanced-score', method: 'weighted_sum', inputs: [] }],
+        mappings: [
+          {
+            name: 'balanced-map',
+            source: 'balanced-score',
+            method: 'threshold_bands',
+            outputs: [{ name: 'balanced-standard' }],
+          },
+        ],
+      },
+      decisions: [
+        {
+          name: 'balanced-route',
+          description: 'Balanced route',
+          priority: 100,
+          rules: {
+            operator: 'AND',
+            conditions: [{ type: 'keyword', name: 'balanced-keyword' }],
+          },
+          modelRefs: [{ model: 'model-a', use_reasoning: false }],
+        },
+      ],
     },
     {
       name: 'privacy',
       description: 'Private objective',
-      routing: {
-        projections: {
-          scores: [{ name: 'private-score', method: 'weighted_sum', inputs: [] }],
-          mappings: [],
-        },
-        signals: {
-          pii: [{ name: 'private-pii', threshold: 0.8 }],
-        },
-        decisions: [
-          {
-            name: 'private-route',
-            description: 'Private route',
-            priority: 100,
-            rules: {
-              operator: 'AND',
-              conditions: [{ type: 'pii', name: 'private-pii' }],
-            },
-            modelRefs: [{ model: 'model-a', use_reasoning: false }],
-          },
-        ],
+      projections: {
+        scores: [{ name: 'private-score', method: 'weighted_sum', inputs: [] }],
+        mappings: [],
       },
+      signals: {
+        pii: [{ name: 'private-pii', predicate: { gte: 0.8 } }],
+      },
+      decisions: [
+        {
+          name: 'private-route',
+          description: 'Private route',
+          priority: 100,
+          rules: {
+            operator: 'AND',
+            conditions: [{ type: 'pii', name: 'private-pii' }],
+          },
+          modelRefs: [{ model: 'model-a', use_reasoning: false }],
+        },
+      ],
     },
   ],
 }
@@ -210,14 +203,13 @@ test('creates a Mixture-of-Models without clipped aliases or assignments', async
     model_names: ['vllm-sr/auto'],
     recipe: 'default',
   })
-  expect(savedConfig?.recipes[0].routing.decisions[0].modelRefs).toEqual([
-    { model: 'model-a', use_reasoning: false },
-  ])
+  const balanced = savedConfig?.recipes.find((recipe) => recipe.name === 'balanced')
+  expect(balanced?.decisions[0].modelRefs).toEqual([{ model: 'model-a', use_reasoning: false }])
 })
 
 test('publishes a built-in recipe from the config the packaged CLI composes', async ({ page }) => {
   let composeRequest: unknown
-  const vault = { name: 'vault', description: 'Composed vault', routing: { decisions: [] } }
+  const vault = { name: 'vault', description: 'Composed vault', decisions: [] }
   await page.route('**/api/recipes/builtin/compose', async (route) => {
     composeRequest = route.request().postDataJSON()
     await route.fulfill({

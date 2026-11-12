@@ -14,19 +14,20 @@ func TestMemoryEmbeddingIdentityIsolatesBackendAndHotCache(t *testing.T) {
 	for _, backend := range []string{"milvus", "valkey", "qdrant"} {
 		t.Run(backend, func(t *testing.T) {
 			cfg := &config.RouterConfig{Memory: config.MemoryConfig{
-				Backend: backend, EmbeddingModel: "mmbert",
+				Backend: backend, Embedding: &config.EmbeddingBinding{Deployment: config.EmbeddingDefaultDeployment},
 				Milvus:     config.MemoryMilvusConfig{Collection: "existing"},
 				Valkey:     &config.MemoryValkeyConfig{IndexName: "existing_index", CollectionPrefix: "existing:"},
 				Qdrant:     &config.MemoryQdrantConfig{Collection: "existing"},
 				RedisCache: &config.MemoryRedisCacheConfig{Enabled: true, KeyPrefix: "hot:"},
 			}}
+			cfg.ModelDeployments = config.DefaultModelDeployments()
 			before := *cfg
 			vc, qc, rc := *cfg.Memory.Valkey, *cfg.Memory.Qdrant, *cfg.Memory.RedisCache
 			before.Memory.Valkey, before.Memory.Qdrant, before.Memory.RedisCache = &vc, &qc, &rc
 			bind := func(fingerprint string) *config.RouterConfig {
 				t.Helper()
 				result, err := memoryConfigForIdentity(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-					if settings.Dimension != 256 || settings.Layer != 0 || settings.ModelType != "mmbert" || settings.InputPolicy == "" {
+					if settings.Dimension != 256 || settings.Layer != 0 || settings.ModelType != config.EmbeddingDefaultDeployment || settings.InputPolicy == "" {
 						t.Fatalf("identity does not describe actual memory inference: %+v", settings)
 					}
 					return embedding.ContentIdentity{Fingerprint: fingerprint, Descriptor: embedding.RuntimeDescriptor{Dimension: 256}}, nil
@@ -73,7 +74,7 @@ func TestMemoryEmbeddingIdentityIsolatesBackendAndHotCache(t *testing.T) {
 
 func TestMemoryEmbeddingIdentityFailureDoesNotAdoptLegacyData(t *testing.T) {
 	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
-	cfg := &config.RouterConfig{Memory: config.MemoryConfig{EmbeddingModel: "mmbert"}}
+	cfg := &config.RouterConfig{Memory: config.MemoryConfig{Embedding: &config.EmbeddingBinding{Deployment: config.EmbeddingDefaultDeployment}}}
 	boom := errors.New("model is unavailable")
 	got, err := memoryConfigForIdentity(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 		return embedding.ContentIdentity{}, boom
@@ -81,18 +82,19 @@ func TestMemoryEmbeddingIdentityFailureDoesNotAdoptLegacyData(t *testing.T) {
 	if got != nil || !errors.Is(err, boom) {
 		t.Fatalf("missing model fell through to untagged memory: %v, %v", got, err)
 	}
-	cfg.Memory.EmbeddingModel = "qwen3"
+	// A remote deployment has no content identity: memory keeps its namespace.
+	cfg.Memory.Embedding.Deployment = "remote-embedding"
 	got, err = memoryConfigForIdentity(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-		t.Fatal("unsupported identity provider was initialized")
-		return embedding.ContentIdentity{}, nil
+		return embedding.ContentIdentity{}, embedding.ErrIdentityUnsupported
 	})
 	if got != cfg || err != nil {
-		t.Fatal("legacy non-mmbert memory changed")
+		t.Fatal("memory of a remote deployment changed its namespace")
 	}
 }
 
 func TestMemoryEmbeddingIdentitySeparatesDeterministicSimulation(t *testing.T) {
-	cfg := &config.RouterConfig{Memory: config.MemoryConfig{EmbeddingModel: "mmbert", RedisCache: &config.MemoryRedisCacheConfig{KeyPrefix: "hot:"}}}
+	cfg := &config.RouterConfig{Memory: config.MemoryConfig{Embedding: &config.EmbeddingBinding{Deployment: config.EmbeddingDefaultDeployment}, RedisCache: &config.MemoryRedisCacheConfig{KeyPrefix: "hot:"}}}
+	cfg.ModelDeployments = config.DefaultModelDeployments()
 	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
 	native, err := memoryConfigForIdentity(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 		return embedding.ContentIdentity{Fingerprint: "native-model", Descriptor: embedding.RuntimeDescriptor{Dimension: 256}}, nil
@@ -124,10 +126,10 @@ func TestOmniMemoryIdentityResolvesActualDimensionAndIsolatesArtifacts(t *testin
 	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
 	for _, backend := range []string{"milvus", "valkey", "qdrant"} {
 		for _, size := range []int{384, 768} {
-			cfg := &config.RouterConfig{Memory: config.MemoryConfig{EmbeddingModel: "multimodal", Backend: backend, Valkey: &config.MemoryValkeyConfig{}, Qdrant: &config.MemoryQdrantConfig{}, RedisCache: &config.MemoryRedisCacheConfig{KeyPrefix: "hot:"}}}
+			cfg := &config.RouterConfig{Memory: config.MemoryConfig{Embedding: &config.EmbeddingBinding{Deployment: "omni"}, Backend: backend, Valkey: &config.MemoryValkeyConfig{}, Qdrant: &config.MemoryQdrantConfig{}, RedisCache: &config.MemoryRedisCacheConfig{KeyPrefix: "hot:"}}}
 			bind := func(name string) (*config.RouterConfig, error) {
 				return memoryConfigForIdentity(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-					if settings.ModelType != "multimodal" || settings.Dimension != 0 || settings.Layer != 0 {
+					if settings.ModelType != "omni" || settings.Dimension != 0 || settings.Layer != 0 {
 						t.Fatalf("dimension guessed before resolving artifact: %+v", settings)
 					}
 					return embedding.ContentIdentity{Fingerprint: name, Descriptor: embedding.RuntimeDescriptor{Dimension: size}}, nil
@@ -163,7 +165,7 @@ func TestOmniMemoryIdentityResolvesActualDimensionAndIsolatesArtifacts(t *testin
 			}
 		}
 	}
-	cfg := &config.RouterConfig{Memory: config.MemoryConfig{EmbeddingModel: "multimodal", Milvus: config.MemoryMilvusConfig{Dimension: 384}}}
+	cfg := &config.RouterConfig{Memory: config.MemoryConfig{Embedding: &config.EmbeddingBinding{Deployment: "omni"}, Milvus: config.MemoryMilvusConfig{Dimension: 384}}}
 	if _, err := memoryConfigForIdentity(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 		return embedding.ContentIdentity{Fingerprint: "mini", Descriptor: embedding.RuntimeDescriptor{Dimension: 768}}, nil
 	}); err == nil {

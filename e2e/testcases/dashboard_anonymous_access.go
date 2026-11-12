@@ -17,6 +17,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("dashboard-anonymous-access-denied", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify anonymous and forged sessions are rejected on /api/logs and on deploy, and a deployable fragment sent without a session leaves the served config, the version ledger, and the active projection untouched (issue #3233)",
 		Tags:        []string{"dashboard", "auth", "security", "logs", "deploy"},
 		Fn:          testDashboardAnonymousAccessDenied,
@@ -30,17 +31,18 @@ func init() {
 // session check. The safe-failure case sends an invalid fragment
 // anonymously, which validation would have stopped anyway; this one would
 // have applied.
-const anonymousProbeFragment = `routing:
-  decisions:
-    - name: e2e-anonymous-probe
-      description: Deployable probe that must never land without a session
-      priority: 2
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: base-model
-          use_reasoning: false
+const anonymousProbeFragment = `recipes:
+  - name: default
+    decisions:
+      - name: e2e-anonymous-probe
+        description: Deployable probe that must never land without a session
+        priority: 2
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
 `
 
 // forgedDashboardSession is shaped like a session but was never issued by

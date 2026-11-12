@@ -1,0 +1,1 @@
+recipes[default].decisions[image]: removed_field: a decision's output no longer follows the modality of its models; run `vllm-sr config migrate` (output: {kind: image, action: generate})

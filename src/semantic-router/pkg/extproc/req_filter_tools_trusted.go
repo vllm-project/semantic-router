@@ -29,10 +29,10 @@ var trustedFactsNow = time.Now
 // reports false when the decision does not opt in to trusted facts, in which
 // case the caller must leave the request untouched.
 func resolveTrustedFactsGate(request *llmprotocol.Request, toolsCfg *config.ToolsPluginConfig, toolsAvailable bool, stage llmprotocol.TrustedStage) (llmprotocol.TrustedFacts, bool) {
-	if request == nil || toolsCfg == nil || !toolsCfg.TrustedFactsEnabled() {
+	if request == nil || !toolsCfg.TrustedFactsEnabled() {
 		return llmprotocol.TrustedFacts{}, false
 	}
-	trusted := toolsCfg.TrustedFacts
+	trusted := toolsCfg.Policy.TrustedFacts
 	return llmprotocol.TrustedFacts{
 		Enforcement:   llmprotocol.TrustedEnforcement(trusted.EffectiveEnforcement()),
 		Capable:       llmprotocol.RequiredCapabilities(*request).Supports(llmprotocol.CapabilityTools),
@@ -83,7 +83,8 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 	if !toolsCfg.TrustedFactsEnabled() {
 		return false
 	}
-	facts, ok := resolveTrustedFactsGate(request, toolsCfg, r.trustedFactsToolsAvailable(toolsCfg.TrustedFacts.FreshnessSeconds), stage)
+	policy := toolsCfg.Policy
+	facts, ok := resolveTrustedFactsGate(request, toolsCfg, r.trustedFactsToolsAvailable(toolsCfg), stage)
 	if !ok || facts.Enforcement == llmprotocol.TrustedDisabled {
 		return false
 	}
@@ -92,12 +93,12 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 	if outcome != llmprotocol.TrustedDeny && outcome != llmprotocol.TrustedNarrow {
 		return false
 	}
-	// Returning here skips ordinary mode handling, so mode none is applied
+	// Returning here skips ordinary policy handling, so mode none is applied
 	// first with the same strip it uses there. Deny and narrow then restrict
 	// the configured policy further and never keep tools it removes.
-	modeNone := toolsCfg.EffectiveMode() == config.ToolsPluginModeNone
+	modeNone := policy.EffectiveMode() == config.ToolsPolicyModeNone
 	if modeNone {
-		if changed, _ := stripSemanticToolPolicy(request, toolsCfg.StripToolHistory); changed {
+		if changed, _ := stripSemanticToolPolicy(request, policy.StripToolHistory); changed {
 			request.Generation++
 		}
 	}
@@ -112,7 +113,7 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 			request.Generation++
 		}
 	case !modeNone:
-		filtered := filterToolsByDecisionPolicy(request.Tools, toolsCfg.AllowTools, toolsCfg.BlockTools)
+		filtered := filterToolsByPolicy(request.Tools, policy)
 		if len(filtered) != len(request.Tools) {
 			request.Generation++
 		}
@@ -145,7 +146,7 @@ func (r *OpenAIRouter) looperToolStageGate(request *llmprotocol.Request, decisio
 	if !toolsCfg.TrustedFactsEnabled() {
 		return nil
 	}
-	base, ok := resolveTrustedFactsGate(request, toolsCfg, r.trustedFactsToolsAvailable(toolsCfg.TrustedFacts.FreshnessSeconds), "")
+	base, ok := resolveTrustedFactsGate(request, toolsCfg, r.trustedFactsToolsAvailable(toolsCfg), "")
 	if !ok || base.Enforcement == llmprotocol.TrustedDisabled {
 		return nil
 	}
@@ -166,47 +167,43 @@ func (r *OpenAIRouter) looperToolStageGate(request *llmprotocol.Request, decisio
 		case llmprotocol.TrustedDeny:
 			return looper.WithoutToolUse(req)
 		case llmprotocol.TrustedNarrow:
-			return looper.NarrowToolUse(req, toolsCfg.AllowTools, toolsCfg.BlockTools)
+			return looper.NarrowToolUse(req, toolsCfg.Policy.AllowTools, toolsCfg.Policy.BlockTools)
 		}
 		return req
 	}
 }
 
 // trustedFactsToolsAvailable reports bounded runtime availability evidence:
-// the tools database must be enabled and must have completed a successful
-// load, and when freshnessSeconds is positive that load must be no older than
-// the bound. An enabled flag alone, an unloaded database, or stale evidence
+// the decision's tool catalog, which its selection adds tools from, must
+// have been read, and when freshness_seconds is positive that read must be
+// no older than the bound. A decision without a catalog, or stale evidence,
 // is unavailable, which narrows and never allows.
-func (r *OpenAIRouter) trustedFactsToolsAvailable(freshnessSeconds int) bool {
-	if r == nil || r.ToolsDatabase == nil || !r.ToolsDatabase.IsEnabled() {
+func (r *OpenAIRouter) trustedFactsToolsAvailable(toolsCfg *config.ToolsPluginConfig) bool {
+	spec := toolsCfg.ActiveSelect()
+	if r == nil || spec == nil || spec.Mode != config.ToolsSelectModeAdd {
 		return false
 	}
-	loadedAt := r.ToolsDatabase.LoadedAt()
-	if loadedAt.IsZero() {
+	catalog := r.toolCatalogs[spec.ToolsDBPath]
+	if catalog == nil {
 		return false
 	}
+	freshnessSeconds := toolsCfg.Policy.TrustedFacts.FreshnessSeconds
 	if freshnessSeconds <= 0 {
 		return true
 	}
-	return trustedFactsNow().Sub(loadedAt) <= time.Duration(freshnessSeconds)*time.Second
+	return trustedFactsNow().Sub(catalog.loadedAt) <= time.Duration(freshnessSeconds)*time.Second
 }
 
 // recordTrustedFactsOutcome records the bounded gate result: enforcement,
 // stage, declared sources, and outcome only — never prompts, arguments,
-// results, or credentials. The gate runs before Replay starts on both the
-// ordinary and Looper paths, so without a record the outcome is retained on
-// the request context and appended once Replay creates one. Recording never
-// fails the request.
+// results, or credentials. Recording never fails the request.
 func (r *OpenAIRouter) recordTrustedFactsOutcome(ctx *RequestContext, toolsCfg *config.ToolsPluginConfig, facts llmprotocol.TrustedFacts, outcome llmprotocol.TrustedOutcome) {
 	decision := ""
 	if ctx != nil && ctx.VSRSelectedDecision != nil {
 		decision = ctx.VSRSelectedDecision.Name
 	}
-	reason := routerreplay.NewTrustedFactsReason(string(facts.Enforcement), string(facts.Stage), append([]string(nil), toolsCfg.TrustedFacts.TrustSources...), string(outcome))
+	reason := routerreplay.NewTrustedFactsReason(string(facts.Enforcement), string(facts.Stage), append([]string(nil), toolsCfg.Policy.TrustedFacts.TrustSources...), string(outcome))
 	logging.Infof("[ToolsPlugin] Decision %q trusted-facts outcome=%s enforcement=%s stage=%s", decision, reason.Outcome, reason.Enforcement, reason.Stage)
-	if ctx == nil {
-		return
-	}
 	replayOutcome := routerreplay.Outcome{
 		Timestamp: time.Now().UTC(),
 		Source:    "tools-plugin",
@@ -222,34 +219,45 @@ func (r *OpenAIRouter) recordTrustedFactsOutcome(ctx *RequestContext, toolsCfg *
 	if decision != "" {
 		replayOutcome.Metadata["decision"] = decision
 	}
+	r.recordToolsOutcome(ctx, replayOutcome)
+}
+
+// recordToolsOutcome adds an outcome of the tools plugin to the request's
+// replay record. The plugin runs before Replay starts on both the ordinary
+// and Looper paths, so without a record the outcome is retained on the
+// request context and appended once Replay creates one.
+func (r *OpenAIRouter) recordToolsOutcome(ctx *RequestContext, outcome routerreplay.Outcome) {
+	if ctx == nil {
+		return
+	}
 	if ctx.RouterReplayID == "" {
-		ctx.pendingTrustedFactsOutcomes = append(ctx.pendingTrustedFactsOutcomes, replayOutcome)
+		ctx.pendingToolsOutcomes = append(ctx.pendingToolsOutcomes, outcome)
 		return
 	}
 	recorder := ctx.RouterReplayRecorder
 	if recorder == nil && r != nil {
 		recorder = r.ReplayRecorder
 	}
-	appendTrustedFactsReplayOutcome(recorder, ctx.RouterReplayID, replayOutcome)
+	appendToolsReplayOutcome(recorder, ctx.RouterReplayID, outcome)
 }
 
-// appendPendingTrustedFactsOutcomes attaches gate outcomes retained before the
-// Replay record existed. Each outcome is appended once.
-func appendPendingTrustedFactsOutcomes(ctx *RequestContext, recorder *routerreplay.Recorder) {
-	if ctx == nil || ctx.RouterReplayID == "" || len(ctx.pendingTrustedFactsOutcomes) == 0 {
+// appendPendingToolsOutcomes attaches tools plugin outcomes retained before
+// the Replay record existed. Each outcome is appended once.
+func appendPendingToolsOutcomes(ctx *RequestContext, recorder *routerreplay.Recorder) {
+	if ctx == nil || ctx.RouterReplayID == "" || len(ctx.pendingToolsOutcomes) == 0 {
 		return
 	}
-	for _, outcome := range ctx.pendingTrustedFactsOutcomes {
-		appendTrustedFactsReplayOutcome(recorder, ctx.RouterReplayID, outcome)
+	for _, outcome := range ctx.pendingToolsOutcomes {
+		appendToolsReplayOutcome(recorder, ctx.RouterReplayID, outcome)
 	}
-	ctx.pendingTrustedFactsOutcomes = nil
+	ctx.pendingToolsOutcomes = nil
 }
 
-func appendTrustedFactsReplayOutcome(recorder *routerreplay.Recorder, replayID string, outcome routerreplay.Outcome) {
+func appendToolsReplayOutcome(recorder *routerreplay.Recorder, replayID string, outcome routerreplay.Outcome) {
 	if recorder == nil {
 		return
 	}
 	if err := recorder.AppendOutcome(replayID, outcome); err != nil {
-		logging.Warnf("[ToolsPlugin] trusted-facts replay append failed: %v", err)
+		logging.Warnf("[ToolsPlugin] %s replay append failed: %v", outcome.Target, err)
 	}
 }

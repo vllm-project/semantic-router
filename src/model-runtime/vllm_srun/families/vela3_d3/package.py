@@ -20,9 +20,10 @@ digests and the base's identity.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, NoReturn, TypedDict, TypeVar
 
 from ...errors import PackageError
 from ...registry.artifacts import (
@@ -35,13 +36,18 @@ from ...registry.artifacts import (
 )
 from ...registry.resolve import REVISION
 from ..vela3_shared import CONFIG_FILE, config_file
-from .span_policy import SpanConfig
 
 FORMAT = "vela3/3"
 # Read for images only (a non-goal here): never loaded.
 IMAGE_ADAPTERS = frozenset({"image_halu"})
-# The span heads besides ``span.head_file``, each under its own ``span`` key.
-OTHER_HEADS = ("ner", "relation")
+# A route names the adapter it runs and the head that reads it.
+Route = Literal["span", "ner", "relation"]
+# The most target tokens a span question reads, in about 21 windows: the vela3 family's default
+# scan budget on a CPU (4 x 8,192). It bounds one question's forwards on every size, whatever the
+# base's question cap (vela3-lite, -mini and -flash's bases allow 262,144 tokens).
+SPAN_TARGET_TOKENS = 32768
+
+T = TypeVar("T")
 
 
 def member_of(root: Path) -> bool:
@@ -71,6 +77,185 @@ class Adapter:
     alpha: float
 
 
+class Schema(TypedDict):
+    """``span.schemas.<label set>``: its trained question and its labels' descriptions."""
+
+    question: str
+    labels: dict[str, str]
+
+
+@dataclass(frozen=True)
+class Evidence:
+    """``span.evidence``: the evidence labels (lower case), question, threshold and decoding."""
+
+    labels: frozenset[str]
+    question: str
+    threshold: float
+    decode: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class Ner:
+    """``span.ner``: its head, its thresholds with and without label descriptions, and where name-only labels run."""
+
+    head_file: str
+    threshold: float
+    threshold_names_only: float
+    keeps_names_only: bool
+
+
+@dataclass(frozen=True)
+class Relation:
+    """``span.relation``: its head, its threshold for one relation (``threshold_dev_pair``) and for several (``_multi``)."""
+
+    head_file: str
+    threshold_pair: float
+    threshold_multi: float
+
+
+@dataclass(frozen=True)
+class SpanConfig:
+    """A package's ``span`` section: its heads, label sets, schemas, questions and thresholds."""
+
+    head_file: str
+    router_label_sets: dict[str, frozenset[str]]
+    schemas: dict[str, Schema]
+    default_question: str
+    threshold: float
+    threshold_names_only: float
+    thresholds_by_set: dict[str, float]
+    pii_buckets: tuple[tuple[float, float], ...]
+    evidence: Evidence | None
+    ner: Ner | None
+    relation: Relation | None
+
+    @property
+    def heads(self) -> dict[Route, str]:
+        heads: dict[Route, str] = {"span": self.head_file}
+        if self.ner is not None:
+            heads["ner"] = self.ner.head_file
+        if self.relation is not None:
+            heads["relation"] = self.relation.head_file
+        return heads
+
+    @classmethod
+    def parse(cls, value: Any) -> SpanConfig:
+        """The ``span`` section, or a ``PackageError`` naming what is missing or malformed."""
+        span = _Section.of(value, "span")
+        sets = span.section("router_label_sets")
+        schemas = span.section("schemas")
+        by_set = span.section("thresholds_by_set")
+        buckets = tuple(
+            (bucket.number("max_tokens"), bucket.number("threshold"))
+            for bucket in span.sections("pii_buckets")
+        )
+        if not any(limit >= SPAN_TARGET_TOKENS for limit, _ in buckets):
+            raise PackageError(
+                f"{CONFIG_FILE}: span.pii_buckets must reach the span budget of "
+                f"{SPAN_TARGET_TOKENS} tokens"
+            )
+        return cls(
+            head_file=span.file("head_file"),
+            router_label_sets={
+                name: frozenset(sets.texts(name)) for name in sets.value
+            },
+            schemas={name: _schema(schemas.section(name)) for name in schemas.value},
+            default_question=span.text("default_question"),
+            threshold=span.number("threshold"),
+            threshold_names_only=span.number("threshold_names_only"),
+            thresholds_by_set={name: by_set.number(name) for name in by_set.value},
+            pii_buckets=buckets,
+            evidence=span.optional("evidence", _evidence),
+            ner=span.optional("ner", _ner),
+            relation=span.optional("relation", _relation),
+        )
+
+
+def _schema(schema: _Section) -> Schema:
+    labels = schema.section("labels")
+    return {
+        "question": schema.text("question"),
+        "labels": {name: labels.text(name) for name in labels.value},
+    }
+
+
+def _evidence(evidence: _Section) -> Evidence:
+    return Evidence(
+        labels=frozenset(x.lower() for x in evidence.texts("labels")),
+        question=evidence.text("question"),
+        threshold=evidence.number("threshold"),
+        decode=evidence.section("decode").value,
+    )
+
+
+def _ner(ner: _Section) -> Ner:
+    return Ner(
+        head_file=ner.file("head_file"),
+        threshold=ner.number("threshold"),
+        threshold_names_only=ner.number("threshold_names_only"),
+        keeps_names_only=ner.value.get("names_only_route") == "ner",
+    )
+
+
+def _relation(relation: _Section) -> Relation:
+    return Relation(
+        head_file=relation.file("head_file"),
+        threshold_pair=relation.number("threshold_dev_pair"),
+        threshold_multi=relation.number("threshold_dev_multi"),
+    )
+
+
+@dataclass(frozen=True)
+class _Section:
+    value: dict[str, Any]
+    where: str
+
+    @classmethod
+    def of(cls, value: Any, where: str) -> _Section:
+        if not isinstance(value, dict):
+            raise PackageError(f"{CONFIG_FILE}: {where} must be an object")
+        return cls(value, where)
+
+    def section(self, key: str) -> _Section:
+        return _Section.of(self.value.get(key), f"{self.where}.{key}")
+
+    def optional(self, key: str, parse: Callable[[_Section], T]) -> T | None:
+        return None if self.value.get(key) is None else parse(self.section(key))
+
+    def sections(self, key: str) -> list[_Section]:
+        items = self.value.get(key)
+        if not isinstance(items, list):
+            self._refuse(key, "a list")
+        return [
+            _Section.of(item, f"{self.where}.{key}[{index}]")
+            for index, item in enumerate(items)
+        ]
+
+    def text(self, key: str) -> str:
+        value = self.value.get(key)
+        if not isinstance(value, str):
+            self._refuse(key, "a string")
+        return value
+
+    def texts(self, key: str) -> list[str]:
+        value = self.value.get(key)
+        if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
+            self._refuse(key, "a list of strings")
+        return value
+
+    def number(self, key: str) -> float:
+        value = self.value.get(key)
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            self._refuse(key, "a number")
+        return float(value)
+
+    def file(self, key: str) -> str:
+        return config_file(self.value.get(key), f"{self.where}.{key}")
+
+    def _refuse(self, key: str, kind: str) -> NoReturn:
+        raise PackageError(f"{CONFIG_FILE}: {self.where}.{key} must be {kind}")
+
+
 @dataclass(frozen=True)
 class Vela3D3Package:
     """A verified ``vela3/3`` package (its base is verified by the ``decision3`` family)."""
@@ -80,7 +265,6 @@ class Vela3D3Package:
     span: SpanConfig
     base: Base
     adapters: dict[str, Adapter]
-    heads: dict[str, str]
     router_questions: dict[str, Any]
     files: dict[str, str]
     weights_sha256: str
@@ -94,18 +278,6 @@ def _base(vela3: dict[str, Any]) -> Base:
     if not REVISION.fullmatch(revision):
         raise PackageError(f"{CONFIG_FILE}: base revision must be a 40-hex commit")
     return Base(base["repo_id"], revision)
-
-
-def _heads(vela3: dict[str, Any]) -> dict[str, str]:
-    span = vela3.get("span")
-    if not isinstance(span, dict):
-        raise PackageError(f"{CONFIG_FILE}: span must describe the span heads")
-    heads = {"span": config_file(span.get("head_file"), "span.head_file")}
-    for name in OTHER_HEADS:
-        entry = span.get(name)
-        if isinstance(entry, dict) and entry.get("head_file"):
-            heads[name] = config_file(entry["head_file"], f"span.{name}.head_file")
-    return heads
 
 
 def adapter_of(root: Path, name: str, spec: Any) -> Adapter:
@@ -161,7 +333,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
         raise PackageError(
             f"{CONFIG_FILE}: adapters must name the decision and span adapters"
         )
-    heads = _heads(vela3)
+    span = SpanConfig.parse(vela3.get("span"))
     questions_file = config_file(
         vela3.get("router_questions_file"), "router_questions_file"
     )
@@ -174,7 +346,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
         for name, spec in specs.items()
         if name not in IMAGE_ADAPTERS
     ]
-    weights += list(heads.values())
+    weights += list(span.heads.values())
     if definitions.get("writer") == "grafted_head":
         weights.append(
             config_file(definitions.get("lm_head_file"), "definitions.lm_head_file")
@@ -212,10 +384,9 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3D3Package:
     return Vela3D3Package(
         root=root,
         vela3=vela3,
-        span=SpanConfig.parse(vela3["span"]),
+        span=span,
         base=base,
         adapters=adapters,
-        heads=heads,
         router_questions=questions,
         files=files,
         weights_sha256=sha256_json({name: files[name] for name in weights}),

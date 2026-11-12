@@ -23,7 +23,8 @@ global:
   model_catalog:
     system:
       decision_model: {deployment: primary}
-      pii_classifier: models/Vela-1.0-Encoder-307M-PII
+    bindings:
+      pii: primary
   router:
     strategy: priority
 `)...)
@@ -39,7 +40,7 @@ global:
 	response := httptest.NewRecorder()
 	UpdateRouterDefaultsHandler(path, false, root)(response,
 		httptest.NewRequest(http.MethodPost, "/api/router/config/global/update", bytes.NewReader(patch)))
-	var result map[string]string
+	var result map[string]any
 	if decodeErr := json.Unmarshal(response.Body.Bytes(), &result); decodeErr != nil {
 		t.Fatalf("response %d: %s", response.Code, response.Body.String())
 	}
@@ -55,9 +56,13 @@ global:
 		t.Fatal(decodeErr)
 	}
 	global := requireMapValue(t, document, "global")
-	system := requireMapValue(t, requireMapValue(t, global, "model_catalog"), "system")
-	if requireMapValue(t, system, "decision_model")["deployment"] != "selected" || system["pii_classifier"] != "models/Vela-1.0-Encoder-307M-PII" || len(system) != 2 {
-		t.Fatalf("selection changed explicit or inherited bindings: %+v", system)
+	catalog := requireMapValue(t, global, "model_catalog")
+	system := requireMapValue(t, catalog, "system")
+	if requireMapValue(t, system, "decision_model")["deployment"] != "selected" || len(system) != 1 {
+		t.Fatalf("selection wrote more than the decision model: %+v", system)
+	}
+	if bindings := requireMapValue(t, catalog, "bindings"); bindings["pii"] != "primary" || len(bindings) != 1 {
+		t.Fatalf("selection changed an explicit binding: %+v", bindings)
 	}
 	if requireMapValue(t, global, "router")["strategy"] != "priority" {
 		t.Fatal("decision model apply discarded other global settings")

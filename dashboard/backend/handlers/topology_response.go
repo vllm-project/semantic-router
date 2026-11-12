@@ -84,22 +84,22 @@ func matchedRouterSignals(routerResp *RouterEvalResponse) *RouterMatchedSignals 
 func topologySignalMappings(matchedSignals *RouterMatchedSignals) []topologySignalMapping {
 	return []topologySignalMapping{
 		{signalType: "keyword", names: matchedSignals.Keywords, reason: "Keyword rule matched", addPath: true},
-		{signalType: "embedding", names: matchedSignals.Embeddings, reason: "Embedding similarity matched", addPath: true},
 		{signalType: "domain", names: matchedSignals.Domains, reason: "Domain classification matched", addPath: true},
 		{signalType: "fact_check", names: matchedSignals.FactCheck, reason: "Fact check signal matched"},
-		{signalType: "preference", names: matchedSignals.Preferences, reason: "User preference matched", addPath: true},
 		{signalType: "user_feedback", names: matchedSignals.UserFeedback, reason: "User feedback matched", addPath: true},
+		{signalType: "turn_relation", names: matchedSignals.TurnRelation, reason: "Turn relation matched", addPath: true},
 		{signalType: "language", names: matchedSignals.Language, reason: "Language detected", addPath: true},
 		{signalType: "context", names: matchedSignals.Context, reason: "Context token count matched", addPath: true},
-		{signalType: "structure", names: matchedSignals.Structure, reason: "Structure rule matched", addPath: true},
 		{signalType: "complexity", names: matchedSignals.Complexity, reason: "Complexity level matched", addPath: true},
 		{signalType: "modality", names: matchedSignals.Modality, reason: "Modality signal matched", addPath: true},
 		{signalType: "authz", names: matchedSignals.Authz, reason: "Authorization signal matched", addPath: true},
 		{signalType: "jailbreak", names: matchedSignals.Jailbreak, reason: "Jailbreak signal matched", addPath: true},
+		{signalType: "safety", names: matchedSignals.Safety, reason: "Safety signal matched", addPath: true},
 		{signalType: "pii", names: matchedSignals.PII, reason: "PII signal matched", addPath: true},
-		{signalType: "kb", names: matchedSignals.KB, reason: "Knowledge base signal matched", addPath: true},
 		{signalType: "conversation", names: matchedSignals.Conversation, reason: "Conversation structure signal matched", addPath: true},
-		{signalType: "event", names: matchedSignals.Event, reason: "Event signal matched", addPath: true},
+		{signalType: "metadata", names: matchedSignals.Metadata, reason: "Metadata signal matched", addPath: true},
+		{signalType: "input_modality", names: matchedSignals.InputModality, reason: "Input modality matched", addPath: true},
+		{signalType: "systemone", names: matchedSignals.SystemOne, reason: "System One question matched", addPath: true},
 		{signalType: "projection", names: matchedSignals.Projection, reason: "Projection mapping matched", addPath: true},
 	}
 }

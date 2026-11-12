@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -83,15 +82,20 @@ func annotateUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOut
 }
 
 func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
-	if ctx == nil ||
-		ctx.IsStreamingResponse ||
-		ctx.TTFTRecorded ||
-		ctx.ProcessingStartTime.IsZero() ||
-		ctx.RequestModel == "" {
+	if ctx == nil || ctx.ProcessingStartTime.IsZero() {
+		return
+	}
+	recordNonStreamingFirstResponse(ctx, time.Since(ctx.ProcessingStartTime))
+}
+
+// recordNonStreamingFirstResponse records how long the request's model took
+// to answer a non-streaming response.
+func recordNonStreamingFirstResponse(ctx *RequestContext, elapsed time.Duration) {
+	if ctx.IsStreamingResponse || ctx.TTFTRecorded || ctx.RequestModel == "" {
 		return
 	}
 
-	ttft := time.Since(ctx.ProcessingStartTime).Seconds()
+	ttft := elapsed.Seconds()
 	if ttft <= 0 {
 		return
 	}
@@ -111,8 +115,6 @@ func buildResponseHeadersContinueResponse(
 	headerMutation *ext_proc.HeaderMutation,
 	streaming bool,
 ) *ext_proc.ProcessingResponse {
-	headerMutation = mergeHeaderMutations(headerMutation,
-		&ext_proc.HeaderMutation{RemoveHeaders: []string{headers.VSRUpstreamHost}})
 	response := &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HeadersResponse{

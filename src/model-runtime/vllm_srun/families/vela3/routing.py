@@ -186,14 +186,24 @@ class Router:
         span = self.span
         temperature = float(span["router_set_temperature"])
         thresholds = dict(span["thresholds_by_set"])
-        buckets = span["pii_buckets"]
+        bucket_source = span
         if route.head == "span_set":
             overrides = span["set_adapter"]
             temperature = float(overrides["router_set_temperature"])
             thresholds.update(overrides["thresholds_by_set"])
-            buckets = overrides["pii_buckets"]
+            bucket_source = overrides
         if route.label_set == "pii":
-            bucket = next(b for b in buckets if target_tokens <= b["max_tokens"])
+            # Only a PII question reads the buckets, so a package without them
+            # still serves every other span question.
+            buckets = bucket_source["pii_buckets"]
+            bucket = next(
+                (b for b in buckets if target_tokens <= b["max_tokens"]),
+                None,
+            )
+            if bucket is None:
+                raise ValueError(
+                    f"no PII threshold bucket covers {target_tokens} tokens"
+                )
             return float(bucket["threshold"]), temperature
         if route.label_set in ("halu", "toxic"):
             return float(thresholds[route.label_set]), temperature
@@ -201,8 +211,17 @@ class Router:
             evidence = span[EVIDENCE]
             if evidence.get("buckets"):
                 bucket = next(
-                    b for b in evidence["buckets"] if target_tokens <= b["max_tokens"]
+                    (
+                        b
+                        for b in evidence["buckets"]
+                        if target_tokens <= b["max_tokens"]
+                    ),
+                    None,
                 )
+                if bucket is None:
+                    raise ValueError(
+                        f"no evidence threshold bucket covers {target_tokens} tokens"
+                    )
                 return float(bucket["threshold"]), 1.0
             return float(evidence["threshold"]), 1.0
         if route.head == "relation":

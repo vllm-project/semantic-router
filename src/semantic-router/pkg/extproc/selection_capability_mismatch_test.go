@@ -25,7 +25,7 @@ func TestAutoRoutingReportsUnsupportedCapabilityLikeNamedModel(t *testing.T) {
 	router.Config.Decisions = []config.Decision{{
 		Name: "default-route", Priority: 1, ModelRefs: []config.ModelRef{{Model: chatModel}},
 	}}
-	classifier, err := classification.NewClassifier(router.Config, nil, nil, nil)
+	classifier, err := classification.NewClassifier(router.Config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestAutoRoutingKeepsMixedContextAndWireExclusionsUnavailable(t *testing.T) 
 		Name: "default-route", Priority: 1,
 		ModelRefs: []config.ModelRef{{Model: messagesModel}, {Model: chatModel}},
 	}}
-	classifier, err := classification.NewClassifier(router.Config, nil, nil, nil)
+	classifier, err := classification.NewClassifier(router.Config)
 	if err != nil {
 		t.Fatal(err)
 	}
