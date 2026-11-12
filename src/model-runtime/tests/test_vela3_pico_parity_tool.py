@@ -151,3 +151,55 @@ def test_a_router_question_failed_by_its_neighbours_row_is_compared_apart() -> N
         "sets": {"c": {"selected": [], "probabilities": {"l": 0.1}}},
     }
     assert parity.apart({"a": {}, "b": {}, "c": {}}, ours, theirs) == ["a", "c"]
+
+
+def test_a_request_the_package_fails_whole_is_a_failure(tmp_path, monkeypatch) -> None:
+    package = tmp_path / "package"
+    package.mkdir()
+    (package / "vela3_config.json").write_text(json.dumps({"span": {"schemas": {}}}))
+    requests = tmp_path / "requests.jsonl"
+    requests.write_text(
+        json.dumps(
+            {
+                "id": "r0",
+                "state": {"request": "hi"},
+                "questions": {"q": {"type": "choice", "choices": [{"key": "a"}]}},
+            }
+        )
+    )
+
+    class Reference:
+        def system_one(self, *_args):
+            raise RuntimeError("the package fails the request")
+
+    class Accelerator:
+        def devices(self):
+            return [None]
+
+        def execute(self, _info, call):
+            return call()
+
+    monkeypatch.setattr(parity, "load_runtime", lambda *_: None)
+    monkeypatch.setattr(parity, "load_reference", lambda *_: Reference())
+    monkeypatch.setattr(parity, "answer", lambda *_: ({}, True))
+    monkeypatch.setattr(parity, "ACCELERATORS", {"cpu": Accelerator})
+    output = tmp_path / "out.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "parity",
+            "--package",
+            str(package),
+            "--output",
+            str(output),
+            "--requests",
+            str(requests),
+        ],
+    )
+    with pytest.raises(SystemExit) as exit_info:
+        parity.main()
+    summary = json.loads(output.read_text())
+    assert exit_info.value.code == 1
+    assert summary["failures"] == 1 and summary["package_errors"] == 1
+    assert summary["cases"][0]["ok"] is False

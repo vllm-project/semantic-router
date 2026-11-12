@@ -21,6 +21,9 @@ This record compares the two on CPU in FP32, and on one GPU.
   window, on either side), and `--requests vela3-parity-profile.jsonl` (the
   requests the Router sends for the `model-runtime-vela3` E2E profile).
 
+The tool counts a request the package raises on as a failure
+(`package_errors`); all runs below had 0 package errors.
+
 ## Results (CPU, FP32)
 
 | Model | Run | Requests (questions) | One pass / question by question | Answers identical | max \|dp\| | Span sets identical |
@@ -35,9 +38,10 @@ This record compares the two on CPU in FP32, and on one GPU.
 Every answer both sides give is identical: the same Choice, Noul, Set
 selections, Span sets of (label, start, end), the same applied thresholds and,
 where neither side fails a question, the same input-token counts; every
-probability is equal (max |dp| 0). On every request the family read in one
-pass exactly when the package did (`passes`). The boundary set reads one
-request in one pass at 8,151 tokens and eleven that land just past the window
+probability is equal (max |dp| 0). On every request the package answered
+without failing any question, the family read it in one pass exactly when the
+package did (`passes`). The boundary set reads one request in one pass at
+8,151 tokens and eleven that land just past the window
 on the question-by-question path, as the package does. The 150M model has no
 test fixture at its shape (hidden 768, intermediate 1,024, six heads), so this
 run is the check that the native UltraBERT reproduces it: it does, bit for bit.
@@ -57,8 +61,8 @@ all 41 recorded answers.
   fit (`max_length_exceeded`), as the System One contract requires and as the
   vela3 family does. The tool asks the package the same request again without
   the questions the family failed; every answer of the rows that fit is then
-  identical. Asking such a question alone is not the same call (its row would
-  hold no other router question), which the first version of the tool did.
+  identical. Asking such a question alone is not the same call: its row would
+  hold no other router question.
 - **Both sides fail.** Score questions and Set questions that are not router
   questions are invalid on both sides (eight per model); eleven questions on
   rows that do not fit fail on both sides (the package says

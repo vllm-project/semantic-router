@@ -22,8 +22,8 @@ The package reads System One in its own spelling, so the tool hands it the same 
 presets expanded to their span questions, ``choices`` / ``labels`` lists as ``criteria``, and a typed
 state's ``request`` / ``prompt`` / ``response`` keys as ``user`` / ``answer``. The bar for the record: every
 decision and span set identical and max |dp| 0 on CPU fp32; <= 0.02 on GPUs. A request the package fails
-with an exception is reported (``package_error``) and not counted as a failure: the family answers what it
-can and fails the offending question alone, by design.
+with an exception is a failure (``package_error``, counted as ``package_errors`` in the summary): nothing
+of it is compared. A question only one side answers is not (see the record).
 """
 
 from __future__ import annotations
@@ -476,7 +476,7 @@ def main() -> None:
     ]
     bar = CPU_BAR if args.device == "cpu" else GPU_BAR
 
-    cases, failures, worst = [], 0, 0.0
+    cases, failures, package_errors, worst = [], 0, 0, 0.0
     timing = {"runtime": 0.0, "package": 0.0}
     for request in requests:
         state, questions = request["state"], request["questions"]
@@ -490,15 +490,19 @@ def main() -> None:
             theirs = reference.system_one(*package_request(state, questions, schemas))
         except (
             Exception
-        ) as exc:  # noqa: BLE001 - the package fails the whole request; recorded, not a failure
+        ) as exc:  # noqa: BLE001 - nothing of the request can be compared
             cases.append(
                 {
                     "id": request["id"],
-                    "ok": True,
+                    "ok": False,
                     "package_error": f"{type(exc).__name__}: {exc}",
                 }
             )
-            print(f"{request['id']} package_error {type(exc).__name__}", flush=True)
+            failures += 1
+            package_errors += 1
+            print(
+                f"{request['id']} FAIL package_error {type(exc).__name__}", flush=True
+            )
             continue
         timing["package"] += time.perf_counter() - started
         rows = compare(questions, ours, theirs)
@@ -557,6 +561,7 @@ def main() -> None:
         "requests": len(requests),
         "questions": sum(len(c.get("questions", {})) for c in cases),
         "failures": failures,
+        "package_errors": package_errors,
         "max_dp": worst,
         "bar": bar,
         "seconds": timing,
@@ -564,7 +569,7 @@ def main() -> None:
     }
     args.output.write_text(json.dumps(summary, indent=1))
     print(
-        f"{len(requests)} requests, {summary['questions']} questions, {failures} failures, max|dp|={worst:.2e}"
+        f"{len(requests)} requests, {summary['questions']} questions, {failures} failures ({package_errors} package errors), max|dp|={worst:.2e}"
         f" (bar {bar}); runtime {timing['runtime']:.1f}s, package {timing['package']:.1f}s"
     )
     if failures:
