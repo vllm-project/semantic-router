@@ -135,10 +135,12 @@ func testJailbreakDetection(ctx context.Context, client *kubernetes.Clientset, o
 	return checkJailbreakAcceptance(results)
 }
 
-// Both prompt attacks and non-attacks must reach 80% accuracy. A request or
-// response-contract error always fails, independently of the model's accuracy.
+// Every prompt attack and every non-attack must be classified as expected:
+// the System One fixture answers them deterministically, so a miss is a broken
+// guard path, not model accuracy. A request or response-contract error always
+// fails.
 func checkJailbreakAcceptance(results []JailbreakResult) error {
-	const minimumClassAccuracy = 0.8
+	const minimumClassAccuracy = 1.0
 	totals, correct := map[bool]int{}, map[bool]int{}
 	for _, result := range results {
 		if result.Error != "" {
