@@ -98,8 +98,9 @@ type chatMessageWire struct {
 	LegacyFunctionCall *chatLegacyCallWire       `json:"function_call,omitempty"`
 	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
 	// provider_specific_fields on response messages. The content is opaque
-	// provider metadata and is not replayed to the client. Client requests
-	// that carry the field are rejected in decodeChatRequestMessage.
+	// provider metadata and is not replayed to the client. A client that
+	// replays a message as LiteLLM parsed it sends the field back, and the
+	// request decode drops it as client metadata (chatClientMetadata).
 	ProviderSpecificFields json.RawMessage      `json:"provider_specific_fields,omitempty"`
 	ToolCalls              []chatToolCallWire   `json:"tool_calls,omitempty"`
 	ToolCallID             string               `json:"tool_call_id,omitempty"`
@@ -193,8 +194,12 @@ type chatOutputWire struct {
 }
 
 func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
+	metadata, err := withoutChatParseResults(body, policy)
+	if err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
 	var wire chatRequestWire
-	if err := decodeWire(body, &wire, policy); err != nil {
+	if err := decodeWire(metadata.body, &wire, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateChatRequestWire(wire); err != nil {
@@ -214,12 +219,14 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	envelope := requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy)
-	// Decoding drops the text alias beside typed reasoning blocks, so the source
-	// bytes no longer describe the request and must not be replayed upstream.
-	if chatMessagesDropReasoningAlias(wire.Messages) {
+	metadata.noteProviderSpecificFields(wire.Messages)
+	// Decoding drops client metadata and the text alias beside typed reasoning
+	// blocks, so the source bytes no longer describe the request and must not
+	// be replayed upstream.
+	if metadata.removed || chatMessagesDropReasoningAlias(wire.Messages) {
 		envelope.Request = nil
 	}
-	return request, envelope, nil, nil
+	return request, envelope, metadata.diagnostics(policy), nil
 }
 
 func chatMessagesDropReasoningAlias(messages []chatMessageWire) bool {
@@ -375,11 +382,6 @@ func decodeChatRequestOptions(wire chatRequestWire, request *llmprotocol.Request
 }
 
 func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
-	// Response-only LiteLLM metadata. The shared message wire accepts the
-	// field so upstream replies decode; a client request must not.
-	if err := rejectUnsupportedRequestField("messages.provider_specific_fields", wire.ProviderSpecificFields); err != nil {
-		return llmprotocol.Message{}, err
-	}
 	for _, call := range wire.ToolCalls {
 		if call.Function.TokenizedArguments != nil {
 			return llmprotocol.Message{}, llmprotocol.NewError(
