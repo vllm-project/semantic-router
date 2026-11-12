@@ -810,6 +810,16 @@
           },
           "type": "object"
         },
+        "unsupported_capabilities": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "sampling_min_p",
+              "sampling_logit_bias"
+            ]
+          },
+          "type": "array"
+        },
         "display_name": {
           "type": "string"
         },

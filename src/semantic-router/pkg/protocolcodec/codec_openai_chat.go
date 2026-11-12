@@ -28,6 +28,7 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilityReasoningBudget, llmprotocol.CapabilitySamplingSeed,
 		llmprotocol.CapabilitySamplingPenalties, llmprotocol.CapabilityStopSequences,
 		llmprotocol.CapabilitySamplingTopK, llmprotocol.CapabilitySamplingMinP,
+		llmprotocol.CapabilitySamplingLogitBias,
 		llmprotocol.CapabilityRepetitionPenalty, llmprotocol.CapabilityCacheIsolation,
 		llmprotocol.CapabilityRequestMetadata, llmprotocol.CapabilityRequestStorage,
 		llmprotocol.CapabilityTextVerbosity,
@@ -64,7 +65,7 @@ type chatRequestWire struct {
 	Audio                json.RawMessage        `json:"audio,omitempty"`
 	FunctionCall         json.RawMessage        `json:"function_call,omitempty"`
 	Functions            json.RawMessage        `json:"functions,omitempty"`
-	LogitBias            json.RawMessage        `json:"logit_bias,omitempty"`
+	LogitBias            map[string]float64     `json:"logit_bias,omitempty"`
 	Logprobs             json.RawMessage        `json:"logprobs,omitempty"`
 	Modalities           json.RawMessage        `json:"modalities,omitempty"`
 	Moderation           json.RawMessage        `json:"moderation,omitempty"`
@@ -239,7 +240,7 @@ func validateChatRequestWire(wire chatRequestWire) error {
 		"prompt_cache_retention": wire.PromptCacheRetention,
 		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
 		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
-		"logit_bias": wire.LogitBias, "logprobs": logprobs, "modalities": wire.Modalities,
+		"logprobs": logprobs, "modalities": wire.Modalities,
 		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
 		"top_logprobs":       wire.TopLogprobs,
 		"web_search_options": wire.WebSearchOptions,
@@ -282,7 +283,7 @@ func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 		ReasoningEffort: wire.ReasoningEffort, ReasoningBudgetTokens: wire.ReasoningBudget,
 		Sampling: llmprotocol.Sampling{
 			Temperature: wire.Temperature, TopP: wire.TopP, Seed: wire.Seed,
-			TopK: wire.TopK, MinP: wire.MinP, RepetitionPenalty: wire.RepetitionPenalty,
+			TopK: wire.TopK, MinP: wire.MinP, LogitBias: wire.LogitBias, RepetitionPenalty: wire.RepetitionPenalty,
 			FrequencyPenalty: wire.FrequencyPenalty, PresencePenalty: wire.PresencePenalty,
 		},
 		Trusted:            llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},

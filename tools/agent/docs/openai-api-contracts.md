@@ -265,6 +265,7 @@ during transport refactors:
 | Tool selection | one neutral mutation before the final provider encoding for every backend format |
 | `tool_choice` | omitted means `auto`; `auto`, `none`, `required`, and named choices survive every protocol pair |
 | Cache directives | same-format mutation, Chat-to-Messages translation, malformed input, cache usage, and unsupported block errors |
+| Sampling controls a model lacks | a model's `unsupported_capabilities` (`sampling_min_p`, `sampling_logit_bias`) leaves `min_p` and `logit_bias` out of the request for that model only, at dispatch and for every fallback candidate, with one `dropped` diagnostic each; `logit_bias` is a semantic Chat field that `request_params.blocked_params` can remove and other targets reject |
 | Structured output | the complete JSON Schema survives routing mutation |
 | Anthropic `output_config` | reasoning effort and strict JSON Schema survive same-format mutation and OpenAI translation |
 | Reasoning streams | both OpenAI-compatible reasoning aliases and ordered Anthropic thinking/signature blocks remain explicit |
@@ -312,6 +313,7 @@ it remains valid when codec internals move.
 | [#3024](https://github.com/vllm-project/semantic-router/issues/3024) routed model rewrites retain the complete JSON Schema contract | structured-output 3×3 goldens and `TestExtProcStructuredOutputRequestProtocolMatrix` | three `protocol-codec-*-backend-structured-output` cases, each buffered and streamed |
 | [#3013](https://github.com/vllm-project/semantic-router/issues/3013) Responses clients never receive Chat SSE from an Anthropic backend | client/backend-independent 3×3 stream encoder matrix | Messages-backed Responses streaming profile |
 | [#2947](https://github.com/vllm-project/semantic-router/issues/2947) streamed cache accounting survives intermediate and terminal usage updates | cumulative usage-state tests plus Anthropic-to-every-target cache matrix | cached Messages stream through native backend profile |
+| [#6315](https://github.com/vllm-project/semantic-router/issues/6315) a model whose backends reject `min_p` or `logit_bias`, as vLLM does under speculative decoding, receives requests without them, with a `dropped` diagnostic each, while the decision's other models keep them | `TestSamplingControlsAreLeftOutOnlyForTheModelThatLacksThem` and `TestFallbackSendsEachCandidateTheSamplingControlsItSupports`, buffered and streamed, and `TestProjectUnsupportedSamplingDropsOnlyDeclaredControls` | none yet |
 | [#5107](https://github.com/vllm-project/semantic-router/issues/5107) a Chat client of a Chat provider gets the same error event however the stream splits into body chunks | `TestChatUpstreamErrorEventDoesNotDependOnReadSplit`, `TestChatStreamFailureEndsItsBatch`, and `TestChatPublicStreamFilterDropsProviderErrorEvent` | `protocol-codec-vllm-stream-error` split markers |
 
 Adding or fixing a protocol issue updates this ledger and the corresponding test in

@@ -405,6 +405,9 @@ func validateSampling(sampling Sampling, limits Limits) error {
 	if err := validateSamplingScalars(sampling); err != nil {
 		return err
 	}
+	if err := validateLogitBias(sampling.LogitBias, limits); err != nil {
+		return err
+	}
 	return validateStopSequences(sampling.Stop, limits)
 }
 

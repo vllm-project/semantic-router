@@ -211,6 +211,7 @@ instead of being silently dropped.
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
 | `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
 | `min_p`, repetition penalty, and cache salt | Supported extensions | Not supported | Not supported |
+| Token logit bias (`logit_bias`) | Supported | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
 
@@ -288,6 +289,39 @@ that:
   `content.file`.
 - **Capable models are unaffected.** A model that declares `file_input`, or
   declares no capabilities, still receives the file.
+
+### Sampling controls a backend rejects
+
+Some backends reject a sampling control their wire format defines. A vLLM
+backend that runs speculative decoding, for example, answers any request that
+carries `min_p` or `logit_bias` with HTTP 400. List such controls in the
+model's `unsupported_capabilities`:
+
+```yaml
+providers:
+  models:
+    - name: qwen3-mtp
+      api_format: chat_completions
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
+      backend_refs:
+        - name: mtp-pool
+          endpoint: mtp-server:8000
+          provider: vllm
+```
+
+- **Left out for that model.** A request sent to the model, as the decision's
+  choice or as a fallback candidate, reaches it without the listed fields.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for each field
+  left out, `min_p` or `logit_bias`.
+- **Other models are unaffected.** Another model of the same decision still
+  receives the fields.
+
+The list accepts `sampling_min_p` and `sampling_logit_bias`; any other name
+fails at load. The gateway spreads a model's requests across its
+`backend_refs`, so list a control when any of them rejects it. To remove a
+control for every model a decision routes to, list it in the decision's
+[`request_params`](../tutorials/plugin/request-params) `blocked_params`
+instead.
 
 ### Signed reasoning from Anthropic backends
 
