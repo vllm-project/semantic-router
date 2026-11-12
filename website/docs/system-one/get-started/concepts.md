@@ -109,11 +109,14 @@ Every model answers a preset in its canonical form. Where a model family was
 trained on a preset, the Router asks it in the trained form instead:
 
 - **Trained bindings.** The Vela 3.0 d3 sizes turn a trained adapter on by
-  exact question ID (`domain`, `attack`, `factcheck`, ...); vela3-fast and
+  exact question ID (`domain`, `factcheck`, `modality`, ...); vela3-fast and
   Vela 2.0 pick it by exact wording, which for every preset they were trained
   on is the canonical wording. Trained option keys are mapped back: the
   modality question's trained `AR`, `DIFFUSION` and `BOTH` come back as
-  `text`, `image` and `text_image`.
+  `text`, `image` and `text_image`. The d3 sizes answer the guards (jailbreak,
+  and harm at the request stage) with their base instead, which their
+  adapters do worse than
+  ([support matrix](../reference/support-matrix.md#support-matrix)).
 - **Router-owned IDs.** A question without a trained form goes out under an ID
   with a `:` in it, which cannot collide with a trained ID and so never turns
   on an adapter by accident.

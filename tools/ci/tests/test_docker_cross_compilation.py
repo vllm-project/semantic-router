@@ -149,7 +149,7 @@ class DockerCrossCompilationTests(unittest.TestCase):
                     if attached
                     else (
                         ["linux/amd64", "linux/arm64"]
-                        if accelerator == "cpu"
+                        if accelerator in {"cpu", "cuda"}
                         else ["linux/amd64"]
                     )
                 )

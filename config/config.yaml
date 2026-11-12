@@ -213,6 +213,10 @@ providers:
         completion_per_1m: 4.0
       external_model_ids:
         openai: llava-omni-preview
+      # Request capabilities the backends reject, as vLLM rejects min_p and
+      # logit_bias under speculative decoding: the Router sends this model
+      # requests without those fields and reports each in x-vsr-warnings.
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
       backend_refs:
         - name: omni-primary
           provider: vllm
@@ -446,6 +450,9 @@ recipes:
           description: Content risk, independent of prompt attacks.
           predicate:
             gte: 0.52
+          # A long input read only in part decides on the windows read once
+          # they are a quarter of them; below that the rule is unknown.
+          min_coverage: 0.25
         - name: unsafe-privacy
           description: Requests that seek or expose private information.
           labels: ["PII/Privacy"]
@@ -540,6 +547,9 @@ recipes:
           # windows read; match matches the request (strict), and unknown
           # leaves the rule to on_unknown.
           on_unscanned: best_effort
+          # best_effort decides only once it has read half the windows;
+          # below that the rule is unknown, which on_unknown decides.
+          min_coverage: 0.5
           # A request none of whose windows the deployment answers matches
           # (fail closed, the default); no_match passes it.
           on_unknown: match
@@ -596,6 +606,7 @@ recipes:
             tool_results: true
             request: false
           deployment: primary
+          min_coverage: 0.5
         # The masking plugin of static_business_route masks what this rule
         # detects in the request as it is sent.
         - name: business_contact_pii
@@ -2888,17 +2899,23 @@ global:
         # reads at most max_tokens of a long input: its head (head_share of
         # it) and its tail around a marker. A guard rule (jailbreak, safety,
         # pii) reads all of it, in windows of scan_window.tokens that overlap
-        # by scan_window.overlap. Both are sized in bytes, four a token, so
+        # by scan_window.overlap, each a call of its own, max_parallel (4) at
+        # a time. Both are sized in bytes, four a token, so
         # dense text such as JSON or base64 holds up to about three times as
         # many tokens: size them so that a call on it fits timeout_ms. A
         # systemone deployment defaults to 4096 for both and a model_runtime
-        # one to 8192; neither ever exceeds the model's validated length.
+        # one to 8192; neither ever exceeds the model's validated length. A
+        # long input whose windows would not all be read by the signals'
+        # deadline at the deployment's measured pace reads larger ones, up to
+        # scan_window.max_tokens (by default the model's validated length).
         routing_view:
           max_tokens: 4096
           head_share: 0.25
         scan_window:
           tokens: 4096
           overlap: 256
+          max_parallel: 4
+          max_tokens: 8192
         capabilities:
           question_types: [choice, noul, score]
           modalities: [text, image]

@@ -402,9 +402,21 @@ test('waits for verified settings before opening the interactive preparation cat
   page,
 }) => {
   const state = await setup(page)
+  let releaseCapabilities!: () => void
   let releaseSettings!: () => void
+  // The "Checking Evaluation" gate and the closed catalog both wait on the
+  // availability probe, while the panel's write controls wait on settings. Hold
+  // both so the loading state is observed deterministically instead of racing the
+  // immediate capability mock, which resolves before the first assertion polls.
+  const capabilitiesReady = new Promise<void>((resolve) => {
+    releaseCapabilities = resolve
+  })
   const settingsReady = new Promise<void>((resolve) => {
     releaseSettings = resolve
+  })
+  await page.route('**/api/v1/capabilities', async (route) => {
+    await capabilitiesReady
+    await route.fulfill({ json: dashboardCapabilitiesResponse() })
   })
   await page.route('**/api/settings', async (route) => {
     await settingsReady
@@ -418,6 +430,7 @@ test('waits for verified settings before opening the interactive preparation cat
     ).toBeVisible()
     await expect(panel).toHaveCount(0)
     expect(state.writes).toEqual([])
+    releaseCapabilities()
     releaseSettings()
     await expect(panel.getByRole('button', { name: 'Download and prepare' })).toBeEnabled()
     await expect(panel.getByRole('combobox', { name: 'Benchmark to download' })).toBeEnabled()
@@ -425,6 +438,7 @@ test('waits for verified settings before opening the interactive preparation cat
     await expect(page.getByRole('heading', { name: 'Checking Evaluation' })).toHaveCount(0)
     expect(state.writes).toEqual([])
   } finally {
+    releaseCapabilities()
     releaseSettings()
   }
 })
