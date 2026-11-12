@@ -60,7 +60,7 @@ func wireHandler(t *testing.T, sink *forwarded) http.HandlerFunc {
 	t.Helper()
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test", "vllm-sr/other"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test", "vllm-sr/other"}}}}
 	return Handler(cfg, listener, func(_ context.Context, _ string, body json.RawMessage) (int, []byte, error) {
 		sink.bodies = append(sink.bodies, string(body))
 		status := sink.status
@@ -188,16 +188,48 @@ func TestPublicSystemOneAnswersAFailedQuestionAsTheWholeRequest(t *testing.T) {
 	if status, _ := send(handler, "/v1/decisions", body, nil); status != 200 {
 		t.Fatalf("/v1/decisions must keep per-question errors, got %d", status)
 	}
-	sink.response = `{"model":"private","answers":{"q":{"type":"noul","noul":0.5}},"states":{"s2":{"model":"private","answers":{"r":{"type":"noul","error":"deadline_exceeded","reason":"deadline"}},"usage":{"input_tokens":1,"output_tokens":0}}},"usage":{"input_tokens":1,"output_tokens":0}}`
-	if status, answer := send(handler, "/v1/systemone", body, nil); status != 504 || answer["question"] != "r" {
-		t.Fatalf("a failed question of a states entry => %d %v", status, answer)
+	batch := []byte(`{"model":"vllm-sr/test","states":{"s1":{"state":"s","questions":{"q":{"type":"noul","instructions":"?"}}},"s2":{"state":"t","questions":{"r":{"type":"noul","instructions":"?"}}}}}`)
+	sink.response = `{"model":"private","states":{"s1":{"model":"private","answers":{"q":{"type":"noul","noul":0.5}},"usage":{"input_tokens":1,"output_tokens":0}},"s2":{"model":"private","answers":{"r":{"type":"noul","error":"deadline_exceeded","reason":"deadline"}},"usage":{"input_tokens":1,"output_tokens":0}}},"usage":{"input_tokens":2,"output_tokens":0}}`
+	if status, answer := send(handler, "/v1/systemone", batch, nil); status != 504 || answer["question"] != "r" || answer["state"] != "s2" {
+		t.Fatalf("a failed question of a batch entry => %d %v", status, answer)
 	}
 	sink.status, sink.response = 400, `{"error":{"code":"invalid_request","message":"no question is valid (box: ...)","reason":"box_unsupported","question":"box"}}`
 	if status, answer := send(handler, "/v1/systemone", body, nil); status != 422 || answer["reason"] != "box_unsupported" || answer["question"] != "box" {
 		t.Fatalf("a request without a valid question on /v1/systemone => %d %v", status, answer)
 	}
-	if status, answer := send(handler, "/v1/decisions", body, nil); status != 400 || answer["code"] != "invalid_request" || !strings.Contains(answer["message"], "box questions") {
+	if status, answer := send(handler, "/v1/decisions", body, nil); status != 400 || answer["code"] != "invalid_request" || answer["question"] != "box" || answer["reason"] != "box_unsupported" || !strings.Contains(answer["message"], "box questions") {
 		t.Fatalf("a request without a valid question on /v1/decisions => %d %v", status, answer)
+	}
+	sink.response = `{"error":{"code":"invalid_request","message":"no question is valid (states.s1.questions.q: ...)","reason":"box_unsupported","question":"q","state":"s1"}}`
+	if status, answer := send(handler, "/v1/systemone", batch, nil); status != 422 || answer["question"] != "q" || answer["state"] != "s1" {
+		t.Fatalf("a batch without a valid question on /v1/systemone => %d %v", status, answer)
+	}
+}
+
+// A System One backend fails a request with a failed question as a whole; the
+// public API answers with the same question_failed on either path, in its own
+// words.
+func TestPublicSystemOnePassesABackendsFailedQuestionThrough(t *testing.T) {
+	sink := &forwarded{}
+	handler := wireHandler(t, sink)
+	batch := []byte(`{"model":"vllm-sr/test","states":{"s1":{"state":"s","questions":{"q":{"type":"box","instructions":"the mug"}}},"s2":{"state":"t","questions":{"r":{"type":"noul","instructions":"?"}}}}}`)
+	for _, tc := range []struct {
+		status       int
+		code, reason string
+	}{
+		{422, "invalid_question", "box_unsupported"},
+		{400, "max_length_exceeded", "question_tokens"},
+	} {
+		sink.status, sink.response = tc.status, `{"error":{"code":"question_failed","type":"systemone_error","message":"question \"q\" of /private/models/test cannot be answered","reason":"`+tc.reason+`","question":"q","state":"s1","question_error":"`+tc.code+`"}}`
+		for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
+			status, answer := send(handler, path, batch, nil)
+			if status != tc.status || answer["code"] != "question_failed" || answer["question_error"] != tc.code || answer["reason"] != tc.reason || answer["question"] != "q" || answer["state"] != "s1" {
+				t.Fatalf("a backend's %s on %s => %d %v", tc.code, path, status, answer)
+			}
+			if strings.Contains(answer["message"], "/private/") {
+				t.Fatalf("the backend's message reached the client: %q", answer["message"])
+			}
+		}
 	}
 }
 

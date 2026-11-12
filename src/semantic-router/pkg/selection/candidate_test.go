@@ -84,25 +84,6 @@ func TestCandidateScoresBestPreservesObjectiveAndEvidenceBoundaries(t *testing.T
 	}
 }
 
-func TestBlendCandidateScoresUsesIdentityAndDirection(t *testing.T) {
-	low := config.ModelRef{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}}
-	high := low
-	high.ReasoningEffort = "high"
-	quality := CandidateScores{{Candidate: high, Score: .9}, {Candidate: low, Score: .6}}
-	latency := CandidateScores{{Candidate: low, Score: 10}, {Candidate: high, Score: 20}}
-	scores := BlendCandidateScores([]config.ModelRef{low, high}, []ScoreComponent{
-		{Weight: .75, Scores: NormalizeCandidateScores(quality, HigherIsBetter)},
-		{Weight: .25, Scores: NormalizeCandidateScores(latency, LowerIsBetter)},
-		{Weight: 100}, // unavailable component must not dilute the available weights
-	})
-	if scores[0].Score != .25 || scores[1].Score != .75 || scores.Best(HigherIsBetter, false) != 1 {
-		t.Fatalf("incorrect candidate composition: %+v", scores)
-	}
-	if quality[0].Score != .9 || latency[0].Score != 10 {
-		t.Fatal("normalization mutated component inputs")
-	}
-}
-
 func TestResolveSelectionCandidateRejectsAmbiguousModelOnlyResult(t *testing.T) {
 	refs := []config.ModelRef{
 		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},

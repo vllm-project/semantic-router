@@ -16,7 +16,7 @@ func cloneModelBindings(bindings map[string]config.ModelBinding) map[string]conf
 func parseModelBindings(value Value) (map[string]config.ModelBinding, error) {
 	object, ok := value.(ObjectValue)
 	if !ok {
-		return nil, fmt.Errorf("must be an object keyed by task consumer")
+		return nil, fmt.Errorf("must be an object keyed by signal type")
 	}
 	payload, err := json.Marshal(dslFieldObjectFromValues(object.Fields).asInterfaceMap())
 	if err != nil {

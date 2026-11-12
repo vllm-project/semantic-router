@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -20,13 +21,13 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 	}
 	ctx.AuthenticatedPrincipal = authHeaderUserID(ctx)
 
-	pinnedSessionID := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID))
+	pinned, pinnedHeader := pinnedSessionID(ctx)
 	if state := ctx.ResponseObjectState; state != nil {
 		// The client session correlates routing and Replay across protocols;
 		// retained-object lineage remains the fallback when it is not supplied.
-		ctx.SessionID = pinnedSessionID
+		ctx.SessionID = pinned
 		if ctx.SessionID != "" {
-			ctx.SessionProvenance = SessionProvenanceHeader
+			ctx.SessionProvenance, ctx.SessionIDHeader = SessionProvenanceHeader, pinnedHeader
 		} else {
 			ctx.SessionID = state.SessionTrackingID
 			ctx.SessionProvenance = SessionProvenanceResponseAPI
@@ -45,10 +46,12 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		return
 	}
 
-	if pinnedSessionID != "" {
-		ctx.SessionID = pinnedSessionID
-		ctx.SessionProvenance = SessionProvenanceHeader
+	if pinned != "" {
+		ctx.SessionID = pinned
+		ctx.SessionProvenance, ctx.SessionIDHeader = SessionProvenanceHeader, pinnedHeader
 	}
+	// Protection may key on it later, after routing has edited the request.
+	ctx.conversationStart()
 
 	if ctx.SessionID == "" {
 		if sid := deriveSessionIDFromAnthropicSignals(ctx); sid != "" {
@@ -86,14 +89,30 @@ func populatePinnedSessionFromHeaders(ctx *RequestContext) {
 		return
 	}
 	ctx.AuthenticatedPrincipal = authHeaderUserID(ctx)
-	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID)); sid != "" {
+	if sid, header := pinnedSessionID(ctx); sid != "" {
 		ctx.SessionID = sid
-		ctx.SessionProvenance = SessionProvenanceHeader
+		ctx.SessionProvenance, ctx.SessionIDHeader = SessionProvenanceHeader, header
 	}
 	if ctx.SessionID == "" {
 		return
 	}
 	populateLastSessionObservation(ctx)
+}
+
+// pinnedSessionID is the session id a request pins and the header that
+// carries it: x-vsr-session-id, else the first client header
+// global.router.headers.session_id_headers accepts.
+func pinnedSessionID(ctx *RequestContext) (string, string) {
+	names := ctx.sessionIDHeaders
+	if len(names) == 0 {
+		names = config.RouterHeadersConfig{}.SessionIDHeaderNames()
+	}
+	for _, name := range names {
+		if sid := strings.TrimSpace(headerValueCI(ctx, name)); sid != "" {
+			return sid, name
+		}
+	}
+	return "", ""
 }
 
 func populateLastSessionObservation(ctx *RequestContext) {
@@ -118,27 +137,18 @@ func populateLastSessionObservation(ctx *RequestContext) {
 	ctx.SessionIdleKnown = true
 }
 
-// deriveSessionIDFromAnthropicSignals returns a session-ID candidate
-// from Anthropic-shape transport and body signals. Two sources, evaluated
-// in order:
+// deriveSessionIDFromAnthropicSignals returns a session-ID candidate from
+// the Anthropic body's metadata.user_id, which the Anthropic inbound parser
+// puts into neutral request metadata. It is returned with an "ant-md-"
+// prefix so the namespace is distinguishable from other derivation sources.
+// Claude Code's x-claude-code-session-id is an accepted session header, so
+// it pins the session before this runs.
 //
-//  1. x-claude-code-session-id — per-conversation UUID emitted by the
-//     Claude Code CLI on every /v1/messages request in a thread. Returned
-//     verbatim so plugins can map sessions back to the client-declared
-//     conversation; operators wanting privacy should run a hashing plugin
-//     in front.
-//  2. metadata.user_id — populated by the PR2 Anthropic inbound parser
-//     into neutral request metadata. Returned with an "ant-md-" prefix
-//     so the namespace is distinguishable from other derivation sources.
-//
-// Returns empty string when neither signal is present, leaving the caller
-// to fall through to the chat-message fingerprint fallbacks.
+// Returns empty string when the signal is absent, leaving the caller to
+// fall through to the chat-message fingerprint fallbacks.
 func deriveSessionIDFromAnthropicSignals(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
-	}
-	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XClaudeCodeSessionID)); sid != "" {
-		return sid
 	}
 	if ctx.SemanticRequest != nil {
 		if uid := strings.TrimSpace(ctx.SemanticRequest.Metadata["user_id"]); uid != "" {
@@ -149,7 +159,7 @@ func deriveSessionIDFromAnthropicSignals(ctx *RequestContext) string {
 }
 
 // populateSemanticSessionIDIfNeeded sets ctx.SessionID when not already pinned
-// (for example by x-session-id). Kept separate to avoid deep nesting in
+// (for example by x-vsr-session-id). Kept separate to avoid deep nesting in
 // populateSessionTransitionFields (nestif).
 func populateSemanticSessionIDIfNeeded(ctx *RequestContext) {
 	if ctx.SessionID != "" {
@@ -161,7 +171,7 @@ func populateSemanticSessionIDIfNeeded(ctx *RequestContext) {
 		ctx.SessionProvenance = SessionProvenanceMessageHash
 		return
 	}
-	ctx.SessionID = deriveSessionIDFromSemanticStructure(ctx.SemanticRequest.Messages)
+	ctx.SessionID = ctx.conversationStart()
 	if ctx.SessionID != "" {
 		ctx.SessionProvenance = SessionProvenanceMessageHash
 	}
@@ -171,6 +181,22 @@ func populateSemanticSessionIDIfNeeded(ctx *RequestContext) {
 	if ctx.SessionID == "" {
 		logging.Debugf("Session: could not derive session ID for chat completion request")
 	}
+}
+
+// conversationStart is the request's conversation-start fingerprint
+// (deriveConversationStartID), taken once from the request as the client sent
+// it, so that later Router edits to the request cannot move it. A Responses
+// request has none: its retained lineage already ties its turns together.
+func (ctx *RequestContext) conversationStart() string {
+	if ctx == nil || ctx.ResponseObjectState != nil {
+		return ""
+	}
+	if !ctx.conversationStartTaken && ctx.SemanticRequest != nil {
+		ctx.conversationStartTaken = true
+		tenant := strings.TrimSpace(headerValueCI(ctx, headers.AuthzTenantID))
+		ctx.conversationStartID = deriveConversationStartID(ctx.SemanticRequest, tenant)
+	}
+	return ctx.conversationStartID
 }
 
 // setSessionIDFromRequestIDFallback assigns ctx.SessionID and its

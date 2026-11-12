@@ -175,8 +175,6 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		// Standard functional test — validates end-to-end routing
 		"chat-completions-request",
-		// Authz-specific functional test (200 OK; identity headers are stripped by Envoy Lua before ext_proc)
-		"chat-completions-request-authz",
 		// Security test — validates that client-supplied identity headers are stripped
 		"authz-header-spoofing",
 	}

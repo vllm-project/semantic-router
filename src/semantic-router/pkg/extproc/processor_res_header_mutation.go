@@ -1,12 +1,8 @@
 package extproc
 
 import (
-	"fmt"
-	"maps"
-	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -17,15 +13,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// lossinessHeaderSizeLimit caps the encoded x-vsr-protocol-warnings
-// header at a conservative size well under any HTTP/2 frame limit.
-// >50 warnings already represent a deeper translation regression worth
+// warningsSizeLimit caps the encoded x-vsr-warnings header at a
+// conservative size well under any HTTP/2 frame limit. More than fifty
+// warnings already represent a deeper translation regression worth
 // investigating via the structured log rather than the header.
-const lossinessHeaderSizeLimit = 4096
+const warningsSizeLimit = 4096
 
-// protocolDefault is the wire-shape token emitted in x-vsr-inbound-
-// protocol / x-vsr-upstream-protocol when the request context did not
-// resolve an explicit protocol. The router's default contract is
+// protocolDefault is the wire protocol the trace reports when the request
+// context did not resolve an explicit one. The router's default contract is
 // OpenAI-compatible.
 const protocolDefault = "openai"
 
@@ -57,16 +52,11 @@ func (builder *responseHeaderMutationBuilder) addString(key string, value string
 	})
 }
 
-func (builder *responseHeaderMutationBuilder) addBool(key string, value bool) {
-	builder.addString(key, strconv.FormatBool(value))
-}
-
-// addKeystone emits the v0.4 keystone headers that ride on every
-// VSR-processed response: x-vsr-schema-version stamps the contract revision
-// and x-vsr-response-path names how the response was produced. The path
+// addKeystone emits the keystone headers that ride on every Router-processed
+// response: x-vsr-schema-version stamps the contract revision and
+// x-vsr-response-path names how the response was produced. The path
 // defaults to "upstream" when the caller has not classified a more specific
-// path (cache, fast_response, looper, rate_limited, error, image_generation).
-// See issue #2203.
+// path (cache, fast_response, looper, blocked, rate_limited, error, fallback).
 func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 	path := ctx.ResponsePath
 	if path == "" {
@@ -83,197 +73,122 @@ func (builder *responseHeaderMutationBuilder) addConfigVersion(ctx *RequestConte
 	}
 }
 
-// addProtocolMarkers emits the client/upstream protocol markers
-// (x-vsr-client-protocol, x-vsr-upstream-protocol). Per the v0.4 contract
-// (#2206) they ride on cross-protocol responses — when the inbound client
-// protocol differs from the outbound upstream protocol, i.e. a translation
-// actually happened — or when the request opted into debug headers (#2216).
-// Same-protocol non-debug calls omit them to keep the contract lean.
-func (builder *responseHeaderMutationBuilder) addProtocolMarkers(ctx *RequestContext) {
-	client := normalizeProtocol(string(ctx.SourceFormat))
-	upstream := normalizeProtocol(string(ctx.TargetFormat))
-	if client == upstream && !debugHeadersRequested(ctx) {
-		return
-	}
-	builder.addString(headers.VSRClientProtocol, client)
-	builder.addString(headers.VSRUpstreamProtocol, upstream)
+// addPublicRoutingHeaders adds the routing facts of the public set: the
+// recipe, decision and model the Router selected, and the replay-id entry
+// point. Each is omitted when the request has none.
+func (builder *responseHeaderMutationBuilder) addPublicRoutingHeaders(ctx *RequestContext) {
+	builder.addString(headers.VSRSelectedRecipe, string(ctx.Routing.RecipeName()))
+	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
+	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
+	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
 }
 
-func (builder *responseHeaderMutationBuilder) addFloat(key string, value float64) {
-	if value <= 0 {
-		return
-	}
-	builder.addString(key, fmt.Sprintf("%.4f", value))
+// addWarnings encodes the response_guard codes and the protocol diagnostics
+// known so far into x-vsr-warnings.
+func (builder *responseHeaderMutationBuilder) addWarnings(ctx *RequestContext) {
+	builder.addString(headers.VSRWarnings, responseWarnings(ctx))
 }
 
-func (builder *responseHeaderMutationBuilder) addNonNegativeFloat(key string, value float64) {
-	if value < 0 {
-		return
-	}
-	builder.addString(key, fmt.Sprintf("%.4f", value))
+// addTrace adds x-vsr-trace for a caller allowed the debug headers.
+func (builder *responseHeaderMutationBuilder) addTrace(ctx *RequestContext) {
+	builder.addString(headers.VSRTrace, responseTrace(ctx))
 }
 
-func (builder *responseHeaderMutationBuilder) addInt(key string, value int) {
-	if value <= 0 {
-		return
+// responseWarnings encodes x-vsr-warnings and counts and logs, once per
+// request, each diagnostic it carries.
+func responseWarnings(ctx *RequestContext) string {
+	value, included := formatWarnings(append(scanWarnings(ctx.VSRScanCoverage), ctx.ResponseGuard.warnings()...), ctx.ProtocolDiagnostics)
+	if reported := min(ctx.protocolDiagnosticsReported, included); included > reported {
+		recordProtocolDiagnostics(ctx, ctx.ProtocolDiagnostics[reported:included])
+		ctx.protocolDiagnosticsReported = included
 	}
-	builder.addString(key, strconv.Itoa(value))
+	return value
 }
 
-// addNonNegativeInt emits the value when it is >= 0, so an explicit zero is
-// still written. Mirrors addNonNegativeFloat; used for tri-state retention
-// fields where 0 is a meaningful, explicitly-set value (not "unset").
-func (builder *responseHeaderMutationBuilder) addNonNegativeInt(key string, value int) {
-	if value < 0 {
-		return
+// scanCoverageFull is the scan coverage of a guard rule that read every
+// window of its input; the others are "partial n/m" and "none".
+const scanCoverageFull = "full"
+
+// scanWarnings is scan_partial when a request-stage guard rule read only
+// some of its input's windows, or none; the counts stay in x-vsr-trace and
+// the replay record.
+func scanWarnings(coverage map[string]string) []string {
+	for _, read := range coverage {
+		if read != scanCoverageFull {
+			return []string{headers.WarningScanPartial}
+		}
 	}
-	builder.addString(key, strconv.Itoa(value))
+	return nil
 }
 
-func (builder *responseHeaderMutationBuilder) addJoined(key string, values []string) {
-	if len(values) == 0 {
-		return
-	}
-	builder.addString(key, strings.Join(values, ","))
-}
-
-// addProtocolDiagnostics encodes neutral codec diagnostics into the
-// x-vsr-protocol-warnings header, increments the per-warning Prometheus
-// counter, and emits a structured log event per warning. Returns
-// without emitting anything when warnings is empty.
-//
-// Format: comma-separated entries, each "severity;reason;field". The
-// optional Warning.Detail stays out of the header (lives in the
-// structured log) to keep the header short. If the encoded list would
-// exceed lossinessHeaderSizeLimit the builder truncates and appends a
-// synthetic "error;warnings_truncated;count=N" trailer.
-func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
-	ctx *RequestContext,
-	diagnostics llmprotocol.Diagnostics,
-) {
-	if len(diagnostics) == 0 {
-		return
-	}
-
-	inbound := normalizeProtocol(string(ctx.SourceFormat))
-	outbound := normalizeProtocol(string(ctx.TargetFormat))
-	value, included := formatProtocolDiagnostics(diagnostics)
-	for _, diagnostic := range diagnostics[:included] {
-		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
-	}
-	builder.addString(headers.VSRProtocolWarnings, value)
-}
-
-// recordBufferedProtocolDiagnostics reports only diagnostics discovered after
-// response headers. The body phase replaces the bounded header with the full
-// list, but diagnostics already reported in the header phase must not be
-// counted again. Diagnostics omitted by truncation follow the same accounting
-// rule as addProtocolDiagnostics.
-func recordBufferedProtocolDiagnostics(ctx *RequestContext, before int) (string, bool) {
-	if ctx.VSRCacheHit || len(ctx.ProtocolDiagnostics) <= before {
+// bufferedWarnings is the x-vsr-warnings value the buffered body phase
+// writes once the response_guard has read the answer, and whether the
+// headers phase could not have sent it: the guard annotated the answer, or
+// the body phase found translation losses.
+func bufferedWarnings(ctx *RequestContext) (string, bool) {
+	if ctx.VSRCacheHit || len(ctx.ResponseGuard.warnings()) == 0 && len(ctx.ProtocolDiagnostics) <= ctx.protocolDiagnosticsReported {
 		return "", false
 	}
-	value, included := formatProtocolDiagnostics(ctx.ProtocolDiagnostics)
-	if included > before {
-		inbound := normalizeProtocol(string(ctx.SourceFormat))
-		outbound := normalizeProtocol(string(ctx.TargetFormat))
-		for _, diagnostic := range ctx.ProtocolDiagnostics[before:included] {
-			recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
-		}
-	}
-	return value, true
+	return responseWarnings(ctx), true
 }
 
-// formatProtocolDiagnostics is shared by the early header phase and the
-// buffered body phase. The latter can discover diagnostics after Envoy has
-// already asked for response headers, so it must replace the warning header
-// with the full bounded list without counting early diagnostics twice.
-func formatProtocolDiagnostics(diagnostics llmprotocol.Diagnostics) (string, int) {
-	if len(diagnostics) == 0 {
-		return "", 0
+// formatWarnings encodes x-vsr-warnings as an RFC 8941 list: the guard codes,
+// then one protocol member per diagnostic while they fit warningsSizeLimit,
+// then a truncated member counting the diagnostics left out. It returns the
+// value and how many diagnostics it carries.
+func formatWarnings(codes []string, diagnostics llmprotocol.Diagnostics) (string, int) {
+	members := make([]string, 0, len(codes)+len(diagnostics))
+	for _, code := range codes {
+		members = append(members, headers.Token(code).String())
 	}
-	// Reserve the largest possible truncation trailer before appending entries.
-	// A single diagnostic obeys the same bound as a longer warning list.
-	trailerBudget := len(fmt.Sprintf("%s;%s;count=%d", llmprotocol.DiagnosticTruncated, "diagnostics_truncated", len(diagnostics))) + 1
-	var sb strings.Builder
-	truncatedAt := -1
-	for i, diagnostic := range diagnostics {
-		entry := formatProtocolDiagnostic(diagnostic)
-		separatorLen := 0
-		if sb.Len() > 0 {
-			separatorLen = 1
-		}
-		if sb.Len()+separatorLen+len(entry) > lossinessHeaderSizeLimit-trailerBudget {
-			truncatedAt = i
+	// Reserve the largest possible truncation member before adding entries,
+	// so one diagnostic obeys the same bound as a long list.
+	trailer := headers.Token(headers.WarningTruncated).With("count", headers.Integer(int64(len(diagnostics)))).String()
+	size := len(strings.Join(members, ", "))
+	included := 0
+	for _, diagnostic := range diagnostics {
+		member := headers.Token(headers.WarningProtocol).
+			With("action", headers.Token(string(diagnostic.Action))).
+			With("reason", headers.String(diagnostic.Reason)).
+			With("field", headers.String(diagnostic.Field)).String()
+		if size+len(", ")+len(member)+len(", ")+len(trailer) > warningsSizeLimit {
 			break
 		}
-		if separatorLen > 0 {
-			sb.WriteByte(',')
+		if size > 0 {
+			size += len(", ")
 		}
-		sb.WriteString(entry)
+		size += len(member)
+		members = append(members, member)
+		included++
 	}
-
-	if truncatedAt >= 0 {
-		trailer := fmt.Sprintf("%s;%s;count=%d",
-			llmprotocol.DiagnosticTruncated,
-			"diagnostics_truncated",
-			len(diagnostics)-truncatedAt,
-		)
-		if sb.Len() > 0 {
-			sb.WriteByte(',')
-		}
-		sb.WriteString(trailer)
+	if included < len(diagnostics) {
+		members = append(members, headers.Token(headers.WarningTruncated).
+			With("count", headers.Integer(int64(len(diagnostics)-included))).String())
 	}
-
-	included := len(diagnostics)
-	if truncatedAt >= 0 {
-		included = truncatedAt
-	}
-	return sb.String(), included
+	return strings.Join(members, ", "), included
 }
 
-func formatProtocolDiagnostic(diagnostic llmprotocol.Diagnostic) string {
-	return fmt.Sprintf("%s;%s;%s",
-		diagnostic.Action,
-		sanitizeWarningField(diagnostic.Reason),
-		sanitizeWarningField(diagnostic.Field),
-	)
-}
-
-// sanitizeWarningField percent-encodes the format separators, percent signs,
-// and ASCII control bytes so a JSON field name cannot break the warning list
-// or produce a header value rejected by Envoy.
-func sanitizeWarningField(field string) string {
-	const hex = "0123456789ABCDEF"
-	var sb strings.Builder
-	sb.Grow(len(field))
-	for i := 0; i < len(field); i++ {
-		b := field[i]
-		if b == ',' || b == ';' || b == '%' || b < 0x20 || b == 0x7f {
-			sb.WriteByte('%')
-			sb.WriteByte(hex[b>>4])
-			sb.WriteByte(hex[b&0x0f])
-		} else {
-			sb.WriteByte(b)
-		}
+func recordProtocolDiagnostics(ctx *RequestContext, diagnostics llmprotocol.Diagnostics) {
+	if len(diagnostics) == 0 {
+		return
 	}
-	return sb.String()
+	inbound := normalizeProtocol(string(ctx.SourceFormat))
+	outbound := normalizeProtocol(string(ctx.TargetFormat))
+	for _, diagnostic := range diagnostics {
+		metrics.RecordTranslationWarning(inbound, outbound, string(diagnostic.Action), diagnostic.Reason)
+		logging.ComponentDebugEvent("extproc", "translation_lossy", map[string]interface{}{
+			"request_id":        ctx.RequestID,
+			"inbound_protocol":  inbound,
+			"outbound_protocol": outbound,
+			"field":             diagnostic.Field,
+			"reason":            diagnostic.Reason,
+			"action":            diagnostic.Action,
+		})
+	}
 }
 
-func recordProtocolDiagnostic(ctx *RequestContext, inbound, outbound string, diagnostic llmprotocol.Diagnostic) {
-	metrics.RecordTranslationWarning(inbound, outbound, string(diagnostic.Action), diagnostic.Reason)
-	logging.ComponentDebugEvent("extproc", "translation_lossy", map[string]interface{}{
-		"request_id":        ctx.RequestID,
-		"inbound_protocol":  inbound,
-		"outbound_protocol": outbound,
-		"field":             diagnostic.Field,
-		"reason":            diagnostic.Reason,
-		"action":            diagnostic.Action,
-	})
-}
-
-// normalizeProtocol returns the canonical protocol token for headers
-// and metrics, defaulting empty to "openai".
+// normalizeProtocol returns the canonical protocol token for the trace and
+// metrics, defaulting empty to "openai".
 func normalizeProtocol(value string) string {
 	v := strings.TrimSpace(value)
 	switch llmprotocol.WireFormat(v) {
@@ -281,6 +196,8 @@ func normalizeProtocol(value string) string {
 		return "anthropic"
 	case llmprotocol.OpenAIResponsesV1:
 		return "responses"
+	case llmprotocol.OpenAIImagesV1:
+		return "images"
 	case llmprotocol.OpenAIChatV1, "":
 		return protocolDefault
 	default:
@@ -295,262 +212,32 @@ func (builder *responseHeaderMutationBuilder) mutation() *ext_proc.HeaderMutatio
 	return &ext_proc.HeaderMutation{SetHeaders: builder.setHeaders}
 }
 
-func buildResponseHeaderMutation(
-	ctx *RequestContext,
-	isSuccessful bool,
-) *ext_proc.HeaderMutation {
-	if ctx == nil {
+// buildResponseHeaderMutation writes the public set and, for a caller allowed
+// the debug headers, x-vsr-trace on a provider's response, success or error.
+// A cache hit replays a response another request produced, so it writes
+// none: the routing facts and warnings would not be this request's.
+func buildResponseHeaderMutation(ctx *RequestContext) *ext_proc.HeaderMutation {
+	if ctx == nil || ctx.VSRCacheHit {
 		return nil
 	}
-
 	builder := newResponseHeaderMutationBuilder()
-
-	// The keystone headers, protocol markers, and protocol warnings ride on
-	// every non-cache-hit response (success or 4xx/5xx). Cache-hit responses
-	// are an exception: protocol diagnostics are request-local, so a
-	// cached response would attribute warnings from a different request — we
-	// skip these headers entirely on cache hits and let the cached payload
-	// flow unchanged.
-	if !ctx.VSRCacheHit {
-		// Keystone headers (schema-version + response-path) ride on every
-		// non-cache-hit response. This function only handles upstream responses,
-		// so the path defaults to "upstream".
-		builder.addKeystone(ctx)
-		builder.addConfigVersion(ctx)
-		// Client/upstream protocol markers ride only on cross-protocol responses
-		// (#2206); same-protocol calls omit them.
-		builder.addProtocolMarkers(ctx)
-		builder.addProtocolDiagnostics(ctx, ctx.ProtocolDiagnostics)
-	}
-
-	if !isSuccessful || ctx.VSRCacheHit {
-		return builder.mutation()
-	}
-
-	// Final routing facts ride on every successful response. The intermediate
-	// decision/classification details, matched signals, and the retention
-	// directive headers are demoted to the x-vsr-debug surface (#2205, #2200):
-	// they remain recoverable from the replay record via x-vsr-replay-id. The
-	// retention directive's runtime effects (cache write skip, TTL override,
-	// model-switch-gate stay) are applied internally regardless of the header,
-	// so demoting the wire header does not change behavior.
-	addFinalDecisionHeaders(builder, ctx)
-	if debugHeadersRequested(ctx) {
-		addRetentionDirectiveHeaders(builder, ctx)
-		addDecisionDetailHeaders(builder, ctx)
-		addMatchedSignalHeaders(builder, ctx)
-	}
+	builder.addKeystone(ctx)
+	builder.addConfigVersion(ctx)
+	builder.addPublicRoutingHeaders(ctx)
+	builder.addWarnings(ctx)
+	builder.addTrace(ctx)
 	return builder.mutation()
 }
 
-// addRetentionDirectiveHeaders emits the matched decision's EMIT retention
-// directive to the response as x-vsr-retention-* headers so operators can
-// observe the router's retention intent at the wire (issue #2009). Per the v0.4
-// contract (#2200) these are demoted to the x-vsr-debug surface: the directive's
-// runtime effects are applied internally, so the headers are observability only.
-// Only fields the directive explicitly set are emitted, mirroring the tri-state
-// semantics of config.RetentionDirective; an unset field is omitted rather than
-// sent as a default.
-func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
-	r := ctx.EmittedRetention
-	if r == nil {
-		return
-	}
-	if r.Drop != nil {
-		builder.addBool(headers.VSRRetentionDrop, *r.Drop)
-	}
-	if r.TTLTurns != nil {
-		// Tri-state: emit whenever explicitly set, including ttl_turns: 0
-		// (a valid no-op the validator permits). The runtime TTL override
-		// still applies only when > 0; the header reflects intent, not effect.
-		builder.addNonNegativeInt(headers.VSRRetentionTTLTurns, *r.TTLTurns)
-	}
-	if r.KeepCurrentModel != nil {
-		builder.addBool(headers.VSRRetentionKeepCurrentModel, *r.KeepCurrentModel)
-	}
-	if r.PreferPrefixRetention != nil {
-		builder.addBool(headers.VSRRetentionPreferPrefix, *r.PreferPrefixRetention)
-	}
-}
-
-// addFinalDecisionHeaders adds the final routing facts that ride on the default
-// surface of every successful non-cache-hit response: the selected decision and
-// its confidence, the selection algorithm, the selected model and how long
-// choosing it took, and the replay-id entry point.
-func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
-	builder.addString(headers.VSRSelectedRecipe, string(ctx.Routing.RecipeName()))
-	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
-	if ctx.VSRSelectedDecisionName != "" && ctx.VSRSelectedDecisionConfidenceScored {
-		builder.addNonNegativeFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)
-	}
-	builder.addString(headers.VSRSelectedAlgorithm, ctx.VSRSelectionMethod)
-	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
-	if record := ctx.FallbackRecord; record != nil && record.FinalStatus == "succeeded" && len(record.Attempts) > 1 {
-		// A fallback candidate served this response, in either gateway mode.
-		builder.addString(headers.VSRFallbackAttempts, strconv.Itoa(len(record.Attempts)))
-	}
-	if ctx.RoutingLatency > 0 {
-		builder.addString(headers.VSRRoutingLatencyMs, formatMilliseconds(ctx.RoutingLatency))
-	}
-	builder.addString(headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
-	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
-}
-
-// formatMilliseconds keeps sub-millisecond precision: keyword routing usually
-// finishes well under 1 ms, which whole milliseconds would report as 0.
-func formatMilliseconds(d time.Duration) string {
-	return strconv.FormatFloat(float64(d)/float64(time.Millisecond), 'f', 3, 64)
-}
-
-func appliedUnknownPolicyHeader(ctx *RequestContext) string {
-	if ctx == nil || len(ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies) == 0 {
-		return ""
-	}
-	policies := ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies
-	pairs := make([]string, 0, len(policies))
-	for _, name := range slices.Sorted(maps.Keys(policies)) {
-		pairs = append(pairs, sanitizeWarningField(name)+"="+sanitizeWarningField(policies[name]))
-	}
-	return strings.Join(pairs, ",")
-}
-
-// decisionRankingHeader explains the served decision against its runner-up.
-// It stays silent when the context no longer serves the ranked winner.
-func decisionRankingHeader(ctx *RequestContext) string {
-	if ctx == nil {
-		return ""
-	}
-	ranking := ctx.VSRDecisionDiagnostics.Ranking
-	if ranking == nil || ranking.RunnerUp == "" || ranking.Winner != ctx.VSRSelectedDecisionName {
-		return ""
-	}
-	return sanitizeWarningField(ranking.Winner) + " over " + sanitizeWarningField(ranking.RunnerUp) + ": " + ranking.Reason
-}
-
-// addDecisionDetailHeaders adds the intermediate decision/classification details
-// (category, modality, reasoning, session phase, injected-system-prompt, cache
-// similarity). Per the v0.4 contract (#2205) these are demoted off the default
-// surface and emitted only under x-vsr-debug; they remain in the replay record.
-func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
-	builder.addString(headers.VSRSelectedCategory, ctx.VSRSelectedCategory)
-	builder.addString(headers.VSRDecisionRanking, decisionRankingHeader(ctx))
-	if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" {
-		modalityValue := ctx.ModalityClassification.Modality
-		if ctx.ModalityClassification.Method != "" {
-			modalityValue += ";" + ctx.ModalityClassification.Method
-		}
-		builder.addString(headers.VSRSelectedModality, modalityValue)
-	}
-	builder.addString(headers.VSRSelectedReasoning, ctx.VSRReasoningMode)
-	builder.addString(headers.VSRSessionPhase, sessionPolicyPhase(ctx))
-	builder.addString(headers.VSRLearningMethods, learningPolicyMethodsHeader(ctx))
-	builder.addString(headers.VSRLearningActions, learningPolicyPairHeader(ctx, learningPolicyFieldAction))
-	builder.addString(headers.VSRLearningScopes, learningPolicyPairHeader(ctx, learningPolicyFieldScope))
-	builder.addString(headers.VSRLearningReasons, learningPolicyPairHeader(ctx, learningPolicyFieldReason))
-	builder.addBool(headers.VSRInjectedSystemPrompt, ctx.VSRInjectedSystemPrompt)
-	addPromptCacheReceiptHeaders(builder, ctx)
-	if ctx.VSRCacheSimilarity > 0 {
-		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
-	}
-}
-
-func addPromptCacheReceiptHeaders(
-	builder *responseHeaderMutationBuilder,
-	ctx *RequestContext,
-) {
-	builder.addString(headers.VSRPromptCacheAction, ctx.PromptCacheAction)
-	builder.addString(headers.VSRPromptCacheReason, ctx.PromptCacheReason)
-	builder.addInt(headers.VSRPromptCacheInserted, ctx.PromptCacheInserted)
-	builder.addInt(headers.VSRPromptCachePreserved, ctx.PromptCachePreserved)
-}
-
-// addMatchedSignalHeaders adds the signal-evaluation headers (matched
-// keywords, embeddings, etc.) describing which signal rules fired for
-// this request.
-func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
-	builder.addJoined(headers.VSRMatchedKeywords, ctx.VSRMatchedKeywords)
-	builder.addJoined(headers.VSRMatchedEmbeddings, ctx.VSRMatchedEmbeddings)
-	builder.addJoined(headers.VSRMatchedDomains, ctx.VSRMatchedDomains)
-	builder.addJoined(headers.VSRMatchedFactCheck, ctx.VSRMatchedFactCheck)
-	builder.addJoined(headers.VSRMatchedUserFeedback, ctx.VSRMatchedUserFeedback)
-	builder.addJoined(headers.VSRMatchedReask, ctx.VSRMatchedReask)
-	builder.addJoined(headers.VSRMatchedPreference, ctx.VSRMatchedPreference)
-	builder.addJoined(headers.VSRMatchedLanguage, ctx.VSRMatchedLanguage)
-	builder.addJoined(headers.VSRMatchedAction, ctx.VSRMatchedAction)
-	builder.addJoined(headers.VSRMatchedContext, ctx.VSRMatchedContext)
-	builder.addInt(headers.VSRContextTokenCount, ctx.VSRContextTokenCount)
-	builder.addJoined(headers.VSRMatchedStructure, ctx.VSRMatchedStructure)
-	builder.addJoined(headers.VSRMatchedComplexity, ctx.VSRMatchedComplexity)
-	builder.addJoined(headers.VSRMatchedModality, ctx.VSRMatchedModality)
-	builder.addJoined(headers.VSRMatchedAuthz, ctx.VSRMatchedAuthz)
-	builder.addJoined(headers.VSRMatchedJailbreak, ctx.VSRMatchedJailbreak)
-	builder.addJoined(headers.VSRMatchedSafety, ctx.VSRMatchedSafety)
-	builder.addJoined(headers.VSRMatchedPII, ctx.VSRMatchedPII)
-	builder.addJoined(headers.VSRMatchedKB, ctx.VSRMatchedKB)
-	builder.addJoined(headers.VSRMatchedConversation, ctx.VSRMatchedConversation)
-	builder.addJoined(headers.VSRMatchedEvent, ctx.VSRMatchedEvent)
-	builder.addJoined(headers.VSRMatchedInputModality, ctx.VSRMatchedInputModality)
-	builder.addJoined(headers.VSRMatchedDecisionModel, ctx.VSRMatchedDecisionModel)
-	builder.addJoined(headers.VSRMatchedProjection, ctx.VSRMatchedProjection)
-}
-
-func sessionPolicyPhase(ctx *RequestContext) string {
-	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
-		if phase := policy.SessionPhase(); phase != "" {
-			return phase
+// providerRouterHeaders are the headers of the Router's namespace a
+// provider's response carries. The Router removes them before it writes its
+// own, so no provider can forge a routing fact, warning or trace.
+func providerRouterHeaders(responseHeaders *core.HeaderMap) []string {
+	var names []string
+	for _, header := range responseHeaders.GetHeaders() {
+		if name := strings.ToLower(header.GetKey()); strings.HasPrefix(name, headers.VSRPrefix) {
+			names = append(names, name)
 		}
 	}
-	return ""
-}
-
-func learningPolicyMethodsHeader(ctx *RequestContext) string {
-	policies := learningPoliciesForHeaders(ctx)
-	if len(policies) == 0 {
-		return ""
-	}
-	values := make([]string, 0, len(policies))
-	for _, policy := range policies {
-		values = append(values, sanitizeWarningField(string(policy.Method)))
-	}
-	return strings.Join(values, ",")
-}
-
-func learningPolicyPairHeader(ctx *RequestContext, field routerLearningPolicyField) string {
-	policies := learningPoliciesForHeaders(ctx)
-	if len(policies) == 0 {
-		return ""
-	}
-	pairs := make([]string, 0, len(policies))
-	for _, policy := range policies {
-		value := policy.StringField(field)
-		if value == "" {
-			continue
-		}
-		pairs = append(pairs, sanitizeWarningField(string(policy.Method))+"="+sanitizeWarningField(value))
-	}
-	return strings.Join(pairs, ",")
-}
-
-func learningPoliciesForHeaders(ctx *RequestContext) []routerLearningPolicy {
-	if ctx == nil {
-		return nil
-	}
-	if !ctx.VSRLearningPolicies.Empty() {
-		policies := make([]routerLearningPolicy, 0, 2)
-		if policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation); ok {
-			policies = append(policies, policy)
-		}
-		if policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection); ok {
-			policies = append(policies, policy)
-		}
-		return policies
-	}
-	if ctx.VSRLearningPolicy == nil || ctx.VSRLearningPolicy.Empty() {
-		return nil
-	}
-	policy := *ctx.VSRLearningPolicy
-	if policy.Method == "" {
-		policy.Method = routerLearningMethodProtection
-	}
-	return []routerLearningPolicy{policy}
+	return names
 }

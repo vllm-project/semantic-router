@@ -31,7 +31,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestExecuteWithLatencyRecordsConfidenceAttemptTrace(t *testing.T) {
+func TestExecuteWithLatencyRecordsEscalateAttemptTrace(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	previous := otel.GetTracerProvider()
@@ -41,18 +41,18 @@ func TestExecuteWithLatencyRecordsConfidenceAttemptTrace(t *testing.T) {
 		otel.SetTracerProvider(previous)
 	})
 
-	server, _ := newConfidenceLogprobBackend(t, map[string]int{"small": 0, "large": 1})
+	server, _ := newEscalateLogprobBackend(t, map[string]int{"small": 0, "large": 1}, true)
 	defer server.Close()
 
 	cfg := config.LooperConfig{Endpoint: server.URL}
-	request := confidenceLogprobRequest("skip")
+	request := escalateRequest(config.EscalateOnErrorLastAttempt, config.ConfidenceMethodAverageLogprob)
 	request.BaseContextTokens = 50
 	request.OriginalRequest.MaxTokens = openai.Int(10)
 	request.ModelParams["small"] = config.ModelParams{ParamSize: "1b", Pricing: config.ModelPricing{Currency: "USD", PromptPer1M: 1, CompletionPer1M: 2}}
 	request.ModelParams["large"] = config.ModelParams{ParamSize: "10b", Pricing: config.ModelPricing{Currency: "USD", PromptPer1M: 1, CompletionPer1M: 2}}
 	response, err := ExecuteWithLatency(
 		context.Background(),
-		NewConfidenceLooper(&cfg),
+		NewEscalateLooper(&cfg),
 		request,
 	)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestExecuteWithLatencyRecordsConfidenceAttemptTrace(t *testing.T) {
 }
 
 func TestBoundExecutionTracePreservesDroppedUsage(t *testing.T) {
-	trace := ExecutionTrace{Version: ExecutionTraceVersion, Algorithm: "confidence"}
+	trace := ExecutionTrace{Version: ExecutionTraceVersion, Algorithm: config.DecisionAlgorithmEscalate}
 	for ordinal := 1; ordinal <= maxTraceAttempts+1; ordinal++ {
 		trace.Attempts = append(trace.Attempts, AttemptTrace{
 			Ordinal: ordinal, Stage: "candidate",
@@ -128,53 +128,5 @@ func TestBoundExecutionTracePreservesDroppedUsage(t *testing.T) {
 	bounded := boundExecutionTrace(trace)
 	if !bounded.AttemptsTruncated || bounded.DroppedAttemptCount != 1 || bounded.DroppedUsage.TotalTokens != 1 {
 		t.Fatalf("bounded trace = %+v, want one dropped attempt and token", bounded)
-	}
-}
-
-// TestAutoMixAttemptTraceCarriesVerifierIdentity pins the traceability half of
-// the shared verifier contract (issue #2857): the confidence AutoMix attempt
-// must carry the shared verifier's own identity, not only the confidence method
-// name, because the public attempt schema declares verifier_version.
-func TestAutoMixAttemptTraceCarriesVerifierIdentity(t *testing.T) {
-	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(tracetest.NewInMemoryExporter()))
-	previous := otel.GetTracerProvider()
-	otel.SetTracerProvider(provider)
-	t.Cleanup(func() {
-		_ = provider.Shutdown(context.Background())
-		otel.SetTracerProvider(previous)
-		automixVerifierCacheReset()
-	})
-
-	server, _ := newStubVerifierServer(t, 0.85, false, 5, 5)
-	defer server.Close()
-
-	looper := newTestLooper()
-	evaluator := &ConfidenceEvaluator{
-		Method:            MethodAutoMixEntailment,
-		Threshold:         0.7,
-		VerifierServerURL: server.URL,
-	}
-	req := buildAutoMixEntailmentRequest("What is 2+2?")
-
-	tracker, ctx, _ := newAttemptTracker(context.Background(), "confidence")
-	_, accepted, err := looper.performAutoMixEntailment(ctx, req, evaluator, "small-model", "4")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !accepted {
-		t.Fatalf("accepted = false, want true (confidence 0.85 >= threshold 0.7)")
-	}
-	if len(tracker.trace.Attempts) != 1 {
-		t.Fatalf("attempts = %d, want exactly one external_verifier attempt", len(tracker.trace.Attempts))
-	}
-	attempt := tracker.trace.Attempts[0]
-	if attempt.Stage != "external_verifier" {
-		t.Fatalf("attempt stage = %q, want external_verifier", attempt.Stage)
-	}
-	if attempt.VerifierType != MethodAutoMixEntailment {
-		t.Fatalf("verifier_type = %q, want %q (confidence method name)", attempt.VerifierType, MethodAutoMixEntailment)
-	}
-	if attempt.VerifierVersion != "automix/1" {
-		t.Fatalf("verifier_version = %q, want automix/1 (shared verifier identity)", attempt.VerifierVersion)
 	}
 }

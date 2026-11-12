@@ -2,11 +2,12 @@ package services
 
 import (
 	"context"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 func resolveIntentCategory(
@@ -16,7 +17,7 @@ func resolveIntentCategory(
 	signals *classification.SignalResults,
 	text string,
 ) Classification {
-	category, _ := resolveIntentCategoryWithError(ctx, classifier, decisionResult, signals, text)
+	category, _ := resolveIntentCategoryWithError(ctx, classifier, decisionResult, signals, text, false)
 	return category
 }
 
@@ -28,6 +29,7 @@ func resolveIntentCategoryWithError(
 	decisionResult *decision.DecisionResult,
 	signals *classification.SignalResults,
 	text string,
+	imageOnly bool,
 ) (Classification, error) {
 	if decisionResult != nil && decisionResult.Decision != nil {
 		return Classification{
@@ -49,10 +51,10 @@ func resolveIntentCategoryWithError(
 		}, nil
 	}
 	// Image-only intent has no text for a text-only category fallback.
-	if strings.TrimSpace(text) == "" {
+	if imageOnly {
 		return Classification{Category: "other", ConfidenceAvailable: confidenceAvailability(false)}, nil
 	}
-	category, confidence, _, err := classifier.ClassifyCategoryWithEntropyContext(ctx, text)
+	answer, err := classifier.AskPreset(ctx, config.SignalTypeDomain, presets.Domain, text)
 	if err != nil {
 		logging.Warnf(
 			"Classification fallback failed: %v, using default 'other' category",
@@ -60,5 +62,5 @@ func resolveIntentCategoryWithError(
 		)
 		return Classification{Category: "other", ConfidenceAvailable: confidenceAvailability(false)}, err
 	}
-	return Classification{Category: category, Confidence: confidence, ConfidenceAvailable: confidenceAvailability(true)}, nil
+	return Classification{Category: answer.Choice, Confidence: answer.Probabilities[answer.Choice], ConfidenceAvailable: confidenceAvailability(true)}, nil
 }

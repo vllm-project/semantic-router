@@ -11,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 )
@@ -31,13 +30,12 @@ type ClassificationService struct {
 	configMutex       sync.RWMutex // Protects config access
 	// Router generations already lease this service. These locks additionally
 	// drain model calls for standalone compatibility-service replacement.
-	runtimeMutex     sync.RWMutex
-	reloadMutex      sync.Mutex
-	runtimeOwner     io.Closer // nil when classifiers are borrowed from the router
-	modelPool        *binding.Pool
-	globalEmbeddings *embedding.Set
-	closed           bool
-	evalSelector     EvalModelSelector
+	runtimeMutex sync.RWMutex
+	reloadMutex  sync.Mutex
+	runtimeOwner io.Closer // nil when classifiers are borrowed from the router
+	modelPool    *binding.Pool
+	closed       bool
+	evalSelector EvalModelSelector
 }
 
 func (s *ClassificationService) SetEvalModelSelector(selector EvalModelSelector) {
@@ -123,7 +121,7 @@ func NewClassificationServiceFromConfig(cfg *config.RouterConfig) (*Classificati
 	if err != nil {
 		return nil, err
 	}
-	if err := service.refreshRecipeClassifiers(cfg, nil, options, lease); err != nil {
+	if err := service.refreshRecipeClassifiers(cfg, options, lease); err != nil {
 		return nil, err
 	}
 	return service, nil
@@ -195,16 +193,19 @@ func (s *ClassificationService) classifyIntent(ctx context.Context, req IntentRe
 		return nil, err
 	}
 	if req.Input != nil && req.Input.Type == "image" {
+		if classifier == nil {
+			return nil, ErrClassifierUnavailable
+		}
 		if err := classifier.ValidateImageClassification(); err != nil {
 			return nil, err
 		}
 	}
-	return s.classifyResolvedIntent(ctx, req, input, classifier, runtimeConfig)
+	return s.classifyResolvedIntent(ctx, req, input, classifier, runtimeConfig, req.Input != nil && req.Input.Type == "image")
 }
 
 // classifyResolvedIntent uses exactly the snapshot admitted by preflight.
 // Callers retain its generation/service lease until this method returns.
-func (s *ClassificationService) classifyResolvedIntent(ctx context.Context, req IntentRequest, input intentSignalInput, classifier *classification.Classifier, runtimeConfig *config.RouterConfig) (*IntentResponse, error) {
+func (s *ClassificationService) classifyResolvedIntent(ctx context.Context, req IntentRequest, input intentSignalInput, classifier *classification.Classifier, runtimeConfig *config.RouterConfig, imageOnly bool) (*IntentResponse, error) {
 	start := time.Now()
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -263,6 +264,7 @@ func (s *ClassificationService) classifyResolvedIntent(ctx context.Context, req 
 		decisionResult,
 		signals,
 		input.evaluationText,
+		imageOnly,
 	)
 
 	if err := ctx.Err(); err != nil {

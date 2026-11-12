@@ -5,24 +5,33 @@ import (
 	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
-// ValidateImageClassification checks a prepared recipe without calling a model.
-// Provider wrappers can expose EmbedImage even when their model is text-only,
-// so both the actual capabilities and image-query rules must be present.
+// ValidateImageClassification checks only prepared, routed image rules and
+// their observed local model-runtime capabilities. It performs no inference.
 func (c *Classifier) ValidateImageClassification() error {
-	if c == nil || c.keywordEmbeddingClassifier == nil || len(c.keywordEmbeddingClassifier.rulesByModality[config.QueryModalityImage]) == 0 {
-		return fmt.Errorf("%w: intent image classification requires prepared image embedding rules", binding.ErrCapability)
+	if c == nil || c.Config == nil {
+		return fmt.Errorf("%w: image classification requires a prepared classifier", binding.ErrCapability)
 	}
-	provider := c.keywordEmbeddingClassifier.provider
-	described, ok := provider.(embedding.Described)
-	if !ok || !slices.Contains(described.EmbeddingInfo().Modalities, "image") {
-		return fmt.Errorf("%w: intent image classification requires a prepared image encoder", binding.ErrCapability)
+	found := false
+	for _, asked := range c.preparedSystemOneRules() {
+		rule := asked.rule
+		if rule.EffectiveStage() != config.SystemOneStageRequest || !rule.Input.Image {
+			continue
+		}
+		found = true
+		name, deployment := c.systemOneRuleDeployment(rule)
+		if !deployment.IsModelRuntime() {
+			return fmt.Errorf("%w: image classification requires a local model-runtime deployment", binding.ErrCapability)
+		}
+		card, ready := c.decisionTaskCard(name)
+		if !ready || !slices.Contains(card.ReadModalities(), "image") {
+			return fmt.Errorf("%w: image classification requires a prepared image-capable deployment", binding.ErrCapability)
+		}
 	}
-	if _, ok := provider.(embedding.ImageProvider); !ok {
-		return fmt.Errorf("%w: prepared embedding provider cannot encode images", binding.ErrCapability)
+	if !found {
+		return fmt.Errorf("%w: image classification requires a routed image-reading rule", binding.ErrCapability)
 	}
 	return nil
 }

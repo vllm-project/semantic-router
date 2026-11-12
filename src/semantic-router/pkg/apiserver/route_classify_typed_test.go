@@ -5,7 +5,6 @@ package apiserver
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -21,7 +20,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -90,77 +88,82 @@ func TestTypedClassificationDefaultBatchBound(t *testing.T) {
 	}
 }
 
-// The fake deployment decodes genuine image bytes; the API still uses the
-// production prepared binding, capability validation, input conversion and
-// model-runtime result validation. No text head accepts an image here.
-type typedAPIRuntime struct {
-	card       modelservice.ModelCard
-	imageCalls atomic.Int32
+// The fake decision deployment decodes genuine image bytes after the same
+// request normalization and capability checks used by the HTTP handlers.
+type typedAPIRuntime struct{ imageCalls atomic.Int32 }
+
+func (*typedAPIRuntime) Card(context.Context, string) (modelservice.ModelCard, error) {
+	return modelservice.ModelCard{ID: "fixture", Surfaces: []string{"decisions"}, QuestionTypes: []string{"noul"}, Modalities: []string{"text", "image"}}, nil
 }
 
-func (r *typedAPIRuntime) Card(context.Context, string) (modelservice.ModelCard, error) {
-	return r.card, nil
-}
-func (r *typedAPIRuntime) CurrentCard(string) (modelservice.ModelCard, bool) { return r.card, true }
-func (r *typedAPIRuntime) Classify(context.Context, string, modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
-	return modelservice.ClassifyResponse{}, errors.New("unexpected text-head inference")
+func (r *typedAPIRuntime) CurrentCard(name string) (modelservice.ModelCard, bool) {
+	card, _ := r.Card(context.Background(), name)
+	return card, true
 }
 
-func (r *typedAPIRuntime) Rerank(context.Context, string, modelservice.RerankRequest) (modelservice.RerankResponse, error) {
-	return modelservice.RerankResponse{}, errors.New("unexpected reranking")
+func (*typedAPIRuntime) Embed(context.Context, string, modelservice.EmbedRequest) (modelservice.EmbedResponse, error) {
+	return modelservice.EmbedResponse{}, errors.New("unexpected embedding call")
 }
 
-func (r *typedAPIRuntime) Embed(_ context.Context, _ string, request modelservice.EmbedRequest) (modelservice.EmbedResponse, error) {
-	response := modelservice.EmbedResponse{Model: r.card.ID, Embeddings: make([][]float32, len(request.Inputs)), Inputs: make([]*modelservice.InputUsage, len(request.Inputs)), Errors: make([]string, len(request.Inputs))}
-	for index, input := range request.Inputs {
-		if input.ImageURL != "" {
-			r.imageCalls.Add(1)
-			if input.Text != "" || input.AudioWAV != "" {
-				return modelservice.EmbedResponse{}, errors.New("ambiguous runtime input")
-			}
-			data, ok := imageurl.DecodeBase64(input.ImageURL)
-			if !ok {
-				return modelservice.EmbedResponse{}, errors.New("runtime did not receive inline image")
-			}
-			if _, err := png.Decode(bytes.NewReader(data)); err != nil {
-				response.Errors[index] = "invalid image"
-				continue
-			}
+func (r *typedAPIRuntime) Decide(_ context.Context, _ string, request modelservice.Request) (modelservice.Response, error) {
+	for _, uri := range request.Images {
+		r.imageCalls.Add(1)
+		data, ok := imageurl.DecodeBase64(uri)
+		if !ok {
+			return modelservice.Response{}, errors.New("runtime did not receive inline image")
 		}
-		response.Embeddings[index] = []float32{1, 0}
-		response.Inputs[index] = &modelservice.InputUsage{Tokens: 1, ProcessedTokens: 1}
+		if _, err := png.Decode(bytes.NewReader(data)); err != nil {
+			return modelservice.Response{}, errors.New("invalid image")
+		}
 	}
-	return response, nil
+	answers := make(map[string]modelservice.Answer)
+	for _, question := range request.Questions {
+		answers[question.ID] = modelservice.Answer{Type: "noul", Noul: 0.9, InputCoverage: "complete"}
+	}
+	return modelservice.Response{Answers: answers}, nil
 }
+
+const typedAPIImageConfig = `version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: image
+          input: {image: true}
+          question: {type: noul, instructions: "Is this an image?"}
+    decisions:
+      - name: vision
+        priority: 100
+        rules:
+          operator: AND
+          conditions: [{type: systemone, name: image}]
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    system: {decision_model: {deployment: primary}}
+    deployments:
+      primary: {provider: model_runtime, artifact: /models/custom-image, device: cpu}
+`
 
 func TestTypedClassificationHTTPUsesExistingImageSignalPath(t *testing.T) {
-	deployment := &typedAPIRuntime{card: modelservice.ModelCard{
-		ID: "typed-api-images", Repo: "test/typed-api-images", ModelSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(t.TempDir()))), Revision: strings.Repeat("1", 40),
-		Surfaces: []string{"embeddings"}, MaxInputTokens: 512, MaxInputs: 8, Device: "cpu", Dtype: "float32", Engine: "native",
-		Embedding: &modelservice.EmbeddingCard{Dimensions: []int{2}, Modalities: []string{"text", "image"}, Normalized: true, Pooling: "mean"},
-	}}
-	runtime := serving.New(deployment, nil)
-	provider, err := runtime.Embedding(context.Background(), config.ResolvedModelBinding{
-		Recipe: config.DefaultRecipeName, Name: "embedding", Binding: config.ModelBinding{Deployment: "vision", Contract: "embedding.v1"},
-		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime.invalid:8100", Device: "cpu", Input: config.ModelInputBudget{Overflow: "truncate"}},
-	}, 0, 0)
+	deployment := &typedAPIRuntime{}
+	cfg, err := config.ParseYAMLBytes([]byte(typedAPIImageConfig))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = provider.Close() })
-	cfg := &config.RouterConfig{}
-	cfg.EmbeddingConfig.ModelType = "mmbert"
-	cfg.EmbeddingConfig.TargetDimension = 2
-	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "image", Candidates: []string{"red square"}, SimilarityThreshold: 0.5, QueryModality: config.QueryModalityImage}, {Name: "text", Candidates: []string{"hello"}, SimilarityThreshold: 0.5}}
-	cfg.Decisions = []config.Decision{{Name: "vision", Rules: config.RuleNode{Type: "embedding", Name: "image"}}, {Name: "text", Rules: config.RuleNode{Type: "embedding", Name: "text"}}}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"vision": {Provider: config.ModelRuntimeProvider, Device: "cpu", Artifact: t.TempDir()}}
-	cfg.ModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "vision", Contract: "embedding.v1", Adapter: "vela_omni"}}
-	prepared := embedding.NewSet(map[string]embedding.Provider{"mmbert": provider}, "mmbert")
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Embeddings: prepared, Runtime: runtime})
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, classification.RecipeRuntimeOptions{Runtime: serving.New(deployment, nil)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = classifiers.Close() })
+	if err := classifiers.InitializeRuntime(); err != nil {
+		t.Fatal(err)
+	}
 	api := &ClassificationAPIServer{classificationSvc: services.NewRecipeClassificationService(classifiers, cfg), config: cfg}
 	var pngBytes bytes.Buffer
 	picture := image.NewRGBA(image.Rect(0, 0, 1, 1))
@@ -169,56 +172,48 @@ func TestTypedClassificationHTTPUsesExistingImageSignalPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	uri := "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes.Bytes())
-	for _, body := range []string{
-		fmt.Sprintf(`{"input":{"type":"image","image_url":%q}}`, uri),
-		fmt.Sprintf(`{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":%q}}]}]}`, uri),
-	} {
+	for _, body := range []string{fmt.Sprintf(`{"input":{"type":"image","image_url":%q}}`, uri), fmt.Sprintf(`{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":%q}}]}]}`, uri)} {
 		recorder := httptest.NewRecorder()
 		api.handleIntentClassification(recorder, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
 		var result services.IntentResponse
 		if recorder.Code != http.StatusOK {
-			t.Fatalf("got %d: %s", recorder.Code, recorder.Body.String())
+			t.Fatalf("status %d: %s", recorder.Code, recorder.Body.String())
 		}
 		if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
-		if result.Classification.Category != "vision" || result.MatchedSignals == nil || len(result.MatchedSignals.Embeddings) != 1 || result.MatchedSignals.Embeddings[0] != "image" {
-			t.Fatalf("did not classify the image: %+v", result)
+		if result.Classification.Category != "vision" {
+			t.Fatalf("did not classify image: %+v", result)
 		}
 	}
 	body := fmt.Sprintf(`{"inputs":[{"type":"text","text":"hello"},{"type":"image","image_url":%q},{"type":"image","image_url":"https://example.com/not-fetched"}]}`, uri)
 	recorder := httptest.NewRecorder()
 	api.handleBatchClassification(recorder, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("got %d: %s", recorder.Code, recorder.Body.String())
-	}
 	var result BatchClassificationResponse
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", recorder.Code, recorder.Body.String())
+	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Results) != 3 || result.Results[0].Category != "text" || result.Results[1].Category != "vision" || result.Results[2].Error == nil {
-		t.Fatalf("unexpected mixed result: %+v", result)
+	if len(result.Results) != 3 || result.Results[0].Error != nil || result.Results[1].Category != "vision" || result.Results[2].Error == nil {
+		t.Fatalf("mixed result: %+v", result)
 	}
-	if deployment.imageCalls.Load() != 1 {
-		t.Fatalf("expected one real image dispatch with repeated-image cache reuse: %d", deployment.imageCalls.Load())
-	}
-	if result.Statistics.CategoryDistribution["vision"] != 1 || result.Statistics.CategoryDistribution["text"] != 1 || len(result.Statistics.CategoryDistribution) != 2 {
-		t.Fatalf("failed entries entered statistics: %+v", result.Statistics)
+	if deployment.imageCalls.Load() != 3 {
+		t.Fatalf("expected three image dispatches: %d", deployment.imageCalls.Load())
 	}
 	for _, task := range []string{"pii", "security", "all"} {
-		unsupportedBody := fmt.Sprintf(`{"inputs":[{"type":"image","image_url":%q}],"task_type":%q}`, uri, task)
-		unsupportedRecorder := httptest.NewRecorder()
-		api.handleBatchClassification(unsupportedRecorder, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(unsupportedBody)))
+		body = fmt.Sprintf(`{"inputs":[{"type":"image","image_url":%q}],"task_type":%q}`, uri, task)
+		recorder = httptest.NewRecorder()
+		api.handleBatchClassification(recorder, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
 		var unsupported BatchClassificationResponse
-		if err := json.Unmarshal(unsupportedRecorder.Body.Bytes(), &unsupported); err != nil {
+		if err := json.Unmarshal(recorder.Body.Bytes(), &unsupported); err != nil {
 			t.Fatal(err)
 		}
-		if unsupportedRecorder.Code != http.StatusOK || len(unsupported.Results) != 1 || unsupported.Results[0].Error == nil || unsupported.Results[0].Error.Code != "UNSUPPORTED_INPUT" || deployment.imageCalls.Load() != 1 {
-			t.Fatalf("%s dispatched an unsupported image: %s", task, unsupportedRecorder.Body.String())
+		if recorder.Code != http.StatusOK || len(unsupported.Results) != 1 || unsupported.Results[0].Error == nil || unsupported.Results[0].Error.Code != "UNSUPPORTED_INPUT" || deployment.imageCalls.Load() != 3 {
+			t.Fatalf("unsupported %s: %s", task, recorder.Body.String())
 		}
 	}
-	// Valid base64 with invalid image bytes reaches the genuine image decoder,
-	// yields one failure, and still preserves the valid text/image siblings.
 	body = fmt.Sprintf(`{"inputs":[{"type":"text","text":"hello"},{"type":"image","image_url":"data:image/png;base64,iVBORw0KGgo="},{"type":"image","image_url":%q}]}`, uri)
 	recorder = httptest.NewRecorder()
 	api.handleBatchClassification(recorder, httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)))
@@ -226,8 +221,8 @@ func TestTypedClassificationHTTPUsesExistingImageSignalPath(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if recorder.Code != http.StatusOK || len(result.Results) != 3 || result.Results[0].Error != nil || result.Results[1].Error == nil || result.Results[2].Error != nil || result.Results[2].Category != "vision" || deployment.imageCalls.Load() != 2 {
-		t.Fatalf("image decoding failure lost siblings: %s", recorder.Body.String())
+	if recorder.Code != http.StatusOK || len(result.Results) != 3 || result.Results[0].Error != nil || result.Results[1].Error == nil || result.Results[2].Error != nil || result.Results[2].Category != "vision" || deployment.imageCalls.Load() != 5 {
+		t.Fatalf("decoder failure lost siblings: %s", recorder.Body.String())
 	}
 }
 

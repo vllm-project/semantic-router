@@ -5,10 +5,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"golang.org/x/net/http/httpguts"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // SystemOneProvider serves a deployment through a remote System One API. The
@@ -21,6 +24,11 @@ const SystemOneProvider = "systemone"
 // Header (default Authorization) after Prefix (default Bearer). Prefix is
 // presence-aware: an authored empty prefix sends the bare key.
 type DeploymentAuth struct {
+	// Credential is the credential mode. delegated sends the requesting
+	// user's credential (global.services.authz.delegated_credential) in place
+	// of a key, and refuses calls the Router makes on its own behalf; unset
+	// sends the key, or nothing without one.
+	Credential string  `yaml:"credential,omitempty" json:"credential,omitempty"`
 	Header     string  `yaml:"header,omitempty" json:"header,omitempty"`
 	Prefix     *string `yaml:"prefix,omitempty" json:"prefix,omitempty"`
 	APIKeyEnv  string  `yaml:"api_key_env,omitempty" json:"api_key_env,omitempty"`
@@ -44,6 +52,31 @@ func (c *RouterConfig) IsSystemOneDeployment(name string) bool {
 // CallTimeout is the deployment's own bound on a call, zero when it sets none.
 func (d ModelDeployment) CallTimeout() time.Duration {
 	return time.Duration(d.TimeoutMs) * time.Millisecond
+}
+
+// CredentialDelegated is the credential mode of an upstream that takes the
+// requesting user's credential.
+const CredentialDelegated = "delegated"
+
+// Delegated reports whether the upstream takes the requesting user's
+// credential instead of a key.
+func (a *DeploymentAuth) Delegated() bool {
+	return a != nil && a.Credential == CredentialDelegated
+}
+
+// validateCredential checks the credential mode against the static key the
+// upstream also names; keys lists where that key may be written.
+func (a *DeploymentAuth) validateCredential(keys string, hasKey bool) error {
+	if a == nil || a.Credential == "" {
+		return nil
+	}
+	if a.Credential != CredentialDelegated {
+		return fmt.Errorf("auth.credential %q is not a credential mode; write delegated, or leave it unset for a static key or none", a.Credential)
+	}
+	if hasKey {
+		return fmt.Errorf("auth.credential: delegated cannot combine with a static key (%s); a delegated upstream takes only the requesting user's credential", keys)
+	}
+	return nil
 }
 
 // HeaderName is the header the credential goes in.
@@ -89,56 +122,136 @@ func (a *DeploymentAuth) Key() (string, error) {
 }
 
 func (d ModelDeployment) validateSystemOne() error {
-	if d.Artifact != "" || d.Revision != "" || d.ExternalModel != "" || d.Device != "" || d.HasEngineArgs() ||
-		len(d.Replicas) != 0 || d.ServedName != "" || d.PublicName != "" {
-		return fmt.Errorf("a systemone deployment takes endpoint, model, auth, timeout_ms and question_types; artifact, revision, external_model, device, engine arguments, replicas, served_name and public_name belong to other providers")
+	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.OutlierDetection != nil || d.PublicName != "" {
+		return fmt.Errorf("a systemone deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits), its schema, deviations and max_concurrency, and capabilities; artifact, revision, device, engine arguments, replicas, outlier_detection and public_name belong to model_runtime")
 	}
 	if d.Input.MaxTokens != 0 || (d.Input.Overflow != "" && d.Input.Overflow != "reject") {
 		return fmt.Errorf("a systemone deployment takes no input budget: its API reads one bounded input")
 	}
-	endpoint, err := url.Parse(d.Endpoint)
-	if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" || endpoint.Fragment != "" {
-		return fmt.Errorf("endpoint must be the http:// or https:// URL the System One API answers POST requests on, such as https://api.example.com/v1/systemone")
+	if d.Generation != nil {
+		return fmt.Errorf("generation belongs to an openai_chat deployment")
 	}
-	if endpoint.User != nil {
-		return fmt.Errorf("endpoint must not carry credentials; set auth.api_key_env or auth.api_key_file")
+	endpoint, err := url.Parse(d.Endpoint)
+	if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" {
+		return fmt.Errorf("endpoint must be the http:// or https:// URL the System One API answers POST requests on, such as https://api.example.com/v1/systemone")
 	}
 	if strings.TrimSpace(d.Model) == "" || d.Model != strings.TrimSpace(d.Model) {
 		return fmt.Errorf("model must name the model the API answers with, such as vllm-sr/d3-ultra")
 	}
-	if d.TimeoutMs < 0 || d.TimeoutMs > MaxDecisionTimeoutMs {
-		return fmt.Errorf("timeout_ms must be within [1, %d] when set", MaxDecisionTimeoutMs)
+	if d.Capabilities != nil && d.Capabilities.Dimensions != 0 {
+		return fmt.Errorf("capabilities.dimensions applies to openai_embeddings deployments")
 	}
-	seen := make(map[string]bool, len(d.QuestionTypes))
-	for _, questionType := range d.QuestionTypes {
+	seen := make(map[string]bool)
+	for _, questionType := range d.DeclaredQuestionTypes() {
 		switch questionType {
-		case DecisionQuestionChoice, DecisionQuestionNoul, DecisionQuestionScore, DecisionQuestionSet, DecisionQuestionSpan:
+		case SystemOneQuestionChoice, SystemOneQuestionNoul, SystemOneQuestionScore, SystemOneQuestionSet, SystemOneQuestionSpan,
+			SystemOneQuestionBox, SystemOneQuestionTrack:
 		default:
-			return fmt.Errorf("question_types lists %q; the types are choice, noul, score, set and span", questionType)
+			return fmt.Errorf("capabilities.question_types lists %q; the types are choice, noul, score, box, track, set and span", questionType)
 		}
 		if seen[questionType] {
-			return fmt.Errorf("question_types lists %q twice", questionType)
+			return fmt.Errorf("capabilities.question_types lists %q twice", questionType)
 		}
 		seen[questionType] = true
 	}
-	return d.Auth.validate()
+	presets := make(map[string]bool)
+	for _, preset := range d.DeclaredPresets() {
+		if strings.TrimSpace(preset) == "" || preset != strings.TrimSpace(preset) {
+			return fmt.Errorf("capabilities.presets must name ready-made questions, such as pii and halu")
+		}
+		if presets[preset] {
+			return fmt.Errorf("capabilities.presets lists %q twice", preset)
+		}
+		presets[preset] = true
+	}
+	if err := validateDeclaredModalities(d.DeclaredModalities()); err != nil {
+		return err
+	}
+	if err := d.validateSchema(); err != nil {
+		return err
+	}
+	return d.validateConnection(endpoint, MaxSystemOneTimeoutMs)
+}
+
+// validateSchema checks the schema and deviations a systemone deployment
+// names, its max_concurrency, and that what it declares is what its schema
+// carries: a systemone/0.2 API has no set or span questions, presets or
+// video.
+func (d ModelDeployment) validateSchema() error {
+	codec, _, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(d.Schema), d.Deviations)
+	if err != nil {
+		return err
+	}
+	if d.MaxConcurrency != nil && *d.MaxConcurrency < 1 {
+		return fmt.Errorf("max_concurrency must be at least 1")
+	}
+	capabilities := codec.Capabilities()
+	for _, questionType := range d.DeclaredQuestionTypes() {
+		if (questionType == SystemOneQuestionSet && !capabilities.Has(systemonecodec.CapabilitySetQuestions)) ||
+			(questionType == SystemOneQuestionSpan && !capabilities.Has(systemonecodec.CapabilitySpan)) {
+			return fmt.Errorf("capabilities.question_types lists %s, which schema %s has no questions of; the Router asks a set question as one noul per label, and span rules need a vllm-sr/5.0 deployment", questionType, codec.ID())
+		}
+		if questionType == SystemOneQuestionTrack && !capabilities.Has(systemonecodec.CapabilityVideos) {
+			return fmt.Errorf("capabilities.question_types lists track, which schema %s has no questions of; a track question reads a video", codec.ID())
+		}
+	}
+	if len(d.DeclaredPresets()) > 0 && !capabilities.Has(systemonecodec.CapabilityPresets) {
+		return fmt.Errorf("capabilities.presets: schema %s carries no presets; the Router asks its presets with their instructions and criteria", codec.ID())
+	}
+	if slices.Contains(d.DeclaredModalities(), SystemOneModalityVideo) && !capabilities.Has(systemonecodec.CapabilityVideos) {
+		return fmt.Errorf("capabilities.modalities lists video, which schema %s does not carry", codec.ID())
+	}
+	return nil
+}
+
+// validateDeclaredModalities checks the input modalities a systemone
+// deployment declares: text, image and video, the parts a System One
+// decisions request carries. The API carries no audio part.
+func validateDeclaredModalities(modalities []string) error {
+	for index, modality := range modalities {
+		switch modality {
+		case "text", SystemOneModalityImage, SystemOneModalityVideo:
+		case SystemOneModalityAudio:
+			return fmt.Errorf("capabilities.modalities lists audio; a System One decisions request carries no audio part")
+		default:
+			return fmt.Errorf("capabilities.modalities lists %q; the modalities are text, image and video", modality)
+		}
+		if slices.Contains(modalities[:index], modality) {
+			return fmt.Errorf("capabilities.modalities lists %q twice", modality)
+		}
+	}
+	return nil
 }
 
 func (a *DeploymentAuth) validate() error {
 	if a == nil {
 		return nil
 	}
-	if a.Header != "" && !httpguts.ValidHeaderFieldName(a.Header) {
-		return fmt.Errorf("auth.header must be an HTTP header name, such as Authorization")
+	if err := a.validateHeader(); err != nil {
+		return err
 	}
-	if a.Prefix != nil && (*a.Prefix != strings.TrimSpace(*a.Prefix) || strings.ContainsAny(*a.Prefix, " \t\r\n")) {
-		return fmt.Errorf("auth.prefix must be one word, such as Bearer, or empty to send the bare key")
+	if err := a.validateCredential("auth.api_key_env or auth.api_key_file", a.APIKeyEnv != "" || a.APIKeyFile != ""); err != nil {
+		return err
+	}
+	if a.Delegated() {
+		return nil
 	}
 	if (a.APIKeyEnv == "") == (a.APIKeyFile == "") {
 		return fmt.Errorf("auth takes exactly one of api_key_env and api_key_file; a key is never written inline")
 	}
 	if a.APIKeyFile != "" && !filepath.IsAbs(a.APIKeyFile) {
 		return fmt.Errorf("auth.api_key_file must be an absolute path")
+	}
+	return nil
+}
+
+// validateHeader checks the header and prefix the key is sent in.
+func (a *DeploymentAuth) validateHeader() error {
+	if a.Header != "" && !httpguts.ValidHeaderFieldName(a.Header) {
+		return fmt.Errorf("auth.header must be an HTTP header name, such as Authorization")
+	}
+	if a.Prefix != nil && (*a.Prefix != strings.TrimSpace(*a.Prefix) || strings.ContainsAny(*a.Prefix, " \t\r\n")) {
+		return fmt.Errorf("auth.prefix must be one word, such as Bearer, or empty to send the bare key")
 	}
 	return nil
 }

@@ -281,25 +281,19 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 	frame []byte,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var wire responsesEventWire
-	_, vendorExtensions, err := decodeProviderWireVendorAware(data, &wire, decoder.policy)
+	_, unknownFields, err := decodeProviderWireTolerant(data, &wire, decoder.policy)
 	if err != nil {
 		return nil, nil, err
 	}
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1, vendorExtensions)
+	decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1, unknownFields)
 	if len(wire.Item) > 0 {
-		itemVendorExtensions, itemErr := responsesItemVendorExtensions(wire.Item, decoder.policy)
-		appendResponsesVendorExtensionDiagnostics(&diagnostics, decoder.policy, "output[]", itemVendorExtensions)
-		if itemErr != nil {
-			return nil, diagnostics, itemErr
-		}
+		decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1,
+			prefixedUnknownFieldPaths("output[]", responsesItemUnknownFields(wire.Item, decoder.policy)))
 	}
 	if wire.Response != nil {
-		outputVendorExtensions, outputErr := responsesOutputVendorExtensions(wire.Response.Output, decoder.policy)
-		appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1, outputVendorExtensions)
-		if outputErr != nil {
-			return nil, diagnostics, outputErr
-		}
+		decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1,
+			responsesOutputUnknownFields(wire.Response.Output, decoder.policy))
 		for _, diagnostic := range responsesProviderDecorationDiagnostics(*wire.Response, decoder.policy, "stream.response.") {
 			if decoder.reportedProviderDecorations[diagnostic.Field] {
 				continue

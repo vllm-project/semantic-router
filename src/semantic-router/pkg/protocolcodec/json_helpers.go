@@ -92,20 +92,24 @@ func decodeProviderWire(body []byte, target any, policy llmprotocol.Policy) erro
 }
 
 func decodeProviderJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) ([]string, error) {
-	_, dropped, err := decodeProviderJSONCanonical(body, target, policy, requireObject)
+	_, dropped, err := decodeProviderJSONCanonical(body, target, policy, requireObject, nil)
 	return dropped, err
 }
 
-// decodeProviderWireVendorAware returns the canonical body alongside any
-// extensions removed during decode.
-//
-// The canonical body matters as much as the field list. Source preservation
-// replays preserved bytes verbatim on a same-format encode, so preserving the
-// decorated upstream bytes would re-emit decorations the decode just dropped
-// and hand a non-canonical body to anything that persists it. Callers that
-// build an envelope must build it from these bytes.
-func decodeProviderWireVendorAware(body []byte, target any, policy llmprotocol.Policy) ([]byte, []string, error) {
-	return decodeProviderJSONCanonical(body, target, policy, true)
+// decodeProviderWireTolerant returns the canonical body, stripped of the
+// members its wire contract does not declare, alongside their paths. A
+// same-format replay keeps forwarding the upstream bytes, so callers build
+// response envelopes from the original body; the paths drive the diagnostics
+// and keep a persisted copy canonical.
+func decodeProviderWireTolerant(body []byte, target any, policy llmprotocol.Policy) ([]byte, []string, error) {
+	return decodeProviderJSONCanonical(body, target, policy, true, nil)
+}
+
+// decodeChatProviderWire is decodeProviderWireTolerant for Chat response
+// bodies and stream chunks, whose usage may name its counters the Anthropic
+// way (aliasChatUsageCounters).
+func decodeChatProviderWire(body []byte, target any, policy llmprotocol.Policy) ([]byte, []string, error) {
+	return decodeProviderJSONCanonical(body, target, policy, true, aliasChatUsageCounters)
 }
 
 // decodeProviderValue is the upstream counterpart to decodeWireValue. Provider
@@ -116,32 +120,33 @@ func decodeProviderValue(body []byte, target any, policy llmprotocol.Policy) err
 	return err
 }
 
-func decodeProviderValueVendorAware(body []byte, target any, policy llmprotocol.Policy) ([]string, error) {
-	return decodeProviderJSON(body, target, policy, false)
-}
-
-func decodeProviderJSONCanonical(body []byte, target any, policy llmprotocol.Policy, requireObject bool) ([]byte, []string, error) {
-	// Without vendor extensions the body is decoded as received, so its member
-	// names can be checked during the duplicate-key walk.
+// decodeProviderJSONCanonical validates body as received, then applies the
+// optional dialect rewrite, drops undeclared members and decodes the result.
+func decodeProviderJSONCanonical(
+	body []byte,
+	target any,
+	policy llmprotocol.Policy,
+	requireObject bool,
+	rewrite func([]byte) []byte,
+) ([]byte, []string, error) {
+	// A conformance decode reads the body as received, so its member names
+	// can be checked during the duplicate-key walk.
 	var exactType reflect.Type
-	if !providerVendorExtensionsAllowed(policy) && rejectUnknownFields(body, policy) {
+	if !dropUnknownUpstreamFields(policy) && rejectUnknownFields(body, policy) {
 		exactType = reflect.TypeOf(target)
 	}
 	if err := validateProviderJSONDocument(body, policy, requireObject, exactType); err != nil {
 		return nil, nil, err
 	}
-	if policy.ResponseVendor == llmprotocol.ResponseVendorOpenAICompatGateway {
-		// Anthropic-style usage counters ride inside an otherwise canonical
-		// usage object; map them onto the canonical names before the strict
-		// decode so the totals check sees a consistent usage object.
-		body = translateGatewayUsageCounters(body)
+	if rewrite != nil {
+		body = rewrite(body)
 	}
 	canonical := body
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	var dropped []string
 	if rejectUnknownFields(body, policy) {
 		if exactType == nil {
-			canonical, dropped = stripProviderVendorExtensions(body, reflect.TypeOf(target))
+			canonical, dropped = stripUnknownUpstreamFields(body, reflect.TypeOf(target))
 			// The stripped body is either the checked original or re-encoded
 			// from it, so only its member names can fail here.
 			if err := walkJSONDocument(canonical, policy.Limits.JSONDepth, reflect.TypeOf(target)); err != nil {
@@ -203,8 +208,7 @@ func hasJSONObjectEnvelope(body []byte) bool {
 var jsonUnmarshalerType = reflect.TypeOf((*json.Unmarshaler)(nil)).Elem()
 
 type jsonStructField struct {
-	typeOf          reflect.Type
-	vendorExtension bool
+	typeOf reflect.Type
 }
 
 var structFieldsByType sync.Map
@@ -241,7 +245,7 @@ func buildExactJSONStructFields(targetType reflect.Type) map[string]jsonStructFi
 		if name == "" {
 			name = field.Name
 		}
-		fields[name] = jsonStructField{typeOf: field.Type, vendorExtension: field.Tag.Get("response_extension") == "true"}
+		fields[name] = jsonStructField{typeOf: field.Type}
 	}
 	return fields
 }
@@ -417,6 +421,23 @@ func isJSONObject(body []byte, maximumDepth int) bool {
 	return llmprotocol.ValidateJSONObject(body, maximumDepth) == nil
 }
 
+// isTruncatedJSONObject reports arguments that stop before or inside a JSON
+// object, the only shapes an output limit leaves behind: vLLM can end a call
+// right after its name with no arguments. The prefix must pass the same
+// duplicate-key and depth rules as a complete object. A complete non-object,
+// trailing data or a syntax error mid-body is malformed, never cut.
+func isTruncatedJSONObject(body []byte, maximumDepth int) bool {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return true
+	}
+	if trimmed[0] != '{' {
+		return false
+	}
+	err := llmprotocol.ValidateJSONObject(trimmed, maximumDepth)
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
+
 var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
 
 // exactJSONShape returns the struct, slice or array type whose member names
@@ -562,7 +583,7 @@ func responseEnvelope(format llmprotocol.WireFormat, body []byte, generation uin
 
 func appendLossy(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source, target llmprotocol.WireFormat, field, reason string) error {
 	if policy.LossyFeatures == llmprotocol.LossyReject && !slices.Contains(policy.AllowedLossyFields, field) {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "lossy_translation", "translation would lose "+field, nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "lossy_translation", "translation would lose "+field+llmprotocol.OptInHint(field), nil)
 	}
 	if len(*diagnostics) < policy.Limits.Diagnostics {
 		*diagnostics = append(*diagnostics, llmprotocol.Diagnostic{
@@ -581,7 +602,7 @@ func rejectUnsupportedRequestField(field string, value json.RawMessage) error {
 	return llmprotocol.NewError(
 		llmprotocol.ErrorUnsupportedFeature,
 		"unsupported_"+strings.ReplaceAll(field, ".", "_"),
-		field+" is not supported by the protocol-neutral request contract",
+		field+" is not supported by the protocol-neutral request contract"+llmprotocol.OptInHint(field),
 		nil,
 	)
 }

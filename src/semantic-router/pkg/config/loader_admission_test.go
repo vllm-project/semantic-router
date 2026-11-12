@@ -8,7 +8,7 @@ import (
 )
 
 const admissionTestYAMLTemplate = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -24,10 +24,9 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:11434
           protocol: http
-routing:
-  modelCards:
-    - name: qwen2.5:3b
       param_size: 3b
+recipes:
+  - name: default
 global:
   model_catalog:
     admission:
@@ -40,12 +39,12 @@ func admissionTestYAML(block string) []byte {
 
 func TestParseYAMLBytesParsesModelCatalogAdmission(t *testing.T) {
 	cfg, err := ParseYAMLBytes(admissionTestYAML(`
-      prompt_guard:
+      primary:
         max_concurrency: 4
         max_queue: 64
         queue_timeout_ms: 250
         on_overflow: shed
-      pii_classifier:
+      vela-embedding:
         max_concurrency: 2
 `))
 	if err != nil {
@@ -53,16 +52,16 @@ func TestParseYAMLBytesParsesModelCatalogAdmission(t *testing.T) {
 	}
 
 	want := AdmissionConfig{MaxConcurrency: 4, MaxQueue: 64, QueueTimeoutMs: 250, OnOverflow: "shed"}
-	if got := cfg.ModelAdmission["prompt_guard"]; got != want {
-		t.Fatalf("prompt_guard admission = %+v, want %+v", got, want)
+	if got := cfg.ModelAdmission["primary"]; got != want {
+		t.Fatalf("primary admission = %+v, want %+v", got, want)
 	}
-	if got := cfg.ModelAdmission["pii_classifier"]; got != (AdmissionConfig{MaxConcurrency: 2}) {
-		t.Fatalf("pii_classifier admission = %+v", got)
+	if got := cfg.ModelAdmission["vela-embedding"]; got != (AdmissionConfig{MaxConcurrency: 2}) {
+		t.Fatalf("vela-embedding admission = %+v", got)
 	}
 
 	exported := canonicalModelCatalogFromRouterConfig(cfg)
-	if got := exported.Admission["prompt_guard"]; got != want {
-		t.Fatalf("exported admission = %+v, want %+v", got, want)
+	if got := exported.Admission["primary"]; got != want {
+		t.Fatalf("exported admission = %+v, want %+v under the deployment", got, want)
 	}
 }
 
@@ -79,12 +78,12 @@ func TestParseYAMLBytesRejectsInvalidAdmission(t *testing.T) {
 		},
 		{
 			"missing concurrency",
-			"      prompt_guard:\n        max_queue: 64\n",
+			"      primary:\n        max_queue: 64\n",
 			"max_concurrency must be >= 1",
 		},
 		{
 			"invalid overflow",
-			"      prompt_guard:\n        max_concurrency: 4\n        on_overflow: drop\n",
+			"      primary:\n        max_concurrency: 4\n        on_overflow: drop\n",
 			"on_overflow must be shed, wait, or fail_open",
 		},
 	}
@@ -103,7 +102,7 @@ func TestReferenceConfigParsesAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reference config parse failed: %v", err)
 	}
-	admission, ok := cfg.ModelAdmission["prompt_guard"]
+	admission, ok := cfg.ModelAdmission["primary"]
 	if !ok || admission.MaxConcurrency != 4 {
 		t.Fatalf("reference admission = %+v (present=%v)", admission, ok)
 	}

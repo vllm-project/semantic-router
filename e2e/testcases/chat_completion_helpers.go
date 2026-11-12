@@ -36,16 +36,14 @@ func sendLocalChatCompletion(
 // sendLocalChatConversation sends a chat-completion request carrying a full
 // conversation (e.g. alternating user/assistant messages), for signals that
 // need prior-turn context (e.g. reask). It always sets the x-vsr-debug
-// request header: the v0.4 contract demotes the intermediate
-// decision/classification and matched-signal response headers off the
-// default surface (#2205), and every routing/classification test using this
-// helper asserts those demoted headers, so the debug surface is always
-// required.
+// request header: the matched signals and classification details ride in
+// x-vsr-trace, which only a caller allowed the debug headers receives, and
+// every routing/classification test using this helper asserts them.
 func sendLocalChatConversation(
 	ctx context.Context,
 	localPort string,
 	model string,
-	messages []map[string]string,
+	messages any,
 	timeout time.Duration,
 ) (*localChatCompletionResponse, error) {
 	requestBody := map[string]interface{}{

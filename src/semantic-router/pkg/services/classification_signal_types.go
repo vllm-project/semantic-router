@@ -73,29 +73,22 @@ type IntentOptions struct {
 // MatchedSignals represents all matched signals from signal evaluation.
 type MatchedSignals struct {
 	Keywords      []string `json:"keywords,omitempty"`
-	Embeddings    []string `json:"embeddings,omitempty"`
 	Domains       []string `json:"domains,omitempty"`
 	FactCheck     []string `json:"fact_check,omitempty"`
 	UserFeedback  []string `json:"user_feedback,omitempty"`
-	Reask         []string `json:"reask,omitempty"`
-	Preferences   []string `json:"preferences,omitempty"`
+	TurnRelation  []string `json:"turn_relation,omitempty"`
 	Language      []string `json:"language,omitempty"`
 	Context       []string `json:"context,omitempty"`
-	Structure     []string `json:"structure,omitempty"`
 	Complexity    []string `json:"complexity,omitempty"`
 	Modality      []string `json:"modality,omitempty"`
 	Authz         []string `json:"authz,omitempty"`
 	Jailbreak     []string `json:"jailbreak,omitempty"`
 	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
-	KB            []string `json:"kb,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
-	Event         []string `json:"event,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
-	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
-	Action        []string `json:"action,omitempty"`
-	Decision      []string `json:"decision,omitempty"`
+	SystemOne     []string `json:"systemone,omitempty"`
 	Projection    []string `json:"projection,omitempty"`
 }
 
@@ -138,6 +131,7 @@ type EvalResponse struct {
 	SignalConfidences      map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" -> 0.81
 	SignalValues           map[string]float64                      `json:"signal_values,omitempty"`      // Raw signal values per signal when exposed, e.g. "structure:many_questions" -> 4
 	SignalErrors           map[string]string                       `json:"signal_errors,omitempty"`
+	ScanCoverage           map[string]string                       `json:"scan_coverage,omitempty"` // How much of their input the guard rules that read it in windows read
 	AppliedUnknownPolicies map[string]string                       `json:"applied_unknown_policies,omitempty"`
 	DecisionRanking        *decision.RankingTrace                  `json:"decision_ranking,omitempty"` // How selection ordered the matched decisions
 	DecisionError          string                                  `json:"decision_error,omitempty"`
@@ -157,6 +151,9 @@ type EvalModelSelectionInput struct {
 	Query             string
 	Category          string
 	ContextTokenCount int
+	// ContextReserveTokens is the reserve part of ContextTokenCount, which a
+	// refusal does not count.
+	ContextReserveTokens int
 }
 
 type EvalModelSelection struct {

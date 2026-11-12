@@ -78,7 +78,7 @@ running packaged remote code (`trust_remote_code`).
 | Families | `decision1` (Decision 1.0), `task_heads` (Vela 1.0 and compatible HF encoder task models), `vela2` (Vela 2.0), `multimodal_embedding` (Vela 1.0 Omni). `decision2` is unchanged. |
 | Surfaces | `POST /v1/classify`, `/v1/embeddings` (OpenAI-compatible), `/v1/rerank`, and `/v1/bundle`; Set and Span answers on `/v1/decisions` where a model declares them. The Phase 1 surfaces are unchanged. |
 | Processes | One runtime process serves one or more models. Each model keeps its own worker, device and engine arguments. The router groups its managed deployments into processes (by default one per device). |
-| Bundling | The router sends all model work of one request stage for one runtime process as one `/v1/bundle` call, and every question the stage asks one model as one decisions task, about one state or several (`states`). Bundling is transport only: every task keeps the semantics of its own surface. |
+| Bundling | The router sends all model work of one request stage for one runtime process as one `/v1/bundle` call, and every question the stage asks one model as one decisions task: a standard request about one state, or a batch (`states`) about several. Bundling is transport only: every task keeps the semantics of its own surface. |
 | Engines | The native PyTorch engine first, for encoders and decoders, on every accelerator; every built-in model runs on it by default. An optional `onnxruntime` engine (the `onnx` extra, not in the router images) runs the ONNX graphs packages ship (Vela 1.0, Vela 2.0 0.3B) and prepared Omni bundles, for portability. |
 | Hardware | Accelerators `cpu`, `cuda`, `rocm` (built in) plus `xpu` and `mps` (built-in plugin slots, unvalidated). |
 | Router seam | The router's typed task bindings (`pkg/modelruntime/binding`, contracts `label_distribution.v1`, `label_scores.v1`, `token_spans.v1`, `embedding.v1`, `relevance_scores.v1`) are kept. The provider facade `pkg/modelruntime/native` (candle, ORT, OpenVINO) is replaced by `pkg/modelruntime/serving`, which implements every contract through the runtime. Consumers change their constructor, not their logic. |
@@ -252,6 +252,14 @@ A work item (`WorkItem`) has `ids` (its token IDs) and may have `cost`, the
 tokens it costs a forward when it has no token IDs (images, audio), and
 `cache_key`, a content hash of everything its result depends on: the runtime
 then answers a repeated item from the model's result cache without a forward.
+A family with expensive materialization may implement `plan_cached_surface`;
+its default delegates to `plan_surface`. Omni audio uses this hook to read the
+same result cache before preparing features. Hits are retained by item position
+in `SurfacePlan.cache_lookups`, so eviction cannot send an unmaterialized hit
+to the scheduler. Miss items are fully prepared and use the ordinary later
+cache lookup, allowing results published during preparation to avoid a forward.
+Media format validation still runs before lookup. Reference/golden execution always
+uses `plan_surface` without the cache.
 `Results` are one value per item or `DEADLINE` (the `Expired` instance) for an
 expired item or plan. Results are shared with the cache, so `finish_surface`
 never mutates them. `mypy --strict` checks the plugin interfaces, the
@@ -332,14 +340,29 @@ MPS backend and run the pure-torch references; they are marked unvalidated.
 
 `Accelerator.golden_reference(device)` names an optional hardware-qualified
 golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
-instruction set and native or emulated BF16 capability, for example
-`cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
+instruction set and whether its kernels compute BF16 natively, for example
+`cpu:x86_64:avx2:bf16_emulated`. Native BF16 needs AVX-512 BF16 or AMX, and
+oneDNN not capped below them (`ONEDNN_MAX_CPU_ISA`): an AVX-512 BF16 host run
+with `ATEN_CPU_CAPABILITY=avx2 ONEDNN_MAX_CPU_ISA=AVX2` answers as an AVX2 host
+does and selects that host's reference. Device inventory architecture names
+stay unchanged. References recorded at another `--dtype` than `auto` carry it
+(`cpu@bfloat16`, `cpu:x86_64:avx2:bf16_emulated@bfloat16`), and only a model
+served at that dtype is checked against them (`readiness.qualified`).
 
 `tools/golden_answers.py --record` writes both the generic device-class baseline
-and any qualified reference. The first generic baseline is preserved within a
-revision; later hardware runs update only their qualified entries. A revision
-change clears all old references. Record the new revision on the intended
-baseline device before adding other hardware classes.
+and any qualified reference, at its `--dtype`, with the PyTorch version each
+was recorded with (`torch`). It loads the model without comparing it to the
+references it replaces. The first generic baseline is preserved within a
+revision and PyTorch version; later hardware runs update only their qualified
+entries, and a hardware entry that answers as its baseline is not kept. A
+revision change clears all old references, and a PyTorch change starts a new
+baseline for its device class. Record the new revision on the intended
+baseline device before adding other hardware classes. Decision 3.0 computes in
+FP32 on CPUs, where its BF16 answers differ by CPU kernel by more than the CPU
+tolerance (`docs/records/d3-cpu-fp32.md`): one `cpu` reference covers every
+CPU class, and `--dtype bfloat16` checks the BF16 reference of its CPU class.
+A new PyTorch can move either, so both are recorded with the PyTorch the CPU
+images pin, and a test fails when they are not.
 
 ### 5.4 Engine arguments
 
@@ -351,7 +374,7 @@ A served model batches and computes as its engine arguments say (`EngineArgs`,
 | `max_num_seqs` | by device | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise; 1 runs every row alone |
 | `max_num_batched_tokens` | by device, calibrated | Tokens one forward may hold: the sum of its rows (each rounded up to 8) for a model that packs merged rows (`packs_merged_rows`), else its rows times its longest row |
 | `batch_window_ms` | 2.0 | How long the scheduler collects requests after the first, before it plans the queue |
-| `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in |
+| `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in, except Decision 3.0's FP32 on CPUs |
 | `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0, and state-once Decision 3.0 packages, whose requests always branch from their state: there it only decides whether whole requests share forwards) |
 
 Limits left unset take the device's memory class (`scheduler/calibration.py`:
@@ -401,8 +424,8 @@ follow the same rule per question type (`DtypePolicy.approximate_kernels`):
 Decision 2.0 consents to CUDA's approximate fused kernels, and Vela 2.0 does
 not, because they change 7% of its span answers. Another `--dtype` holds every
 backbone weight in that dtype and runs the reference kernels without copies;
-the golden references apply only to `auto`, so its golden status is
-`unverified` (`dtypes.py`). Each family records the accuracy (label
+only references recorded at that dtype check it (Decision 3.0's BF16 on CPUs),
+so elsewhere its golden status is `unverified` (`dtypes.py`). Each family records the accuracy (label
 agreement, max |Δp| or embedding cosine against the reference path) and the
 latency of its reduced path. `vllm-sr config migrate` drops the legacy
 `precision: fp16` (the model runs in its published precision) and maps a
@@ -481,16 +504,18 @@ declare them:
 - **Thresholds.** A Set or Span question may carry `threshold`; the response
   always reports the applied one in `thresholds.<id>`, including
   length-dependent rules.
-- **Further states** (every decision family). `states` names more states, each
-  with its own questions; the runtime runs each as a request of its own in the
-  model's job group, as it runs a bundle's tasks, so a state's answers are
-  those it gets alone, and answers it under the same name in the response's
-  `states`. A typed-part state reads all its parts together, so texts a
-  client wants read apart are states, not parts.
+- **Batches** (every decision family). A request is a standard request (`state`
+  and `questions`) or a batch: `states` alone, named standard requests that
+  share the batch's model, options and assets. The runtime runs each entry as
+  a request of its own in the model's job group, as it runs a bundle's tasks,
+  so an entry's answers are those it gets alone, and answers it under the same
+  name in the response's `states`, with the `usage` of every entry. A batch
+  has no top-level state, questions, images or videos; a body that mixes the
+  forms is `invalid_request`. A typed-part state reads all its parts
+  together, so texts a client wants read apart are entries, not parts.
 
-This follows the Vela 2.0 packages' own server, so the runtime is a drop-in
-for it. Decision models without Set or Span answer such a question with
-`invalid_question`.
+Apart from batches, this follows the Vela 2.0 packages' own server. Decision
+models without Set or Span answer such a question with `invalid_question`.
 
 ### 6.2 `POST /v1/classify`
 
@@ -613,7 +638,9 @@ model is ready, with the process state (`starting`, `loading`, `warming`,
 `ready`, `degraded`, `failed`) and, when the process serves several models,
 each model's state. `/health/live` is
 liveness (`Liveness`): 200 with `status: alive` while the process serves
-HTTP, whatever its models' states. All three report `api_version`, the
+HTTP, whatever its models' states, and 503 with `status: stalled` and a
+`reason` while a forward has run longer than `--forward-timeout-seconds`
+(section 10). All three report `api_version`, the
 contract version (`info.version`). A router and its runtime come from one
 release, so the router accepts only a runtime of exactly its contract version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
@@ -783,7 +810,9 @@ costs its budget, not its length, and fails the questions that read it whole
 with `scan_budget_exceeded`; the other questions read its first tokens, which
 are all any truncation keeps of a part they do not read. A question with
 `overflow: truncate` reads only a part's first `limits.truncate_tokens` (one
-input on a CPU, its row one forward over what fits). The model's answer to a
+input on a CPU, its row one forward over what fits), and a Vela 3.0 evidence
+span question its route's 32,768-token window of the parts it reads, the
+others still cut to the router's. The model's answer to a
 question depends on the questions beside it in a sequence, so questions of
 both kinds share their rows as before unless a row has to be read in windows;
 only then does each kind get rows of its own. The router truncates its
@@ -998,6 +1027,11 @@ positions, each layer at its own rope base) with adapter networks over it.
 | Router adapters | The shared router adapter and the domain, fact-check and feedback adapters | Choice and Set questions whose instructions are a trained router text, per (part, adapter) in the Vela 2.0 0.3B layout, 8,192-token windows |
 | Span adapters | span, span-set (PII and unsupported claims), evidence (one window up to 32,768 tokens), relation and NER | Span questions, one row each, in the Vela 2.0 0.3B layout; routed by label set and wording, each route at its own temperature and threshold |
 
+A string state is one user part as it is, even when it parses as JSON
+(`vela3_encoder._parts`), so span offsets index the text the caller sent; only
+a JSON-object state is read as typed parts. Vela 2.0 reads a string that holds
+a JSON object as that object.
+
 Each adapter file holds LoRA factors for every projection of every layer, its
 own copies of the top layers it trained and the readout tensors it trained.
 The engine builds each one as an adapter network (`BackboneSpec.adapters`):
@@ -1199,7 +1233,14 @@ with a clean device context. The accelerator decides what is one (on CUDA and
 ROCm: a CUDA or HIP error, a device-side assert or an illegal memory access;
 running out of memory is not). Any other error in a forward fails only the
 requests whose jobs were in that batch, as `internal_error`, and so does an
-answer holding NaN or infinity; the model keeps serving. A model that fails
+answer holding NaN or infinity; the model keeps serving. A forward that runs
+longer than `--forward-timeout-seconds` (300 s) is taken for a hung device:
+its model reports `degraded` and takes no requests, and `/health/live`
+answers 503 with `status: stalled`, so a liveness probe restarts the
+process; a forward that does return gives the model back its state. A forward
+on a device cannot be interrupted, so on SIGTERM the server waits
+`--shutdown-grace-seconds` (8 s) for the requests and forwards in flight, then
+exits with status 4, logging each forward it abandoned. A model that fails
 to load releases its worker and device memory. A package or golden-answer
 failure is final; any other load failure (no device with enough free memory,
 a download, a busy device) is retried `--load-attempts` times in all (5),
@@ -1226,7 +1267,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
+| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`); fused gated-delta prep (`gdn_prep`) needs FLA but does not require causal-conv1d to be installed; optional causal-conv1d is approximate on CUDA, so exact-only/non-consenting models use torch reference even when it is installed; [convolution evidence and released-runtime impact](records/cuda-causal-conv1d-exactness.md); [A/B model comparison](records/cuda-gdn-prep-without-causal-conv1d.md) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
@@ -1574,10 +1615,9 @@ Router entry points into them: `pkg/modelruntime/native` (61 files: the
 owned-model facade for every contract), the legacy singletons in
 `pkg/classification` (`classifier_{category,jailbreak,pii}_init.go`,
 `unified_classifier*`, `native_task_results.go`, `keyword_classifier*`),
-`pkg/modelselection` (`selector.go`, `persistence.go`), test helpers in
+test helpers in
 `pkg/cache` and `pkg/extproc`, and, outside the router,
 `src/training/model_classifier/*_verifier.go`,
-`src/training/model_selection/ml_model_selection/validate.go`,
 `tools/dev/examples/{redis,valkey}`, `tools/modelcompat` and `perf/`. 204 router
 files carry `!windows && cgo` build tags only because of these imports.
 
@@ -1642,7 +1682,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | Make | `rust.mk`, `openvino.mk`, `build-run-test.mk` binding targets, `models.mk` native model tests, `common.mk` library paths | Deleted or pointed at the runtime |
 | Workflows | `test-native.yml`, `build-native.yml`, `publish-crate.yml`, the native lanes of `ci.yml`, `performance-test.yml`, Rust hooks in `pre-commit.yml` | Deleted, or replaced by the model-runtime lanes |
 | Helm and operator | model download init containers, native library environment, provider settings | The runtime ships in the router image; optional attached runtime sidecar values |
-| E2E profiles | `vela-halu`, `vela-shield`, `vela-omni`, `multimodal-routing`, `local-classifier-backend`, `ml-model-selection`, `hallucination`, and every profile that loads default models through the router image | Run against the runtime; new runtime profiles (section 15) |
+| E2E profiles | `vela-halu`, `vela-shield`, `vela-omni`, `multimodal-routing`, `hallucination`, and every profile that loads default models through the router image | Run against the runtime; new runtime profiles (section 15) |
 | Harness | `tools/agent/domains.yaml` domains `native-bindings`, `openvino`, `riscv-runtime`, `onnx-*`, `ck-flash-attn-rewriter`, `published-model-tests`, native verifications | Removed; `model-runtime` domain covers the families, engines and parity tools |
 | Docs | runtime, installation, AMD, OpenVINO and Vela pages describing candle, ORT and OpenVINO | Task-oriented runtime docs and a migration guide |
 | RISC-V | candle on riscv64 under QEMU, a riscv64 router build and its CI lane | **Removed** (maintainer decision): no riscv64 build, lane, image or build tags |

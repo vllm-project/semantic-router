@@ -21,7 +21,7 @@ listeners:
     timeout: 0s
 `
 
-const compileFixture = "version: v0.3\n" + compileFixtureListeners + compileFixtureProviders
+const compileFixture = "version: v0.5\n" + compileFixtureListeners + compileFixtureProviders
 
 const compileFixtureProviders = `
 providers:
@@ -46,11 +46,12 @@ providers:
       api_format: openai
       backend_refs:
         - provider: vllm
-          base_url: https://api.example.test/compatible-mode/v1/
-          extra_headers:
+          endpoint: https://api.example.test/compatible-mode/v1/
+          headers:
             X-Tenant: one
             X-Region: west
-routing: {}
+recipes:
+  - name: default
 `
 
 func compileYAML(t *testing.T, yaml string) Topology {
@@ -110,6 +111,23 @@ func TestCompileMapsEndpointsAndRouteBehavior(t *testing.T) {
 	}
 }
 
+func TestCompileRemovesTheConfiguredIdentityHeaders(t *testing.T) {
+	topology := compileYAML(t, compileFixture+`
+global:
+  services:
+    authz:
+      identity:
+        user_id_header: x-jwt-sub
+        user_groups_header: x-jwt-groups
+`)
+	want := []string{"x-authz-user-id", "x-authz-user-groups", "x-authz-team-id", "x-authz-tenant-id", "x-jwt-sub", "x-jwt-groups"}
+	for _, cluster := range topology.Clusters {
+		if !reflect.DeepEqual(cluster.RemoveHeaders, want) {
+			t.Fatalf("cluster %s removes %v, want %v", cluster.Name, cluster.RemoveHeaders, want)
+		}
+	}
+}
+
 func TestCompileListenerTimeoutsBecomeRouteDefaults(t *testing.T) {
 	topology := compileYAML(t, compileFixture)
 	want := []ListenerSpec{
@@ -120,7 +138,7 @@ func TestCompileListenerTimeoutsBecomeRouteDefaults(t *testing.T) {
 		t.Fatalf("listeners = %+v, want %+v", topology.Listeners, want)
 	}
 
-	defaults := compileYAML(t, "version: v0.3\n"+compileFixtureProviders).Listeners
+	defaults := compileYAML(t, "version: v0.5\n"+compileFixtureProviders).Listeners
 	wantDefault := []ListenerSpec{{Name: "listener_0", Timeouts: Timeouts{Total: 300 * time.Second, Idle: 300 * time.Second}}}
 	if !reflect.DeepEqual(defaults, wantDefault) {
 		t.Fatalf("default listeners = %+v, want %+v", defaults, wantDefault)
@@ -128,7 +146,7 @@ func TestCompileListenerTimeoutsBecomeRouteDefaults(t *testing.T) {
 }
 
 const reliabilityFixture = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: pooled
@@ -144,22 +162,23 @@ providers:
         health_check_interval: 5s
         health_check_timeout: 1s
       backend_refs:
-        - {name: a, provider: vllm, endpoint: 10.0.0.1:8000}
-        - {name: b, provider: vllm, endpoint: 10.0.0.2:8000}
+        - {name: a, provider: vllm, endpoint: '10.0.0.1:8000'}
+        - {name: b, provider: vllm, endpoint: '10.0.0.2:8000'}
     - name: single
       provider_model_id: single-model
       api_format: openai
       reliability:
         consecutive_5xx: 3
       backend_refs:
-        - {name: a, provider: vllm, endpoint: 10.0.0.3:8000}
+        - {name: a, provider: vllm, endpoint: '10.0.0.3:8000'}
     - name: plain
       provider_model_id: plain-model
       api_format: openai
       backend_refs:
-        - {name: a, provider: vllm, endpoint: 10.0.0.4:8000}
-        - {name: b, provider: vllm, endpoint: 10.0.0.5:8000}
-routing: {}
+        - {name: a, provider: vllm, endpoint: '10.0.0.4:8000'}
+        - {name: b, provider: vllm, endpoint: '10.0.0.5:8000'}
+recipes:
+  - name: default
 `
 
 func TestCompileMapsReliabilityWithTheTemplateConditions(t *testing.T) {

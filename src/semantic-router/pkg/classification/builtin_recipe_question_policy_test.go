@@ -6,9 +6,9 @@ import "testing"
 // facts it lists; each name in unknown is a question whose answer failed. They
 // are controlled inputs to the shipped rules, not model output.
 func questionAnswers(questions, facts, unknown []string) *SignalResults {
-	in := &SignalResults{MatchedDecisionRules: questions, MatchedConversationRules: facts, SignalErrors: map[string]string{}}
+	in := &SignalResults{MatchedSystemOneRules: questions, MatchedConversationRules: facts, SignalErrors: map[string]string{}}
 	for _, name := range unknown {
-		in.SignalErrors["decision:"+name] = "unavailable"
+		in.SignalErrors["systemone:"+name] = "unavailable"
 	}
 	return in
 }

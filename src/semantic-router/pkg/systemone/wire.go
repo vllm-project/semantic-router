@@ -14,7 +14,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/contentcoding"
 )
 
 // zstdMaxWindow is the largest window a zstd request body may use, as on
@@ -43,7 +43,7 @@ func malformedBody(reason, format string, args ...any) *wireError {
 // identity, "gzip" for gzip or x-gzip, "zstd"; another coding, or more than
 // one, is 415.
 func requestEncoding(h http.Header) (string, *wireError) {
-	coding, single := httputil.ContentCoding(h.Values("Content-Encoding"))
+	coding, single := contentcoding.Parse(h.Values("Content-Encoding"))
 	if single && (coding == "" || coding == "gzip" || coding == "zstd") {
 		return coding, nil
 	}

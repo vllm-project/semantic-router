@@ -127,6 +127,8 @@ func (s *ClassificationService) populateEvalModelSelection(
 		Query:             input.currentUserText,
 		Category:          evalDecisionCategory(decisionResult.MatchedRules),
 		ContextTokenCount: input.requestFacts.ContextTokenFloor,
+		// A refusal does not count the estimate's reserves.
+		ContextReserveTokens: input.requestFacts.ContextReserveTokens,
 	})
 	response.SelectedModel = selection.SelectedModel
 	response.SelectionStatus = selection.Status

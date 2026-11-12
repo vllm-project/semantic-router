@@ -13,16 +13,24 @@ reads its input completely.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from ...errors import SCAN_BUDGET_EXCEEDED, QuestionError
-from ...systemone import listed_options, named_options, require_full_input
-from ..decision3.family import Item
-from ..vela3_shared import expand_preset, invalid, text, threshold_of
-from .span_policy import Definitions, Policy, Route
-from .span_render import Renderer, Window
+from ...systemone import (
+    REQUEST_ROLES,
+    listed_options,
+    named_options,
+    require_full_input,
+)
+from ..vela3_shared import SPAN_HEADS, expand_preset, invalid, text, threshold_of
+from .package import SPAN_TARGET_TOKENS
+from .span_policy import Policy
+from .span_read import SpanItem, SpanReader
+from .span_read import answer as span_answer
+from .span_render import Renderer
 
 FIELDS = frozenset(
     {
@@ -39,10 +47,6 @@ FIELDS = frozenset(
 )
 # A span question reads its whole target, in windows: the one overflow it takes.
 WINDOWED = "window"
-# The most target tokens a span question reads, in about 21 windows: the vela3 family's default
-# scan budget on a CPU (4 x 8,192). It bounds one question's forwards on every size, whatever the
-# base's question cap (vela3-lite, -mini and -flash's bases allow 262,144 tokens).
-SPAN_TARGET_TOKENS = 32768
 
 
 def is_span(question: Any) -> bool:
@@ -52,20 +56,10 @@ def is_span(question: Any) -> bool:
     )
 
 
-@dataclass(frozen=True)
-class SpanItem(Item):
-    """A span question: its route, labels, threshold and the windows it reads."""
-
-    route: Route = "span"
-    names: tuple[str, ...] = ()
-    label_set: str | None = None
-    threshold: float = 0.5
-    evidence: dict[str, Any] | None = None
-    text: str = ""
-    windows: tuple[Window, ...] = field(default=())
-
-
 def parts_of(state: Any) -> list[tuple[str, str]]:
+    """A span state's parts by name: text is the user part, an object of text parts its keys in order, and,
+    with ``roles: null`` (no part has a role), an object the user's content as Decision 3 writes it.
+    """
     if isinstance(state, str):
         return [("user", state)]
     if (
@@ -73,8 +67,20 @@ def parts_of(state: Any) -> list[tuple[str, str]]:
         and state
         and all(isinstance(v, str) for v in state.values())
     ):
+        if REQUEST_ROLES.get() is None:
+            return [("user", json.dumps(state, ensure_ascii=False))]
         return list(state.items())
     raise invalid("span questions need a text state or an object of text parts")
+
+
+def default_target(names: list[str]) -> str:
+    """The part a span question reads without ``over``: the answer (the first part ``roles`` names the answer,
+    or the ``answer`` key without roles), else the last part."""
+    roles = REQUEST_ROLES.get()
+    if isinstance(roles, dict):
+        answers = [name for name in names if roles.get(name) == "answer"]
+        return answers[0] if answers else names[-1]
+    return "answer" if "answer" in names else names[-1]
 
 
 def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
@@ -111,72 +117,83 @@ def over_budget(tokens: int) -> QuestionError | None:
     )
 
 
-def plan_question(
-    question_id: str,
-    question: dict[str, Any],
-    state: Any,
-    policy: Policy,
-    renderer: Renderer,
-    definitions: Definitions,
-    length_error: Callable[[int], QuestionError | None],
-) -> SpanItem:
-    """One span question's item, as the released ``span_answer`` prepares it; ``QuestionError`` if invalid.
+@dataclass(frozen=True)
+class Spans:
+    """A model's span questions: planned with the package's policy and the base's renderer, read by its heads."""
 
-    The target may hold at most ``SPAN_TARGET_TOKENS`` tokens
-    (``scan_budget_exceeded``, checked before it is laid out). Every window, whose other parts are not
-    windowed, must pass the base's ``length_error``.
-    """
-    if "preset" in question:
-        question = expand_preset(question, policy.config.schemas)
-    unknown = sorted(set(question) - FIELDS)
-    if unknown:
-        raise invalid(f"span questions do not take {unknown}")
-    if question.get("overflow") not in (None, WINDOWED):
-        raise invalid(
-            f"span questions read their whole target in windows: overflow must be {WINDOWED!r}"
+    policy: Policy
+    renderer: Renderer
+    reader: SpanReader
+
+    def plan(
+        self,
+        question_id: str,
+        question: dict[str, Any],
+        state: Any,
+        length_error: Callable[[int], QuestionError | None],
+    ) -> SpanItem:
+        """One span question's item, as the released ``span_answer`` prepares it; ``QuestionError`` if invalid.
+
+        The target may hold at most ``SPAN_TARGET_TOKENS`` tokens
+        (``scan_budget_exceeded``, checked before it is laid out). Every window, whose other parts are not
+        windowed, must pass the base's ``length_error``.
+        """
+        if "preset" in question:
+            question = expand_preset(question, self.policy.config.schemas)
+        unknown = sorted(set(question) - FIELDS)
+        if unknown:
+            raise invalid(f"span questions do not take {unknown}")
+        if question.get("overflow") not in (None, WINDOWED):
+            raise invalid(
+                f"span questions read their whole target in windows: overflow must be {WINDOWED!r}"
+            )
+        require_full_input(question)
+        if question.get("head") not in (None, *SPAN_HEADS):
+            raise invalid("this model has no broad span head")
+        parts = parts_of(state)
+        roles = [role for role, _ in parts]
+        target = question.get("over") or default_target(roles)
+        if not isinstance(target, str) or target not in roles:
+            raise invalid(f"over names no part of the state: {target!r}")
+        labels = labels_of(question)
+        names = [name for name, _ in labels]
+        instructions = question.get("instructions")
+        if instructions is not None and not isinstance(instructions, str):
+            raise invalid("span instructions must be a string")
+        override = threshold_of(question)
+        routed = self.policy.resolve(labels, instructions)
+        windows, count = self.renderer.windows(
+            parts,
+            target,
+            routed.question,
+            routed.labels,
+            over_budget,
         )
-    require_full_input(question)
-    if question.get("head") not in (None, "router"):
-        raise invalid("this model has no broad span head")
-    parts = parts_of(state)
-    roles = [role for role, _ in parts]
-    target = question.get("over") or ("answer" if "answer" in roles else roles[-1])
-    if not isinstance(target, str) or target not in roles:
-        raise invalid(f"over names no part of the state: {target!r}")
-    labels = labels_of(question)
-    names = [name for name, _ in labels]
-    instructions = question.get("instructions")
-    if instructions is not None and not isinstance(instructions, str):
-        raise invalid("span instructions must be a string")
-    override = threshold_of(question)
-    routed = policy.resolve(labels, instructions, definitions)
-    windows, count = renderer.windows(
-        parts,
-        target,
-        routed.question,
-        routed.labels,
-        over_budget,
-    )
-    refused = length_error(max(len(window.ids) for window in windows))
-    if refused is not None:
-        raise refused
-    threshold = (
-        override
-        if override is not None
-        else policy.threshold(routed.route, routed.label_set, routed.labels, count)
-    )
-    return SpanItem(
-        question_id=question_id,
-        task_type="span",
-        ids=list(windows[0].ids),
-        keys=names,
-        descriptions=[d or None for _, d in routed.labels],
-        cost=sum(len(w.ids) for w in windows),
-        route=routed.route,
-        names=tuple(names),
-        label_set=routed.label_set,
-        threshold=threshold,
-        evidence=routed.evidence,
-        text=dict(parts)[target],
-        windows=tuple(windows),
-    )
+        refused = length_error(max(len(window.ids) for window in windows))
+        if refused is not None:
+            raise refused
+        threshold = (
+            override
+            if override is not None
+            else self.policy.threshold(
+                routed.route, routed.label_set, routed.labels, count
+            )
+        )
+        return SpanItem(
+            question_id=question_id,
+            task_type="span",
+            ids=list(windows[0].ids),
+            keys=names,
+            descriptions=[d or None for _, d in routed.labels],
+            cost=sum(len(w.ids) for w in windows),
+            route=routed.route,
+            names=tuple(names),
+            label_set=routed.label_set,
+            threshold=threshold,
+            evidence=routed.evidence,
+            text=dict(parts)[target],
+            windows=tuple(windows),
+        )
+
+    def answer(self, item: SpanItem) -> dict[str, Any]:
+        return span_answer(item, *self.reader.logits(item))

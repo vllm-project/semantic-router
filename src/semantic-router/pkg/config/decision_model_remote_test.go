@@ -12,7 +12,7 @@ import (
 // Bearer auth and gateway-d3 behind a gateway's own header and path prefix.
 // One question names gateway-d3; the rest, and a selector, ask the decision
 // model, hosted-d3.
-const systemOneDecisionYAML = `version: v0.3
+const systemOneDecisionYAML = `version: v0.5
 providers:
   defaults: {model: general}
   models:
@@ -20,46 +20,49 @@ providers:
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
     - name: other-model
       backend_refs: [{name: other, endpoint: "127.0.0.1:8001", protocol: http}]
-routing:
-  signals:
-    decision:
-      - name: support_team
-        deployment: gateway-d3
-        question: {type: choice, instructions: "Which team should handle this request?", choices: [{key: billing}, {key: engineering}]}
-      - name: needs_tools
-        question: {type: noul, instructions: "Does the request need a tool?"}
-  decisions:
-    - name: engineering
-      priority: 200
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions: [{type: decision, name: support_team, label: engineering}]
-      modelRefs: [{model: general}]
-    - name: choose
-      priority: 100
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions: [{type: decision, name: needs_tools}]
-      modelRefs: [{model: general}, {model: other-model}]
-      algorithm:
-        type: decision
-        decision: {instructions: "Which model should answer?"}
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: support_team
+          deployment: gateway-d3
+          question: {type: choice, instructions: "Which team should handle this request?", choices: [{key: billing}, {key: engineering}]}
+        - name: needs_tools
+          question: {type: noul, instructions: "Does the request need a tool?"}
+    decisions:
+      - name: engineering
+        priority: 200
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions: [{type: systemone, name: support_team, label: engineering}]
+        modelRefs: [{model: general}]
+      - name: choose
+        priority: 100
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions: [{type: systemone, name: needs_tools}]
+        modelRefs: [{model: general}, {model: other-model}]
+        algorithm:
+          type: systemone
+          systemone: {instructions: "Which model should answer?"}
 global:
   model_catalog:
     deployments:
       hosted-d3:
         provider: systemone
+        schema: vllm-sr/5.0
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: HOSTED_D3_TEST_KEY}
         timeout_ms: 3000
       gateway-d3:
         provider: systemone
+        schema: vllm-sr/5.0
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vLLM-SR-d3-27B
-        question_types: [choice, noul, score]
+        capabilities: {question_types: [choice, noul, score]}
         auth: {header: Ocp-Apim-Subscription-Key, prefix: "", api_key_file: /run/secrets/gateway-key}
     system:
       decision_model: {deployment: hosted-d3}
@@ -71,12 +74,12 @@ func TestSystemOneDeploymentsAnswerDecisionQuestions(t *testing.T) {
 		t.Fatal("both deployments are systemone and hosted-d3 is the decision model")
 	}
 	want := map[string]string{"support_team": "gateway-d3", "needs_tools": "hosted-d3"}
-	for _, rule := range cfg.DecisionRules {
-		if got := cfg.DecisionQuestionDeployment(rule); got != want[rule.Name] {
+	for _, rule := range cfg.SystemOneRules {
+		if got := cfg.SystemOneRuleDeployment(rule); got != want[rule.Name] {
 			t.Fatalf("rule %s asks %q, want %q", rule.Name, got, want[rule.Name])
 		}
 	}
-	if got := cfg.DecisionSelectorDeployment(*cfg.Decisions[1].Algorithm.Decision); got != "hosted-d3" {
+	if got := cfg.SystemOneSelectorDeployment(*cfg.Decisions[1].Algorithm.SystemOne); got != "hosted-d3" {
 		t.Fatalf("selector asks %q", got)
 	}
 	gateway := cfg.ModelDeployments["gateway-d3"]
@@ -117,15 +120,15 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 	for name, tc := range map[string]struct{ old, replacement, want string }{
 		"an engine argument": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        max_num_seqs: 4\n",
-			"a systemone deployment takes endpoint, model, auth, timeout_ms and question_types",
+			"a systemone deployment takes a connection block",
 		},
 		"a device": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        device: cpu\n",
-			"a systemone deployment takes endpoint",
+			"a systemone deployment takes a connection block",
 		},
 		"replicas": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        replicas: [{device: cpu}]\n",
-			"a systemone deployment takes endpoint",
+			"a systemone deployment takes a connection block",
 		},
 		"an input budget": {
 			"        timeout_ms: 3000\n", "        timeout_ms: 3000\n        input: {max_tokens: 512, overflow: window}\n",
@@ -160,8 +163,8 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 			"auth.prefix must be one word",
 		},
 		"an unknown question type": {
-			"question_types: [choice, noul, score]", "question_types: [choice, box]",
-			`question_types lists "box"`,
+			"question_types: [choice, noul, score]", "question_types: [choice, rank]",
+			`capabilities.question_types lists "rank"`,
 		},
 		"a timeout past the decision limit": {
 			"timeout_ms: 3000", "timeout_ms: 90000",
@@ -169,11 +172,11 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 		},
 		"systemone fields on a model_runtime deployment": {
 			"    system:\n", "      local-d3: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu, timeout_ms: 100}\n    system:\n",
-			"model, auth, timeout_ms and question_types apply only to systemone deployments",
+			"apply to an attached endpoint, not to a worker the Router starts",
 		},
-		"a task binding": {
-			"    system:\n", "    bindings:\n      domain_classifier: {deployment: hosted-d3, contract: label_distribution.v1, adapter: vela}\n    system:\n",
-			"a systemone deployment answers decision signals and selectors only",
+		"the default embedding deployment": {
+			"    system:\n", "    embeddings:\n      default: {deployment: hosted-d3}\n    system:\n",
+			"embeddings need a model_runtime or openai_embeddings deployment",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

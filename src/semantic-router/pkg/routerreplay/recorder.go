@@ -45,6 +45,7 @@ type (
 	LearningPolicyDiagnostics     = store.LearningPolicyDiagnostics
 	LearningProtectionDiagnostics = store.LearningProtectionDiagnostics
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
+	LearningReleaseDiagnostics    = store.LearningReleaseDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
 	PreparedDispatchReceipt       = store.PreparedDispatchReceipt
@@ -55,7 +56,6 @@ type (
 	LooperAttempt                 = store.LooperAttempt
 	LooperDiagnostics             = store.LooperDiagnostics
 	RouteDiagnostics              = store.RouteDiagnostics
-	TopicContinuityRecord         = store.TopicContinuityRecord
 	DecisionRanking               = store.DecisionRanking
 	RoutingRecord                 = store.Record
 	ToolTrace                     = store.ToolTrace
@@ -123,9 +123,9 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 	}
 }
 
-// SetMaxToolTraceBytes sets the per-field byte limit for structured tool-trace
-// fields (Prompt, ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
-// A value of 0 disables truncation for those fields.
+// SetMaxToolTraceBytes sets the per-field byte limit for structured text
+// (Prompt, ToolDefinitions, and each ToolTraceStep's Text, Arguments and
+// Output). A value of 0 disables truncation for those fields.
 func (r *Recorder) SetMaxToolTraceBytes(max int) {
 	r.policyMu.Lock()
 	defer r.policyMu.Unlock()
@@ -194,6 +194,7 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 		rec.RequestBody, rec.RequestBodyTruncated, policy.captureRequestBody, policy.maxBodyBytes)
 	rec.ResponseBody, rec.ResponseBodyTruncated = applyBodyCapturePolicy(
 		rec.ResponseBody, rec.ResponseBodyTruncated, policy.captureResponseBody, policy.maxBodyBytes)
+	omitUncapturedText(&rec, policy)
 
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
@@ -220,8 +221,8 @@ func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
 	truncateToolTraceSteps(rec.ToolTrace, max)
 }
 
-// truncateToolTraceSteps applies the byte limit to each step's Arguments and
-// Output fields.
+// truncateToolTraceSteps applies the byte limit to each step's Text,
+// Arguments and Output fields.
 func truncateToolTraceSteps(trace *ToolTrace, max int) {
 	if trace == nil {
 		return
@@ -254,18 +255,20 @@ func capToolTraceStepCount(trace *ToolTrace, max int) {
 	trace.DroppedStepCount += dropped
 }
 
-// truncateToolTraceStep applies the byte limit to a single step's Arguments
-// and Output fields. RawArguments and RawOutput are intentionally preserved at
-// their original full-fidelity values so that downstream consumers that need
-// to replay the exchange byte-for-byte can still recover the untruncated
-// payload (see #1781). Only the "normalized" Arguments/Output fields are cut,
+// truncateToolTraceStep applies the byte limit to a single step's Text,
+// Arguments and Output fields. RawArguments and RawOutput are intentionally
+// preserved at their original full-fidelity values so that downstream
+// consumers that need to replay the exchange byte-for-byte can still recover
+// the untruncated payload (see #1781). Only the "normalized" fields are cut,
 // and Truncated is set to signal that truncation happened.
 func truncateToolTraceStep(step *ToolTraceStep, max int) {
+	text, t0 := truncateString(step.Text, max)
 	args, t1 := truncateString(step.Arguments, max)
 	out, t2 := truncateString(step.Output, max)
+	step.Text = text
 	step.Arguments = args
 	step.Output = out
-	if t1 || t2 {
+	if t0 || t1 || t2 {
 		step.Truncated = true
 	}
 }
@@ -353,6 +356,9 @@ func (r *Recorder) AttachRequest(id string, requestBody []byte) error {
 // the same byte limit AddRecord applies to it.
 func (r *Recorder) AttachPrompt(id string, prompt string) error {
 	policy := r.policySnapshot()
+	if !policy.captureRequestBody {
+		return nil
+	}
 	prompt, truncated := truncateString(prompt, policy.maxToolTraceBytes)
 	ctx, cancel := r.replayOperationContext()
 	defer cancel()
@@ -378,6 +384,7 @@ func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
 // AppendOutcomeContext lets background dispatchers cancel outstanding receipt
 // I/O at shutdown. The recorder's operation timeout still bounds each write.
 func (r *Recorder) AppendOutcomeContext(parent context.Context, id string, outcome Outcome) error {
+	outcome = omitUncapturedReplies(outcome, r.policySnapshot())
 	ctx, cancel := r.replayOperationContextFrom(parent)
 	defer cancel()
 	return r.storage.AppendOutcome(ctx, id, outcome)
@@ -385,6 +392,7 @@ func (r *Recorder) AppendOutcomeContext(parent context.Context, id string, outco
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
 func (r *Recorder) UpdateHallucinationStatus(id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan, score ...HallucinationScore) error {
+	spans, spanDetails = omitUncapturedSpans(spans, spanDetails, r.policySnapshot())
 	ctx, cancel := r.replayOperationContext()
 	defer cancel()
 	return r.storage.UpdateHallucinationStatus(ctx, id, detected, confidence, spans, spanDetails, score...)
@@ -404,6 +412,7 @@ func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
 	// reasoning applies to MaxToolTraceSteps — a long agent session updates
 	// the trace through this method, so without a cap here the OOM scenario
 	// from #1835 can still happen even when AddRecord truncates correctly.
+	omitUncapturedStepText(&trace, policy)
 	truncateToolTraceSteps(&trace, policy.maxToolTraceBytes)
 	capToolTraceStepCount(&trace, policy.maxToolTraceSteps)
 	ctx, cancel := r.replayOperationContext()
@@ -500,21 +509,17 @@ func truncateString(s string, maxBytes int) (string, bool) {
 func logSignalFields(signals Signal) map[string]interface{} {
 	return map[string]interface{}{
 		"keyword":       signals.Keyword,
-		"embedding":     signals.Embedding,
 		"domain":        signals.Domain,
 		"fact_check":    signals.FactCheck,
 		"user_feedback": signals.UserFeedback,
-		"reask":         signals.Reask,
-		"preference":    signals.Preference,
+		"turn_relation": signals.TurnRelation,
 		"language":      signals.Language,
 		"context":       signals.Context,
-		"structure":     signals.Structure,
 		"complexity":    signals.Complexity,
 		"modality":      signals.Modality,
 		"authz":         signals.Authz,
 		"jailbreak":     signals.Jailbreak,
 		"pii":           signals.PII,
-		"kb":            signals.KB,
 		"conversation":  signals.Conversation,
 	}
 }
@@ -536,16 +541,6 @@ func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
 			fields["jailbreak_decision"] = r.JailbreakDecision
 		} else if r.JailbreakScoreAvailable {
 			fields["jailbreak_confidence"] = r.JailbreakConfidence
-		}
-	}
-	if r.ResponseJailbreakDetected {
-		fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
-		fields["response_jailbreak_type"] = r.ResponseJailbreakType
-		fields["response_jailbreak_score_available"] = r.ResponseJailbreakScoreAvailable
-		if r.ResponseJailbreakDecision != nil {
-			fields["response_jailbreak_decision"] = r.ResponseJailbreakDecision
-		} else if r.ResponseJailbreakScoreAvailable {
-			fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
 		}
 	}
 	if r.PIIDetected {

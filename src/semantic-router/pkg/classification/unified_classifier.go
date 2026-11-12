@@ -9,15 +9,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
-// UnifiedClassifier classifies a batch of texts for intent, PII and security
-// with one recipe's prepared bindings. Every input's three tasks run in
-// parallel inside one request bundle, so a batch reaches each runtime process
-// as one call.
+// UnifiedClassifier classifies a batch of texts for intent (the domain
+// preset, asked of the deployment the recipe's domains rules resolve to), PII
+// and security with one recipe's prepared bindings. Every input's three tasks
+// run in parallel inside one request bundle, so a batch reaches each runtime
+// process as one call.
 type UnifiedClassifier struct {
 	lifecycle  sync.RWMutex
 	closed     bool
@@ -39,6 +41,7 @@ type UnifiedClassifierStats struct {
 
 // UnifiedBatchResults contains results from all classification tasks.
 type UnifiedBatchResults struct {
+	taskErrors      []error
 	ItemErrors      []error          `json:"-"`
 	IntentResults   []IntentResult   `json:"intent_results"`
 	PIIResults      []PIIResult      `json:"pii_results"`
@@ -63,17 +66,16 @@ type PIIResult struct {
 
 // SecurityResult represents security threat detection result.
 type SecurityResult struct {
-	ScoresAvailable *bool                `json:"scores_available,omitempty"`
-	Decision        *tasks.LabelDecision `json:"decision,omitempty"`
-	ThreatType      string               `json:"threat_type"`
-	Confidence      float32              `json:"confidence"`
-	IsJailbreak     bool                 `json:"is_jailbreak"`
+	ScoresAvailable *bool   `json:"scores_available,omitempty"`
+	ThreatType      string  `json:"threat_type"`
+	Confidence      float32 `json:"confidence"`
+	IsJailbreak     bool    `json:"is_jailbreak"`
 }
 
 // NewUnifiedClassifierFromRecipe borrows a recipe classifier that serves all
-// three tasks; it returns nil when one of them is not configured.
+// three tasks through the decision model; it returns nil without a classifier.
 func NewUnifiedClassifierFromRecipe(classifier *Classifier) *UnifiedClassifier {
-	if classifier == nil || classifier.Config == nil || classifier.categoryInference == nil || classifier.piiInference == nil || classifier.jailbreakInference == nil || !classifier.IsCategoryEnabled() || !classifier.IsPIIEnabled() || !classifier.IsJailbreakEnabled() {
+	if classifier == nil || classifier.Config == nil {
 		return nil
 	}
 	return &UnifiedClassifier{classifier: classifier}
@@ -87,13 +89,13 @@ func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults
 // ClassifyBatchContext returns an independent inference for every input. The
 // caller's generation lease owns the borrowed recipe classifier.
 func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []string) (*UnifiedBatchResults, error) {
-	results, err := uc.ClassifyBatchPartialContext(ctx, texts)
+	results, err := uc.classifyBatchTasks(ctx, texts, "all", true)
 	if err != nil {
 		return nil, err
 	}
-	for _, itemErr := range results.ItemErrors {
-		if itemErr != nil {
-			return nil, itemErr
+	for _, taskErr := range results.taskErrors {
+		if taskErr != nil {
+			return nil, taskErr
 		}
 	}
 	return results, nil
@@ -102,6 +104,19 @@ func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []s
 // ClassifyBatchPartialContext preserves one ordered outcome per input. A failed
 // item does not discard successful siblings; setup failures remain batch errors.
 func (uc *UnifiedClassifier) ClassifyBatchPartialContext(ctx context.Context, texts []string) (*UnifiedBatchResults, error) {
+	return uc.ClassifyBatchPartialTaskContext(ctx, texts, "all")
+}
+
+// ClassifyBatchPartialTaskContext returns errors for the requested task for each
+// item; an unrelated unavailable task must not erase a successful result.
+func (uc *UnifiedClassifier) ClassifyBatchPartialTaskContext(ctx context.Context, texts []string, selected string) (*UnifiedBatchResults, error) {
+	return uc.classifyBatchTasks(ctx, texts, selected, false)
+}
+
+func (uc *UnifiedClassifier) classifyBatchTasks(ctx context.Context, texts []string, selected string, legacy bool) (*UnifiedBatchResults, error) {
+	if selected != "all" && selected != "intent" && selected != "pii" && selected != "security" {
+		return nil, binding.ErrInvalidInput
+	}
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("empty text batch")
 	}
@@ -119,13 +134,15 @@ func (uc *UnifiedClassifier) ClassifyBatchPartialContext(ctx context.Context, te
 	defer leave()
 	results := &UnifiedBatchResults{BatchSize: len(texts), IntentResults: make([]IntentResult, len(texts)), PIIResults: make([]PIIResult, len(texts)), SecurityResults: make([]SecurityResult, len(texts))}
 	errs := make([]error, len(texts)*3)
+	// Preserve the legacy question set: a joint model may change an answer
+	// when its other questions are omitted from a fused request.
 	modelservice.Fan(ctx, len(errs), func(task int) {
 		index := task / 3
-		if err := ctx.Err(); err != nil {
+		if err := ctx.Err(); !legacy && err != nil {
 			errs[task] = err
 			return
 		}
-		if strings.TrimSpace(texts[index]) == "" {
+		if !legacy && strings.TrimSpace(texts[index]) == "" {
 			errs[task] = binding.ErrInvalidInput
 			return
 		}
@@ -138,57 +155,86 @@ func (uc *UnifiedClassifier) ClassifyBatchPartialContext(ctx context.Context, te
 			results.SecurityResults[index], errs[task] = uc.security(ctx, texts[index])
 		}
 	})
+	results.taskErrors = errs
 	results.ItemErrors = make([]error, len(texts))
 	for index := range texts {
-		results.ItemErrors[index] = errors.Join(errs[index*3 : index*3+3]...)
+		switch selected {
+		case "intent":
+			results.ItemErrors[index] = errs[index*3]
+		case "pii":
+			results.ItemErrors[index] = errs[index*3+1]
+		case "security":
+			results.ItemErrors[index] = errs[index*3+2]
+		default:
+			results.ItemErrors[index] = errors.Join(errs[index*3 : index*3+3]...)
+		}
+	}
+	if legacy {
+		for _, taskErr := range errs {
+			if taskErr != nil {
+				return results, nil
+			}
+		}
 	}
 	uc.updateStats(len(texts), time.Since(started))
 	return results, nil
 }
 
 func (uc *UnifiedClassifier) intent(ctx context.Context, text string) (IntentResult, error) {
-	c := uc.classifier
-	intent, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
+	answer, err := uc.classifier.AskPreset(ctx, config.SignalTypeDomain, presets.Domain, text)
 	if err != nil {
 		return IntentResult{}, err
 	}
-	label, ok := c.CategoryMapping.GetCategoryFromIndex(intent.Class)
-	if !ok {
-		return IntentResult{}, fmt.Errorf("unknown intent label index %d", intent.Class)
+	domain, _ := presets.Lookup(presets.Domain, presets.StageRequest)
+	probabilities := make([]float32, len(domain.Options))
+	for index, option := range domain.Options {
+		probabilities[index] = float32(answer.Probabilities[option.Key])
 	}
-	return IntentResult{Category: label, Confidence: intent.Confidence, Probabilities: append([]float32(nil), intent.Probabilities...)}, nil
+	return IntentResult{Category: answer.Choice, Confidence: float32(answer.Probabilities[answer.Choice]), Probabilities: probabilities}, nil
 }
 
+// pii reports the personal data the pii preset finds in text at its
+// calibrated threshold.
 func (uc *UnifiedClassifier) pii(ctx context.Context, text string) (PIIResult, error) {
-	detections, err := uc.classifier.ClassifyPIIWithDetails(ctx, text)
+	answer, err := uc.classifier.AskPreset(ctx, config.SignalTypePII, presets.PII, text)
 	if err != nil {
 		return PIIResult{}, err
 	}
+	threshold := uc.classifier.Config.PresetThreshold(config.SignalTypePII, presets.PII)
 	types := map[string]bool{}
 	score := float32(0)
-	for _, detection := range detections {
-		types[detection.EntityType] = true
-		score = max(score, detection.Confidence)
+	for _, span := range answer.Spans {
+		if span.Probability >= threshold {
+			types[span.Label] = true
+			score = max(score, float32(span.Probability))
+		}
 	}
 	detected := make([]string, 0, len(types))
 	for label := range types {
 		detected = append(detected, label)
 	}
 	sort.Strings(detected)
-	scored := len(detections) > 0
+	scored := true
 	return PIIResult{HasPII: len(detected) > 0, PIITypes: detected, Confidence: score, ScoresAvailable: &scored}, nil
 }
 
+// security reports whether the jailbreak preset finds an attack in text at
+// its calibrated threshold.
 func (uc *UnifiedClassifier) security(ctx context.Context, text string) (SecurityResult, error) {
-	c := uc.classifier
-	verdict, err := c.CheckForJailbreakVerdict(ctx, text, c.Config.PromptGuard.Threshold)
+	answer, err := uc.classifier.AskPreset(ctx, config.SignalTypeJailbreak, presets.Jailbreak, text)
 	if err != nil {
 		return SecurityResult{}, err
 	}
-	available := verdict.Confidence != nil
-	result := SecurityResult{IsJailbreak: verdict.Detected, ThreatType: verdict.Label, Decision: verdict.Decision, ScoresAvailable: &available}
-	if available {
-		result.Confidence = *verdict.Confidence
+	canonical, _ := presets.Lookup(presets.Jailbreak, presets.StageRequest)
+	probability := answer.Probabilities[canonical.Positive[0]]
+	scored := true
+	result := SecurityResult{
+		IsJailbreak:     probability >= uc.classifier.Config.PresetThreshold(config.SignalTypeJailbreak, presets.Jailbreak),
+		Confidence:      float32(probability),
+		ScoresAvailable: &scored,
+	}
+	if result.IsJailbreak {
+		result.ThreatType = canonical.Positive[0]
 	}
 	return result, nil
 }

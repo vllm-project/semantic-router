@@ -41,7 +41,7 @@ func (s *ClassificationService) ClassifyBatchUnifiedContext(ctx context.Context,
 	}
 
 	start := time.Now()
-	results, err := s.unifiedClassifier.ClassifyBatchPartialContext(ctx, texts)
+	results, err := s.unifiedClassifier.ClassifyBatchContext(ctx, texts)
 	if err != nil {
 		return nil, fmt.Errorf("unified batch classification failed: %w", err)
 	}

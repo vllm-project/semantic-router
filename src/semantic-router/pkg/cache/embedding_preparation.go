@@ -21,7 +21,7 @@ func ValidateBackendEmbedding(ctx context.Context, backend LegacyCacheBackend) e
 	switch c := backend.(type) {
 	case *InMemoryCache:
 		provider = c.embeddingProvider
-		dimension = semanticCacheEmbeddingDimension(inMemoryEmbeddingOptions(c.embeddingModel).Dimension, provider)
+		dimension = semanticCacheEmbeddingDimension(c.embeddingView.Dimension, provider)
 	case *RedisCache:
 		provider = c.embeddingProvider
 		dimension = c.embeddingDimension()

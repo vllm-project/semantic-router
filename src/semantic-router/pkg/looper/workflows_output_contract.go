@@ -44,26 +44,20 @@ func applyJSONActionOutputContract(spec *config.OutputContractSpec, resp *ModelR
 	}
 }
 
+// applyReferenceSelectionOutputContract serves the content of the reference
+// the answer selects. A reference without content leaves the answer as it is:
+// reasoning is never published as an answer.
 func applyReferenceSelectionOutputContract(spec *config.OutputContractSpec, resp *ModelResponse, candidates []*ModelResponse) {
-	if resp == nil || !requestsReferenceSelection(spec) || !shouldDereferenceReferenceSelection(spec) {
+	if resp == nil || resp.HasToolCalls || !requestsReferenceSelection(spec) || !shouldDereferenceReferenceSelection(spec) {
 		return
 	}
 	index, ok := extractReferenceSelectionIndexFromResponse(resp, spec)
-	if !ok || index < 1 || index > len(candidates) {
+	if !ok || index < 1 || index > len(candidates) || candidates[index-1] == nil {
 		return
 	}
-	candidate := candidates[index-1]
-	if candidate == nil {
-		return
+	if content := strings.TrimSpace(candidates[index-1].Content); content != "" {
+		replaceModelResponseContent(resp, content)
 	}
-	content := strings.TrimSpace(candidate.Content)
-	if content == "" {
-		content = strings.TrimSpace(candidate.ReasoningContent)
-	}
-	if content == "" {
-		return
-	}
-	replaceModelResponseContent(resp, content)
 }
 
 func extractJSONActionFromSource(resp *ModelResponse, candidates []*ModelResponse, source string, spec *config.OutputContractSpec) (string, bool) {
@@ -290,6 +284,15 @@ func writeJSONActionField(builder *strings.Builder, key string, value interface{
 	builder.WriteByte(':')
 	builder.Write(valueBytes)
 	return nil
+}
+
+// applyWorkflowOutputContract shapes a workflow's final answer by the
+// decision's output contract, on a first turn and on a resumed one alike.
+func applyWorkflowOutputContract(spec *config.OutputContractSpec, resp *ModelResponse, stepResults []workflowStepResult) {
+	applyJSONActionOutputContract(spec, resp, workflowStepModelResponses(stepResults))
+	applyFinalOutputContract(spec, resp)
+	applyWorkflowSingleChoiceFallback(spec, resp, stepResults)
+	applyFinalOutputContract(spec, resp)
 }
 
 func applyWorkflowSingleChoiceFallback(spec *config.OutputContractSpec, resp *ModelResponse, stepResults []workflowStepResult) {

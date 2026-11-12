@@ -126,6 +126,22 @@ class CommunityLabelSyncConcurrencyTests(unittest.TestCase):
         self.assertFalse(pr_concurrency["cancel-in-progress"])
         self.assertFalse(sweep_concurrency["cancel-in-progress"])
 
+    def test_acceptance_backfill_runs_one_sweep_at_a_time_off_events(self) -> None:
+        job = self.data["jobs"]["issue-acceptance-sweep"]
+
+        self.assertEqual(
+            job["concurrency"],
+            {
+                "group": "community-label-sync-acceptance-sweep",
+                "cancel-in-progress": False,
+            },
+        )
+        self.assertIn("github.event_name == 'schedule'", job["if"])
+        self.assertIn("github.event_name == 'workflow_dispatch'", job["if"])
+        self.assertNotIn("workflow_run", job["if"])
+        self.assertNotIn("check_suite", job["if"])
+        self.assertIn("accept-issues", job["steps"][-1]["run"])
+
 
 class CommunityValidationTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -181,6 +197,14 @@ class CommunityValidationTests(unittest.TestCase):
         self.assertIn(
             "github.event.issue.number", jobs["title-format"]["concurrency"]["group"]
         )
+
+    def test_accept_comments_reconcile_one_issue_not_the_repository(self) -> None:
+        job = self.data["jobs"]["issue-acceptance"]
+        commands = " ".join(step.get("run", "") for step in job["steps"])
+
+        self.assertIn("github.event.comment.body == '/accept'", job["if"])
+        self.assertIn("community_lifecycle.py accept-issue ", commands)
+        self.assertNotIn("accept-issues", commands)
 
     def test_review_events_keep_the_trusted_label_sync_bridge(self) -> None:
         events = self.data.get("on", self.data.get(True))

@@ -90,7 +90,7 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 // should be evaluated regardless of whether they are used in decisions
 func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.IntentRequest
-	expected := r.Header.Get(headers.SRBenchExpectedConfigHash)
+	expected := r.Header.Get(headers.VSRBenchExpectedConfigHash)
 	if expected != "" && !headers.ValidConfigHash(expected) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CONFIG_HASH", "expected config hash must be a lowercase SHA-256 digest")
 		return
@@ -184,7 +184,7 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 	}
 	if err != nil {
 		metrics.RecordBatchClassificationError("unified", "classification_failed")
-		s.writeErrorResponse(w, http.StatusInternalServerError, "UNIFIED_CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
@@ -378,7 +378,6 @@ func newBatchSecurityResult(r classification.SecurityResult) *BatchSecurityResul
 		ThreatType:      r.ThreatType,
 		Confidence:      batchConfidence(r.ScoresAvailable, r.Confidence),
 		ScoresAvailable: r.ScoresAvailable,
-		Decision:        r.Decision,
 	}
 }
 

@@ -12,9 +12,16 @@ import torch
 from vllm_srun.config import EngineArgs
 from vllm_srun.errors import PackageError
 from vllm_srun.families.decision3.family import BATCH_SIZE
+from vllm_srun.families.vela3_d3.family import Vela3D3Family
 from vllm_srun.families.vela3_d3.gates import Gates
 from vllm_srun.families.vela3_d3.model import adapter_of
-from vllm_srun.plugins.base import AdapterGate, ForwardBatch, Job
+from vllm_srun.plugins.base import (
+    AdapterGate,
+    ForwardBatch,
+    Job,
+    PackageRef,
+    RegistryOptions,
+)
 from vllm_srun.scheduler.batching import Batcher, SharedContext
 from vllm_srun.testing import vela3_d3 as fixture
 
@@ -274,5 +281,6 @@ def test_a_state_once_base_needs_noncausal_replays(written, tmp_path) -> None:
     path.write_text(json.dumps(config))
     fixture.write_sums(root)
     base = written.parent / f"{written.name}-base"
+    family = Vela3D3Family(RegistryOptions(base_path=base))
     with pytest.raises(PackageError, match=r"decisions\.attention 'noncausal'"):
-        start_runtime(root, base_path=str(base))
+        family.verify(PackageRef(root))

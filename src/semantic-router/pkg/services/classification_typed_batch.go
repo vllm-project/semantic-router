@@ -81,6 +81,9 @@ func (s *ClassificationService) ClassifyInputsContext(ctx context.Context, input
 	selector := s.routingInputSelectorSnapshot()
 	for index, input := range inputs {
 		request, itemErr := input.intentRequest(options)
+		if itemErr == nil && task == "intent" && classifier == nil {
+			itemErr = ErrClassifierUnavailable
+		}
 		if itemErr == nil && input.Type == "image" {
 			if task != "intent" {
 				itemErr = binding.ErrCapability
@@ -89,9 +92,6 @@ func (s *ClassificationService) ClassifyInputsContext(ctx context.Context, input
 			}
 		}
 		if itemErr == nil && task != "intent" && (s.unifiedClassifier == nil || !s.unifiedClassifier.IsInitialized()) {
-			itemErr = ErrClassifierUnavailable
-		}
-		if itemErr == nil && task == "intent" && classifier == nil {
 			itemErr = ErrClassifierUnavailable
 		}
 		if itemErr == nil && task == "intent" {
@@ -107,7 +107,7 @@ func (s *ClassificationService) ClassifyInputsContext(ctx context.Context, input
 			if response.Results[index].Error != nil {
 				return
 			}
-			result, itemErr := s.classifyResolvedIntent(ctx, requests[index], resolved[index], classifier, runtimeConfig)
+			result, itemErr := s.classifyResolvedIntent(ctx, requests[index], resolved[index], classifier, runtimeConfig, inputs[index].Type == "image")
 			if itemErr == nil {
 				itemErr = result.inferenceError
 			}
@@ -128,7 +128,7 @@ func (s *ClassificationService) ClassifyInputsContext(ctx context.Context, input
 			}
 		}
 		if len(texts) > 0 {
-			results, batchErr := s.unifiedClassifier.ClassifyBatchPartialContext(ctx, texts)
+			results, batchErr := s.unifiedClassifier.ClassifyBatchPartialTaskContext(ctx, texts, task)
 			for offset, index := range indexes {
 				itemErr := batchErr
 				if itemErr == nil {

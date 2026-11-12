@@ -46,7 +46,7 @@ The Router rebuilds only what a change reaches:
 - In standalone mode the Router binds its listeners at startup. Adding or
   removing a listener, or changing a listener's `address`, `port`, `timeout` or
   `tls`, is rejected with `restart_required`; restart the Router to apply it.
-  Listener `api_keys` change without a restart.
+  A listener's `api_keys`, `apis` and `identity` change without a restart.
 
 ## Change a local stack
 
@@ -105,6 +105,7 @@ known, and a `message`.
 | `restart_required` | The change needs a restart, such as a standalone listener's new address or port. |
 | `unsupported` | The change needs a feature the gateway mode lacks; the message names the `--gateway` mode that has it. |
 | `artifact_unavailable` | A model artifact the change needs is not available. |
+| `storage_unavailable` | The Router cannot write a local directory the change uses; the `path` names its setting. See [Files on the Router's disk](storage-overview#router-local-files). |
 | `model_unavailable` | A model the change needs could not be prepared. |
 | `build_failed` | The routing pipeline or the upstream layer could not be built. |
 | `warmup_failed` | A component failed to warm up. |

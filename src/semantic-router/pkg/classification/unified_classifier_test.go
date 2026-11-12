@@ -3,12 +3,13 @@ package classification
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
@@ -44,41 +45,31 @@ func TestUnifiedClassifierRejectsEmptyAndClosedBatches(t *testing.T) {
 	}
 }
 
-type partialBatchCategory struct{ failed string }
+type partialBatchDecider struct{ failed string }
 
-func (p partialBatchCategory) Classify(ctx context.Context, text string) (tasks.ClassResult, error) {
-	result, err := p.ClassifyWithProbabilities(ctx, text)
-	return tasks.ClassResult{Class: result.Class, Confidence: result.Confidence}, err
-}
-
-func (p partialBatchCategory) ClassifyWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error) {
+func (p partialBatchDecider) Decide(ctx context.Context, _ string, request modelservice.Request) (modelservice.Response, error) {
 	if !modelservice.InBundle(ctx) {
-		return tasks.ClassResultWithProbs{}, errors.New("missing batch bundle")
+		return modelservice.Response{}, errors.New("missing batch bundle")
 	}
 	select {
-	case <-time.After(time.Duration(3-len(text)) * 5 * time.Millisecond):
+	case <-time.After(time.Duration(3-len(request.State)) * 5 * time.Millisecond):
 	case <-ctx.Done():
-		return tasks.ClassResultWithProbs{}, ctx.Err()
+		return modelservice.Response{}, ctx.Err()
 	}
-	if text == p.failed {
-		return tasks.ClassResultWithProbs{}, errors.New("individual failure")
+	if request.State == p.failed {
+		return modelservice.Response{}, errors.New("individual failure")
 	}
-	return tasks.ClassResultWithProbs{Class: len(text) - 1, Confidence: 1, Probabilities: []float32{1, 0, 0}}, nil
+	answers := make(map[string]modelservice.Answer)
+	for _, question := range request.Questions {
+		answers[question.ID] = modelservice.Answer{Type: "choice", Choice: request.State, Probabilities: map[string]float64{request.State: 1, "benign": 1, "jailbreak": 0}, InputCoverage: "complete"}
+	}
+	return modelservice.Response{Answers: answers}, nil
 }
 
 func partialBatchClassifier(failed string) *UnifiedClassifier {
-	cfg := &config.RouterConfig{}
-	cfg.PIIModel.ModelID = "prepared-pii"
-	cfg.PromptGuard.Enabled = true
-	cfg.PromptGuard.ModelID = "prepared-guard"
-	cfg.PromptGuard.Threshold = .5
-	return &UnifiedClassifier{classifier: &Classifier{
-		Config: cfg, categoryInference: partialBatchCategory{failed: failed}, piiInference: &MockPIIInference{},
-		jailbreakInference: &MockJailbreakInference{MockJailbreakInferenceResponse: MockJailbreakInferenceResponse{classifyResult: SequenceClassificationResult{Probabilities: []float32{.99, .01}}}},
-		CategoryMapping:    &CategoryMapping{IdxToCategory: map[string]string{"0": "a", "1": "bb", "2": "ccc"}},
-		PIIMapping:         &PIIMapping{LabelToIdx: map[string]int{"O": 0}, IdxToLabel: map[string]string{"0": "O"}},
-		JailbreakMapping:   &JailbreakMapping{LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1}, IdxToLabel: map[string]string{"0": "benign", "1": "jailbreak"}},
-	}}
+	classifier := &Classifier{Config: &config.RouterConfig{}}
+	classifier.SetDecisionDecider(partialBatchDecider{failed: failed})
+	return &UnifiedClassifier{classifier: classifier}
 }
 
 func TestUnifiedPartialBatchPreservesFirstMiddleLastFailures(t *testing.T) {
@@ -124,6 +115,116 @@ func TestUnifiedPartialBatchRejectsBlankAndCanceledItems(t *testing.T) {
 	for index, itemErr := range result.ItemErrors {
 		if !errors.Is(itemErr, context.Canceled) {
 			t.Fatalf("item %d: %v", index, itemErr)
+		}
+	}
+}
+
+type selectiveBatchDecider struct {
+	mu    sync.Mutex
+	asked []string
+}
+
+func (d *selectiveBatchDecider) Decide(_ context.Context, _ string, request modelservice.Request) (modelservice.Response, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	answers := make(map[string]modelservice.Answer)
+	for _, question := range request.Questions {
+		d.asked = append(d.asked, question.ID)
+		if question.ID == "preset:domain" {
+			return modelservice.Response{}, errors.New("domain unavailable")
+		}
+		answers[question.ID] = modelservice.Answer{Type: "span", InputCoverage: "complete"}
+	}
+	return modelservice.Response{Answers: answers}, nil
+}
+
+func TestUnifiedPartialBatchSelectedTaskKeepsLegacyQuestionsAndIgnoresOtherErrors(t *testing.T) {
+	d := &selectiveBatchDecider{}
+	classifier := &Classifier{Config: &config.RouterConfig{}}
+	classifier.SetDecisionDecider(d)
+	unified := &UnifiedClassifier{classifier: classifier}
+	result, err := unified.ClassifyBatchPartialTaskContext(context.Background(), []string{"one", "two"}, "pii")
+	if err != nil || result.ItemErrors[0] != nil || result.ItemErrors[1] != nil {
+		t.Fatalf("PII results lost to another task: %+v %v", result, err)
+	}
+	counts := make(map[string]int)
+	for _, id := range d.asked {
+		counts[id]++
+	}
+	for _, id := range []string{"preset:domain", "preset:pii", "preset:jailbreak"} {
+		if counts[id] != 2 {
+			t.Fatalf("legacy question set not asked once per item: %v", counts)
+		}
+	}
+	if len(d.asked) != 6 {
+		t.Fatalf("unexpected logical questions: %v", d.asked)
+	}
+}
+
+type taskErrorDecider struct{}
+
+func (taskErrorDecider) Decide(_ context.Context, _ string, req modelservice.Request) (modelservice.Response, error) {
+	if len(req.Questions) == 0 {
+		return modelservice.Response{}, errors.New("missing question")
+	}
+	switch req.Questions[0].ID {
+	case "preset:domain":
+		return modelservice.Response{}, admission.ErrQueueFull
+	case "preset:pii":
+		return modelservice.Response{}, binding.ErrInputLimit
+	default:
+		return modelservice.Response{}, modelservice.ErrUnavailable
+	}
+}
+
+func TestUnifiedLegacyBatchKeepsFirstTaskErrorOrder(t *testing.T) {
+	classifier := &Classifier{Config: &config.RouterConfig{}}
+	classifier.SetDecisionDecider(taskErrorDecider{})
+	unified := &UnifiedClassifier{classifier: classifier}
+	_, err := unified.ClassifyBatchContext(context.Background(), []string{"text"})
+	if !errors.Is(err, admission.ErrQueueFull) || errors.Is(err, binding.ErrInputLimit) {
+		t.Fatalf("legacy task-order error changed: %v", err)
+	}
+	if unified.stats.TotalBatches != 0 || unified.stats.TotalTexts != 0 {
+		t.Fatalf("failed legacy batch changed statistics: %+v", unified.stats)
+	}
+	partial, err := unified.ClassifyBatchPartialContext(context.Background(), []string{"text"})
+	if err != nil || !errors.Is(partial.ItemErrors[0], admission.ErrQueueFull) || !errors.Is(partial.ItemErrors[0], binding.ErrInputLimit) {
+		t.Fatalf("typed partial item lost failures: %+v %v", partial, err)
+	}
+	for _, tc := range []struct {
+		task string
+		want error
+	}{
+		{"pii", binding.ErrInputLimit},
+		{"security", modelservice.ErrUnavailable},
+	} {
+		selected, err := unified.ClassifyBatchPartialTaskContext(context.Background(), []string{"text"}, tc.task)
+		if err != nil || !errors.Is(selected.ItemErrors[0], tc.want) || errors.Is(selected.ItemErrors[0], admission.ErrQueueFull) {
+			t.Fatalf("%s reported unrelated task errors: %+v %v", tc.task, selected, err)
+		}
+	}
+}
+
+type failedExchangeDecider struct{}
+
+func (failedExchangeDecider) Decide(context.Context, string, modelservice.Request) (modelservice.Response, error) {
+	return modelservice.Response{}, modelservice.ErrUnavailable
+}
+
+func TestUnifiedPartialBatchSelectedTaskReportsSharedExchangeFailure(t *testing.T) {
+	classifier := &Classifier{Config: &config.RouterConfig{}}
+	classifier.SetDecisionDecider(failedExchangeDecider{})
+	unified := &UnifiedClassifier{classifier: classifier}
+	for _, selected := range []string{"pii", "security", "all"} {
+		result, err := unified.ClassifyBatchPartialTaskContext(context.Background(), []string{"one", "two"}, selected)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, itemErr := range result.ItemErrors {
+			if !errors.Is(itemErr, modelservice.ErrUnavailable) {
+				t.Fatalf("%s item %d: %v", selected, i, itemErr)
+			}
 		}
 	}
 }

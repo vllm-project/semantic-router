@@ -39,7 +39,7 @@ it:
 POST /api/v1/config/validate
 Content-Type: application/json
 
-{"yaml":"version: v0.3\n..."}
+{"yaml":"version: v0.5\n..."}
 ```
 
 Successful responses include `valid: true` and the normalized canonical YAML.
@@ -64,19 +64,17 @@ global:
 `max_batch_size` bounds `texts` per `/api/v1/diagnostics/classify/batch` request. Larger
 batches return `400 INVALID_INPUT`.
 
-`routing_preview` applies to `POST /api/v1/routing/preview`. Its inference
-deadline starts after the request body is decoded and defaults to 120 seconds.
-Set `request_timeout_seconds` between 1 and 3600 using measured inference times
-for the intended input lengths and deployment hardware. This setting can be
-updated through config hot reload;
-other HTTP routes keep their existing timeouts.
+`routing_preview` applies to `POST /api/v1/routing/preview`:
+
+| Setting | Meaning | Default | Change |
+| --- | --- | --- | --- |
+| `request_timeout_seconds` | The inference deadline, from when the request body is decoded; 1 to 3600. Set it from measured inference times for your input lengths and hardware. | 120 | Hot reload |
+| `max_concurrency` | A positive worker limit with no wait queue: when every slot is busy, new previews return `429 OVERLOADED`. | 16 | Restart; hot reload rejects it |
 
 A deadline returns `504 REQUEST_TIMEOUT` and cancels the preview's model calls:
 the model runtime skips work it has not started and finishes a pass already
-running. The preview's admission slot is free again once those calls return.
-`max_concurrency` is a positive worker limit, defaults to 16, and has no wait
-queue: when all slots are occupied, new previews return `429 OVERLOADED`.
-Changing this limit requires a deployment restart; hot reload rejects the change.
+running. The admission slot frees once those calls return. Other HTTP routes
+keep their own timeouts.
 
 The response writer has five additional seconds to send the result or timeout
 response. Dashboard Topology uses the configured Preview budget plus this
@@ -84,6 +82,44 @@ allowance and propagates client cancellation. Recipe probes retain their own
 `evaluation.request_timeout_seconds` caller budget in `probes.yaml`; configure
 it for the intended run, and allow at least five extra seconds in external HTTP
 clients or proxies when they need to receive the Router's timeout response.
+
+### Authz
+
+```yaml
+global:
+  services:
+    authz:
+      fail_open: false
+      identity:
+        user_id_header: x-authz-user-id
+        user_groups_header: x-authz-user-groups
+      providers:
+        - type: header-injection
+        - type: static-config
+      delegated_credential:
+        enabled: false
+        header: x-vsr-delegated-credential
+```
+
+`identity` names the headers an authenticating gateway sets for the user and
+their groups. `providers` is the credential chain for upstream provider keys,
+and the first match wins:
+
+- `header-injection` reads the per-user keys an ext_authz service injected.
+- `static-config` falls back to the `api_key` of the selected backend.
+
+`fail_open: true` lets a request through with no key at all.
+
+`delegated_credential` names the header in which a deployment authenticator
+attaches the credential it issued the requesting user:
+
+- **Only delegated upstreams receive it.** An upstream whose auth is
+  `credential: delegated` (a `backend_refs` entry or a deployment) gets it
+  under its own auth header, and only on a call made for that request.
+- **A request without it** is answered `401` before the call.
+
+See
+[Security Hardening](../../installation/security-hardening#delegate-the-users-credential-to-an-upstream).
 
 ### Response API
 
@@ -103,6 +139,8 @@ The `store_backend` field controls where response and conversation history is pe
 |---------|-----------|----------|
 | `redis` | Survives router restart, shared across replicas | Production (default) |
 | `memory` | Lost on router restart | Local development only |
+
+The `redis` store needs `redis.address` (or `cluster_addresses` in cluster mode). When the store cannot start, the router still starts, logs `response_api_store_init_failed`, and answers every `/v1/responses` request with 503 and code `response_store_unavailable`. Set `enabled: false` to serve no Responses API at all, which answers 404.
 
 ### Observability
 
@@ -144,11 +182,10 @@ Common Prometheus metric families:
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | Router Memory | `llm_memory_retrieval_total` (`backend`, `status`), `llm_memory_retrieval_latency_seconds`, `llm_memory_retrieval_results`, `llm_memory_store_operations_total`, `llm_memory_cache_hits_total`, `llm_memory_cache_misses_total`, `llm_memory_extraction_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
-| Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total` |
+| Translation and request-parameter policy | `llm_translation_lossy_total` (by `reason`, with any count in it written as `N`), `sr_request_params_blocked_total` |
 | Signals | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
 | Configuration lifecycle | `llm_config_updates_total` (`source`, `result`, `stage`), `llm_config_update_duration_seconds`, `llm_config_active_version`, `llm_config_active_info` (`version`, `hash`), `llm_config_last_rejection_timestamp_seconds` |
-| Complexity verdicts | `llm_complexity_verdict_total` (by `rule`, `verdict`, `source`), `llm_complexity_evaluation_failures_total` |
-| Remote classifier backends | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
+| Remote model calls | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
 | Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` (stages `signals`, `decision`, `algorithm`, `prompt_compression`), `llm_prompt_compression_total` (by `recipe` and `outcome`: `compressed`, `skipped_disabled`, `skipped_min_length`, `skipped_max_tokens`) |
 | Routing input | `llm_routing_input_removed_total` (by `kind`: `skipped_message`, `stripped_block`), from [`global.router.routing_input`](../signal/overview#choose-the-user-text-signals-read) |
 | Streamed request body | `llm_streamed_body_arrival_seconds`, `llm_streamed_body_bytes`, `llm_streamed_body_chunks` (by `recipe`; STREAMED and FULL_DUPLEX_STREAMED modes only) |
@@ -162,75 +199,100 @@ such as a Looper template's algorithm and respond steps; a step that holds
 others counts their time too. `template` names the graph (`looper.fusion`, for
 example) and `node_type` the step's registered type.
 
-`llm_request_outcomes_total{traffic_kind="inference"}` counts public inference
-requests once at their terminal boundary. Authenticated internal looper requests
-use `inference_internal`; catalog, response-object and health operations have
-separate traffic kinds. Outcomes distinguish success, client/server errors,
-cancellation, timeout, incomplete responses and other failures. A backend
-selection or an error event is not another completed public request.
+`llm_request_outcomes_total{traffic_kind="inference"}` counts each public
+inference request once, at its terminal boundary:
 
-The model latency names describe their actual observations:
-`llm_model_first_response_observation_seconds` measures the first stream chunk
-or non-streaming response headers, while
-`llm_model_response_duration_per_output_token_seconds` divides complete response
-time by reported output tokens. These are not first-token latency or decode-only
-inter-token latency. The optional windowed metrics summarize at most 10,000
-observed completed responses per model; they do not estimate utilization, queue
-depth or provider error rates.
+- **Traffic kinds.** Authenticated internal looper requests use
+  `inference_internal`; catalog, response-object and health operations have
+  their own kinds.
+- **Outcomes** distinguish success, client and server errors, cancellation,
+  timeout, incomplete responses and other failures.
+- **One request, one count.** A backend selection or an error event is not
+  another completed public request.
 
-The `semantic_router.request` span covers the complete ExtProc request, including
-streamed responses and cancellation. Its bounded `traffic.kind` and route
-separate inference from catalog or health polling without storing URL queries or
-resource IDs. Signal evaluation, decision evaluation, algorithm selection,
-plugins, and the actual upstream request are child stages. Resolved
-`routing.entrypoint`, `routing.recipe`, `decision.name`, and `routing.algorithm`
-identify the routing boundary where available. A `routing.backend.resolved`
-event records selection evidence; the upstream span measures provider duration.
-If a local response guard blocks an upstream HTTP 200, the upstream span retains
-200 while the root records the final client response status.
+The model latency names describe what they observe:
+
+| Metric | Measures |
+| --- | --- |
+| `llm_model_first_response_observation_seconds` | The first stream chunk, or a non-streaming response's headers, of successful responses only |
+| `llm_model_response_duration_per_output_token_seconds` | Complete response time divided by reported output tokens |
+
+Neither is first-token latency or decode-only inter-token latency. The
+optional windowed metrics summarize at most 10,000 completed responses per
+model; they don't estimate utilization, queue depth or provider error rates.
+
+The `semantic_router.request` span covers the complete ExtProc request,
+streamed responses and cancellation included:
+
+- **Bounded labels.** Its `traffic.kind` and route separate inference from
+  catalog or health polling, without storing URL queries or resource IDs.
+- **Child stages:** signal evaluation, decision evaluation, algorithm
+  selection, plugins, and the actual upstream request.
+- **Routing attributes.** `routing.entrypoint`, `routing.recipe`,
+  `decision.name` and `routing.algorithm` identify the routing boundary where
+  available.
+- **Selection and duration.** A `routing.backend.resolved` event records
+  selection evidence; the upstream span measures provider duration.
+- **Status.** If a local response guard blocks an upstream HTTP 200, the
+  upstream span keeps 200 while the root records the final client status.
 
 The upstream span also carries OpenTelemetry GenAI attributes, so GenAI-aware
-trace backends can show each provider call: `gen_ai.operation.name` (`chat`),
-`gen_ai.provider.name`, `gen_ai.request.model` (the provider model ID sent
-upstream), and the provider-reported `gen_ai.usage.input_tokens` and
-`gen_ai.usage.output_tokens`. Buffered responses also set
-`gen_ai.response.model`; streamed responses do not yet. Usage the provider did
-not report is left unset rather than estimated, and `model.name` keeps the
-Router's logical model name. The GenAI conventions are still in Development
-status upstream, so their attribute names can change.
+trace backends can show each provider call:
 
-Signal evidence events contain finite reported values and confidence separately,
-including real zero values; missing evidence remains absent. Projection events
-contain evaluated scores and configured names. Aggregate signal evaluation does
-not invent a confidence score. Traces exclude raw prompts, signal errors and
-retrieval exception text. Earlier traces cannot be enriched retroactively.
+| Attribute | Value |
+| --- | --- |
+| `gen_ai.operation.name` | `chat` |
+| `gen_ai.provider.name` | The provider |
+| `gen_ai.request.model` | The provider model ID sent upstream |
+| `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens` | As the provider reports them; unset, never estimated, when it doesn't |
+| `gen_ai.response.model` | Buffered responses only |
+
+`model.name` keeps the Router's logical model name. The GenAI conventions are
+still in Development status upstream, so their attribute names can change.
+
+- **Signal evidence events** carry finite reported values and confidence
+  separately, real zeros included; missing evidence stays absent, and aggregate
+  signal evaluation never invents a confidence score.
+- **Projection events** carry evaluated scores and configured names.
+- **Never in traces:** raw prompts, signal errors and retrieval exception
+  text. Earlier traces cannot be enriched after the fact.
 
 The local `vllm-sr serve` stack provisions the **vLLM Semantic Router**
-in Grafana. Its main groups cover public inference outcomes, recipe workflow,
-backend usage, plugins and response cache, and telemetry health. Additional
-accounting and MoM panels distinguish reported model usage from supported looper
-attempt evidence. Recipe stage duration is an observed mean; projection counts
-show evaluations, with individual scores available in Insights. Model timing
-panels use observed means rather than clipped long-call histogram quantiles.
-Prometheus scrapes both the Router and Jaeger's internal admin metrics. An absent
-series means no measurement, not zero traffic or a healthy collector. Export
-success counts completed SDK exporter batches; it does not prove every request
-was sampled or retained.
+dashboard in Grafana:
 
-Local Jaeger uses the pinned all-in-one image with non-root Badger storage and a
-stack-specific `<jaeger-container-name>-data` named volume mounted at `/tmp`.
-Trace retention is seven days. Grafana keeps its database and preferences in
-`<grafana-container-name>-data` at `/var/lib/grafana`, retaining the image's
-non-root user. Prometheus retains its local TSDB for 15 days. Container replacement
-preserves these stores; deleting a telemetry store starts a new history. Keep
-telemetry reset operations separate from benchmark, authentication, learning and
-configuration stores.
+- **Main groups:** public inference outcomes, recipe workflow, backend usage,
+  plugins and response cache, and telemetry health.
+- **Accounting and MoM panels** separate reported model usage from supported
+  looper attempt evidence.
+- **Means, not quantiles.** Recipe stage duration and the model timing panels
+  are observed means; projection counts show evaluations, with individual
+  scores in Insights.
+- **Sources.** Prometheus scrapes both the Router and Jaeger's internal admin
+  metrics.
 
-Changing an older in-memory Jaeger instance to Badger does not migrate its
-memory. Sampling remains controlled by Router configuration, and a search limit
-is not a count of all retained traces. For multi-node trace storage, configure an
-external collector/storage deployment instead of sharing this single-node
-Badger volume. See the [Jaeger 1.76 storage documentation](https://www.jaegertracing.io/docs/1.76/deployment/#badger---local-storage).
+:::note
+An absent series means no measurement, not zero traffic or a healthy
+collector. Export success counts completed SDK exporter batches; it does not
+prove that every request was sampled or retained.
+:::
+
+Local telemetry storage:
+
+| Store | Where | Retention |
+| --- | --- | --- |
+| Jaeger | The pinned all-in-one image, non-root Badger storage in the `<jaeger-container-name>-data` volume at `/tmp` | 7 days |
+| Grafana | Database and preferences in `<grafana-container-name>-data` at `/var/lib/grafana`, as the image's non-root user | — |
+| Prometheus | Its local TSDB | 15 days |
+
+- Replacing a container keeps these stores; deleting one starts a new history.
+  Keep telemetry resets separate from benchmark, authentication, learning and
+  configuration stores.
+- Moving an older in-memory Jaeger to Badger doesn't migrate its memory.
+- Sampling stays controlled by the Router configuration, and a search limit is
+  not a count of all retained traces.
+- For multi-node trace storage, configure an external collector and storage
+  instead of sharing this single-node Badger volume; see the
+  [Jaeger 1.76 storage documentation](https://www.jaegertracing.io/docs/1.76/deployment/#badger---local-storage).
 
 Looper metric labels are restricted to bounded algorithm, stage, status,
 reason, token-type, and currency values. Request IDs, trace IDs, ordinals,
@@ -307,13 +369,36 @@ or stripping the header on trust grounds. Background on the AI Gateway
 interop pattern that motivates this gate lives in
 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808).
 
+### Debug Headers
+
+`global.router.headers.debug` decides who may turn on the debug response
+header, `x-vsr-trace`, with `x-vsr-debug: true`. The trace names the signal and
+guard rules a request matched, so access is off by default:
+
+| Value | Honors `x-vsr-debug` from |
+| --- | --- |
+| `none` (default) | No client |
+| `any` | Every client; for development and tests |
+| `authenticated` | Only the users and groups in `debug_principals`, as the identity headers your authenticator sets assert them |
+
+```yaml
+global:
+  router:
+    headers:
+      debug: authenticated
+      debug_principals:
+        groups: [platform-sre]
+```
+
+See [VSR routing headers](../../api/headers#the-trace) for
+what the trace carries.
+
 ### Router Replay
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres     # explicit durable, SQL-queryable audit storage
       async_writes: true
       postgres:
@@ -322,13 +407,20 @@ global:
         database: vsr
         user: router
         password: ${ROUTER_REPLAY_POSTGRES_PASSWORD}
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
-Router replay is disabled by default. Set `global.services.router_replay.enabled`
-to enable it router-wide; when it is on, a decision captures replay unless that
-decision adds a route-local `router_replay` plugin with `enabled: false`. A
-decision may also opt in explicitly. If no durable backend is configured, the
-default in-memory store is process-local and is lost on restart.
+Router replay is disabled by default:
+
+- **Router-wide.** A `router_replay` plugin in `global.plugins` turns it on.
+- **Per recipe or decision.** A recipe's or decision's `router_replay` plugin
+  overrides it: `enabled: false` turns capture off there, and `enabled: true`
+  opts in when the default is off.
+- **Storage.** Without a durable backend, the default in-memory store is
+  process-local and lost on restart.
 
 The `store_backend` field controls where routing-decision replay records are persisted. Available backends:
 

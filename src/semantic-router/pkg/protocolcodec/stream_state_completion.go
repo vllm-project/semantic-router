@@ -186,9 +186,19 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 		arguments = []byte(event.ToolCall.Arguments)
 	}
 	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
+		if !isTruncatedJSONObject(arguments, state.policy.Limits.JSONDepth) {
+			return nil, nonObjectToolArgumentsError()
+		}
+		// The output limit can cut a call mid-arguments, and Anthropic and OpenAI
+		// then send the partial call with a max_tokens or length stop. Its stop
+		// reason arrives after the item ends, so the terminal event decides.
+		state.cutToolArguments = true
 	}
 	return arguments, nil
+}
+
+func nonObjectToolArgumentsError() error {
+	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
 }
 
 func (state *streamState) markItemComplete(itemIndex int) {
@@ -254,6 +264,9 @@ func (state *streamState) applyTerminalEvent(event llmprotocol.Event) (llmprotoc
 func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmprotocol.Event, error) {
 	if err := state.validateCompletedLifecycle(event); err != nil {
 		return llmprotocol.Event{}, err
+	}
+	if state.cutToolArguments && state.stop != llmprotocol.StopMaxTokens {
+		return llmprotocol.Event{}, nonObjectToolArgumentsError()
 	}
 	event, err := validateCompletedStopReason(event)
 	if err != nil {
@@ -339,6 +352,25 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 	if current.State == llmprotocol.UsageAvailable && update.State == llmprotocol.UsageUnavailable {
 		return llmprotocol.Usage{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "usage_evidence_decreased", "upstream streaming usage evidence became unavailable", nil)
 	}
+	if sameInputTotal(current, update) {
+		// vLLM's Messages stream counts the whole prompt as uncached input in
+		// message_start and splits it into cache reads and writes in
+		// message_delta. The total is unchanged, so the later split replaces
+		// the earlier one instead of reading as a decrease. Only the buckets
+		// the update reports are replaced: Anthropic repeats the split in
+		// message_delta without the cache-write TTL tiers.
+		for _, bucket := range []struct{ current, update *llmprotocol.TokenCount }{
+			{&current.InputUncached, &update.InputUncached},
+			{&current.InputCacheRead, &update.InputCacheRead},
+			{&current.InputCacheWrite, &update.InputCacheWrite},
+			{&current.InputCacheWrite5m, &update.InputCacheWrite5m},
+			{&current.InputCacheWrite1h, &update.InputCacheWrite1h},
+		} {
+			if bucket.update.Value != nil {
+				*bucket.current = *bucket.update
+			}
+		}
+	}
 	currentCounts := usageCounts(current)
 	updateCounts := usageCounts(update)
 	merged := make([]llmprotocol.TokenCount, len(currentCounts))
@@ -367,6 +399,11 @@ func mergeMonotonicUsage(current, update llmprotocol.Usage) (llmprotocol.Usage, 
 		return llmprotocol.Usage{}, err
 	}
 	return result, nil
+}
+
+func sameInputTotal(current, update llmprotocol.Usage) bool {
+	return current.InputTotal.Value != nil && update.InputTotal.Value != nil &&
+		update.InputUncached.Value != nil && *current.InputTotal.Value == *update.InputTotal.Value
 }
 
 // refreshInputTotal re-derives the input total from its buckets after an

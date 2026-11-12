@@ -33,21 +33,25 @@ and route-local plugins.
 
 ## Configuration
 
-Each entrypoint lists one or more aliases and the named recipe they select:
+Each entrypoint lists one or more aliases and the recipe they select. With
+several recipes, exactly one chat entrypoint is marked `default: true`; its
+recipe is the default recipe:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names:
       - vllm-sr/mom-v1-flash
       - company/fast
     recipe: flash
-
 recipes:
+  - name: default
   - name: flash
     description: Low-latency routing for interactive requests.
-    routing:
-      strategy: priority
-      decisions: []
+    strategy: priority
+    decisions: []
 ```
 
 Both aliases select the same recipe. A client uses either name like any other
@@ -70,18 +74,20 @@ backend, the Router rewrites the request to that backend's model name.
 | Requested model | Router behavior |
 | --- | --- |
 | An `entrypoints[].model_names` value | Evaluate only the mapped recipe. |
-| `vllm-sr/auto`, when no entrypoint explicitly targets `default` | Evaluate the `default` recipe from top-level `routing`. |
+| `vllm-sr/auto`, in a document with one recipe and no entrypoint for it | Evaluate that recipe. |
 | An explicitly declared ReMoM, Fusion, or Flow entrypoint | Evaluate its recipe; the matched decision selects the looper algorithm. |
-| A concrete provider model or LoRA name | Send directly to that backend without recipe routing. |
+| A concrete provider model or LoRA name | Send directly to that backend without recipe routing. A LoRA name that more than one model declares is refused with `model_not_found`; a decision selects it through `model` and `lora_name`. |
 
-Entrypoints are listed by `/v1/models` with routing metadata. Successful routed
+Entrypoints are listed by `/v1/models` with routing metadata. With
+`global.router.list_backend_models: true` the list also names, sorted, every
+model and LoRA name a direct request is served for. Successful routed
 responses expose `x-vsr-selected-recipe`; Router Replay and Insights can also
 filter records by recipe.
 
-To rename the default entrypoint, declare `recipe: default` with your desired
-`model_names`. This replaces the built-in `vllm-sr/auto` name, so include that
-name explicitly if existing clients still need it. Bare `auto` and looper
-names have no implicit behavior.
+To rename the default entrypoint, give the entrypoint marked `default: true`
+your desired `model_names`. This replaces the built-in `vllm-sr/auto` name, so
+include that name explicitly if existing clients still need it. Bare `auto` and
+looper names have no implicit behavior.
 
 For example, to publish both the namespaced default and an older client's
 `auto` name:
@@ -90,6 +96,7 @@ For example, to publish both the namespaced default and an older client's
 entrypoints:
   - model_names: [vllm-sr/auto, auto]
     recipe: default
+    default: true
 ```
 
 ## Naming and validation rules
@@ -97,6 +104,8 @@ entrypoints:
 Configuration loading rejects an entrypoint when:
 
 - `model_names` is empty or `recipe` names no configured recipe;
+- several recipes are declared and not exactly one chat entrypoint is marked
+  `default: true`;
 - the same virtual name is claimed by more than one entrypoint; or
 - a virtual name collides with a provider model, LoRA, or another effective
   entrypoint, including the built-in default name.
