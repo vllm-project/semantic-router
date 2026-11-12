@@ -7,8 +7,10 @@ parameter count and a device memory floor of about twice what a GPU holds
 once the model is loaded (1.42 GiB and 0.64 GiB on an MI325X); references live in
 ``registry/golden_answers_vela3_pico.json``. The repositories are public; the
 pins are the revisions the parity record measured
-(``docs/records/vela31-pico-parity.md``). The bundled Python, the int8 ONNX
-encoder and ``SHA256SUMS`` are not pinned: the family never reads them.
+(``docs/records/vela31-pico-parity.md``). The bundled Python and the int8
+ONNX encoder are not pinned: the family never reads them. ``SHA256SUMS`` is not
+pinned either; a pinned model is verified against the pins, and the family
+reads that file only when the package has one (required when nothing is pinned).
 """
 
 from __future__ import annotations
