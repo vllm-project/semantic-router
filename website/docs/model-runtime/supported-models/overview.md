@@ -82,6 +82,8 @@ rest. A model without spans can still be the decision model: bind `pii` and
 | [vela3-mini](./vela-3/vela3-mini) | 4.79B | choice, noul, score, span | router | text, image, video | 16 GiB |
 | [vela3-flash](./vela-3/vela3-flash) | 8.83B | choice, noul, score, span | router | text, image, video | 32 GiB |
 | [vela3-turbo](./vela-3/vela3-turbo) | 27.6B | choice, noul, score, span | router | text, image, video | 72 GiB |
+| [vela3.1-pico-150m](./vela-3/vela3-1-pico-150m) | 0.153B | choice, noul, span | router | text | 2 GiB |
+| [vela3.1-pico-380m](./vela-3/vela3-1-pico-380m) | 0.381B | choice, noul, span | router | text | 3 GiB |
 
 ### Vela 2.0
 

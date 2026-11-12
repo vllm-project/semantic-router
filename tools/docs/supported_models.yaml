@@ -21,6 +21,9 @@ families:
   vela3_d3:
     dir: vela-3
     label: Vela 3.0
+  vela3_pico:
+    dir: vela-3
+    label: Vela 3.1
   vela2:
     dir: vela-2
     label: Vela 2.0
@@ -197,6 +200,20 @@ models:
       d3-turbo's state-once path, then asks the router questions again with
       their adapters on.
     records: [vela3-d3-parity.md, state-once.md]
+  vllm-sr/vela3.1-pico-380m:
+    page: vela3-1-pico-380m
+    summary: >-
+      A small Vela 3.1 model: one 380M encoder answers the built-in routing
+      questions and the PII and hallucination spans, a whole call in one pass
+      when it fits 8,192 tokens. Opt-in; it has no calibrated thresholds yet.
+    records: [vela31-pico-parity.md]
+  vllm-sr/vela3.1-pico-150m:
+    page: vela3-1-pico-150m
+    summary: >-
+      The smallest Vela 3.1 model, a 150M encoder for small CPU hosts, with
+      the same questions and spans as vela3.1-pico-380m. Opt-in; it has no
+      calibrated thresholds yet.
+    records: [vela31-pico-parity.md]
 
   vllm-sr/Vela-2.0-0.3B:
     page: vela-2-0-3b
