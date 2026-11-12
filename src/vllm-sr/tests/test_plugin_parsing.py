@@ -10,6 +10,7 @@ from cli.models import (
     FastResponsePluginConfig,
     PluginConfig,
     PluginType,
+    RequestParamsPluginConfig,
     RouterReplayPluginConfig,
     ContextPluginConfig,
     ContextSource,
@@ -279,6 +280,21 @@ class TestToolsPluginConfig:
             ToolsPluginConfig.model_validate(
                 {"enabled": True, "policy": {"mode": "future_mode"}}
             )
+
+
+class TestRequestParamsPluginConfig:
+    """Test the request_params plugin schema."""
+
+    def test_stream_cannot_be_blocked(self):
+        with pytest.raises(
+            PydanticValidationError, match="blocked_params cannot include stream"
+        ):
+            RequestParamsPluginConfig.model_validate(
+                {"blocked_params": ["logprobs", " stream "]}
+            )
+        assert RequestParamsPluginConfig.model_validate(
+            {"blocked_params": ["logprobs"]}
+        ).blocked_params == ["logprobs"]
 
 
 class TestPluginConfigurationValidation:

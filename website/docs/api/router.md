@@ -35,8 +35,12 @@ system-message item before the stored input items. Item IDs, `first_id`, and
 `last_id` remain stable across repeated reads of an unchanged stored response.
 
 Engine mode serves the native System One paths with recipe routing disabled.
-Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
-allowlist does not grant native access. Both APIs use the listener's API keys.
+A listener serves the native API when it lists `systemone` in `apis`
+(`listeners[].apis.systemone`, optionally with `models`); the LLM APIs'
+`models` do not grant native access. All APIs use the listener's API keys, and
+`apis.systemone.schema` sets the System One schema the listener speaks
+(`vllm-sr/5.0` by default, or `vllm-sr/4.0`); see
+[System One schemas](../system-one/use/schemas.md).
 See the [model runtime quickstart](../model-runtime/get-started/quickstart.md) for a request.
 
 The System One paths read bodies compressed with one layer of gzip or zstd
@@ -55,7 +59,7 @@ for assets, Box, track and long context.
 ### Route a System One request
 
 In Router mode, publish an `entrypoints` item with `api: systemone` and grant
-its name in `listeners[].systemone.models`. The Chat default `vllm-sr/auto`
+its name in `listeners[].apis.systemone.models`. The Chat default `vllm-sr/auto`
 does not automatically publish a native entrypoint. Follow the
 [System One escalate guide](../tutorials/algorithm/looper/escalate.md#on-system-one) to connect
 local deployments or remote Engine and compatible System One services.
@@ -108,9 +112,16 @@ The `quality` field names the configured acceptance method; it is not an
 accuracy score. Native discovery marks recipe entrypoints with `routing: true`
 and concrete models with `routing: false`.
 
-Malformed or unsupported auto questions return `400`. If no complete answer
-passes the declared acceptance rule, the request returns `503` with
-`systemone_unresolved`. Exhausting the shared physical-call limit returns
+Malformed or unsupported auto questions return `400` with `invalid_request`,
+and a message saying what auto cannot route. A request that no candidate model
+can answer returns `400` with `unsupported_capability`: for example, a `box`
+question when no model of the decision answers box questions or reads images.
+Its message names what is missing and each candidate, with what it lacks and
+where that came from (its card, its backend's listing, or what its deployment
+declares); see
+[Route by what each model answers](../tutorials/algorithm/looper/escalate.md#route-by-what-each-model-answers).
+If no complete answer passes the declared acceptance rule, the request returns
+`503` with `systemone_unresolved`. Exhausting the shared physical-call limit returns
 `503`; exhausting its deadline returns `504`. Both budget errors use
 `systemone_budget_exhausted` and include the reason and `model_calls` count.
 A model whose auth is `credential: delegated` answers `401`
@@ -133,8 +144,10 @@ Auto execution exports `sr_systemone_stage_total` and
 `sr_systemone_stage_duration_seconds` by configured algorithm, stage and model,
 plus `sr_systemone_auto_requests_total` and
 `sr_systemone_auto_duration_seconds`. These distinguish accepted, rejected,
-invalid and failed attempts; they measure serving behavior, not label-based
-evaluation quality. The auto duration covers the algorithm; preceding recipe
+invalid and failed attempts, and stages skipped because their model cannot
+answer the request (`outcome="incapable"`, also the request outcome when no
+candidate can). They measure serving behavior, not label-based evaluation
+quality. The auto duration covers the algorithm; preceding recipe
 signals are outside that metric.
 
 Other `/v1/*` paths fail closed. In particular, `/v1/files`,
@@ -170,7 +183,7 @@ them. The options are `deadline_ms` (a number greater than 0),
 `return_meta` (`true` or `false`); `null` sets none. Any other option, or a value of another type, returns `400` with
 `invalid_request` and a message that names it. A request the Router sends to
 its model directly waits 30 seconds for the answer, or its `deadline_ms` when
-that is longer, up to the listener's `systemone.max_deadline_ms` (600000, 10
+that is longer, up to the listener's `apis.systemone.max_deadline_ms` (600000, 10
 minutes, by default); a `long_context` request without `deadline_ms` waits
 that whole limit. `options.profile` was removed in
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request
@@ -264,6 +277,12 @@ these fields through routing and request edits:
 prompt. Reuse a salt for requests that may share cached prefixes. The Router
 also preserves `chat_template_kwargs`, such as `enable_thinking`. These
 extensions are rejected when the target protocol cannot represent them.
+
+`logit_bias`, which maps token IDs to a bias from -100 to 100, reaches Chat
+backends the same way and is rejected for Responses and Messages backends. A
+vLLM backend that runs speculative decoding rejects `min_p` and `logit_bias`;
+[list them in the model's `unsupported_capabilities`](../installation/protocol-compatibility#sampling-controls-a-backend-rejects)
+to send that model requests without them.
 
 ### Responses API
 
@@ -534,7 +553,8 @@ lists eligible models independently of their scores; an unrecorded score appears
 as `—`, while a recorded zero remains zero. Missing identity or evidence
 is displayed explicitly. Replay capture uses `global.services.router_replay`
 defaults and the selected decision's `router_replay` plugin overrides. Rejected
-requests without a selected decision use the global defaults.
+requests without a selected decision use the global defaults layered with their
+recipe's own plugins.
 `capture_personal_data: false` retains routing evidence but suppresses content
 when personal data is detected or PII evidence is unavailable.
 
@@ -545,6 +565,22 @@ the result text in `output` with `content_redacted: false`, cut to
 tool message carries it as `content` with `content_truncated`. Otherwise the
 step keeps only its call ID and `status`. Without `replay.detail`, outputs,
 request bodies and trajectory content are returned redacted either way.
+
+`capture_request_body: false` leaves request text out of the whole record: the
+body, `prompt`, `tool_definitions`, and the text, arguments and results of each
+request step in `tool_trace`. `capture_response_body: false` does the same for
+the response body, the response steps, `hallucination_spans`, and the provider
+replies in a fallback outcome's `execution_record`, where each failed attempt
+keeps its status code and a fixed reason. Those steps keep their type, tool
+name, call ID and status. The left-out text is absent, not marked
+`content_redacted`, which keeps marking content hidden from the reader's role
+and tool results that `capture_tool_results` keeps out. `max_tool_trace_bytes`
+cuts step text too, and a trajectory's user and assistant messages then carry
+`content_truncated`.
+
+Every Replay read route applies the same redaction. Without `replay.detail`,
+trajectory `routes` return `selection_reasoning` and `session_reason` empty,
+as the record's `route_diagnostics` do.
 
 ### Configured-rate cost estimates
 

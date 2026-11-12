@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -110,7 +111,7 @@ func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol
 }
 
 // EncodeRequest renders a neutral request as a DALL-E images request. The
-// prompt is taken from the last user text block; size comes from the hosted
+// prompt is the text of the last user message; size comes from the hosted
 // image-generation options with a 1024x1024 default. Every other neutral
 // option that the images dialect cannot express fails closed instead of being
 // silently dropped, and the provider model plus b64_json response format are
@@ -351,23 +352,24 @@ func (imagesStreamUnsupportedEncoder) Finalize(error) ([][]byte, llmprotocol.Dia
 	return nil, nil, fmt.Errorf("images wire does not support streaming")
 }
 
-// lastUserRequestText returns the last non-empty text block of the last user
-// message, which is the prompt to render for image generation. Content in
-// assistant or tool roles never becomes the prompt, so multi-message
-// conversations cannot steer the image request.
+// lastUserRequestText returns the non-empty text blocks of the last user
+// message joined by spaces, as routing reads them, which is the prompt to
+// render for image generation. Content in assistant or tool roles never
+// becomes the prompt, so multi-message conversations cannot steer the image
+// request.
 func lastUserRequestText(request llmprotocol.Request) (string, bool) {
 	for index := len(request.Messages) - 1; index >= 0; index-- {
 		message := request.Messages[index]
 		if message.Role != llmprotocol.RoleUser {
 			continue
 		}
-		for block := len(message.Content) - 1; block >= 0; block-- {
-			content := message.Content[block]
+		var parts []string
+		for _, content := range message.Content {
 			if content.Kind == llmprotocol.ContentText && content.Text != "" {
-				return content.Text, true
+				parts = append(parts, content.Text)
 			}
 		}
-		return "", false
+		return strings.Join(parts, " "), len(parts) > 0
 	}
 	return "", false
 }

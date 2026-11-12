@@ -64,8 +64,9 @@ func (row matchFeature) validateRecall(path string, recall MatchRecall) error {
 
 // validateMatchJudge checks a judge: its question, the deployment that
 // answers it, which must answer its type, its keep rules and its cap. A
-// choice judge reads at most 255 candidates, the options one question takes;
-// more are truncated, so no recall bound is refused.
+// choice judge reads at most 255 candidates, the options one question takes,
+// and a judge asked about each candidate at most 4096, the states one model
+// runtime bundle carries; more are truncated, so no recall bound is refused.
 func validateMatchJudge(cfg *RouterConfig, path string, judge MatchJudge) error {
 	switch {
 	case judge.Preset != "" && judge.Question != nil:
@@ -86,10 +87,14 @@ func validateMatchJudge(cfg *RouterConfig, path string, judge MatchJudge) error 
 	if err := validateDeclaredQuestionType(cfg, cfg.MatchJudgeDeployment(judge), judge.QuestionType()); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	if judge.MaxCandidates < 0 || (judge.Chooses() && judge.MaxCandidates > presets.MaxChoices) {
-		if judge.Chooses() {
-			return fmt.Errorf("%s.max_candidates must be within [1, %d]: a choice judge's candidates are the options of one question", path, presets.MaxChoices)
-		}
+	limit, why := MaxMatchJudgeCandidates, "a judge asked about each candidate sends them in one model runtime bundle, 64 tasks of 64 states"
+	if judge.Chooses() {
+		limit, why = presets.MaxChoices, "a choice judge's candidates are the options of one question"
+	}
+	if judge.MaxCandidates > limit {
+		return fmt.Errorf("%s.max_candidates must be within [1, %d]: %s", path, limit, why)
+	}
+	if judge.MaxCandidates < 0 {
 		return fmt.Errorf("%s.max_candidates must be at least 1 when set", path)
 	}
 	if judge.TopK < 0 {

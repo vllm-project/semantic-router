@@ -140,7 +140,7 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
       key: 'capture_tool_results',
       label: 'Capture Tool Results',
       type: 'boolean',
-      description: 'Store client tool-result text; requires personal data capture',
+      description: 'Store client tool-result text; requires request body and personal data capture',
     },
     { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
     {

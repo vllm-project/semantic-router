@@ -196,13 +196,15 @@ func TestReplayRuntimeUsesGlobalMemoryCapacity(t *testing.T) {
 }
 
 func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
-	for _, capture := range []bool{false, true} {
-		name := "omit"
-		if capture {
-			name = "allow"
-		}
-		t.Run(name, func(t *testing.T) {
-			cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": capture}))
+	for _, test := range []struct {
+		name               string
+		personal, response bool
+	}{{"omit", false, true}, {"allow", true, true}, {"response body off", true, false}} {
+		capture := test.personal && test.response
+		t.Run(test.name, func(t *testing.T) {
+			cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{
+				"enabled": true, "capture_personal_data": test.personal, "capture_response_body": test.response,
+			}))
 			router := replayRuntimeRouter(t, cfg)
 			ctx := replayPolicyRequest(t)
 			ctx.VSRSelectedDecision = &config.Decision{Name: "ordinary", Plugins: cfg.DefaultPlugins}
@@ -214,7 +216,7 @@ func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
 				Spans:   map[string][]modelservice.Span{key: {{Label: "unsupported", Text: "private@example.invalid", Probability: 0.9}}},
 			}
 			ctx.ResponseGuard = &responseGuardRun{conditions: observedConditions{observed: observed}}
-			router.updateRouterReplayHallucinationStatus(ctx, router.ReplayRecorder)
+			router.updateRouterReplayHallucinationStatus(ctx, router.responseGuardReplayRecorder(ctx))
 			record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 			if !found || !record.HallucinationDetected || !record.HallucinationScoreAvailable || record.HallucinationConfidence != 0.9 {
 				t.Fatal("the hallucination verdict or score metadata was lost")
@@ -300,5 +302,40 @@ func TestReplayCleanPromptDoesNotAuthorizeResponseToolsOrDifferentInput(t *testi
 		if record.RequestBody != "" || record.ResponseBody != "" || record.ToolTrace != nil || record.ToolDefinitions != "" {
 			t.Fatal("request evidence certified unscanned structured or response content")
 		}
+	}
+}
+
+// A recipe that enables Replay in its own plugins records its requests that
+// are rejected before a decision, on the memory store as on a shared one.
+func TestReplayRecipeDefaultsCaptureBeforeDecisionOnMemoryStore(t *testing.T) {
+	cfg := &config.RouterConfig{
+		RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"},
+		Recipes: []config.RoutingRecipe{
+			{Name: "plain", Profile: config.RoutingProfile{
+				Decisions: []config.Decision{{Name: "route", ModelRefs: []config.ModelRef{{Model: "m"}}}},
+			}},
+			{Name: "audited", Profile: config.RoutingProfile{
+				Plugins:   []config.DecisionPlugin{replayTestPlugin(map[string]interface{}{"enabled": true})},
+				Decisions: []config.Decision{{Name: "route", ModelRefs: []config.ModelRef{{Model: "m"}}}},
+			}},
+		},
+	}
+	withGlobalPlugins(t, cfg)
+	router := replayRuntimeRouter(t, cfg)
+	for i, recorded := range []bool{false, true} {
+		ctx := replayPolicyRequest(t)
+		ctx.Routing.SelectRecipe(&cfg.Recipes[i])
+		router.respondDecisionUnresolved(ctx, "public-entry", &decision.DecisionUnresolvedError{Decision: "unknown"})
+		if (ctx.RouterReplayID != "") != recorded {
+			t.Fatalf("recipe %s: replay id %q, want recorded=%t", cfg.Recipes[i].Name, ctx.RouterReplayID, recorded)
+		}
+	}
+	page, err := router.queryRouterReplayPage(routerReplayListQuery{limit: 10})
+	if err != nil || len(page.Data) != 1 {
+		t.Fatalf("rejected request not queryable: %+v err=%v", page, err)
+	}
+	record := page.Data[0]
+	if record.Recipe != "audited" || record.Decision != "" || record.ResponseStatus != 503 || record.LifecycleState != routerreplay.LifecycleFailed {
+		t.Fatalf("record = recipe %q decision %q status %d lifecycle %q", record.Recipe, record.Decision, record.ResponseStatus, record.LifecycleState)
 	}
 }

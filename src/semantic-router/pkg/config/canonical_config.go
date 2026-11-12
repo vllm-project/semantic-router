@@ -7,6 +7,7 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // CanonicalConfigVersion identifies the steady-state public configuration
@@ -177,6 +178,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
+	if err := normalizeListenerAPIs(cfg.Listeners); err != nil {
+		return nil, err
+	}
 	cfg.ModelConfig = make(map[string]ModelParams)
 	cfg.GlobalPlugins = copyDecisionPlugins(global.Plugins)
 	if err := applyCanonicalRecipeState(&cfg, canonical); err != nil {
@@ -185,6 +189,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := applyEffectiveModelRegistry(&cfg, effective, canonical.Providers.Models); err != nil {
 		return nil, err
 	}
+	cfg.DefaultBackendTLS = cloneProviderDefaultsTLS(canonical.Providers.Defaults.TLS)
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {
@@ -389,6 +394,9 @@ func validateCanonicalProviderModelMetadata(model CanonicalProviderModel) error 
 	}
 	if err := validateProviderReliability(model.Name, model.Reliability); err != nil {
 		return err
+	}
+	if _, err := llmprotocol.ParseUnsupportedCapabilities(model.UnsupportedCapabilities); err != nil {
+		return fmt.Errorf("providers.models[%s].unsupported_capabilities: %w", model.Name, err)
 	}
 	return validateModelPricing(model.Name, model.Pricing)
 }

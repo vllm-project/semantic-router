@@ -265,8 +265,8 @@ resolve as a failed signal ([Reference](../reference/http-api.md#long-inputs)).
 
 A model-runtime signal that has not answered by the signals' deadline resolves
 through its policy, so one slow model does not fail the whole request: a
-jailbreak or PII rule as no answer, which matches only with
-`on_unknown: match`, and any other signal as a failed signal (`Unknown` under
+jailbreak or PII rule as no answer, which matches unless the rule sets
+`on_unknown: no_match`, and any other signal as a failed signal (`Unknown` under
 `rules.on_unknown`; otherwise no match, or a `systemone` condition's
 `on_error`). The deadline
 is the request's less a tenth of the time left, or 45 s for a served request;

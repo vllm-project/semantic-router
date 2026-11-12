@@ -32,8 +32,10 @@ Router 数据面在配置的监听器上接收模型请求。默认的 standalon
 | `GET` | `/v1/systemone/models` | 原生模型发现 | 列出该 listener 发布的 System One 模型 |
 
 Engine 模式关闭配方路由，并提供原生 System One 接口。在
-`listeners[].systemone.models` 中发布原生模型 ID；Chat 的 `models` 名单不会授权
-原生访问。两类接口都使用 listener 的 API keys。完整请求见
+listener 在 `apis` 中列出 `systemone`（`listeners[].apis.systemone`，可加 `models`）时提供原生 API；
+LLM API 的 `models` 不会授权原生访问。所有 API 都使用 listener 的 API keys，`apis.systemone.schema`
+设置 listener 使用的 System One schema（默认 `vllm-sr/5.0`，或 `vllm-sr/4.0`），见
+[System One schema](../system-one/use/schemas.md)。完整请求见
 [模型运行时快速开始](../model-runtime/get-started/quickstart.md)。
 
 其他 `/v1/*` 路径默认拒绝。特别是 `/v1/files`、`/v1/vector_stores` 和路由回放路径在公网推理监听器上不可用。Router 自有的文件和向量存储操作使用管理监听器上的 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores`。其他 `/openai/*` 操作，例如 embeddings 和读取已存储的 response，返回 `404`。
@@ -278,9 +280,11 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 
 记录、轨迹中的路由和消息在具有显式对话身份时包含 `conversation_id`。消息按对话和轮次分组，因此同一会话内的不同对话都可以从第零轮开始。Insights 会显示对话边界和完整 ID。
 
-Dashboard Insights 将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值。全局或插件设置 `capture_personal_data: false` 后，检测到 PII 或无法确认 PII 状态时会省略正文、提示词和工具内容，保留路由元数据。
+Dashboard Insights 将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值，并叠加其所属配方自身的插件。全局或插件设置 `capture_personal_data: false` 后，检测到 PII 或无法确认 PII 状态时会省略正文、提示词和工具内容，保留路由元数据。
 
-启用 bearer 认证时，回放调用者需要 `replay.read`。提示词、响应、工具及其他敏感细节保持脱敏，除非主体还拥有 `replay.detail`。即使 API 通常返回脱敏视图，也应将回放存储视为可能敏感。
+`capture_request_body: false` 会让整条记录都不含请求文本：请求体、`prompt`、`tool_definitions`，以及 `tool_trace` 中每个请求步骤的文本、参数和结果。`capture_response_body: false` 对响应体、响应步骤、`hallucination_spans`，以及回退结果 `execution_record` 中提供方返回的内容同样处理；每个失败的尝试只保留状态码和固定的原因。这些步骤保留类型、工具名、调用 ID 和状态。被省略的文本直接缺失，不标记为 `content_redacted`；该标记仍只表示对读者角色隐藏的内容，以及 `capture_tool_results` 未保留的工具结果。`max_tool_trace_bytes` 也会截断步骤文本，此时轨迹中的用户和助手消息带有 `content_truncated`。
+
+启用 bearer 认证时，回放调用者需要 `replay.read`。提示词、响应、工具及其他敏感细节保持脱敏，除非主体还拥有 `replay.detail`。所有回放读取路由使用同一套脱敏：没有 `replay.detail` 时，轨迹 `routes` 中的 `selection_reasoning` 和 `session_reason` 与记录的 `route_diagnostics` 一样返回为空。即使 API 通常返回脱敏视图，也应将回放存储视为可能敏感。
 
 回放生命周期值描述记录器观察到的状态：
 

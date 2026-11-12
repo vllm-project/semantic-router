@@ -162,7 +162,7 @@ def test_metadata_keeps_loaded_identity_when_model_has_a_public_alias(
             },
             "options": {"return_meta": True},
         }
-        client = TestClient(create_app(runtime))
+        client = TestClient(create_app(runtime, systemone_schema="vllm-sr/4.0"))
         response = post(client, request, "/v1/systemone")
         assert response.status_code == 200
         body = response.json()

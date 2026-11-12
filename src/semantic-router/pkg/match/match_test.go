@@ -111,7 +111,7 @@ func matchConfig() *config.RouterConfig {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{
 		config.DefaultDecisionDeployment: {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/vela3-fast"},
-		"remote":                         {Provider: config.SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", TimeoutMs: 40},
+		"remote":                         {Provider: config.SystemOneProvider, Schema: "vllm-sr/4.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", TimeoutMs: 40},
 	}
 	return cfg
 }

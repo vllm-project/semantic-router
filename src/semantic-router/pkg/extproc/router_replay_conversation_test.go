@@ -78,6 +78,7 @@ func TestReplayIdentityFallbackAndSessionScope(t *testing.T) {
 
 func TestReplayTrajectorySeparatesConversationTurns(t *testing.T) {
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
 	r := &OpenAIRouter{ReplayRecorder: recorder, ReplayStoreShared: true}
 	first := []routerreplay.ToolTraceStep{
 		{Type: replayToolStepUserInput, Text: "First task"},

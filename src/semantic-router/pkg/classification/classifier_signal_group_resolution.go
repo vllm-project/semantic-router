@@ -83,6 +83,18 @@ func applySignalGroupDefaultFallback(
 			return matched
 		}
 	}
+	// A member that failed may have matched, so whether the default applies
+	// is unknown: the default member fails too, and the decisions on it
+	// resolve through their on_unknown policy.
+	for member := range memberSet {
+		if _, failed := results.SignalErrors[signalConfidenceKey(signalType, member)]; failed {
+			defaultKey := signalConfidenceKey(signalType, group.Default)
+			if _, own := results.SignalErrors[defaultKey]; !own {
+				results.SignalErrors[defaultKey] = "partition_member_failed"
+			}
+			return matched
+		}
+	}
 
 	logging.Debugf(
 		"[Signal Groups] %s group %q synthesized default member %q because no group members matched",

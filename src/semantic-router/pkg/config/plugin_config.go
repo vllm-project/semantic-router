@@ -171,12 +171,13 @@ type RouterReplayPluginConfig struct {
 	CaptureResponseBody bool  `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
 	// CaptureToolResults keeps client tool-result text in the captured request
 	// body and in each client_tool_result step's Output, bounded by
-	// MaxToolTraceBytes. It requires CapturePersonalData, and principals
-	// without replay.detail still read the results redacted.
+	// MaxToolTraceBytes. It requires CapturePersonalData, stores nothing while
+	// CaptureRequestBody is off, and principals without replay.detail still
+	// read the results redacted.
 	CaptureToolResults bool `json:"capture_tool_results,omitempty" yaml:"capture_tool_results,omitempty"`
 	MaxBodyBytes       int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
-	// MaxToolTraceBytes caps each structured tool-trace field (Prompt,
-	// ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
+	// MaxToolTraceBytes caps each structured text field (Prompt,
+	// ToolDefinitions, ToolTraceStep.Text, Arguments and Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that
 	// structured fields remain complete even when the raw body is truncated.
 	MaxToolTraceBytes int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
