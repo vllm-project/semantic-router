@@ -27,7 +27,7 @@
       "sensitivity": "none",
       "owner": "response_contract",
       "version": "v0.4",
-      "doc": "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`."
+      "doc": "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`."
     },
     {
       "name": "x-vsr-config-version",
@@ -960,6 +960,11 @@
       "key": "signals",
       "owner": "signals",
       "doc": "Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`."
+    },
+    {
+      "key": "scan_coverage",
+      "owner": "signals",
+      "doc": "Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts."
     },
     {
       "key": "context_tokens",

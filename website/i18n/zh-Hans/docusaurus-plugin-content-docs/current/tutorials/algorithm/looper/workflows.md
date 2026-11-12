@@ -87,7 +87,7 @@ recipes:
 | 字段 | 用途 |
 | --- | --- |
 | `output_contract` | 决策范围的提示词文本：应同时作用于静态 Flow、动态 Flow、Fusion 和 ReMoM 的基准或应用格式要求，而不是硬编码进算法的任务特定提示词。 |
-| `output_contract_spec` | 由 Router 执行的类型化归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。 |
+| `output_contract_spec` | 由 Router 执行的类型化归一化和后处理，例如 choice 提取或终端动作 JSON 归一化。只有 Fusion、ReMoM 和 Flow 决策接受它；Flow 拒绝 `reference_selection`，因为其最终阶段列出的 worker 输出没有编号。 |
 
 提取默认精确匹配 `content`。仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
 
@@ -175,6 +175,8 @@ Router Flow 为客户端保留普通的 OpenAI 兼容工具调用契约。像对
 3. 在客户端发送匹配的尾随 `tool` 消息时，在下一次请求中消费该状态；
 4. 把这些工具结果路由回恰好请求它们的那个 worker 或最终智能体，而不重放无关 worker；
 5. 继续该智能体的工具循环，直到它产生内容，然后恢复剩余工作流。
+
+每个响应的 `usage` 只统计该请求发起的模型调用，因此恢复后的那一轮不会再次报告之前各轮的调用。与首轮一样，恢复后的工作流的最终回答遵循 `output_contract_spec`；在 `on_error: skip` 下，最终合成失败时会返回某个 worker 的回答。
 
 每个 worker 有自己的消息历史。后续步骤的 `access_list` 只暴露先前步骤或智能体的输出，绝不暴露另一个 worker 的原始工具调用或工具结果轨迹：
 

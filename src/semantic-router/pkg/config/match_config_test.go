@@ -15,7 +15,7 @@ func matchConfig() *RouterConfig {
 		DefaultDecisionDeployment: {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/vela3-fast"},
 		"lite":                    {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/vela3-lite"},
 		"chooser": {
-			Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra",
+			Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra",
 			Capabilities: &DeploymentCapabilities{QuestionTypes: []string{SystemOneQuestionChoice}},
 		},
 		"bert": {Provider: OpenAIEmbeddingsProvider, Endpoint: "http://embedder:8000/v1", Model: "bert"},
@@ -175,6 +175,7 @@ func TestMatchBlockValidation(t *testing.T) {
 		"choice over more than it reads":  {MatchRAG, MatchConfig{Recall: recall("", 300, nil), Judge: judge(func(j *MatchJudge) { j.Preset = presets.ToolRank })}},
 		"choice reading 255":              {MatchToolsSelect, MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset, j.MaxCandidates = presets.ToolRank, 255 })}},
 		"per candidate reading 500":       {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MaxCandidates = 500 })}},
+		"per candidate reading a bundle":  {MatchRAG, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MaxCandidates = 4096 })}},
 	}
 	for name, test := range valid {
 		if err := validateMatch(matchConfig(), "m", &test.block, test.feature); err != nil {
@@ -222,6 +223,11 @@ func TestMatchBlockValidation(t *testing.T) {
 			MatchToolsSelect,
 			MatchConfig{Judge: judge(func(j *MatchJudge) { j.Preset, j.MaxCandidates = presets.ToolRank, 256 })},
 			"m.judge.max_candidates must be within [1, 255]: a choice judge's candidates are the options of one question",
+		},
+		"per candidate reading more than a bundle carries": {
+			MatchRAG,
+			MatchConfig{Judge: judge(func(j *MatchJudge) { j.MaxCandidates = 4097 })},
+			"m.judge.max_candidates must be within [1, 4096]: a judge asked about each candidate sends them in one model runtime bundle",
 		},
 		"negative max_candidates": {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.MaxCandidates = -1 })}, "m.judge.max_candidates must be at least 1 when set"},
 		"negative judge top_k":    {MatchCompress, MatchConfig{Judge: judge(func(j *MatchJudge) { j.TopK = -2 })}, "m.judge.top_k must be at least 1 when set"},

@@ -67,6 +67,7 @@ from .scheduler.batching import Batcher, SharedContext
 from .scheduler.scheduler import STOP_SECONDS, Forward, Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
 from .supervision.readiness import STATES, Health, golden_check
+from .systemone import IMPLICIT_ROLES, REQUEST_ROLES, normalize_presets, read_roles
 from .timing import RunTiming, ServerTiming
 
 log = logging.getLogger("vllm_srun")
@@ -217,6 +218,7 @@ SURFACE_FIELDS = {
         "images",
         "videos",
         "assets",
+        "roles",
         "options",
     },
     "classify": {"model", "input", "head", "options"},
@@ -499,25 +501,33 @@ class ServedModel:
         )
         try:
             self._start(process, execute)
+
+            with self.runtime._lifecycle_lock:
+                if self.runtime._stopping.is_set():
+                    raise _RuntimeStoppingError(
+                        "runtime shutdown began during model initialization"
+                    )
+
+                metrics = self.runtime.metrics
+                metrics.model_info.labels(
+                    model=self.label,
+                    revision=model.info.revision or "local",
+                    family=family.name,
+                    engine=self.engine,
+                    accelerator=placement.accelerator.name,
+                    device=placement.device.label,
+                    dtype=self.precision,
+                    numerics=self.numerics,
+                ).set(1)
+                metrics.model_memory.labels(model=self.label).set(
+                    model.engine_model.memory_bytes()
+                )
+                self.health.set("ready", self.unpinned)
+
         except BaseException:
             self.stop()
             self.scheduler = self.model = None
             raise
-        metrics = self.runtime.metrics
-        metrics.model_info.labels(
-            model=self.label,
-            revision=model.info.revision or "local",
-            family=family.name,
-            engine=self.engine,
-            accelerator=placement.accelerator.name,
-            device=placement.device.label,
-            dtype=self.precision,
-            numerics=self.numerics,
-        ).set(1)
-        metrics.model_memory.labels(model=self.label).set(
-            model.engine_model.memory_bytes()
-        )
-        self.health.set("ready", self.unpinned)
         log.info(
             "serving %s on %s (max_num_seqs %d, max_num_batched_tokens %d from %s, "
             "batch_window_ms %g, dtype %s, shared context %s, %s numerics)",
@@ -554,7 +564,7 @@ class ServedModel:
             and not model.engine_model.approximate_kernels
             else "approximate"
         )
-        self.scheduler = Scheduler(
+        scheduler = Scheduler(
             model,
             batcher,
             SchedulerLimits(
@@ -571,7 +581,14 @@ class ServedModel:
             device_fault=placement.accelerator.device_fault,
             planning=self.runtime.planning_before,
         )
-        self.scheduler.start()
+
+        with self.runtime._lifecycle_lock:
+            if self.runtime._stopping.is_set():
+                raise _RuntimeStoppingError(
+                    "runtime shutdown began during model loading"
+                )
+            self.scheduler = scheduler
+            self.scheduler.start()
         self.health.set("warming", "running the golden check")
         assert self.family is not None and self.package is not None
         self.health.golden = golden_check(
@@ -943,6 +960,10 @@ class ProcessHealth:
         }
 
 
+class _RuntimeStoppingError(Exception):
+    """Loading was cancelled because runtime shutdown began."""
+
+
 class Runtime:
     def __init__(self, config: ServeConfig, metrics: RuntimeMetrics | None = None):
         self.config = config
@@ -958,6 +979,10 @@ class Runtime:
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)
         self._thread: threading.Thread | None = None
+        # The model the background load is loading now; ``stop`` leaves it to the load.
+        self._loading: ServedModel | None = None
+        # Held to start a model's worker or report it ready, and to set ``_stopping``.
+        self._lifecycle_lock = threading.Lock()
         self._stopping = threading.Event()
 
     # -- lifecycle -----------------------------------------------------------
@@ -991,17 +1016,28 @@ class Runtime:
     def stop(self, timeout: float = STOP_SECONDS) -> list[str]:
         """Stop every model, waiting up to ``timeout`` seconds in all for the forwards in flight.
 
-        What still runs then, one entry per model; those models stay open.
+        What still runs then, one entry per model; those models stay open. A
+        load in flight starts no worker once stopping is set and frees its own
+        model: it is waited for first, within the same ``timeout``, and if it
+        is still running then, its model is left to it.
         """
-        self._stopping.set()
+        deadline = time.monotonic() + timeout
+        with self._lifecycle_lock:
+            self._stopping.set()
+        loader = self._thread
+        if loader is not None and loader is not threading.current_thread():
+            loader.join(max(0.0, deadline - time.monotonic()))
+        loading = self._loading if loader is not None and loader.is_alive() else None
+        abandoned = (
+            [] if loading is None else [f"{loading.label}: its load has not finished"]
+        )
+        models = [served for served in self.served if served is not loading]
         # Every worker stops taking work before any is waited for, so a hung
         # forward leaves the other models the whole timeout.
-        for served in self.served:
+        for served in models:
             if served.scheduler is not None:
                 served.scheduler.stop(0)
-        deadline = time.monotonic() + timeout
-        abandoned = []
-        for served in self.served:
+        for served in models:
             running = served.stop(max(0.0, deadline - time.monotonic()))
             if running is not None:
                 abandoned.append(running)
@@ -1055,8 +1091,11 @@ class Runtime:
             for served in pending:
                 if self._stopping.is_set():
                     return
+                self._loading = served
                 try:
                     served.load()
+                except _RuntimeStoppingError:
+                    return
                 except (PackageError, UnsupportedDeviceError, VerificationError) as exc:
                     log.error("loading %s failed: %s", served.label, exc)
                     served.health.set("failed", f"{type(exc).__name__}: {exc}")
@@ -1074,6 +1113,8 @@ class Runtime:
                             f"retrying after {failure} (attempt {attempt} of {attempts})",
                         )
                         retry.append(served)
+                finally:
+                    self._loading = None
                 self._ready_gauge()
             freeze_heap()
             if not retry:
@@ -1085,7 +1126,10 @@ class Runtime:
             pending = retry
 
     def _ready_gauge(self) -> None:
-        self.metrics.ready.set(1 if self.health.ready else 0)
+        with self._lifecycle_lock:
+            if self._stopping.is_set():
+                return
+            self.metrics.ready.set(1 if self.health.ready else 0)
 
     # -- routing -------------------------------------------------------------
 
@@ -1191,13 +1235,34 @@ class Runtime:
                 f"model {served.label} does not serve /v1/{surface}",
             )
         deadline, return_meta, received = self._options(served, surface, body, received)
+        roles = IMPLICIT_ROLES
+        if surface == "decisions":
+            try:
+                roles = read_roles(body)
+            except ValueError as exc:
+                raise RuntimeServiceError("invalid_request", str(exc)) from exc
+            if isinstance(body.get("questions"), dict):
+                body = {
+                    **body,
+                    "questions": normalize_presets(
+                        body["questions"], served.model.info.presets
+                    ),
+                }
         request = SurfaceRequest(surface, body, deadline, return_meta, received, part)
+        token = REQUEST_ROLES.set(roles)
         try:
-            plan = served.model.plan_surface(surface, request)
+            if served.cache.entries > 0:
+                plan = served.model.plan_cached_surface(
+                    surface, request, served.cache.get
+                )
+            else:
+                plan = served.model.plan_surface(surface, request)
         except UnsupportedSurfaceError as exc:
             raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
         except ValueError as exc:
             raise RuntimeServiceError.invalid(exc) from exc
+        finally:
+            REQUEST_ROLES.reset(token)
         return Prepared(served, request, plan)
 
     def finish(
@@ -1442,13 +1507,16 @@ class Runtime:
         for member, (_, prepared) in enumerate(members):
             items, member_slots = [], []
             for position, item in enumerate(prepared.plan.items):
+                observed = prepared.plan.cache_lookups.get(position)
                 key = (
                     getattr(item, "cache_key", None)
-                    if served.cache.entries > 0
+                    if served.cache.entries > 0 or observed is not None
                     else None
                 )
                 if key is not None:
-                    hit, value = served.cache.get(key)
+                    hit, value = (
+                        observed if observed is not None else served.cache.get(key)
+                    )
                     self.metrics.result_cache.labels(
                         model=served.label, outcome="hit" if hit else "miss"
                     ).inc()

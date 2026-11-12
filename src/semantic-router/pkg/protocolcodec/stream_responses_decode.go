@@ -57,7 +57,9 @@ func (decoder *responsesStreamDecoder) validateResponsesToolDone(wire responsesE
 		complete = wire.Input
 	}
 	if len(arguments) == 0 {
-		if wire.Type == "response.function_call_arguments.done" && !isJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) {
+		// A cut call's arguments stop inside an object; the stream state decides it at the terminal event.
+		if wire.Type == "response.function_call_arguments.done" && !isJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) &&
+			!isTruncatedJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) {
 			return invalidProviderResponse("invalid_stream_tool_arguments", "Responses function-call done arguments must be a JSON object")
 		}
 		decoder.toolArguments[index] = []byte(complete)

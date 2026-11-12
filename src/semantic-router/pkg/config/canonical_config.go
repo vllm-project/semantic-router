@@ -177,6 +177,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
+	if err := normalizeListenerAPIs(cfg.Listeners); err != nil {
+		return nil, err
+	}
 	cfg.ModelConfig = make(map[string]ModelParams)
 	cfg.GlobalPlugins = copyDecisionPlugins(global.Plugins)
 	if err := applyCanonicalRecipeState(&cfg, canonical); err != nil {
@@ -185,6 +188,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := applyEffectiveModelRegistry(&cfg, effective, canonical.Providers.Models); err != nil {
 		return nil, err
 	}
+	cfg.DefaultBackendTLS = cloneProviderDefaultsTLS(canonical.Providers.Defaults.TLS)
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {

@@ -44,6 +44,15 @@ The PR, main, weekly, and explicit qualification entrypoints share one verificat
   artifacts. A trusted status publisher exposes the branch-protection check
   **PR Gate**, including an explicit waiting state for committer authorization.
 
+An E2E case that fails is also a check-run annotation titled with its profile
+and case. Each profile's report, in the job summary, lists its failed cases and
+its five slowest cases above the full list.
+
+E2E Kubernetes jobs skip the hosted runner's toolchain cleanup while the root
+disk has at least 40G free, and record the disk in use when the batch ends.
+Within a job, later profiles reuse the Helm chart dependencies the first one
+built for the same `Chart.lock`.
+
 Display categories, execution workers, and verification identities are separate.
 Catalog IDs identify results even when a display name changes. Job names describe
 the execution boundary; model names and feature cases appear in its report.
@@ -114,6 +123,34 @@ behavior shared by gateways belongs in the existing ExtProc contract; a new
 platform profile must justify its distinct assertion and public support claim.
 Storage backend semantics belong in their storage contracts, while Operator
 qualification owns configuration conversion, reconciliation and a routed request.
+
+Within the E2E layer, every case has a priority, set where it is registered:
+
+| Priority | Cases | Scopes that run it |
+| --- | --- | --- |
+| P0 | Contracts whose break reaches users or fails open: the routed request, routing refusals, guardrail blocks and no-dispatch, PII and jailbreak detection, identity and credential boundaries | `p0`, `standard`, `full` |
+| P1 (default) | Per-feature contracts, run when changed paths select their profile | `standard`, `full` |
+| P2 | Expensive qualification such as load stages | `full` |
+
+A PR runs the `standard` scope and `/ci run full` and Nightly the `full` scope.
+The `p0` scope runs P0 cases alone. A PR that changes the Router's request path
+(the `router-request-path` domain: `extproc`, `classification`, `decision`,
+`selection`, `config`, `masking`, `responseapi`) selects the baseline, masking
+and pii-remote-backend profiles in that scope, because their unit tests alone
+never reach the client boundary; a profile whose own files change, or that
+another domain selects, keeps `standard`. Locally, `p0` is a quick check of a
+profile; a profile with no P0 case stops before its cluster is built. Model
+quality is not an E2E priority: E2E answers decision questions with the System
+One fixture, and the release benchmarks measure the models.
+
+Only the `model-runtime*` profiles start a model. Every other profile binds its
+learned signals to the provider-mocker System One fixture and its embeddings to
+the provider-mocker embedding fixture, and a case pins the answer it needs with
+a marker such as `__SYSTEMONE_CHOICE__ <key>` or `__EMBED_TOPIC__ <key>`, so its
+floor is every request. `TestE2EProfilesStartNoModelOutsideTheRuntimeProfiles`
+fails when a profile starts a model again. A profile that binds an embedding
+fixture deploys provider-mocker as a prerequisite, because the Router prepares
+its embedding deployments before it reports ready.
 
 A layer is not a dependency rule: a configuration change can require checks in
 several layers. `domains.yaml` remains the only changed-path selector. Tests do

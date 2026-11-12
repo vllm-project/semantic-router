@@ -135,6 +135,16 @@ func TestBuiltInCatalogLocalRuntimeReasoningWireContracts(t *testing.T) {
 			},
 		},
 		{
+			name: "vLLM Qwen under its served name keeps the mapping", catalog: "qwen/qwen3.8-27b", provider: "vllm",
+			providerModelID: "qwen38",
+			enabled:         true, mode: config.ReasoningModeEnabled, effort: "low",
+			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
+			wantControls: map[string]interface{}{
+				"reasoning_effort":     "low",
+				"chat_template_kwargs": map[string]interface{}{"enable_thinking": true},
+			},
+		},
+		{
 			name: "vLLM Qwen template switch disabled", catalog: "qwen/qwen3.8-27b", provider: "vllm",
 			enabled: false, mode: config.ReasoningModeDisabled,
 			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,

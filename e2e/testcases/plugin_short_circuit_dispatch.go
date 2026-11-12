@@ -17,6 +17,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("plugin-short-circuit-no-dispatch", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify a fast_response guardrail answers the client without dispatching to the upstream backend (issue #3182)",
 		Tags:        []string{"kubernetes", "routing", "plugins", "security"},
 		Fn:          testPluginShortCircuitNoDispatch,
