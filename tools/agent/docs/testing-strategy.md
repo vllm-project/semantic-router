@@ -134,6 +134,15 @@ profile; a profile with no P0 case stops before its cluster is built. Model
 quality is not an E2E priority: E2E answers decision questions with the System
 One fixture, and the release benchmarks measure the models.
 
+Only the `model-runtime*` profiles start a model. Every other profile binds its
+learned signals to the provider-mocker System One fixture and its embeddings to
+the provider-mocker embedding fixture, and a case pins the answer it needs with
+a marker such as `__SYSTEMONE_CHOICE__ <key>` or `__EMBED_TOPIC__ <key>`, so its
+floor is every request. `TestE2EProfilesStartNoModelOutsideTheRuntimeProfiles`
+fails when a profile starts a model again. A profile that binds an embedding
+fixture deploys provider-mocker as a prerequisite, because the Router prepares
+its embedding deployments before it reports ready.
+
 A layer is not a dependency rule: a configuration change can require checks in
 several layers. `domains.yaml` remains the only changed-path selector. Tests do
 not become optional merely because their filenames contain `test`.

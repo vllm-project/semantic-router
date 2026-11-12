@@ -143,6 +143,15 @@ config:
   global:
     model_catalog:
       deployments:
+        # provider-mocker's embedding fixture (see its README) stands in for
+        # the embedding model, so the Router downloads none.
+        fixture-embedding:
+          provider: openai_embeddings
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1
+          model: e2e/fixture-embedding
+          timeout_ms: 5000
+          capabilities:
+            dimensions: 256
         # provider-mocker's System One fixture answers the jailbreak and PII
         # rules, so the shared detection cases are pinned by their markers
         # (tools/test/services/provider-mocker/README.md).
@@ -157,6 +166,8 @@ config:
       bindings:
         jailbreak: fake-systemone
         pii: fake-systemone
+      embeddings:
+        default: {deployment: fixture-embedding}
     router:
       streamed_body:
         enabled: true
