@@ -380,15 +380,22 @@ static_resources:
       name: envoy.transport_sockets.tls
       typed_config:
         "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
-        sni: {{ model.endpoints[0].address }}
+        sni: {{ model.tls.server_name | tojson if model.tls.server_name else model.endpoints[0].address }}
         auto_sni_san_validation: true
         common_tls_context:
           tls_params:
             tls_minimum_protocol_version: TLSv1_2
             tls_maximum_protocol_version: TLSv1_3
+          {%- if model.tls.cert_file %}
+          tls_certificates:
+          - certificate_chain:
+              filename: {{ model.tls.cert_file | tojson }}
+            private_key:
+              filename: {{ model.tls.key_file | tojson }}
+          {%- endif %}
           validation_context:
             trusted_ca:
-              filename: /etc/ssl/certs/ca-certificates.crt
+              filename: {{ model.tls.ca_file | tojson if model.tls.ca_file else "/etc/ssl/certs/ca-certificates.crt" }}
     {% endif %}
   {% endfor %}
 

@@ -36,9 +36,13 @@ func init() {
 	})
 }
 
-// responseJailbreakSignalRule is the response-direction rule the profile
-// declares, and the series name its extraction is counted under.
+// responseJailbreakSignalRule is the response-direction rule the
+// response-guard recipe declares.
 const responseJailbreakSignalRule = "unsafe_completion"
+
+// responseJailbreakSignalMetricName is the rule as the extraction metric names
+// it: rules outside the default recipe carry their recipe, recipe::rule.
+const responseJailbreakSignalMetricName = "response-guard::" + responseJailbreakSignalRule
 
 // responseGuardBufferedMetric counts the streamed answers the Router held for
 // a response_guard, by decision and outcome.
@@ -127,7 +131,7 @@ func readResponseJailbreakCounters(ctx context.Context, metricsSession *fixtures
 	if err != nil {
 		return 0, 0, fmt.Errorf("read the router's metrics: %w", err)
 	}
-	return signalExtractionCount(body, "jailbreak", responseJailbreakSignalRule), responseGuardBufferedCount(body, decision, outcome), nil
+	return signalExtractionCount(body, "jailbreak", responseJailbreakSignalMetricName), responseGuardBufferedCount(body, decision, outcome), nil
 }
 
 // responseGuardBufferedCount reads decision's held streams that ended with
@@ -240,7 +244,7 @@ func testResponseJailbreakStreamingPass(ctx context.Context, client *kubernetes.
 
 func sendResponseJailbreakStreamingRequest(ctx context.Context, localPort, prompt string) (*http.Response, error) {
 	requestBody := map[string]interface{}{
-		"model":  "vllm-sr/auto",
+		"model":  responseJailbreakEntrypoint,
 		"stream": true,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},

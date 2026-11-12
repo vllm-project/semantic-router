@@ -300,6 +300,7 @@ func materializedProviderProfile(
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
 		ChatPath:       provider.Instance.ChatPath,
 		AuthCredential: provider.Instance.AuthCredential,
+		TLS:            deploymentTLSFromCatalog(provider.Instance.TLS),
 	}
 }
 

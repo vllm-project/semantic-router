@@ -55,6 +55,7 @@
     {
       "event": "",
       "data": {
+        "choices": [],
         "id": "response_1",
         "model": "public-model",
         "obfuscation": "\u003crandom\u003e",

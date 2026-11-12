@@ -57,6 +57,10 @@ type ProviderProfile struct {
 	// backend's credential; static keys and per-user provider keys are not
 	// consulted for it.
 	AuthCredential string `yaml:"auth_credential,omitempty"`
+	// TLS is how an https backend is verified, its tls block with the default
+	// CA applied; nil keeps the system roots and the endpoint's host. Envoy's
+	// cluster and the Router's own calls use the same settings.
+	TLS *DeploymentTLS `yaml:"tls,omitempty"`
 }
 
 // Delegated reports whether the backend takes the requesting user's

@@ -140,15 +140,19 @@ in windows. An input over its scan budget fails instead of being read:
 
 The only byte limit is `--max-request-bytes`, on a request as a whole.
 
-The router reads a long request through Vela 2.0 in two ways. A routing
+The router reads a long request in two ways before the model does (see
+[Long inputs](../../system-one/deploy/performance.md#long-inputs)). A routing
 question (domain, fact check, feedback, modality, `systemone` questions
-without `coverage: full`, and the `systemone` selector) truncates. A safety question (jailbreak, safety,
-PII and hallucination) reads it whole, up to the model's scan budget or the
-deployment's `input.max_tokens` with `overflow: window`. Content past it was
-not read: a jailbreak or PII rule matches it as `unscanned`. A safety scan
-that misses the signals' deadline (`global.model_catalog.signal_timeout_ms`)
-gives no answer: a jailbreak or PII rule then does not match unless it sets
-`on_unknown: match`.
+without `coverage: full`, and the `systemone` selector) reads a bounded view,
+the head and the tail within the deployment's `routing_view`. A guard question
+(jailbreak, safety and PII) reads it whole, in windows within the deployment's
+`scan_window`, each of which the model reads whole, up to its scan budget or
+the deployment's `input.max_tokens` with `overflow: window`. When the signals'
+deadline (`global.model_catalog.signal_timeout_ms`) ends a scan early, a
+jailbreak or PII rule decides on the windows read
+(`on_unscanned: best_effort`); when no window answers, it matches unless it
+sets `on_unknown: no_match`. A hallucination question reads its input whole,
+up to the model's scan budget; content past it was not read.
 
 Token budgets describe input coverage, not response time. Complete long-input
 embeddings and scans can exceed the signal deadline on a CPU with few cores.

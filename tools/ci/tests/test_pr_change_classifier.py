@@ -46,11 +46,7 @@ class SelectionTests(unittest.TestCase):
         expected_by_source = {
             "signal_routing_helpers.go": {
                 "envoy-ai-gateway",
-                "structure-routing",
-                "conversation-routing",
-                "complexity-routing",
-                "long-context-routing",
-                "preference-routing",
+                "signal-routing",
             },
             "failover_during_traffic.go": {"production-stack"},
             "streaming_body.go": {"streaming"},
@@ -91,20 +87,20 @@ class SelectionTests(unittest.TestCase):
         )
         self.assertEqual(scopes([source], full=True), dict.fromkeys(guards, "full"))
 
-    def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
+    def test_no_route_contract_keeps_a_required_gateway_profile_without_fallback(self):
         for path in (
-            "e2e/profiles/routing-errors/values.yaml",
+            "e2e/profiles/remote-embedding/values.yaml",
             "e2e/testcases/routing_error_codes.go",
             "src/semantic-router/pkg/extproc/routing_failure.go",
             "src/semantic-router/pkg/extproc/req_filter_classification_runtime.go",
         ):
             with self.subTest(path=path):
-                self.assertIn("e2e.routing-errors", classify([path]).selected_jobs)
-        self.assertIn("e2e.routing-errors", full_cpu_ids())
-        record = make_plan([], source_sha=SHA, requested=("e2e.routing-errors",))[
+                self.assertIn("e2e.remote-embedding", classify([path]).selected_jobs)
+        self.assertIn("e2e.remote-embedding", full_cpu_ids())
+        record = make_plan([], source_sha=SHA, requested=("e2e.remote-embedding",))[
             "verifications"
         ][0]
-        self.assertEqual(record["profile"], "routing-errors")
+        self.assertEqual(record["profile"], "remote-embedding")
         self.assertEqual(set(record["images"]), {"vllm-sr", "provider-mocker"})
 
     def test_manual_platform_selection_uses_the_same_plan_contract_and_build(self):
@@ -377,7 +373,7 @@ class SelectionTests(unittest.TestCase):
         }
         baseline = make_plan([], source_sha=SHA, full=True)
         self.assertTrue(set(cases).isdisjoint(baseline["expected_verification_ids"]))
-        self.assertEqual(len(baseline["verifications"]), 25)
+        self.assertEqual(len(baseline["verifications"]), 24)
         self.assertEqual(len(baseline["component_batches"]), 5)
         for identity, path in cases.items():
             with self.subTest(identity=identity):

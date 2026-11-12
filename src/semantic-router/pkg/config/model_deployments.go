@@ -54,6 +54,12 @@ type ModelDeployment struct {
 	Auth *DeploymentAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
 	// Headers are further non-secret headers every call carries.
 	Headers map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
+	// ForwardRequestHeaders names the client request headers that a call
+	// made for a client request copies, matched case-insensitively, when the
+	// client sent them; the client's value replaces the same header in
+	// headers. A call the Router makes on its own behalf, such as a models
+	// listing or a probe, carries none. Remote providers only.
+	ForwardRequestHeaders []string `yaml:"forward_request_headers,omitempty" json:"forward_request_headers,omitempty"`
 	// TimeoutMs bounds one attempt of a call to an attached or remote
 	// deployment; a decision question or selector's own timeout_ms wins.
 	TimeoutMs int `yaml:"timeout_ms,omitempty" json:"timeout_ms,omitempty"`
@@ -89,6 +95,11 @@ type ModelDeployment struct {
 	// OutlierDetection ejects a model_runtime replica whose exchanges keep
 	// running out of their deadline; unset keeps its defaults.
 	OutlierDetection *DeploymentOutlierDetection `yaml:"outlier_detection,omitempty" json:"outlier_detection,omitempty"`
+	// RoutingView bounds what a routing question sends this decision
+	// deployment about a long input: its head and tail.
+	RoutingView *DeploymentRoutingView `yaml:"routing_view,omitempty" json:"routing_view,omitempty"`
+	// ScanWindow sizes the windows a guard rule reads a long input in.
+	ScanWindow *DeploymentScanWindow `yaml:"scan_window,omitempty" json:"scan_window,omitempty"`
 	// PublicName is the inference API identity. It never identifies a socket,
 	// local package path, or internal deployment key.
 	PublicName string `yaml:"public_name,omitempty" json:"public_name,omitempty"`
@@ -164,6 +175,7 @@ func (d ModelDeployment) SchemaCapabilities() (systemonecodec.CapabilitySet, boo
 func (d ModelDeployment) WithDefaults() ModelDeployment {
 	d.Replicas = append([]ModelReplica(nil), d.Replicas...)
 	d.Deviations = append([]string(nil), d.Deviations...)
+	d.ForwardRequestHeaders = append([]string(nil), d.ForwardRequestHeaders...)
 	if d.Provider == ModelRuntimeProvider {
 		if d.Device == "" && len(d.Replicas) == 0 && d.Endpoint == "" {
 			d.Device = "auto"
@@ -202,6 +214,12 @@ func (d ModelDeployment) validate() error {
 	}
 	if !d.IsSystemOne() && (d.Schema != "" || len(d.Deviations) > 0 || d.MaxConcurrency != nil) {
 		return fmt.Errorf("schema, deviations and max_concurrency describe a remote System One API; they apply to systemone deployments")
+	}
+	if !d.IsRemote() && len(d.ForwardRequestHeaders) > 0 {
+		return fmt.Errorf("forward_request_headers applies to systemone, openai_chat and openai_embeddings deployments, whose APIs the Router calls for a request")
+	}
+	if err := d.validateInputViews(); err != nil {
+		return err
 	}
 	switch d.Provider {
 	case SystemOneProvider:
@@ -258,6 +276,7 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 		if deployment, ok := any(value).(ModelDeployment); ok {
 			deployment.Replicas = append([]ModelReplica(nil), deployment.Replicas...)
 			deployment.Deviations = append([]string(nil), deployment.Deviations...)
+			deployment.ForwardRequestHeaders = append([]string(nil), deployment.ForwardRequestHeaders...)
 			cloned[key] = any(deployment).(T)
 		} else {
 			cloned[key] = value

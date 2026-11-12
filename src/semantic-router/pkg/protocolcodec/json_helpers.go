@@ -421,6 +421,23 @@ func isJSONObject(body []byte, maximumDepth int) bool {
 	return llmprotocol.ValidateJSONObject(body, maximumDepth) == nil
 }
 
+// isTruncatedJSONObject reports arguments that stop before or inside a JSON
+// object, the only shapes an output limit leaves behind: vLLM can end a call
+// right after its name with no arguments. The prefix must pass the same
+// duplicate-key and depth rules as a complete object. A complete non-object,
+// trailing data or a syntax error mid-body is malformed, never cut.
+func isTruncatedJSONObject(body []byte, maximumDepth int) bool {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return true
+	}
+	if trimmed[0] != '{' {
+		return false
+	}
+	err := llmprotocol.ValidateJSONObject(trimmed, maximumDepth)
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
+
 var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
 
 // exactJSONShape returns the struct, slice or array type whose member names

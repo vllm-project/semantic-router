@@ -74,7 +74,10 @@ type SignalResults struct {
 	SignalErrors       map[string]string              // Signal evaluation errors keyed by "type:name"
 	SignalSpans        map[string][]modelservice.Span // The matched spans of span rules keyed by "type:name"; set at the response stage
 	SignalErrorMatches map[string]bool
-	Diagnostics        decision.EvaluationDiagnostics
+	// ScanCoverage is how much of its input each guard rule that read it in
+	// windows read, keyed by "type:name": full, partial n/m or none.
+	ScanCoverage map[string]string
+	Diagnostics  decision.EvaluationDiagnostics
 
 	// Signal metrics (only populated in eval mode)
 	Metrics *SignalMetricsCollection
