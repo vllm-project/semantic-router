@@ -153,7 +153,7 @@ providers:
 
 - **保守的估算。** 工具调用参数等结构化数据按每字节一个 token 计，图片、音频、视频和文件各有自己的预留。因此，编码 Agent 的长会话可能被估算得超过它实际放得下的窗口。
 - **第二次计数。** 当估算超过所有候选的窗口时，Router 会去掉这些预留重新计数，并保留放得下的候选。一个都放不下时，最宽的候选保留：估算从不拒绝请求，真实长度由后端检查。
-- **Router 的计数。** 字节数可能超出某个窗口的请求，会用每个模型的[分词器](../../installation/model-configuration#check-prompts-against-the-context-window)计数。计数超出它能到达的每个窗口的余量时，请求会在任何信号运行之前以 `400` `context_length_exceeded` 被拒绝；在余量之内则继续发送，由后端决定。
+- **Router 的计数。** 字节数可能超出某个窗口的请求，会用每个模型的[分词器](../../installation/model-configuration#check-prompts-against-the-context-window)计数。计数超出它能到达的每个窗口的区间时（用模型自己的分词器时为 3%，用代理分词器时为 30%），请求会在任何信号运行之前以 `400` `context_length_exceeded` 被拒绝；在区间之内则继续发送，由后端决定。
 - **默认不检查输出上限**，因此请求 16,384 个输出 token 时，仍可能选中 `local-coder`。
 
 在配方上配置 [`candidate_requirements`](../../installation/configuration#recipe-candidate-requirements) 后，Router 还会在打分前检查输出上限以及工具、推理和结构化输出声明。一个候选都不适合的请求会在派发前被拒绝；见[请求预算错误](../../api/router#request-budget-errors)。

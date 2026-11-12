@@ -191,9 +191,10 @@ required input such as images:
 - **The Router's count.** A request whose bytes could exceed a window is
   counted with each model's
   [tokenizer](../../installation/model-configuration#check-prompts-against-the-context-window).
-  A request whose count is beyond the margin of every window it can reach is
-  rejected with `400` `context_length_exceeded` before any signal runs; one
-  within the margin goes on, and the backend decides.
+  A request whose count is beyond the band of every window it can reach (3%
+  with a model's own tokenizer, 30% with the proxy) is rejected with `400`
+  `context_length_exceeded` before any signal runs; one within the band goes
+  on, and the backend decides.
 - **Output limits are not checked** by default, so a request for 16,384 output
   tokens can still reach `local-coder`.
 

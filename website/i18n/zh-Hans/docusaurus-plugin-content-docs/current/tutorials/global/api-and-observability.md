@@ -173,6 +173,7 @@ global:
 | 配置生命周期 | `llm_config_updates_total` （`source`、`result`、`stage`）, `llm_config_update_duration_seconds`, `llm_config_active_version`, `llm_config_active_info` （`version`、`hash`）, `llm_config_last_rejection_timestamp_seconds` |
 | 远程模型调用 | `llm_remote_connector_requests_total` （按 `operation`、`outcome`）, `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
 | Recipe 路由 | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` （阶段 `signals`、`decision`、`algorithm`、`prompt_compression`）, `llm_prompt_compression_total` （按 `recipe` 和 `outcome`：`compressed`、`skipped_disabled`、`skipped_min_length`、`skipped_max_tokens`） |
+| 上下文窗口 | `llm_context_window_checks_total` （按 `count`：`exact` 或 `proxy`，以及 `verdict`：`fits`、`in_band` 或 `exceeds`）, `llm_context_window_refusals_total` （按 `count`）, `llm_context_window_margin` （按 `count`），来自[上下文窗口检查](../../installation/model-configuration#check-prompts-against-the-context-window) |
 | 路由输入 | `llm_routing_input_removed_total` （按 `kind`：`skipped_message`、`stripped_block`），来自 [`global.router.routing_input`](../signal/overview#choose-the-user-text-signals-read) |
 | 流式请求体 | `llm_streamed_body_arrival_seconds`, `llm_streamed_body_bytes`, `llm_streamed_body_chunks` （按 `recipe`；仅 STREAMED 和 FULL_DUPLEX_STREAMED 模式） |
 | 投影 | `llm_projection_score` （按配置中的 Recipe 和投影名称） |

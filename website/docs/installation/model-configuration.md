@@ -307,7 +307,7 @@ providers:
   models:
     - name: long-context
       context_window_size: 1048576
-      tokenizer: deepseek-ai/DeepSeek-V3
+      tokenizer: /opt/vllm-sr/tokenizers/deepseek-v3
       backend_refs:
         - name: primary
           provider: vllm
@@ -317,25 +317,27 @@ global:
   router:
     context_window:
       margin: 0.03
+      proxy_margin: 0.30
       proxy_tokenizer: o200k_base
 ```
 
 | Field | Default | Effect |
 | --- | --- | --- |
-| `providers.models[].tokenizer` | the proxy tokenizer | The model's tokenizer: a built-in encoding (`o200k_base`, `cl100k_base`), the path of a Hugging Face `tokenizer.json`, or a Hugging Face repo id, `org/name` or `org/name@revision`. |
-| `global.router.context_window.margin` | `0.03` | The band around each window, as a fraction of it, in which a count decides nothing. |
-| `global.router.context_window.proxy_tokenizer` | `o200k_base` | Counts the prompts of models that name no tokenizer. |
+| `providers.models[].tokenizer` | none: the proxy counts | The model's own tokenizer: a built-in encoding (`o200k_base`, `cl100k_base`), a Hugging Face `tokenizer.json` or the directory that holds one (a path that is absolute or starts with `./` or `../`), or a Hugging Face repo id, `org/name` or `org/name@revision`. |
+| `global.router.context_window.margin` | `0.03` | The band around a window, as a fraction of it, for a count with the model's own tokenizer. |
+| `global.router.context_window.proxy_margin` | `0.30` | The band for a count with the proxy tokenizer. |
+| `global.router.context_window.proxy_tokenizer` | `o200k_base` | Counts the prompts of models that name no tokenizer, or whose tokenizer has not loaded. |
 
 - **Tokenizers.** The Router carries `o200k_base` and `cl100k_base`, and reads
   byte-level BPE `tokenizer.json` files, the kind DeepSeek, Qwen, GLM, MiniMax
-  and gpt-oss publish. A repo id is read from the Hugging Face cache
-  (`HF_HUB_CACHE`, or `HF_HOME/hub`), so an offline Router
-  (`HF_HUB_OFFLINE=1`) uses a cached or mounted copy; otherwise the Router
-  downloads the repo's `tokenizer.json` into the cache once, in the
-  background, with `HF_TOKEN` for a gated repo. Tokenizers load when the
-  Router starts. Until a model's tokenizer has loaded, or when it cannot load
-  (a SentencePiece tokenizer, for one), the proxy tokenizer counts for it,
-  and the log says `tokenizer_unavailable`.
+  and gpt-oss publish. Tokenizers load when the Router starts. A local file
+  or directory needs nothing more; see [Vendor tokenizers](#vendor-tokenizers).
+  A repo id is read from the Hugging Face cache (`HF_HUB_CACHE`, or
+  `HF_HOME/hub`); when it is not there, the Router downloads its
+  `tokenizer.json` into the cache once, in the background, with `HF_TOKEN` for
+  a gated repo, unless `HF_HUB_OFFLINE=1`. Until a model's tokenizer has
+  loaded, or when it cannot load (a missing file, a SentencePiece tokenizer),
+  the proxy tokenizer counts for it, and the log says `tokenizer_unavailable`.
 - **The byte bound.** A byte-level tokenizer never produces more tokens than
   a prompt has UTF-8 bytes. A request whose bytes, plus a reserve for the
   chat template and message framing, fit the widest window it can reach is
@@ -346,17 +348,28 @@ global:
   plus a few tokens per message for the chat template. A 4 MB prompt takes
   about 50 ms on one core. Requests that carry images, audio, video or files
   are not counted.
-- **The band.** A count at or below the window less its margin fits. A count
-  at or above the window plus its margin does not: when that rules out every
-  model the request can reach, the Router answers `400` with
+- **The bands.** A count with the model's own tokenizer at or below the
+  window less `margin` fits, and at or above the window plus `margin` does
+  not. A proxy count can be well off the model's own count: `o200k_base`
+  counts Chinese text up to a quarter higher than some models' tokenizers,
+  and English and code a little lower. So a proxy count uses `proxy_margin`,
+  and refuses a prompt only at or above the window plus 30%. When the counts
+  rule out every model the request can reach, the Router answers `400` with
   `context_length_exceeded` before any signal reads the request, and the
   message names the widest window and the estimated count; see
   [Routing errors](../api/router#routing-errors). A count in between goes on
   to the backend, which decides; its refusal reaches the client as
-  `context_length_exceeded`. When a decision of the recipe compresses context,
-  the refusal waits for the check after the decision. When one replaces the
+  `context_length_exceeded`, and a fallback goes on only to candidates with
+  wider windows. When a decision of the recipe compresses context, the
+  refusal waits for the check after the decision. When one replaces the
   client's system prompt or drops its tools (a tool policy of `none`), the
   request is refused only if it is still beyond the band without them.
+- **What decided.** Each model's check is logged once per request as
+  `context_window_checked`, with the kind of count (`exact` or `proxy`), its
+  band and the verdict (`fits`, `in_band` or `exceeds`), and counted in
+  `llm_context_window_checks_total`; refusals are counted in
+  `llm_context_window_refusals_total`, and `llm_context_window_margin` shows
+  both bands.
 - **Without a count.** A request with media is never refused for its length.
   Its token estimate still steers it away from a candidate whose window looks
   too small, and when it rules out every candidate, the widest ones stay.
@@ -365,6 +378,43 @@ The token estimate learns a bytes-per-token ratio from the prompt usage
 backends report. That ratio places a request in a recipe's
 [context bands](../tutorials/signal/heuristic/context), and nothing else: it
 never refuses a request.
+
+### Vendor tokenizers
+
+Name each model's tokenizer by a local path, so that the Router counts its
+prompts exactly and needs no Hugging Face access at run time:
+
+1. Download each model's `tokenizer.json` at a pinned revision, for example
+   with the Hugging Face CLI:
+
+   ```bash
+   hf download deepseek-ai/DeepSeek-V3 tokenizer.json --revision <commit> --local-dir tokenizers/deepseek-v3
+   hf download Qwen/Qwen3-8B tokenizer.json --revision <commit> --local-dir tokenizers/qwen3-8b
+   ```
+
+2. Ship the directory with the Router: copy it into the image, or mount it
+   from a volume (an image volume, a persistent volume or a host path). A
+   ConfigMap holds at most 1 MiB, and a `tokenizer.json` is 5 to 20 MB.
+
+   ```dockerfile
+   FROM ghcr.io/vllm-project/semantic-router/vllm-sr:latest
+   COPY tokenizers/ /opt/vllm-sr/tokenizers/
+   ```
+
+3. Name the directory, or the file in it, on each model:
+
+   ```yaml
+   providers:
+     models:
+       - name: deepseek-v3
+         context_window_size: 131072
+         tokenizer: /opt/vllm-sr/tokenizers/deepseek-v3
+   ```
+
+4. Check the Router's log when it starts: `tokenizer_loaded` names each
+   tokenizer and its vocabulary size, and `tokenizer_unavailable` names one
+   that did not load, whose model then counts with the proxy and its wider
+   band.
 
 ## Fall back to another model
 
@@ -447,7 +497,7 @@ layer first:
   `upstream_unavailable`, or `504` with `upstream_timeout`, and none of the
   transport's detail.
 - **Long prompts.** A candidate whose window the Router's
-  [count](#check-prompts-against-the-context-window) exceeds beyond the band
+  [count](#check-prompts-against-the-context-window) exceeds beyond its band
   is never tried. After a backend refuses the prompt for its length, the chain
   goes on only to candidates with wider windows. Both are logged as
   `fallback_candidate_skipped`. Behind Envoy the first model's error body is
