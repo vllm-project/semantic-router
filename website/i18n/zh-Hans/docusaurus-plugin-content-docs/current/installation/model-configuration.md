@@ -213,6 +213,42 @@ reliability 块是设置这些请求头的唯一方式：Router 在加载配置�
 
 Envoy 无法对单个请求应用空闲超时、首字节超时、退避或 `Retry-After` 上限。设置了 `idle_timeout`、`first_byte_timeout`、`retry_back_off_base`、`retry_back_off_max` 或 `retry_after_max` 的决策会校验失败，除非 Router 以 `--gateway standalone` 提供服务。
 
+## 对照上下文窗口检查提示 {#check-prompts-against-the-context-window}
+
+Router 会两次对照模型的 `context_window_size` 检查请求：在任何信号运行之前，对照请求能到达的每个模型；在决策之后，对照该决策的候选。它用为每个模型加载的分词器自己为提示计数，不请任何后端计数：
+
+```yaml
+providers:
+  models:
+    - name: long-context
+      context_window_size: 1048576
+      tokenizer: deepseek-ai/DeepSeek-V3
+      backend_refs:
+        - name: primary
+          provider: vllm
+          endpoint: long-context.example:8000
+          protocol: http
+global:
+  router:
+    context_window:
+      margin: 0.03
+      proxy_tokenizer: o200k_base
+```
+
+| 字段 | 默认值 | 作用 |
+| --- | --- | --- |
+| `providers.models[].tokenizer` | 代理分词器 | 模型的分词器：内置编码（`o200k_base`、`cl100k_base`）、Hugging Face `tokenizer.json` 的路径，或 Hugging Face 仓库 id，即 `org/name` 或 `org/name@revision`。 |
+| `global.router.context_window.margin` | `0.03` | 每个窗口周围的区间，以窗口的比例表示；计数落在其中时不作判断。 |
+| `global.router.context_window.proxy_tokenizer` | `o200k_base` | 为没有指定分词器的模型的提示计数。 |
+
+- **分词器。**Router 内置 `o200k_base` 和 `cl100k_base`，并能读取字节级 BPE 的 `tokenizer.json`，即 DeepSeek、Qwen、GLM、MiniMax 和 gpt-oss 发布的那类文件。仓库 id 从 Hugging Face 缓存（`HF_HUB_CACHE`，或 `HF_HOME/hub`）读取，因此离线的 Router（`HF_HUB_OFFLINE=1`）使用缓存或挂载的副本；否则 Router 会在后台把该仓库的 `tokenizer.json` 下载到缓存中一次，受限仓库使用 `HF_TOKEN`。分词器在 Router 启动时加载。在模型的分词器加载完成之前，或它无法加载时（例如 SentencePiece 分词器），由代理分词器为它计数，日志记为 `tokenizer_unavailable`。
+- **字节上限。**字节级分词器产生的 token 数从不超过提示的 UTF-8 字节数。字节数加上聊天模板和消息框架的预留后，放得下请求能到达的最宽窗口的请求，不会被计数。
+- **计数。**更长的请求按每个分词器计数一次，分成多段并行，这个计数也用于决策之后的检查。计数覆盖文本、工具调用与结果、工具定义和输出 schema，并为聊天模板给每条消息加几个 token。4 MB 的提示在单核上约需 50 ms。带有图片、音频、视频或文件的请求不计数。
+- **区间。**计数不超过窗口减去余量时，放得下。计数达到窗口加上余量时，放不下：若这排除了请求能到达的所有模型，Router 在任何信号读取请求之前，以 `400` 和 `context_length_exceeded` 应答，消息给出最宽的窗口和估算的计数；见[路由错误](../api/router#routing-errors)。计数介于两者之间时，请求继续发往后端，由后端决定；后端的拒绝以 `context_length_exceeded` 到达客户端。若配方中有决策压缩上下文，拒绝留给决策之后的检查；若有决策替换客户端的系统提示或丢弃其工具（`none` 工具策略），只有去掉它们后仍超出区间的请求才会被拒绝。
+- **没有计数时。**带媒体的请求从不因长度被拒绝。它的 token 估算仍会让它避开窗口看起来太小的候选；当估算排除了所有候选时，最宽的候选保留。
+
+token 估算会根据后端报告的提示用量学习每个 token 的字节数比率。这个比率只用于把请求放进配方的[上下文区间](../tutorials/signal/heuristic/context)：它从不拒绝请求。
+
 ## 回退到另一个模型 {#fall-back-to-another-model}
 
 模型失败时，Router 可以把请求改发给决策中排名下一位的候选。这种跨模型回退默认关闭。可以全局开启，也可以为某个配方或某个决策开启：
@@ -268,6 +304,8 @@ recipes:
 - **候选**始终是决策中对该请求仍有资格的排名模型。没有单独的回退列表，提供方模型也没有自己的回退：同一模型的其他副本改由其重试、剔除和健康检查来尝试。
 - **推理。**候选按它自己在 `modelRefs` 中的推理设置（`use_reasoning`、`reasoning_effort`、`reasoning_mode`）发送，并像第一次尝试那样写成其后端的格式。Router 无法准备的候选（例如被其限流拒绝的候选）会被跳过，改试下一个，并以 `fallback_candidate_skipped` 记录日志，注明原因。
 - **流式。**流式请求同样会回退，无论它带有什么 `stream_options`。在 Envoy 之后，Router 以非流式方式调用候选，再按客户端自己的 `stream_options` 把回答以流式发给客户端，因此设置了 `include_usage` 的客户端仍会最后收到用量块。在 standalone 模式下，候选以流式发送，并像第一次尝试那样向 Chat Completions 后端请求用量。
+- **应答。**没有成功就结束的回退链以最后一次尝试应答。候选的错误保留其状态码，并以客户端的协议到达客户端，因此候选的 `400` 仍是 `400`，而对超出窗口的提示的拒绝会变成 `context_length_exceeded`。最后一次尝试没有任何后端应答时，客户端收到带 `upstream_unavailable` 的 `503`，或带 `upstream_timeout` 的 `504`，不包含传输层的任何细节。
+- **长提示。**Router 的[计数](#check-prompts-against-the-context-window)超出其窗口区间的候选从不尝试。后端因长度拒绝提示后，回退链只会继续到窗口更宽的候选。两者都以 `fallback_candidate_skipped` 记录日志。在 Envoy 之后看不到第一个模型的错误响应体，因此当计数落在该模型窗口的区间内时，它的 `400` 或 `413` 视为因长度的拒绝。
 
 两种网关模式运行相同的策略，只有一处有意的差异：standalone 模式在完全没有后端应答时（例如连接被拒绝或超时）也会回退，而在 Envoy 之后，客户端会收到 Envoy 的回复。这样的失败计为 `503` 或 `504`，因此要在这类失败上回退，请在 `retryable_status_codes` 中保留这两个状态码。响应的任何部分一旦到达客户端，就不再回退。
 

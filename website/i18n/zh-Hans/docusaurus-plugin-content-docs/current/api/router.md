@@ -206,7 +206,7 @@ Router 自行生成的 Chat 流（例如缓存重放）使用 `reasoning_content
 
 ## 路由错误 {#routing-errors}
 
-Router 无法路由某个请求时，会直接应答该请求，不调用任何后端。错误采用客户端所用的协议。在 OpenAI Chat Completions 和 Responses 的错误中，`error.code` 是稳定的原因码，`error.message` 是简短消息。除预算错误外，消息不包含模型、决策或请求内容：
+Router 无法路由某个请求时，会直接应答该请求，不调用任何后端。错误采用客户端所用的协议。在 OpenAI Chat Completions 和 Responses 的错误中，`error.code` 是稳定的原因码，`error.message` 是简短消息。除预算错误和上下文长度错误外，消息不包含模型、决策或请求内容：
 
 ```json
 {"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
@@ -216,7 +216,7 @@ Router 无法路由某个请求时，会直接应答该请求，不调用任何�
 | --- | --- | --- | --- |
 | `model_not_found` | 400 | `invalid_request_error` | 请求指定的模型不由该 Router 提供。 |
 | `no_route` | 400 | `invalid_request_error` | 没有决策匹配，且没有可用的默认模型。配方入口会回退到已配置的 `providers.defaults.model`；Looper 入口遵循同样的配方规则，名称本身不会选择算法。 |
-| `context_length_exceeded` | 400 或 422 | `invalid_request_error` | 请求超出了可服务它的模型的容量：400 来自[请求预算检查](#request-budget-errors)，422 来自模型的 `context_window_size`。 |
+| `context_length_exceeded` | 400 | `invalid_request_error` | Router 的计数表明请求超出了每个可服务它的模型的 `context_window_size` 的余量：在任何信号之前，对照请求能到达的每个模型；或在决策之后，对照其候选。`param` 为 `messages`，消息像 OpenAI 的那样给出最宽的窗口和请求的估算计数：`This model's maximum context length is 1048576 tokens. However, your request has an estimated 1100000 input tokens. Please reduce the length of the input.` Anthropic Messages 客户端收到 `prompt is too long: 1100000 tokens > 1048576 maximum`。见[上下文窗口检查](../installation/model-configuration#check-prompts-against-the-context-window)。[请求预算检查](#request-budget-errors)也以同一错误码应答。 |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | 请求的输出超过了配置的模型上限。见[请求预算错误](#request-budget-errors)。 |
 | `decision_unresolved` | 503 | `server_error` | 某个决策所需的信号不可用，导致该决策无法评估，且其 `rules.on_unknown` 为 `fail_request`。`x-vsr-trace` 的 `on_unknown` 成员会给出该决策。 |
 | `no_eligible_model` | 503 | `server_error` | 选择策略拒绝了匹配决策的所有候选模型。 |
@@ -237,7 +237,7 @@ Router 会以 `WARN` 级别记录每一次此类失败，带上请求的 `x-requ
 
 缺少能力、上限未知、选择证据不可用以及混合失败，保持选择错误的行为，即 `no_eligible_model`。预算检查本身不会截断请求；需要时请启用[上下文压缩](../tutorials/plugin/context.md#compression-and-budget)。
 
-这些计数是估算值。后端仍可能拒绝请求；其有效的 HTTP 状态码和有意义的消息会被保留。vLLM 的整数错误码在 OpenAI 兼容错误中以字符串形式暴露：`code: 400` 的 `BadRequestError` 会变成 `code: "400"` 的 `invalid_request_error`。
+这些计数是估算值。后端仍可能拒绝请求；其有效的 HTTP 状态码和有意义的消息会被保留。vLLM 的整数错误码在 OpenAI 兼容错误中以字符串形式暴露：`code: 400` 的 `BadRequestError` 会变成 `code: "400"` 的 `invalid_request_error`。后端对超出其窗口的提示的拒绝（vLLM 的 `param: input_tokens`、提到上下文长度、窗口或大小的消息，或 Anthropic 的 `prompt is too long`）改为得到错误码 `context_length_exceeded`，并保留后端的消息，其中给出它的窗口和提示的计数。
 
 在生成开始前被拒绝的流式请求，收到的是同样的非 2xx JSON 错误，而不是成功的 SSE 流。启用回放时，回放会记录失败的状态码和响应体；Router 的预算拒绝使用 `terminal_reason: request_budget_exceeded`。
 
