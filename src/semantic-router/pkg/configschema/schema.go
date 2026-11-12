@@ -315,11 +315,8 @@ func setCoreEnums(root *jsonschema.Schema) {
 		string(routerconfig.ConfigSourceFile),
 		string(routerconfig.ConfigSourceKubernetes),
 	})
-	if lossy := definitionProperty(root, "CanonicalRouterGlobal", "allow_lossy_translation"); lossy != nil && lossy.Items != nil {
-		for _, field := range llmprotocol.OptInLossyFields() {
-			lossy.Items.Enum = append(lossy.Items.Enum, field)
-		}
-	}
+	setDefinitionPropertyItemsEnum(root, "CanonicalRouterGlobal", "allow_lossy_translation", llmprotocol.OptInLossyFields())
+	setDefinitionPropertyItemsEnum(root, "CanonicalProviderModel", "unsupported_capabilities", llmprotocol.UnsupportedCapabilityNames())
 	setDefinitionPropertyEnum(root, "RouterHeadersConfig", "debug", routerconfig.SupportedDebugHeadersModes())
 	setDefinitionPropertyEnum(root, "AlgorithmConfig", "type", routerconfig.SupportedDecisionAlgorithmTypes())
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "capabilities", []string{routerconfig.CandidateCapabilitiesDeclared})
@@ -453,6 +450,16 @@ func setDefinitionPropertyEnum(root *jsonschema.Schema, definition, property str
 	field.Enum = make([]any, len(values))
 	for index, value := range values {
 		field.Enum[index] = value
+	}
+}
+
+func setDefinitionPropertyItemsEnum(root *jsonschema.Schema, definition, property string, values []string) {
+	field := definitionProperty(root, definition, property)
+	if field == nil || field.Items == nil {
+		return
+	}
+	for _, value := range values {
+		field.Items.Enum = append(field.Items.Enum, value)
 	}
 }
 

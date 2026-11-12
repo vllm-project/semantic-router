@@ -338,6 +338,7 @@ recipes:
 | `per_attempt_timeout` | `10s` | Time for each candidate after the first. It cannot exceed `total_timeout`. |
 | `retryable_status_codes` | `[502, 503, 504]` | Statuses that move on to the next candidate. |
 | `circuit_breaker` | 3 failures, `30s`, 1 probe | Skips a backend that keeps failing, for a cool-down. Global and recipe policies only. |
+| `forward_request_headers` | none | Client request headers that a fallback attempt the Router sends itself copies; see [Carry client headers on a fallback attempt](#carry-client-headers-on-a-fallback-attempt). Global and recipe policies only. |
 
 The policy a request runs under is merged field by field, the most specific
 layer first:
@@ -361,6 +362,12 @@ layer first:
   its backend the way the first attempt's are. A candidate the Router cannot
   prepare, such as one its rate limit refuses, is passed over for the next one
   and logged as `fallback_candidate_skipped` with the reason.
+- **Streaming.** A streamed request falls back too, whatever `stream_options`
+  it carries. Behind Envoy the Router calls the candidate without streaming and
+  streams the answer to the client with the client's own `stream_options`, so a
+  client that sets `include_usage` still gets the usage chunk last. In
+  standalone mode the candidate streams, and a Chat Completions backend is
+  asked for its usage as the first attempt's is.
 
 Both gateway modes run the same policy, with one deliberate difference:
 standalone mode also falls back when no backend answered at all, such as a
@@ -379,6 +386,56 @@ standalone mode:
   `total_timeout`, so make `total_timeout` longer than the `per_try_timeout`.
 - A decision's own `per_try_timeout` bounds every candidate it tries, so a
   slower candidate fails the same way.
+
+### Carry client headers on a fallback attempt
+
+Behind Envoy, the first attempt goes through Envoy with the client's
+headers. A fallback attempt is a call the Router makes itself, and it carries
+only the backend's `headers` and its credential. To pass a client header
+through as well, such as the `x-user-id` an upstream gateway attributes usage
+by, list it in `forward_request_headers`:
+
+```yaml
+global:
+  router:
+    fallback:
+      enabled: true
+      forward_request_headers: [x-user-id]
+```
+
+- **Matching.** Names match in any letter case, and an attempt copies a
+  header only when the client sent it with a value.
+- **Precedence.** The client's value replaces a backend's `headers` value of
+  the same name, which stays the default for a client that sends none. The
+  credential header is always the Router's own.
+- **Gateway modes.** In standalone mode every attempt, fallback attempts
+  included, starts from the client's request and already carries its
+  headers, so the list changes nothing there. An attempt that starts from the
+  client's request, which is also the first attempt behind Envoy, sends a
+  backend's `headers` value in place of the client's.
+- **Layers.** Only global and recipe policies take the list, as with
+  `circuit_breaker`. A recipe's list replaces the global one.
+- **Logs.** Each attempt in the fallback record names the headers it copied
+  (`forwarded_headers`), never their values.
+
+The configuration fails to load, naming the header, when a list names one
+that a call the Router builds must not copy from the client:
+
+- a pseudo-header, such as `:authority`;
+- a hop-by-hop or framing header: `connection`, `keep-alive`, `te`,
+  `trailer`, `transfer-encoding`, `upgrade`, any `proxy-*` header, `host`,
+  `content-length`, and the body headers the Router sets for its own request
+  (`content-type`, `content-encoding`, `accept`, `accept-encoding`, `expect`);
+- a credential: `authorization`, `proxy-authorization`, `cookie`,
+  `x-api-key`, `api-key`, `ocp-apim-subscription-key`, the per-user key
+  headers (`x-user-*-key`), and any backend's auth header;
+- the Router's own `x-vsr-*` headers, Envoy's `x-envoy-*` controls, and the
+  authenticator's identity headers (`x-authz-*`), which the Router keeps from
+  every upstream.
+
+A remote deployment takes the same setting for the calls the Router makes to
+it; see
+[Forward client headers](model-catalog.md#forward-client-headers).
 
 On Kubernetes, a decision takes the same `reliability` and `fallback` blocks,
 with the same field names: in an `IntelligentRoute`'s `spec.decisions[]` and in

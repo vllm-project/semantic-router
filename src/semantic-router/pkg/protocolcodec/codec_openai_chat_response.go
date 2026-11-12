@@ -40,6 +40,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"citations":                                              wire.hasCitations(),
 		"search_results":                                         wire.hasSearchResults(),
 	}, "response request metadata is not model output")
+	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, wire.vllmServingMetadata(), vllmServingMetadataReason)
 	if wire.hasTimeInfo() {
 		// A same-format response replays the original bytes, so unlike the
 		// shared family message this reason also states what the client sees.

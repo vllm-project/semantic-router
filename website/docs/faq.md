@@ -107,7 +107,7 @@ See [Integrate with llm-d](installation/k8s/llm-d) for the shared deployment and
 
 Switching models mid-conversation has a real cost — prefix-cache loss, tool drift and broken continuity. Treat it as a deliberate trade rather than an automatic optimization:
 
-- **Prefer stickiness where continuity matters.** Session-scoped learning protects an established choice by default (built-in initialization defaults to protection on and online adaptation off), but only when the Router can identify the conversation: the default `scope: conversation` requires **both** `x-session-id` and `x-conversation-id`. Sending either header alone leaves the request without a retained model. Session-only identification applies to an explicit `scope: session`.
+- **Prefer stickiness where continuity matters.** Session-scoped learning protects an established choice by default (built-in initialization defaults to protection on and online adaptation off), but only when the client sends `x-session-id`. Under the default `scope: conversation`, `x-conversation-id` names each conversation in the session; without it the Router names the conversation by how it starts. A request without `x-session-id` gets no retained model.
 - **Switch only on an explicit escalation policy.** "Cheaper" is not by itself a reason to move a conversation.
 - **Verify continuity, not just delivery.** Check the model actually used on continuation, tool completion, correction, model failure and conversation reset — an observed recommendation is not an applied hold.
 

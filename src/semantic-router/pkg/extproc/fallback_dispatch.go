@@ -347,12 +347,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	attemptStart := time.Now()
 
 	if r.fallbackCaller != nil {
-		extraHeaders := make(map[string]string)
-		if dispatch.profile != nil {
-			for k, v := range dispatch.profile.ExtraHeaders {
-				extraHeaders[k] = v
-			}
-		}
+		extraHeaders := fallbackRequestHeaders(ctx, dispatch.profile, orch)
 		resBody, statusCode, callErr = r.fallbackCaller(attemptCtx, candidateModel, requestBody, extraHeaders)
 	} else {
 		resBody, statusCode, callErr = r.dispatchFallbackHTTP(attemptCtx, ctx, dispatch, requestBody, orch)
@@ -360,24 +355,26 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	attemptDuration := time.Since(attemptStart)
 
 	attemptOutcome := fallback.AttemptOutcome{
-		Model:      candidateModel,
-		Backend:    dispatch.backendName,
-		StatusCode: statusCode,
-		Error:      callErr,
-		Duration:   attemptDuration,
-		Discarded:  callErr != nil || statusCode < 200 || statusCode >= 300,
+		Model:            candidateModel,
+		Backend:          dispatch.backendName,
+		StatusCode:       statusCode,
+		Error:            callErr,
+		Duration:         attemptDuration,
+		Discarded:        callErr != nil || statusCode < 200 || statusCode >= 300,
+		ForwardedHeaders: forwardedFallbackHeaders(ctx, orch),
 	}
 
 	if callErr != nil || statusCode < 200 || statusCode >= 300 {
 		attemptOutcome.ErrorMessage = string(resBody)
 		evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 		logging.ComponentWarnEvent("extproc", "fallback_candidate_attempt_failed", map[string]interface{}{
-			"request_id":      ctx.RequestID,
-			"candidate_model": candidateModel,
-			"status":          statusCode,
-			"error":           callErr,
-			"can_fallback":    evalResult.CanFallback,
-			"final_status":    ctx.FallbackRecord.FinalStatus,
+			"request_id":        ctx.RequestID,
+			"candidate_model":   candidateModel,
+			"status":            statusCode,
+			"error":             callErr,
+			"can_fallback":      evalResult.CanFallback,
+			"final_status":      ctx.FallbackRecord.FinalStatus,
+			"forwarded_headers": attemptOutcome.ForwardedHeaders,
 		})
 		return nil, evalResult, fmt.Errorf("candidate %s failed with status %d: %w", candidateModel, statusCode, callErr)
 	}
@@ -483,6 +480,9 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	ctx.TargetFormat = dispatch.targetFormat
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticResponse = &candidateResponse
+	// The call was buffered, but the client still reads its own stream, which
+	// is rendered with its own stream options.
+	reqCopy.Stream, reqCopy.StreamOptions = origSemanticRequest.Stream, origSemanticRequest.StreamOptions
 	ctx.SemanticRequest = reqCopy
 	ctx.ResponseEnvelope = translated.Envelope
 	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(translated.Diagnostics)
@@ -642,8 +642,10 @@ type fallbackCandidate struct {
 // encodes its request: reasoning, decision and request parameters,
 // capability checks, codec encoding, provider adaptation and the rate limit,
 // as for the primary. buffered asks for a non-streaming response, which the
-// response-phase fallback needs to answer at once; the native gateway keeps
-// the client's streaming mode.
+// response-phase fallback needs to answer at once, so the call carries none of
+// the client's stream options either; the native gateway keeps the client's
+// streaming mode, and a streamed call asks a Chat backend for its usage as the
+// primary's does.
 func (r *OpenAIRouter) prepareFallbackCandidate(
 	callCtx context.Context,
 	candidateRef *config.ModelRef,
@@ -678,6 +680,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	reqCopy.Model = dispatch.upstreamModel
 	if buffered {
 		reqCopy.Stream = false
+		reqCopy.StreamOptions = llmprotocol.StreamOptions{}
 	}
 	if useReasoning {
 		effort := candidateRef.ReasoningEffort
@@ -737,6 +740,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	if projectionErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
+	requestBackendStreamUsage(dispatch.targetFormat, &projected)
 	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
 	if encodeErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
@@ -908,11 +912,16 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 			timeout = remaining
 		}
 	}
+	tlsConfig, err := providerTLSConfig(dispatch.profile)
+	if err != nil {
+		return nil, 0, err
+	}
 	client, err := connector.New(base, authorize, connector.Options{
 		AttemptTimeout:   timeout,
 		MaxRequestBytes:  16 << 20,
 		MaxResponseBytes: 32 << 20,
 		MaxErrorBytes:    8 << 10,
+		TLSConfig:        tlsConfig,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -929,12 +938,7 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		Query:             query,
 		SuccessStatusCode: http.StatusOK,
 	}
-	reqHeaders := make(map[string]string)
-	if dispatch.profile != nil {
-		for k, v := range dispatch.profile.ExtraHeaders {
-			reqHeaders[k] = v
-		}
-	}
+	reqHeaders := fallbackRequestHeaders(reqCtx, dispatch.profile, orch)
 	resp, err := client.DoRequest(ctx, operation, connector.Request{
 		Body:    body,
 		Headers: reqHeaders,

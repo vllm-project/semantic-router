@@ -361,6 +361,7 @@ func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
 			"headers":     map[string]string{"X-Tenant": "production"},
 			"api_version": "2026-09-01",
 			"chat_path":   "/chat/completions",
+			"tls":         map[string]string{"ca_file": "/etc/vllm-sr/certs/example-corp-ca.pem", "server_name": "provider.internal"},
 		},
 	}
 
@@ -402,6 +403,7 @@ func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
 		"headers":     map[string]interface{}{"X-Tenant": "production"},
 		"api_version": "2026-09-01",
 		"chat_path":   "/chat/completions",
+		"tls":         map[string]interface{}{"ca_file": "/etc/vllm-sr/certs/example-corp-ca.pem", "server_name": "provider.internal"},
 	}
 	for key, expected := range want {
 		if actual := got[key]; !reflect.DeepEqual(actual, expected) {

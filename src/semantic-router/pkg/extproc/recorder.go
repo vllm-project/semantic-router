@@ -149,8 +149,8 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 		return
 	}
 	record.SessionID = identity.sessionID
-	if identity.conversationID != "" {
-		record.ConversationID = identity.conversationID
+	if conversationID := identity.declaredConversationID(); conversationID != "" {
+		record.ConversationID = conversationID
 	}
 	// Persist the key the gate resolved, so outcome ingest can land feedback
 	// in the same window even when the session id alone keys it wider.

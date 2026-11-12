@@ -450,6 +450,9 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "tls": {
+          "$ref": "#/$defs/DeploymentTLS"
         }
       },
       "additionalProperties": false,
@@ -742,6 +745,9 @@
         },
         "reasoning_effort": {
           "type": "string"
+        },
+        "tls": {
+          "$ref": "#/$defs/ProviderDefaultsTLS"
         }
       },
       "additionalProperties": false,
@@ -803,6 +809,16 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "unsupported_capabilities": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "sampling_min_p",
+              "sampling_logit_bias"
+            ]
+          },
+          "type": "array"
         },
         "display_name": {
           "type": "string"
@@ -2361,6 +2377,16 @@
         "overlap": {
           "type": "integer",
           "minimum": 0
+        },
+        "max_parallel": {
+          "type": "integer",
+          "maximum": 64,
+          "minimum": 1
+        },
+        "max_tokens": {
+          "type": "integer",
+          "maximum": 1048576,
+          "minimum": 256
         }
       },
       "additionalProperties": false,
@@ -2673,6 +2699,12 @@
         },
         "circuit_breaker": {
           "$ref": "#/$defs/CircuitBreakerConfig"
+        },
+        "forward_request_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -3034,6 +3066,11 @@
             "no_match",
             "unknown"
           ]
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         },
         "on_unknown": {
           "type": "string",
@@ -4072,6 +4109,12 @@
           },
           "type": "object"
         },
+        "forward_request_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "timeout_ms": {
           "type": "integer"
         },
@@ -4623,6 +4666,11 @@
             "unknown"
           ]
         },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
         "on_unknown": {
           "type": "string",
           "enum": [
@@ -4917,6 +4965,15 @@
         },
         "preserve_last_n": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProviderDefaultsTLS": {
+      "properties": {
+        "ca_file": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -6278,6 +6335,11 @@
         },
         "timeout_ms": {
           "type": "integer"
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         }
       },
       "additionalProperties": false,

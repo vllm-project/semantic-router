@@ -16,6 +16,8 @@ type CanonicalProviders struct {
 type CanonicalProviderDefaults struct {
 	DefaultModel           string `yaml:"model,omitempty"`
 	DefaultReasoningEffort string `yaml:"reasoning_effort,omitempty"`
+	// TLS is the trust of every https backend whose own tls names no CA.
+	TLS *ProviderDefaultsTLS `yaml:"tls,omitempty"`
 }
 
 // CanonicalProviderModel describes one model alias in one place: how requests
@@ -40,7 +42,13 @@ type CanonicalProviderModel struct {
 	// schema IDs; omitted, the API's default (systemone/0.2 for systemone).
 	Schema           string            `yaml:"schema,omitempty"`
 	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
-	ModelFacts       `yaml:",inline"`
+	// UnsupportedCapabilities lists the request capabilities the model's
+	// backends reject: sampling_min_p or sampling_logit_bias, both of which a
+	// vLLM backend that runs speculative decoding rejects. The Router sends
+	// this model requests without those fields and reports each in
+	// x-vsr-warnings; other models still receive them.
+	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
+	ModelFacts              `yaml:",inline"`
 }
 
 // ModelFactFields are the keys of the facts a providers.models[] entry states.
@@ -137,6 +145,11 @@ type CanonicalBackendRef struct {
 	Auth *DeploymentAuth `yaml:"auth,omitempty"`
 	// Headers are non-secret headers sent with every request.
 	Headers map[string]string `yaml:"headers,omitempty"`
+	// TLS verifies an https backend as a deployment's tls block does, for
+	// Envoy and for the Router's own calls alike: ca_file replaces the system
+	// roots, server_name the endpoint's host, and cert_file with key_file
+	// present a client certificate. Verification is never skipped.
+	TLS *DeploymentTLS `yaml:"tls,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

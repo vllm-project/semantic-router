@@ -197,11 +197,11 @@ func TestScanWindowsCoverTheWholeTextWithOverlap(t *testing.T) {
 			t.Fatalf("windows %d and %d share %d bytes, want about %d", index-1, index, shared, overlap)
 		}
 	}
-	if order := scanOrder(5); fmt.Sprint(order) != "[4 0 1 2 3]" {
-		t.Fatalf("reading order %v, want the tail, the head, then the middle", order)
+	if order := scanOrder(5, 0); fmt.Sprint(order) != "[4 0 2 1 3]" {
+		t.Fatalf("reading order %v, want the tail, the head, then the middle by halves", order)
 	}
-	if order := scanOrder(100); len(order) != maxScanWindows || order[0] != 99 || order[1] != 0 {
-		t.Fatalf("reading order of 100 windows %v", order)
+	if order := scanOrder(maxScanWindows+36, 7); len(order) != maxScanWindows || order[0] != maxScanWindows+35 || order[1] != 0 {
+		t.Fatalf("reading order of %d windows %v", maxScanWindows+36, order)
 	}
 }
 
@@ -266,18 +266,19 @@ func TestViewAndWindowBudgetsComeFromTheDeploymentAndTheCard(t *testing.T) {
 	remote := newFakeSystemOne()
 	classifier.SetSystemOneDecider(remote)
 	// Bytes: four a configured token, at most a byte a token of the card's
-	// cap less the reserve.
-	for deployment, want := range map[string][4]float64{
-		"local":     {32_768, 0.25, 32_768, 2048},
-		"bounded":   {8192, 0.5, 8192, 2048},
-		"small":     {4096 - routingViewReserveTokens, 0.25, 4096 - routingViewReserveTokens, (4096-routingViewReserveTokens)/2 - 1},
-		"hosted-d3": {16_384, 0.25, 16_384, 1024},
-		"unknown":   {32_768, 0.25, 32_768, 2048},
+	// cap less the reserve. A long input's windows grow up to that cap, and
+	// past the configured size only on a card that states one.
+	for deployment, want := range map[string][5]float64{
+		"local":     {32_768, 0.25, 32_768, 2048, 65_536 - routingViewReserveTokens},
+		"bounded":   {8192, 0.5, 8192, 2048, 32_768 - routingViewReserveTokens},
+		"small":     {4096 - routingViewReserveTokens, 0.25, 4096 - routingViewReserveTokens, (4096-routingViewReserveTokens)/2 - 1, 4096 - routingViewReserveTokens},
+		"hosted-d3": {16_384, 0.25, 16_384, 1024, 16_384},
+		"unknown":   {32_768, 0.25, 32_768, 2048, 32_768},
 	} {
 		budget, share := classifier.routingViewBudget(deployment)
-		size, overlap := classifier.scanWindowBudget(deployment)
-		if got := [4]float64{float64(budget), share, float64(size), float64(overlap)}; got != want {
-			t.Fatalf("%s: view %d bytes (head %.2f), windows %d overlapping %d; want %v", deployment, budget, share, size, overlap, want)
+		windows := classifier.scanWindowBudget(deployment)
+		if got := [5]float64{float64(budget), share, float64(windows.size), float64(windows.overlap), float64(windows.most)}; got != want {
+			t.Fatalf("%s: view %d bytes (head %.2f), windows %d overlapping %d, at most %d; want %v", deployment, budget, share, windows.size, windows.overlap, windows.most, want)
 		}
 	}
 	remote.card.MaxInputTokens, remote.card.ValidatedInputTokens = 262_144, 2048
@@ -310,8 +311,7 @@ func TestViewsAndWindowsOfDenseTextNeverOverrunTheModel(t *testing.T) {
 			if len(view)+routingViewReserveTokens > validated || !strings.HasSuffix(view, "Summarize the attachment above.") {
 				t.Fatalf("%s on %s: a %d-byte view, over the cap of %d less the reserve", kind, deployment, len(view), validated)
 			}
-			size, overlap := classifier.scanWindowBudget(deployment)
-			scan := newGuardScan(deployment, modelservice.Request{State: text}, size, overlap)
+			scan := newGuardScan(deployment, modelservice.Request{State: text}, classifier.scanWindowBudget(deployment))
 			if scan == nil || len(scan.windows) < 6 || scan.windows[len(scan.windows)-1].end != len(text) {
 				t.Fatalf("%s on %s: the scan does not cover the turn", kind, deployment)
 			}

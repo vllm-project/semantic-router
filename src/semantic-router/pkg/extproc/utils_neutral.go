@@ -105,7 +105,7 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 		}
 		recordNonUserSignalMessage(result, string(instruction.Role), text)
 	}
-	routing := selector.Walk()
+	routing := selector.Walk(routingUserTexts(selector, request.Messages)...)
 	for index, message := range request.Messages {
 		if message.Role == llmprotocol.RoleUser && selector != nil {
 			var skipped bool
@@ -131,11 +131,16 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 	previousWasTool := result.LastMessageToolResult || result.LastMessageRole == string(llmprotocol.RoleTool)
 	role := string(message.Role)
 	text := semanticText(message.Content)
-	result.LastMessageRole = role
-	result.LastMessageToolResult = false
-	result.LastMessageFlowToolResult = false
-	result.LastAssistantToolCall = false
-	result.LastUserAfterToolResult = false
+	// Like the request's instructions, a system or developer message inside
+	// the conversation is not a turn: the last-message facts stay those of the
+	// user turn or tool result it follows.
+	if !isInstructionRole(message.Role) {
+		result.LastMessageRole = role
+		result.LastMessageToolResult = false
+		result.LastMessageFlowToolResult = false
+		result.LastAssistantToolCall = false
+		result.LastUserAfterToolResult = false
+	}
 	switch message.Role {
 	case llmprotocol.RoleUser:
 		result.UserMessageCount++

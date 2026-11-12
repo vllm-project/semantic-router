@@ -18,6 +18,14 @@ func TestApplicationRuleOnUnknownAndOnUnscannedTakeTheirValues(t *testing.T) {
 		"response stage": {applicationRuleSpec{signalType: SignalTypeJailbreak, preset: presets.Jailbreak, stage: presets.StageResponse, onUnknown: "match"}, "response_guard plugin's on_unknown"},
 		"best effort":    {applicationRuleSpec{signalType: SignalTypePII, preset: presets.PII, onUnscanned: "best_effort"}, ""},
 		"v0.4 allow":     {applicationRuleSpec{signalType: SignalTypeJailbreak, preset: presets.Jailbreak, onUnscanned: "allow"}, "on_unscanned must be best_effort, match, no_match or unknown"},
+		"min_coverage":   {applicationRuleSpec{signalType: SignalTypeSafety, preset: presets.Harm, onUnscanned: "best_effort", minCoverage: 0.5}, ""},
+		"min_coverage 1": {applicationRuleSpec{signalType: SignalTypeJailbreak, preset: presets.Jailbreak, onUnscanned: "best_effort", minCoverage: 1}, ""},
+		"min_coverage over one": {
+			applicationRuleSpec{signalType: SignalTypePII, preset: presets.PII, onUnscanned: "best_effort", minCoverage: 1.5}, "min_coverage must be between 0 and 1",
+		},
+		"min_coverage without best_effort": {
+			applicationRuleSpec{signalType: SignalTypeJailbreak, preset: presets.Jailbreak, onUnscanned: "match", minCoverage: 0.5}, "min_coverage applies to on_unscanned: best_effort",
+		},
 	} {
 		err := validateApplicationRuleSpec(tc.spec)
 		if tc.want == "" && err != nil {
