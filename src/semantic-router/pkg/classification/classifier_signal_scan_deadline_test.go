@@ -432,10 +432,36 @@ func TestAReplannedScanReadsItsRunsBeforeReReadsFarBelowTheThreshold(t *testing.
 		classifier.windowPaces.observe("primary", 30_000, 22*time.Millisecond*scale)
 	}
 
+	unknown := unknownAnswersCounted(t)
 	results := evaluateTurn(classifier, distinctProse(300_000, 9)+"\n\nSummarize the minutes above.")
 
 	if results.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull || guarded(results) {
 		t.Fatalf("coverage %v (guarded %v): the runs should all be read before the re-reads far below the threshold", results.ScanCoverage, guarded(results))
+	}
+	// The deadline cuts re-reads that waited, whose questions the runs answered.
+	if counted := unknownAnswersCounted(t) - unknown; counted != 0 {
+		t.Fatalf("%v questions the runs answered were counted unknown", counted)
+	}
+}
+
+// The pace a scan teaches its deployment ends once the cut's windows are all
+// read: the re-reads that waited for them read none of its windows, and would
+// make the deployment seem to read each window two to three times slower.
+func TestReReadsThatWaitAreLeftOutOfTheDeploymentsPace(t *testing.T) {
+	pace := func(score float64) time.Duration {
+		classifier, _ := scoredGuardClassifier(t, 60*time.Second, 3*time.Millisecond, 0.5, func(string) float64 { return score })
+		evaluateTurn(classifier, distinctProse(700_000, 11)+"\n\nSummarize the minutes above.")
+		perCall, perByte, ok := classifier.windowPaces.line("primary", 4)
+		if !ok {
+			t.Fatal("the scan taught its deployment no pace")
+		}
+		return time.Duration((perCall + perByte*configuredWindow) * float64(time.Second))
+	}
+	// At 0.01 no window is read again; at 0.1 each, 2.2 below the threshold
+	// in log-odds, waits for the cut.
+	alone, waited := pace(0.01), pace(0.1)
+	if waited > alone*3/2 {
+		t.Fatalf("a window takes %v at the pace of a scan whose re-reads waited, %v without them", waited, alone)
 	}
 }
 

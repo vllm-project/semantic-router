@@ -593,7 +593,7 @@ func (scan *guardScan) waitingCalls() []*systemOneCall {
 			calls = append(calls, scan.addWindowLocked(part, scan.rank))
 		}
 	}
-	scan.waiting = nil
+	scan.waiting, scan.pace.cutRead = nil, time.Now()
 	return calls
 }
 
@@ -607,7 +607,7 @@ func (scan *guardScan) addWindowLocked(window scanWindow, rank int) *systemOneCa
 	scan.done = append(scan.done, false)
 	request := scan.windowState(scan.text[window.start:window.end])
 	request.Window, request.Parallel = rank, scan.parallel
-	return &systemOneCall{deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index}
+	return &systemOneCall{deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index, reread: window.first < 0}
 }
 
 // refusingRules are the rules among rules whose match in one window refuses

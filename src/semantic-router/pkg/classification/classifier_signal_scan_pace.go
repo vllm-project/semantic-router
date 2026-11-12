@@ -48,7 +48,8 @@ const (
 // started and when its deadline is, the context each window of its cut is
 // read under and the function that cancels it, whether it judged that it
 // fell behind, and once it re-planned, when, the bytes of its larger windows
-// and the calls that read them that its readers have yet to take.
+// and the calls that read them that its readers have yet to take; and when
+// its cut's windows and runs were all read, once re-reads waited for them.
 type scanPace struct {
 	stage             *scanStop
 	started, deadline time.Time
@@ -58,6 +59,7 @@ type scanPace struct {
 	at                time.Time
 	size              int
 	pending           []*systemOneCall
+	cutRead           time.Time
 }
 
 // windowPace is one deployment's learned pace: the decayed weight of its
@@ -310,5 +312,10 @@ func (c *Classifier) observePace(scan *guardScan, cause error) {
 	if read == 0 && cut == 0 {
 		return
 	}
-	c.windowPaces.observe(scan.deployment, size, time.Since(from)/time.Duration(max(read, 1)))
+	// The re-reads that waited for the cut read none of its windows.
+	end := time.Now()
+	if !pace.cutRead.IsZero() {
+		end = pace.cutRead
+	}
+	c.windowPaces.observe(scan.deployment, size, end.Sub(from)/time.Duration(max(read, 1)))
 }
