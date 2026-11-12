@@ -42,10 +42,11 @@ type DeploymentRoutingView struct {
 
 // DeploymentScanWindow sizes the windows a guard rule (jailbreak, safety,
 // pii) reads a long input in: windows of Tokens, each overlapping the one
-// before by Overlap, read tail first, then head, then the middle, each in a
-// call of its own with at most MaxParallel in flight. Windows are sized in
-// bytes as routing views are, so the model's validated length bounds a
-// window whatever Tokens says and however dense the text.
+// before by Overlap, read tail first, then head, then the middle by halves,
+// each in a call of its own with at most MaxParallel in flight. Windows are
+// sized in bytes as routing views are, so the model's validated length bounds
+// a window whatever Tokens says and however dense the text; an input that
+// needs more than 256 windows is read in larger ones, up to that length.
 type DeploymentScanWindow struct {
 	// Tokens is the size of one window in tokens of prose, as four bytes
 	// each (default 8192; 4096 for a systemone deployment).
@@ -58,6 +59,12 @@ type DeploymentScanWindow struct {
 	// deployment reads at a time (default 4). The windows read when the
 	// signals' deadline ends are the ones a partial scan decides on.
 	MaxParallel int `yaml:"max_parallel,omitempty" json:"max_parallel,omitempty" jsonschema:"minimum=1,maximum=64"`
+	// MaxTokens is the largest a window grows to, in tokens of prose as four
+	// bytes each, for an input whose windows of Tokens would not all be read
+	// by the signals' deadline at the deployment's measured pace, or would
+	// number more than 256. By default the model's validated length less the
+	// reserve, which bounds every window whatever MaxTokens says.
+	MaxTokens int `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty" jsonschema:"minimum=256,maximum=1048576"`
 }
 
 // RoutingViewTokens is the routing view's bound and head share the
@@ -105,6 +112,15 @@ func (d ModelDeployment) ScanWindowParallel() int {
 	return DefaultScanWindowParallel
 }
 
+// ScanWindowMaxTokens is the largest a window of the deployment grows to, in
+// tokens of prose, or 0 for the model's validated length.
+func (d ModelDeployment) ScanWindowMaxTokens() int {
+	if window := d.ScanWindow; window != nil {
+		return window.MaxTokens
+	}
+	return 0
+}
+
 func (d ModelDeployment) validateInputViews() error {
 	if d.RoutingView == nil && d.ScanWindow == nil {
 		return nil
@@ -130,6 +146,9 @@ func (d ModelDeployment) validateInputViews() error {
 		}
 		if window.MaxParallel < 0 || window.MaxParallel > MaxScanWindowParallel {
 			return fmt.Errorf("scan_window.max_parallel must be between 1 and %d", MaxScanWindowParallel)
+		}
+		if window.MaxTokens != 0 && (window.MaxTokens < tokens || window.MaxTokens > MaxModelInputTokens) {
+			return fmt.Errorf("scan_window.max_tokens must be at least scan_window.tokens (%d) and at most %d", tokens, MaxModelInputTokens)
 		}
 	}
 	return nil

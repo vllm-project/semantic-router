@@ -173,7 +173,7 @@ var registry = []Header{
 	{VSRResponsePath, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`."},
 	{VSRConfigVersion, ToClient, SurfacePublic, SensitivityNone, "config", "v0.5", "Version of the configuration snapshot that served the request."},
 	{VSRConfigHash, ToClient, SurfacePublic, SensitivityNone, "config", "v0.4", "SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`."},
-	{VSRWarnings, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.5", "Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."},
+	{VSRWarnings, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.5", "Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."},
 
 	// Final routing facts.
 	{VSRSelectedRecipe, ToClient, SurfacePublic, SensitivityNone, "routing", "v0.4", "Recipe the effective entrypoint selected; omitted for concrete backend models."},

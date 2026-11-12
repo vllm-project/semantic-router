@@ -810,6 +810,16 @@
           },
           "type": "object"
         },
+        "unsupported_capabilities": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "sampling_min_p",
+              "sampling_logit_bias"
+            ]
+          },
+          "type": "array"
+        },
         "display_name": {
           "type": "string"
         },
@@ -2372,6 +2382,11 @@
           "type": "integer",
           "maximum": 64,
           "minimum": 1
+        },
+        "max_tokens": {
+          "type": "integer",
+          "maximum": 1048576,
+          "minimum": 256
         }
       },
       "additionalProperties": false,
@@ -3051,6 +3066,11 @@
             "no_match",
             "unknown"
           ]
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         },
         "on_unknown": {
           "type": "string",
@@ -4645,6 +4665,11 @@
             "no_match",
             "unknown"
           ]
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         },
         "on_unknown": {
           "type": "string",
@@ -6310,6 +6335,11 @@
         },
         "timeout_ms": {
           "type": "integer"
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         }
       },
       "additionalProperties": false,

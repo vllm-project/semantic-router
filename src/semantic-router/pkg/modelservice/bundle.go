@@ -45,6 +45,7 @@ type participantKey struct{}
 // participant asks each deployment once, before any other runtime call. Once
 // its questions are sent, a caller waits for them until the latest deadline
 // of the exchange that carries them: the stage waits for that exchange anyway.
+// A caller whose context is cancelled stops waiting at once.
 //
 // A guard window (Request.Window) is sent with the deployment's other
 // questions but in an exchange of its own, with the other calls about the
@@ -408,11 +409,23 @@ func (c *bundleCall) wait() error {
 	}
 }
 
+// waitCarrier waits for a sent call until the exchange that carries it ends,
+// or until its caller gives up on it: a caller whose context is cancelled,
+// rather than past its deadline, waits no longer.
 func (c *bundleCall) waitCarrier() error {
 	select {
 	case <-c.done:
 		return c.answered()
 	case <-c.carrier.Done():
+	case <-c.ctx.Done():
+		if errors.Is(c.ctx.Err(), context.Canceled) {
+			return c.ctx.Err()
+		}
+		select {
+		case <-c.done:
+			return c.answered()
+		case <-c.carrier.Done():
+		}
 	}
 	select {
 	case <-c.done:

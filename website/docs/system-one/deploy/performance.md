@@ -93,13 +93,33 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
 
 - An input longer than one `scan_window` is split into windows that overlap by
   `scan_window.overlap`, so text across a cut is read whole by one of them.
-- The windows are read tail first, then the head, then the middle in order,
-  each in a call of its own, at most `scan_window.max_parallel` at a time per
-  deployment. The `jailbreak`, `safety` and `pii` rules that read the same input
-  share each window's call, and a window's answers count as soon as it is read.
+- The windows are read tail first, then the head, then the middle by halves:
+  the window at its middle, then those at its quarters, its eighths and so on,
+  from a starting point that changes with every request. The windows read by
+  any moment are spread over the whole input, so no part of it is predictably
+  left unread. Each window is a call of its own, at most
+  `scan_window.max_parallel` at a time per deployment. The `jailbreak`,
+  `safety` and `pii` rules that read the same input share each window's call,
+  and a window's answers count as soon as it is read.
 - Any window that finds an attack, a harm or personal data flags the input.
   `pii` spans keep their places in the input, so masking replaces every one.
-- One input reads at most 256 windows; the rest counts as unread.
+- A window that makes a rule match decides it: no unread window can undo a
+  match. When that match alone refuses the request, because a decision with a
+  `fast_response` plugin matches on the rule by itself and no other decision
+  ranks above it, the window ends the request's guard scans: the windows not
+  read yet are not sent, and the request is refused at once instead of at the
+  deadline.
+- One input reads at most 256 windows. An input that needs more of them is
+  read in larger windows instead, up to `scan_window.max_tokens` (by default
+  the largest the model takes: 31,744 bytes for a 32,768-token validated
+  length), so 256 cover it whole. Only an input longer than 256 of the largest
+  windows, about 7.5 MB, leaves windows unread, and they count as unread.
+- The windows are sized to the time the signals' deadline leaves. The Router
+  learns how long each deployment takes per window from the scans it served,
+  and an input whose windows would not all be read in time at that pace is
+  read in larger windows, the smallest that are, up to `scan_window.max_tokens`:
+  every part read at a larger size catches more than a fraction read at a small
+  one. An input whose windows are all read in time keeps the configured size.
 
 ```yaml
 global:
@@ -126,6 +146,7 @@ global:
 | `scan_window.tokens` | 8,192; 4,096 for `provider: systemone` | 256 to 1,048,576 |
 | `scan_window.overlap` | 512; 256 for `provider: systemone` | 0 to less than half a window |
 | `scan_window.max_parallel` | 4 | 1 to 64 |
+| `scan_window.max_tokens` | the model's validated length less 1,024 | `scan_window.tokens` to 1,048,576 |
 
 **Views and windows are sized in bytes.** A token of `max_tokens` or
 `scan_window.tokens` counts as four bytes, about what a token of prose takes,
@@ -149,22 +170,43 @@ JSON or base64. A scan's windows share the deadline: the deployment reads
 `scan_window.max_parallel` of them at a time, the tail and the head first, so
 the windows read when the deadline comes are the ones a partial scan decides
 on. A window not read in time counts as unread, and with `best_effort` the rule
-decides on the windows read. Lower `scan_window.tokens` for a slow API, and
+decides on the windows read. A long input's windows grow to be read in time at
+the deployment's measured pace, as far as `scan_window.max_tokens` allows; the
+cost a call adds besides its text is what larger windows save, so on one
+decision model an input of about a million tokens may still be read only in
+part, and `scan_partial` says so. Lower `scan_window.tokens` for a slow API, and
 raise the deadline for inputs you expect to scan in full; more windows in
 flight help only while the model has room to batch them.
 
 **Coverage and failures.** When the deadline ends a scan before every window is
-read, `on_unscanned` decides: `best_effort` (the default) decides on the windows
-read, `match` matches (strict), `no_match` does not, and `unknown` leaves the rule
-to `on_unknown`. When no window is read at all (the model is down, or no
-window answered in time), a `jailbreak` or `pii` rule follows `on_unknown`,
-which matches by default (fail closed), and a `safety` rule is unknown, which
-its decision's `rules.on_unknown` decides.
+read, and no window read decides the rule, `on_unscanned` decides:
+`best_effort` (the default) decides on the windows read, `match` matches
+(strict), `no_match` does not, and `unknown` leaves the rule to `on_unknown`. A
+rule's `min_coverage`, a share from 0 to 1 that is off by default, sets how
+much `best_effort` must have read: below it the rule reads as `unknown`, so a
+`jailbreak` or `pii` rule matches by default and the guard refuses what it read
+too little of. When no window is read at all (the model is down, or no window
+answered in time), a `jailbreak` or `pii` rule follows `on_unknown`, which
+matches by default (fail closed), and a `safety` rule is unknown, which its
+decision's `rules.on_unknown` decides.
+
+```yaml
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_attack
+          min_coverage: 0.5
+```
 
 Coverage is reported for every guard rule that read its input in windows:
 
+- `x-vsr-warnings` carries `scan_partial`, for every caller, on a request that
+  was routed while a request-stage guard rule had read only part of its input;
 - `vsr_signal_scan_coverage_total{signal, result}` counts each guard rule's read
-  as `full`, `partial` or `none`;
+  as `full`, `partial` or `none`, `vsr_signal_scan_coverage_ratio{signal}` gives
+  the share of its windows it read, and `vsr_signal_scan_decided_total{signal}`
+  counts the rules a window decided before the rest was read;
 - the routing preview (`scan_coverage`) and the Router Replay record
   (`scan_coverage`) give `full`, `partial n/m` or `none` per rule;
 - `x-vsr-trace` carries it as `scan_coverage` for a caller allowed the debug

@@ -93,6 +93,7 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 | Seed 以及频率或存在惩罚 | Supported | Not supported | Not supported |
 | `top_k` 采样 | Supported 扩展 | Not supported | 非负值 Supported |
 | `min_p`、重复惩罚和缓存盐 | Supported 扩展 | Not supported | Not supported |
+| Token logit 偏置（`logit_bias`） | Supported | Not supported | Not supported |
 | 停止序列 | Supported | Not supported | Supported |
 | 原生响应或会话状态字段 | Not supported | Supported | Not supported |
 
@@ -132,6 +133,32 @@ Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它�
 `verbosity` 字段；Messages 没有对应字段，因此 Router 丢弃这个输出详细程度提示，
 并在 `x-vsr-warnings` 中报告 `text.verbosity`。
 
+### 后端拒绝的采样控制 {#sampling-controls-a-backend-rejects}
+
+有些后端会拒绝其线路格式定义的采样控制。例如，运行推测解码（speculative
+decoding）的 vLLM 后端会以 HTTP 400 拒绝任何携带 `min_p` 或 `logit_bias` 的请求。
+在模型的 `unsupported_capabilities` 中列出这类控制：
+
+```yaml
+providers:
+  models:
+    - name: qwen3-mtp
+      api_format: chat_completions
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
+      backend_refs:
+        - name: mtp-pool
+          endpoint: mtp-server:8000
+          provider: vllm
+```
+
+- **仅对该模型省略。** 发给该模型的请求，无论它是决策的选择还是回退候选，到达时都不带所列字段。
+- **会报告。** `x-vsr-warnings` 会为每个被省略的字段（`min_p` 或 `logit_bias`）报告 `dropped` 诊断。
+- **其他模型不受影响。** 同一决策的其他模型仍会收到这些字段。
+
+该列表接受 `sampling_min_p` 和 `sampling_logit_bias`；其他名称会在加载时失败。网关会把模型的请求分摊到它的各个
+`backend_refs`，因此只要其中任何一个拒绝某个控制，就应列出它。若要为决策路由到的每个模型移除某个控制，请改为在该决策的
+[`request_params`](../tutorials/plugin/request-params) `blocked_params` 中列出它。
+
 ## 配置后端格式
 
 客户端可以使用任何受支持的面向客户端端点；`api_format` 控制所选后端接收的内容：
@@ -159,12 +186,15 @@ providers:
 ## 校验和失败行为
 
 - 即使客户端和后端格式匹配，公共请求也会被解码为中立契约。未知或不支持的请求字段会失败关闭。
+- Chat 请求接受但不转发客户端库在回放 assistant 消息时添加的字段：LiteLLM 的 `provider_specific_fields`（存放其消息类型没有的回复字段），以及 openai SDK 自己的解析结果 `parsed` 和 `tool_calls[].function.parsed_arguments`。取值不为 null 的字段报告为 `dropped`。与其他 Responses 输入项一样，reasoning 项可以带有 `status`，openai SDK 的流式辅助方法会设置它。
 - 跨协议请求保留共享语义。无法表示的目标特定功能会返回类型化协议错误。对于运维人员可以接受的损失（例如 `tool_result.is_error`），`lossy_translation` 错误会指出接受该损失的 `global.router.allow_lossy_translation` 设置；`unsupported_capability` 错误不会指出。
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。
 - vLLM 的服务元数据无论取值如何都不会导致回复失败：回复或流式块顶层的 `prompt_logprobs`、`prompt_text`、`prompt_routed_experts`、`kv_transfer_params`、`ec_transfer_params` 和 `metrics`，以及 choices 中的 `routed_experts` 和 `weight_versions`。Chat 客户端原样收到这些字段；取值不为 null 或空时报告为 `dropped`。在 vLLM-Omni 的流中，`modality` 不是 `text` 的块会以 `unsupported_upstream_audio`（或 `unsupported_upstream_modality`）失败，因为其 `delta.content` 承载的是编码后的媒体，而不是回答文本。
 - Chat 提供方以 `finish_reason: "stop"` 结束强制指定的工具调用。对于以这种方式结束且包含 `tool_use` 块的轮次，Anthropic Messages 客户端会收到 `stop_reason: "tool_use"`。因达到输出上限、命中停止序列或拒绝而结束的轮次保留原停止原因。
+- 当输出上限在工具调用中途截断一个非流式回复时，客户端收到带有上限停止原因的回复：Chat 为 `finish_reason: "length"`，Responses 为原因为 `max_output_tokens` 的 incomplete 响应，Anthropic Messages 为 `stop_reason: "max_tokens"`。Chat 和 Responses 客户端收到的调用参数与后端发送的一致。由于 `tool_use.input` 必须是对象，Messages 客户端收到的是模型在截断前已完成的成员，Router 会为 `content.tool_use.input` 报告 `approximated` 诊断。只有回复中的最后一个调用可以被截断。不是 JSON 对象开头的参数，或者被截断的调用之后还有其他输出，仍会使回复失败。
+- Chat 流的一个 chunk 可以包含多个 `index` 相同的 `tool_calls` 条目，vLLM 的工具解析器在最后一个 chunk 中补发调用的剩余部分时就是这样。这些条目按顺序续写同一个调用，与 OpenAI SDK 的拼接方式一致。`index` 相同但指向不同调用的条目会以 `duplicate_stream_tool_index` 失败。
 - Anthropic 的 `model_context_window_exceeded` 停止以 `finish_reason: "length"` 到达 Chat 客户端，并以原因为 `max_output_tokens` 的 incomplete 响应到达 Responses 客户端，与 vLLM 报告输出达到 `max_model_len` 的方式一致。Router 会为 `response.stop_reason` 报告 `approximated` 诊断。`pause_turn` 停止对这些客户端仍会失败。
 - 适用时，`x-vsr-warnings` 以及 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员会暴露翻译细节。参见 [VSR 路由标头](../api/headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。
 

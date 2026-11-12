@@ -2451,6 +2451,12 @@ class Model(ModelFacts):
         "API's default (systemone/0.2 for systemone).",
     )
     external_model_ids: Optional[Dict[str, str]] = None
+    unsupported_capabilities: Optional[List[str]] = Field(
+        default=None,
+        description="Request capabilities the model's backends reject, "
+        "sampling_min_p or sampling_logit_bias; the Router sends this model "
+        "requests without those fields.",
+    )
 
     @field_validator("api_format")
     @classmethod

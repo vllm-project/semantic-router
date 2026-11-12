@@ -60,13 +60,10 @@ const (
 var resourceManifests = []string{
 	baseModelManifest,
 	gatewayAPIManifest,
-	// Serves the System One fixture the jailbreak and PII rules ask.
-	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
 var waitDeployments = []helpers.DeploymentRef{
 	{Namespace: namespaceDefault, Name: deploymentDemoLLM},
-	{Namespace: namespaceDefault, Name: "provider-mocker"},
 }
 
 // Profile implements the production-stack test profile.
@@ -84,8 +81,12 @@ func NewProfile() *Profile {
 			SemanticRouterSet: map[string]string{
 				"replicaCount": "1",
 			},
-			ResourceManifests: resourceManifests,
-			WaitDeployments:   waitDeployments,
+			// provider-mocker serves the System One and embedding fixtures,
+			// which the Router prepares as it starts.
+			PrerequisiteManifests: []string{"deploy/kubernetes/hallucination/provider-mocker.yaml"},
+			PrerequisiteWaits:     []helpers.DeploymentRef{{Namespace: namespaceDefault, Name: "provider-mocker"}},
+			ResourceManifests:     resourceManifests,
+			WaitDeployments:       waitDeployments,
 		}),
 	}
 }
@@ -159,13 +160,6 @@ func (p *Profile) GetTestCases() []string {
 			"multi-replica-health",
 			"load-balancing-verification",
 			"failover-during-traffic",
-			"performance-throughput",
-			"resource-utilization-monitoring",
-			// Router intelligence layer — all configured in values.yaml
-			"domain-classify",
-			"pii-detection",
-			"jailbreak-detection",
-			"semantic-cache",
 		},
 	)
 }

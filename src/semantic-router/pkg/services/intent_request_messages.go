@@ -363,7 +363,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		},
 	}
 	previousWasToolResult := false
-	routing := selector.Walk()
+	routing := selector.Walk(intentUserTexts(selector, messages)...)
 
 	for index, msg := range messages {
 		role := strings.ToLower(strings.TrimSpace(msg.Role))
@@ -407,6 +407,21 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 	history.routingInput = routing.Outcome()
 
 	return history
+}
+
+// intentUserTexts lists the user messages as routing_input reads them, for a
+// walk's fallback; none without a selector.
+func intentUserTexts(selector *routinginput.Selector, messages []IntentMessage) []routinginput.UserText {
+	if selector == nil {
+		return nil
+	}
+	var texts []routinginput.UserText
+	for index, msg := range messages {
+		if strings.ToLower(strings.TrimSpace(msg.Role)) == "user" {
+			texts = append(texts, routinginput.UserText{Index: index, Text: extractIntentMessageRawText(msg.Content), TextOnly: intentMessageTextOnly(msg.Content)})
+		}
+	}
+	return texts
 }
 
 // intentMessageTextOnly reports whether message content is nothing but text,

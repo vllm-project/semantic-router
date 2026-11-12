@@ -67,9 +67,11 @@ translation:
 **防护规则分窗口读取完整输入。** 指 `jailbreak`、`safety` 和 `pii`，包括请求阶段和响应阶段。
 
 - 超过一个 `scan_window` 的输入被切成相互重叠 `scan_window.overlap` 的窗口，跨越切点的文本总能被某个窗口完整读到。
-- 读取顺序是先结尾，再开头，然后按顺序读中间。每个窗口单独一次调用，每个部署同时最多 `scan_window.max_parallel` 个。读取同一输入的 `jailbreak`、`safety` 和 `pii` 规则共用每个窗口的调用，一个窗口读完，它的回答立即计入。
+- 读取顺序是先结尾，再开头，然后按二分读中间：先读中点处的窗口，再读四分点、八分点处的窗口，依此类推，起点每个请求都不同。任一时刻已读的窗口都分布在整个输入上，因此输入的任何部分都不会可预知地被漏读。每个窗口单独一次调用，每个部署同时最多 `scan_window.max_parallel` 个。读取同一输入的 `jailbreak`、`safety` 和 `pii` 规则共用每个窗口的调用，一个窗口读完，它的回答立即计入。
 - 任何一个窗口发现攻击、危害或个人数据，整个输入即被标记。`pii` 的 span 保持其在原输入中的位置，脱敏会替换每一处。
-- 一个输入最多读取 256 个窗口，其余窗口计为未读。
+- 使规则匹配的窗口即决定了该规则：未读的窗口不能撤销一次匹配。如果这一匹配本身就会拒绝请求（有一个带 `fast_response` 插件的决策仅凭这条规则即匹配，且没有其他决策排在它之前），该窗口会结束请求的全部防护扫描：尚未读取的窗口不再发送，请求立即被拒绝，而不必等到截止时间。
+- 一个输入最多读取 256 个窗口。需要更多窗口的输入改用更大的窗口读取，最大到 `scan_window.max_tokens`（默认是模型能接受的最大大小：验证长度为 32,768 个 token 时为 31,744 字节），使 256 个窗口覆盖整个输入。只有超过 256 个最大窗口（约 7.5 MB）的输入才会留下未读窗口，这些窗口计为未读。
+- 窗口大小按信号截止时间剩余的时间确定。Router 从每个部署处理过的扫描中学习它读取每个窗口所需的时间；按这一速度在截止时间前读不完全部窗口的输入，会改用更大的窗口读取，取能按时读完的最小大小，最大到 `scan_window.max_tokens`：以较大窗口读完的每一部分，比以小窗口只读到的一小部分能发现更多问题。能按时读完全部窗口的输入保持配置的大小。
 
 ```yaml
 global:
@@ -96,16 +98,27 @@ global:
 | `scan_window.tokens` | 8,192；`provider: systemone` 为 4,096 | 256 到 1,048,576 |
 | `scan_window.overlap` | 512；`provider: systemone` 为 256 | 0 到小于半个窗口 |
 | `scan_window.max_parallel` | 4 | 1 到 64 |
+| `scan_window.max_tokens` | 模型的验证长度减去 1,024 | `scan_window.tokens` 到 1,048,576 |
 
 **视图和窗口按字节计算大小。** `max_tokens` 和 `scan_window.tokens` 中的一个 token 按四个字节计算，大约是一个散文 token 所占的字节数，因此默认的 8,192 对应 32 KB 的视图。模型的验证长度（模型卡的 `validated_input_tokens`，没有时为 `max_input_tokens`）减去留给问题的 1,024 个 token，按每个 token 一个字节限制两者，因为字节级分词器不会让一个字节产生多于一个 token。JSON、base64 这类密集文本每个 token 所占的字节远少于散文，同样大小的视图可能包含约三倍的 token，但任何设置都不会让视图或窗口超出模型长度：验证长度为 32,768 个 token 时，两者都不会超过 31,744 字节。
 
-**按截止时间设定大小。** 调用应在截止时间之前留有余量地完成：远程 API 的截止时间是规则或部署的 `timeout_ms`，本地模型的截止时间是信号的截止时间（对服务中的请求默认 45 秒，`global.model_catalog.signal_timeout_ms`）。如果一个 API 每秒读取 R 个 token，回答最小的调用需要 T 秒，那么不超过 `(timeout - T) × R` 个 token 的视图能按时得到回答：一个每秒读取 2,000 个 token、最小调用需要 2 秒的 API，在 6 秒超时内约能读取 8,000 个 token，对散文相当于 `max_tokens` 为 8,000；如果消息经常是 JSON 或 base64，则约为 2,700。一次扫描的各个窗口共用截止时间：部署每次读取 `scan_window.max_parallel` 个窗口，先读结尾和开头，因此截止时间到达时已读的窗口就是部分扫描据以判断的窗口。未能按时读到的窗口记为未读，`best_effort` 下规则依据已读窗口做出判断。API 较慢时调低 `scan_window.tokens`；需要完整扫描的输入则调高截止时间；同时处理更多窗口只在模型还有余量合批时才有帮助。
+**按截止时间设定大小。** 调用应在截止时间之前留有余量地完成：远程 API 的截止时间是规则或部署的 `timeout_ms`，本地模型的截止时间是信号的截止时间（对服务中的请求默认 45 秒，`global.model_catalog.signal_timeout_ms`）。如果一个 API 每秒读取 R 个 token，回答最小的调用需要 T 秒，那么不超过 `(timeout - T) × R` 个 token 的视图能按时得到回答：一个每秒读取 2,000 个 token、最小调用需要 2 秒的 API，在 6 秒超时内约能读取 8,000 个 token，对散文相当于 `max_tokens` 为 8,000；如果消息经常是 JSON 或 base64，则约为 2,700。一次扫描的各个窗口共用截止时间：部署每次读取 `scan_window.max_parallel` 个窗口，先读结尾和开头，因此截止时间到达时已读的窗口就是部分扫描据以判断的窗口。未能按时读到的窗口记为未读，`best_effort` 下规则依据已读窗口做出判断。长输入的窗口会按部署实测的速度放大，以便按时读完，最大到 `scan_window.max_tokens`；更大的窗口节省的是每次调用在文本之外的固定开销，因此在单个决策模型上，约一百万 token 的输入仍可能只读到一部分，`scan_partial` 会如实说明。API 较慢时调低 `scan_window.tokens`；需要完整扫描的输入则调高截止时间；同时处理更多窗口只在模型还有余量合批时才有帮助。
 
-**覆盖率与失败。** 如果截止时间在所有窗口读完之前到达，由 `on_unscanned` 决定：`best_effort`（默认）根据已读窗口作出判断，`match` 直接匹配（严格模式），`no_match` 不匹配，`unknown` 交给 `on_unknown`。如果一个窗口都没有读到（模型不可用，或没有窗口按时作答），`jailbreak` 和 `pii` 规则按 `on_unknown` 处理，默认匹配（失败即拦截）；`safety` 规则则为未知，由其决策的 `rules.on_unknown` 决定。
+**覆盖率与失败。** 如果截止时间在所有窗口读完之前到达，且已读窗口都没有决定该规则，由 `on_unscanned` 决定：`best_effort`（默认）根据已读窗口作出判断，`match` 直接匹配（严格模式），`no_match` 不匹配，`unknown` 交给 `on_unknown`。规则的 `min_coverage` 是 0 到 1 之间的比例，默认关闭，它规定 `best_effort` 至少要读多少窗口：低于该比例时规则视为 `unknown`，因此 `jailbreak` 或 `pii` 规则默认匹配，防护会拒绝读得太少的输入。如果一个窗口都没有读到（模型不可用，或没有窗口按时作答），`jailbreak` 和 `pii` 规则按 `on_unknown` 处理，默认匹配（失败即拦截）；`safety` 规则则为未知，由其决策的 `rules.on_unknown` 决定。
+
+```yaml
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_attack
+          min_coverage: 0.5
+```
 
 每条分窗口读取输入的防护规则都会报告覆盖率：
 
-- `vsr_signal_scan_coverage_total{signal, result}` 按 `full`、`partial` 或 `none` 统计每条防护规则的读取；
+- 请求阶段的防护规则只读了部分输入、请求仍被路由时，`x-vsr-warnings` 对每个调用方都携带 `scan_partial`；
+- `vsr_signal_scan_coverage_total{signal, result}` 按 `full`、`partial` 或 `none` 统计每条防护规则的读取，`vsr_signal_scan_coverage_ratio{signal}` 给出已读窗口的比例，`vsr_signal_scan_decided_total{signal}` 统计在其余窗口读完之前就被某个窗口决定的规则；
 - 路由预览（`scan_coverage`）和 Router Replay 记录（`scan_coverage`）按规则给出 `full`、`partial n/m` 或 `none`；
 - 对允许查看调试头的调用方，`x-vsr-trace` 以 `scan_coverage` 成员携带该信息。
 

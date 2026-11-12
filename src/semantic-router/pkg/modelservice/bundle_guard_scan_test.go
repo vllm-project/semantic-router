@@ -127,3 +127,43 @@ func TestADeadlineLeavesTheWindowsReadAnswered(t *testing.T) {
 		t.Fatalf("windows sent %v; want the first, and the second cut at the deadline", sent)
 	}
 }
+
+// A caller that gives up on its windows, its context cancelled rather than
+// past its deadline, as a stage whose window found an attack does, stops
+// waiting for the one in flight at once, and the one queued behind it is
+// never sent.
+func TestACancelledCallerStopsWaitingForItsWindows(t *testing.T) {
+	runtime := runtimetest.New(runtimetest.Model{ID: "d3"})
+	runtime.SetWordTime(20 * time.Millisecond)
+	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"d3"}})
+	stop, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var askers []asker
+	for rank := 1; rank <= 2; rank++ {
+		request := Request{State: windowText(rank, 30), Window: rank, Parallel: 1, Questions: []Question{choiceQuestion("preset:jailbreak")}}
+		askers = append(askers, asker{deployments: []string{"d3"}, ask: func(ctx context.Context) error {
+			ctx, release := context.WithCancel(ctx)
+			defer release()
+			context.AfterFunc(stop, release)
+			_, err := lease.Decide(ctx, "d3", request)
+			return err
+		}})
+	}
+	time.AfterFunc(100*time.Millisecond, cancel)
+	started := time.Now()
+	_, errs := runStage(DefaultBundleWindow, askers...)
+	if elapsed := time.Since(started); elapsed > 400*time.Millisecond {
+		t.Fatalf("the stage gave up after 100 ms but waited %v for the window in flight (600 ms)", elapsed)
+	}
+	for rank, err := range errs {
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("window %d: %v, want cancelled", rank+1, err)
+		}
+	}
+	time.Sleep(700 * time.Millisecond)
+	for _, decision := range runtime.Decisions() {
+		if rank := windowRank(decision.State); rank != 1 {
+			t.Fatalf("window %d was sent after its caller gave up", rank)
+		}
+	}
+}

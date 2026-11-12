@@ -62,6 +62,7 @@ func applyEffectiveModelRegistry(
 		if params.AuthoredModel != nil {
 			params.Deployment = params.AuthoredModel.Deployment
 			params.Schema = params.AuthoredModel.Schema
+			params.UnsupportedCapabilities = append([]string(nil), params.AuthoredModel.UnsupportedCapabilities...)
 		}
 		if model.BindingDefaults.Protocol != "" {
 			apiFormat, err := apiFormatForProtocol(model.BindingDefaults.Protocol)
