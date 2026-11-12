@@ -48,8 +48,9 @@ const (
 // started and when its deadline is, the context each window of its cut is
 // read under and the function that cancels it, whether it judged that it
 // fell behind, and once it re-planned, when, the bytes of its larger windows
-// and the calls that read them that its readers have yet to take; and when
-// its cut's windows and runs were all read, once re-reads waited for them.
+// and the calls that read them that its readers have yet to take; when its
+// cut's windows and runs were all read, once re-reads waited for them; and
+// whether a window waited for its deployment to have capacity.
 type scanPace struct {
 	stage             *scanStop
 	started, deadline time.Time
@@ -60,6 +61,16 @@ type scanPace struct {
 	size              int
 	pending           []*systemOneCall
 	cutRead           time.Time
+	waited            bool
+}
+
+// markWaited records that a window of the scan waited for its deployment to
+// have capacity (on_signal_overload): the scan's time then says nothing of
+// how fast the deployment reads.
+func (scan *guardScan) markWaited() {
+	scan.mu.Lock()
+	defer scan.mu.Unlock()
+	scan.pace.waited = true
 }
 
 // windowPace is one deployment's learned pace: the decayed weight of its
@@ -171,12 +182,14 @@ func (c *Classifier) replan(scan *guardScan) []*systemOneCall {
 // replanRuns is how many of a scan's windows left it reads as one, or 0
 // when it keeps them: before it read scanPaceRounds rounds of its windows
 // in flight, when it is not behind, when no k fits, once it judged or
-// another scan of its input re-planned it, and once its stage's scans ended.
+// another scan of its input re-planned it, once its stage's scans ended, and
+// once a window waited for capacity, after which its time says nothing of
+// how fast its deployment reads.
 func (c *Classifier) replanRuns(scan *guardScan) int {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
 	pace := &scan.pace
-	if pace.judged || !pace.at.IsZero() || pace.deadline.IsZero() || scan.most <= scan.grown ||
+	if pace.judged || pace.waited || !pace.at.IsZero() || pace.deadline.IsZero() || scan.most <= scan.grown ||
 		pace.stage != nil && pace.stage.ctx.Err() != nil {
 		return 0
 	}
@@ -285,14 +298,18 @@ func (scan *guardScan) peers() []*guardScan {
 
 // observePace records how long a scan took per window it read, over its
 // cut's windows read or, once it re-planned, over its larger ones read since,
-// unless its caller gave up on it or the runtime turned every window away:
-// neither says how fast the deployment reads. A scan the deadline cut before
-// any window was read took at least the time it had for one.
+// unless its caller gave up on it, the runtime turned every window away or a
+// window waited for capacity: none says how fast the deployment reads. A
+// scan the deadline cut before any window was read took at least the time it
+// had for one.
 func (c *Classifier) observePace(scan *guardScan, cause error) {
 	if cause != nil && !errors.Is(cause, errScanDecided) && !errors.Is(cause, context.DeadlineExceeded) {
 		return
 	}
 	pace := &scan.pace
+	if pace.waited {
+		return
+	}
 	from, size := pace.started, scan.grown
 	if !pace.at.IsZero() {
 		from, size = pace.at, pace.size

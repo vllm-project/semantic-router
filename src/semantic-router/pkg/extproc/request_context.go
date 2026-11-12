@@ -347,6 +347,13 @@ type RequestContext struct {
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
 	VSRSignalErrorMatches     map[string]bool
+	// VSRGuardOverload are the rules ("type:name") unread on an overloaded
+	// decision runtime that decide the request: alone they refuse it, or one
+	// would refuse it. It then gets a retryable error instead
+	// (global.model_catalog.on_signal_overload).
+	VSRGuardOverload []string
+	// guardOverloadAnswered is whether the request got that retryable error.
+	guardOverloadAnswered bool
 	// VSRScanCoverage is how much of their input the guard rules that read
 	// it in windows read, by "type:name".
 	VSRScanCoverage map[string]string

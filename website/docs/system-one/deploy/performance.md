@@ -71,6 +71,89 @@ or feature decides. A deadline ends the Router's wait, but does not stop a
 forward pass already running.
 :::
 
+## When the decision model is overloaded
+
+A decision model refuses a call it has no room for: its request queue is full,
+and it answers `overloaded`. A rule that fails closed then matches. A
+request-stage `jailbreak` or `pii` rule does so unless its `on_unknown` is
+`no_match`. A decision with a `fast_response` then refuses the request as if it
+were unsafe. Under load this refuses most requests, and coding agents take the
+refusal as final.
+
+`global.model_catalog.on_signal_overload` makes such a request get an error the
+client retries. Without it, nothing changes:
+
+```yaml
+global:
+  model_catalog:
+    on_signal_overload:
+      action: retry          # refuse (the default) or retry
+      wait_ms: 2000          # 0 to 60,000; 0 does not wait
+      retry_after_seconds: 0 # up to 60; 0 derives it from wait_ms
+```
+
+With `action: retry`:
+
+- **Wait for capacity.** Every request-stage call that comes back
+  `overloaded` is asked again while the request waits for capacity, whatever
+  its rules' failure policy. That covers a rule that fails closed, one that
+  fails open such as `safety`, and a routing question. If the model answers,
+  the request is read as it is without the overload.
+  - The wait lasts up to `wait_ms` from the request's first overloaded answer,
+    within the signals' deadline. A rule's own `timeout_ms` bounds each attempt
+    of its call, not the wait.
+  - A request's calls to one model ask again together, in rounds, so the
+    questions one call carried travel in one call again.
+- **Bound the load.** A request's calls to a model ask again in at most 3
+  rounds: at a quarter of its wait, at half and at its end.
+  - While the model refuses calls as overloaded, one waiting request's round
+    asks it per step, however many requests wait. The step is jittered, from
+    100 ms doubling to 1 s.
+  - In such a round, a request with more than 8 calls waiting for the model,
+    such as a long input's windows, sends only one of them, on its own, as a
+    probe. The probe does not count as one of the 3 rounds.
+  - The first answer to any call opens the model again, and every request
+    waiting for it has its round then.
+- **Learn no pace from the wait.** A guard scan that waited learns no pace for
+  its model, and does not judge from its time that it fell behind: its time
+  says nothing of how fast the model reads.
+- **Answer a retryable error.** If the model still does not answer, the Router
+  answers an error the client retries in two cases:
+  - Only rules that failed closed on the overloaded model refuse the request.
+    The error replaces the refusal.
+  - A rule left unread because the model was overloaded would refuse the
+    request had it matched. The error replaces the forward. A rule that fails
+    open, such as `safety`, no longer lets the request through when the model
+    was too busy to read it.
+
+  An Anthropic Messages client gets `529 overloaded_error`. An OpenAI Chat
+  Completions or Responses client gets `429` with the code `overloaded`. Its
+  SDK and agents retry a 429 after its `Retry-After`, where some treat a 5xx as
+  a failure. Both errors reach the client before any byte of a stream, and
+  carry:
+  - `Retry-After`: `retry_after_seconds`, else `wait_ms` rounded up to whole
+    seconds, at least 1. It is at most 60: some clients ignore a longer value,
+    and others sleep it in full.
+  - `x-vsr-warnings: guard_overloaded`.
+- **Never forward unchecked.** The request is never forwarded while a rule
+  that could refuse it is unread for overload.
+  - A rule that matches still refuses it, and so does a decision whose
+    condition matches on error.
+  - Other failures, such as a timeout or a model that is not ready, keep
+    their outcome.
+  - A prompt beyond every context window still gets
+    `400 context_length_exceeded`.
+  - A routing question left unread lets the request go on: it can choose a
+    route, but not refuse the request.
+
+These are counted apart from refusals and from the `signal_failed_closed` log:
+
+- `vsr_signal_overload_waits_total{deployment, outcome}` counts the calls asked
+  again, by how the last one ended: `ok` when capacity freed, `overloaded`
+  when the wait ran out, or the reason of another failure.
+- `vsr_signal_overload_retryable_total{format}` counts the requests answered
+  the retryable error, by the client's wire format.
+
 ## Long inputs
 
 A long user turn, such as a pasted document, a log or a long tool output, is

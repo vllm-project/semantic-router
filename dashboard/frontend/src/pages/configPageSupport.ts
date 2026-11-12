@@ -672,6 +672,11 @@ export interface CanonicalModelCatalogConfig {
   kbs?: Array<Record<string, unknown>>
   admission?: Record<string, Record<string, unknown>>
   signal_timeout_ms?: number
+  on_signal_overload?: {
+    action?: 'refuse' | 'retry'
+    wait_ms?: number
+    retry_after_seconds?: number
+  }
 }
 
 export interface RouterLearningConfig {

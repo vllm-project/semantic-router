@@ -3021,6 +3021,22 @@ global:
     # second), or 45 s for a served request. A rule still waiting for its
     # answer is unknown.
     signal_timeout_ms: 0
+    # A request whose signals could not be read because the decision runtime
+    # refused their calls as overloaded (its request queue full). refuse
+    # (default): a rule that fails closed refuses it, as on any failure, and
+    # one that fails open does not match. retry asks every such call again,
+    # whatever its rule's failure policy, for up to wait_ms (at most 60000)
+    # within the signals' deadline. Then a request that only rules it could
+    # not read refuse, or that one of them would refuse, gets an error the
+    # client retries instead: 429 with the code overloaded, or 529
+    # overloaded_error for Anthropic Messages, with Retry-After
+    # (retry_after_seconds, at most 60, else wait_ms rounded up, at least 1)
+    # and x-vsr-warnings: guard_overloaded. wait_ms and retry_after_seconds
+    # apply only to retry.
+    on_signal_overload:
+      action: refuse
+      wait_ms: 0
+      retry_after_seconds: 0
   plugins:
     - type: context
       configuration:
