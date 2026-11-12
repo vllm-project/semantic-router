@@ -279,6 +279,30 @@ type RequestContext struct {
 	// fallbackExecutedByCaller is set when the native gateway runs the
 	// request's fallback chain; the response phases then never fall back.
 	fallbackExecutedByCaller bool
+	// fallbackLastFailure is the last fallback candidate's failed upstream
+	// answer; a chain that ends without a success answers the client with it.
+	fallbackLastFailure *failedAttempt
+
+	// contextCounts holds the Router's counts of the request's prompt and
+	// contextBounds its byte bounds (context_window_count.go);
+	// contextWindowKept names the models the window filter kept although
+	// only the estimate said they do not fit, and contextInBand those whose
+	// windows the count falls within the margin of.
+	contextCounts     map[contextCountKey]contextCount
+	contextBounds     map[contextCountKey]int
+	contextWindowKept map[string]struct{}
+	contextInBand     map[string]struct{}
+	// contextTokenizers fixes the tokenizer of each model the request is
+	// counted for; contextVerdicts names the model and prompt shape pairs
+	// whose window check is logged and counted.
+	contextTokenizers map[string]modelTokenizer
+	contextVerdicts   map[string]struct{}
+	// contextAdmission counts a request whose bytes could exceed a window it
+	// can reach, beside its signals (context_window_parallel.go).
+	contextAdmission *contextAdmission
+	// fallbackMinWindow is the widest window whose backend refused the
+	// request for its length; fallback goes on only to wider windows.
+	fallbackMinWindow int
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams

@@ -80,6 +80,14 @@ providers:
       external_model_ids:
         openai: qwen3-8b
         analytics: qwen3-routing
+      # The tokenizer a long prompt is counted with for the context window
+      # check: a Hugging Face repo id (optional @revision), whose
+      # tokenizer.json the Router downloads beside its models, a built-in
+      # encoding (o200k_base, cl100k_base) or a local tokenizer.json.
+      # Omitted, it is the repo of the card's open-weights source, as here,
+      # or the id a self-hosted engine serves the model under; a model with
+      # neither counts with global.router.context_window.proxy_tokenizer.
+      tokenizer: Qwen/Qwen3-8B
       # A backend connects with the shape a deployment uses: endpoint
       # (host:port with protocol, or a full URL), auth and headers. The key
       # comes from auth.api_key_env; it is never written here.
@@ -2230,6 +2238,17 @@ global:
       strip_blocks:
         - start: '<relevant-memories>'
           end: '</relevant-memories>'
+    # The check of a prompt against the context windows of the models that
+    # can serve it, counted beside the signals. A count with a model's own
+    # tokenizer within margin of a window (3%) is left to the backend; beyond
+    # it the prompt is refused with 400 context_length_exceeded at once.
+    # Models without a loaded tokenizer count with the proxy tokenizer, whose
+    # count can be a quarter off theirs, and refuse only beyond proxy_margin
+    # (30%). These are the defaults.
+    context_window:
+      margin: 0.03
+      proxy_margin: 0.30
+      proxy_tokenizer: o200k_base
     model_selection:
       enabled: true
     learning:

@@ -820,6 +820,9 @@
           },
           "type": "array"
         },
+        "tokenizer": {
+          "type": "string"
+        },
         "display_name": {
           "type": "string"
         },
@@ -1116,6 +1119,9 @@
         },
         "headers": {
           "$ref": "#/$defs/RouterHeadersConfig"
+        },
+        "context_window": {
+          "$ref": "#/$defs/ContextWindowConfig"
         }
       },
       "additionalProperties": false,
@@ -1678,6 +1684,25 @@
       "required": [
         "type"
       ]
+    },
+    "ContextWindowConfig": {
+      "properties": {
+        "margin": {
+          "type": "number",
+          "maximum": 0.5,
+          "minimum": 0
+        },
+        "proxy_margin": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
+        "proxy_tokenizer": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "ConversationFeature": {
       "properties": {

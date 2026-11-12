@@ -127,6 +127,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			AllowLossyTranslation: cfg.AllowLossyTranslation,
 			RoutingInput:          cfg.RoutingInput,
 			Headers:               cfg.Headers,
+			ContextWindow:         cfg.ContextWindow,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -253,6 +254,7 @@ func canonicalProviderModelFromRuntime(
 		Pricing:          params.Pricing,
 		Reliability:      params.Reliability,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
+		Tokenizer:        params.Tokenizer,
 		BackendRefs: canonicalProviderBackendRefs(
 			name,
 			params,

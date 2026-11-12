@@ -395,6 +395,11 @@ func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResul
 	work = append(work, readers...)
 	modelservice.Fan(ctx, len(work), func(i int) { work[i]() })
 	release()
+	// Signals the request abandoned decide nothing, and the calls they cut
+	// short are no guard's failure.
+	if modelservice.SignalsAbandoned(ctx) {
+		return
+	}
 	for _, scan := range scans {
 		c.applyScan(results, mu, scan)
 	}
@@ -424,6 +429,9 @@ func (c *Classifier) askCall(
 	if observe != nil {
 		observe(response, err)
 	}
+	if modelservice.SignalsAbandoned(ctx) {
+		return
+	}
 	c.applyCall(results, call, response, err, latency)
 }
 
@@ -452,7 +460,7 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 	} else {
 		response, err = c.decider().Decide(callCtx, deployment, request)
 	}
-	if err != nil {
+	if err != nil && !modelservice.SignalsAbandoned(ctx) {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
 	}
 	return response, time.Since(started).Seconds(), err

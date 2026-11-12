@@ -137,12 +137,16 @@ func routingFailureCases() []routingFailureCase {
 			event:   "specified_model_not_found",
 		},
 		{
+			// The Router counts the 1,640 bytes far beyond gpt-oss's 64-token
+			// window.
 			name: "request-outgrows-every-context-window",
 			path: "/v1/chat/completions",
 			body: `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"` +
 				strings.Repeat("Summarize these meeting notes carefully. ", 40) + `"}]}`,
-			failure: routingFailureContextLength,
-			event:   "decision_context_ineligible",
+			failure: contextLengthFailure(&contextLengthError{
+				window: 64, tokens: routerCountOf(strings.Repeat("Summarize these meeting notes carefully. ", 40)),
+			}, llmprotocol.OpenAIChatV1),
+			event: "context_window_exceeded",
 		},
 	}
 }
