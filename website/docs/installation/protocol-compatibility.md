@@ -466,10 +466,10 @@ tools or error translation.
     requires a limit, and reports `max_tokens` as `generated`. Thinking counts
     toward that limit, and a positive integer in the decision's
     `request_params.default_max_tokens` replaces the 4096.
-- When the output limit ends a streamed tool call inside its arguments, the
-  Router passes the partial call on with the limit stop, as the providers do:
-  `max_tokens` for Messages, `length` for Chat, and `incomplete` with
-  `max_output_tokens` for Responses. In every other case, arguments that are
+- When the output limit ends a streamed tool call inside its arguments, or
+  right after its name with none, the Router passes the partial call on with
+  the limit stop, as the providers do: `max_tokens` for Messages, `length` for
+  Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
   not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
   response is not cached, stored, or kept as the replay response body.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
