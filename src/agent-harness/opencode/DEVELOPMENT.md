@@ -12,9 +12,19 @@ npm run test:integration
 `src/index.ts` owns host registration and cleanup. `settings.ts` validates options,
 `runtime.ts` owns bounded HTTP calls and capability discovery, `decisions.ts`
 retains session-scoped metadata, and `rpc.ts` defines server/UI messages.
+`routing-policy.ts` owns tier/effort selection, `routing.ts` owns per-turn
+escalation and cancellation, and `routing-hooks.ts` adapts native prompt,
+context and tool lifecycle events. Classifier question framing is deliberately
+copied into `questions.ts`; sibling plugin imports remain forbidden.
 
 `test:integration` requires the installed OpenCode 2.2.0 CLI and installs no
 models. It packs/extracts the package and starts an isolated private server.
+The routing fixtures capture real outgoing model/variant requests, retries,
+explicit/resumed/agent-specific choices, parent preservation, observed usage,
+pushback, concurrent children and session isolation. They use a synthetic
+generation provider and decision runtime, so they qualify host behavior rather
+than model accuracy. The CLI tests explicitly pass the parent model/variant;
+OpenCode 2.2.0 `run` does not apply the configured default variant consistently.
 
 Tests use Node's built-in test runner, synthetic inputs and loopback HTTP
 servers. Real runtime tests require an explicit separately started model. Do

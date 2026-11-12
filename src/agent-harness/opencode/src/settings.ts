@@ -1,3 +1,5 @@
+import { parseRouting } from "./routing-settings.ts";
+import type { RoutingSettings } from "./routing-settings.ts";
 export const APPS = [
   "router",
   "escalate",
@@ -9,6 +11,7 @@ export const APPS = [
 export type App = (typeof APPS)[number];
 export type Wait = 1000 | 2000 | 3000 | "done";
 export interface Settings {
+  routing: RoutingSettings;
   runtimeUrl: string;
   runtimeModel: string;
   runtimeTokenEnv: string;
@@ -59,6 +62,7 @@ export function parseSettings(input: unknown): Settings {
     "waits",
     "maxDecisions",
     "maxSessions",
+    "routing",
   ]);
   for (const key of Object.keys(options))
     if (!known.has(key)) throw new Error(`Unknown option: ${key}`);
@@ -111,6 +115,7 @@ export function parseSettings(input: unknown): Settings {
     if (!["redact", "shield", "guard"].includes(key))
       throw new Error(`Unknown wait: ${key}`);
   return {
+    routing: parseRouting(options.routing),
     runtimeUrl: url.href,
     runtimeModel: string(options.runtimeModel, "", "runtimeModel"),
     runtimeTokenEnv: tokenEnv,

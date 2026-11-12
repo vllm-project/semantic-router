@@ -18,7 +18,38 @@ export const OUTCOMES = [
   "skipped",
 ] as const;
 export type Outcome = (typeof OUTCOMES)[number];
+export const REASONS = [
+  "selected",
+  "unconfigured",
+  "unknown-parent",
+  "low-confidence",
+  "quality",
+  "invalid-tier",
+  "pushback",
+  "input-too-long",
+  "cancelled",
+  "timeout",
+  "offline",
+  "http",
+  "invalid-response",
+  "unsupported",
+  "queue-full",
+  "spawn-failed",
+  "observation-unavailable",
+] as const;
+export type Reason = (typeof REASONS)[number];
+export interface Usage {
+  input: number;
+  output: number;
+  cachedInput: number;
+  reasoning: number;
+  cost: number;
+}
 export interface Decision {
+  reason?: Reason;
+  observedModel?: string;
+  childSessionID?: string;
+  usage?: Usage;
   id: string;
   sessionID: string;
   turnID?: string;
@@ -83,7 +114,8 @@ export class DecisionStore {
     if (
       !input.sessionID ||
       !APPS.includes(input.app) ||
-      !OUTCOMES.includes(input.outcome)
+      !OUTCOMES.includes(input.outcome) ||
+      (input.reason !== undefined && !REASONS.includes(input.reason))
     )
       throw new Error("Invalid decision");
     for (const [key, value] of [
@@ -106,6 +138,7 @@ export class DecisionStore {
       app: input.app,
       outcome: input.outcome,
       at: Date.now(),
+      ...(input.reason ? { reason: input.reason } : {}),
       ...(input.turnID === undefined ? {} : { turnID: input.turnID }),
       ...(input.toolCallID === undefined
         ? {}
@@ -124,6 +157,44 @@ export class DecisionStore {
       delete session.feedback[session.decisions.shift()!.id];
     this.revision++;
     return structuredClone(decision);
+  }
+  observe(
+    sessionID: string,
+    id: string,
+    observation: {
+      model?: string;
+      childSessionID?: string;
+      usage?: Usage;
+      failed?: boolean;
+    },
+  ): void {
+    const decision = this.sessions
+      .get(sessionID)
+      ?.decisions.find((item) => item.id === id);
+    if (!decision) return;
+    const usage = observation.usage
+      ? {
+          input: observation.usage.input,
+          output: observation.usage.output,
+          cachedInput: observation.usage.cachedInput,
+          reasoning: observation.usage.reasoning,
+          cost: observation.usage.cost,
+        }
+      : undefined;
+    if (
+      usage &&
+      Object.values(usage).some((value) => !Number.isFinite(value) || value < 0)
+    )
+      throw new Error("Invalid usage");
+    if (observation.failed) {
+      decision.outcome = "skipped";
+      decision.reason = "spawn-failed";
+    }
+    if (observation.model) decision.observedModel = observation.model;
+    if (observation.childSessionID)
+      decision.childSessionID = observation.childSessionID;
+    if (usage) decision.usage = usage;
+    this.revision++;
   }
   label(sessionID: string, decisionID: string, feedback: Feedback): void {
     const session = this.sessions.get(sessionID);

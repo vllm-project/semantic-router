@@ -63,3 +63,40 @@ test("metadata projection discards raw outputs and validates measurements", () =
     }),
   );
 });
+
+test("child observations are session-scoped and keep planned and actual model facts separate", () => {
+  const store = new DecisionStore(2, 5);
+  const decision = store.record({
+    sessionID: "one",
+    app: "router",
+    outcome: "routed",
+    model: "fixture/light#low",
+    reason: "selected",
+  });
+  const usage = {
+    input: 10,
+    output: 2,
+    cachedInput: 0,
+    reasoning: 0,
+    cost: 0,
+    rawOutput: "private fixture",
+  };
+  store.observe("two", decision.id, { model: "wrong-session" });
+  assert.equal(store.snapshot("one").decisions[0]?.observedModel, undefined);
+  store.observe("one", decision.id, {
+    model: "fixture/middle#medium",
+    childSessionID: "child",
+    usage,
+  });
+  usage.input = 99;
+  const snapshot = store.snapshot("one");
+  assert.equal(snapshot.decisions[0]?.model, "fixture/light#low");
+  assert.equal(snapshot.decisions[0]?.observedModel, "fixture/middle#medium");
+  assert.equal(snapshot.decisions[0]?.usage?.input, 10);
+  assert.ok(!JSON.stringify(snapshot).includes("private fixture"));
+  assert.throws(() =>
+    store.observe("one", decision.id, { usage: { ...usage, input: NaN } }),
+  );
+  store.observe("one", decision.id, { failed: true });
+  assert.equal(store.snapshot("one").decisions[0]?.reason, "spawn-failed");
+});

@@ -1,6 +1,6 @@
 import { Rpc } from "@opencode/plugin/rpc";
 import { APPS } from "./settings.ts";
-import { FEEDBACK, OUTCOMES } from "./decisions.ts";
+import { FEEDBACK, OUTCOMES, REASONS } from "./decisions.ts";
 const id = { type: "string", minLength: 1, maxLength: 256 } as const;
 const session = {
   type: "object",
@@ -23,6 +23,20 @@ const models = {
 const decision = {
   type: "object",
   properties: {
+    reason: { type: "string", enum: [...REASONS] },
+    observedModel: { type: "string" },
+    childSessionID: id,
+    usage: {
+      type: "object",
+      properties: Object.fromEntries(
+        ["input", "output", "cachedInput", "reasoning", "cost"].map((key) => [
+          key,
+          { type: "number", minimum: 0 },
+        ]),
+      ),
+      required: ["input", "output", "cachedInput", "reasoning", "cost"],
+      additionalProperties: false,
+    },
     id,
     sessionID: id,
     turnID: id,

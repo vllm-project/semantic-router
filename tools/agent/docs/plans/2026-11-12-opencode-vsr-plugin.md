@@ -136,10 +136,10 @@ If Gate 0 fails, keep the full acceptance scope pending and record dependencies.
 
 ### Stage 2: router and escalate
 
-- [ ] Implement task scoring, tier/effort mapping, confidence policy, stable child
+- [x] Implement task scoring, tier/effort mapping, confidence policy, stable child
   selection, explicit/resume exclusions, and atomic escalation consumption.
-- [ ] Capture actual model/usage facts for later cost reporting.
-- [ ] Test request-level observations, concurrent children, retries, cancellation,
+- [x] Capture actual model/usage facts for later cost reporting.
+- [x] Test request-level observations, concurrent children, retries, cancellation,
   unsupported models/question types, offline fallback, and prompt pushback.
 
 ### Stage 3: guard
@@ -211,18 +211,23 @@ disguised as a successful skip. The exact PR count may change while keeping scop
 
 ## Resume here
 
-Planning validation on 2026-11-12: independent builder review found no material
+Historical planning validation on 2026-11-12: independent builder review found no material
 unanswered planning questions. Markdown formatting, spelling, structure and
 dependency checks passed. `make impact` selects the harness domain. The harness
 suite ran 796 tests with five failures in Kubernetes generated-contract tests
 because `go` and `controller-gen` are unavailable in the current environment;
 the full repository check is therefore not green. No application code changed.
 
-1. Recheck overlapping GitHub work and current main.
-2. Review this proposed design and resolve Gate 0 against an actual OpenCode build.
-3. Record a capability matrix and final technical choices before product code.
-4. Update checkboxes with links and evidence as work lands; leave untested items
-   pending. No implementation is complete at the time this document was written.
+This prerequisite failure was resolved by the temporary verified toolchain in
+the Stage 1 checkpoint below. The approved delivery is staged implementation on
+one feature branch followed by one complete integration Draft PR.
+
+1. Stage 1 and Stage 2 product code and native fixture tests are implemented;
+   consult their checkpoints below for the qualification boundaries.
+2. Continue Stage 3: shell decomposition, fixed/model guard rules and native
+   approval with side-effect assertions. Then implement Stages 4–7 in order.
+3. Keep the remaining checkboxes pending until their evidence exists. Recheck
+   overlapping upstream work before final publication.
 
 ## References
 
@@ -476,6 +481,53 @@ host prerequisite failures; no global Go installation was changed. The new CI
 contract's Node/JUnit commands also ran successfully on the local ARM64 host;
 that local result is not represented as a hosted AMD64 CI receipt.
 
-The next implementation stage is router/escalate with configurable model tiers,
+At that checkpoint the next implementation stage was router/escalate with configurable model tiers,
 confidence/fallback rules and actual child-model/effort assertions. The integration
 Draft PR remains pending until the complete six-app scope is reviewable.
+
+### Stage 2 implementation checkpoint
+
+Router and Escalate are wired to the pinned OpenCode 2.2.0 prompt/context and
+subagent hooks. The configurable three-model ladder stays within one provider;
+all requested effort variants must be enabled in the native model catalog.
+Explicit calls, resumed children and agent-specific models are preserved. Low
+confidence, invalid tiers and unavailable classification keep the original model.
+Selections are applied at child creation and remain stable across provider retries.
+
+Escalation is bound to the admitted human message that actually executes, rather
+than prompt admission order. Detection adds re-check context and atomically
+raises only the next eligible child. Queued admissions, unadmitted synthetic
+messages and other sessions cannot inherit the active escalation. Tier policy:
+one above the ordinary pick, capped at the top and floored at the parent's tier;
+raise one effort step and preserve a higher parent effort on that same tier.
+If scoring fails after established pushback, the parent supplies the baseline.
+This configurable policy is stated explicitly rather than assuming Claude model
+aliases or importing its host-specific routing implementation.
+
+Decision snapshots distinguish planned from observed child model/variant, session
+and token/cost facts. Observations are scoped by session and tool call. Missing
+observations remain absent and failed spawns are separate outcomes. Cancellation
+also works with Escalate disabled and for synthetic turns. Classifier question
+framing is retained locally from Claude commit `d7ab7f587`; no sibling imports,
+raw-text diagnostics, global settings changes, paid API calls or model downloads.
+
+Validation: 22 fixture unit tests and four packed-artifact native integration
+tests pass, with strict TypeScript and formatting checks. Native assertions cover
+actual outbound model/effort, unchanged parent, explicit/resumed/agent overrides,
+low confidence, HTTP failure fallback, an actual provider retry, pushback context,
+concurrent children, concurrent sessions and observed usage through public RPC.
+Coordinator unit tests cover queued admission/execution ordering, interruption,
+synthetic turns, malformed scores, unsupported/disabled tiers and offline policy.
+These use synthetic generation/decision endpoints; they are host integration
+evidence, not new Vela quality/latency measurements. Native CLI tests explicitly
+pass `--model provider/model#variant` because `run` did not consistently apply
+the configured default variant.
+
+Stage 2 final validation: `make check` passed for every changed path, including
+the source/security/structure gates, `harness-check` (797 CI tests, 74 agent tests
+and tiny-model checks), clean dependency install, TypeScript/format checks and
+all 22 unit tests. The four packed native tests passed separately. Codespell now
+skips this package's generated lockfile and installed dependencies, matching the
+other npm packages; a random integrity hash had produced a spelling false alarm.
+No dependency integrity data or global spellings were changed. Continue with
+Stage 3; the complete integration Draft PR is still pending.

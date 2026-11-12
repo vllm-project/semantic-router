@@ -1,3 +1,4 @@
+import { registerRouting } from "./routing-hooks.ts";
 import { Plugin } from "@opencode/plugin";
 import { DecisionStore } from "./decisions.ts";
 import type { Feedback } from "./decisions.ts";
@@ -51,7 +52,27 @@ export default Plugin.define({
         return { saved: true };
       },
     });
+    const notify = async (id: string): Promise<void> => {
+      const { instanceID, revision } = decisions.snapshot(id);
+      try {
+        await registration.events.emit("updated", {
+          instanceID,
+          sessionID: id,
+          revision,
+        });
+      } catch {
+        /* UI transport must not block routing. */
+      }
+    };
+    const closeRouting = await registerRouting(
+      ctx,
+      settings,
+      runtime,
+      decisions,
+      notify,
+    );
     return async () => {
+      closeRouting();
       runtime.close();
       await registration.dispose();
     };
