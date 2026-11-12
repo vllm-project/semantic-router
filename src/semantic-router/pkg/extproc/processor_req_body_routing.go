@@ -386,7 +386,7 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 			ctx.FallbackRequest = snapshot
 		}
 	}
-	captureRequestDemand(
+	r.captureRequestDemand(
 		ctx,
 		requestDemandStageProviderBound,
 		ctx.SemanticRequest,

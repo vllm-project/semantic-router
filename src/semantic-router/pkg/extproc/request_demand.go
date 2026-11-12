@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokenaccounting"
 )
 
 const (
@@ -15,7 +16,7 @@ const (
 	requestDemandStagePostToolPolicy = "post_tool_policy"
 	requestDemandStageProviderBound  = "provider_bound"
 
-	requestDemandCountingSourceFallback = "fallback"
+	requestDemandCountingSourceFallback = string(tokenaccounting.SourceFallback)
 	requestDemandRepresentationSemantic = "semantic"
 	requestDemandOutputReserveExplicit  = "explicit"
 	requestDemandOutputReserveUnknown   = "unknown"
@@ -30,13 +31,11 @@ var requestDemandStageOrder = map[string]int{
 	requestDemandStageProviderBound:  3,
 }
 
-// captureRequestDemand records a bounded, content-free estimate of the neutral
+// captureRequestDemand records a bounded, content-free count of the neutral
 // request at one lifecycle stage. The representation field makes explicit that
-// provider_bound describes the final semantic request before wire encoding; the
-// estimate deliberately uses the existing provider-neutral fallback until #3050
-// supplies tokenizer-aware accounting. This evidence is observe-only: it never
-// changes routing or admission.
-func captureRequestDemand(
+// provider_bound describes the final semantic request before wire encoding.
+// This evidence is observe-only: it never changes routing or admission.
+func (r *OpenAIRouter) captureRequestDemand(
 	ctx *RequestContext,
 	stage string,
 	request *llmprotocol.Request,
@@ -48,32 +47,32 @@ func captureRequestDemand(
 	if _, ok := requestDemandStageOrder[stage]; !ok {
 		return
 	}
-
-	snapshot, ok := reusableRequestDemandSnapshot(ctx.RequestDemandSnapshots, request.Generation)
-	if ok {
-		snapshot.Stage = stage
-		snapshot.Model = firstNonEmpty(strings.TrimSpace(model), strings.TrimSpace(request.Model))
-	} else {
-		facts := extractSemanticRequestSignals(request)
-		snapshot = requestDemandSnapshot(stage, request, model, facts.ContextTokenFloor)
-	}
-	recordRequestDemandSnapshot(ctx, snapshot)
+	model = firstNonEmpty(strings.TrimSpace(model), strings.TrimSpace(request.Model))
+	recordRequestDemandSnapshot(ctx, requestDemandSnapshot(stage, request, model, r.countRequestDemand(ctx, model, request)))
 }
 
-func captureOriginalRequestDemand(
+// countRequestDemand counts the prompt for the model that receives it:
+// exactly with a registered tokenizer, else with the provider-neutral
+// estimate, its text rate calibrated when the request's classifier has enough
+// provider samples (#3050).
+func (r *OpenAIRouter) countRequestDemand(
 	ctx *RequestContext,
+	model string,
 	request *llmprotocol.Request,
-	facts *requestSignalSnapshot,
-) {
-	if ctx == nil || request == nil || facts == nil {
-		return
+) tokenaccounting.Count {
+	var counter *tokenaccounting.Counter
+	var calibration tokenaccounting.Calibration
+	if r != nil {
+		counter = r.TokenAccounting
+		if classifier := r.classifierForRequest(ctx); classifier != nil {
+			// The router-wide category learns from every text-only response,
+			// in the text-byte units this count passes.
+			calibration = func(textBytes int) (int, bool) {
+				return classifier.EstimateTokens("", textBytes)
+			}
+		}
 	}
-	recordRequestDemandSnapshot(ctx, requestDemandSnapshot(
-		requestDemandStageOriginal,
-		request,
-		request.Model,
-		facts.ContextTokenFloor,
-	))
+	return counter.Count(model, request, calibration)
 }
 
 func recordRequestDemandSnapshot(
@@ -95,11 +94,9 @@ func requestDemandSnapshot(
 	stage string,
 	request *llmprotocol.Request,
 	model string,
-	promptTokens int,
+	prompt tokenaccounting.Count,
 ) routerreplay.RequestDemandSnapshot {
-	if promptTokens < 0 {
-		promptTokens = 0
-	}
+	promptTokens := max(prompt.Tokens, 0)
 	reservedOutput, reserveSource := requestOutputReserve(request)
 	return routerreplay.RequestDemandSnapshot{
 		Stage:                stage,
@@ -109,7 +106,7 @@ func requestDemandSnapshot(
 		ReservedOutputTokens: reservedOutput,
 		TotalDemandTokens:    saturatingNeutralAdd(promptTokens, reservedOutput),
 		TotalDemandKnown:     reserveSource == requestDemandOutputReserveExplicit,
-		CountingSource:       requestDemandCountingSourceFallback,
+		CountingSource:       string(prompt.Source),
 		OutputReserveSource:  reserveSource,
 		RequestGeneration:    request.Generation,
 	}
@@ -127,17 +124,6 @@ func requestOutputReserve(request *llmprotocol.Request) (int, string) {
 		return math.MaxInt, requestDemandOutputReserveExplicit
 	}
 	return int(value), requestDemandOutputReserveExplicit
-}
-
-func reusableRequestDemandSnapshot(
-	snapshots []routerreplay.RequestDemandSnapshot,
-	generation uint64,
-) (routerreplay.RequestDemandSnapshot, bool) {
-	if len(snapshots) == 0 {
-		return routerreplay.RequestDemandSnapshot{}, false
-	}
-	latest := snapshots[len(snapshots)-1]
-	return latest, latest.RequestGeneration == generation
 }
 
 func upsertRequestDemandSnapshot(
