@@ -140,7 +140,18 @@ var (
 	ErrRejected = errors.New("model runtime rejected the request")
 	// ErrFailed covers transport failures and unexpected responses.
 	ErrFailed = errors.New("model runtime call failed")
+	// ErrSignalsAbandoned is the cause a caller cancels a request's signals
+	// with once it has answered the request without them, as when the
+	// request is refused for its length. The calls it cuts short are not
+	// failures of their deployments, and are neither counted nor logged.
+	ErrSignalsAbandoned = errors.New("the request no longer needs its signals")
 )
+
+// SignalsAbandoned reports a context its caller cancelled with
+// ErrSignalsAbandoned.
+func SignalsAbandoned(ctx context.Context) bool {
+	return ctx != nil && errors.Is(context.Cause(ctx), ErrSignalsAbandoned)
+}
 
 // ErrorReason is a stable, low-cardinality label for an error.
 func ErrorReason(err error) string {

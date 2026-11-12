@@ -190,6 +190,7 @@ func planChat(t *testing.T, engine routing.Engine, id, text string) (*routing.Pl
 // guard scan is still reading, and the cancelled scan sends no more windows.
 func TestAnOversizedRequestStopsItsGuardScan(t *testing.T) {
 	engine, guard := slowGuardEngine(t, 100*time.Millisecond, true)
+	logs := observeRouterEvents(t)
 	plan, elapsed := planChat(t, engine, "oversized", promptOfTokens(t, 1_100_000))
 	require.NotNil(t, plan.Immediate, "the oversized request was routed")
 	require.Equal(t, http.StatusBadRequest, plan.Immediate.Status)
@@ -198,8 +199,17 @@ func TestAnOversizedRequestStopsItsGuardScan(t *testing.T) {
 	t.Logf("refused in %v after %d guard windows", elapsed, refusedAfter)
 	time.Sleep(500 * time.Millisecond)
 	require.Equal(t, refusedAfter, guard.windows(), "the cancelled guard scan kept sending windows")
+	// The signals the count cancelled are no guard's failure.
+	for _, event := range []string{"signal_failed_closed", "systemone_deployment_failed"} {
+		require.Empty(t, logs.FilterMessage(event).All(), "the count's cancel was logged as %s", event)
+	}
 
 	_, fitted := planChat(t, engine, "fitting", promptOfTokens(t, 1_040_000))
+	if raceDetector {
+		// Under -race the count can end after the oversized request's scan
+		// has read all its windows, so neither comparison below holds.
+		return
+	}
 	require.Greater(t, fitted, elapsed, "the refusal waited for the guard")
 	require.Greater(t, guard.windows(), 2*refusedAfter, "a fitting request's scan reads every window")
 }

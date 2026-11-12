@@ -2,11 +2,11 @@ package extproc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount"
@@ -14,7 +14,7 @@ import (
 
 // errContextWindowExceeded cancels the signals of a request whose count
 // rules out every model it can reach.
-var errContextWindowExceeded = errors.New("the request exceeds the context window of every model it can reach")
+var errContextWindowExceeded = fmt.Errorf("the request exceeds the context window of every model it can reach: %w", modelservice.ErrSignalsAbandoned)
 
 // contextAdmission is the window check of a request whose bytes could exceed
 // a window it can reach. Its counts run beside the signals, which never wait
