@@ -151,6 +151,41 @@ func recordPrivacyEvidence(results *SignalResults, call *systemOneCall, response
 	}
 }
 
+// ReplayPromptReadable reports whether ReplayPromptEvidence could read prompt
+// whole within within: a prompt that one window of each pii rule's deployment
+// holds is one call, and is always readable. A longer one is not readable
+// when the request's own guard scan of it ran out of time (guardReadShort),
+// when it needs more windows than one scan reads, or when its windows would
+// take longer than scanReadShare of within at the deployment's measured pace.
+// Without a pace yet, it is readable.
+func (c *Classifier) ReplayPromptReadable(prompt string, within time.Duration, guardReadShort bool) bool {
+	if c == nil || c.Config == nil {
+		return true
+	}
+	for _, rule := range c.applicationRules {
+		if rule.Type != config.SignalTypePII || rule.Rule.Input != (config.SystemOneInput{}) {
+			continue
+		}
+		deployment := c.Config.SystemOneRuleDeployment(applicationAsked(rule).rule)
+		budget := c.scanWindowBudget(deployment)
+		if len(prompt) <= budget.size {
+			continue
+		}
+		if guardReadShort {
+			return false
+		}
+		perCall, perByte, ok := c.windowPaces.line(deployment, budget.parallel)
+		if !ok {
+			continue
+		}
+		windows, grown := cutScanWindows(prompt, budget.size, budget.most, budget.overlap)
+		if len(windows) > maxScanWindows || float64(len(windows))*(perCall+perByte*float64(grown)) > scanReadShare*within.Seconds() {
+			return false
+		}
+	}
+	return true
+}
+
 // ReplayPromptEvidence reads a prompt with the recipe's pii rules, for Router
 // Replay's privacy check of a prompt routing did not read alone.
 func (c *Classifier) ReplayPromptEvidence(ctx context.Context, prompt string) PrivacyEvidence {

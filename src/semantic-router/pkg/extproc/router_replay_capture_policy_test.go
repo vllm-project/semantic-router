@@ -181,6 +181,76 @@ func TestReplayChecksAWithheldPromptAfterRoutingAndAttachesItOnlyWhenClean(t *te
 	}
 }
 
+// No check starts that could not read the prompt whole in its time: it would
+// end incomplete_read and withhold the prompt anyway. Whether it could is the
+// classifier's call, told whether the request's own guard scans ran out of
+// time on its input; scans that a match ended early did not. A check that
+// can finish still runs, and still withholds a prompt with personal data.
+func TestReplayStartsNoCheckThatCouldNotReadThePromptInTime(t *testing.T) {
+	const prompt = "Summarize the meeting agenda."
+	for _, test := range []struct {
+		name                          string
+		coverage                      map[string]string
+		matched                       []string
+		readable, guardShort, checked bool
+	}{
+		{"readable in time", nil, nil, true, false, true},
+		{"too long for its time", nil, nil, false, false, false},
+		{"guard scan cut by its deadline", map[string]string{"jailbreak:prompt_attack": "partial 43/97"}, nil, false, true, false},
+		{"guard scan ended by a match", map[string]string{"jailbreak:prompt_attack": "partial 2/97"}, []string{"prompt_attack"}, true, false, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			no := false
+			cfg := &config.RouterConfig{
+				RouterReplay:       config.RouterReplayConfig{StoreBackend: "memory"},
+				IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}}},
+			}
+			withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": no}))
+			router := replayRuntimeRouter(t, cfg)
+			router.Classifier = &classification.Classifier{Config: cfg}
+			read := make(chan string, 1)
+			savedEvidence, savedReadable := replayPromptEvidence, replayPromptReadable
+			t.Cleanup(func() { replayPromptEvidence, replayPromptReadable = savedEvidence, savedReadable })
+			var guardShort bool
+			replayPromptReadable = func(_ *classification.Classifier, text string, within time.Duration, short bool) bool {
+				if text != prompt || within != replayPromptCheckTimeout {
+					t.Errorf("asked whether %q is readable in %v", text, within)
+				}
+				guardShort = short
+				return test.readable
+			}
+			replayPromptEvidence = func(_ *classification.Classifier, _ context.Context, text string) classification.PrivacyEvidence {
+				read <- text
+				return classification.NewPrivacyEvidence("request", text, true, false)
+			}
+			ctx := replayPolicyRequest(t)
+			ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
+			ctx.VSRScanCoverage, ctx.VSRMatchedJailbreak = test.coverage, test.matched
+			router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
+			if guardShort != test.guardShort {
+				t.Fatalf("told the guard scan ran out of time: %v, want %v", guardShort, test.guardShort)
+			}
+			select {
+			case <-read:
+				if !test.checked {
+					t.Fatal("a check started that could not read the prompt in time")
+				}
+			case <-time.After(map[bool]time.Duration{true: 5 * time.Second, false: 50 * time.Millisecond}[test.checked]):
+				if test.checked {
+					t.Fatal("no check started for a prompt it could read in time")
+				}
+			}
+			deadline := time.Now().Add(5 * time.Second)
+			for len(replayPromptCheckSlots) > 0 && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			if record, _ := router.ReplayRecorder.GetRecord(ctx.RouterReplayID); record.Prompt != "" {
+				t.Fatalf("the prompt was attached: %q", record.Prompt)
+			}
+		})
+	}
+}
+
 func TestReplayRuntimeUsesGlobalMemoryCapacity(t *testing.T) {
 	max := 1
 	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "max_records": max}))
