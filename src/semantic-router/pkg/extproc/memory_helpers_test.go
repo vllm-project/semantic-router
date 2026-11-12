@@ -162,3 +162,25 @@ func TestConversationStartIsTakenOnceFromTheClientRequest(t *testing.T) {
 		t.Fatalf("a Responses request got a conversation start %q; its lineage identifies it", got)
 	}
 }
+
+// With USER_SCOPE_NAMESPACE_SECRET the fingerprint is keyed: it holds for the
+// conversation, but a plain SHA-256 of a guessed start does not match it, and
+// another deployment's secret gives the same start another id.
+func TestDeriveConversationStartIDIsKeyedByTheDeploymentSecret(t *testing.T) {
+	request := conversationStartRequest(llmprotocol.RoleSystem, "You are a coding agent.",
+		neutralTextMessage(llmprotocol.RoleUser, "Fix the failing test."))
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "")
+	plain := deriveConversationStartID(request, "tenant-a")
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "deployment-a")
+	keyed := deriveConversationStartID(request, "tenant-a")
+	again := deriveConversationStartID(request, "tenant-a")
+	otherTenant := deriveConversationStartID(request, "tenant-b")
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "deployment-b")
+	otherDeployment := deriveConversationStartID(request, "tenant-a")
+	if keyed != again || len(keyed) != len(plain) || !strings.HasPrefix(keyed, "cc-start-") {
+		t.Fatalf("keyed fingerprint %q then %q, plain %q", keyed, again, plain)
+	}
+	if keyed == plain || keyed == otherTenant || keyed == otherDeployment {
+		t.Fatalf("keyed %q matches plain %q, another tenant %q or another deployment %q", keyed, plain, otherTenant, otherDeployment)
+	}
+}

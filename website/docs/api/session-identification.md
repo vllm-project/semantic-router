@@ -75,7 +75,11 @@ that send only message history a usable fallback. Every request of a
 conversation repeats its start, so a client without a session header gets one
 session id for the whole conversation: Replay shows it as one trajectory,
 session telemetry accumulates across its turns, and each turn sees the model
-the previous turn used. The Router keeps only the hash.
+the previous turn used. The Router keeps only the hash. With
+`USER_SCOPE_NAMESPACE_SECRET` set, the hash is an HMAC-SHA256 under that
+secret, as response-cache scoping is: whoever lacks the secret cannot confirm
+a guessed conversation start from its id, and another deployment gives the
+same start another id. Without the secret it is a plain SHA-256.
 
 Two conversations that start the same way, with the same instructions and
 first message in the same tenant, share that id. Their Replay, telemetry and
