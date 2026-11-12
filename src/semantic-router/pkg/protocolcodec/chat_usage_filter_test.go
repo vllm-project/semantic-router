@@ -2,6 +2,7 @@ package protocolcodec
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -43,6 +44,26 @@ func TestChatUsageStreamFilterPreservesExtensionsAndArbitraryChunking(t *testing
 	}
 	if count := bytes.Count(output, []byte("data: [DONE]")); count != 1 {
 		t.Fatalf("terminal frame count = %d, want 1: %s", count, output)
+	}
+}
+
+func TestChatPublicStreamFilterRewritesModel(t *testing.T) {
+	filter := NewChatPublicStreamFilter(1<<20, true)
+	filter.SetPublicModel("gpt-4o")
+
+	frame := []byte("data: {\"id\":\"chunk_1\",\"model\":\"qwen2.5-7b-synthesis\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"model qwen2.5-7b-synthesis is fast\"}}]}\n\n")
+	output, err := filter.Push(frame)
+	if err != nil {
+		t.Fatalf("push failed: %v", err)
+	}
+
+	outputStr := string(output)
+	if !strings.Contains(outputStr, `"model":"gpt-4o"`) {
+		t.Fatalf("model was not rewritten: %s", outputStr)
+	}
+	// Verify that text inside delta.content was NOT rewritten
+	if !strings.Contains(outputStr, `"content":"model qwen2.5-7b-synthesis is fast"`) {
+		t.Fatalf("content was improperly modified: %s", outputStr)
 	}
 }
 

@@ -17,12 +17,21 @@ import (
 type ChatUsageStreamFilter struct {
 	framer          sseFramer
 	stripUsage      bool
+	publicModel     string
 	seenFinish      map[int]bool
 	frames          int
 	pendingTerminal []byte
 	failure         error
 	finalized       bool
 	upstreamFailed  bool
+}
+
+// SetPublicModel configures the virtual model identity presented downstream.
+// When non-empty, matching SSE frames have their "model" field rewritten.
+func (filter *ChatUsageStreamFilter) SetPublicModel(model string) {
+	if filter != nil {
+		filter.publicModel = model
+	}
 }
 
 // errChatUpstreamErrorFrame marks a provider error event. The filter drops it
@@ -97,7 +106,7 @@ func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, erro
 			continue
 		}
 		filtered, keep, hasData, terminal, err := filterChatUsageFrame(
-			frame, filter.framer.limit, filter.frames == 0, filter.stripUsage, filter.seenFinish,
+			frame, filter.framer.limit, filter.frames == 0, filter.stripUsage, filter.seenFinish, filter.publicModel,
 		)
 		filter.frames++
 		if errors.Is(err, errChatUpstreamErrorFrame) {
@@ -136,7 +145,7 @@ func (filter *ChatUsageStreamFilter) poison(err error) error {
 	return filter.failure
 }
 
-func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool) ([]byte, bool, bool, bool, error) {
+func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool, publicModel string) ([]byte, bool, bool, bool, error) {
 	parsed, err := parseSSEFrameAtPosition(frame, limit, first)
 	if err != nil {
 		return nil, false, false, false, err
@@ -155,6 +164,17 @@ func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenF
 		return nil, false, true, false, errChatUpstreamErrorFrame
 	}
 	changed := false
+	if publicModel != "" {
+		if rawModel, ok := object["model"]; ok && !bytes.Equal(bytes.TrimSpace(rawModel), []byte("null")) {
+			var currentModel string
+			if unmarshalErr := json.Unmarshal(rawModel, &currentModel); unmarshalErr == nil && currentModel != publicModel {
+				if encoded, marshalErr := json.Marshal(publicModel); marshalErr == nil {
+					object["model"] = encoded
+					changed = true
+				}
+			}
+		}
+	}
 	if _, present := object["provider"]; present {
 		delete(object, "provider")
 		changed = true

@@ -171,7 +171,7 @@ func ResolveFinalStageOwnership(req *Request) StageOwnership {
 		return resolveReMoMFinalStage(req)
 	case config.DecisionAlgorithmWorkflows:
 		return resolveWorkflowsFinalStage(req)
-	case config.DecisionAlgorithmConfidence:
+	case config.DecisionAlgorithmEscalate:
 		return resolveConfidenceFinalStage(req)
 	case config.DecisionAlgorithmRatings:
 		return resolveRatingsFinalStage(req)
@@ -347,7 +347,7 @@ func resolveConfidenceFinalStage(req *Request) StageOwnership {
 	// the winning model is pending and cannot be determined before emission.
 	// Therefore, selection is pending and native streaming is ineligible.
 	return StageOwnership{
-		AlgorithmType:      config.DecisionAlgorithmConfidence,
+		AlgorithmType:      config.DecisionAlgorithmEscalate,
 		StageName:          "candidate_selection",
 		StageRole:          StageRoleDirect,
 		TargetModel:        "",

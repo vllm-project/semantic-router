@@ -533,10 +533,8 @@ func TestConfidenceSelectionPendingBuffering(t *testing.T) {
 	req := &Request{
 		IsStreaming: true,
 		Algorithm: &config.AlgorithmConfig{
-			Type: config.DecisionAlgorithmConfidence,
-			Confidence: &config.ConfidenceAlgorithmConfig{
-				Threshold: 0.8,
-			},
+			Type:     config.DecisionAlgorithmEscalate,
+			Escalate: &config.EscalateAlgorithmConfig{},
 		},
 		ModelRefs: []config.ModelRef{
 			{Model: "small-model"},
@@ -545,7 +543,7 @@ func TestConfidenceSelectionPendingBuffering(t *testing.T) {
 	}
 
 	ownership := ResolveFinalStageOwnership(req)
-	assert.Equal(t, config.DecisionAlgorithmConfidence, ownership.AlgorithmType)
+	assert.Equal(t, config.DecisionAlgorithmEscalate, ownership.AlgorithmType)
 	assert.Equal(t, StageRoleDirect, ownership.StageRole)
 	assert.True(t, ownership.StageRole.IsUserVisible())
 	assert.True(t, ownership.IsFinalUserVisible)

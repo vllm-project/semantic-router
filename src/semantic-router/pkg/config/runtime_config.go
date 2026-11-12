@@ -8,12 +8,24 @@ type LooperConfig struct {
 	EntrypointModels []string `yaml:"-"`
 	// Endpoint points a connector client built in code at a chat completions
 	// URL; the Router's Loopers make their model calls in process.
-	Endpoint           string            `yaml:"-"`
-	GRPCMaxMsgSizeMB   int               `yaml:"grpc_max_msg_size_mb,omitempty"`
-	MaxResponseBytesMB int               `yaml:"max_response_bytes_mb,omitempty"`
-	TimeoutSeconds     int               `yaml:"timeout_seconds,omitempty"`
-	Headers            map[string]string `yaml:"headers,omitempty"`
-	Flow               FlowRuntimeConfig `yaml:"flow,omitempty"`
+	Endpoint           string                `yaml:"-"`
+	GRPCMaxMsgSizeMB   int                   `yaml:"grpc_max_msg_size_mb,omitempty"`
+	MaxResponseBytesMB int                   `yaml:"max_response_bytes_mb,omitempty"`
+	TimeoutSeconds     int                   `yaml:"timeout_seconds,omitempty"`
+	Headers            map[string]string     `yaml:"headers,omitempty"`
+	Flow               FlowRuntimeConfig     `yaml:"flow,omitempty"`
+	Streaming          LooperStreamingConfig `yaml:"streaming,omitempty"`
+}
+
+type LooperStreamingConfig struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
+}
+
+func (l *LooperConfig) IsStreamingEnabled() bool {
+	if l == nil || l.Streaming.Enabled == nil {
+		return false
+	}
+	return *l.Streaming.Enabled
 }
 
 func (l *LooperConfig) GetTimeout() int {
