@@ -179,7 +179,8 @@ def _acquire_file_lock(
             if time.monotonic() >= deadline:
                 raise RuntimeLifecycleLockError(
                     f"Stack {stack_name!r} on {runtime} has another lifecycle "
-                    f"operation in progress. {_holder_message(lock_fd)}"
+                    "operation in progress. "
+                    f"{_holder_message(lock_fd, take_over_waiting)}"
                 ) from error
             time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
 
@@ -265,7 +266,7 @@ def _stop_waiting_holder(lock_fd: int) -> bool:
         return False
 
 
-def _holder_message(lock_fd: int) -> str:
+def _holder_message(lock_fd: int, take_over_waiting: bool) -> str:
     owner = _read_owner(lock_fd)
     if owner is None:
         return "Wait for the holder to finish, then retry."
@@ -278,10 +279,20 @@ def _holder_message(lock_fd: int) -> str:
         or not isinstance(started_at, str)
     ):
         return "Wait for the holder to finish, then retry."
-    state = SERVE_WAITING if _waiting_heartbeat(owner) else owner.get("state", "active")
+    waiting = _waiting_heartbeat(owner)
+    state = SERVE_WAITING if waiting else owner.get("state", "active")
+    if waiting and not take_over_waiting:
+        hint = "Run `vllm-sr stop` to end its setup wait, then retry."
+    elif command == "vllm-sr serve":
+        hint = (
+            "If it is only waiting for Dashboard setup, end it with "
+            f"`kill -TERM {pid}`; otherwise wait for it to finish, then retry."
+        )
+    else:
+        hint = "Wait for it to finish, then retry."
     return (
         f"Holder: pid {pid}, command {command!r}, state {state}, "
-        f"started {started_at}. Run `kill -TERM {pid}` to end it, then retry."
+        f"started {started_at}. {hint}"
     )
 
 

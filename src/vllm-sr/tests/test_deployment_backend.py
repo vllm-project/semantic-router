@@ -74,9 +74,9 @@ class TestContainerBackend:
             "cli.container_backend.start_vllm_sr",
             lambda *a, **kw: captured.update(kw),
         )
+        acquire_lock = MagicMock(return_value=lifecycle_lock)
         monkeypatch.setattr(
-            "cli.container_backend.acquire_runtime_lifecycle_lock",
-            MagicMock(return_value=lifecycle_lock),
+            "cli.container_backend.acquire_runtime_lifecycle_lock", acquire_lock
         )
         monkeypatch.setattr(
             "cli.container_backend.get_container_runtime", lambda: "docker"
@@ -115,6 +115,7 @@ class TestContainerBackend:
         assert captured["enable_observability"] is False
         assert captured["runtime_config_lock"] is runtime_lock
         assert captured["startup_timeout"] == (startup_timeout or 1800)
+        assert acquire_lock.call_args.kwargs["take_over_waiting"] is False
         lifecycle_lock.__enter__.assert_called_once_with()
         lifecycle_lock.__exit__.assert_called_once()
 

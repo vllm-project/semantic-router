@@ -98,7 +98,8 @@ def test_runtime_lifecycle_lock_contends_across_working_directories(
     assert "command 'vllm-sr lifecycle'" in contender.stderr
     assert "state active" in contender.stderr
     assert "started " in contender.stderr
-    assert f"kill -TERM {os.getpid()}" in contender.stderr
+    assert "Wait for it to finish, then retry." in contender.stderr
+    assert "kill -TERM" not in contender.stderr
 
 
 def _serve_holder(private_tmp_path: Path, state: str, script_name: str = "vllm-sr"):
@@ -149,15 +150,14 @@ with acquire_runtime_lifecycle_lock(
     not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"),
     reason="safe process signaling requires Linux pidfd",
 )
-@pytest.mark.parametrize("operation", ["serve", "stop"])
-def test_waiting_serve_is_taken_over(private_tmp_path: Path, operation: str):
+def test_waiting_serve_is_taken_over(private_tmp_path: Path):
     process, lock_root, _heartbeat = _serve_holder(private_tmp_path, "waiting")
     try:
         with acquire_runtime_lifecycle_lock(
             runtime="docker",
             stack_name="audit-a",
             lock_root=lock_root,
-            command=f"vllm-sr {operation}",
+            command="vllm-sr stop",
             take_over_waiting=True,
         ):
             assert process.wait(timeout=2) == 0
@@ -190,7 +190,9 @@ def test_takeover_refuses_unverified_holder(private_tmp_path: Path, invalid: str
             record = json.loads(heartbeat.read_text(encoding="utf-8"))
             record["start_ticks"] += 1
             heartbeat.write_text(json.dumps(record), encoding="utf-8")
-        with pytest.raises(RuntimeLifecycleLockError, match="another lifecycle"):
+        with pytest.raises(
+            RuntimeLifecycleLockError, match="another lifecycle"
+        ) as error:
             acquire_runtime_lifecycle_lock(
                 runtime="docker",
                 stack_name="audit-a",
@@ -198,6 +200,7 @@ def test_takeover_refuses_unverified_holder(private_tmp_path: Path, invalid: str
                 command="vllm-sr stop",
                 take_over_waiting=True,
             )
+        assert f"kill -TERM {process.pid}" in str(error.value)
         assert process.poll() is None
     finally:
         process.terminate()
@@ -232,8 +235,6 @@ with acquire_runtime_lifecycle_lock(
 
 
 def _installer_serve(private_tmp_path: Path):
-    """A background serve waiting for setup, holding both locks the way core does."""
-
     lock_root = private_tmp_path / "locks"
     config = private_tmp_path / "runtime-config.yaml"
     state_root = private_tmp_path / "state"

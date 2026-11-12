@@ -53,6 +53,7 @@ class ContainerBackend:
         with self._lifecycle_lock(
             command="vllm-sr serve",
             state="starting",
+            take_over_waiting=runtime_config_lock is None,
             heartbeat_path=heartbeat_file(
                 Path(runtime_config_file or config_file).absolute()
             ),
@@ -84,12 +85,16 @@ class ContainerBackend:
         )
 
     def teardown(self) -> None:
-        with self._lifecycle_lock(command="vllm-sr stop", state="stopping"):
+        with self._lifecycle_lock(
+            command="vllm-sr stop", state="stopping", take_over_waiting=True
+        ):
             stop_managed_controller()
             stop_vllm_sr()
 
     @staticmethod
-    def _lifecycle_lock(*, command: str, state: str, heartbeat_path=None):
+    def _lifecycle_lock(
+        *, command: str, state: str, take_over_waiting: bool, heartbeat_path=None
+    ):
         stack_layout = resolve_runtime_stack()
         return acquire_runtime_lifecycle_lock(
             runtime=get_container_runtime(),
@@ -97,7 +102,7 @@ class ContainerBackend:
             command=command,
             state=state,
             heartbeat_path=heartbeat_path,
-            take_over_waiting=True,
+            take_over_waiting=take_over_waiting,
         )
 
     def logs(self, service: str, follow: bool = False) -> None:
