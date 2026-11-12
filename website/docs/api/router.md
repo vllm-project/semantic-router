@@ -560,6 +560,22 @@ tool message carries it as `content` with `content_truncated`. Otherwise the
 step keeps only its call ID and `status`. Without `replay.detail`, outputs,
 request bodies and trajectory content are returned redacted either way.
 
+`capture_request_body: false` leaves request text out of the whole record: the
+body, `prompt`, `tool_definitions`, and the text, arguments and results of each
+request step in `tool_trace`. `capture_response_body: false` does the same for
+the response body, the response steps, `hallucination_spans`, and the provider
+replies in a fallback outcome's `execution_record`, where each failed attempt
+keeps its status code and a fixed reason. Those steps keep their type, tool
+name, call ID and status. The left-out text is absent, not marked
+`content_redacted`, which keeps marking content hidden from the reader's role
+and tool results that `capture_tool_results` keeps out. `max_tool_trace_bytes`
+cuts step text too, and a trajectory's user and assistant messages then carry
+`content_truncated`.
+
+Every Replay read route applies the same redaction. Without `replay.detail`,
+trajectory `routes` return `selection_reasoning` and `session_reason` empty,
+as the record's `route_diagnostics` do.
+
 ### Configured-rate cost estimates
 
 Insights uses recorded token usage and configured input, cached-input,

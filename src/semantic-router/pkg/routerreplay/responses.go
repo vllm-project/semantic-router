@@ -137,7 +137,7 @@ type TrajectoryMessage struct {
 	ToolCalls      []TrajectoryToolCall `json:"tool_calls,omitempty"`
 	ToolCallID     string               `json:"tool_call_id,omitempty"`
 	ToolName       string               `json:"tool_name,omitempty"`
-	// ContentTruncated marks a captured tool result cut at max_tool_trace_bytes.
+	// ContentTruncated marks message text or a tool result cut at max_tool_trace_bytes.
 	ContentTruncated bool `json:"content_truncated,omitempty"`
 	TurnIndex        int  `json:"turn_index"`
 }
