@@ -186,6 +186,53 @@ func TestAGrownWindowCloseToAMatchIsReadAgainAtTheConfiguredSize(t *testing.T) {
 	}
 }
 
+// A window larger than the configured size is read again when its answer
+// leaves a rule just short of the rule's own threshold, wherever that is: the
+// default margin of 3 in log-odds re-reads a rule at 0.5 from about 0.05 and
+// one at 0.995 from about 0.91, not far below either, and never once the
+// window matched.
+func TestAGrownWindowIsReadAgainJustBelowItsRulesThreshold(t *testing.T) {
+	text := strings.Repeat("The committee reviewed the quarterly report and agreed to meet again. ", 40)
+	for _, test := range []struct {
+		threshold, score float64
+		reread           bool
+	}{
+		{0.5, 0.45, true},
+		{0.5, 0.06, true},
+		{0.5, 0.03, false},
+		{0.5, 0.6, false},
+		{0.995, 0.99, true},
+		{0.995, 0.92, true},
+		{0.995, 0.85, false},
+		{0.995, 0.997, false},
+	} {
+		threshold := test.threshold
+		asked := askedRule{signalType: config.SignalTypeJailbreak, preset: presets.Jailbreak, rule: config.SystemOneRule{
+			Name: "prompt_attack", Labels: []string{"jailbreak"}, Predicate: &config.NumericPredicate{GTE: &threshold},
+			Question: config.SystemOneQuestion{Type: config.SystemOneQuestionChoice, Choices: []config.SystemOneOption{{Key: "benign"}, {Key: "jailbreak"}}},
+		}}
+		scan := &guardScan{
+			text: text, size: 1024, overlap: 128, rereadMargin: config.DefaultScanWindowRereadMargin, rules: []askedRule{asked}, cut: 1,
+			windows:   []scanWindow{{start: 0, end: len(text), first: 0, last: 0}},
+			responses: make([]modelservice.Response, 1), errs: make([]error, 1), done: []bool{true},
+			windowState: func(window string) modelservice.Request { return modelservice.Request{State: window} },
+		}
+		choice := map[bool]string{true: "jailbreak", false: "benign"}[test.score >= 0.5]
+		response := modelservice.Response{Answers: map[string]modelservice.Answer{asked.questionID(): {
+			Type: "choice", Choice: choice, Probabilities: map[string]float64{"benign": 1 - test.score, "jailbreak": test.score},
+		}}}
+		calls := scan.rereadCalls(&systemOneCall{window: 0, request: modelservice.Request{Window: 3}}, response, nil)
+		if (len(calls) > 0) != test.reread {
+			t.Fatalf("threshold %v, score %v: %d windows read again, want a second look: %v", test.threshold, test.score, len(calls), test.reread)
+		}
+		for _, call := range calls {
+			if len(call.request.State) > scan.size || call.request.Window != 3 {
+				t.Fatalf("a window read again holds %d bytes at rank %d, want at most %d at the window's rank", len(call.request.State), call.request.Window, scan.size)
+			}
+		}
+	}
+}
+
 // An input whose windows of the configured size are all read by the
 // signals' deadline keeps them, however little time that leaves: it is read
 // as before windows could grow, as fast, and at the size its rules expect.

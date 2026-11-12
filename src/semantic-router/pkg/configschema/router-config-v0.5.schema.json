@@ -2413,10 +2413,10 @@
           "maximum": 1048576,
           "minimum": 256
         },
-        "reread_floor": {
+        "reread_margin": {
           "type": "number",
-          "maximum": 1,
-          "exclusiveMinimum": 0
+          "maximum": 20,
+          "minimum": 0
         }
       },
       "additionalProperties": false,

@@ -118,9 +118,12 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
 - A larger window dilutes what it holds: the same injection scores lower in a
   window of 8,000 tokens than in one of 2,000. The head and the tail, the first
   and the last `scan_window.tokens` of the input, are always read at that
-  size. A larger window whose answer gives a rule at least
-  `scan_window.reread_floor` (0.9 by default) without making it match is read
-  again in windows of `scan_window.tokens` before the rule decides.
+  size. A larger window whose answer leaves a rule short of its threshold, by
+  at most `scan_window.reread_margin` in log-odds, is read again in windows of
+  `scan_window.tokens` before the rule decides. Dilution lowers a score's
+  log-odds by about the same amount at any threshold, so the default of 3
+  re-reads from about 0.91 for a rule at 0.995, 0.27 at 0.88 and 0.05 at 0.5,
+  and never once the window matched.
 - An input whose windows are all read by the signals' deadline is read at the
   configured size, as fast as its windows are read. A scan that falls behind,
   whose windows left would not all be read in time at the pace it read the
@@ -156,7 +159,7 @@ global:
 | `scan_window.overlap` | 512; 256 for `provider: systemone` | 0 to less than half a window |
 | `scan_window.max_parallel` | 4 | 1 to 64 |
 | `scan_window.max_tokens` | the model's validated length less 1,024 | `scan_window.tokens` to 1,048,576 |
-| `scan_window.reread_floor` | 0.9 | more than 0, at most 1 (1 reads no window again) |
+| `scan_window.reread_margin` | 3 (log-odds below the rule's threshold) | 0 to 20 (0 reads no window again) |
 
 **Views and windows are sized in bytes.** A token of `max_tokens` or
 `scan_window.tokens` counts as four bytes, about what a token of prose takes,

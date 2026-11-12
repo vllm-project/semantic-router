@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"math/bits"
 	"slices"
 	"strings"
@@ -32,11 +33,11 @@ import (
 // span question. A window whose answer makes the rule match decides it, and
 // when that match alone refuses the request, the stage's scans end there. A
 // window larger than the configured size dilutes what it holds, so one whose
-// answer comes close to a match (scan_window.reread_floor) is read again in
-// windows of that size before the rule decides. When the stage's deadline
-// leaves only some windows read, on_unscanned decides (best_effort: on the
-// windows read, once they reach the rule's min_coverage); when none was, the
-// rule is unknown, which on_unknown decides.
+// answer puts a rule close below its threshold (scan_window.reread_margin) is
+// read again in windows of that size before the rule decides. When the
+// stage's deadline leaves only some windows read, on_unscanned decides
+// (best_effort: on the windows read, once they reach the rule's
+// min_coverage); when none was, the rule is unknown, which on_unknown decides.
 
 // maxScanWindows bounds the windows of one input, and so the calls its scan
 // holds. An input that needs more windows of its deployment's size is read in
@@ -90,9 +91,10 @@ type guardScan struct {
 	// the cut's windows between its head and its tail, most the largest a
 	// window may grow to, and overlap what two neighbours share.
 	size, grown, most, overlap int
-	// reread is the value a window larger than size must give a rule, short
-	// of a match, to be read again in windows of size.
-	reread float64
+	// rereadMargin is how far below its threshold, in log-odds, a window
+	// larger than size may put a rule, short of a match, to be read again in
+	// windows of size.
+	rereadMargin float64
 	// order is the cut's reading order (scanOrder), turned by turn.
 	order []int
 	turn  int
@@ -117,11 +119,11 @@ type guardScan struct {
 // or of up to most bytes when the input needs more than maxScanWindows of
 // them or its scan falls behind, each overlapping the one before by overlap
 // bytes, at most parallel of them in flight; a window larger than size whose
-// answer gives a rule reread or more, short of a match, is read again in
-// windows of size.
+// answer puts a rule within rereadMargin below its threshold, in log-odds, is
+// read again in windows of size.
 type scanBudget struct {
 	size, most, overlap, parallel int
-	reread                        float64
+	rereadMargin                  float64
 }
 
 // guardScanned reports whether a rule reads its input in windows: the
@@ -139,7 +141,7 @@ func guardScanned(asked askedRule) bool {
 // reserve; the largest window a long input's windows may grow to, its
 // scan_window.max_tokens or else that cap (none larger without either, as
 // only they say what the model takes); how many windows are in flight at a
-// time; and its scan_window.reread_floor.
+// time; and its scan_window.reread_margin.
 func (c *Classifier) scanWindowBudget(deployment string) scanBudget {
 	window := c.Config.ModelDeployments[deployment]
 	tokens, overlap := window.ScanWindowTokens()
@@ -152,7 +154,7 @@ func (c *Classifier) scanWindowBudget(deployment string) scanBudget {
 	}
 	return scanBudget{
 		size: size, most: most, overlap: max(0, min(overlap*routingViewBytesPerToken, size/2-1)), parallel: window.ScanWindowParallel(),
-		reread: window.ScanWindowRereadFloor(),
+		rereadMargin: window.ScanWindowRereadMargin(),
 	}
 }
 
@@ -172,7 +174,7 @@ func newGuardScan(deployment string, state modelservice.Request, budget scanBudg
 	offset := int(binary.LittleEndian.Uint16(turn[:]))
 	return &guardScan{
 		deployment: deployment, whole: state, text: text, windows: windows, cut: len(windows),
-		size: size, grown: grown, most: most, overlap: overlap, reread: budget.reread,
+		size: size, grown: grown, most: most, overlap: overlap, rereadMargin: budget.rereadMargin,
 		order: scanOrder(len(windows), offset), turn: offset, windowState: windowState, parallel: budget.parallel, stop: func() {},
 		responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)), done: make([]bool, len(windows)),
 	}
@@ -494,22 +496,18 @@ func (scan *guardScan) record(window int, response modelservice.Response, err er
 }
 
 // rereadCalls are the calls that read a window larger than the configured
-// size again in windows of that size, when its answer gave a rule that one
-// window decides the reread floor or more without making it match: a larger
-// window dilutes what it holds, which a window of the configured size reads
-// as the rule expects. They take the window's rank, so they are read before
-// the windows after it.
+// size again in windows of that size, when its answer put a rule that one
+// window decides close below its threshold without making it match
+// (closeBelowThreshold): a larger window dilutes what it holds, which a window
+// of the configured size reads as the rule expects. They take the window's
+// rank, so they are read before the windows after it.
 func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Response, err error) []*systemOneCall {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
 	window := scan.windows[call.window]
 	if err != nil || window.end-window.start <= scan.size || !slices.ContainsFunc(scan.rules, func(asked askedRule) bool {
 		answer, ok := response.Answers[asked.questionID()]
-		if !ok || answer.Error != "" || !windowDecides(asked.rule) {
-			return false
-		}
-		value, matched := windowVerdict(asked, answer)
-		return !matched && value >= scan.reread
+		return ok && answer.Error == "" && windowDecides(asked.rule) && closeBelowThreshold(asked, answer, scan.rereadMargin)
 	}) {
 		return nil
 	}
@@ -580,6 +578,34 @@ func windowVerdict(asked askedRule, answer modelservice.Answer) (float64, bool) 
 	results := newResponseSignalResults()
 	matched := applySystemOneAnswer(results, asked.signalType, asked.rule, answer)
 	return results.SignalValues[signalConfidenceKey(asked.signalType, asked.rule.Name)], slices.Contains(matched, asked.rule.Name)
+}
+
+// closeBelowThreshold reports whether one window's answer leaves asked's rule
+// short of a match by at most margin in log-odds below its threshold, the
+// floor its predicate sets. Dilution lowers a score's log-odds by about the
+// same amount wherever the threshold is, so one margin serves a rule at 0.5
+// and one at 0.995 alike. A rule with no floor (a selection without a
+// predicate) has no threshold to fall short of.
+func closeBelowThreshold(asked askedRule, answer modelservice.Answer, margin float64) bool {
+	predicate := asked.rule.EffectivePredicate()
+	if margin <= 0 || predicate == nil {
+		return false
+	}
+	threshold := predicate.GTE
+	if threshold == nil {
+		threshold = predicate.GT
+	}
+	if threshold == nil {
+		return false
+	}
+	value, matched := windowVerdict(asked, answer)
+	return !matched && logOdds(value) >= logOdds(*threshold)-margin
+}
+
+// logOdds is p's log-odds, with p held just inside (0, 1).
+func logOdds(p float64) float64 {
+	p = min(max(p, 1e-9), 1-1e-9)
+	return math.Log(p / (1 - p))
 }
 
 // decidedBy reports whether a read window decides asked's rule: its answer

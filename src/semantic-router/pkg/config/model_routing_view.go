@@ -19,7 +19,8 @@ const (
 	DefaultSystemOneScanWindowOverlap = 256
 	DefaultScanWindowParallel         = 4
 	MaxScanWindowParallel             = 64
-	DefaultScanWindowRereadFloor      = 0.9
+	DefaultScanWindowRereadMargin     = 3.0
+	MaxScanWindowRereadMargin         = 20.0
 	MinModelInputTokens               = 256
 	MaxModelInputTokens               = 1 << 20
 )
@@ -68,11 +69,14 @@ type DeploymentScanWindow struct {
 	// default the model's validated length less the reserve, which bounds
 	// every window whatever MaxTokens says.
 	MaxTokens int `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty" jsonschema:"minimum=256,maximum=1048576"`
-	// RereadFloor is the value a window larger than Tokens must give a rule
-	// that one window decides, short of a match, to be read again in windows
-	// of Tokens before the rule resolves: a larger window dilutes what it
-	// holds (default 0.9; 1 reads no window again).
-	RereadFloor *float64 `yaml:"reread_floor,omitempty" json:"reread_floor,omitempty" jsonschema:"exclusiveMinimum=0,maximum=1"`
+	// RereadMargin is how far below its threshold, in log-odds, a window
+	// larger than Tokens may put a rule that one window decides, short of a
+	// match, and still be read again in windows of Tokens before the rule
+	// resolves: a larger window dilutes what it holds, and dilution lowers a
+	// score's log-odds by about the same amount at any threshold (default 3,
+	// which re-reads from 0.91 for a rule at 0.995 and from 0.05 for one at
+	// 0.5; 0 reads no window again).
+	RereadMargin *float64 `yaml:"reread_margin,omitempty" json:"reread_margin,omitempty" jsonschema:"minimum=0,maximum=20"`
 }
 
 // RoutingViewTokens is the routing view's bound and head share the
@@ -129,14 +133,14 @@ func (d ModelDeployment) ScanWindowMaxTokens() int {
 	return 0
 }
 
-// ScanWindowRereadFloor is the value a window of the deployment larger than
-// its configured size must give a rule, short of a match, to be read again
-// in windows of that size.
-func (d ModelDeployment) ScanWindowRereadFloor() float64 {
-	if window := d.ScanWindow; window != nil && window.RereadFloor != nil {
-		return *window.RereadFloor
+// ScanWindowRereadMargin is how far below a rule's threshold, in log-odds, a
+// window of the deployment larger than its configured size may put the rule,
+// short of a match, to be read again in windows of that size.
+func (d ModelDeployment) ScanWindowRereadMargin() float64 {
+	if window := d.ScanWindow; window != nil && window.RereadMargin != nil {
+		return *window.RereadMargin
 	}
-	return DefaultScanWindowRereadFloor
+	return DefaultScanWindowRereadMargin
 }
 
 func (d ModelDeployment) validateInputViews() error {
@@ -168,8 +172,8 @@ func (d ModelDeployment) validateInputViews() error {
 		if window.MaxTokens != 0 && (window.MaxTokens < tokens || window.MaxTokens > MaxModelInputTokens) {
 			return fmt.Errorf("scan_window.max_tokens must be at least scan_window.tokens (%d) and at most %d", tokens, MaxModelInputTokens)
 		}
-		if floor := window.RereadFloor; floor != nil && (math.IsNaN(*floor) || *floor <= 0 || *floor > 1) {
-			return fmt.Errorf("scan_window.reread_floor must be greater than 0 and at most 1")
+		if margin := window.RereadMargin; margin != nil && (math.IsNaN(*margin) || *margin < 0 || *margin > MaxScanWindowRereadMargin) {
+			return fmt.Errorf("scan_window.reread_margin must be between 0 and %g", MaxScanWindowRereadMargin)
 		}
 	}
 	return nil
