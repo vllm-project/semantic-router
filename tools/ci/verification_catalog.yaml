@@ -345,7 +345,7 @@ verifications:
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 # Authoring tools remain affected/manual contracts, outside product qualification.
 full_cpu:
-  version: 5
+  version: 6
   required:
     - quality
     - generated-contracts
@@ -368,7 +368,6 @@ full_cpu:
     - e2e-unit
     - e2e.standalone
     - e2e.envoy-ai-gateway
-    - e2e.routing-errors
     - e2e.dashboard
     - e2e.remote-embedding
     - e2e.streaming

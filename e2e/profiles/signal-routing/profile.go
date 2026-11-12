@@ -1,49 +1,52 @@
-// Package longcontextrouting validates the context signal's token-count
-// threshold matching end-to-end, isolated from the shared ai-gateway
-// profile's safety-decision priority space (block_jailbreak, block_pii). The
-// overlap between long_context_routing and those guardrails is covered
-// separately by context-safety-overlap, which runs in ai-gateway where the
-// guardrails actually exist. See #3178.
-package longcontextrouting
+// Package signalrouting validates the structure, context, conversation,
+// complexity and preference signals' rule matching end to end. Each signal has
+// its own recipe behind its own entrypoint, so its decisions never compete for
+// priority space with another signal's (#3178), and one deployment serves all
+// five cases.
+package signalrouting
 
 import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-const valuesFile = "e2e/profiles/long-context-routing/values.yaml"
+const valuesFile = "e2e/profiles/signal-routing/values.yaml"
 
 var resourceManifests = []string{
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
+	// Serves the System One fixture the complexity and preference rules ask.
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
-// Profile validates the context signal's threshold matching in isolation.
+// Profile validates five signals' rule matching, one recipe per signal.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
 
-// NewProfile creates a new long-context-routing profile.
+// NewProfile creates a new signal-routing profile.
 func NewProfile() *Profile {
 	return &Profile{
 		stack: gatewaystack.New(gatewaystack.Config{
-			Name:                     "long-context-routing",
+			Name:                     "signal-routing",
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
+			WaitDeployments:          []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
 		}),
 	}
 }
 
 // Name returns the profile name.
-func (p *Profile) Name() string { return "long-context-routing" }
+func (p *Profile) Name() string { return "signal-routing" }
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the context signal's token-count threshold matching end-to-end"
+	return "Tests the structure, context, conversation, complexity and preference signals' rule matching end-to-end, one recipe each"
 }
 
 // Setup deploys the shared gateway stack and this profile's resources.
@@ -58,7 +61,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile.
 func (p *Profile) GetTestCases() []string {
-	return []string{"context-routing"}
+	return []string{"structure-routing", "context-routing", "conversation-routing", "complexity-routing", "preference-routing"}
 }
 
 // GetServiceConfig returns the service configuration for accessing the deployed service.
