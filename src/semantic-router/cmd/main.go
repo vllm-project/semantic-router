@@ -122,6 +122,9 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return recordStartupError(startupWriter, "ensure models are downloaded", err)
 	}
 	if opts.downloadOnly {
+		// A serving Router fetches tokenizers in the background; a
+		// download-only run, which fills the model volume, waits for them.
+		_ = modeldownload.EnsureTokenizers(ctx, cfg.ContextWindowTokenizers())
 		logging.ComponentEvent("router", "download_only_complete", map[string]interface{}{
 			"mode": "download_only",
 		})

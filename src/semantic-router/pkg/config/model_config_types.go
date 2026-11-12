@@ -111,8 +111,23 @@ type ModelParams struct {
 	// backends reject; the Router leaves their fields out for this model.
 	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
 	// Tokenizer counts the model's prompts for the context window check;
-	// empty counts them with the proxy tokenizer.
+	// empty counts them with the tokenizer of HubRepo, else with the proxy
+	// tokenizer.
 	Tokenizer string `yaml:"tokenizer,omitempty"`
+	// HubRepo is the Hugging Face repo the model comes from: the
+	// open-weights source of its catalog card, else the id a self-hosted
+	// engine serves it under. Empty when it has neither.
+	HubRepo string `yaml:"-" json:"-"`
+}
+
+// EffectiveTokenizer is the tokenizer that counts the model's prompts for
+// the context window check: Tokenizer, else HubRepo; empty leaves them to
+// the proxy tokenizer.
+func (params ModelParams) EffectiveTokenizer() string {
+	if params.Tokenizer != "" {
+		return params.Tokenizer
+	}
+	return params.HubRepo
 }
 
 // EvidenceScore resolves a versioned static model index. Missing, failed, and

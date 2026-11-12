@@ -223,7 +223,6 @@ Credentials, by name only. None reaches a client, and a provider receives only t
 | --- | --- | --- | --- |
 | `x-vsr-route-model` | request, provider request | v0.5 | Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own. |
 | `x-vsr-upstream-host` | provider response | v0.5 | Endpoint Envoy reports on the provider response for KV registry writes; removed before the client. |
-| `x-repo-commit` | provider response | v0.5 | Commit the Hugging Face Hub resolved a revision to when the Router downloads a model's `tokenizer.json`; the Router caches the file under it. |
 | `x-vsr-kv-source-pod` | provider request | v0.4 | Address of the pod that holds the source model's KV cache. |
 | `x-vsr-kv-cache-id` | provider request | v0.4 | Opaque id of the source KV block. |
 | `x-vsr-kv-mapper-id` | provider request | v0.4 | Mapper artifact for the source and target model pair. |

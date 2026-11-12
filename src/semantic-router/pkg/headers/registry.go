@@ -210,7 +210,6 @@ var registry = []Header{
 	// Routing and transport internals.
 	{VSRRouteModel, FromClient | ToProvider, SurfaceInternal, SensitivityNone, "routing", "v0.5", "Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own."},
 	{VSRUpstreamHost, FromProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.5", "Endpoint Envoy reports on the provider response for KV registry writes; removed before the client."},
-	{HubRepoCommit, FromProvider, SurfaceInternal, SensitivityNone, "context_window", "v0.5", "Commit the Hugging Face Hub resolved a revision to when the Router downloads a model's `tokenizer.json`; the Router caches the file under it."},
 	{VSRKVSourcePod, ToProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.4", "Address of the pod that holds the source model's KV cache."},
 	{VSRKVCacheID, ToProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.4", "Opaque id of the source KV block."},
 	{VSRKVMapperID, ToProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.4", "Mapper artifact for the source and target model pair."},

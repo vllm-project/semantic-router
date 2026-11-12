@@ -50,8 +50,9 @@ type Spec struct {
 
 var (
 	hubRepo = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)?$`)
-	// The Hugging Face cache keeps a revision under its own name, so each
-	// part of one starts with a letter or digit: none is empty, "." or "..".
+	// The Router keeps a revision's tokenizer in a directory named after it,
+	// so each part of one starts with a letter or digit: none is empty, "."
+	// or "..".
 	hubRevision = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]*(/[A-Za-z0-9][A-Za-z0-9._+-]*)*$`)
 )
 

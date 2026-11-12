@@ -3,11 +3,11 @@ package tokencount
 import (
 	"context"
 	"math/rand"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -199,16 +199,11 @@ func TestRegistryLoadsEachKindOfSpec(t *testing.T) {
 		t.Fatal(err)
 	}
 	commit := strings.Repeat("ab", 20)
-	cached := filepath.Join(dir, "hub", "models--org--cached", "snapshots", commit, hubFile)
-	if err := writeFileAtomic(cached, []byte(tinyTokenizer)); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeFileAtomic(filepath.Join(dir, "hub", "models--org--cached", "refs", "main"), []byte(commit)); err != nil {
-		t.Fatal(err)
-	}
-	registry := NewRegistry(Hub{CacheDir: filepath.Join(dir, "hub"), Offline: true})
+	registry := NewRegistry(func(repo, revision string) (string, bool) {
+		return file, repo == "org/model" && (revision == "main" || revision == commit)
+	}, nil)
 
-	for _, spec := range []string{O200kBase, file, dir, "org/cached", "org/cached@" + commit} {
+	for _, spec := range []string{O200kBase, file, dir, "org/model", "org/model@" + commit} {
 		enc, ok := registry.Lookup(spec)
 		if !ok {
 			t.Fatalf("Lookup(%q) found nothing", spec)
@@ -225,14 +220,15 @@ func TestRegistryLoadsEachKindOfSpec(t *testing.T) {
 	if err := os.Mkdir(empty, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	// A missing, corrupt or non-regular file, or a directory without a
-	// tokenizer.json, fails to load and leaves its models on the proxy.
+	// A repo not on disk, a missing, corrupt or non-regular file, or a
+	// directory without a tokenizer.json, fails to load and leaves its
+	// models on the proxy.
 	for _, spec := range []string{"org/missing", filepath.Join(dir, "missing.json"), "not a spec", corrupt, empty, "/dev/null"} {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_, err := registry.Load(ctx, spec)
 		cancel()
 		if err == nil {
-			t.Errorf("Load(%q) should fail offline", spec)
+			t.Errorf("Load(%q) should fail", spec)
 		}
 		if _, ok := registry.Lookup(spec); ok {
 			t.Errorf("Lookup(%q) should find nothing", spec)
@@ -240,46 +236,39 @@ func TestRegistryLoadsEachKindOfSpec(t *testing.T) {
 	}
 }
 
-func TestRegistryDownloadsIntoTheHubCache(t *testing.T) {
-	commit := strings.Repeat("cd", 20)
-	auths := make(chan string, 1)
-	release := make(chan struct{})
-	mux := http.NewServeMux()
-	mux.HandleFunc("/org/model/resolve/main/tokenizer.json", func(w http.ResponseWriter, r *http.Request) {
-		<-release
-		auths <- r.Header.Get("Authorization")
-		w.Header().Set("X-Repo-Commit", commit)
-		http.Redirect(w, r, "/blob/tokenizer.json", http.StatusFound)
-	})
-	mux.HandleFunc("/blob/tokenizer.json", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(tinyTokenizer))
-	})
-	server := httptest.NewServer(mux)
-	defer server.Close()
+// A repo whose tokenizer.json is not on disk is pending until a Refresh
+// finds it, and the registry says when it has loaded.
+func TestRegistryLoadsAPendingRepoOnRefresh(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "tokenizer.json")
+	var arrived atomic.Bool
+	states := make(chan bool, 8)
+	registry := NewRegistry(func(repo, revision string) (string, bool) {
+		return file, arrived.Load()
+	}, func(tokenizer string, loaded bool) { states <- loaded })
 
-	cache := t.TempDir()
-	registry := NewRegistry(Hub{Endpoint: server.URL, Token: "test-token", CacheDir: cache})
+	registry.Preload("org/model")
 	if _, ok := registry.Lookup("org/model"); ok {
-		t.Fatal("a repo outside the cache should load in the background")
+		t.Fatal("a repo not on disk should find nothing")
 	}
-	close(release)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if _, err := registry.Load(ctx, "org/model"); err != nil {
+	registry.Refresh()
+	if _, ok := registry.Lookup("org/model"); ok {
+		t.Fatal("a Refresh before the file arrives should find nothing")
+	}
+	if err := os.WriteFile(file, []byte(tinyTokenizer), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if auth := <-auths; auth != "Bearer test-token" {
-		t.Errorf("the download sent Authorization %q", auth)
+	arrived.Store(true)
+	registry.Refresh()
+	enc, ok := registry.Lookup("org/model")
+	if !ok || enc.Count("hello") != 1 {
+		t.Fatalf("Lookup after the file arrived = %v, %v", enc, ok)
 	}
-	if _, err := os.Stat(filepath.Join(cache, "models--org--model", "snapshots", commit, hubFile)); err != nil {
-		t.Fatalf("the tokenizer is not in the cache's snapshot: %v", err)
+	close(states)
+	var got []bool
+	for state := range states {
+		got = append(got, state)
 	}
-	ref, err := os.ReadFile(filepath.Join(cache, "models--org--model", "refs", "main"))
-	if err != nil || string(ref) != commit {
-		t.Fatalf("refs/main = %q, %v; want %s", ref, err, commit)
-	}
-	offline := NewRegistry(Hub{CacheDir: cache, Offline: true})
-	if _, ok := offline.Lookup("org/model"); !ok {
-		t.Fatal("the downloaded tokenizer should load offline")
+	if want := []bool{false, false, true}; !slices.Equal(got, want) {
+		t.Errorf("the registry told %v, want %v: pending, loading, loaded", got, want)
 	}
 }

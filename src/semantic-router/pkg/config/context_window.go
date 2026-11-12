@@ -2,8 +2,11 @@ package config
 
 import (
 	"fmt"
+	"net/url"
+	"slices"
 	"strings"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount/tokenizerspec"
 )
 
@@ -17,10 +20,10 @@ const (
 )
 
 // ContextWindowConfig governs the check of a prompt against the context
-// windows of the models that can serve it, which runs before the signals.
-// The Router counts the prompt itself, with the tokenizer each model names
-// in providers.models[].tokenizer or with ProxyTokenizer, and only for a
-// prompt whose UTF-8 bytes could exceed a window.
+// windows of the models that can serve it, which starts with the request
+// and runs beside the signals. The Router counts the prompt itself, with each
+// model's EffectiveTokenizer or with ProxyTokenizer, and only for a prompt
+// whose UTF-8 bytes could exceed a window.
 type ContextWindowConfig struct {
 	// Margin is the band around a window, as a fraction of it, in which a
 	// count with the model's own tokenizer decides nothing: at or below
@@ -77,4 +80,61 @@ func validateContextWindowContracts(cfg *RouterConfig) error {
 		}
 	}
 	return nil
+}
+
+// selfHostedSupportTier is the catalog's support tier of the engines an
+// operator runs, such as vLLM and SGLang, which serve a model under the id of
+// its Hugging Face repo.
+const selfHostedSupportTier = "runtime"
+
+// ContextWindowTokenizers are the tokenizers the context window check counts
+// with: the proxy tokenizer and each model's EffectiveTokenizer, each once.
+func (cfg *RouterConfig) ContextWindowTokenizers() []string {
+	if cfg == nil {
+		return nil
+	}
+	proxy := cfg.ContextWindow.EffectiveProxyTokenizer()
+	var tokenizers []string
+	for _, params := range cfg.ModelConfig {
+		if tokenizer := params.EffectiveTokenizer(); tokenizer != "" && tokenizer != proxy && !slices.Contains(tokenizers, tokenizer) {
+			tokenizers = append(tokenizers, tokenizer)
+		}
+	}
+	slices.Sort(tokenizers)
+	return append([]string{proxy}, tokenizers...)
+}
+
+// hubReservedPaths are the first path segments of huggingface.co pages that
+// are not model repos.
+var hubReservedPaths = map[string]bool{
+	"api": true, "blog": true, "collections": true, "datasets": true, "docs": true,
+	"models": true, "organizations": true, "papers": true, "spaces": true,
+}
+
+// hubRepoOf is the Hugging Face repo an open-weights distribution comes
+// from, by its source https://huggingface.co/<org>/<name>[/...], or "".
+func hubRepoOf(distribution modelcatalog.ModelDistribution) string {
+	if distribution.Type != "open_weights" {
+		return ""
+	}
+	source, err := url.Parse(distribution.Source)
+	if err != nil || source.Scheme != "https" || source.Host != "huggingface.co" || source.User != nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(source.Path, "/"), "/")
+	if len(parts) < 2 || hubReservedPaths[parts[0]] {
+		return ""
+	}
+	return hubRepoID(parts[0] + "/" + parts[1])
+}
+
+// hubRepoID is id when it is a Hugging Face repo id, org/name, else "".
+func hubRepoID(id string) string {
+	if !strings.Contains(id, "/") || strings.Contains(id, "@") {
+		return ""
+	}
+	if spec, err := tokenizerspec.Parse(id); err != nil || spec.Kind != tokenizerspec.Hub {
+		return ""
+	}
+	return id
 }

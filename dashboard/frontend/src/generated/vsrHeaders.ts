@@ -109,9 +109,6 @@ export const X_RATELIMIT_REMAINING = 'x-ratelimit-remaining'
 /** Unix time the window resets at. Surface: public. */
 export const X_RATELIMIT_RESET = 'x-ratelimit-reset'
 
-/** Commit the Hugging Face Hub resolved a revision to when the Router downloads a model's `tokenizer.json`; the Router caches the file under it. Surface: internal. */
-export const X_REPO_COMMIT = 'x-repo-commit'
-
 /** Request correlation id, forwarded to providers; the native gateway adds one when absent, and the management API echoes it. Surface: public. */
 export const X_REQUEST_ID = 'x-request-id'
 

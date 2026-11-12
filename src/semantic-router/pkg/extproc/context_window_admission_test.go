@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -330,7 +331,7 @@ func TestModelsCountWithTheirTokenizerOrTheProxy(t *testing.T) {
 	request := testNeutralRequest("vllm-sr/auto", text)
 	counts := map[string]int{}
 	for _, name := range []string{tokencount.O200kBase, tokencount.Cl100kBase, file} {
-		encoding, err := tokencount.Default().Load(context.Background(), name)
+		encoding, err := defaultTokenizers().Load(context.Background(), name)
 		require.NoError(t, err)
 		counts[name] = countPromptTokens(encoding, request)
 	}
@@ -377,24 +378,51 @@ func TestModelsCountWithTheirTokenizerOrTheProxy(t *testing.T) {
 	}
 }
 
-// A model whose Hugging Face tokenizer is not in the cache counts with the
-// proxy until it arrives; an offline Router keeps the proxy.
-func TestAModelWhoseTokenizerIsMissingCountsWithTheProxy(t *testing.T) {
+// A model whose Hugging Face tokenizer is not on disk yet counts with the
+// proxy, and with its own tokenizer once a download has fetched it; the
+// tokenizer-loaded metric follows.
+func TestAModelCountsWithTheProxyUntilItsTokenizerArrives(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "tokenizer.json")
+	arrived := false
+	var mu sync.Mutex
+	var loaded []bool
+	registry := tokencount.NewRegistry(func(repo, revision string) (string, bool) {
+		return file, arrived && repo == "org/model" && revision == "main"
+	}, func(tokenizer string, ok bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		if tokenizer == "org/model" {
+			loaded = append(loaded, ok)
+		}
+	})
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
-				"remote": {ContextWindowSize: 1_000, Tokenizer: "missing-org/missing-model"},
+				"open": {ContextWindowSize: 1_000, HubRepo: "org/model"},
 			}},
 		},
-		tokenizers: tokencount.NewRegistry(tokencount.Hub{CacheDir: t.TempDir(), Offline: true}),
+		tokenizers: registry,
 	}
+	registry.Preload(router.Config.ContextWindowTokenizers()...)
 	for range 2 {
-		tokenizer := router.promptTokenizer("remote")
+		tokenizer := router.promptTokenizer("open")
 		require.Equal(t, tokencount.O200kBase, tokenizer.encoding.Name())
 		require.Equal(t, contextCountProxy, tokenizer.kind)
-		_, err := router.tokenizers.Load(t.Context(), "missing-org/missing-model")
+		_, err := registry.Load(t.Context(), "org/model")
 		require.Error(t, err)
 	}
+
+	require.NoError(t, os.WriteFile(file, []byte(helloTokenizer), 0o600))
+	arrived = true
+	registry.Refresh()
+	_, err := registry.Load(t.Context(), "org/model")
+	require.NoError(t, err)
+	tokenizer := router.promptTokenizer("open")
+	require.Equal(t, "org/model@main", tokenizer.encoding.Name())
+	require.Equal(t, contextCountExact, tokenizer.kind)
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []bool{false, false, true}, loaded, "pending, loading, loaded")
 }
 
 // A decision that may dispatch a smaller prompt than the client sent defers

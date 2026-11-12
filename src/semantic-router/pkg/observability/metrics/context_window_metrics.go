@@ -26,6 +26,10 @@ var (
 		Name: "llm_context_window_margin",
 		Help: "Band around a context window in which the Router's count decides nothing, as a fraction of the window, by count: exact (global.router.context_window.margin) or proxy (proxy_margin).",
 	}, []string{"count"})
+	contextWindowTokenizers = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "llm_context_window_tokenizer_loaded",
+		Help: "1 once a tokenizer the context window check counts with has loaded; 0 while it is downloading, loading or failed, when its models count with the proxy tokenizer and its band.",
+	}, []string{"tokenizer"})
 )
 
 // RecordContextWindowCheck counts one window check decided on a count.
@@ -47,4 +51,13 @@ func SetContextWindowMargins(exact, proxy float64) {
 // RecordContextWindowWait observes how long a request waited for its count.
 func RecordContextWindowWait(seconds float64) {
 	contextWindowWait.Observe(seconds)
+}
+
+// SetContextWindowTokenizerLoaded publishes whether a tokenizer has loaded.
+func SetContextWindowTokenizerLoaded(tokenizer string, loaded bool) {
+	value := 0.0
+	if loaded {
+		value = 1
+	}
+	contextWindowTokenizers.WithLabelValues(tokenizer).Set(value)
 }

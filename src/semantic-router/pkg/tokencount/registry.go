@@ -14,51 +14,60 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount/tokenizerspec"
 )
 
+const (
+	encodingFile      = "tokenizer.json"
+	maxTokenizerBytes = 256 << 20
+)
+
+// RepoPath finds a Hugging Face repo's tokenizer.json at a revision on disk,
+// and reports whether it is there.
+type RepoPath func(repo, revision string) (string, bool)
+
 // Registry loads tokenizers by spec and keeps them for the life of the
-// process. Built-in encodings and local files (a tokenizer.json, or the
-// directory that holds one) load when first asked for, as does a repo
-// already in the Hugging Face cache; a repo that is not there is downloaded
-// in the background, and its callers count with a proxy until it arrives.
+// process. A built-in encoding, a local file (a tokenizer.json, or the
+// directory that holds one) or a Hugging Face repo whose tokenizer.json is on
+// disk loads when first asked for. A repo whose file is not there yet is
+// pending, and its models count with the proxy, until a Preload or Refresh
+// finds the file; the Registry never downloads.
 type Registry struct {
-	hub     Hub
-	mu      sync.Mutex
-	entries map[string]*entry
+	repoPath RepoPath
+	notify   func(tokenizer string, loaded bool)
+	mu       sync.Mutex
+	entries  map[string]*entry
+	pending  map[string]bool
 }
 
 type entry struct {
 	ready chan struct{}
-	local bool
 	enc   *Encoding
 	err   error
 }
 
-// NewRegistry returns a registry that fetches repos through hub.
-func NewRegistry(hub Hub) *Registry {
-	return &Registry{hub: hub, entries: map[string]*entry{}}
+// NewRegistry returns a registry that finds repos with repoPath and, when
+// notify is not nil, tells it whether each tokenizer it is asked for is
+// loaded: false while it is pending, loading or failed, true once loaded.
+func NewRegistry(repoPath RepoPath, notify func(tokenizer string, loaded bool)) *Registry {
+	return &Registry{repoPath: repoPath, notify: notify, entries: map[string]*entry{}, pending: map[string]bool{}}
 }
 
-var defaultRegistry = sync.OnceValue(func() *Registry { return NewRegistry(HubFromEnv()) })
-
-// Default is the process's registry, whose hub follows the HF_* environment.
-func Default() *Registry { return defaultRegistry() }
-
-// Lookup returns the encoding a spec names, once it is loaded.
+// Lookup returns the encoding a spec names, waiting for a load from disk the
+// first time. A pending repo finds nothing.
 func (r *Registry) Lookup(tokenizer string) (*Encoding, bool) {
-	e := r.start(tokenizer)
-	if e.local {
-		<-e.ready
-	}
-	select {
-	case <-e.ready:
-		return e.enc, e.err == nil
-	default:
+	e := r.start(tokenizer, false)
+	if e == nil {
 		return nil, false
 	}
+	<-e.ready
+	return e.enc, e.err == nil
 }
 
-// Load loads a spec, waiting until it is loaded or ctx ends.
+// Load loads a spec, waiting until it is loaded or ctx ends. A pending repo
+// fails at once.
 func (r *Registry) Load(ctx context.Context, tokenizer string) (*Encoding, error) {
-	e := r.start(tokenizer)
+	e := r.start(tokenizer, true)
+	if e == nil {
+		return nil, fmt.Errorf("the tokenizer.json of %s is not on disk yet", tokenizer)
+	}
 	select {
 	case <-e.ready:
 		return e.enc, e.err
@@ -67,40 +76,75 @@ func (r *Registry) Load(ctx context.Context, tokenizer string) (*Encoding, error
 	}
 }
 
-// Preload starts loading every spec in the background.
+// Preload starts loading every spec in the background, looking again for
+// the files of pending repos.
 func (r *Registry) Preload(tokenizers ...string) {
 	for _, tokenizer := range tokenizers {
 		if strings.TrimSpace(tokenizer) != "" {
-			r.start(tokenizer)
+			r.start(tokenizer, true)
 		}
 	}
 }
 
-func (r *Registry) start(tokenizer string) *entry {
+// Refresh looks again for the files of pending repos and loads those it
+// finds.
+func (r *Registry) Refresh() {
+	r.mu.Lock()
+	pending := make([]string, 0, len(r.pending))
+	for tokenizer := range r.pending {
+		pending = append(pending, tokenizer)
+	}
+	r.mu.Unlock()
+	r.Preload(pending...)
+}
+
+// start returns the spec's entry, starting its load the first time, or nil
+// while the spec is a repo whose file is not on disk. The file of a repo
+// already pending is looked for again only when look is set.
+func (r *Registry) start(tokenizer string, look bool) *entry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if e, ok := r.entries[tokenizer]; ok {
 		return e
 	}
-	e := &entry{ready: make(chan struct{})}
-	parsed, err := tokenizerspec.Parse(tokenizer)
-	if err == nil && parsed.Kind == tokenizerspec.Hub {
-		_, e.local = r.hub.cachedPath(parsed.Value, parsed.Revision)
-	} else {
-		e.local = true
+	if r.pending[tokenizer] && !look {
+		return nil
 	}
+	parsed, err := tokenizerspec.Parse(tokenizer)
+	path := ""
+	if err == nil && parsed.Kind == tokenizerspec.Hub {
+		found := false
+		if r.repoPath != nil {
+			path, found = r.repoPath(parsed.Value, parsed.Revision)
+		}
+		if !found {
+			if !r.pending[tokenizer] {
+				r.pending[tokenizer] = true
+				r.tell(tokenizer, false)
+				logging.ComponentWarnEvent("tokencount", "tokenizer_pending", map[string]interface{}{
+					"tokenizer": tokenizer, "counts_with": "proxy_tokenizer",
+					"reason": "its tokenizer.json is not on disk yet",
+				})
+			}
+			return nil
+		}
+		delete(r.pending, tokenizer)
+	}
+	e := &entry{ready: make(chan struct{})}
 	r.entries[tokenizer] = e
+	r.tell(tokenizer, false)
 	go func() {
 		started := time.Now()
 		if err != nil {
 			e.err = err
 		} else {
-			e.enc, e.err = r.loadRecovered(parsed)
+			e.enc, e.err = loadRecovered(parsed, path)
 		}
+		r.tell(tokenizer, e.err == nil)
 		close(e.ready)
 		if e.err != nil {
 			logging.ComponentWarnEvent("tokencount", "tokenizer_unavailable", map[string]interface{}{
-				"tokenizer": tokenizer, "error": e.err.Error(),
+				"tokenizer": tokenizer, "counts_with": "proxy_tokenizer", "error": e.err.Error(),
 			})
 			return
 		}
@@ -111,26 +155,33 @@ func (r *Registry) start(tokenizer string) *entry {
 	return e
 }
 
+func (r *Registry) tell(tokenizer string, loaded bool) {
+	if r.notify != nil {
+		r.notify(tokenizer, loaded)
+	}
+}
+
 // loadRecovered is load with a panic turned into its error, so that a
 // malformed tokenizer leaves its models counting with the proxy instead of
 // stopping the Router.
-func (r *Registry) loadRecovered(tokenizer tokenizerspec.Spec) (enc *Encoding, err error) {
+func loadRecovered(tokenizer tokenizerspec.Spec, repoFile string) (enc *Encoding, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			enc, err = nil, fmt.Errorf("the tokenizer failed to load: %v", recovered)
 		}
 	}()
-	return r.load(tokenizer)
+	return load(tokenizer, repoFile)
 }
 
-func (r *Registry) load(tokenizer tokenizerspec.Spec) (*Encoding, error) {
+// load loads a spec; repoFile is where a repo's tokenizer.json is.
+func load(tokenizer tokenizerspec.Spec, repoFile string) (*Encoding, error) {
 	switch tokenizer.Kind {
 	case tokenizerspec.Builtin:
 		return Builtin(tokenizer.Value)
 	case tokenizerspec.File:
 		path := tokenizer.Value
 		if info, err := os.Stat(path); err == nil && info.IsDir() {
-			path = filepath.Join(path, hubFile)
+			path = filepath.Join(path, encodingFile)
 		}
 		data, err := readTokenizerFile(path)
 		if err != nil {
@@ -138,16 +189,7 @@ func (r *Registry) load(tokenizer tokenizerspec.Spec) (*Encoding, error) {
 		}
 		return ParseHFTokenizer(tokenizer.Value, data)
 	default:
-		path, ok := r.hub.cachedPath(tokenizer.Value, tokenizer.Revision)
-		if !ok {
-			ctx, cancel := context.WithTimeout(context.Background(), hubDownloadTimeout)
-			defer cancel()
-			var err error
-			if path, err = r.hub.download(ctx, tokenizer.Value, tokenizer.Revision); err != nil {
-				return nil, err
-			}
-		}
-		data, err := readTokenizerFile(path)
+		data, err := readTokenizerFile(repoFile)
 		if err != nil {
 			return nil, err
 		}
@@ -156,9 +198,9 @@ func (r *Registry) load(tokenizer tokenizerspec.Spec) (*Encoding, error) {
 }
 
 // readTokenizerFile reads a tokenizer.json that is a regular file of at most
-// maxTokenizerBytes, as a download is bounded, so that a path to a device, a
-// pipe or a huge file fails to load instead of blocking or exhausting memory.
-// It checks before opening, since opening a pipe waits for a writer.
+// maxTokenizerBytes, so that a path to a device, a pipe or a huge file fails
+// to load instead of blocking or exhausting memory. It checks before
+// opening, since opening a pipe waits for a writer.
 func readTokenizerFile(path string) ([]byte, error) {
 	info, err := os.Stat(path)
 	if err != nil {

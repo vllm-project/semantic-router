@@ -377,17 +377,6 @@
       "doc": "Endpoint Envoy reports on the provider response for KV registry writes; removed before the client."
     },
     {
-      "name": "x-repo-commit",
-      "direction": [
-        "provider response"
-      ],
-      "surface": "internal",
-      "sensitivity": "none",
-      "owner": "context_window",
-      "version": "v0.5",
-      "doc": "Commit the Hugging Face Hub resolved a revision to when the Router downloads a model's `tokenizer.json`; the Router caches the file under it."
-    },
-    {
       "name": "x-vsr-kv-source-pod",
       "direction": [
         "provider request"

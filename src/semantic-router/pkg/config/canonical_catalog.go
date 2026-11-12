@@ -95,6 +95,7 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		Catalog:              model.Catalog,
 		ParamSize:            card.ParameterSize,
 		ContextWindowSize:    card.Limits.ContextWindowSize,
+		HubRepo:              hubRepoOf(card.Distribution),
 		MaxOutputTokens:      card.Limits.MaxOutputTokens,
 		Description:          card.Description,
 		Capabilities:         declaredCardCapabilities(model.Card),
@@ -186,6 +187,9 @@ func applyBindingMetadata(
 	binding := effective.Binding
 	providerID := effective.Provider.Definition.ID
 	params.ExternalModelIDs[providerID] = binding.ModelID
+	if params.HubRepo == "" && effective.Provider.Definition.SupportTier == selfHostedSupportTier {
+		params.HubRepo = hubRepoID(binding.ModelID)
+	}
 	for key, value := range binding.ExternalModelIDs {
 		params.ExternalModelIDs[key] = value
 	}

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -101,14 +103,23 @@ type modelTokenizer struct {
 	kind     contextCountKind
 }
 
-// promptTokenizer is the tokenizer that counts model's prompts: the one its
-// configuration names, once loaded, else the proxy tokenizer.
+// defaultTokenizers is the process's tokenizer registry. It finds a Hugging
+// Face repo's tokenizer.json where the Router's model downloads keep it, and
+// loads one as soon as a download fetches it.
+var defaultTokenizers = sync.OnceValue(func() *tokencount.Registry {
+	registry := tokencount.NewRegistry(modeldownload.TokenizerPath, metrics.SetContextWindowTokenizerLoaded)
+	modeldownload.OnTokenizerDownloaded(registry.Refresh)
+	return registry
+})
+
+// promptTokenizer is the tokenizer that counts model's prompts: its
+// EffectiveTokenizer once loaded, else the proxy tokenizer.
 func (r *OpenAIRouter) promptTokenizer(model string) modelTokenizer {
 	registry := r.tokenizers
 	if registry == nil {
-		registry = tokencount.Default()
+		registry = defaultTokenizers()
 	}
-	if tokenizer := r.Config.ModelConfig[strings.TrimSpace(model)].Tokenizer; tokenizer != "" {
+	if tokenizer := r.Config.ModelConfig[strings.TrimSpace(model)].EffectiveTokenizer(); tokenizer != "" {
 		if encoding, ok := registry.Lookup(tokenizer); ok {
 			return modelTokenizer{encoding: encoding, kind: contextCountExact}
 		}
@@ -136,17 +147,14 @@ func (r *OpenAIRouter) requestTokenizer(ctx *RequestContext, model string) model
 	return tokenizer
 }
 
-// prepareContextWindowCheck starts loading every tokenizer the configuration
-// names, so that requests find them loaded, and publishes the bands.
+// prepareContextWindowCheck starts loading every tokenizer the check counts
+// with that is on disk, so that requests find them loaded, and publishes the
+// bands.
 func prepareContextWindowCheck(cfg *config.RouterConfig) {
 	if cfg == nil {
 		return
 	}
-	tokenizers := []string{cfg.ContextWindow.EffectiveProxyTokenizer()}
-	for _, params := range cfg.ModelConfig {
-		tokenizers = append(tokenizers, params.Tokenizer)
-	}
-	tokencount.Default().Preload(tokenizers...)
+	defaultTokenizers().Preload(cfg.ContextWindowTokenizers()...)
 	metrics.SetContextWindowMargins(cfg.ContextWindow.EffectiveMargin(), cfg.ContextWindow.EffectiveProxyMargin())
 }
 

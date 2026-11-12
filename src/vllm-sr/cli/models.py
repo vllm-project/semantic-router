@@ -2496,9 +2496,11 @@ class Model(ModelFacts):
     tokenizer: Optional[str] = Field(
         default=None,
         description="Counts the model's prompts for the context window check: "
-        "a built-in encoding (o200k_base, cl100k_base), a path to a Hugging Face "
-        "tokenizer.json, or a Hugging Face repo id ([org/]name[@revision]). "
-        "Without one, global.router.context_window.proxy_tokenizer counts.",
+        "a Hugging Face repo id ([org/]name[@revision]), whose tokenizer.json "
+        "the Router downloads beside its models, a built-in encoding "
+        "(o200k_base, cl100k_base), or a path to a tokenizer.json. Omitted, it "
+        "is the repo the model comes from, if any; else "
+        "global.router.context_window.proxy_tokenizer counts.",
     )
 
     @field_validator("api_format")
