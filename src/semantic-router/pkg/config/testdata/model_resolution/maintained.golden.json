@@ -214,6 +214,17 @@
       "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
     ]
   },
+  "config/fragments/signal/systemone/vela31-pico-labels-spans.yaml": {
+    "signals": {
+      "default/pii.personal_data": "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0",
+      "default/systemone.instruction_attack": "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0",
+      "default/systemone.needs_account_access": "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0",
+      "default/systemone.order_numbers": "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0"
+    ]
+  },
   "config/fragments/signal/turn-relation/reask.yaml": {
     "signals": {
       "default/turn_relation.likely_dissatisfied": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
