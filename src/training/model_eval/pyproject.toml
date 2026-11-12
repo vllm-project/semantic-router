@@ -2,7 +2,7 @@
 name = "vllm-sr-model-eval"
 version = "0.0.0"
 description = "Environment for the model evaluation scripts under src/training/model_eval"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "datasets>=2.19,<5",
     "huggingface_hub>=0.20,<2",
