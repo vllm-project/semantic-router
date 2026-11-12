@@ -29,6 +29,13 @@ func TestRoutingViewAndScanWindowDefaultsByProvider(t *testing.T) {
 	if tokens, overlap := local.ScanWindowTokens(); tokens != 1024 || overlap != 0 {
 		t.Fatalf("a deployment's own windows win: %d tokens overlapping %d", tokens, overlap)
 	}
+	if floor := local.ScanWindowRereadFloor(); floor != 0.9 {
+		t.Fatalf("the default reread floor is 0.9, got %v", floor)
+	}
+	local.ScanWindow.RereadFloor = &half
+	if floor := local.ScanWindowRereadFloor(); floor != 0.5 {
+		t.Fatalf("a deployment's own reread floor wins: %v", floor)
+	}
 }
 
 func TestRoutingViewAndScanWindowBoundsAreValidated(t *testing.T) {
@@ -52,6 +59,11 @@ func TestRoutingViewAndScanWindowBoundsAreValidated(t *testing.T) {
 		},
 		"max_tokens below the default window": {
 			ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{MaxTokens: 4096}}, "scan_window.max_tokens must be at least scan_window.tokens (8192)",
+		},
+		"reread_floor":      {ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{RereadFloor: share(1)}}, ""},
+		"reread_floor zero": {ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{RereadFloor: share(0)}}, "scan_window.reread_floor must be greater than 0 and at most 1"},
+		"reread_floor above one": {
+			ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{RereadFloor: share(1.2)}}, "scan_window.reread_floor must be greater than 0 and at most 1",
 		},
 		"chat model": {ModelDeployment{Provider: OpenAIChatProvider, RoutingView: &DeploymentRoutingView{MaxTokens: 4096}}, "apply to model_runtime and systemone deployments"},
 	} {

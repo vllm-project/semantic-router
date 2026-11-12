@@ -2923,10 +2923,14 @@ global:
         # dense text such as JSON or base64 holds up to about three times as
         # many tokens: size them so that a call on it fits timeout_ms. A
         # systemone deployment defaults to 4096 for both and a model_runtime
-        # one to 8192; neither ever exceeds the model's validated length. A
-        # long input whose windows would not all be read by the signals'
-        # deadline at the deployment's measured pace reads larger ones, up to
-        # scan_window.max_tokens (by default the model's validated length).
+        # one to 8192; neither ever exceeds the model's validated length.
+        # Between its head and its tail, a long input that needs more than
+        # 256 windows, or whose scan falls behind the signals' deadline while
+        # larger windows would be read in time at the deployment's measured
+        # pace, reads larger ones, up to scan_window.max_tokens (by default
+        # the model's validated length). A larger window whose answer gives a
+        # rule reread_floor (0.9) or more without a match is read again in
+        # windows of scan_window.tokens.
         routing_view:
           max_tokens: 4096
           head_share: 0.25
@@ -2935,6 +2939,7 @@ global:
           overlap: 256
           max_parallel: 4
           max_tokens: 8192
+          reread_floor: 0.9
         capabilities:
           question_types: [choice, noul, score]
           modalities: [text, image]
