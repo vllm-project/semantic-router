@@ -189,6 +189,11 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		writeError(w, http.StatusNotFound, "routing_disabled", "Chat routing is disabled for this instance.")
 		return
 	}
+	if r.URL.Path == "/" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		writeError(w, http.StatusNotFound, "not_found",
+			"Unknown endpoint: GET /. Use POST /v1/chat/completions or GET /v1/models.")
+		return
+	}
 	if listing && serving.ListsSystemOne && serving.SystemOne != nil {
 		h.serveListing(w, r, serving, x)
 		return
