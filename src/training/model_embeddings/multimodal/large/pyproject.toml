@@ -10,8 +10,7 @@ dependencies = [
     "datasets==2.21.0",
     "librosa>=0.10.0,<1",
     "numpy>=1.26.0,<3",
-    # Pillow 11 and 12 are already released; the small area stops before 13.
-    "pillow>=10.0.0,<13",
+    "pillow>=10.0.0,<14",
     "pyyaml>=6.0,<7",
     "sentence-transformers>=5.1.0,<6",
     # Declared for the text-encoder tokenizer stack; the modules do not import it directly.
