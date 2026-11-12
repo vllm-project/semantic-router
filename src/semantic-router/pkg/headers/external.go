@@ -31,6 +31,10 @@ const (
 	XContentTypeOptions = "x-content-type-options"
 )
 
+// The Hugging Face Hub's answer to a file download names the commit the
+// requested revision resolved to.
+const HubRepoCommit = "x-repo-commit"
+
 // Provider credential headers. A provider profile or the model catalog names
 // the one a provider reads.
 const (
