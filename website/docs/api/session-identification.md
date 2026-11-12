@@ -1,8 +1,9 @@
 # Session identification
 
-Router Learning protection requires stable, explicit client identities for
-related turns. Replay and telemetry can use derived fallback identities, but
-those fallbacks do not enable protection.
+Router Learning protection requires a stable, explicit session identity for
+related turns. Replay and telemetry also group requests that carry none, by a
+fingerprint of how their conversation starts, but that fingerprint never
+enables protection.
 
 For the inference connection and a tool-loop check, start with
 [Connect an agent harness](../installation/agent-harness).
@@ -17,10 +18,21 @@ x-conversation-id: conversation-3
 ```
 
 Keep `x-session-id` stable for the session and `x-conversation-id` stable for
-each conversation inside it. Conversation protection requires both; a policy
-with `scope: session` requires only the session header. Use your configured
-header names if customized. If a required identity is missing, the request
-still routes, but protection does not retain a model.
+each conversation inside it. A policy with `scope: session` reads only the
+session header. Use your configured header names if customized.
+
+Under `scope: conversation`, a request with the session header but no
+conversation header is still held per conversation. The Router names the
+conversation by how it starts, with the fingerprint described under
+[Chat and Messages API priority](#chat-and-messages-api-priority). An agent's
+main thread and its side calls, such as a title request, keep separate models.
+Send `x-conversation-id` when your harness tracks its conversations: it
+replaces the fingerprint and survives a change to the conversation's opening,
+such as compaction. Replay reports a fingerprinted conversation with the
+identity source `message_hash`.
+
+Without the session header the request still routes, but protection does not
+retain a model.
 
 An agent harness that delegates work to subagents can also name each agent.
 Set `identity.headers.agent` to the header that carries that name, such as
@@ -51,14 +63,27 @@ this order becomes the router session id:
 1. `x-session-id` supplied by the agent harness, another client, or a trusted gateway.
 2. `x-claude-code-session-id` on Anthropic Messages requests.
 3. Anthropic `metadata.user_id`, stored with an `ant-md-` prefix.
-4. A fingerprint of the message history and authenticated user identity.
-5. A fingerprint of the message structure when no user identity is available.
+4. A fingerprint of the first user message and the authenticated user identity.
+5. Without an authenticated user, a fingerprint of how the conversation
+   starts, stored with a `cc-start-` prefix: the first 512 characters of the
+   system and developer instructions and of the first user message, with the
+   authenticated tenant (`x-authz-tenant-id`) when the gateway sets one.
 6. A hash derived from `x-request-id` as the final fallback.
 
 This order keeps explicit conversation keys stable while still giving clients
-that send only message history a usable fallback. Derived fingerprints should
-not be treated as durable application identifiers: editing history or changing
-identity context can change them.
+that send only message history a usable fallback. Every request of a
+conversation repeats its start, so a client without a session header gets one
+session id for the whole conversation: Replay shows it as one trajectory,
+session telemetry accumulates across its turns, and each turn sees the model
+the previous turn used. The Router keeps only the hash.
+
+Two conversations that start the same way, with the same instructions and
+first message in the same tenant, share that id. Their Replay, telemetry and
+previous-model lookups then merge; protection, sticky tool state and KV
+placement do not, because a derived fingerprint never enables them. Derived
+fingerprints are not durable application identifiers either: a client that
+rewrites the start of its history, for example by compacting it, starts a new
+one.
 
 ## Privacy and stability
 
