@@ -32,6 +32,7 @@ type Runner struct {
 	cluster             *cluster.KindCluster
 	builder             *docker.Builder
 	restConfig          *rest.Config
+	kubeConfig          string
 	reporter            *ReportGenerator
 }
 
@@ -317,6 +318,7 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 		Namespace:     "default",
 		Timeout:       "5m",
 		RestConfig:    r.restConfig,
+		KubeConfig:    r.kubeConfig,
 		ServiceConfig: svcConfig,
 		SetDetails: func(details map[string]interface{}) {
 			result.Details = details

@@ -134,6 +134,7 @@ func (p *Profile) GetTestCases() []string {
 		"standalone-debug-headers-default-off",
 		"routing-error-codes",
 		"standalone-decision-model",
+		"standalone-helm-upgrade",
 		"standalone-config-rollout",
 	}
 }

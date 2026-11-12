@@ -92,6 +92,9 @@ type TestCaseOptions struct {
 	// RestConfig is the Kubernetes REST config
 	RestConfig *rest.Config
 
+	// KubeConfig is the path to the cluster's kubeconfig file, for cases that run helm
+	KubeConfig string
+
 	// ServiceConfig contains service-specific configuration
 	ServiceConfig ServiceConfig
 
