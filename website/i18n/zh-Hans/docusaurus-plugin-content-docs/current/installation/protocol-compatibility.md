@@ -93,6 +93,7 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 | Seed 以及频率或存在惩罚 | Supported | Not supported | Not supported |
 | `top_k` 采样 | Supported 扩展 | Not supported | 非负值 Supported |
 | `min_p`、重复惩罚和缓存盐 | Supported 扩展 | Not supported | Not supported |
+| Token logit 偏置（`logit_bias`） | Supported | Not supported | Not supported |
 | 停止序列 | Supported | Not supported | Supported |
 | 原生响应或会话状态字段 | Not supported | Supported | Not supported |
 
@@ -131,6 +132,32 @@ Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它�
 `unsupported_capability` 拒绝它们。Responses 的 `text.verbosity` 映射到 Chat 的
 `verbosity` 字段；Messages 没有对应字段，因此 Router 丢弃这个输出详细程度提示，
 并在 `x-vsr-warnings` 中报告 `text.verbosity`。
+
+### 后端拒绝的采样控制 {#sampling-controls-a-backend-rejects}
+
+有些后端会拒绝其线路格式定义的采样控制。例如，运行推测解码（speculative
+decoding）的 vLLM 后端会以 HTTP 400 拒绝任何携带 `min_p` 或 `logit_bias` 的请求。
+在模型的 `unsupported_capabilities` 中列出这类控制：
+
+```yaml
+providers:
+  models:
+    - name: qwen3-mtp
+      api_format: chat_completions
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
+      backend_refs:
+        - name: mtp-pool
+          endpoint: mtp-server:8000
+          provider: vllm
+```
+
+- **仅对该模型省略。** 发给该模型的请求，无论它是决策的选择还是回退候选，到达时都不带所列字段。
+- **会报告。** `x-vsr-warnings` 会为每个被省略的字段（`min_p` 或 `logit_bias`）报告 `dropped` 诊断。
+- **其他模型不受影响。** 同一决策的其他模型仍会收到这些字段。
+
+该列表接受 `sampling_min_p` 和 `sampling_logit_bias`；其他名称会在加载时失败。网关会把模型的请求分摊到它的各个
+`backend_refs`，因此只要其中任何一个拒绝某个控制，就应列出它。若要为决策路由到的每个模型移除某个控制，请改为在该决策的
+[`request_params`](../tutorials/plugin/request-params) `blocked_params` 中列出它。
 
 ## 配置后端格式
 

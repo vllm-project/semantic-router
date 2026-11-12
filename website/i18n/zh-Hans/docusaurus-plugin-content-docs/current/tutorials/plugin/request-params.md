@@ -16,6 +16,7 @@ translation:
 
 - 按路由限制昂贵参数（`max_tokens`、`n`）。
 - 对不应暴露 token 分布的层级阻止敏感参数，例如 `logprobs` / `top_logprobs`。
+- 当一条路由的所有后端都拒绝 `min_p` 和 `logit_bias` 时（例如运行推测解码的 vLLM），可以用 `blocked_params: [min_p, logit_bias]` 移除它们。若只对某个模型移除，请在[该模型的 `unsupported_capabilities`](../../installation/protocol-compatibility#sampling-controls-a-backend-rejects) 中列出。
 
 ## 解决什么问题？
 

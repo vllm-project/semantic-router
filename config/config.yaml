@@ -213,6 +213,10 @@ providers:
         completion_per_1m: 4.0
       external_model_ids:
         openai: llava-omni-preview
+      # Request capabilities the backends reject, as vLLM rejects min_p and
+      # logit_bias under speculative decoding: the Router sends this model
+      # requests without those fields and reports each in x-vsr-warnings.
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
       backend_refs:
         - name: omni-primary
           provider: vllm

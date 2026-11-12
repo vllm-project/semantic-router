@@ -278,6 +278,12 @@ prompt. Reuse a salt for requests that may share cached prefixes. The Router
 also preserves `chat_template_kwargs`, such as `enable_thinking`. These
 extensions are rejected when the target protocol cannot represent them.
 
+`logit_bias`, which maps token IDs to a bias from -100 to 100, reaches Chat
+backends the same way and is rejected for Responses and Messages backends. A
+vLLM backend that runs speculative decoding rejects `min_p` and `logit_bias`;
+[list them in the model's `unsupported_capabilities`](../installation/protocol-compatibility#sampling-controls-a-backend-rejects)
+to send that model requests without them.
+
 ### Responses API
 
 ```bash
