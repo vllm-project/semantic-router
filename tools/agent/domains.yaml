@@ -287,6 +287,17 @@ domains:
     checks: [make agent-vscode-test]
     verifications: [agent-plugins]
 
+  opencode-plugin:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - src/agent-harness/opencode/**
+    checks:
+      - npm --prefix src/agent-harness/opencode ci --ignore-scripts
+      - npm --prefix src/agent-harness/opencode run check
+      - npm --prefix src/agent-harness/opencode test
+    verifications: [opencode-plugin]
+
   vela-omni-artifacts:
     owner: model-runtime
     paths:
@@ -870,7 +881,7 @@ domains:
       - tools/ci/verification_catalog.yaml
       - tools/ci/worker_process.py
     checks: [make harness-check]
-    verifications: [cli-unit, agent-plugins, model-runtime, bench-tools, training, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools]
+    verifications: [cli-unit, agent-plugins, model-runtime, bench-tools, training, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools, opencode-plugin]
 
   runtime-evidence:
     owner: maintainers

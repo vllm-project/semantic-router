@@ -328,6 +328,19 @@ verifications:
     target: test-bench-tools
     inventory: bench-research-tools-framework-discovery
 
+  opencode-plugin:
+    layer: source
+    execution: automatic
+    display_name: OpenCode Plugin
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: cli
+    workflow: .github/workflows/test-tools.yml
+    target: opencode-plugin-test
+    inventory: opencode-node-test-discovery-v1
+
   harness-tools:
     layer: source
     execution: automatic
