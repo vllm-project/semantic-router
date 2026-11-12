@@ -49,6 +49,7 @@ type maskingEcho struct {
 
 func init() {
 	pkgtestcases.Register("masking-cross-protocol", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "An equivalent PII-bearing request through Chat, Responses and Anthropic all reach the mock backend with a placeholder and no raw value",
 		Tags:        []string{"masking", "pii", "cross-protocol", "functional"},
 		Fn:          testMaskingCrossProtocol,

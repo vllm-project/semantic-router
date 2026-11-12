@@ -192,6 +192,23 @@ domains:
     checks: [make test-semantic-router, make config-schema-check]
     verifications: [core]
 
+  # The request path every client goes through. Its unit tests run in core,
+  # and these E2E profiles run their P0 cases only (e2e_scope), so a change
+  # here is checked at the boundary without the full feature contracts.
+  router-request-path:
+    owner: router-core
+    e2e_scope: p0
+    paths:
+      - src/semantic-router/pkg/extproc/**
+      - src/semantic-router/pkg/classification/**
+      - src/semantic-router/pkg/decision/**
+      - src/semantic-router/pkg/selection/**
+      - src/semantic-router/pkg/config/**
+      - src/semantic-router/pkg/masking/**
+      - src/semantic-router/pkg/responseapi/**
+    checks: []
+    verifications: [e2e.envoy-ai-gateway, e2e.masking, e2e.pii-remote-backend]
+
   # The Router's tests read these pages and files: the config tests load every
   # YAML example (src/semantic-router/pkg/config/docs_examples_test.go and,
   # for the agent skill, agent_skill_examples_test.go) and check the

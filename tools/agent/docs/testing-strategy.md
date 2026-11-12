@@ -124,8 +124,13 @@ Within the E2E layer, every case has a priority, set where it is registered:
 | P2 | Expensive qualification such as load stages | `full` |
 
 A PR runs the `standard` scope and `/ci run full` and Nightly the `full` scope.
-The `p0` scope runs P0 cases alone, for a quick local check of a profile; a
-profile with no P0 case stops before its cluster is built. Model
+The `p0` scope runs P0 cases alone. A PR that changes the Router's request path
+(the `router-request-path` domain: `extproc`, `classification`, `decision`,
+`selection`, `config`, `masking`, `responseapi`) selects the baseline, masking
+and pii-remote-backend profiles in that scope, because their unit tests alone
+never reach the client boundary; a profile whose own files change, or that
+another domain selects, keeps `standard`. Locally, `p0` is a quick check of a
+profile; a profile with no P0 case stops before its cluster is built. Model
 quality is not an E2E priority: E2E answers decision questions with the System
 One fixture, and the release benchmarks measure the models.
 
