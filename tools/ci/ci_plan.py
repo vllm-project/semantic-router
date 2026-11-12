@@ -29,6 +29,7 @@ from execution_batches import (
     expected_dispatch_jobs,
     image_producers,
     platform_batches,
+    scheduled_verifications,
 )
 from execution_batches import (
     component_batches as build_component_batches,
@@ -293,7 +294,7 @@ def component_batches(verifications: list[dict]) -> list[dict]:
 def dispatch_records(plan: dict) -> dict[str, list[dict]]:
     """Map stable physical caller IDs to contracts or bounded workers."""
     result = {job: [] for job in EXECUTOR_JOBS}
-    for record in plan["verifications"]:
+    for record in scheduled_verifications(plan):
         if record["executor"] not in {"tools", "platform", "e2e"}:
             result[record["dispatch_job"]].append(record)
     result["tools"] = plan["component_batches"]
@@ -397,7 +398,7 @@ def render_plan_summary(plan: dict) -> str:
     ):
         lines.append(
             f"| {paths[record['category']]} | {record['display_name']} | "
-            f"{workers[record['id']]} | {record['runtime']} / {record['device']} / {record['platform']} |"
+            f"{workers.get(record['id'], 'Reused successful receipt')} | {record['runtime']} / {record['device']} / {record['platform']} |"
         )
     deferred = plan.get("deferred_verifications", [])
     deferred_images = plan.get("deferred_images", [])
@@ -537,6 +538,18 @@ def main() -> int:
         publish=args.publish,
     )
     resolve_image_sources(plan)
+    if (
+        args.require_approval
+        and args.authorization
+        and json.loads(args.authorization.read_text()).get("authorized")
+        and os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
+        and int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")) > 1
+    ):
+        from ci_reuse import (  # noqa: PLC0415 - ci_reuse imports this module
+            reuse_automatic_results,
+        )
+
+        reuse_automatic_results(plan, args.output.parent / "reused")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2) + "\n")
     if args.github_output:
