@@ -2346,8 +2346,8 @@ global:
     authz:
       fail_open: false
       identity:
-        user_id_header: x-user-id
-        user_groups_header: x-user-groups
+        user_id_header: x-auth-request-user
+        user_groups_header: x-auth-request-groups
       providers:
         - type: header-injection
           headers:

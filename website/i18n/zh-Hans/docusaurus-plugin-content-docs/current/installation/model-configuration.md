@@ -300,7 +300,7 @@ global:
 - 伪请求头，例如 `:authority`；
 - 逐跳或帧请求头：`connection`、`keep-alive`、`te`、`trailer`、`transfer-encoding`、`upgrade`、任何 `proxy-*` 请求头、`host`、`content-length`，以及 Router 为自己的请求设置的正文请求头（`content-type`、`content-encoding`、`accept`、`accept-encoding`、`expect`）；
 - 凭据：`authorization`、`proxy-authorization`、`cookie`、`x-api-key`、`api-key`、`ocp-apim-subscription-key`、每用户密钥请求头（`x-user-*-key`），以及任何后端的认证请求头；
-- Router 自己的 `x-vsr-*` 请求头、Envoy 的 `x-envoy-*` 控制请求头，以及身份验证器的身份请求头（`x-authz-*`），Router 不会把它们发给任何上游。
+- Router 自己的 `x-vsr-*` 请求头、Envoy 的 `x-envoy-*` 控制请求头，以及身份请求头（`x-authz-*` 和 `global.services.authz.identity` 设置的请求头名），Router 不会把它们发给任何上游。
 
 远程部署对 Router 发往它的调用也接受同样的设置；参见[转发客户端请求头](model-catalog.md#forward-client-headers)。
 

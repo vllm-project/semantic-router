@@ -33,6 +33,7 @@ var (
 		validateBackendTLSFiles,
 		validateModelDeploymentContracts,
 		validateFallbackForwardRequestHeaders,
+		validateForwardedIdentityHeaders,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
 		validateGlobalRouterReplayCaptureContracts,

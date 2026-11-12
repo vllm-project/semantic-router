@@ -430,8 +430,8 @@ that a call the Router builds must not copy from the client:
   `x-api-key`, `api-key`, `ocp-apim-subscription-key`, the per-user key
   headers (`x-user-*-key`), and any backend's auth header;
 - the Router's own `x-vsr-*` headers, Envoy's `x-envoy-*` controls, and the
-  authenticator's identity headers (`x-authz-*`), which the Router keeps from
-  every upstream.
+  identity headers (`x-authz-*` and the names `global.services.authz.identity`
+  sets), which the Router keeps from every upstream.
 
 A remote deployment takes the same setting for the calls the Router makes to
 it; see

@@ -124,6 +124,38 @@ func TestForwardRequestHeadersRefusesWhatNoCallMayCarry(t *testing.T) {
 	}
 }
 
+// A header the identity configuration reads the caller from is kept from
+// upstreams like the x-authz- set, so no forward_request_headers list may
+// name it, in any case.
+func TestForwardRequestHeadersRefusesConfiguredIdentityHeaders(t *testing.T) {
+	t.Setenv("FORWARD_TEST_GATEWAY_KEY", "gateway-key")
+	t.Setenv("FORWARD_TEST_DECISION_KEY", "decision-key")
+	withIdentity := func(document []byte) []byte {
+		return []byte(strings.Replace(string(document), "global:\n", `global:
+  services:
+    authz:
+      identity: {user_id_header: x-user-id, user_groups_header: x-user-groups}
+`, 1))
+	}
+	allowed := []string{"X-Request-Id"}
+	if _, err := ParseYAMLBytes(withIdentity(forwardHeadersDocument(allowed, allowed, allowed))); err != nil {
+		t.Fatalf("the request id: %v", err)
+	}
+	for _, tc := range []struct {
+		setting                    string
+		global, recipe, deployment []string
+		want                       string
+	}{
+		{"global fallback", []string{"x-user-id"}, allowed, allowed, `global.router.fallback: forward_request_headers cannot include identity header "x-user-id"`},
+		{"recipe fallback", allowed, []string{"X-User-Groups"}, allowed, `recipes[default].fallback: forward_request_headers cannot include identity header "X-User-Groups"`},
+		{"deployment", allowed, allowed, []string{"X-User-Id"}, `global.model_catalog.deployments.gateway-d3: forward_request_headers cannot include identity header "X-User-Id"`},
+	} {
+		if _, err := ParseYAMLBytes(withIdentity(forwardHeadersDocument(tc.global, tc.recipe, tc.deployment))); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: got %v, want %q", tc.setting, err, tc.want)
+		}
+	}
+}
+
 // Only a remote API's calls are made for a request with its headers; the
 // model runtime is the Router's own.
 func TestForwardRequestHeadersAppliesToRemoteDeployments(t *testing.T) {
