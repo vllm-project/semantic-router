@@ -315,6 +315,9 @@ type RequestContext struct {
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
 	VSRSignalErrorMatches     map[string]bool
+	// VSRScanCoverage is how much of their input the guard rules that read
+	// it in windows read, by "type:name".
+	VSRScanCoverage map[string]string
 	// RoutedSignals is the decision engine's view of the request-stage
 	// signals, which the selected decision's response_guard reads once the
 	// model has answered.

@@ -118,7 +118,7 @@ func TestNativeListenerReadyWaitsForKubernetesActivation(t *testing.T) {
 // listener still drains, as the gRPC health service turns NOT_SERVING then.
 func TestNativeListenerReadyTurnsUnavailableWhenShutdownBegins(t *testing.T) {
 	server, _, _, readyStatus := startReadyTestGateway(t, "")
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(readinessWait)
 	for readyStatus() != http.StatusOK {
 		if time.Now().After(deadline) {
 			t.Fatal("listener /ready never answered 200")

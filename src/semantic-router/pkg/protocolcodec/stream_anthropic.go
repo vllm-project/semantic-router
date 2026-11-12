@@ -756,15 +756,19 @@ func (encoder *anthropicStreamEncoder) completeAnthropicItem(
 			return nil, nil, err
 		}
 		frames = append(frames, started...)
-		delta := anthropicEventWire{
-			Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
-			Delta: &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments},
+		// A call cut right after its name has no arguments, and Messages has
+		// no empty input_json_delta, so the block stops after it starts.
+		if event.ToolCall.Arguments != "" {
+			delta := anthropicEventWire{
+				Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
+				Delta: &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments},
+			}
+			deltaFrames, _, err := encodeAnthropicWireFrame(delta)
+			if err != nil {
+				return nil, nil, err
+			}
+			frames = append(frames, deltaFrames...)
 		}
-		deltaFrames, _, err := encodeAnthropicWireFrame(delta)
-		if err != nil {
-			return nil, nil, err
-		}
-		frames = append(frames, deltaFrames...)
 		keys = append(keys, key)
 	}
 	if len(keys) == 0 {

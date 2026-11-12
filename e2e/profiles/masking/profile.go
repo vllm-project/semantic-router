@@ -19,7 +19,7 @@ const valuesFile = "e2e/profiles/masking/values.yaml"
 // resourceManifests reuses the plain provider-mocker manifest unchanged: it
 // is both the chat backend and the systemone deployment that answers the pii
 // rule. It is a generic fixture, not specific to the profile that first
-// added it -- response-jailbreak reuses the same manifest.
+// added it -- route-action reuses the same manifest.
 var resourceManifests = []string{
 	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/masking/gwapi-resources.yaml",

@@ -134,7 +134,7 @@ export interface SystemOneSignal {
   stage?: 'request' | 'response'
   input?: SystemOneInput
   coverage?: 'truncate' | 'full'
-  on_unscanned?: 'match' | 'no_match' | 'unknown'
+  on_unscanned?: 'best_effort' | 'match' | 'no_match' | 'unknown'
   timeout_ms?: number
 }
 

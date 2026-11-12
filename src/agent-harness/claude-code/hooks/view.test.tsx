@@ -251,18 +251,29 @@ test('the tally colours each glyph in its app colour and leaves out what did not
   expect(tally).toBe('› 1 allowed')
 })
 
-test('the tally and the newest decisions fit the rows the pane is given', { options: { check: true } }, async ($, on) => {
+test('the pane draws every decision, more than its rows hold, for the engine to scroll', { options: { check: true } }, async ($, on) => {
   engine(on, { review: 0.2 })
   for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) await $.tool.check({ tool: 'Bash', input: { command: `git push origin b${n}` } })
 
-  // Each entry is four rows here: its badge, its detail on two, and the answers it takes; the hint above the answers
-  // takes two rows at 60 columns, and the controls six.
+  // Eight entries of four rows each are more than 35 rows hold.
   const lines = await paneLines($, { columns: 60, rows: 35 })
 
   expect(lines).toContain(ANSWER_HINT)
-  expect(lines.filter(text => text.startsWith(' ALLOWED  git')).length).toBe(2)
   expect(afterLogo(lines)[0]).toBe('› 8 allowed')
-  expect(lines.join('\n')).toContain(' ALLOWED  git push origin b8')
+  expect(lines).toContain('‖ guard · 8')
+  expect(lines.filter(text => text.startsWith(' ALLOWED  git'))).toEqual([8, 7, 6, 5, 4, 3, 2, 1].map(n => ` ALLOWED  git push origin b${n}`))
+})
+
+test('a section header counts the rows it lists, up to the hundred decisions the pane keeps', async ($, on) => {
+  engine(on, { review: 0.2 })
+  for (let n = 1; n <= 105; n++) await $.tool.check({ tool: 'Bash', input: { command: `git push origin b${n}` } })
+
+  const lines = await paneLines($, { columns: 60, rows: 30 })
+  const allowed = lines.filter(text => text.startsWith(' ALLOWED  git'))
+
+  expect(lines).toContain('‖ guard · 100')
+  expect(allowed.length).toBe(100)
+  expect(allowed.at(-1)).toBe(' ALLOWED  git push origin b6')
 })
 
 test('the pane starts empty', async ($, on) => {
@@ -353,7 +364,7 @@ test('the pane has one section per app in urgency order, each with its newest en
   expect(lines).toContain(' REDACTED  ticket.txt')
 })
 
-test('the pane gives every section its newest entry before older ones', async ($, on) => {
+test('a short pane still lists every section in full, each newest first', async ($, on) => {
   engine(on, { review: 0.2, pii: TICKET_SPANS })
   on('tool.call', () => readResult())
   for (const n of [1, 2, 3, 4, 5, 6]) await $.tool.check({ tool: 'Bash', input: { command: `git push origin b${n}` } })
@@ -362,8 +373,8 @@ test('the pane gives every section its newest entry before older ones', async ($
   const lines = await paneLines($, { columns: 60, rows: 22 })
 
   expect(lines).toContain(' REDACTED  ticket.txt')
-  expect(lines).toContain(' ALLOWED  git push origin b6')
-  expect(lines).not.toContain(' ALLOWED  git push origin b1')
+  expect(lines).toContain('‖ guard · 6')
+  expect(lines.filter(text => text.startsWith(' ALLOWED  git'))).toEqual([6, 5, 4, 3, 2, 1].map(n => ` ALLOWED  git push origin b${n}`))
 })
 
 test('at 50 columns the cards of every new kind fall back to the one-line form', async ($, on) => {

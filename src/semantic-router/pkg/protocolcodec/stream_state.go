@@ -41,6 +41,9 @@ type streamState struct {
 	imageProgressSeen     map[int]map[llmprotocol.ImageGenerationStatus]bool
 	nextPartialImageIndex map[int]int64
 	reportedUnknownFields map[string]bool
+	// a tool call whose arguments ended before forming a JSON object; only a
+	// max_tokens stop explains one, which the terminal event decides
+	cutToolArguments bool
 }
 
 // appendStreamUnknownFields reports each unknown upstream member once per
@@ -255,6 +258,11 @@ func (state *streamState) prepareStartEvent(event llmprotocol.Event) (llmprotoco
 }
 
 func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.Event, error) {
+	if state.cutToolArguments && isOutputItemEvent(event.Type) {
+		// A limit cuts only the final output, so a later item means the call's
+		// arguments were malformed rather than cut.
+		return llmprotocol.Event{}, nonObjectToolArgumentsError()
+	}
 	switch event.Type {
 	case llmprotocol.EventOutputItemStarted:
 		return state.startItem(event)
@@ -266,6 +274,15 @@ func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.E
 		return state.completeItem(event)
 	}
 	return event, nil
+}
+
+func isOutputItemEvent(eventType llmprotocol.EventType) bool {
+	switch eventType {
+	case llmprotocol.EventOutputItemStarted, llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta,
+		llmprotocol.EventToolCallDelta, llmprotocol.EventImageGenerationProgress, llmprotocol.EventOutputItemCompleted:
+		return true
+	}
+	return false
 }
 
 func (state *streamState) startItem(event llmprotocol.Event) (llmprotocol.Event, error) {
