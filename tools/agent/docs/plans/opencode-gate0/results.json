@@ -1,0 +1,243 @@
+{
+  "opencode": "2.2.0",
+  "recorded_at": "2026-11-12T16:14:51.962314+00:00",
+  "synthetic_inputs_only": true,
+  "real_decision_cases": [
+    "live-routing"
+  ],
+  "sources": {
+    "live_probe.py": "8af18495923f4bef316190dddf1dbe608b3b8ff57e7e11c26fb32c3146d5efab",
+    "rpc.ts": "d41301ab6ee8a8c8690ad1b7ef3680f888f21b0861553bbbbe6740c7fdb96113",
+    "plugin.ts": "e77e953f5a5dd6e6c9d8d1987d4f7a1368a205ee1318a3c34bf7d7cd69091245",
+    "probe.py": "48b04c0424eaccb43e8c4a5678c9c1bb875ee7c42b4f98637578991a58c1af40",
+    "tui.tsx": "871a342c6deb0c7b6f20986204146ae4ca5d0fdc3526121ad8f9592c6946c018"
+  },
+  "results": [
+    {
+      "case": "redact",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "error",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "deny",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "explicit",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "auto",
+        "auto",
+        "auto"
+      ]
+    },
+    {
+      "case": "resume",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "concurrent",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "auto",
+        "auto",
+        "routed",
+        "auto",
+        "routed",
+        "auto",
+        "auto"
+      ]
+    },
+    {
+      "case": "ask-allow",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "ask-reject",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "ask-cancel",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "read",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "web",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "long",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "strict",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "partial",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "background",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto",
+        "routed"
+      ]
+    },
+    {
+      "case": "rpc",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "deny-override-allow",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "deny-override-ask",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "evidence",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "auto",
+        "auto",
+        "auto",
+        "auto",
+        "auto",
+        "auto"
+      ]
+    },
+    {
+      "case": "lifecycle",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto",
+        "auto",
+        "routed",
+        "routed",
+        "auto",
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    },
+    {
+      "case": "live-routing",
+      "passed": true,
+      "model_sequence": [
+        "auto",
+        "routed",
+        "routed",
+        "auto"
+      ]
+    }
+  ]
+}
