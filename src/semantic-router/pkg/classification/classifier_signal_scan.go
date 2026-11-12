@@ -3,8 +3,11 @@ package classification
 import (
 	"cmp"
 	"context"
+	cryptorand "crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/bits"
 	"slices"
 	"strings"
 	"sync"
@@ -19,19 +22,27 @@ import (
 
 // A guard rule (jailbreak, safety or pii, at either stage) reads its whole
 // input. An input longer than one window of its deployment is read in
-// overlapping windows: the tail first, then the head, then the middle in
-// order, each window a call of its own, at most the deployment's
+// overlapping windows: the tail first, then the head, then the middle by
+// bisection, each window a call of its own, at most the deployment's
 // scan_window.max_parallel of them in flight, so a window's answers count as
 // soon as it is read. The rule decides on what the windows found: the most
 // alarming window's answer, each label's highest probability for a set
 // question, and every window's spans, at their places in the input, for a
-// span question. When the stage's deadline leaves only some windows read,
-// on_unscanned decides (best_effort: on the windows read); when none was, the
-// rule is unknown, which on_unknown decides.
+// span question. A window whose answer makes the rule match decides it, and
+// when that match alone refuses the request, the stage's scans end there.
+// When the stage's deadline leaves only some windows read, on_unscanned
+// decides (best_effort: on the windows read, once they reach the rule's
+// min_coverage); when none was, the rule is unknown, which on_unknown decides.
 
 // maxScanWindows bounds the windows of one input, and so the calls its scan
-// holds: the ones past it in reading order count as unread.
+// holds. An input that needs more windows of its deployment's size is read in
+// larger ones, up to the largest its model takes; only past those do the
+// windows beyond the bound in reading order count as unread.
 const maxScanWindows = 256
+
+// errScanDecided ends the windows of a request stage's guard scans once one
+// window decided a rule whose match refuses the request.
+var errScanDecided = errors.New("scan_decided")
 
 // errWindowLimit marks a window past maxScanWindows.
 var errWindowLimit = errors.New("window_limit")
@@ -59,15 +70,29 @@ type guardScan struct {
 	requestAlone bool
 	text         string
 	windows      []scanWindow
+	// order is the windows' reading order (scanOrder).
+	order []int
 	// windowState is the state a window's call reads.
 	windowState func(window string) modelservice.Request
 	// parallel bounds the windows in flight.
 	parallel int
+	// refusing are the rules a window that makes them match ends the
+	// stage's scans for, and stop ends them.
+	refusing []askedRule
+	stop     func()
 
 	mu        sync.Mutex
 	responses []modelservice.Response
 	errs      []error
 	latency   float64
+}
+
+// scanBudget is how a deployment reads a long input: windows of size bytes,
+// or of up to most bytes when the input needs more than maxScanWindows of
+// them, each overlapping the one before by overlap bytes, at most parallel
+// of them in flight.
+type scanBudget struct {
+	size, most, overlap, parallel int
 }
 
 // guardScanned reports whether a rule reads its input in windows: the
@@ -80,29 +105,57 @@ func guardScanned(asked askedRule) bool {
 	return false
 }
 
-// scanWindowBudget is the size and overlap, in bytes, of deployment's scan
-// windows, at most its card's question cap less the reserve, and how many
-// of them are in flight at a time.
-func (c *Classifier) scanWindowBudget(deployment string) (int, int, int) {
+// scanWindowBudget is how deployment reads a long input: its scan windows'
+// size and overlap in bytes, at most its card's question cap less the
+// reserve; the largest window that cap allows, which a long input's windows
+// may grow to (none larger without a cap, which says what the model takes);
+// and how many windows are in flight at a time.
+func (c *Classifier) scanWindowBudget(deployment string) scanBudget {
 	window := c.Config.ModelDeployments[deployment]
 	tokens, overlap := window.ScanWindowTokens()
 	size := c.budgetBytes(deployment, tokens)
-	return size, max(0, min(overlap*routingViewBytesPerToken, size/2-1)), window.ScanWindowParallel()
+	most := size
+	if card, known := c.deploymentCard(deployment); known && card.QuestionTokens() > 0 {
+		most = max(size, c.budgetBytes(deployment, config.MaxModelInputTokens))
+	}
+	return scanBudget{
+		size: size, most: most, overlap: max(0, min(overlap*routingViewBytesPerToken, size/2-1)), parallel: window.ScanWindowParallel(),
+	}
 }
 
-// newGuardScan is the scan of state in windows of size bytes overlapping by
-// overlap, at most parallel of them in flight, or nil when the state fits
-// one window and is read as it is.
-func newGuardScan(deployment string, state modelservice.Request, size, overlap, parallel int) *guardScan {
-	if stateBytes(state) <= size {
+// newGuardScan is the scan of state in budget's windows, read in an order
+// of its own, or nil when the state fits one window and is read as it is.
+func newGuardScan(deployment string, state modelservice.Request, budget scanBudget) *guardScan {
+	if stateBytes(state) <= budget.size {
 		return nil
 	}
-	text, windowSize, windowState := scanSource(state, size)
-	windows := scanWindowsOf(text, windowSize, min(overlap, windowSize/2-1))
+	text, windowSize, windowState := scanSource(state, budget.size)
+	windows := fittedScanWindows(text, windowSize, budget.most-budget.size+windowSize, min(budget.overlap, windowSize/2-1))
+	// The order's turn comes from crypto/rand: a client that could predict
+	// it could put an attack where the windows read last are.
+	var turn [2]byte
+	_, _ = cryptorand.Read(turn[:])
 	return &guardScan{
-		deployment: deployment, whole: state, text: text, windows: windows, windowState: windowState, parallel: parallel,
+		deployment: deployment, whole: state, text: text, windows: windows, order: scanOrder(len(windows), int(binary.LittleEndian.Uint16(turn[:]))),
+		windowState: windowState, parallel: budget.parallel, stop: func() {},
 		responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)),
 	}
+}
+
+// fittedScanWindows cuts text into windows of size bytes or, when that takes
+// more than maxScanWindows, into the fewest windows of up to most bytes that
+// do, so the bound leaves no text unread unless even the largest windows
+// cannot cover it.
+func fittedScanWindows(text string, size, most, overlap int) []scanWindow {
+	windows := scanWindowsOf(text, size, overlap)
+	if len(windows) <= maxScanWindows || most <= size {
+		return windows
+	}
+	// A cut moves back to a character and a word boundary, so a window
+	// moves on by at least its size less the overlap and this much.
+	shortfall := overlap + routingViewSnap + utf8.UTFMax
+	fitted := min(most, (len(text)+(maxScanWindows-1)*shortfall)/maxScanWindows+1)
+	return scanWindowsOf(text, fitted, overlap)
 }
 
 // scanSource is the text a state's windows cover, the window size that
@@ -185,14 +238,35 @@ func scanWindowsOf(text string, size, overlap int) []scanWindow {
 }
 
 // scanOrder is the order windows are read in: the tail, the head, then the
-// middle in order, at most maxScanWindows of them.
-func scanOrder(windows int) []int {
+// middle by bisection, at most maxScanWindows of them. The middle's windows
+// come at the input's half, then at its quarters, its eighths and so on, so
+// the windows read by any moment are spread over the whole input and no part
+// of it waits for the rest; offset (at least 0) turns the points the halving
+// starts from, so which window of each part is read first differs from scan
+// to scan.
+func scanOrder(windows, offset int) []int {
 	order := make([]int, 0, windows)
 	if windows > 1 {
 		order = append(order, windows-1)
 	}
-	for index := 0; index < windows-1; index++ {
-		order = append(order, index)
+	if windows > 0 {
+		order = append(order, 0)
+	}
+	if middle := windows - 2; middle > 0 {
+		// Points 0 to 2^depth-1 in bit-reversed order halve the input
+		// between the head (point 0) and the tail; each falls in a window.
+		depth := bits.Len(uint(middle))
+		points := 1 << depth
+		turn := offset % points
+		taken := make([]bool, windows)
+		taken[0], taken[windows-1] = true, true
+		for step := range points {
+			point := (int(bits.Reverse(uint(step))>>(bits.UintSize-depth)) + turn) % points
+			if index := point * (middle + 1) / points; !taken[index] {
+				taken[index] = true
+				order = append(order, index)
+			}
+		}
 	}
 	return order[:min(len(order), maxScanWindows)]
 }
@@ -200,7 +274,7 @@ func scanOrder(windows int) []int {
 // windowCalls are the calls that read scan's windows, in reading order, and
 // mark the windows past maxScanWindows unread.
 func (scan *guardScan) windowCalls() []*systemOneCall {
-	order := scanOrder(len(scan.windows))
+	order := scan.order
 	sent := make([]bool, len(scan.windows))
 	calls := make([]*systemOneCall, len(order))
 	for rank, index := range order {
@@ -218,14 +292,45 @@ func (scan *guardScan) windowCalls() []*systemOneCall {
 	return calls
 }
 
-// windowReaders are the work that reads scans' windows. In a stage's bundle
+// scanStopKey keys a request stage's scanStop in its context.
+type scanStopKey struct{}
+
+// scanStop ends every guard scan of one request stage: once a window decides
+// a rule whose match refuses the request, the windows not yet sent are not
+// sent and the stage stops waiting for those in flight.
+type scanStop struct {
+	ctx  context.Context
+	stop context.CancelFunc
+}
+
+// withScanStop returns a request stage's context with the stop of its guard
+// scans, and the function that releases it when the stage ends.
+func withScanStop(ctx context.Context) (context.Context, context.CancelFunc) {
+	stopped, stop := context.WithCancelCause(context.Background())
+	end := func() { stop(context.Canceled) }
+	return context.WithValue(ctx, scanStopKey{}, &scanStop{ctx: stopped, stop: func() { stop(errScanDecided) }}), end
+}
+
+// windowReaders are the work that reads scans' windows, and the function
+// that releases what they hold once that work is done. In a stage's bundle
 // every window parks its call at once and the bundle sends them, at most
 // each scan's parallel bound in flight, the lowest rank first; elsewhere each
 // scan has that many readers, which take its windows in reading order. A
-// window not started before the deadline stays unread.
-func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) []func() {
+// window not started before the deadline, or before a window of the stage
+// decided a refusing rule, stays unread.
+func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]func(), func()) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	release := func() { cancel(context.Canceled) }
+	stop := func() {}
+	if stage, ok := ctx.Value(scanStopKey{}).(*scanStop); ok {
+		unhook := context.AfterFunc(stage.ctx, func() { cancel(context.Cause(stage.ctx)) })
+		release = func() { unhook(); cancel(context.Canceled) }
+		stop = stage.stop
+	}
 	var readers []func()
 	for _, scan := range scans {
+		scan.refusing = c.refusingRules(scan.rules)
+		scan.stop = stop
 		calls := scan.windowCalls()
 		read := func(call *systemOneCall) {
 			if err := ctx.Err(); err != nil {
@@ -250,14 +355,74 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) []fu
 			})
 		}
 	}
-	return readers
+	return readers, release
 }
 
+// record keeps a window's answers, and ends the stage's scans when they make
+// a refusing rule match.
 func (scan *guardScan) record(window int, response modelservice.Response, err error, latency float64) {
 	scan.mu.Lock()
-	defer scan.mu.Unlock()
 	scan.responses[window], scan.errs[window] = response, err
 	scan.latency = max(scan.latency, latency)
+	scan.mu.Unlock()
+	if err != nil {
+		return
+	}
+	for _, asked := range scan.refusing {
+		if answer, ok := response.Answers[asked.questionID()]; ok && answer.Error == "" && windowMatches(asked, answer) {
+			scan.stop()
+			return
+		}
+	}
+}
+
+// refusingRules are the rules among rules whose match in one window refuses
+// the request: request-stage rules a window decides (windowDecides) that a
+// decision refuses on alone (config.RouterConfig.RefusedOnMatch).
+func (c *Classifier) refusingRules(rules []askedRule) []askedRule {
+	var refusing []askedRule
+	for _, asked := range rules {
+		if asked.rule.EffectiveStage() == config.SystemOneStageRequest && windowDecides(asked.rule) &&
+			c.Config.RefusedOnMatch(asked.signalType, asked.rule.Name) {
+			refusing = append(refusing, asked)
+		}
+	}
+	return refusing
+}
+
+// windowDecides reports whether one window that makes rule match decides
+// it, whatever the windows not read: the scan answers with the most
+// alarming window, and every label's highest probability and every span,
+// so a match on a floor (gte or gt) or a selection only grows with more
+// windows.
+func windowDecides(rule config.SystemOneRule) bool {
+	predicate := rule.EffectivePredicate()
+	if predicate != nil && (predicate.LT != nil || predicate.LTE != nil) {
+		return false
+	}
+	switch rule.Question.Type {
+	case config.SystemOneQuestionSet, config.SystemOneQuestionSpan:
+		return true
+	case config.SystemOneQuestionChoice:
+		return predicate != nil && len(rule.Question.Choices) == 2 && len(rule.CountedLabels()) > 0
+	}
+	return false
+}
+
+// windowMatches reports whether one window's answer makes asked's rule
+// match.
+func windowMatches(asked askedRule, answer modelservice.Answer) bool {
+	matched := applySystemOneAnswer(newResponseSignalResults(), asked.signalType, asked.rule, answer)
+	return slices.Contains(matched, asked.rule.Name)
+}
+
+// decidedBy reports whether a read window decides asked's rule: its answer
+// makes the rule match, which no window left unread can undo.
+func decidedBy(asked askedRule, read []windowAnswer) bool {
+	if !windowDecides(asked.rule) {
+		return false
+	}
+	return slices.ContainsFunc(read, func(entry windowAnswer) bool { return windowMatches(asked, entry.answer) })
 }
 
 // windowAnswer is one window's answer to a rule's question.
@@ -303,6 +468,7 @@ func (c *Classifier) applyScan(results *SignalResults, mu *sync.Mutex, scan *gua
 		key := signalConfidenceKey(asked.signalType, rule.Name)
 		c.recordSignalExtraction(asked.signalType, rule.Name, scan.latency)
 		read, reason := scan.answers(asked)
+		decided := (len(read) < len(scan.windows) || asked.unread != "") && decidedBy(asked, read)
 		c.recordScanCoverage(results, asked, len(read), len(scan.windows))
 		switch {
 		case len(read) == 0:
@@ -310,8 +476,16 @@ func (c *Classifier) applyScan(results *SignalResults, mu *sync.Mutex, scan *gua
 			modelservice.RecordUnknown(scan.deployment, reason, 1)
 			c.applyFailClosed(results, asked, scan.deployment, reason)
 			continue
+		case decided:
+			if len(read) < len(scan.windows) {
+				metrics.RecordSignalScanDecided(signalConfidenceKey(asked.signalType, c.scopedSignalName(rule.Name)))
+			}
 		case len(read) < len(scan.windows):
-			switch rule.EffectiveOnUnscanned() {
+			policy := rule.EffectiveOnUnscanned()
+			if policy == config.SystemOneUnscannedBestEffort && float64(len(read)) < asked.minCoverage*float64(len(scan.windows)) {
+				policy = config.SystemOneUnscannedUnknown
+			}
+			switch policy {
 			case config.SystemOneUnscannedMatch:
 				c.applyUnscanned(results, asked, scan.deployment, reason)
 				continue
@@ -323,7 +497,7 @@ func (c *Classifier) applyScan(results *SignalResults, mu *sync.Mutex, scan *gua
 				continue
 			}
 		}
-		if asked.unread != "" && c.resolveUnread(results, asked, scan.deployment, asked.unread) {
+		if !decided && asked.unread != "" && c.resolveUnread(results, asked, scan.deployment, asked.unread) {
 			continue
 		}
 		c.applyRuleAnswer(results, asked, scanAnswer(rule, read, scan))
@@ -331,8 +505,9 @@ func (c *Classifier) applyScan(results *SignalResults, mu *sync.Mutex, scan *gua
 }
 
 // recordScanCoverage counts how much of its input a guard rule read and, for
-// one read in windows, records it for the trace and the replay record. A
-// rule that missed part of its tool results or images read its input in part.
+// one read in windows, the share of its windows read, which it records for
+// the trace and the replay record. A rule that missed part of its tool
+// results or images read its input in part.
 func (c *Classifier) recordScanCoverage(results *SignalResults, asked askedRule, read, windows int) {
 	result := scanCoverageFull
 	switch {
@@ -342,10 +517,12 @@ func (c *Classifier) recordScanCoverage(results *SignalResults, asked askedRule,
 		result = scanCoveragePartial
 	}
 	key := signalConfidenceKey(asked.signalType, asked.rule.Name)
-	metrics.RecordSignalScanCoverage(signalConfidenceKey(asked.signalType, c.scopedSignalName(asked.rule.Name)), result)
+	signal := signalConfidenceKey(asked.signalType, c.scopedSignalName(asked.rule.Name))
+	metrics.RecordSignalScanCoverage(signal, result)
 	if windows < 2 {
 		return
 	}
+	metrics.RecordSignalScanCoverageRatio(signal, float64(read)/float64(windows))
 	if results.ScanCoverage == nil {
 		results.ScanCoverage = make(map[string]string)
 	}

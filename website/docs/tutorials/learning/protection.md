@@ -61,7 +61,7 @@ components otherwise default to enabled when the master switch is enabled.
 
 | Scope | What is protected | What can re-route |
 | --- | --- | --- |
-| `conversation` | Turns sharing one `x-conversation-id`. | A new `x-conversation-id` in the same `x-session-id`, or an explicit release. |
+| `conversation` | Turns sharing one `x-conversation-id`; without one, turns of the session that share how their conversation starts. | A new `x-conversation-id` or a new conversation in the same `x-session-id`, or an explicit release. |
 | `session` | Turns sharing one `x-session-id`. | Idle timeout, a decision with `adaptations.mode: bypass`, or an explicit release. |
 
 - **Use `conversation`** when each agent run should be routed on its own. A
@@ -73,8 +73,12 @@ components otherwise default to enabled when the master switch is enabled.
 - **Neither scope** can keep a previous model outside the admitted candidate
   set.
 
-If the configured identity headers are missing, protection fails open and
-records diagnostics instead of failing the request.
+If the session header is missing, protection fails open and records
+diagnostics instead of failing the request. A missing conversation header is
+not a failure: under `scope: conversation` the Router names the conversation by
+how it starts, its first instructions and user message, so each conversation of
+the session keeps its own key. See
+[Session identification](../../api/session-identification#choose-the-identity-you-need).
 
 ### Agents that delegate to subagents
 

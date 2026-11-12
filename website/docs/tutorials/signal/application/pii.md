@@ -70,6 +70,7 @@ recipes:
 | `input.tool_results` | Also read the request's tool results |
 | `input.request` | `false` leaves the current user turn out, so the rule reads only the earlier user turns or tool results it names |
 | `on_unscanned` | What the rule reports when only some windows of a long input were read: `best_effort` (the default), `match`, `no_match` or `unknown` |
+| `min_coverage` | With `best_effort`, the share of the windows, 0 to 1, that must have been read to decide on them; below it the rule is unknown. Off by default |
 | `on_unknown` | What the rule reports when its model gives no answer: `match` (the default) or `no_match` |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
 
@@ -96,13 +97,16 @@ not asked, and does not match, before the request has a tool result.
 
 It reads its whole input. An input longer than one of the deployment's
 `scan_window`s is read in overlapping windows, the tail first, then the head,
-then the middle, and every window's spans count, at their places in the input,
-so masking replaces each one. See
+then the middle by halves, and every window's spans count, at their places in
+the input, so masking replaces each one. See
 [Long inputs](../../../system-one/deploy/performance.md#long-inputs). When the
-deadline ends before every window is read, `on_unscanned` decides:
-`best_effort` (the default) decides on the windows read, `match` counts the
-request as personal data (strict), `no_match` does not, and `unknown` leaves
-the rule to `on_unknown`. The masking plugin always needs every window: a text
+deadline ends before every window is read and no window read found personal
+data, `on_unscanned` decides: `best_effort` (the default) decides on the
+windows read, once they are the rule's `min_coverage` share of them if it sets
+one (below it the rule is unknown), `match` counts the request as personal data
+(strict), `no_match` does not, and `unknown` leaves the rule to `on_unknown`.
+Personal data found in a window read counts whatever `on_unscanned` says. The
+masking plugin always needs every window: a text
 it could not read whole is not sent. A tool result the Router cannot read as
 text, such as an image or an unsupported block, counts as unread input too,
 which `on_unscanned` decides the same way, even when no tool result holds text.

@@ -180,7 +180,10 @@ comment `/ci run` on a PR to authorize all affected work. `/ci run models`,
 `storage`, `product`, `e2e`, `operator`, or `performance` authorizes only that
 scope; multiple scopes may be listed, and valid approvals for the same revision
 accumulate. A partial approval does not waive the other required contracts or
-image builds. `/ci run full` adds the full CPU inventory.
+image builds. `/ci run full` adds the full CPU inventory. Authorized reruns reuse
+successful automatic receipts from the same repository PR workflow run only
+when the head, merge revision, base, and contract digest match; missing, failed,
+or invalid evidence runs again.
 
 Command feedback uses 👀 for receipt, 🚀 after the rerun API succeeds, and 😕
 with an actionable bot reply for rejected requests or a trigger that could not

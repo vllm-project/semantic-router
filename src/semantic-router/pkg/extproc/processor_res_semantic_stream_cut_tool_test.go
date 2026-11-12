@@ -7,9 +7,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// A call the output limit cut reaches the client as a successful stream, but
-// its partial arguments do not re-encode as a buffered response, so nothing
-// is cached, stored, or kept as the replay response body.
+// A call the output limit cut reaches the client as a successful stream, and
+// it is never cached: a hit would give another request the cut call.
 func TestSemanticStreamKeepsCutToolCallOutOfCache(t *testing.T) {
 	chunk := func(delta, finish string) string {
 		return `data: {"id":"response_1","model":"source-model","choices":[{"index":0,"delta":` + delta + `,"finish_reason":` + finish + "}]}\n\n"

@@ -115,6 +115,10 @@ type RequestContext struct {
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
+	// UpstreamBodyStreamed reports the provider body's own mode. A client that
+	// asked for a stream gets IsStreamingResponse even when the provider
+	// answered with one JSON object, and that body has to be read whole.
+	UpstreamBodyStreamed bool
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
@@ -181,6 +185,10 @@ type RequestContext struct {
 	// of the sessionIDHeaders the Router reads in order.
 	SessionIDHeader  string
 	sessionIDHeaders []string
+	// conversationStartID is read through conversationStart, which takes it
+	// once per request.
+	conversationStartID    string
+	conversationStartTaken bool
 	// identity names the headers the Router reads the caller's user and
 	// groups from: global.services.authz.identity, else the x-authz-* names.
 	identity config.IdentityConfig
