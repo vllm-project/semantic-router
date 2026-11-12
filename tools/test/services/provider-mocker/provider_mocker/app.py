@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from . import (
     chat,
     embeddings,
+    held_stream,
     images,
     looper,
     messages,
@@ -32,6 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         provider_boundary.router,
         systemone.router,
         embeddings.router,
+        held_stream.router,
         chat.router,
         responses.router,
         messages.router,
