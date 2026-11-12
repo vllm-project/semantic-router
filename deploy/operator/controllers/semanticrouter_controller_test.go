@@ -587,6 +587,97 @@ func TestUpdateStatusClearsStaleProgressingOnZeroReady(t *testing.T) {
 	})
 }
 
+func TestUpdateStatusClearsStaleProgressingOnDeploymentNotFound(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+	key := types.NamespacedName{Name: "test", Namespace: "default"}
+
+	assertNoProgressing := func(t *testing.T, got *vllmv1alpha1.SemanticRouter) {
+		t.Helper()
+		if got.Status.Phase != "Pending" {
+			t.Errorf("Phase=%q, want Pending", got.Status.Phase)
+		}
+		available := meta.FindStatusCondition(got.Status.Conditions, typeAvailableSemanticRouter)
+		if available == nil || available.Status != metav1.ConditionFalse || available.Reason != "DeploymentNotFound" {
+			t.Errorf("Available condition: %+v", available)
+		}
+		if p := meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter); p != nil {
+			t.Errorf("Progressing should be removed when the Deployment is missing, got %+v", p)
+		}
+	}
+
+	t.Run("initial_reconciling_cleared", func(t *testing.T) {
+		sr := &vllmv1alpha1.SemanticRouter{
+			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+		}
+		meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
+			Type:    typeProgressingSemanticRouter,
+			Status:  metav1.ConditionTrue,
+			Reason:  "Reconciling",
+			Message: "Starting reconciliation",
+		})
+		cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr).WithStatusSubresource(sr).Build()
+		r := &SemanticRouterReconciler{Client: cl, Scheme: s}
+
+		current := &vllmv1alpha1.SemanticRouter{}
+		if err := cl.Get(context.Background(), key, current); err != nil {
+			t.Fatalf("get SemanticRouter: %v", err)
+		}
+		if err := r.updateStatus(context.Background(), current, current.DeepCopy()); err != nil {
+			t.Fatalf("updateStatus: %v", err)
+		}
+		got := &vllmv1alpha1.SemanticRouter{}
+		if err := cl.Get(context.Background(), key, got); err != nil {
+			t.Fatalf("get SemanticRouter: %v", err)
+		}
+		assertNoProgressing(t, got)
+	})
+
+	t.Run("deleted_mid_rollout_clears_partial_count", func(t *testing.T) {
+		sr := &vllmv1alpha1.SemanticRouter{
+			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+		}
+		deployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+			Status:     appsv1.DeploymentStatus{Replicas: 3, ReadyReplicas: 1},
+		}
+		cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, deployment).WithStatusSubresource(sr, deployment).Build()
+		r := &SemanticRouterReconciler{Client: cl, Scheme: s}
+
+		run := func(t *testing.T) *vllmv1alpha1.SemanticRouter {
+			t.Helper()
+			current := &vllmv1alpha1.SemanticRouter{}
+			if err := cl.Get(context.Background(), key, current); err != nil {
+				t.Fatalf("get SemanticRouter: %v", err)
+			}
+			if err := r.updateStatus(context.Background(), current, current.DeepCopy()); err != nil {
+				t.Fatalf("updateStatus: %v", err)
+			}
+			got := &vllmv1alpha1.SemanticRouter{}
+			if err := cl.Get(context.Background(), key, got); err != nil {
+				t.Fatalf("get SemanticRouter: %v", err)
+			}
+			return got
+		}
+
+		seed := run(t)
+		if p := meta.FindStatusCondition(seed.Status.Conditions, typeProgressingSemanticRouter); p == nil || p.Message != "1/3 replicas ready" {
+			t.Fatalf("1/3 seed: Progressing=%+v", p)
+		}
+		if err := cl.Delete(context.Background(), deployment); err != nil {
+			t.Fatalf("delete Deployment: %v", err)
+		}
+		got := run(t)
+		assertNoProgressing(t, got)
+		for _, c := range got.Status.Conditions {
+			if strings.Contains(c.Message, "1/3 replicas ready") {
+				t.Errorf("stale partial-ready count survived in condition %s: %q", c.Type, c.Message)
+			}
+		}
+	})
+}
+
 func TestUpdateStatusPreservesReconcileDerivedFields(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = scheme.AddToScheme(s)

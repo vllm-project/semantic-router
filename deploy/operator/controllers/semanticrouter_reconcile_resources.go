@@ -289,6 +289,7 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 				sr.Status.Replicas = 0
 				sr.Status.ReadyReplicas = 0
 				sr.Status.Phase = "Pending"
+				meta.RemoveStatusCondition(&sr.Status.Conditions, typeProgressingSemanticRouter)
 				meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
 					ObservedGeneration: sr.Generation,
 					Type:               typeAvailableSemanticRouter,
