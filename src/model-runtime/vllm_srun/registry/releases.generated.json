@@ -44,5 +44,7 @@
   "vllm-sr/vela3-flash": "af48828de3f9769795d8fc5c42d6cc337a1816b0",
   "vllm-sr/vela3-lite": "c789afd6fbeaceb3c734b95b9ca3ad9772a7f434",
   "vllm-sr/vela3-mini": "bbc0206efbbbee5d41955b429e98238b5ad32252",
-  "vllm-sr/vela3-turbo": "ce95e6d9e10def159fbdb39c95bfc4ff6a30b955"
+  "vllm-sr/vela3-turbo": "ce95e6d9e10def159fbdb39c95bfc4ff6a30b955",
+  "vllm-sr/vela3.1-pico-150m": "dad77ad7a83c884b3e608a58c13cf25beba00803",
+  "vllm-sr/vela3.1-pico-380m": "a79cbf66ee09245ef8f40f66afa9bcbd57ccf5a5"
 }

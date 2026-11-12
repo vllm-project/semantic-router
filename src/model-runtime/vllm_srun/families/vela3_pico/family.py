@@ -105,10 +105,7 @@ def refuse_blank(state: Any) -> None:
 class Vela3PicoFamily(ModelFamily):
     name = "vela3_pico"
     surfaces = frozenset({"decisions"})
-    # The pins (revision, file digests, parameter count, device memory) and
-    # golden answers are recorded on a host with the released weights; until
-    # then a pico is served from a local package directory.
-    builtin_table = None
+    builtin_table = "vllm_srun.registry.tables.vela3_pico"
     fixture_writer = "vllm_srun.testing.vela3_pico"
 
     @classmethod

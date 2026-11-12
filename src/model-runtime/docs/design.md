@@ -690,6 +690,7 @@ Before any model code runs, the family verifies the package:
 | `task_heads` | `vllm-sr/Vela-1.0-Encoder-307M-{Domain, Guard, Safety, Shield, FactCheck, Feedback, Modality, Hazard, PII, Halu, Embedding, Reranker}`, `Qwen/Qwen3-Embedding-0.6B` | The revisions the router pinned (section 16.3), for example Domain `f6354f54`, PII `6d3300c4`, Halu `ca875312`, Embedding `1e57cebf`, Reranker `a388e41c` |
 | `vela2` | `vllm-sr/Vela-2.0-{0.3B, 0.8B, 4B, 9B}` | 0.3B `a3209a50`, 0.8B `a778eb2a`, 4B `c1e64d4f`, 9B `bc876163` |
 | `vela3` | `vllm-sr/vela3-fast` | `7cbefd4b` |
+| `vela3_pico` | `vllm-sr/vela3.1-pico-{380m, 150m}` | 380m `a79cbf66`, 150m `dad77ad7` (the `v1.0` tags; [record](records/vela31-pico-parity.md)) |
 | `multimodal_embedding` | `vllm-sr/Vela-1.0-Omni-{Nano, Mini}` | Nano `2ff2d663`, Mini `801bae3a` (the published weights, section 8.5) |
 
 Each family names its table (`ModelFamily.builtin_table`); the built-in

@@ -140,9 +140,14 @@ def test_every_family_has_a_table_and_lookups_cover_them():
         "vela2",
         "vela3",
         "vela3_d3",
+        "vela3_pico",
         "multimodal_embedding",
     }
     assert all(model.family == "decision2" for model in builtin.all_models("decision2"))
+    assert {model.repo_id for model in builtin.all_models("vela3_pico")} == {
+        "vllm-sr/vela3.1-pico-380m",
+        "vllm-sr/vela3.1-pico-150m",
+    }
     assert {model.repo_id for model in builtin.all_models("vela3_d3")} == {
         "vllm-sr/vela3-lite",
         "vllm-sr/vela3-mini",

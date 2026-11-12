@@ -19,6 +19,7 @@ const sources = [
   'registry/tables/vela2.py',
   'registry/tables/vela3.py',
   'registry/tables/vela3_d3.py',
+  'registry/tables/vela3_pico.py',
   'registry/tables/vela1.py',
   'registry/tables/omni.py',
   'families/vela2/request.py',
@@ -32,6 +33,7 @@ const sources = [
   'families/decision3/family.py',
   'families/vela3/family.py',
   'families/vela3_d3/family.py',
+  'families/vela3_pico/family.py',
 ].map((path) => runtime + path)
 
 describe('Decision catalog generation boundary', () => {
