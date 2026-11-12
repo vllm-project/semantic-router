@@ -181,6 +181,10 @@ type RequestContext struct {
 	// of the sessionIDHeaders the Router reads in order.
 	SessionIDHeader  string
 	sessionIDHeaders []string
+	// conversationStartID is read through conversationStart, which takes it
+	// once per request.
+	conversationStartID    string
+	conversationStartTaken bool
 	// identity names the headers the Router reads the caller's user and
 	// groups from: global.services.authz.identity, else the x-authz-* names.
 	identity config.IdentityConfig
