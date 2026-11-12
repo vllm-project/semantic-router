@@ -20,6 +20,7 @@ func NewProfile() *Profile {
 			"Tests Response API endpoints using Redis storage backend",
 			valuesFile,
 			redisManifest,
+			"--for=condition=available", "deployment/redis",
 		),
 	}
 }
