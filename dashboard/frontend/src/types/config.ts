@@ -111,6 +111,8 @@ export interface SystemOneInput {
   image?: boolean
   audio?: boolean
   video?: boolean
+  // false leaves the current user turn out: the rule reads only the history or tool results it names
+  request?: boolean
 }
 
 export interface SystemOneSignal {
@@ -132,7 +134,7 @@ export interface SystemOneSignal {
   stage?: 'request' | 'response'
   input?: SystemOneInput
   coverage?: 'truncate' | 'full'
-  on_unscanned?: 'match' | 'no_match' | 'unknown'
+  on_unscanned?: 'best_effort' | 'match' | 'no_match' | 'unknown'
   timeout_ms?: number
 }
 

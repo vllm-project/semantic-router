@@ -188,6 +188,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := applyEffectiveModelRegistry(&cfg, effective, canonical.Providers.Models); err != nil {
 		return nil, err
 	}
+	cfg.DefaultBackendTLS = cloneProviderDefaultsTLS(canonical.Providers.Defaults.TLS)
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {

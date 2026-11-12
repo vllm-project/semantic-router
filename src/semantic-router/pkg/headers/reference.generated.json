@@ -962,6 +962,11 @@
       "doc": "Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`."
     },
     {
+      "key": "scan_coverage",
+      "owner": "signals",
+      "doc": "Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts."
+    },
+    {
       "key": "context_tokens",
       "owner": "signals",
       "doc": "Token count the `context` signal measured."

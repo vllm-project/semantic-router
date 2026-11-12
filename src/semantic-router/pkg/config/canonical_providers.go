@@ -16,6 +16,8 @@ type CanonicalProviders struct {
 type CanonicalProviderDefaults struct {
 	DefaultModel           string `yaml:"model,omitempty"`
 	DefaultReasoningEffort string `yaml:"reasoning_effort,omitempty"`
+	// TLS is the trust of every https backend whose own tls names no CA.
+	TLS *ProviderDefaultsTLS `yaml:"tls,omitempty"`
 }
 
 // CanonicalProviderModel describes one model alias in one place: how requests
@@ -137,6 +139,11 @@ type CanonicalBackendRef struct {
 	Auth *DeploymentAuth `yaml:"auth,omitempty"`
 	// Headers are non-secret headers sent with every request.
 	Headers map[string]string `yaml:"headers,omitempty"`
+	// TLS verifies an https backend as a deployment's tls block does, for
+	// Envoy and for the Router's own calls alike: ca_file replaces the system
+	// roots, server_name the endpoint's host, and cert_file with key_file
+	// present a client certificate. Verification is never skipped.
+	TLS *DeploymentTLS `yaml:"tls,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

@@ -81,11 +81,14 @@ With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server certificate chain and its DNS hostname:
 
 - **One hostname per pool.** The supported Envoy runtime shares its TLS
-  context within a cluster, so an HTTPS replica pool must keep one hostname.
-  Use separate model aliases for different HTTPS hosts.
+  context within a cluster, so an HTTPS replica pool must keep one hostname
+  and one `tls` block. Use separate model aliases for different HTTPS hosts.
 - **No IP literals.** IP-literal HTTPS targets are rejected, instead of
   silently weakening hostname verification.
-- **A CA bundle.** A custom Envoy image used with `vllm-sr serve` must provide
+- **A CA bundle.** A backend's `tls.ca_file`, else
+  `providers.defaults.tls.ca_file`, names the bundle its certificate must
+  chain to; see [Trust a private CA](backend-target-compatibility#trust-a-private-ca).
+  Without either, a custom Envoy image used with `vllm-sr serve` must provide
   the system CA bundle at `/etc/ssl/certs/ca-certificates.crt`. Startup
   validation fails when that trust store is missing, rather than silently
   disabling verification.
@@ -387,7 +390,12 @@ tools or error translation.
   reply; see
   [Response fields the Router does not model](#response-fields-the-router-does-not-model).
 - Cross-protocol requests preserve shared semantics. Target-specific features
-  that cannot be represented return a typed protocol error.
+  that cannot be represented return a typed protocol error. A
+  `lossy_translation` error for a loss an operator may accept, such as
+  `tool_result.is_error`, names the `global.router.allow_lossy_translation`
+  setting that accepts it. The `unsupported_capability` errors for files,
+  signed reasoning and stored completions don't; their sections above name
+  the setting.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
   Responses requests. By default the Router rejects this translation with
   `lossy_translation`, while a false or absent flag remains supported and
@@ -423,6 +431,15 @@ tools or error translation.
   `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
+- vLLM's serving metadata never fails a reply, whatever its value:
+  `prompt_logprobs`, `prompt_text`, `prompt_routed_experts`,
+  `kv_transfer_params`, `ec_transfer_params` and `metrics` at the top level of
+  a reply or stream chunk, and `routed_experts` and `weight_versions` in its
+  choices. Chat clients receive them unchanged; a value other than null or
+  empty is reported as `dropped`. In a vLLM-Omni stream, a chunk whose
+  `modality` is not `text` fails with `unsupported_upstream_audio` (or
+  `unsupported_upstream_modality`), because its `delta.content` carries
+  encoded media, not answer text.
 - A Chat provider ends a forced named tool call with `finish_reason: "stop"`.
   Anthropic Messages clients receive `stop_reason: "tool_use"` for a turn that
   ends that way and carries `tool_use` blocks. A turn that ends at the output
@@ -449,6 +466,12 @@ tools or error translation.
     requires a limit, and reports `max_tokens` as `generated`. Thinking counts
     toward that limit, and a positive integer in the decision's
     `request_params.default_max_tokens` replaces the 4096.
+- When the output limit ends a streamed tool call inside its arguments, or
+  right after its name with none, the Router passes the partial call on with
+  the limit stop, as the providers do: `max_tokens` for Messages, `length` for
+  Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
+  not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
+  response is not cached, stored, or kept as the replay response body.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../api/headers).

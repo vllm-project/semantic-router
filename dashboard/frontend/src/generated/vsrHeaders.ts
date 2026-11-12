@@ -273,6 +273,9 @@ export const TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS = 'effective_max_output_tokens'
 /** Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. */
 export const TRACE_SIGNALS = 'signals'
 
+/** Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. */
+export const TRACE_SCAN_COVERAGE = 'scan_coverage'
+
 /** Token count the `context` signal measured. */
 export const TRACE_CONTEXT_TOKENS = 'context_tokens'
 
@@ -333,6 +336,7 @@ export const TRACE_MEMBERS = [
   TRACE_EFFECTIVE_INPUT_TOKENS,
   TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS,
   TRACE_SIGNALS,
+  TRACE_SCAN_COVERAGE,
   TRACE_CONTEXT_TOKENS,
   TRACE_CATEGORY,
   TRACE_REASONING,
