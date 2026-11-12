@@ -3062,6 +3062,11 @@
             "unknown"
           ]
         },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
         "on_unknown": {
           "type": "string",
           "enum": [
@@ -4655,6 +4660,11 @@
             "no_match",
             "unknown"
           ]
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         },
         "on_unknown": {
           "type": "string",
@@ -6320,6 +6330,11 @@
         },
         "timeout_ms": {
           "type": "integer"
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         }
       },
       "additionalProperties": false,

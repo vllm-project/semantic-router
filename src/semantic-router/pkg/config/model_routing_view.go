@@ -42,10 +42,11 @@ type DeploymentRoutingView struct {
 
 // DeploymentScanWindow sizes the windows a guard rule (jailbreak, safety,
 // pii) reads a long input in: windows of Tokens, each overlapping the one
-// before by Overlap, read tail first, then head, then the middle, each in a
-// call of its own with at most MaxParallel in flight. Windows are sized in
-// bytes as routing views are, so the model's validated length bounds a
-// window whatever Tokens says and however dense the text.
+// before by Overlap, read tail first, then head, then the middle by halves,
+// each in a call of its own with at most MaxParallel in flight. Windows are
+// sized in bytes as routing views are, so the model's validated length bounds
+// a window whatever Tokens says and however dense the text; an input that
+// needs more than 256 windows is read in larger ones, up to that length.
 type DeploymentScanWindow struct {
 	// Tokens is the size of one window in tokens of prose, as four bytes
 	// each (default 8192; 4096 for a systemone deployment).

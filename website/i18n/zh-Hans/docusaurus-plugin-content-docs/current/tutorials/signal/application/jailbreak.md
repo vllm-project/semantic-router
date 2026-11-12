@@ -66,6 +66,7 @@ recipes:
 | `stage` | `request`（默认）或 `response`，后者读取模型的答案 |
 | `input.history` | 同时读取之前的用户和工具轮次 |
 | `on_unscanned` | 长输入只读了部分窗口时规则报告什么：`best_effort`（默认）、`match`、`no_match` 或 `unknown` |
+| `min_coverage` | 使用 `best_effort` 时，至少要读完的窗口比例（0 到 1），达到后才根据已读窗口判断；低于该比例时规则为未知。默认关闭 |
 | `on_unknown` | 请求阶段：模型没有给出答案时规则报告什么，`match`（默认）或 `no_match` |
 | `deployment`、`timeout_ms` | 回答问题的部署，以及答案的截止时间 |
 
@@ -73,16 +74,18 @@ recipes:
 
 在请求阶段，问题读取请求末尾连续的用户和工具消息，遇到助手、系统或开发者消息即停止，因此本轮的所有文本工具结果会被一起读取。设置 `input.history` 时，还会读取之前的用户和工具文本。系统和开发者指令以及助手回复不会被当作攻击证据读取。它还会读取 `global.router.routing_input` 从路由文本中移除的内容，所以伪造的记忆块或运行时上下文轮次无法藏住攻击。
 
-问题读取完整输入。超过部署一个 `scan_window` 的输入（很长的粘贴文档或工具输出）被切成相互重叠的窗口，先读结尾，再读开头，然后读中间；任何一个窗口发现攻击，整个输入即被标记，所以靠填充提示无法把攻击带过防护。参见[长输入](../../../system-one/deploy/performance.md#long-inputs)。
+问题读取完整输入。超过部署一个 `scan_window` 的输入（很长的粘贴文档或工具输出）被切成相互重叠的窗口，先读结尾，再读开头，然后按二分读中间，因此任一时刻已读的窗口都分布在整个输入上。任何一个窗口发现攻击，整个输入即被标记，所以靠填充提示无法把攻击带过防护。如果一个拒绝请求的决策（`fast_response`）仅凭这条规则即匹配，发现攻击的窗口会结束扫描，请求立即被拒绝。参见[长输入](../../../system-one/deploy/performance.md#long-inputs)。
 
 ### 只读到部分输入时 {#when-only-part-of-the-input-was-read}
 
-如果信号的截止时间在所有窗口读完之前到达，由 `on_unscanned` 决定：
+如果信号的截止时间在所有窗口读完之前到达，且已读窗口中没有发现攻击，由 `on_unscanned` 决定：
 
-- `best_effort`（默认）根据已读窗口作出判断：任何一个窗口中有攻击即匹配，都没有则不匹配；
+- `best_effort`（默认）根据已读窗口作出判断，此时不匹配。设置 `min_coverage` 时，只有读完该比例的窗口才作判断：低于该比例时规则为未知，交给 `on_unknown`；
 - `match` 匹配该请求，匹配类型为 `unscanned`（严格模式）；
 - `no_match` 不匹配；
 - `unknown` 让规则保持未知，交给 `on_unknown`。
+
+已读窗口发现的攻击无论 `on_unscanned` 如何设置都会匹配：未读的窗口不能撤销它。只读了部分输入就被路由的请求会在 `x-vsr-warnings` 中携带 `scan_partial`。
 
 ### 模型没有给出答案时 {#when-the-model-gives-no-answer}
 
@@ -95,6 +98,8 @@ recipes:
       jailbreak:
         - name: strict_guard
           on_unscanned: match
+        - name: half_read_guard
+          min_coverage: 0.5
         - name: lenient_guard
           on_unknown: no_match
 ```

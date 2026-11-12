@@ -205,7 +205,8 @@ func (r systemOneReading) toolResultsUnread(rule config.SystemOneRule) bool {
 // application type and shares its preset's question with the stage's other
 // rules of the preset. path is where the configuration asks it when that is
 // not a rule (fusion grounding). toolResultsUnread is whether it misses part
-// of the tool results it reads.
+// of the tool results it reads. minCoverage is the share of a long input's
+// windows best_effort must have read to decide on them.
 type askedRule struct {
 	signalType        string
 	rule              config.SystemOneRule
@@ -213,6 +214,7 @@ type askedRule struct {
 	failClosed        bool
 	path              string
 	toolResultsUnread bool
+	minCoverage       float64
 }
 
 func systemOneAsked(rule config.SystemOneRule) askedRule {
@@ -220,7 +222,7 @@ func systemOneAsked(rule config.SystemOneRule) askedRule {
 }
 
 func applicationAsked(rule config.ApplicationRule) askedRule {
-	return askedRule{signalType: rule.Type, rule: rule.Rule, preset: rule.Preset, failClosed: rule.FailClosed}
+	return askedRule{signalType: rule.Type, rule: rule.Rule, preset: rule.Preset, failClosed: rule.FailClosed, minCoverage: rule.MinCoverage}
 }
 
 // questionID is the ID of the question whose answer the rule reads.
@@ -290,8 +292,7 @@ func (c *Classifier) guardScanOf(scans *[]*guardScan, deployment string, state m
 			return scan
 		}
 	}
-	size, overlap, parallel := c.scanWindowBudget(deployment)
-	scan := newGuardScan(deployment, state, size, overlap, parallel)
+	scan := newGuardScan(deployment, state, c.scanWindowBudget(deployment))
 	if scan == nil {
 		return nil
 	}
@@ -389,8 +390,10 @@ func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResul
 	for _, call := range calls {
 		work = append(work, func() { c.evaluateSystemOneDeployment(ctx, results, mu, call) })
 	}
-	work = append(work, c.windowReaders(ctx, scans)...)
+	readers, release := c.windowReaders(ctx, scans)
+	work = append(work, readers...)
 	modelservice.Fan(ctx, len(work), func(i int) { work[i]() })
+	release()
 	for _, scan := range scans {
 		c.applyScan(results, mu, scan)
 	}
