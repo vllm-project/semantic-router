@@ -208,7 +208,7 @@ func TestRegistryLoadsEachKindOfSpec(t *testing.T) {
 	}
 	registry := NewRegistry(Hub{CacheDir: filepath.Join(dir, "hub"), Offline: true})
 
-	for _, spec := range []string{O200kBase, file, "org/cached", "org/cached@" + commit} {
+	for _, spec := range []string{O200kBase, file, dir, "org/cached", "org/cached@" + commit} {
 		enc, ok := registry.Lookup(spec)
 		if !ok {
 			t.Fatalf("Lookup(%q) found nothing", spec)

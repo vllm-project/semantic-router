@@ -494,7 +494,7 @@ func rollbackResources(resources *resourceScope, cause error) error {
 }
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
-	preloadTokenizers(components.cfg)
+	prepareContextWindowCheck(components.cfg)
 	router := &OpenAIRouter{
 		signals:                     components.signals,
 		Config:                      components.cfg,

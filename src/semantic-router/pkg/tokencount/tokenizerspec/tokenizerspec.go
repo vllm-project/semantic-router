@@ -34,7 +34,8 @@ type Kind int
 const (
 	// Builtin names a built-in encoding, such as o200k_base.
 	Builtin Kind = iota
-	// File is a path to a tokenizer.json.
+	// File is a path to a tokenizer.json, or to the directory that holds
+	// one.
 	File
 	// Hub is a Hugging Face repo id, [org/]name[@revision].
 	Hub
@@ -60,8 +61,9 @@ func validRevision(revision string) bool {
 }
 
 // Parse reads a tokenizer spec: a built-in encoding's name, a path to a
-// tokenizer.json (absolute, starting with ./ or ../, or ending in .json), or
-// a Hugging Face repo id with an optional @revision.
+// tokenizer.json or to the directory that holds one (absolute, starting with
+// ./ or ../, or ending in .json), or a Hugging Face repo id with an optional
+// @revision.
 func Parse(raw string) (Spec, error) {
 	value := strings.TrimSpace(raw)
 	switch {

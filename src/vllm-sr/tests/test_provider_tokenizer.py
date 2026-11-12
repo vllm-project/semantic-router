@@ -25,7 +25,7 @@ def test_the_field_is_the_routers():
     assert "token_count" not in properties
     assert "tokenizer" in Model.model_fields
     window = definitions["ContextWindowConfig"]["properties"]
-    assert set(window) == {"margin", "proxy_tokenizer"}
+    assert set(window) == {"margin", "proxy_margin", "proxy_tokenizer"}
 
 
 @pytest.mark.parametrize(

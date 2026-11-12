@@ -3,6 +3,7 @@ package tokencount
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -12,10 +13,10 @@ import (
 )
 
 // Registry loads tokenizers by spec and keeps them for the life of the
-// process. Built-in encodings and local files load when first asked for, as
-// does a repo already in the Hugging Face cache; a repo that is not there is
-// downloaded in the background, and its callers count with a proxy until it
-// arrives.
+// process. Built-in encodings and local files (a tokenizer.json, or the
+// directory that holds one) load when first asked for, as does a repo
+// already in the Hugging Face cache; a repo that is not there is downloaded
+// in the background, and its callers count with a proxy until it arrives.
 type Registry struct {
 	hub     Hub
 	mu      sync.Mutex
@@ -113,7 +114,11 @@ func (r *Registry) load(tokenizer tokenizerspec.Spec) (*Encoding, error) {
 	case tokenizerspec.Builtin:
 		return Builtin(tokenizer.Value)
 	case tokenizerspec.File:
-		data, err := os.ReadFile(tokenizer.Value)
+		path := tokenizer.Value
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			path = filepath.Join(path, hubFile)
+		}
+		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}

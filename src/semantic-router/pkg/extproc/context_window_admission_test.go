@@ -47,9 +47,41 @@ func routerCountOf(text string) int {
 	return countPromptTokens(proxy, testNeutralRequest("vllm-sr/auto", text))
 }
 
+// longWindowRouterFor serves longWindowConfig, whose model names no
+// tokenizer: its prompts count with the proxy tokenizer and its wide band.
 func longWindowRouterFor(t *testing.T) *OpenAIRouter {
 	t.Helper()
 	return longWindowRouter(t, strings.Replace(longWindowConfig, "BACKEND", "127.0.0.1:18100", 1))
+}
+
+// namedTokenizerConfig is longWindowConfig with the model naming its
+// tokenizer, o200k_base, so that its prompts count exactly, with the narrow
+// band.
+func namedTokenizerConfig() string {
+	return strings.Replace(strings.Replace(longWindowConfig, "BACKEND", "127.0.0.1:18100", 1),
+		"      context_window_size: 1048576\n", "      context_window_size: 1048576\n      tokenizer: o200k_base\n", 1)
+}
+
+func namedTokenizerRouter(t *testing.T) *OpenAIRouter {
+	t.Helper()
+	return longWindowRouter(t, namedTokenizerConfig())
+}
+
+// requireWindowChecked asserts the one context_window_checked event of a
+// request: the kind of count, its band and the verdict.
+func requireWindowChecked(t *testing.T, logs *observer.ObservedLogs, count string, margin float64, verdict string) {
+	t.Helper()
+	checked := logs.FilterMessage("context_window_checked").All()
+	require.NotEmpty(t, checked)
+	fields := checked[0].ContextMap()
+	require.Equal(t, count, fields["count"])
+	require.InDelta(t, margin, fields["margin"], 1e-9)
+	require.Equal(t, verdict, fields["verdict"])
+}
+
+func refusalCount(t *testing.T, count string) float64 {
+	t.Helper()
+	return counterValue(t, "llm_context_window_refusals_total", map[string]string{"count": count})
 }
 
 func runLongWindowCaseAgainst(t *testing.T, router *OpenAIRouter, name, body string, upstream *parity.Upstream) *parity.Record {
@@ -76,7 +108,7 @@ func withCounts(router *OpenAIRouter, ctx *RequestContext, counts map[string]int
 	}
 	for model, tokens := range counts {
 		key := contextCountKey{
-			tokenizer:  router.promptTokenizer(model).Name(),
+			tokenizer:  router.promptTokenizer(model).encoding.Name(),
 			shape:      promptShape(ctx.VSRSelectedDecision),
 			generation: ctx.SemanticRequest.Generation,
 		}
@@ -91,26 +123,40 @@ func observeRouterEvents(t *testing.T) *observer.ObservedLogs {
 	return logs
 }
 
-// A prompt of 1,040,000 tokens is in the band of a 1,048,576-token window:
-// the Router admits it and the backend decides. The one count taken before
-// the signals serves the window check after the decision too.
+// A prompt of 1,040,000 tokens is in the band of a 1,048,576-token window,
+// counted exactly or with the proxy: the Router admits it and the backend
+// decides. The one count taken before the signals serves the window check
+// after the decision too, and the log says which count and band decided.
 func TestAPromptInTheBandOfTheWindowReachesTheBackend(t *testing.T) {
-	router := longWindowRouterFor(t)
-	logs := observeRouterEvents(t)
-	record := runLongWindowCase(t, router, "english-1040000", "/v1/chat/completions",
-		chatRequestBody(t, promptOfTokens(t, 1_040_000)))
-	requireServedByLongModel(t, record)
+	for _, tc := range []struct {
+		name   string
+		router func(*testing.T) *OpenAIRouter
+		count  string
+		margin float64
+	}{
+		{"named tokenizer", namedTokenizerRouter, "exact", config.DefaultContextWindowMargin},
+		{"proxy", longWindowRouterFor, "proxy", config.DefaultContextWindowProxyMargin},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := tc.router(t)
+			logs := observeRouterEvents(t)
+			record := runLongWindowCase(t, router, "english-1040000", "/v1/chat/completions",
+				chatRequestBody(t, promptOfTokens(t, 1_040_000)))
+			requireServedByLongModel(t, record)
 
-	counted := logs.FilterMessage("context_tokens_counted").All()
-	require.Len(t, counted, 1)
-	require.Equal(t, tokencount.O200kBase, counted[0].ContextMap()["tokenizer"])
+			counted := logs.FilterMessage("context_tokens_counted").All()
+			require.Len(t, counted, 1)
+			require.Equal(t, tokencount.O200kBase, counted[0].ContextMap()["tokenizer"])
+			requireWindowChecked(t, logs, tc.count, tc.margin, "in_band")
+		})
+	}
 }
 
-// A prompt of 1,100,000 tokens is beyond the band: it is refused before any
-// signal runs, so no guard reads a window of it, with 400
-// context_length_exceeded in the client's own protocol, naming the window
-// and the estimated count (#6320).
-func TestAPromptBeyondTheBandIsRefusedBeforeTheSignals(t *testing.T) {
+// A model that names its tokenizer refuses a prompt of 1,100,000 tokens,
+// beyond W x 1.03: before any signal runs, so no guard reads a window of it,
+// with 400 context_length_exceeded in the client's own protocol, naming the
+// window and the estimated count (#6320).
+func TestANamedTokenizerRefusesBeyondTheNarrowBandBeforeTheSignals(t *testing.T) {
 	text := promptOfTokens(t, 1_100_000)
 	estimate := routerCountOf(text)
 	for _, tc := range []struct {
@@ -122,8 +168,9 @@ func TestAPromptBeyondTheBandIsRefusedBeforeTheSignals(t *testing.T) {
 		{"messages", "/v1/messages", map[string]any{"max_tokens": 16, "messages": []map[string]string{{"role": "user", "content": text}}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			router := longWindowRouterFor(t)
+			router := namedTokenizerRouter(t)
 			logs := observeRouterEvents(t)
+			refusals := refusalCount(t, "exact")
 			tc.body["model"] = "vllm-sr/auto"
 			body, err := json.Marshal(tc.body)
 			require.NoError(t, err)
@@ -139,6 +186,8 @@ func TestAPromptBeyondTheBandIsRefusedBeforeTheSignals(t *testing.T) {
 			require.Equal(t, http.StatusBadRequest, record.Response.Status, "%s", record.Response.Body)
 			require.Empty(t, logs.FilterMessage("signal_phase_timing").All(), "a signal ran on a request that cannot run")
 			require.Len(t, logs.FilterMessage("context_tokens_counted").All(), 1)
+			requireWindowChecked(t, logs, "exact", config.DefaultContextWindowMargin, "exceeds")
+			require.InDelta(t, refusals+1, refusalCount(t, "exact"), 1e-9)
 			require.Less(t, elapsed, 5*time.Second)
 
 			decoded := decodeClientError(t, record.Response.Body)
@@ -156,35 +205,81 @@ func TestAPromptBeyondTheBandIsRefusedBeforeTheSignals(t *testing.T) {
 	}
 }
 
+// A model without a tokenizer of its own counts with the proxy, which can
+// overcount its real tokens by a quarter (Chinese text), so it refuses before
+// the signals only beyond W x 1.3: 1,100,000 tokens reach the backend, and
+// 1,400,000 are refused at once.
+func TestAProxyCountRefusesOnlyBeyondTheWideBand(t *testing.T) {
+	router := longWindowRouterFor(t)
+	logs := observeRouterEvents(t)
+	served := runLongWindowCase(t, router, "proxy-1100000", "/v1/chat/completions", chatRequestBody(t, promptOfTokens(t, 1_100_000)))
+	requireServedByLongModel(t, served)
+	requireWindowChecked(t, logs, "proxy", config.DefaultContextWindowProxyMargin, "in_band")
+
+	logs = observeRouterEvents(t)
+	refusals := refusalCount(t, "proxy")
+	text := promptOfTokens(t, 1_400_000)
+	refused := runLongWindowCase(t, router, "proxy-1400000", "/v1/chat/completions", chatRequestBody(t, text))
+	require.Nil(t, refused.Upstream, "the request reached a backend")
+	require.NotNil(t, refused.Response)
+	require.Equal(t, http.StatusBadRequest, refused.Response.Status, "%s", refused.Response.Body)
+	require.Empty(t, logs.FilterMessage("signal_phase_timing").All())
+	require.Contains(t, decodeClientError(t, refused.Response.Body).Error.Message,
+		fmt.Sprintf("your request has an estimated %d input tokens", routerCountOf(text)))
+	requireWindowChecked(t, logs, "proxy", config.DefaultContextWindowProxyMargin, "exceeds")
+	require.InDelta(t, refusals+1, refusalCount(t, "proxy"), 1e-9)
+}
+
 // A prompt in the band reaches the backend; when the backend refuses it for
 // its length, the client gets that refusal as context_length_exceeded.
 func TestABackendRefusalOfAnInBandPromptIsContextLengthExceeded(t *testing.T) {
-	router := longWindowRouterFor(t)
-	record := runLongWindowCaseAgainst(t, router, "in-band-refused", chatRequestBody(t, promptOfTokens(t, 1_060_000)),
-		&parity.Upstream{Status: http.StatusBadRequest, Headers: [][]string{{"content-type", "application/json"}}, Body: vllmContextLengthError})
-	require.Empty(t, record.Error)
-	require.NotNil(t, record.Upstream, "the band leaves the prompt to the backend")
-	require.NotNil(t, record.Response)
-	requireContextLengthExceeded(t, record.Response.Status, record.Response.Body)
+	for _, tc := range []struct {
+		name   string
+		router func(*testing.T) *OpenAIRouter
+		tokens int
+	}{
+		{"named tokenizer", namedTokenizerRouter, 1_060_000},
+		{"proxy", longWindowRouterFor, 1_200_000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := runLongWindowCaseAgainst(t, tc.router(t), "in-band-refused", chatRequestBody(t, promptOfTokens(t, tc.tokens)),
+				&parity.Upstream{Status: http.StatusBadRequest, Headers: [][]string{{"content-type", "application/json"}}, Body: vllmContextLengthError})
+			require.Empty(t, record.Error)
+			require.NotNil(t, record.Upstream, "the band leaves the prompt to the backend")
+			require.NotNil(t, record.Response)
+			requireContextLengthExceeded(t, record.Response.Status, record.Response.Body)
+		})
+	}
 }
 
-// The margin is configurable: with none, the same 1,060,000 tokens are
-// refused before the backend.
-func TestTheBandFollowsTheConfiguredMargin(t *testing.T) {
-	yaml := strings.Replace(longWindowConfig, "BACKEND", "127.0.0.1:18100", 1) +
-		"  router:\n    context_window:\n      margin: 0\n"
-	router := longWindowRouter(t, yaml)
-	record := runLongWindowCase(t, router, "no-margin", "/v1/chat/completions", chatRequestBody(t, promptOfTokens(t, 1_060_000)))
-	require.Nil(t, record.Upstream)
-	require.NotNil(t, record.Response)
-	require.Equal(t, http.StatusBadRequest, record.Response.Status)
+// Both bands are configurable: with margin 0 a named tokenizer refuses
+// 1,060,000 tokens before the backend, and with proxy_margin 0.05 the proxy
+// refuses 1,150,000, which the default proxy band leaves to the backend.
+func TestTheBandsFollowTheConfiguredMargins(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		yaml   string
+		tokens int
+	}{
+		{"margin 0", namedTokenizerConfig() + "  router:\n    context_window:\n      margin: 0\n", 1_060_000},
+		{"proxy_margin 0.05", strings.Replace(longWindowConfig, "BACKEND", "127.0.0.1:18100", 1) +
+			"  router:\n    context_window:\n      proxy_margin: 0.05\n", 1_150_000},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := longWindowRouter(t, tc.yaml)
+			record := runLongWindowCase(t, router, "configured-band", "/v1/chat/completions", chatRequestBody(t, promptOfTokens(t, tc.tokens)))
+			require.Nil(t, record.Upstream)
+			require.NotNil(t, record.Response)
+			require.Equal(t, http.StatusBadRequest, record.Response.Status)
+		})
+	}
 }
 
 // A Router that learned a dense ratio from Chinese prose, JSON and logs still
 // admits English of 1,040,000 tokens and refuses English of 1,100,000: the
 // learned ratio has no say in either.
 func TestTheRoutersCountDoesNotDriftWithDenseTraffic(t *testing.T) {
-	router := longWindowRouterFor(t)
+	router := namedTokenizerRouter(t)
 	recipe, ok := router.Config.RecipeByName("default")
 	require.True(t, ok)
 	for range 40 {
@@ -223,12 +318,15 @@ const helloTokenizer = `{
     "merges": ["h e", "l l", "he ll", "hell o"]}
 }`
 
-// Each model counts with the tokenizer it names, a built-in encoding or a
-// tokenizer.json; a model that names none counts with the proxy tokenizer,
-// o200k_base unless global.router.context_window.proxy_tokenizer says
-// otherwise.
+// Each model counts exactly with the tokenizer it names: a built-in encoding,
+// a tokenizer.json, or a directory that holds one, as a mounted volume or an
+// image directory does. A model that names none counts with the proxy
+// tokenizer, o200k_base unless global.router.context_window.proxy_tokenizer
+// says otherwise.
 func TestModelsCountWithTheirTokenizerOrTheProxy(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "tokenizer.json")
+	dir := filepath.Join(t.TempDir(), "hello-model")
+	require.NoError(t, os.MkdirAll(dir, 0o750))
+	file := filepath.Join(dir, "tokenizer.json")
 	require.NoError(t, os.WriteFile(file, []byte(helloTokenizer), 0o600))
 	text := "中文的文本，包括标点符号。 hello hello hello"
 	request := testNeutralRequest("vllm-sr/auto", text)
@@ -240,13 +338,25 @@ func TestModelsCountWithTheirTokenizerOrTheProxy(t *testing.T) {
 	}
 	require.NotEqual(t, counts[tokencount.O200kBase], counts[tokencount.Cl100kBase])
 
+	type counted struct {
+		tokenizer string
+		kind      contextCountKind
+	}
 	for _, tc := range []struct {
 		name  string
 		proxy string
-		want  map[string]string
+		want  map[string]counted
 	}{
-		{"default proxy", "", map[string]string{"plain": tokencount.O200kBase, "cl100k": tokencount.Cl100kBase, "file": file}},
-		{"configured proxy", tokencount.Cl100kBase, map[string]string{"plain": tokencount.Cl100kBase, "file": file}},
+		{"default proxy", "", map[string]counted{
+			"plain":  {tokencount.O200kBase, contextCountProxy},
+			"cl100k": {tokencount.Cl100kBase, contextCountExact},
+			"file":   {file, contextCountExact},
+			"dir":    {file, contextCountExact},
+		}},
+		{"configured proxy", tokencount.Cl100kBase, map[string]counted{
+			"plain": {tokencount.Cl100kBase, contextCountProxy},
+			"dir":   {file, contextCountExact},
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			router := &OpenAIRouter{Config: &config.RouterConfig{
@@ -254,14 +364,16 @@ func TestModelsCountWithTheirTokenizerOrTheProxy(t *testing.T) {
 					"plain":  {ContextWindowSize: 1_000},
 					"cl100k": {ContextWindowSize: 1_000, Tokenizer: tokencount.Cl100kBase},
 					"file":   {ContextWindowSize: 1_000, Tokenizer: file},
+					"dir":    {ContextWindowSize: 1_000, Tokenizer: dir},
 				}},
 			}}
 			router.Config.ContextWindow.ProxyTokenizer = tc.proxy
-			for model, tokenizer := range tc.want {
+			for model, want := range tc.want {
 				ctx := &RequestContext{SemanticRequest: request}
-				tokens, ok := router.contextTokens(ctx, nil, model)
+				tokens, kind, ok := router.contextTokens(ctx, nil, model)
 				require.True(t, ok)
-				require.Equal(t, counts[tokenizer], tokens, "%s counts with %s", model, tokenizer)
+				require.Equal(t, counts[want.tokenizer], tokens, "%s counts with %s", model, want.tokenizer)
+				require.Equal(t, want.kind, kind, "%s", model)
 			}
 		})
 	}
@@ -278,10 +390,13 @@ func TestAModelWhoseTokenizerIsMissingCountsWithTheProxy(t *testing.T) {
 		},
 		tokenizers: tokencount.NewRegistry(tokencount.Hub{CacheDir: t.TempDir(), Offline: true}),
 	}
-	require.Equal(t, tokencount.O200kBase, router.promptTokenizer("remote").Name())
-	_, err := router.tokenizers.Load(t.Context(), "missing-org/missing-model")
-	require.Error(t, err)
-	require.Equal(t, tokencount.O200kBase, router.promptTokenizer("remote").Name())
+	for range 2 {
+		tokenizer := router.promptTokenizer("remote")
+		require.Equal(t, tokencount.O200kBase, tokenizer.encoding.Name())
+		require.Equal(t, contextCountProxy, tokenizer.kind)
+		_, err := router.tokenizers.Load(t.Context(), "missing-org/missing-model")
+		require.Error(t, err)
+	}
 }
 
 // A decision that may dispatch a smaller prompt than the client sent defers
@@ -332,6 +447,9 @@ func TestAnInsertedSystemPromptIsJudgedOnTheCountAsSent(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			router := routeActionRouter(map[string]int{"model": 50_000})
+			params := router.Config.ModelConfig["model"]
+			params.Tokenizer = tokencount.O200kBase
+			router.Config.ModelConfig["model"] = params
 			ctx := &RequestContext{}
 			withCounts(router, ctx, map[string]int{"model": tc.sent})
 			ctx.VSRSelectedDecision = decision
@@ -344,20 +462,75 @@ func TestAnInsertedSystemPromptIsJudgedOnTheCountAsSent(t *testing.T) {
 	}
 }
 
+// The band around a window is 3% for a count with the model's own tokenizer
+// and 30% for a proxy count.
 func TestBandVerdicts(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	for tokens, want := range map[int]contextWindowVerdict{
-		969_999: contextFits, 970_000: contextFits, 970_001: contextInBand,
-		1_000_000: contextInBand, 1_029_999: contextInBand, 1_030_000: contextExceeds,
+	for _, tc := range []struct {
+		kind contextCountKind
+		want map[int]contextWindowVerdict
+	}{
+		{contextCountExact, map[int]contextWindowVerdict{
+			969_999: contextFits, 970_000: contextFits, 970_001: contextInBand,
+			1_000_000: contextInBand, 1_029_999: contextInBand, 1_030_000: contextExceeds,
+		}},
+		{contextCountProxy, map[int]contextWindowVerdict{
+			699_999: contextFits, 700_000: contextFits, 700_001: contextInBand, 1_030_000: contextInBand,
+			1_299_999: contextInBand, 1_300_000: contextExceeds,
+		}},
 	} {
-		require.Equal(t, want, router.bandVerdict(1_000_000, tokens), "%d tokens", tokens)
+		for tokens, want := range tc.want {
+			require.Equal(t, want, router.bandVerdict(1_000_000, tokens, tc.kind), "%s count of %d tokens", tc.kind, tokens)
+		}
 	}
+}
+
+// Each model's window check is logged and counted once per request and
+// prompt shape, with the kind of count and the band that decided it.
+func TestTheWindowCheckIsVisibleInMetricsAndLogs(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			"named": {ContextWindowSize: 1_000, Tokenizer: tokencount.O200kBase},
+			"proxy": {ContextWindowSize: 1_000},
+		}},
+	}}
+	text := promptOfTokens(t, 1_100)
+	ctx := &RequestContext{RequestID: "req-window", SemanticRequest: testNeutralRequest("vllm-sr/auto", text)}
+	checks := func(count, verdict string) float64 {
+		return counterValue(t, "llm_context_window_checks_total", map[string]string{"count": count, "verdict": verdict})
+	}
+	exactExceeds, proxyInBand := checks("exact", "exceeds"), checks("proxy", "in_band")
+	logs := observeRouterEvents(t)
+
+	for range 2 {
+		verdict, tokens := router.contextWindowVerdict(ctx, nil, "named", 0)
+		require.Equal(t, contextExceeds, verdict)
+		require.Equal(t, routerCountOf(text), tokens)
+		verdict, _ = router.contextWindowVerdict(ctx, nil, "proxy", 0)
+		require.Equal(t, contextInBand, verdict)
+	}
+
+	require.InDelta(t, exactExceeds+1, checks("exact", "exceeds"), 1e-9)
+	require.InDelta(t, proxyInBand+1, checks("proxy", "in_band"), 1e-9)
+	events := logs.FilterMessage("context_window_checked").All()
+	require.Len(t, events, 2)
+	byModel := map[string]map[string]interface{}{}
+	for _, event := range events {
+		fields := event.ContextMap()
+		byModel[fields["model"].(string)] = fields
+	}
+	require.Equal(t, "exact", byModel["named"]["count"])
+	require.InDelta(t, 0.03, byModel["named"]["margin"], 1e-9)
+	require.Equal(t, "exceeds", byModel["named"]["verdict"])
+	require.Equal(t, "proxy", byModel["proxy"]["count"])
+	require.InDelta(t, 0.30, byModel["proxy"]["margin"], 1e-9)
+	require.Equal(t, "in_band", byModel["proxy"]["verdict"])
 }
 
 // A recipe with a decision that replaces the client's system prompt still
 // refuses up front a request that is beyond the band without that prompt.
 func TestAdmissionRefusesThroughADecisionThatDropsTheSystemPrompt(t *testing.T) {
-	yaml := strings.Replace(strings.Replace(longWindowConfig, "BACKEND", "127.0.0.1:18100", 1), "      - name: default_route\n",
+	yaml := strings.Replace(namedTokenizerConfig(), "      - name: default_route\n",
 		"      - name: default_route\n        plugins:\n          - type: system_prompt\n            configuration:\n"+
 			"              system_prompt: Answer briefly.\n              mode: replace\n", 1)
 	router := longWindowRouter(t, yaml)
@@ -393,7 +566,7 @@ func TestPromptsWithMediaAreNotCounted(t *testing.T) {
 	require.True(t, requestCarriesMedia(request))
 	router := routeActionRouter(map[string]int{"model": 100})
 	ctx := &RequestContext{SemanticRequest: request}
-	_, ok := router.contextTokens(ctx, nil, "model")
+	_, _, ok := router.contextTokens(ctx, nil, "model")
 	require.False(t, ok)
 	verdict, _ := router.contextWindowVerdict(ctx, nil, "model", 0)
 	require.Equal(t, contextFits, verdict)
@@ -417,11 +590,13 @@ func TestCountPromptTokensCoversWhatATemplateRenders(t *testing.T) {
 }
 
 // A fallback candidate whose window the Router's count exceeds beyond the
-// band is never called (#6322).
+// band is never called (#6322). The candidate names its tokenizer, so the
+// narrow band applies; on a proxy count the same 1.16 x W is in its band.
 func TestFallbackSkipsACandidateTheRoutersCountRulesOut(t *testing.T) {
 	ruleOut := func(router *OpenAIRouter, ctx *RequestContext) {
 		params := router.Config.ModelConfig["model-fallback-1"]
 		params.ContextWindowSize = 1_048_576
+		params.Tokenizer = tokencount.O200kBase
 		router.Config.ModelConfig["model-fallback-1"] = params
 		withCounts(router, ctx, map[string]int{"model-fallback-1": 1_213_758})
 	}
@@ -453,6 +628,24 @@ func TestFallbackSkipsACandidateTheRoutersCountRulesOut(t *testing.T) {
 		require.NotNil(t, resp.GetImmediateResponse())
 		require.Equal(t, []string{"model-fallback-2"}, called)
 		requireOneSkippedCandidate(t, logs, "model-fallback-1")
+	})
+
+	t.Run("a proxy count in its band is no reason to skip", func(t *testing.T) {
+		router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+		ctx := testFallbackRequestContext("model-primary", eligible)
+		params := router.Config.ModelConfig["model-fallback-1"]
+		params.ContextWindowSize = 1_048_576
+		router.Config.ModelConfig["model-fallback-1"] = params
+		withCounts(router, ctx, map[string]int{"model-fallback-1": 1_213_758})
+		ctx.UpstreamStatusCode = http.StatusServiceUnavailable
+		var called []string
+		router.fallbackCaller = func(_ context.Context, model string, _ []byte, _ map[string]string) ([]byte, int, error) {
+			called = append(called, model)
+			return []byte(strings.Replace(servedChatCompletion, "long-model", model, 1)), http.StatusOK, nil
+		}
+		resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx)
+		require.NotNil(t, resp.GetImmediateResponse())
+		require.Equal(t, []string{"model-fallback-1"}, called)
 	})
 }
 

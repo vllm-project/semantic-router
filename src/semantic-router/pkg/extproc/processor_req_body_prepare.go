@@ -90,7 +90,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 			logRoutingFailure(ctx, "decision_context_ineligible", routingFailureContextLength.code, decisionErr)
 			var refusal *contextLengthError
 			errors.As(decisionErr, &refusal)
-			return requestDecisionState{}, r.routingFailureResponse(ctx, contextLengthFailure(refusal, ctx.SourceFormat))
+			return requestDecisionState{}, r.routingFailureResponse(ctx, refuseForLength(refusal, ctx.SourceFormat))
 		}
 		if errors.Is(decisionErr, selection.ErrNoEligibleCandidates) {
 			return requestDecisionState{}, r.respondSelectionRejected(ctx, originalModel, decisionErr)

@@ -9,9 +9,11 @@ import (
 
 // Defaults and bounds of global.router.context_window.
 const (
-	DefaultContextWindowMargin = 0.03
-	MaxContextWindowMargin     = 0.5
-	DefaultProxyTokenizer      = tokenizerspec.O200kBase
+	DefaultContextWindowMargin      = 0.03
+	MaxContextWindowMargin          = 0.5
+	DefaultContextWindowProxyMargin = 0.30
+	MaxContextWindowProxyMargin     = 1.0
+	DefaultProxyTokenizer           = tokenizerspec.O200kBase
 )
 
 // ContextWindowConfig governs the check of a prompt against the context
@@ -21,13 +23,19 @@ const (
 // prompt whose UTF-8 bytes could exceed a window.
 type ContextWindowConfig struct {
 	// Margin is the band around a window, as a fraction of it, in which a
-	// count decides nothing: at or below window*(1-margin) a prompt fits, at
-	// or above window*(1+margin) it is refused, and in between the backend
-	// decides. Defaults to 0.03.
+	// count with the model's own tokenizer decides nothing: at or below
+	// window*(1-margin) a prompt fits, at or above window*(1+margin) it is
+	// refused, and in between the backend decides. Defaults to 0.03.
 	Margin *float64 `yaml:"margin,omitempty" jsonschema:"minimum=0,maximum=0.5"`
-	// ProxyTokenizer counts the prompts of models that name no tokenizer: a
-	// built-in encoding, a tokenizer.json path or a Hugging Face repo id.
-	// Defaults to o200k_base.
+	// ProxyMargin is the band for a count with the proxy tokenizer, which
+	// can be well off a model's own count: Chinese text counts up to a
+	// quarter higher with o200k_base than with some models' tokenizers.
+	// Defaults to 0.30.
+	ProxyMargin *float64 `yaml:"proxy_margin,omitempty" jsonschema:"minimum=0,maximum=1"`
+	// ProxyTokenizer counts the prompts of models that name no tokenizer,
+	// or whose tokenizer has not loaded: a built-in encoding, a
+	// tokenizer.json or its directory, or a Hugging Face repo id. Defaults
+	// to o200k_base.
 	ProxyTokenizer string `yaml:"proxy_tokenizer,omitempty"`
 }
 
@@ -37,6 +45,14 @@ func (c ContextWindowConfig) EffectiveMargin() float64 {
 		return DefaultContextWindowMargin
 	}
 	return *c.Margin
+}
+
+// EffectiveProxyMargin is ProxyMargin, or its default.
+func (c ContextWindowConfig) EffectiveProxyMargin() float64 {
+	if c.ProxyMargin == nil {
+		return DefaultContextWindowProxyMargin
+	}
+	return *c.ProxyMargin
 }
 
 // EffectiveProxyTokenizer is ProxyTokenizer, or its default.
@@ -51,6 +67,9 @@ func validateContextWindowContracts(cfg *RouterConfig) error {
 	window := cfg.ContextWindow
 	if margin := window.EffectiveMargin(); margin < 0 || margin > MaxContextWindowMargin {
 		return fmt.Errorf("global.router.context_window.margin must be between 0 and %g, got %g", MaxContextWindowMargin, margin)
+	}
+	if margin := window.EffectiveProxyMargin(); margin < 0 || margin > MaxContextWindowProxyMargin {
+		return fmt.Errorf("global.router.context_window.proxy_margin must be between 0 and %g, got %g", MaxContextWindowProxyMargin, margin)
 	}
 	if window.ProxyTokenizer != "" {
 		if _, err := tokenizerspec.Parse(window.ProxyTokenizer); err != nil {

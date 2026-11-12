@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount"
 )
@@ -82,28 +83,61 @@ func promptShape(decision *config.Decision) string {
 	return ""
 }
 
+// contextCountKind says which tokenizer counted a model's prompt: the one
+// the model names (exact), or the proxy tokenizer, whose count can be well
+// off the model's own and gets the wider proxy_margin band.
+type contextCountKind string
+
+const (
+	contextCountExact contextCountKind = "exact"
+	contextCountProxy contextCountKind = "proxy"
+)
+
+// modelTokenizer is the tokenizer that counts a model's prompts, and which
+// kind of count it gives.
+type modelTokenizer struct {
+	encoding *tokencount.Encoding
+	kind     contextCountKind
+}
+
 // promptTokenizer is the tokenizer that counts model's prompts: the one its
 // configuration names, once loaded, else the proxy tokenizer.
-func (r *OpenAIRouter) promptTokenizer(model string) *tokencount.Encoding {
+func (r *OpenAIRouter) promptTokenizer(model string) modelTokenizer {
 	registry := r.tokenizers
 	if registry == nil {
 		registry = tokencount.Default()
 	}
 	if tokenizer := r.Config.ModelConfig[strings.TrimSpace(model)].Tokenizer; tokenizer != "" {
 		if encoding, ok := registry.Lookup(tokenizer); ok {
-			return encoding
+			return modelTokenizer{encoding: encoding, kind: contextCountExact}
 		}
 	}
 	if encoding, ok := registry.Lookup(r.Config.ContextWindow.EffectiveProxyTokenizer()); ok {
-		return encoding
+		return modelTokenizer{encoding: encoding, kind: contextCountProxy}
 	}
 	encoding, _ := tokencount.Builtin(config.DefaultProxyTokenizer)
-	return encoding
+	return modelTokenizer{encoding: encoding, kind: contextCountProxy}
 }
 
-// preloadTokenizers starts loading every tokenizer the configuration names,
-// so that requests find them loaded.
-func preloadTokenizers(cfg *config.RouterConfig) {
+// requestTokenizer is promptTokenizer, fixed for the rest of the request at
+// its first answer, so that a tokenizer that finishes loading mid-request
+// does not change one request's counts.
+func (r *OpenAIRouter) requestTokenizer(ctx *RequestContext, model string) modelTokenizer {
+	model = strings.TrimSpace(model)
+	if tokenizer, ok := ctx.contextTokenizers[model]; ok {
+		return tokenizer
+	}
+	tokenizer := r.promptTokenizer(model)
+	if ctx.contextTokenizers == nil {
+		ctx.contextTokenizers = map[string]modelTokenizer{}
+	}
+	ctx.contextTokenizers[model] = tokenizer
+	return tokenizer
+}
+
+// prepareContextWindowCheck starts loading every tokenizer the configuration
+// names, so that requests find them loaded, and publishes the bands.
+func prepareContextWindowCheck(cfg *config.RouterConfig) {
 	if cfg == nil {
 		return
 	}
@@ -112,23 +146,24 @@ func preloadTokenizers(cfg *config.RouterConfig) {
 		tokenizers = append(tokenizers, params.Tokenizer)
 	}
 	tokencount.Default().Preload(tokenizers...)
+	metrics.SetContextWindowMargins(cfg.ContextWindow.EffectiveMargin(), cfg.ContextWindow.EffectiveProxyMargin())
 }
 
 // contextTokens is the request's prompt token count by model's tokenizer,
-// counted in the Router once per tokenizer and prompt shape. ok is false for
-// a request that carries media, whose tokens no text tokenizer counts; the
-// window check never refuses such a request.
-func (r *OpenAIRouter) contextTokens(ctx *RequestContext, decision *config.Decision, model string) (int, bool) {
+// counted in the Router once per tokenizer and prompt shape, and the kind of
+// that count. ok is false for a request that carries media, whose tokens no
+// text tokenizer counts; the window check never refuses such a request.
+func (r *OpenAIRouter) contextTokens(ctx *RequestContext, decision *config.Decision, model string) (int, contextCountKind, bool) {
 	if r == nil || r.Config == nil || ctx == nil || ctx.SemanticRequest == nil {
-		return 0, false
+		return 0, "", false
 	}
-	tokenizer := r.promptTokenizer(model)
-	if tokenizer == nil {
-		return 0, false
+	tokenizer := r.requestTokenizer(ctx, model)
+	if tokenizer.encoding == nil {
+		return 0, "", false
 	}
-	key := contextCountKey{tokenizer: tokenizer.Name(), shape: promptShape(decision), generation: ctx.SemanticRequest.Generation}
+	key := contextCountKey{tokenizer: tokenizer.encoding.Name(), shape: promptShape(decision), generation: ctx.SemanticRequest.Generation}
 	if count, cached := ctx.contextCounts[key]; cached {
-		return count.tokens, count.ok
+		return count.tokens, tokenizer.kind, count.ok
 	}
 	started := time.Now()
 	request := ctx.SemanticRequest
@@ -141,29 +176,30 @@ func (r *OpenAIRouter) contextTokens(ctx *RequestContext, decision *config.Decis
 	}
 	count := contextCount{}
 	if err == nil {
-		count = contextCount{tokens: countPromptTokens(tokenizer, request), ok: true}
+		count = contextCount{tokens: countPromptTokens(tokenizer.encoding, request), ok: true}
 	}
 	if ctx.contextCounts == nil {
 		ctx.contextCounts = make(map[contextCountKey]contextCount)
 	}
 	ctx.contextCounts[key] = count
 	logContextCount(ctx, key, count, err, time.Since(started))
-	return count.tokens, count.ok
+	return count.tokens, tokenizer.kind, count.ok
 }
 
-// cachedContextTokens is a count contextTokens already holds for model.
-func (r *OpenAIRouter) cachedContextTokens(ctx *RequestContext, decision *config.Decision, model string) (int, bool) {
+// cachedContextTokens is a count contextTokens already holds for model, and
+// its kind.
+func (r *OpenAIRouter) cachedContextTokens(ctx *RequestContext, decision *config.Decision, model string) (int, contextCountKind, bool) {
 	if r == nil || r.Config == nil || ctx == nil || ctx.SemanticRequest == nil {
-		return 0, false
+		return 0, "", false
 	}
-	tokenizer := r.promptTokenizer(model)
-	if tokenizer == nil {
-		return 0, false
+	tokenizer := r.requestTokenizer(ctx, model)
+	if tokenizer.encoding == nil {
+		return 0, "", false
 	}
 	count, cached := ctx.contextCounts[contextCountKey{
-		tokenizer: tokenizer.Name(), shape: promptShape(decision), generation: ctx.SemanticRequest.Generation,
+		tokenizer: tokenizer.encoding.Name(), shape: promptShape(decision), generation: ctx.SemanticRequest.Generation,
 	}]
-	return count.tokens, cached && count.ok
+	return count.tokens, tokenizer.kind, cached && count.ok
 }
 
 func logContextCount(ctx *RequestContext, key contextCountKey, count contextCount, err error, elapsed time.Duration) {

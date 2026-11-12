@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // contextWindowVerdict is whether a request's prompt fits one model's
@@ -38,18 +39,31 @@ func (v contextWindowVerdict) excludes() bool {
 	return v == contextExceeds || v == contextLikelyExceeds
 }
 
+func (v contextWindowVerdict) String() string {
+	switch v {
+	case contextInBand:
+		return "in_band"
+	case contextExceeds:
+		return "exceeds"
+	case contextLikelyExceeds:
+		return "likely_exceeds"
+	}
+	return "fits"
+}
+
 // contextLengthError refuses a request for its length on the Router's count:
-// the widest window that could serve it and the request's estimated count
-// there.
+// the widest window that could serve it, the request's estimated count
+// there, and the kind of that count.
 type contextLengthError struct {
 	window int
 	tokens int
+	kind   contextCountKind
 	scope  string
 }
 
 func (e *contextLengthError) Error() string {
-	return fmt.Sprintf("%s: %s has a %d-token context window and the request counts about %d tokens",
-		errNoContextEligibleDecisionModel, e.scope, e.window, e.tokens)
+	return fmt.Sprintf("%s: %s has a %d-token context window and the request counts about %d tokens (%s count)",
+		errNoContextEligibleDecisionModel, e.scope, e.window, e.tokens, e.kind)
 }
 
 func (e *contextLengthError) Unwrap() error { return errNoContextEligibleDecisionModel }
@@ -96,17 +110,18 @@ func (r *OpenAIRouter) contextWindowVerdict(
 		if bound < window {
 			return contextFits, 0
 		}
-		verdict, tokens, decided := r.addedPromptVerdict(ctx, decision, model, window, bound)
+		verdict, tokens, kind, decided := r.addedPromptVerdict(ctx, decision, model, window, bound)
 		if !decided {
 			var ok bool
-			if tokens, ok = r.contextTokens(ctx, decision, model); ok {
-				verdict, decided = r.bandVerdict(window, tokens), true
+			if tokens, kind, ok = r.contextTokens(ctx, decision, model); ok {
+				verdict, decided = r.bandVerdict(window, tokens, kind), true
 			}
 		}
 		if decided {
 			if verdict == contextInBand {
 				markContextInBand(ctx, model)
 			}
+			r.noteContextVerdict(ctx, decision, model, window, tokens, kind, verdict)
 			return verdict, tokens
 		}
 	}
@@ -127,26 +142,36 @@ func (r *OpenAIRouter) contextWindowVerdict(
 // decision adds an upper one.
 func (r *OpenAIRouter) addedPromptVerdict(
 	ctx *RequestContext, decision *config.Decision, model string, window, bound int,
-) (contextWindowVerdict, int, bool) {
+) (contextWindowVerdict, int, contextCountKind, bool) {
 	if promptShape(decision) == "" || decisionMayShrinkPrompt(decision) {
-		return contextFits, 0, false
+		return contextFits, 0, "", false
 	}
-	sent, ok := r.cachedContextTokens(ctx, nil, model)
+	sent, kind, ok := r.cachedContextTokens(ctx, nil, model)
 	if !ok {
-		return contextFits, 0, false
+		return contextFits, 0, "", false
 	}
-	if r.bandVerdict(window, sent) == contextExceeds {
-		return contextExceeds, sent, true
+	if r.bandVerdict(window, sent, kind) == contextExceeds {
+		return contextExceeds, sent, kind, true
 	}
-	if added := bound - requestContextByteBound(ctx, nil); r.bandVerdict(window, sent+added) == contextFits {
-		return contextFits, sent, true
+	if added := bound - requestContextByteBound(ctx, nil); r.bandVerdict(window, sent+added, kind) == contextFits {
+		return contextFits, sent, kind, true
 	}
-	return contextFits, 0, false
+	return contextFits, 0, "", false
 }
 
-// bandVerdict places a count against a window and the margin around it.
-func (r *OpenAIRouter) bandVerdict(window, tokens int) contextWindowVerdict {
-	margin := r.Config.ContextWindow.EffectiveMargin()
+// contextMargin is the band around a window for a count of kind: margin
+// for the model's own tokenizer, proxy_margin for the proxy tokenizer.
+func (r *OpenAIRouter) contextMargin(kind contextCountKind) float64 {
+	if kind == contextCountExact {
+		return r.Config.ContextWindow.EffectiveMargin()
+	}
+	return r.Config.ContextWindow.EffectiveProxyMargin()
+}
+
+// bandVerdict places a count of kind against a window and the band around
+// it.
+func (r *OpenAIRouter) bandVerdict(window, tokens int, kind contextCountKind) contextWindowVerdict {
+	margin := r.contextMargin(kind)
 	switch {
 	case float64(tokens) <= float64(window)*(1-margin):
 		return contextFits
@@ -154,6 +179,37 @@ func (r *OpenAIRouter) bandVerdict(window, tokens int) contextWindowVerdict {
 		return contextExceeds
 	}
 	return contextInBand
+}
+
+// noteContextVerdict logs and counts, once per model and prompt shape of a
+// request, how the Router's count placed the request against the model's
+// window: the kind of count, the band it used, and the verdict.
+func (r *OpenAIRouter) noteContextVerdict(
+	ctx *RequestContext, decision *config.Decision, model string, window, tokens int,
+	kind contextCountKind, verdict contextWindowVerdict,
+) {
+	key := strings.TrimSpace(model) + "\x00" + promptShape(decision)
+	if _, noted := ctx.contextVerdicts[key]; noted {
+		return
+	}
+	if ctx.contextVerdicts == nil {
+		ctx.contextVerdicts = map[string]struct{}{}
+	}
+	ctx.contextVerdicts[key] = struct{}{}
+	metrics.RecordContextWindowCheck(string(kind), verdict.String())
+	fields := map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      strings.TrimSpace(model),
+		"window":     window,
+		"tokens":     tokens,
+		"count":      string(kind),
+		"margin":     r.contextMargin(kind),
+		"verdict":    verdict.String(),
+	}
+	if shape := promptShape(decision); shape != "" {
+		fields["decision"] = shape
+	}
+	logging.ComponentEvent("extproc", "context_window_checked", fields)
 }
 
 // markContextInBand notes a model whose window the request's count falls
@@ -251,7 +307,7 @@ func (r *OpenAIRouter) contextLengthRefusal(ctx *RequestContext, models []string
 			return nil
 		}
 		if window := r.contextWindowSize(model); refusal == nil || window > refusal.window {
-			refusal = &contextLengthError{window: window, tokens: tokens, scope: scope}
+			refusal = &contextLengthError{window: window, tokens: tokens, kind: r.requestTokenizer(ctx, model).kind, scope: scope}
 		}
 	}
 	return refusal
@@ -299,12 +355,21 @@ func (r *OpenAIRouter) admitContextWindow(originalModel string, ctx *RequestCont
 	}
 	removable := shrink.removableBytes(ctx.SemanticRequest)
 	for _, model := range models {
-		if tokens, _ := r.cachedContextTokens(ctx, nil, model); r.bandVerdict(r.contextWindowSize(model), tokens-removable) != contextExceeds {
+		if tokens, kind, _ := r.cachedContextTokens(ctx, nil, model); r.bandVerdict(r.contextWindowSize(model), tokens-removable, kind) != contextExceeds {
 			return nil
 		}
 	}
 	logRoutingFailure(ctx, "context_window_exceeded", routingFailureContextLength.code, refusal)
-	return r.routingFailureResponse(ctx, contextLengthFailure(refusal, ctx.SourceFormat))
+	return r.routingFailureResponse(ctx, refuseForLength(refusal, ctx.SourceFormat))
+}
+
+// refuseForLength is contextLengthFailure for a refusal the client gets,
+// counted in llm_context_window_refusals_total.
+func refuseForLength(refusal *contextLengthError, format llmprotocol.WireFormat) routingFailure {
+	if refusal != nil {
+		metrics.RecordContextWindowRefusal(string(refusal.kind))
+	}
+	return contextLengthFailure(refusal, format)
 }
 
 // countContextModels counts the request as sent for every model whose window

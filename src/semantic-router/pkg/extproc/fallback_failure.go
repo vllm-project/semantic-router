@@ -151,8 +151,8 @@ func (r *OpenAIRouter) fallbackWindowSkip(ctx *RequestContext, ref *config.Model
 	if window <= 0 {
 		return nil
 	}
-	if tokens, ok := r.cachedContextTokens(ctx, ctx.VSRSelectedDecision, ref.Model); ok && r.bandVerdict(window, tokens) == contextExceeds {
-		return &contextLengthError{window: window, tokens: tokens, scope: fmt.Sprintf("fallback candidate %q", candidateModelIdentity(*ref))}
+	if tokens, kind, ok := r.cachedContextTokens(ctx, ctx.VSRSelectedDecision, ref.Model); ok && r.bandVerdict(window, tokens, kind) == contextExceeds {
+		return &contextLengthError{window: window, tokens: tokens, kind: kind, scope: fmt.Sprintf("fallback candidate %q", candidateModelIdentity(*ref))}
 	}
 	return nil
 }

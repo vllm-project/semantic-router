@@ -1692,6 +1692,11 @@
           "maximum": 0.5,
           "minimum": 0
         },
+        "proxy_margin": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
         "proxy_tokenizer": {
           "type": "string"
         }

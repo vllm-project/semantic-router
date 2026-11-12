@@ -292,6 +292,11 @@ type RequestContext struct {
 	contextBounds     map[contextCountKey]int
 	contextWindowKept map[string]struct{}
 	contextInBand     map[string]struct{}
+	// contextTokenizers fixes the tokenizer of each model the request is
+	// counted for; contextVerdicts names the model and prompt shape pairs
+	// whose window check is logged and counted.
+	contextTokenizers map[string]modelTokenizer
+	contextVerdicts   map[string]struct{}
 	// fallbackMinWindow is the widest window whose backend refused the
 	// request for its length; fallback goes on only to wider windows.
 	fallbackMinWindow int
