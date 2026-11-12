@@ -61,6 +61,9 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	// only pre-routing path for normal request-body processing.
 	history := signalConversationHistoryFromRequest(request, snapshot)
 	applyRequestContextEstimate(snapshot, ctx)
+	if refused := r.admitContextWindow(originalModel, ctx); refused != nil {
+		return requestDecisionState{}, refused
+	}
 	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(
 		originalModel,
 		history,
@@ -85,7 +88,9 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		}
 		if errors.Is(decisionErr, errNoContextEligibleDecisionModel) {
 			logRoutingFailure(ctx, "decision_context_ineligible", routingFailureContextLength.code, decisionErr)
-			return requestDecisionState{}, r.routingFailureResponse(ctx, routingFailureContextLength)
+			var refusal *contextLengthError
+			errors.As(decisionErr, &refusal)
+			return requestDecisionState{}, r.routingFailureResponse(ctx, contextLengthFailure(refusal, ctx.SourceFormat))
 		}
 		if errors.Is(decisionErr, selection.ErrNoEligibleCandidates) {
 			return requestDecisionState{}, r.respondSelectionRejected(ctx, originalModel, decisionErr)

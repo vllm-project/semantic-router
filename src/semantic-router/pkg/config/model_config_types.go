@@ -110,6 +110,9 @@ type ModelParams struct {
 	// UnsupportedCapabilities are the request capabilities the model's
 	// backends reject; the Router leaves their fields out for this model.
 	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
+	// Tokenizer counts the model's prompts for the context window check;
+	// empty counts them with the proxy tokenizer.
+	Tokenizer string `yaml:"tokenizer,omitempty"`
 }
 
 // EvidenceScore resolves a versioned static model index. Missing, failed, and

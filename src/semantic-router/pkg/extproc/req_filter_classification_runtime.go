@@ -380,14 +380,14 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		ctx.VSRSelectionMethod = "fast_response"
 		return "", entropy.ReasoningDecision{}, nil
 	}
-	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, contextTokensWithoutReserves(ctx, ctx.VSRContextTokenCount)); !decisionUsesAutomaticOutput(ctx.SemanticRequest, result.Decision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && ineligible > 0 {
-		return "", entropy.ReasoningDecision{}, fmt.Errorf(
-			"%w: decision %q requires %d request tokens but %d explicitly configured algorithm model(s) have smaller context windows",
-			errNoContextEligibleDecisionModel,
-			decisionName,
-			ctx.VSRContextTokenCount,
-			ineligible,
-		)
+	if !decisionUsesAutomaticOutput(ctx.SemanticRequest, result.Decision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
+		withoutReserves := contextTokensWithoutReserves(ctx, ctx.VSRContextTokenCount)
+		if ineligible := r.contextIneligibleAlgorithmModels(ctx, result.Decision, withoutReserves); len(ineligible) > 0 {
+			scope := fmt.Sprintf("an algorithm model of decision %q", decisionName)
+			if refusal := r.contextLengthRefusal(ctx, ineligible, withoutReserves, scope); refusal != nil {
+				return "", entropy.ReasoningDecision{}, refusal
+			}
+		}
 	}
 	if len(result.Decision.ModelRefs) == 0 && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
 		return r.selectDecisionDefaultRuntimeModel(result.Decision, decisionName, ctx)
