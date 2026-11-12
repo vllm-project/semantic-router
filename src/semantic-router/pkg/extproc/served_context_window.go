@@ -134,11 +134,17 @@ func (r *OpenAIRouter) checkServedContextWindow(ctx context.Context, target serv
 		logServedContextWindowUnverified(target.model, target.endpoint, err)
 		return
 	}
+	tlsConfig, err := providerTLSConfig(target.profile)
+	if err != nil {
+		logServedContextWindowUnverified(target.model, target.endpoint, err)
+		return
+	}
 	client, err := connector.New(target.baseURL, authorize, connector.Options{
 		AttemptTimeout:   5 * time.Second,
 		MaxRequestBytes:  1,
 		MaxResponseBytes: 1 << 20,
 		MaxErrorBytes:    1 << 10,
+		TLSConfig:        tlsConfig,
 	})
 	if err != nil {
 		logServedContextWindowUnverified(target.model, target.endpoint, err)

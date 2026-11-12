@@ -145,6 +145,25 @@ async function markReachable($: EngineInterface) {
 const baseOf = (url: string) => url.replace(/\/v1\/decisions\/?$/, '').replace(/\/$/, '')
 export const healthUrlOf = (url: string) => `${baseOf(url)}/health`
 export const modelsUrlOf = (url: string) => `${baseOf(url)}/v1/models`
+// The runtime's model and the question types it answers, from a System One API's model list or the one model
+// vllm-srun lists; undefined when neither names it with its types.
+export async function modelOf($: EngineInterface, runtime: Runtime): Promise<{ id: string; types: string[] } | undefined> {
+  for (const url of [`${baseOf(runtime.url)}/v1/systemone/models`, modelsUrlOf(runtime.url)]) {
+    const text = await $.http.fetch(url, { headers: headersOf(runtime) }).then(r => (r.ok ? r.text : ''), () => '')
+    let data: unknown
+    try {
+      data = (JSON.parse(text) as { data?: unknown }).data
+    } catch {
+      continue
+    }
+    const models = Array.isArray(data) ? data.filter(isRecord) : []
+    const model = runtime.model === '' ? models[0] : models.find(one => one.id === runtime.model)
+    if (model !== undefined && typeof model.id === 'string' && Array.isArray(model.question_types)) {
+      return { id: model.id, types: model.question_types.filter(type => typeof type === 'string') }
+    }
+  }
+  return undefined
+}
 // A `/v1/models` answer that lists at least one model, as the setup script's health check requires.
 const listsModels = (response: { ok: boolean; text: string }) => {
   if (!response.ok) return false
@@ -166,8 +185,8 @@ async function markOffline($: EngineInterface, runtime: Runtime) {
 }
 
 // Asks the runtime's `/health` once; one that does not answer in time is offline. A hosted System One API has no
-// `/health`, so a 404 there is answered by its `/v1/models` instead.
-export async function checkRuntime($: EngineInterface, runtime: Runtime) {
+// `/health`, so a 404 there is answered by its `/v1/models` instead. True when it answered.
+export async function checkRuntime($: EngineInterface, runtime: Runtime): Promise<boolean> {
   const answered = await Promise.race([
     $.http.fetch(healthUrlOf(runtime.url), { headers: headersOf(runtime) }).then(
       response =>
@@ -177,5 +196,6 @@ export async function checkRuntime($: EngineInterface, runtime: Runtime) {
     ),
     $.clock.sleep(HEALTH_TIMEOUT_MS).then(() => false),
   ])
-  return answered ? markReachable($) : markOffline($, runtime)
+  await (answered ? markReachable($) : markOffline($, runtime))
+  return answered
 }

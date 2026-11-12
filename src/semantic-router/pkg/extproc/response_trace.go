@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"time"
@@ -23,6 +24,9 @@ func responseTrace(ctx *RequestContext) string {
 	if signals := matchedSignalTrace(ctx); len(signals) > 0 {
 		trace.Set(headers.TraceSignals, headers.List(signals...))
 	}
+	if coverage := scanCoverageTrace(ctx.VSRScanCoverage); len(coverage) > 0 {
+		trace.Set(headers.TraceScanCoverage, headers.List(coverage...))
+	}
 	if ctx.VSRContextTokenCount > 0 {
 		trace.Set(headers.TraceContextTokens, headers.Integer(int64(ctx.VSRContextTokenCount)))
 	}
@@ -32,6 +36,22 @@ func responseTrace(ctx *RequestContext) string {
 	ctx.ToolsSelection.addTo(&trace)
 	addResponseGuardTrace(&trace, ctx)
 	return trace.Encode()
+}
+
+// scanCoverageTrace lists, in rule order, the guard rules that read their
+// input in windows and how much of it they read.
+func scanCoverageTrace(coverage map[string]string) []headers.Item {
+	items := make([]headers.Item, 0, len(coverage))
+	for _, rule := range slices.Sorted(maps.Keys(coverage)) {
+		var read, windows int64
+		if _, err := fmt.Sscanf(coverage[rule], "partial %d/%d", &read, &windows); err == nil {
+			items = append(items, headers.String(rule).With("coverage", headers.Token("partial")).
+				With("read", headers.Integer(read)).With("windows", headers.Integer(windows)))
+			continue
+		}
+		items = append(items, headers.String(rule).With("coverage", headers.Token(coverage[rule])))
+	}
+	return items
 }
 
 // addResponseGuardTrace adds what the selected decision's response_guard did

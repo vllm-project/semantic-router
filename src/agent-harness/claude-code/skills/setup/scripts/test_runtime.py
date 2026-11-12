@@ -198,7 +198,13 @@ class HostedRuntimeTest(unittest.TestCase):
         replies = {
             "/health": {"status": "ok"},
             "/v1/systemone/models": {
-                "data": [{"id": "vela3-fast", "api": "systemone"}]
+                "data": [
+                    {
+                        "id": "vela3-fast",
+                        "api": "systemone",
+                        "question_types": ["choice", "noul", "span"],
+                    }
+                ]
             },
             "/v1/models": {"data": [{"id": "vllm-sr/auto"}]},
         }
@@ -213,6 +219,8 @@ class HostedRuntimeTest(unittest.TestCase):
             out = runtime.health("http://127.0.0.1:8899/v1/decisions")
         self.assertTrue(out["ready"])
         self.assertEqual(out["modelIds"], ["vela3-fast"])
+        # vela3-fast answers no score questions, which the router app asks
+        self.assertEqual(out["noScore"], ["vela3-fast"])
 
     def test_a_question_names_the_model_only_when_one_is_set(self):
         sent = []

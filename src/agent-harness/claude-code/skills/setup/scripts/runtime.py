@@ -110,6 +110,15 @@ def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
     )
     out["model"] = models[0].get("id") if models else out["health"].get("model")
     out["modelIds"] = [m.get("id") for m in models or [] if isinstance(m, dict)]
+    # A model that lists its question types without `score`, such as vela3-fast,
+    # cannot answer the router app's two questions.
+    out["noScore"] = [
+        m.get("id")
+        for m in models or []
+        if isinstance(m, dict)
+        and isinstance(m.get("question_types"), list)
+        and "score" not in m["question_types"]
+    ]
     # vllm-srun names the device the model runs on in /v1/models; older builds leave it out.
     out["device"] = (
         (models[0].get("device") or models[0].get("accelerator")) if models else None
@@ -361,6 +370,13 @@ def main(argv: list[str]) -> int:
             + f" · health {out['healthMs']} ms"
             + ("" if out["ready"] else f" · {out['health']}")
         )
+        model = options.get("runtimeModel") or out["model"]
+        if model in out.get("noScore", []):
+            print(
+                f"warning: {model} answers no score questions, so the router app steps "
+                "aside; vela3-lite answers them",
+                file=sys.stderr,
+            )
         return 0 if out["ready"] else 1
     apps = set(args.apps.split(",")) if args.apps else None
     rows = run_probes(url, token, options, apps, args.smoke, args.tolerance)

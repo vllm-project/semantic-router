@@ -133,12 +133,15 @@ func (f *sessionFallback) prepare(
 	candidate, prepared, err := s.router.prepareFallbackCandidate(callCtx, ref, ctx, false)
 	if err != nil {
 		f.restore()
+		logSkippedFallbackCandidate(ctx, ref, prepared, err)
 		return routing.FallbackStep{}, prepared, err
 	}
 	call, err := s.candidateCall(candidate)
 	if err != nil {
 		f.restore()
-		return routing.FallbackStep{}, fallback.EvaluationResult{CanFallback: true}, err
+		prepared = fallback.EvaluationResult{CanFallback: true}
+		logSkippedFallbackCandidate(ctx, ref, prepared, err)
+		return routing.FallbackStep{}, prepared, err
 	}
 	call.Reliability = nil
 	if override := f.candidateReliability(orch, call.Route); override != nil {
