@@ -199,10 +199,8 @@ def test_embed_legacy_ab_records_failed_pairs(el, monkeypatch, tmp_path):
     record = json.loads(out.read_text(encoding="utf-8"))
     row = record["embedding"]
     assert row["total_pairs"] == 3
-    assert row["successful_pairs"] == 0
-    assert row["failed_pairs"] == 3
-    assert row["success_rate"] == 0.0
     assert row["pairs"] == 0
+    assert row["failed_pairs"] == 3
     assert row["median_speedup"] is None
 
 
@@ -310,10 +308,9 @@ def test_embed_legacy_ab_records_successful_pairs(el, monkeypatch, tmp_path):
     record = json.loads(out.read_text(encoding="utf-8"))
     row = record["embedding"]
     assert row["total_pairs"] == 2
-    assert row["successful_pairs"] == 2
-    assert row["failed_pairs"] == 0
-    assert row["success_rate"] == 1.0
     assert row["pairs"] == 2
+    assert row["failed_pairs"] == 0
+    assert row["pairs"] == row["total_pairs"]
     assert row["median_speedup"] == 2.0
 
 
@@ -428,11 +425,9 @@ def test_embed_legacy_ab_legacy_requests_failing(el, monkeypatch, tmp_path):
     record = json.loads(out.read_text(encoding="utf-8"))
     row = record["embedding"]
     assert row["total_pairs"] == 2
-    assert row["successful_pairs"] == 0
-    assert row["failed_pairs"] == 2
-    assert row["success_rate"] == 0.0
-    assert row["failure_rate"] == 1.0
     assert row["pairs"] == 0
+    assert row["failed_pairs"] == 2
+    assert row["failed_pairs"] == row["total_pairs"]
     assert row["median_speedup"] is None
     assert row["legacy"]["p50_ms"] is None
     assert row["legacy"]["p95_ms"] is None
@@ -453,11 +448,9 @@ def test_embed_legacy_ab_both_sides_failing(el, monkeypatch, tmp_path):
     record = json.loads(out.read_text(encoding="utf-8"))
     row = record["embedding"]
     assert row["total_pairs"] == 2
-    assert row["successful_pairs"] == 0
-    assert row["failed_pairs"] == 2
-    assert row["success_rate"] == 0.0
-    assert row["failure_rate"] == 1.0
     assert row["pairs"] == 0
+    assert row["failed_pairs"] == 2
+    assert row["failed_pairs"] == row["total_pairs"]
     assert row["median_speedup"] is None
 
 
@@ -528,11 +521,10 @@ def test_embed_legacy_ab_mixed_success_and_failure(el, monkeypatch, tmp_path):
     record = json.loads(out.read_text(encoding="utf-8"))
     row = record["embedding"]
     assert row["total_pairs"] == 3
-    assert row["successful_pairs"] == 1
-    assert row["failed_pairs"] == 2
-    assert row["success_rate"] == pytest.approx(1 / 3)
-    assert row["failure_rate"] == pytest.approx(2 / 3)
     assert row["pairs"] == 1
+    assert row["failed_pairs"] == 2
+    assert row["pairs"] / row["total_pairs"] == pytest.approx(1 / 3)
+    assert row["failed_pairs"] / row["total_pairs"] == pytest.approx(2 / 3)
     assert row["median_speedup"] == 2.0
 
 
@@ -618,11 +610,8 @@ def test_embed_legacy_ab_zero_attempted_pairs(el, monkeypatch, tmp_path):
     record = json.loads(out.read_text(encoding="utf-8"))
     row = record["embedding"]
     assert row["total_pairs"] == 0
-    assert row["successful_pairs"] == 0
-    assert row["failed_pairs"] == 0
-    assert row["success_rate"] is None
-    assert row["failure_rate"] is None
     assert row["pairs"] == 0
+    assert row["failed_pairs"] == 0
     assert row["median_speedup"] is None
     assert row["legacy"]["p50_ms"] is None
     assert row["legacy"]["p95_ms"] is None

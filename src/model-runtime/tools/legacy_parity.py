@@ -776,26 +776,12 @@ def ab_summary(report: dict[str, Any]) -> dict[str, Any]:
         failed_pairs = values.get("failed_pairs")
         new_total_pairs = values.get("new_total_pairs", 0)
         new_failed_pairs = values.get("new_failed_pairs", 0)
-        successful_pairs = len(pairs)
-        success_rate = (
-            successful_pairs / total_pairs
-            if total_pairs is not None and total_pairs > 0
-            else None
-        )
-        failure_rate = (
-            failed_pairs / total_pairs
-            if total_pairs is not None and total_pairs > 0
-            else None
-        )
         row: dict[str, Any] = {
             "pairs": len(pairs),
             "total_pairs": total_pairs,
             "new_total_pairs": new_total_pairs,
-            "successful_pairs": successful_pairs,
             "failed_pairs": failed_pairs,
             "new_failed_pairs": new_failed_pairs,
-            "success_rate": success_rate,
-            "failure_rate": failure_rate,
             "legacy_ms": {
                 "p50": percentile_or_none(values["legacy"], 0.5),
                 "p95": percentile_or_none(values["legacy"], 0.95),
@@ -880,7 +866,7 @@ async def ab_rounds(
                 entry["new_total_pairs"] += 1
                 if entry["total_pairs"] is not None:
                     entry["total_pairs"] += 1
-                if legacy_ns < 0 or runtime_ns < 0:
+                if legacy_ns <= 0 or runtime_ns <= 0:
                     entry["new_failed_pairs"] += 1
                     if entry["failed_pairs"] is not None:
                         entry["failed_pairs"] += 1
@@ -1000,8 +986,9 @@ def run_ab(args: argparse.Namespace) -> None:
         failed_text = str(failed) if failed is not None else "?"
         speedup = row["median_speedup"]
         speedup_text = f"x{speedup:.2f}" if speedup is not None else "N/A"
-        sr = row["success_rate"]
-        fr = row["failure_rate"]
+        ok = row["pairs"]
+        sr = ok / total if total else None
+        fr = failed / total if total and failed is not None else None
         sr_text = f"{sr:.1%}" if sr is not None else "?"
         fr_text = f"{fr:.1%}" if fr is not None else "?"
 
@@ -1009,7 +996,7 @@ def run_ab(args: argparse.Namespace) -> None:
             return f"{v:.2f}" if v is not None else "N/A"
 
         print(
-            f"{job:13s} pairs={row['pairs']:4d} total={total_text} ok={row['successful_pairs']} fail={failed_text} "
+            f"{job:13s} pairs={ok:4d} total={total_text} fail={failed_text} "
             f"sr={sr_text} fr={fr_text} "
             f"new_total={new_total} new_fail={new_failed} "
             f"p50 {_fmt_ms(row['legacy_ms']['p50'])}->{_fmt_ms(row['runtime_ms']['p50'])} ms "

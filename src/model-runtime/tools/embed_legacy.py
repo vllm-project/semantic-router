@@ -914,18 +914,7 @@ def run_ab(args: argparse.Namespace) -> None:
         job: {
             "pairs": len(values["ratio"]),
             "total_pairs": values.get("total_pairs", 0),
-            "successful_pairs": len(values["legacy"]),
             "failed_pairs": values.get("failed_pairs", 0),
-            "success_rate": (
-                len(values["legacy"]) / values["total_pairs"]
-                if values.get("total_pairs", 0) > 0
-                else None
-            ),
-            "failure_rate": (
-                values.get("failed_pairs", 0) / values["total_pairs"]
-                if values.get("total_pairs", 0) > 0
-                else None
-            ),
             "legacy": latency([{"latency_ns": values["legacy"]}]),
             "runtime": latency([{"latency_ns": values["runtime"]}]),
             "median_speedup": (

@@ -366,11 +366,10 @@ def test_ab_summary_all_failed_pairs_report_null_speedup(lp):
     }
     row = lp.ab_summary(report)["domain"]
     assert row["total_pairs"] == 3
-    assert row["successful_pairs"] == 0
-    assert row["failed_pairs"] == 3
-    assert row["success_rate"] == 0.0
-    assert row["failure_rate"] == 1.0
     assert row["pairs"] == 0
+    assert row["failed_pairs"] == 3
+    assert row["pairs"] == 0 and row["total_pairs"] == 3
+    assert row["failed_pairs"] / row["total_pairs"] == 1.0
     assert row["median_speedup"] is None
     assert row["legacy_ms"]["p50"] is None
     assert row["runtime_ms"]["p95"] is None
@@ -389,12 +388,11 @@ def test_ab_summary_mixed_success_and_failure(lp):
     }
     row = lp.ab_summary(report)["domain"]
     assert row["total_pairs"] == 4
-    assert row["successful_pairs"] == 1
-    assert row["failed_pairs"] == 3
-    assert row["success_rate"] == pytest.approx(0.25)
-    assert row["failure_rate"] == pytest.approx(0.75)
-    assert row["median_speedup"] == 2.0
     assert row["pairs"] == 1
+    assert row["failed_pairs"] == 3
+    assert row["pairs"] / row["total_pairs"] == pytest.approx(0.25)
+    assert row["failed_pairs"] / row["total_pairs"] == pytest.approx(0.75)
+    assert row["median_speedup"] == 2.0
 
 
 def test_ab_summary_unknown_historical_accounting(lp):
@@ -410,9 +408,7 @@ def test_ab_summary_unknown_historical_accounting(lp):
     row = lp.ab_summary(report)["domain"]
     assert row["total_pairs"] is None
     assert row["failed_pairs"] is None
-    assert row["successful_pairs"] == 1
-    assert row["success_rate"] is None
-    assert row["failure_rate"] is None
+    assert row["pairs"] == 1
     assert row["median_speedup"] == 2.0
 
 
@@ -597,8 +593,8 @@ def test_ab_summary_json_contains_no_nan(lp):
     assert row["runtime_ms"]["p50"] is None
     assert row["runtime_ms"]["p95"] is None
     assert row["median_speedup"] is None
-    assert row["success_rate"] == 0.0
-    assert row["failure_rate"] == 1.0
+    assert row["pairs"] == 0 and row["total_pairs"] == 3
+    assert row["failed_pairs"] / row["total_pairs"] == 1.0
 
 
 def test_ab_summary_all_successful(lp):
@@ -613,9 +609,35 @@ def test_ab_summary_all_successful(lp):
     }
     row = lp.ab_summary(report)["domain"]
     assert row["total_pairs"] == 3
-    assert row["successful_pairs"] == 3
-    assert row["failed_pairs"] == 0
-    assert row["success_rate"] == 1.0
-    assert row["failure_rate"] == 0.0
-    assert row["median_speedup"] == 3.0
     assert row["pairs"] == 3
+    assert row["failed_pairs"] == 0
+    assert row["pairs"] / row["total_pairs"] == 1.0
+    assert row["median_speedup"] == 3.0
+
+
+@pytest.mark.parametrize(
+    "latencies",
+    [
+        (0, 1_000),
+        (1_000, 0),
+        (0, 0),
+    ],
+)
+def test_ab_rounds_counts_zero_latency_as_failure(lp, latencies):
+    specs = [sequence_spec(["a"])]
+    report: dict[str, Any] = {}
+
+    async def zero_latency_pair(spec, item, runtime_first):
+        return latencies
+
+    state = {"pair_rounds": 0, "window_rounds": 0, "report": report}
+    asyncio.run(
+        lp.ab_rounds(state, specs, 1, zero_latency_pair, ["legacy"], None, lambda: None)
+    )
+
+    entry = report["domain"]
+    assert entry["total_pairs"] == 1
+    assert entry["failed_pairs"] == 1
+    assert entry["legacy"] == []
+    assert entry["runtime"] == []
+    assert entry["ratio"] == []
