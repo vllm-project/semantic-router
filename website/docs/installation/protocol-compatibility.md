@@ -385,6 +385,13 @@ tools or error translation.
 
 - Public requests are decoded into the neutral contract even when client and
   backend formats match. Unknown or unsupported request fields fail closed.
+- Chat requests accept and don't forward the fields that client libraries add
+  to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
+  which holds the reply fields its message type lacks, and `parsed` and
+  `tool_calls[].function.parsed_arguments`, the openai SDK's own parse
+  results. One that carries a value is reported as `dropped`. Like the other
+  Responses input items, a reasoning item may carry `status`, which the openai
+  SDK's stream helper sets.
 - Backend replies are decoded into the same contract. A reply field that its
   `api_format` does not define is dropped and reported instead of failing the
   reply; see
