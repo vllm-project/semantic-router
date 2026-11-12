@@ -316,20 +316,12 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 			meta.RemoveStatusCondition(&sr.Status.Conditions, typeProgressingSemanticRouter)
 		} else if deployment.Status.ReadyReplicas < deployment.Status.Replicas {
 			sr.Status.Phase = "Progressing"
-			readyMsg := fmt.Sprintf("%d/%d replicas ready", deployment.Status.ReadyReplicas, deployment.Status.Replicas)
 			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
 				ObservedGeneration: sr.Generation,
 				Type:               typeProgressingSemanticRouter,
 				Status:             metav1.ConditionTrue,
 				Reason:             "Progressing",
-				Message:            readyMsg,
-			})
-			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
-				ObservedGeneration: sr.Generation,
-				Type:               typeAvailableSemanticRouter,
-				Status:             metav1.ConditionFalse,
-				Reason:             "ReplicasNotReady",
-				Message:            readyMsg,
+				Message:            fmt.Sprintf("%d/%d replicas ready", deployment.Status.ReadyReplicas, deployment.Status.Replicas),
 			})
 		} else {
 			sr.Status.Phase = "Running"
