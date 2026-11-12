@@ -245,6 +245,10 @@ type systemOneCall struct {
 	// that window's index.
 	scan   *guardScan
 	window int
+	// reread is whether the window reads part of the input again: the larger
+	// window it reads again answered its questions, so its failure leaves
+	// none of them unknown.
+	reread bool
 }
 
 // systemOneCalls groups rules by the deployment that answers them and the
@@ -460,7 +464,7 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 	} else {
 		response, err = c.decider().Decide(callCtx, deployment, request)
 	}
-	if err != nil && !answersGivenUp(ctx) {
+	if err != nil && !answersGivenUp(ctx) && !call.reread {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
 	}
 	return response, time.Since(started).Seconds(), err
