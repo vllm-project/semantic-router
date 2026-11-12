@@ -196,13 +196,15 @@ func TestReplayRuntimeUsesGlobalMemoryCapacity(t *testing.T) {
 }
 
 func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
-	for _, capture := range []bool{false, true} {
-		name := "omit"
-		if capture {
-			name = "allow"
-		}
-		t.Run(name, func(t *testing.T) {
-			cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": capture}))
+	for _, test := range []struct {
+		name               string
+		personal, response bool
+	}{{"omit", false, true}, {"allow", true, true}, {"response body off", true, false}} {
+		capture := test.personal && test.response
+		t.Run(test.name, func(t *testing.T) {
+			cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{
+				"enabled": true, "capture_personal_data": test.personal, "capture_response_body": test.response,
+			}))
 			router := replayRuntimeRouter(t, cfg)
 			ctx := replayPolicyRequest(t)
 			ctx.VSRSelectedDecision = &config.Decision{Name: "ordinary", Plugins: cfg.DefaultPlugins}
@@ -214,7 +216,7 @@ func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
 				Spans:   map[string][]modelservice.Span{key: {{Label: "unsupported", Text: "private@example.invalid", Probability: 0.9}}},
 			}
 			ctx.ResponseGuard = &responseGuardRun{conditions: observedConditions{observed: observed}}
-			router.updateRouterReplayHallucinationStatus(ctx, router.ReplayRecorder)
+			router.updateRouterReplayHallucinationStatus(ctx, router.responseGuardReplayRecorder(ctx))
 			record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 			if !found || !record.HallucinationDetected || !record.HallucinationScoreAvailable || record.HallucinationConfidence != 0.9 {
 				t.Fatal("the hallucination verdict or score metadata was lost")

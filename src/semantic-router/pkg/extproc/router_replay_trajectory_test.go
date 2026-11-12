@@ -17,6 +17,7 @@ func newTrajectoryTestRouter(t *testing.T) (*OpenAIRouter, string) {
 	t.Helper()
 	sessionID := "sess-abc123"
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
 
 	_, err := recorder.AddRecord(routerreplay.RoutingRecord{
 		ID:        "traj-1",
@@ -100,6 +101,7 @@ func TestHandleRouterReplayTrajectoryConvertsToolTraceToOpenAIMessages(t *testin
 
 func TestHandleRouterReplayTrajectoryCoalescesConsecutiveToolCalls(t *testing.T) {
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
 	sessionID := "sess-multi-tool"
 
 	_, err := recorder.AddRecord(routerreplay.RoutingRecord{
@@ -203,6 +205,7 @@ func TestHandleRouterReplayTrajectoryDoesNotReparseStoredWireBodies(t *testing.T
 
 func TestHandleRouterReplayTrajectoryCollapsesCumulativeToolLoopRecords(t *testing.T) {
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
 	sessionID := "sess-tool-loop"
 	records := []routerreplay.RoutingRecord{
 		{
