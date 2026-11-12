@@ -183,6 +183,7 @@ func (r *Runner) prepareKubeClient(ctx context.Context, state *runState) error {
 	}
 
 	r.restConfig = config
+	r.kubeConfig = kubeConfig
 	state.kubeClient, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
