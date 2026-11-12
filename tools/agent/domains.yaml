@@ -929,6 +929,8 @@ profiles:
       - deploy/helm/semantic-router/values.yaml
       - src/semantic-router/pkg/gateway/**
       - src/semantic-router/cmd/native_gateway*.go
+      - src/semantic-router/pkg/upstream/**
+      - src/semantic-router/pkg/fallback/**
   envoy-ai-gateway:
     display_name: Envoy AI Gateway
     owner: e2e
@@ -1093,12 +1095,17 @@ profiles:
       - deploy/kubernetes/observability/dashboard/**
       - dashboard/backend/handlers/deploy.go
       - dashboard/backend/handlers/canonical_transport.go
+      - dashboard/backend/auth/**
+      - dashboard/backend/middleware/**
+      - dashboard/backend/routerauth/**
   dynamic-config:
     display_name: Dynamic Configuration
     owner: e2e
     coverage_role: dynamic-crd-routing-contracts
     selection: pr
-    paths: [e2e/profiles/dynamic-config/**]
+    paths:
+      - e2e/profiles/dynamic-config/**
+      - src/semantic-router/pkg/k8s/**
   remote-embedding:
     display_name: Remote Embeddings
     owner: e2e
@@ -1256,6 +1263,8 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
       - src/semantic-router/pkg/extproc/provider_request_adapter.go
       - src/semantic-router/pkg/selection/cache_affinity.go
+      - src/semantic-router/pkg/responseapi/**
+      - src/semantic-router/pkg/responsestore/**
   response-api-redis:
     display_name: Responses API (Redis)
     owner: e2e
