@@ -362,6 +362,12 @@ layer first:
   its backend the way the first attempt's are. A candidate the Router cannot
   prepare, such as one its rate limit refuses, is passed over for the next one
   and logged as `fallback_candidate_skipped` with the reason.
+- **Streaming.** A streamed request falls back too, whatever `stream_options`
+  it carries. Behind Envoy the Router calls the candidate without streaming and
+  streams the answer to the client with the client's own `stream_options`, so a
+  client that sets `include_usage` still gets the usage chunk last. In
+  standalone mode the candidate streams, and a Chat Completions backend is
+  asked for its usage as the first attempt's is.
 
 Both gateway modes run the same policy, with one deliberate difference:
 standalone mode also falls back when no backend answered at all, such as a

@@ -16,12 +16,13 @@ translation:
 
 ## 支持矩阵 {#support-matrix}
 
-**TC** 训练且校准，**T** 训练，**Z** 零样本，**—** 无法运行。
+**TC** 训练且校准，**T** 训练，**B** 关闭全部适配器的基座模型，**Z** 零样本，**—** 无法运行。
 
 | 预设 | vela3-fast | vela3-lite | vela3-mini、-flash、-turbo | d3（本地或托管） | Decision 2.0 | Vela 2.0 |
 | --- | --- | --- | --- | --- | --- | --- |
-| domain、fact_check、feedback、jailbreak | TC | T | T | Z | Z | TC |
-| harm | TC | T | T | Z | Z | TC |
+| domain、fact_check、feedback | TC | T | T | Z | Z | TC |
+| jailbreak | TC | B | B | Z | Z | TC |
+| harm | TC | request 阶段为 B，response 阶段为 T | request 阶段为 B，response 阶段为 T | Z | Z | TC |
 | 危害类别 | T | request 阶段为 T，response 阶段为 Z | Z | Z | Z | Z |
 | pii | TC | T | T | — | — | TC |
 | hallucination | T | T | T | — | — | T |
@@ -29,7 +30,8 @@ translation:
 | modality | `text`、`image`、`text_image` 为 TC，其余为 Z | 这三个为 T，其余为 Z | 这三个为 T，其余为 Z | Z | Z | Z |
 | turn_relation、complexity、relevance、same_request、tool_rank、tool_need、answer_check | Z | Z | Z | Z | Z | Z |
 
-- Vela 3.0 的 d3 规格按问题 ID 开启训练过的适配器：`domain`、`factcheck`、`feedback`、`attack`、`p_harm` 和 `r_harm`、`r_refusal`、`modality`，以及仅在 vela3-lite 上开启的危害类别 `hazard:` 前缀；vela3-fast 和 Vela 2.0 按措辞匹配。
+- Vela 3.0 的 d3 规格按问题 ID 开启训练过的适配器：`domain`、`factcheck`、`feedback`、`r_harm`、`r_refusal`、`modality`，以及仅在 vela3-lite 上开启的危害类别 `hazard:` 前缀；vela3-fast 和 Vela 2.0 按措辞匹配。
+- Vela 3.0 的 d3 规格用基座模型回答 jailbreak 预设和 request 阶段的 harm 预设，关闭全部适配器。它们的 `attack` 和 `p_harm` 适配器在攻击被其他文本包围时会失去它（在 vela3-turbo 上，8K token 散文之后的注入得分 0.975，基座为 0.9992），对正常文本的评分也更高；而 0.995 这类防护阈值是按基座的回答设定的。
 - d3 家族和 Vela 3.0 的 d3 规格能读取图片输入。目前没有决策模型能为路由规则读取音频或视频。
 
 ## 校准阈值 {#calibrated-thresholds}

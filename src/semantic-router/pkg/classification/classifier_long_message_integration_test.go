@@ -67,7 +67,7 @@ func (m *cappedDecisionModel) Decide(_ context.Context, _ string, request models
 			answers[question.ID] = modelservice.Answer{Type: question.Type, Error: "max_length_exceeded"}
 			continue
 		}
-		if windows > 0 && request.Order > windows {
+		if windows > 0 && request.Window > windows {
 			answers[question.ID] = modelservice.Answer{Type: question.Type, Error: "deadline_exceeded"}
 			continue
 		}
@@ -189,7 +189,7 @@ func TestLongSingleMessagesKeepTheirRoutingAndTheGuardReadsThemWhole(t *testing.
 			continue
 		}
 		windows[request.State] = true
-		require.Positive(t, request.Order)
+		require.Positive(t, request.Window)
 	}
 	require.Len(t, routing, 1)
 	require.Contains(t, routing[0].State, " tokens omitted ...]")

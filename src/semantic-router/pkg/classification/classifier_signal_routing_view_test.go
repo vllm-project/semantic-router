@@ -200,8 +200,8 @@ func TestScanWindowsCoverTheWholeTextWithOverlap(t *testing.T) {
 	if order := scanOrder(5); fmt.Sprint(order) != "[4 0 1 2 3]" {
 		t.Fatalf("reading order %v, want the tail, the head, then the middle", order)
 	}
-	if order := scanOrder(100); len(order) != maxScanWindows || order[0] != 99 || order[1] != 0 {
-		t.Fatalf("reading order of 100 windows %v", order)
+	if order := scanOrder(maxScanWindows + 36); len(order) != maxScanWindows || order[0] != maxScanWindows+35 || order[1] != 0 {
+		t.Fatalf("reading order of %d windows %v", maxScanWindows+36, order)
 	}
 }
 
@@ -275,7 +275,7 @@ func TestViewAndWindowBudgetsComeFromTheDeploymentAndTheCard(t *testing.T) {
 		"unknown":   {32_768, 0.25, 32_768, 2048},
 	} {
 		budget, share := classifier.routingViewBudget(deployment)
-		size, overlap := classifier.scanWindowBudget(deployment)
+		size, overlap, _ := classifier.scanWindowBudget(deployment)
 		if got := [4]float64{float64(budget), share, float64(size), float64(overlap)}; got != want {
 			t.Fatalf("%s: view %d bytes (head %.2f), windows %d overlapping %d; want %v", deployment, budget, share, size, overlap, want)
 		}
@@ -310,8 +310,8 @@ func TestViewsAndWindowsOfDenseTextNeverOverrunTheModel(t *testing.T) {
 			if len(view)+routingViewReserveTokens > validated || !strings.HasSuffix(view, "Summarize the attachment above.") {
 				t.Fatalf("%s on %s: a %d-byte view, over the cap of %d less the reserve", kind, deployment, len(view), validated)
 			}
-			size, overlap := classifier.scanWindowBudget(deployment)
-			scan := newGuardScan(deployment, modelservice.Request{State: text}, size, overlap)
+			size, overlap, parallel := classifier.scanWindowBudget(deployment)
+			scan := newGuardScan(deployment, modelservice.Request{State: text}, size, overlap, parallel)
 			if scan == nil || len(scan.windows) < 6 || scan.windows[len(scan.windows)-1].end != len(text) {
 				t.Fatalf("%s on %s: the scan does not cover the turn", kind, deployment)
 			}

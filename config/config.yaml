@@ -2888,7 +2888,8 @@ global:
         # reads at most max_tokens of a long input: its head (head_share of
         # it) and its tail around a marker. A guard rule (jailbreak, safety,
         # pii) reads all of it, in windows of scan_window.tokens that overlap
-        # by scan_window.overlap. Both are sized in bytes, four a token, so
+        # by scan_window.overlap, each a call of its own, max_parallel (4) at
+        # a time. Both are sized in bytes, four a token, so
         # dense text such as JSON or base64 holds up to about three times as
         # many tokens: size them so that a call on it fits timeout_ms. A
         # systemone deployment defaults to 4096 for both and a model_runtime
@@ -2899,6 +2900,7 @@ global:
         scan_window:
           tokens: 4096
           overlap: 256
+          max_parallel: 4
         capabilities:
           question_types: [choice, noul, score]
           modalities: [text, image]
