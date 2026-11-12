@@ -304,6 +304,7 @@ type Record struct {
 	ProjectionTrace          *projectiontrace.Trace `json:"projection_trace,omitempty"`
 	SignalConfidences        map[string]float64     `json:"signal_confidences,omitempty"`
 	SignalErrorMatches       map[string]bool        `json:"signal_error_matches,omitempty"`
+	ScanCoverage             map[string]string      `json:"scan_coverage,omitempty"`
 	ConfidenceScoreAvailable bool                   `json:"confidence_score_available"`
 	SignalValues             map[string]float64     `json:"signal_values,omitempty"`
 	ToolTrace                *ToolTrace             `json:"tool_trace,omitempty"`

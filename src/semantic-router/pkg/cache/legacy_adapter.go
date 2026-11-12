@@ -144,12 +144,26 @@ func (a *LegacyBackendAdapter) LookupSemantic(
 			Similarity:    hit.Similarity,
 			Query:         hit.Query,
 			NegationGuard: hit.NegationGuard,
+			RequestID:     hit.RequestID,
 			Age:           age,
 			AgeKnown:      ageKnown,
 			ExpiresAt:     hit.ExpiresAt,
 		})
 	}
 	return recall, nil
+}
+
+// semanticHitCounter is a backend that counts the semantic hits its callers
+// serve, as its eviction policy reads them.
+type semanticHitCounter interface {
+	servedSemantic(requestID string)
+}
+
+// servedSemantic tells the backend which recalled entry its caller served.
+func (a *LegacyBackendAdapter) servedSemantic(hit CacheResult) {
+	if counter, ok := a.backend.(semanticHitCounter); ok && hit.RequestID != "" {
+		counter.servedSemantic(hit.RequestID)
+	}
 }
 
 func resultAge(result LookupResult) (time.Duration, bool) {

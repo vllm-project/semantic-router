@@ -121,7 +121,7 @@ func vectorStoreRAGFilter(query string, fileIDs []string) map[string]interface{}
 		"_query_text": query,
 	}
 	if len(fileIDs) > 0 {
-		filter["file_id"] = fileIDs[0]
+		filter["file_id"] = fileIDs
 	}
 	return filter
 }

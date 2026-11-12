@@ -36,7 +36,11 @@ document. Do not maintain a second, hand-converted configuration.
 
 ```yaml
 configOverride:
-  version: v0.3
+  version: v0.5
+  listeners:
+    - name: http-8899
+      address: 0.0.0.0
+      port: 8899
   providers:
     defaults:
       model: my-model
@@ -46,10 +50,8 @@ configOverride:
           - name: primary
             endpoint: my-vllm.default.svc.cluster.local:8000
             provider: vllm
-  routing:
-    modelCards:
-      - name: my-model
-    decisions: []
+  recipes:
+    - name: default
 ```
 
 Replace the model and endpoint and add the signals, decisions, algorithms, and
@@ -154,6 +156,26 @@ make helm-safety-validate HELM_REPO_UPDATE=false
 `helm-ci-validate` resolves dependencies and renders the maintained profiles.
 `helm-safety-validate` checks value-schema and local-state safety guards, such
 as unsupported shared use of replica-local learning state.
+
+### Dependency charts
+
+`Chart.lock` pins the dependency charts. `helm-ci-setup` (which
+`helm-ci-validate` and `helm-package` run first) and the chart publication
+download exactly those versions into `semantic-router/charts/` with
+`fetch-dependencies.sh`. It makes up to four attempts with exponential backoff,
+so a brief chart repository or GitHub release outage doesn't fail a run. CI
+caches the archives under the hash of `Chart.lock`; a cache hit downloads
+nothing. The archives are not committed (`charts/*.tgz` is ignored). To change
+a dependency, edit `Chart.yaml`, then refresh the lock and commit it:
+
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add milvus https://milvus-io.github.io/milvus-helm/
+helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm dependency update deploy/helm/semantic-router
+```
 
 The Grafana Live render tests require `helm`, `kubectl` (including Kustomize),
 and PyYAML. They run in `helm-ci-validate` and `validate-chart.sh`, without

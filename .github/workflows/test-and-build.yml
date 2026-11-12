@@ -50,7 +50,16 @@ jobs:
         with:
           version: v1.33.0
 
+      - name: Cache Helm dependency charts
+        id: helm-dependencies
+        uses: actions/cache@v4
+        with:
+          path: deploy/helm/semantic-router/charts/*.tgz
+          key: helm-dependencies-${{ hashFiles('deploy/helm/semantic-router/Chart.lock') }}
+
       - name: Validate Helm chart
+        env:
+          HELM_DEPENDENCIES_CACHED: ${{ steps.helm-dependencies.outputs.cache-hit }}
         run: make helm-ci-validate HELM_NAMESPACE=test-namespace
 
       - name: Cache Go dependencies

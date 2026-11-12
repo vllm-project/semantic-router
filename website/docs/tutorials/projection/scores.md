@@ -78,7 +78,7 @@ recipes:
               name: reasoning_request_markers
               weight: 0.22
               value_source: confidence
-            - type: embedding
+            - type: systemone
               name: agentic_workflows
               weight: 0.18
               value_source: confidence

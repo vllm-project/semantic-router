@@ -514,7 +514,8 @@ func appendAnthropicStateDiagnostics(
 	request llmprotocol.Request,
 	policy llmprotocol.Policy,
 ) error {
-	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Store != nil || request.Truncation == llmprotocol.TruncationAuto {
+	storing := request.Store != nil && *request.Store
+	if request.PreviousResponseID != "" || request.ConversationID != "" || storing || request.Truncation == llmprotocol.TruncationAuto {
 		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "conversation_state", "Messages has no stateful response reference")
 	}
 	return nil
@@ -838,6 +839,7 @@ func anthropicContentDiagnostics(contents []llmprotocol.Content, source llmproto
 				return diagnostics, err
 			}
 		}
+		appendAnthropicMediaOmissions(&diagnostics, content, source, policy)
 		if content.Kind == llmprotocol.ContentToolResult && content.ToolResult != nil {
 			nested, err := anthropicContentDiagnostics(content.ToolResult.Content, source, policy)
 			diagnostics = appendDiagnostics(diagnostics, nested, policy.Limits.Diagnostics)
@@ -847,4 +849,15 @@ func anthropicContentDiagnostics(contents []llmprotocol.Content, source llmproto
 		}
 	}
 	return diagnostics, nil
+}
+
+// Messages images have no detail level and documents no file name. The
+// default detail, auto, loses nothing.
+func appendAnthropicMediaOmissions(diagnostics *llmprotocol.Diagnostics, content llmprotocol.Content, source llmprotocol.WireFormat, policy llmprotocol.Policy) {
+	if content.Kind == llmprotocol.ContentImage && content.Detail != "" && content.Detail != "auto" {
+		appendProviderFieldOmission(diagnostics, policy, source, "content.image.detail", "Messages images have no detail level")
+	}
+	if content.Kind == llmprotocol.ContentFile && content.Filename != "" {
+		appendProviderFieldOmission(diagnostics, policy, source, "content.file.filename", "Messages documents have no file name")
+	}
 }

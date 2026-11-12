@@ -181,6 +181,9 @@ type RequestContext struct {
 	// of the sessionIDHeaders the Router reads in order.
 	SessionIDHeader  string
 	sessionIDHeaders []string
+	// identity names the headers the Router reads the caller's user and
+	// groups from: global.services.authz.identity, else the x-authz-* names.
+	identity config.IdentityConfig
 	// AuthenticatedPrincipal is the trusted gateway-authenticated user ID
 	// (from the configured authz header, via authHeaderUserID) — never a
 	// client-supplied or derived value. Empty when the request carries no
@@ -275,8 +278,8 @@ type RequestContext struct {
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
 	// values). It defaults to "upstream"; immediate-response paths (cache,
-	// fast_response, looper, rate-limit, error, image generation) set it
-	// explicitly so the emitted path is accurate. See issue #2203.
+	// fast_response, looper, rate-limit, error) set it explicitly so the
+	// emitted path is accurate. See issue #2203.
 	ResponsePath string
 
 	// RequestDemandSnapshots retains at most one content-free demand estimate for
@@ -312,6 +315,9 @@ type RequestContext struct {
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
 	VSRSignalErrorMatches     map[string]bool
+	// VSRScanCoverage is how much of their input the guard rules that read
+	// it in windows read, by "type:name".
+	VSRScanCoverage map[string]string
 	// RoutedSignals is the decision engine's view of the request-stage
 	// signals, which the selected decision's response_guard reads once the
 	// model has answered.

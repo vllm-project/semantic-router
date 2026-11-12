@@ -217,6 +217,12 @@ func (t *DeploymentTLS) validate(endpoint *url.URL) error {
 	if endpoint == nil || endpoint.Scheme != "https" {
 		return fmt.Errorf("tls applies to an https:// endpoint")
 	}
+	return t.validateShape()
+}
+
+// validateShape checks the block itself: absolute files, a client
+// certificate with its key, and a host name.
+func (t *DeploymentTLS) validateShape() error {
 	for field, path := range map[string]string{"ca_file": t.CAFile, "cert_file": t.CertFile, "key_file": t.KeyFile} {
 		if path != "" && !filepath.IsAbs(path) {
 			return fmt.Errorf("tls.%s must be an absolute path", field)
@@ -274,6 +280,9 @@ func (d ModelDeployment) validateConnection(endpoint *url.URL, maxTimeoutMs int)
 	if err := validateConnectionHeaders(d.Headers, d.Auth); err != nil {
 		return err
 	}
+	if err := validateForwardRequestHeaders(d.ForwardRequestHeaders, d.Auth.HeaderName()); err != nil {
+		return err
+	}
 	return d.Auth.validate()
 }
 
@@ -316,8 +325,8 @@ func (g *DeploymentGeneration) validate() error {
 // validateRemote checks an openai_chat or openai_embeddings deployment: a
 // connection block and nothing the model runtime owns.
 func (d ModelDeployment) validateRemote() error {
-	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.PublicName != "" {
-		return fmt.Errorf("a %s deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits); artifact, revision, device, engine arguments, replicas and public_name belong to model_runtime", d.Provider)
+	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.OutlierDetection != nil || d.PublicName != "" {
+		return fmt.Errorf("a %s deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits); artifact, revision, device, engine arguments, replicas, outlier_detection and public_name belong to model_runtime", d.Provider)
 	}
 	if d.Input.MaxTokens != 0 || (d.Input.Overflow != "" && d.Input.Overflow != "reject") {
 		return fmt.Errorf("a %s deployment takes no input budget: the remote model reads its own input", d.Provider)

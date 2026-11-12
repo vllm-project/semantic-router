@@ -569,6 +569,9 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 	if patch.Global != nil {
 		merged.Global = patch.Global
 	}
+	if patch.Evaluation != nil {
+		merged.Evaluation = patch.Evaluation
+	}
 	return merged
 }
 

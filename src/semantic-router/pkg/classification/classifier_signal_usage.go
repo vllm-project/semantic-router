@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -21,9 +22,13 @@ func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map
 
 	for i := range decisions {
 		c.analyzeRuleCombination(decisions[i].Rules, usedSignals)
-		for _, condition := range c.Config.ResponseGuardRequestConditions(&decisions[i]) {
+		for _, condition := range c.Config.ResponseGuardRequestConditions(decisions[i].Plugins) {
 			c.analyzeRuleCombination(condition, usedSignals)
 		}
+	}
+	// A request that matches no decision runs the default plugins' guard.
+	for _, condition := range c.Config.ResponseGuardRequestConditions(c.Config.DefaultPlugins) {
+		c.analyzeRuleCombination(condition, usedSignals)
 	}
 	// Replay's privacy check reads the PII rules after routing (ReplayPromptEvidence), never here.
 	c.expandTransitiveSignalDependencies(usedSignals)
@@ -74,8 +79,23 @@ func (c *Classifier) expandTransitiveSignalDependencies(usedSignals map[string]b
 	for {
 		before := len(usedSignals)
 		c.expandProjectionDependencies(usedSignals)
+		c.expandPartitionMembers(usedSignals)
 		if len(usedSignals) == before {
 			return
+		}
+	}
+}
+
+// expandPartitionMembers marks every member of a partition used once one is:
+// the partition picks its winner, or its default, among all of them.
+func (c *Classifier) expandPartitionMembers(usedSignals map[string]bool) {
+	key := func(member string) string { return strings.ToLower(config.SignalTypeDomain + ":" + member) }
+	for _, partition := range c.Config.Projections.Partitions {
+		if !slices.ContainsFunc(partition.Members, func(member string) bool { return usedSignals[key(member)] }) {
+			continue
+		}
+		for _, member := range partition.Members {
+			usedSignals[key(member)] = true
 		}
 	}
 }

@@ -1,5 +1,7 @@
 package headers
 
+import "slices"
+
 // Package headers provides constants for all custom HTTP headers used in the semantic router.
 // All custom headers follow the "x-" prefix convention for non-standard HTTP headers.
 
@@ -82,15 +84,14 @@ const (
 	VSRResponsePath = "x-vsr-response-path"
 
 	// ResponsePath* are the valid values for VSRResponsePath.
-	ResponsePathUpstream        = "upstream"         // forwarded to and answered by the upstream model
-	ResponsePathCache           = "cache"            // served from semantic cache, no upstream call
-	ResponsePathFastResponse    = "fast_response"    // short-circuited by the fast_response plugin
-	ResponsePathLooper          = "looper"           // produced by the agent looper
-	ResponsePathImageGeneration = "image_generation" // produced by the image-generation path
-	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
-	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
-	ResponsePathError           = "error"            // router-side error response
-	ResponsePathFallback        = "fallback"         // produced by upstream error fallback
+	ResponsePathUpstream     = "upstream"      // forwarded to and answered by the upstream model
+	ResponsePathCache        = "cache"         // served from semantic cache, no upstream call
+	ResponsePathFastResponse = "fast_response" // short-circuited by the fast_response plugin
+	ResponsePathLooper       = "looper"        // produced by the agent looper
+	ResponsePathBlocked      = "blocked"       // an answer the response_guard plugin refused
+	ResponsePathRateLimited  = "rate_limited"  // rejected by rate limiting
+	ResponsePathError        = "error"         // router-side error response
+	ResponsePathFallback     = "fallback"      // produced by upstream error fallback
 
 	// VSRSelectedRecipe identifies the isolated routing profile selected by the
 	// inbound virtual model. Concrete backend model requests omit this header.
@@ -134,6 +135,26 @@ const (
 	WarningProtocol          = "protocol"
 	WarningTruncated         = "truncated"
 )
+
+// WarningCode records one code of x-vsr-warnings.
+type WarningCode struct {
+	Code string `json:"code"`
+	// Doc says what the code reports, in one sentence.
+	Doc string `json:"doc"`
+}
+
+// WarningCodes lists the codes of x-vsr-warnings: the response_guard codes,
+// then the protocol and truncation members.
+func WarningCodes() []WarningCode { return slices.Clone(warningCodes) }
+
+var warningCodes = []WarningCode{
+	{WarningHallucination, "A `response_guard` rule over a `hallucination` signal flagged the answer."},
+	{WarningUnverifiedFactual, "The answer was factual, but a `hallucination` rule had no context to check it against."},
+	{WarningJailbreak, "A `response_guard` rule over a response-stage `jailbreak` signal flagged the answer."},
+	{WarningGuard, "A `response_guard` rule over any other signal flagged the answer."},
+	{WarningProtocol, "Protocol translation changed or dropped part of the request, with its `action`, `reason` and `field`."},
+	{WarningTruncated, "Protocol warnings left out to keep the header within 4 KB, with their `count`."},
+}
 
 // VSRTrace is the one debug header: an RFC 8941 dictionary of the routing
 // details (TraceMembers) for a caller global.router.headers.debug allows.

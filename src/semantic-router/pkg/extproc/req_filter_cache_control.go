@@ -97,7 +97,7 @@ func applyResponseCacheRequestTTL(ctx *RequestContext, configured int) int {
 		return configured
 	}
 	requested := *ctx.CacheWriteTTLSeconds
-	if configured <= 0 || requested < configured {
+	if configured < 0 || requested < configured {
 		return requested
 	}
 	return configured

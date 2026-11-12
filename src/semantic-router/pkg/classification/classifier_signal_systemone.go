@@ -96,6 +96,9 @@ func (r systemOneReading) previousAnswer() string {
 // others as context). A part with nothing to read is left out.
 func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request {
 	input := rule.Input
+	if !input.ReadsRequest() {
+		return modelservice.Request{State: strings.Join(r.besidesRequest(input), "\n\n")}
+	}
 	if request, ok := r.spanScan(rule); ok {
 		return request
 	}
@@ -151,14 +154,7 @@ func (r systemOneReading) spanScan(rule config.SystemOneRule) (modelservice.Requ
 	if rule.Question.Type != config.SystemOneQuestionSpan || input.Answer || input.Context || input.PreviousTurns > 0 {
 		return modelservice.Request{}, false
 	}
-	var scanned []string
-	if input.History {
-		scanned = append(scanned, r.history...)
-	}
-	if input.ToolResults {
-		scanned = append(scanned, r.toolResults...)
-	}
-	scanned = slices.DeleteFunc(scanned, func(text string) bool { return strings.TrimSpace(text) == "" })
+	scanned := r.besidesRequest(input)
 	if len(scanned) == 0 {
 		return modelservice.Request{}, false
 	}
@@ -170,6 +166,26 @@ func (r systemOneReading) spanScan(rule config.SystemOneRule) (modelservice.Requ
 		request.Videos = slices.Clone(r.videos)
 	}
 	return request, true
+}
+
+// besidesRequest is the text a rule reads in the earlier user turns and the tool
+// results, without the turns and results that hold none.
+func (r systemOneReading) besidesRequest(input config.SystemOneInput) []string {
+	var texts []string
+	if input.History {
+		texts = append(texts, r.history...)
+	}
+	if input.ToolResults {
+		texts = append(texts, r.toolResults...)
+	}
+	return slices.DeleteFunc(texts, func(text string) bool { return strings.TrimSpace(text) == "" })
+}
+
+// hasInput reports whether a rule has text to read: a rule that leaves the
+// current user turn out has none until the earlier turns or the tool results
+// it reads hold some, and is not asked, so it does not match.
+func (r systemOneReading) hasInput(rule config.SystemOneRule) bool {
+	return rule.Input.ReadsRequest() || len(r.besidesRequest(rule.Input)) > 0
 }
 
 // askedRule is one rule a stage asks: a systemone rule, or an application
@@ -208,19 +224,39 @@ type systemOneCall struct {
 	request      modelservice.Request
 	rules        []askedRule
 	requestAlone bool
+	// scan is the guard scan a window call reads a window of, and window
+	// that window's index.
+	scan   *guardScan
+	window int
 }
 
 // systemOneCalls groups rules by the deployment that answers them and the
 // state they read, in rule order: every rule of a stage goes to its
 // deployment in one call, a batch with an entry per state when it reads
-// several.
-func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading) []*systemOneCall {
+// several. A rule that does not read its whole input reads the routing view
+// of its state, and a guard rule whose input is longer than one window reads
+// it in windows: the scans returned, whose windows windowReaders reads.
+func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading) ([]*systemOneCall, []*guardScan) {
 	var calls []*systemOneCall
+	var scans []*guardScan
 	for _, asked := range rules {
+		if !reading.hasInput(asked.rule) {
+			continue
+		}
 		deployment := c.Config.SystemOneRuleDeployment(asked.rule)
 		state := reading.state(asked.rule)
+		switch {
+		case guardScanned(asked):
+			if scan := c.guardScanOf(&scans, deployment, state, reading); scan != nil {
+				scan.rules = append(scan.rules, asked)
+				continue
+			}
+		case !asked.rule.FullCoverage():
+			budget, headShare := c.routingViewBudget(deployment)
+			state = boundedState(state, budget, headShare)
+		}
 		index := slices.IndexFunc(calls, func(call *systemOneCall) bool {
-			return call.deployment == deployment && sameState(call.request, state)
+			return call.scan == nil && call.deployment == deployment && sameState(call.request, state)
 		})
 		if index < 0 {
 			calls = append(calls, &systemOneCall{deployment: deployment, request: state, requestAlone: state.Parts == nil && state.State == reading.request})
@@ -228,7 +264,25 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 		}
 		calls[index].rules = append(calls[index].rules, asked)
 	}
-	return calls
+	return calls, scans
+}
+
+// guardScanOf is the scan of state on deployment among scans, a new one when
+// there is none, or nil when the state fits one window.
+func (c *Classifier) guardScanOf(scans *[]*guardScan, deployment string, state modelservice.Request, reading systemOneReading) *guardScan {
+	for _, scan := range *scans {
+		if scan.deployment == deployment && sameState(scan.whole, state) {
+			return scan
+		}
+	}
+	size, overlap, parallel := c.scanWindowBudget(deployment)
+	scan := newGuardScan(deployment, state, size, overlap, parallel)
+	if scan == nil {
+		return nil
+	}
+	scan.requestAlone = state.Parts == nil && state.State == reading.request
+	*scans = append(*scans, scan)
+	return scan
 }
 
 func sameState(a, b modelservice.Request) bool {
@@ -301,10 +355,16 @@ func newResponseSignalResults() *SignalResults {
 }
 
 func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResults, mu *sync.Mutex, rules []askedRule, reading systemOneReading) {
-	calls := c.systemOneCalls(rules, reading)
-	modelservice.Fan(ctx, len(calls), func(i int) {
-		c.evaluateSystemOneDeployment(ctx, results, mu, calls[i])
-	})
+	calls, scans := c.systemOneCalls(rules, reading)
+	work := make([]func(), 0, len(calls))
+	for _, call := range calls {
+		work = append(work, func() { c.evaluateSystemOneDeployment(ctx, results, mu, call) })
+	}
+	work = append(work, c.windowReaders(ctx, scans)...)
+	modelservice.Fan(ctx, len(work), func(i int) { work[i]() })
+	for _, scan := range scans {
+		c.applyScan(results, mu, scan)
+	}
 }
 
 func (c *Classifier) evaluateSystemOneDeployment(
@@ -325,6 +385,18 @@ func (c *Classifier) askCall(
 	call *systemOneCall,
 	observe func(modelservice.Response, error),
 ) {
+	response, latency, err := c.sendCall(ctx, call)
+	mu.Lock()
+	defer mu.Unlock()
+	if observe != nil {
+		observe(response, err)
+	}
+	c.applyCall(results, call, response, err, latency)
+}
+
+// sendCall asks one call's questions and returns the answers, how long the
+// call took, and why there are none.
+func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelservice.Response, float64, error) {
 	deployment, rules := call.deployment, call.rules
 	// The deployment's scan budget keeps a stage's questions to it in one
 	// call: a full-coverage rule reads its input whole, up to the budget, and
@@ -347,48 +419,73 @@ func (c *Classifier) askCall(
 	} else {
 		response, err = c.decider().Decide(callCtx, deployment, request)
 	}
-	latency := time.Since(started).Seconds()
 	if err != nil {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	if observe != nil {
-		observe(response, err)
-	}
+	return response, time.Since(started).Seconds(), err
+}
+
+// applyCall applies each rule's answer in one call's response to results.
+func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, response modelservice.Response, err error, latency float64) {
+	deployment := call.deployment
 	recordPrivacyEvidence(results, call, response, err)
-	for _, asked := range rules {
+	for _, asked := range call.rules {
 		rule := asked.rule
 		key := signalConfidenceKey(asked.signalType, rule.Name)
 		c.recordSignalExtraction(asked.signalType, rule.Name, latency)
 		if err != nil {
+			c.recordGuardRead(results, asked, false)
 			results.SignalErrors[key] = systemOneSignalErrorPrefix + modelservice.ErrorReason(err)
-			c.applyFailClosed(results, asked)
+			c.applyFailClosed(results, asked, deployment, modelservice.ErrorReason(err))
 			continue
 		}
 		answer, ok := response.Answers[asked.questionID()]
 		if !ok || answer.Error != "" {
+			c.recordGuardRead(results, asked, false)
 			reason := answer.Error
 			if !ok {
 				reason = "missing_answer"
 			}
-			if ok && rule.FullCoverage() && unscanned(reason) && rule.EffectiveOnUnscanned() != config.SystemOneUnscannedUnknown {
-				c.applyUnscanned(results, asked)
-				continue
+			if ok && rule.FullCoverage() && unscanned(reason) {
+				switch rule.EffectiveOnUnscanned() {
+				case config.SystemOneUnscannedMatch, config.SystemOneUnscannedNoMatch:
+					c.applyUnscanned(results, asked, deployment, reason)
+					continue
+				}
 			}
 			results.SignalErrors[key] = systemOneSignalErrorPrefix + reason
 			modelservice.RecordUnknown(deployment, reason, 1)
-			c.applyFailClosed(results, asked)
+			c.applyFailClosed(results, asked, deployment, reason)
 			continue
 		}
-		for _, matched := range applySystemOneAnswer(results, asked.signalType, rule, answer) {
-			results.appendMatched(asked.signalType, rule, matched)
-			c.recordSignalMatch(asked.signalType, matched)
-		}
-		if rule.Question.Type == config.SystemOneQuestionSpan && results.SignalSpans != nil {
-			if spans := matchedSpans(rule, answer); len(spans) > 0 {
-				results.SignalSpans[key] = spans
-			}
+		c.recordGuardRead(results, asked, true)
+		c.applyRuleAnswer(results, asked, answer)
+	}
+}
+
+// recordGuardRead counts the coverage of a guard rule that read its input
+// in one call: all of it, or none.
+func (c *Classifier) recordGuardRead(results *SignalResults, asked askedRule, read bool) {
+	if !guardScanned(asked) {
+		return
+	}
+	if read {
+		c.recordScanCoverage(results, asked, 1, 1)
+	} else {
+		c.recordScanCoverage(results, asked, 0, 1)
+	}
+}
+
+// applyRuleAnswer publishes a rule's answer and records what it matched.
+func (c *Classifier) applyRuleAnswer(results *SignalResults, asked askedRule, answer modelservice.Answer) {
+	rule := asked.rule
+	for _, matched := range applySystemOneAnswer(results, asked.signalType, rule, answer) {
+		results.appendMatched(asked.signalType, rule, matched)
+		c.recordSignalMatch(asked.signalType, matched)
+	}
+	if rule.Question.Type == config.SystemOneQuestionSpan && results.SignalSpans != nil {
+		if spans := matchedSpans(rule, answer); len(spans) > 0 {
+			results.SignalSpans[signalConfidenceKey(asked.signalType, rule.Name)] = spans
 		}
 	}
 }
@@ -452,7 +549,7 @@ func mergeReads(reads, more []string) []string {
 // read the whole input.
 func unscanned(reason string) bool {
 	switch reason {
-	case "scan_budget_exceeded", "input_coverage_unknown", "max_length_exceeded":
+	case "scan_budget_exceeded", "input_coverage_unknown", "max_length_exceeded", "partial_scan":
 		return true
 	}
 	return false
@@ -461,19 +558,23 @@ func unscanned(reason string) bool {
 // applyUnscanned resolves a full-coverage rule whose model could not read
 // the whole input as its on_unscanned says, when that is not unknown: the
 // rule and its counted labels match, or nothing does. An unscanned answer
-// has no values, so a condition's own predicate does not match it.
-func (c *Classifier) applyUnscanned(results *SignalResults, asked askedRule) {
+// has no values, so a condition's own predicate resolves the match as the
+// condition without one does. reason is the model's error code, which the
+// match is logged under.
+func (c *Classifier) applyUnscanned(results *SignalResults, asked askedRule, deployment, reason string) {
 	if asked.rule.EffectiveOnUnscanned() != config.SystemOneUnscannedMatch {
 		return
 	}
 	c.appendPolicyMatches(results, asked)
+	c.recordSignalFailClosed(asked.signalType, asked.rule.Name, deployment, reason)
 }
 
 // applyFailClosed resolves a fail-closed rule whose deployment gave no answer
 // as a match: a guard whose model is down does not pass the request. The
 // signal error stays, and SignalErrorMatches marks the match as policy rather
-// than evidence, so a decision's rules.on_unknown still decides it.
-func (c *Classifier) applyFailClosed(results *SignalResults, asked askedRule) {
+// than evidence, so a decision's rules.on_unknown still decides it. reason is
+// why there is no answer, which the match is logged under.
+func (c *Classifier) applyFailClosed(results *SignalResults, asked askedRule, deployment, reason string) {
 	if !asked.failClosed {
 		return
 	}
@@ -482,6 +583,7 @@ func (c *Classifier) applyFailClosed(results *SignalResults, asked askedRule) {
 	}
 	results.SignalErrorMatches[signalConfidenceKey(asked.signalType, asked.rule.Name)] = true
 	c.appendPolicyMatches(results, asked)
+	c.recordSignalFailClosed(asked.signalType, asked.rule.Name, deployment, reason)
 }
 
 // appendPolicyMatches matches a rule and its counted labels without an
@@ -560,9 +662,10 @@ func SystemOneQuestion(id string, question config.SystemOneQuestion) modelservic
 // applySystemOneAnswer publishes an answer's values and returns the matched
 // references: the rule name when the rule matches itself, and "rule:label"
 // for each matching option (choice) or label (set, span). A value is
-// published under "<type>:<rule>" (P(yes), the expected level, the chosen
-// option's probability, or the highest probability of a counted label) and
-// under "<type>:<rule>:<label>" for every option or label.
+// published under "<type>:<rule>" (P(yes), the expected level, the highest
+// probability of a counted label, or for a choice rule without labels the
+// chosen option's) and under "<type>:<rule>:<label>" for every option or
+// label.
 func applySystemOneAnswer(results *SignalResults, signalType string, rule config.SystemOneRule, answer modelservice.Answer) []string {
 	key := signalConfidenceKey(signalType, rule.Name)
 	predicate := rule.EffectivePredicate()
@@ -591,8 +694,8 @@ func applySystemOneAnswer(results *SignalResults, signalType string, rule config
 }
 
 // applyChoiceAnswer publishes each option's probability, and under the rule
-// itself the chosen option's (or, for an operating point, the highest of its
-// labels'), and returns the matching options. With two options and a
+// itself the highest of its labels' (the chosen option's for a rule without
+// labels), and returns the matching options. With two options and a
 // predicate, the predicate is an operating point: an option matches when its
 // own probability satisfies it, whichever option the model chose. Otherwise
 // the chosen option matches, when the predicate (a confidence floor) holds
@@ -602,25 +705,23 @@ func applyChoiceAnswer(rule config.SystemOneRule, answer modelservice.Answer, pr
 	for option, probability := range answer.Probabilities {
 		publish(key+":"+option, probability)
 	}
+	best := answer.Probabilities[answer.Choice]
+	if len(rule.Labels) > 0 {
+		best = 0
+		for _, label := range rule.Labels {
+			best = max(best, answer.Probabilities[label])
+		}
+	}
+	publish(key, best)
 	var matched []string
 	if predicate != nil && len(rule.Question.Choices) == 2 {
-		best := 0.0
 		for _, option := range rule.Question.OptionKeys() {
-			probability := answer.Probabilities[option]
-			if slices.Contains(rule.Labels, option) {
-				best = max(best, probability)
-			}
-			if predicateMatches(probability, predicate) {
+			if predicateMatches(answer.Probabilities[option], predicate) {
 				matched = append(matched, rule.Name+":"+option)
 			}
 		}
-		if len(rule.Labels) == 0 {
-			best = answer.Probabilities[answer.Choice]
-		}
-		publish(key, best)
 	} else {
 		chosen := answer.Probabilities[answer.Choice]
-		publish(key, chosen)
 		if answer.Choice == "" || (predicate != nil && !predicateMatches(chosen, predicate)) {
 			return nil
 		}

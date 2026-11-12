@@ -4,7 +4,7 @@
 
 `jailbreak` detects prompt-injection and jailbreak attempts, in the request before routing or in the model's answer.
 It asks the `jailbreak`
-[preset](../../../system-one/reference#preset-catalog), "Is this a prompt
+[preset](../../../system-one/reference/presets#preset-catalog), "Is this a prompt
 injection or jailbreak attempt?", with the options `benign` and `jailbreak`,
 and reads its whole input.
 
@@ -65,7 +65,8 @@ recipes:
 | `predicate` | The least probability of `jailbreak`; by default the model's calibrated threshold (0.88 on vela3-fast) at the request stage, else 0.5 |
 | `stage` | `request` (default) or `response`, which reads the model's answer |
 | `input.history` | Also read the earlier user and tool turns |
-| `on_unknown` | Request stage: what the rule reports when its model gives no answer, `no_match` (the default) or `match` |
+| `on_unscanned` | What the rule reports when only some windows of a long input were read: `best_effort` (the default), `match`, `no_match` or `unknown` |
+| `on_unknown` | Request stage: what the rule reports when its model gives no answer, `match` (the default) or `no_match` |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
 
 ### What it reads
@@ -79,18 +80,32 @@ evidence. It also reads what `global.router.routing_input` removes from the
 routing text, so a fake memory block or runtime-context turn cannot hide an
 attack.
 
-The question reads its whole input, in windows when the input is longer than
-one forward. Text the model could not read counts as an attack, with the
-match type `unscanned`, so padding a prompt cannot carry an attack past the
-guard.
+The question reads its whole input. An input longer than one of the
+deployment's `scan_window`s, a long pasted document or a long tool output, is
+read in overlapping windows, the tail first, then the head, then the middle;
+any window that finds an attack flags the input, so padding a prompt cannot
+carry an attack past the guard. See
+[Long inputs](../../../system-one/deploy/performance.md#long-inputs).
+
+### When only part of the input was read
+
+When the signals' deadline ends before every window is read, `on_unscanned`
+decides:
+
+- `best_effort` (the default) decides on the windows read: an attack in any of
+  them matches, and none means no match;
+- `match` matches the request, with the match type `unscanned` (strict);
+- `no_match` does not match;
+- `unknown` leaves the rule unknown, for `on_unknown`.
 
 ### When the model gives no answer
 
-A request-stage rule whose model gives no answer (it fails, is overloaded or
-misses its deadline) does not match, which keeps traffic flowing when the
-decision model is down. To fail closed instead, write `on_unknown: match`:
-the rule then matches such a request, with the match type `unavailable`. A
-decision's `rules.on_unknown` still decides how the decision treats it.
+A request-stage rule none of whose windows gets an answer (the model fails, is
+overloaded, or misses the deadline) matches, with the match type
+`unavailable` (`unscanned` when the model could not read the input): a guard
+whose model is down does not pass the request. To keep traffic flowing
+instead, write `on_unknown: no_match`. A decision's `rules.on_unknown` still
+decides how the decision treats such a match.
 
 ```yaml
 recipes:
@@ -98,7 +113,9 @@ recipes:
     signals:
       jailbreak:
         - name: strict_guard
-          on_unknown: match
+          on_unscanned: match
+        - name: lenient_guard
+          on_unknown: no_match
 ```
 
 `on_unknown` is refused on a response-stage rule: the `response_guard`
@@ -117,7 +134,7 @@ answer; see [Response Guard](../../plugin/response-guard.md).
 
 The decision model answers every jailbreak rule, unless the `jailbreak`
 binding or the rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). vela3-fast, the Vela
+[Choose a deployment](../../../system-one/deploy/deployments). vela3-fast, the Vela
 3.0 d3 sizes and Vela 2.0 have trained forms of the question at both stages.
 Detection is probabilistic and can be evaded or over-triggered: combine it
 with least-privilege tools and backend policy.

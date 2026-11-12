@@ -28,7 +28,7 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	plugin := activeContextRecoveryPlugin(requestCtx)
+	plugin := activeContextRecoveryPlugin(r.Config, requestCtx)
 	if plugin == nil {
 		return responseBody, nil
 	}
@@ -80,6 +80,7 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 }
 
 func activeContextRecoveryPlugin(
+	cfg *config.RouterConfig,
 	requestCtx *RequestContext,
 ) *config.ContextCompressConfig {
 	if requestCtx == nil ||
@@ -87,7 +88,7 @@ func activeContextRecoveryPlugin(
 		len(requestCtx.ContextCompressionRecoveryKeys) == 0 {
 		return nil
 	}
-	plugin := contextCompression(requestCtx.VSRSelectedDecision)
+	plugin := contextCompression(requestPlugins(cfg, requestCtx))
 	if plugin == nil || plugin.Compress.Recovery == nil || !plugin.Compress.Recovery.Enabled {
 		return nil
 	}

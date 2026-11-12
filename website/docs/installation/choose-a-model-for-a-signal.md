@@ -64,6 +64,7 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}      # keys come from an env var or a file, never inline
         timeout_ms: 1500
         capabilities: {presets: [pii, halu]}  # used if the API's /models lists none
@@ -98,6 +99,7 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}
     system:
       decision_model: {deployment: d3-remote}
@@ -124,6 +126,7 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}
     system:
       decision_model: {deployment: kai}
@@ -161,6 +164,7 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}
     system:
       decision_model: {deployment: kai}

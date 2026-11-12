@@ -53,12 +53,9 @@
               "tool_calls": [
                 {
                   "function": {
-                    "arguments": "\"Par",
-                    "name": "lookup"
+                    "arguments": "\"Par"
                   },
-                  "id": "call_1",
-                  "index": 0,
-                  "type": "function"
+                  "index": 0
                 }
               ]
             },

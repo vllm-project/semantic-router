@@ -24,6 +24,9 @@ func TestExpandEnvString(t *testing.T) {
 		{name: "literal dollar", input: "cost-$$value", want: "cost-$value"},
 		{name: "no substitution", input: "plain-text", want: "plain-text"},
 		{name: "mixed text", input: "user:${MILVUS_USERNAME}@db", want: "user:root@db"},
+		{name: "lowercase name", input: "${lower:-fallback} $lower", want: "${lower:-fallback} $lower"},
+		{name: "digit or empty name", input: "$100 ${1} ${}", want: "$100 ${1} ${}"},
+		{name: "longer mixed-case name", input: "$MILVUS_USERNAMEx", want: "$MILVUS_USERNAMEx"},
 	}
 
 	for _, tt := range tests {
@@ -139,6 +142,36 @@ recipes:
 	}
 }
 
+// The loader expands a key once; reading it must not expand what is left.
+func TestModelAccessKeyIsExpandedOnlyAtLoad(t *testing.T) {
+	t.Setenv("HOST_SECRET", "host-value")
+	t.Setenv("lower_key", "lower-value")
+
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.5
+providers:
+  defaults:
+    model: m
+  models:
+    - name: m
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+          api_key: 'abc$100-pa$$word-$$HOST_SECRET-${lower_key}'
+recipes:
+  - name: default
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+	const want = "abc$100-pa$word-$HOST_SECRET-${lower_key}"
+	if got := cfg.GetModelAccessKey("m"); got != want {
+		t.Fatalf("GetModelAccessKey = %q, want %q", got, want)
+	}
+	if got := cfg.GetModelAccessKeyForProvider("m", "vllm"); got != want {
+		t.Fatalf("GetModelAccessKeyForProvider = %q, want %q", got, want)
+	}
+}
+
 func TestExpandEnvSubstitutionsInMapLeavesNonStringsUntouched(t *testing.T) {
 	raw := map[string]interface{}{
 		"port":     5432,
@@ -179,6 +212,82 @@ func TestExpandStringKeepsUnsetReferences(t *testing.T) {
 		if got := keep.expandString(input); got != want {
 			t.Fatalf("expandString(%q) = %q, want %q", input, got, want)
 		}
+	}
+}
+
+// Only an uppercase name is an environment reference. A template's variables,
+// a price, and the placeholders the Router fills in per request load as
+// written, even when a variable of that name is set.
+func TestParseYAMLBytesKeepsDollarTextThatNamesNoVariable(t *testing.T) {
+	t.Setenv("i", "set")
+	t.Setenv("resp", "set")
+	t.Setenv("user_content", "set")
+	t.Setenv("PRICE_UNIT", "USD")
+	const template = `{{range $i, $resp := .ReferenceResponses}}{{add $i 1}}: {{$resp.Content}}{{end}}`
+	const request = `{"query":"${user_content}","top_k":${top_k}}`
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.5
+providers:
+  defaults:
+    model: model-a
+  models:
+    - name: model-a
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+    - name: model-b
+      backend_refs:
+        - endpoint: 127.0.0.1:8001
+          provider: vllm
+recipes:
+  - name: default
+    decisions:
+      - name: synthesis
+        rules:
+          operator: AND
+        modelRefs:
+          - model: model-a
+          - model: model-b
+        algorithm:
+          type: remom
+          remom:
+            breadth_schedule: [2]
+            synthesis_template: '` + template + `'
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: Quote $100 or $5.99 in $PRICE_UNIT, not $$EUR.
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: external_api
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 3
+                  backend_config:
+                    endpoint: https://search.example.com/query
+                    request_format: custom
+                    request_template: '` + request + `'
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	decision := cfg.Decisions[0]
+	if got := decision.Algorithm.ReMoM.SynthesisTemplate; got != template {
+		t.Errorf("synthesis_template = %q, want %q", got, template)
+	}
+	if got := decision.GetSystemPromptConfig().SystemPrompt; got != "Quote $100 or $5.99 in USD, not $EUR." {
+		t.Errorf("system_prompt = %q", got)
+	}
+	external, err := decision.GetContextConfig().Sources[0].ExternalAPIBackendConfig()
+	if err != nil {
+		t.Fatalf("external API config: %v", err)
+	}
+	if external.RequestTemplate != request {
+		t.Errorf("request_template = %q, want %q", external.RequestTemplate, request)
 	}
 }
 

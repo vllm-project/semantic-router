@@ -91,15 +91,13 @@ var (
 )
 
 // vela3Bindings are the router questions both Vela 3.0 families were
-// trained on (router_questions.json), under their trained IDs.
+// trained on (router_questions.json), under their trained IDs. The vela3_d3
+// sizes answer the guards with their base instead (baseOnly).
 func vela3Bindings(family string) map[bindingKey]Binding {
 	bindings := map[bindingKey]Binding{
 		{family, Domain, StageRequest}:         {ID: "domain"},
 		{family, FactCheck, StageRequest}:      {ID: "factcheck"},
 		{family, Feedback, StageRequest}:       {ID: "feedback"},
-		{family, Jailbreak, StageRequest}:      {ID: "attack"},
-		{family, Jailbreak, StageResponse}:     {ID: "attack"},
-		{family, Harm, StageRequest}:           {ID: "p_harm"},
 		{family, Harm, StageResponse}:          {ID: "r_harm", Options: answerHarmOptions, Canonical: answerHarmCanonical},
 		{family, Refusal, StageResponse}:       {ID: "r_refusal"},
 		{family, Modality, StageRequest}:       {ID: "modality", Options: modalityOptions, Canonical: modalityCanonical, Covers: []string{"text", "image", "text_image"}},
@@ -107,6 +105,9 @@ func vela3Bindings(family string) map[bindingKey]Binding {
 		{family, Hallucination, StageResponse}: {ModelPreset: "halu"},
 	}
 	if family == FamilyVela3 {
+		bindings[bindingKey{family, Jailbreak, StageRequest}] = Binding{ID: "attack"}
+		bindings[bindingKey{family, Jailbreak, StageResponse}] = Binding{ID: "attack"}
+		bindings[bindingKey{family, Harm, StageRequest}] = Binding{ID: "p_harm"}
 		bindings[bindingKey{family, HarmCategories, StageRequest}] = Binding{ID: "p_cats", NativeSet: true}
 		bindings[bindingKey{family, HarmCategories, StageResponse}] = Binding{ID: "r_cats", NativeSet: true}
 	} else {
@@ -139,8 +140,34 @@ var bindings = func() map[bindingKey]Binding {
 	all[bindingKey{FamilyVela2, Jailbreak, StageResponse}] = Binding{}
 	all[bindingKey{FamilyVela2, PII, StageRequest}] = Binding{ModelPreset: "pii"}
 	all[bindingKey{FamilyVela2, Hallucination, StageResponse}] = Binding{ModelPreset: "halu"}
+	// A model of no known family, such as a remote API's, answers a span
+	// preset with its own question where its card lists one.
+	all[bindingKey{"", PII, StageRequest}] = Binding{ModelPreset: "pii"}
+	all[bindingKey{"", Hallucination, StageResponse}] = Binding{ModelPreset: "halu"}
 	return all
 }()
+
+// baseOnly are the presets a family answers with its base, every adapter
+// off. The vela3_d3 sizes' attack and p_harm adapters lose an attack under
+// surrounding text (vela3-turbo: 0.975 against its base's 0.9992 for an
+// injection after 8K tokens of prose) and rate benign text higher, and guard
+// thresholds were set on the base's answers, which these sizes gave before
+// they had trained bindings.
+var baseOnly = map[bindingKey]bool{
+	{FamilyVela3D3, Jailbreak, StageRequest}:  true,
+	{FamilyVela3D3, Jailbreak, StageResponse}: true,
+	{FamilyVela3D3, Harm, StageRequest}:       true,
+}
+
+// BaseOnly reports whether a family answers a preset at a stage with its
+// base model: the canonical question under the Router's own ID, without the
+// opt-in decision adapter.
+func BaseOnly(family, preset, stage string) bool {
+	if stage == "" {
+		stage = StageRequest
+	}
+	return baseOnly[bindingKey{family, preset, stage}]
+}
 
 // Trained returns the form a model family was trained to be asked a preset
 // in, for a stage, and false when the family answers it zero-shot.

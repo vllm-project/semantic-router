@@ -97,7 +97,7 @@ ROUTE memory_route {
   }
 }
 `)
-	if len(errs) == 0 || !strings.Contains(fmt.Sprint(errs), "failed to decode plugin fields") {
+	if len(errs) == 0 || !strings.Contains(fmt.Sprint(errs), "invalid context configuration") || !strings.Contains(fmt.Sprint(errs), "reflection") {
 		t.Fatalf("compile errors = %v, want a reflection decode error", errs)
 	}
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -319,6 +320,75 @@ func TestFallbackCrossProtocolOpenAIToAnthropic(t *testing.T) {
 	if clientBody.Usage.PromptTokens != 15 || clientBody.Usage.CompletionTokens != 12 {
 		t.Errorf("usage not translated correctly: prompt=%d completion=%d", clientBody.Usage.PromptTokens, clientBody.Usage.CompletionTokens)
 	}
+}
+
+// The trace names the protocol of the upstream that answered: after a
+// fallback to an Anthropic candidate, Anthropic, as in the native gateway.
+func TestFallbackCrossProtocolTraceNamesTheCandidateProtocol(t *testing.T) {
+	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-2"})
+	ctx.UpstreamStatusCode = http.StatusBadGateway
+	router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+		return []byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"hi"}],"model":"claude","stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`), http.StatusOK, nil
+	}
+
+	resp := router.handleUpstreamTransportError([]byte(`{"error":{"message":"bad gateway"}}`), ctx)
+	require.NotNil(t, resp.GetImmediateResponse())
+	require.Equal(t, "model-fallback-2", ctx.VSRSelectedModel)
+	trace := fallbackTrace(t, resp, ctx)
+	require.Equal(t, "openai", trace[headers.TraceClientProtocol])
+	require.Equal(t, "anthropic", trace[headers.TraceUpstreamProtocol])
+}
+
+// Behind Envoy the fallback answers in place of the failed primary's headers,
+// so the candidate's own response time, from its dispatch, is its first
+// response time. A streaming client's candidate is called buffered, so its
+// time is the whole answer, not a first token, and is not recorded.
+func TestFallbackRecordsTheCandidatesFirstResponseTime(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		latency.RemoveModelFromTTFTCache("model-primary")
+		latency.RemoveModelFromTTFTCache("model-fallback-1")
+		router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+		ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
+		ctx.ProcessingStartTime = time.Now().Add(-2 * time.Second)
+		ctx.ExpectStreamingResponse = streaming
+		ctx.SemanticRequest.Stream = streaming
+		router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+			time.Sleep(20 * time.Millisecond)
+			return []byte(`{"id":"c1","object":"chat.completion","created":1,"model":"model-fallback-1","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`), http.StatusOK, nil
+		}
+
+		resp, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{ResponseHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "503"}}},
+		}}, ctx)
+		require.NoError(t, err)
+		require.NotNil(t, resp.GetImmediateResponse())
+		_, primaryRecorded := latency.GetTTFTPercentile("model-primary", 90)
+		require.False(t, primaryRecorded, "the primary failed")
+		ttft, recorded := latency.GetTTFTPercentile("model-fallback-1", 90)
+		if streaming {
+			require.False(t, recorded, "a buffered answer is not a first token")
+			continue
+		}
+		require.True(t, recorded, "the candidate that answered has no first-response time")
+		require.True(t, ttft >= 0.02 && ttft < 1, "ttft = %.3fs, want the candidate's own time, not the request's", ttft)
+		require.Equal(t, ttft, ctx.TTFTSeconds)
+	}
+}
+
+// A candidate that fails after the request switched to it, at its finalized
+// stream or wire validation, rolls the protocol back with the model, so the
+// primary's error is read in the primary's protocol. Reaching that failure at
+// the boundary takes a response over the codec's 64 MiB body limit, so this
+// checks the rollback itself.
+func TestFallbackRollbackRestoresThePrimaryProtocol(t *testing.T) {
+	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	ctx := testFallbackRequestContext("model-fallback-2", []string{"model-primary", "model-fallback-2"})
+	ctx.TargetFormat = llmprotocol.AnthropicMessagesV1
+
+	router.rollbackFallbackContext(ctx, "model-primary", http.StatusBadGateway, "", nil, false, llmprotocol.OpenAIChatV1)
+	require.Equal(t, "model-primary", ctx.VSRSelectedModel)
+	require.Equal(t, llmprotocol.OpenAIChatV1, ctx.TargetFormat)
 }
 
 func TestFallbackSafetyGateStreamingCommitted(t *testing.T) {
@@ -2404,12 +2474,11 @@ func TestFallbackResponsesAPIStreamingWithPersistence(t *testing.T) {
 }
 
 // guardedFallbackAnswer drives a fallback whose candidate's answer the
-// decision's response_guard scores at jailbreak and blocks over its
+// decision's response_guard reads with server and blocks over its jailbreak
 // threshold, for a client that streams or not, with an exact response cache
 // on the decision. It returns the Router's reply and the cache.
-func guardedFallbackAnswer(t *testing.T, streaming bool, jailbreak float32) (*ext_proc.ImmediateResponse, *RequestContext, *mockStreamingCache) {
+func guardedFallbackAnswer(t *testing.T, streaming bool, server *responseStageDecider) (*ext_proc.ImmediateResponse, *RequestContext, *mockStreamingCache) {
 	t.Helper()
-	server := newJailbreakDecider(jailbreak)
 	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 	responseCache := &mockStreamingCache{}
 	router.Cache = responseCache
@@ -2499,20 +2568,25 @@ func guardedFallbackAnswer(t *testing.T, streaming bool, jailbreak float32) (*ex
 	if procResp == nil || procResp.GetImmediateResponse() == nil {
 		t.Fatalf("expected ImmediateResponse from fallback, got: %#v", procResp)
 	}
-	if matched, _ := ctx.ResponseGuard.jailbreakFinding(); matched != (jailbreak > 0.5) {
-		t.Fatalf("the guard recorded a response jailbreak = %v at score %v", matched, jailbreak)
+	if matched, _ := ctx.ResponseGuard.jailbreakFinding(); matched != (server.jailbreak > 0.5) {
+		t.Fatalf("the guard recorded a response jailbreak = %v at score %v", matched, server.jailbreak)
 	}
 	return procResp.GetImmediateResponse(), ctx, responseCache
 }
 
 func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
-	imm, _, responseCache := guardedFallbackAnswer(t, false, 0.95)
+	imm, _, responseCache := guardedFallbackAnswer(t, false, newJailbreakDecider(0.95))
 	if imm.GetStatus().GetCode() != typev3.StatusCode_Forbidden {
 		t.Fatalf("expected HTTP 403 Forbidden due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
 	}
 	bodyStr := string(imm.GetBody())
 	if !strings.Contains(bodyStr, "Response blocked: jailbreak content detected in LLM output") {
 		t.Errorf("expected jailbreak block message in body, got: %s", bodyStr)
+	}
+	if path := immediateHeaderValue(&ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: imm},
+	}, headers.VSRResponsePath); path != headers.ResponsePathBlocked {
+		t.Errorf("%s = %q, want %q", headers.VSRResponsePath, path, headers.ResponsePathBlocked)
 	}
 	if responseCache.exactAdded || responseCache.addEntryCalled {
 		t.Fatal("a fallback answer the guard blocked was written to the response cache")
@@ -2522,7 +2596,7 @@ func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 // The guard passes the candidate's answer: the cache keeps the answer the
 // client received.
 func TestFallbackAnswerTheGuardPassesIsCached(t *testing.T) {
-	imm, _, responseCache := guardedFallbackAnswer(t, false, 0.01)
+	imm, _, responseCache := guardedFallbackAnswer(t, false, newJailbreakDecider(0.01))
 	if imm.GetStatus().GetCode() != typev3.StatusCode_OK {
 		t.Fatalf("status = %v, want the candidate's answer", imm.GetStatus().GetCode())
 	}
@@ -2534,12 +2608,14 @@ func TestFallbackAnswerTheGuardPassesIsCached(t *testing.T) {
 // A streaming client receives a blocked fallback answer's refusal as a
 // stream, as it receives a blocked held stream's.
 func TestFallbackResponsePolicyRefusesAStreamingClientInStreamForm(t *testing.T) {
-	imm, ctx, responseCache := guardedFallbackAnswer(t, true, 0.95)
+	imm, ctx, responseCache := guardedFallbackAnswer(t, true, newJailbreakDecider(0.95))
 	body := string(imm.GetBody())
-	if imm.GetStatus().GetCode() != typev3.StatusCode_OK || immediateHeaderValue(&ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: imm},
-	}, "content-type") != "text/event-stream" {
+	reply := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: imm}}
+	if imm.GetStatus().GetCode() != typev3.StatusCode_OK || immediateHeaderValue(reply, "content-type") != "text/event-stream" {
 		t.Fatalf("reply = %d %s, want the refusal as a 200 event stream", imm.GetStatus().GetCode(), body)
+	}
+	if path := immediateHeaderValue(reply, headers.VSRResponsePath); path != headers.ResponsePathBlocked {
+		t.Fatalf("%s = %q, want %q", headers.VSRResponsePath, path, headers.ResponsePathBlocked)
 	}
 	if !strings.HasPrefix(body, `data: {"error":`) || !strings.Contains(body, "jailbreak content detected in LLM output") ||
 		strings.Contains(body, unsafeAnswer) {
@@ -2550,6 +2626,21 @@ func TestFallbackResponsePolicyRefusesAStreamingClientInStreamForm(t *testing.T)
 	}
 	if responseCache.exactAdded || responseCache.addEntryCalled {
 		t.Fatal("a fallback answer the guard blocked was written to the response cache")
+	}
+}
+
+// A streaming client whose fallback answer the guard could not read for want
+// of the request's delegated credential receives the 401's refusal as a
+// stream, and none of the answer.
+func TestFallbackRefusesAStreamingClientWithoutTheDelegatedCredential(t *testing.T) {
+	imm, _, responseCache := guardedFallbackAnswer(t, true, newDelegatedDecider())
+	body := string(imm.GetBody())
+	if imm.GetStatus().GetCode() != typev3.StatusCode_OK || !strings.HasPrefix(body, `data: {"error":`) ||
+		!strings.Contains(body, delegatedCredentialMessage) || strings.Contains(body, unsafeAnswer) {
+		t.Fatalf("reply = %d %s, want one error chunk naming the missing credential and none of the answer", imm.GetStatus().GetCode(), body)
+	}
+	if responseCache.exactAdded || responseCache.addEntryCalled {
+		t.Fatal("a fallback answer refused for the missing credential was written to the response cache")
 	}
 }
 
@@ -3312,6 +3403,42 @@ func TestFallbackWritesClientResponseToCache(t *testing.T) {
 	if !strings.Contains(cachedBody, "quantum computing cached") && !strings.Contains(string(mockCache.exactResponseAdded), "quantum computing cached") {
 		t.Errorf("expected cached response body to contain candidate output, got addEntry: %q, exact: %q",
 			cachedBody, string(mockCache.exactResponseAdded))
+	}
+}
+
+// A fallback candidate's answer is stored in the candidate's selected-model
+// partition: a later request the primary serves never replays it.
+func TestFallbackCachesTheAnswerInTheCandidatesPartition(t *testing.T) {
+	router, cfg := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	mockCache := &mockStreamingCache{}
+	router.Cache = mockCache
+	cfg.SemanticCache = config.SemanticCache{InUse: true}
+	cfg.IntelligentRouting.Decisions = []config.Decision{{
+		Name:      "chat_fallback_decision",
+		ModelRefs: []config.ModelRef{{Model: "model-primary"}, {Model: "model-fallback-1"}},
+		Plugins: []config.DecisionPlugin{{
+			Type:          config.DecisionPluginResponseCache,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "mode": "semantic"}),
+		}},
+	}}
+	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
+	withSelectedDecision(ctx, &cfg.IntelligentRouting.Decisions[0])
+	ctx.UpstreamStatusCode = 503
+	ctx.CacheQuery, ctx.CacheExactFingerprint, ctx.CacheSemanticSafe = "Explain quantum computing in one sentence", "test-fingerprint", true
+	ctx.CacheRequestModel, ctx.CacheSelectedModel = "vllm-sr/auto", "model-fallback-1"
+	candidatePartition := router.responseCacheService().ResolveIdentity(responseCacheIdentity(ctx, ctx.CacheRequestModel)).SemanticPartitionKey()
+	ctx.CacheSelectedModel = "model-primary"
+	ctx.CacheIdentity = responseCacheIdentity(ctx, ctx.CacheRequestModel)
+	router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+		return []byte(`{"id":"chatcmpl-fallback-partition","object":"chat.completion","created":1,"model":"model-fallback-1",` +
+			`"choices":[{"index":0,"message":{"role":"assistant","content":"fallback answer"},"finish_reason":"stop"}]}`), http.StatusOK, nil
+	}
+
+	if resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx); resp.GetImmediateResponse() == nil {
+		t.Fatalf("expected ImmediateResponse from fallback, got: %#v", resp)
+	}
+	if !mockCache.addEntryCalled || mockCache.addEntryModel != candidatePartition {
+		t.Fatalf("fallback answer stored in partition %q, want the candidate's %q", mockCache.addEntryModel, candidatePartition)
 	}
 }
 

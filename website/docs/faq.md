@@ -8,13 +8,16 @@ description: What vLLM Semantic Router is, how it differs from llm-d and AI gate
 
 ## Is it an AI gateway, or something else?
 
-It combines a frontend, an optional Decision Engine, and a model runtime. The
-frontend accepts requests; the Decision Engine selects models or bounded
-multi-model workflows from signals and policy. The default standalone gateway
-forwards requests itself. Use `--gateway extproc` to integrate with Envoy.
+It combines three parts:
 
-The model runtime serves the Router's own judgments, embeddings, and other model
-tasks. Chat backends run independently. TLS termination and cluster-wide Pod
+- **A frontend** accepts requests. Its default standalone gateway forwards them
+  itself; use `--gateway extproc` to integrate with Envoy.
+- **An optional Decision Engine** selects models, or bounded multi-model
+  workflows, from signals and policy.
+- **A model runtime** serves the Router's own judgments, embeddings and other
+  model tasks.
+
+Chat backends run independently. TLS termination and cluster-wide Pod
 scheduling remain deployment responsibilities.
 
 See [Component Architecture](overview/component-architecture) for the architecture and
@@ -28,28 +31,28 @@ backends or a routing recipe:
 
 ```bash
 # Router: the positional model supplies routing judgments
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
+vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 
 # Engine: the same frontend and runtime, without Chat routing
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve vllm-sr/d3-edge -e
 ```
 
-`serve` defaults to Router; a positional model does not change the mode.
-`--engine` also has the short form `-e`. Mode is chosen at startup. The Dashboard
-manages model deployments and tasks in either mode.
+`serve` defaults to Router, and a positional model doesn't change the mode;
+`--engine` also has the short form `-e`. Mode is chosen at startup, and the
+Dashboard manages model deployments and tasks in either mode.
 
 ## Can Router also expose System One?
 
-Yes. Publish the native model through the listener's `systemone.models`
-grant and call `/v1/systemone`. `/v1/decisions` is an alias. Native model discovery
+Yes. Publish the native model through the listener's `apis.systemone.models`
+grant, and call `/v1/systemone` (alias `/v1/decisions`). Native model discovery
 uses `/v1/systemone/models`; Chat model discovery uses `/v1/models`.
 
 Use a concrete model ID for direct inference in either mode. In Router mode,
 you can also publish an explicit `api: systemone` entrypoint and grant its
-`vllm-sr/auto` name on the listener to run a native escalation. The Chat default
-entrypoint does not implicitly enable native routing. See the
+`vllm-sr/auto` name on the listener to run a native escalation; the Chat
+default entrypoint doesn't enable native routing implicitly. See the
 [System One escalate guide](tutorials/algorithm/looper/escalate#on-system-one) and
-[Quickstart](model-runtime/quickstart) for configuration and requests.
+[Quickstart](./model-runtime/get-started/quickstart) for configuration and requests.
 
 ## How does it work with an agent harness?
 
@@ -62,7 +65,7 @@ selected model path.
 
 ## How do we measure routing accuracy and business value?
 
-Classifier accuracy is not the number that decides this. The question is whether a routing recipe **keeps answer quality while reducing cost and latency** against a strong single-model baseline — and that claim needs paired evidence, not a before-and-after anecdote.
+Signal accuracy is not the number that decides this. The question is whether a routing recipe **keeps answer quality while reducing cost and latency** against a strong single-model baseline — and that claim needs paired evidence, not a before-and-after anecdote.
 
 The repository's answer is **sr-bench**: freeze the cases, grader versions, request parameters and prices; run the strongest single model and the current mixture on the same aggregate; then read quality together with `100 × (1 − candidate cost / baseline cost)`. Two disciplines keep the number honest:
 
@@ -125,4 +128,4 @@ signal → policy / decision → algorithm / model → plugin → endpoint sched
 
 Delivery, route correctness and answer quality are three separate outcomes; qualify the ones you did not measure instead of inferring success.
 
-The [CLI reference](api/cli) documents every flag shown here, [VSR headers](troubleshooting/vsr-headers) lists the receipt headers, and [API and Observability](tutorials/global/api-and-observability) covers the telemetry surfaces.
+The [CLI reference](api/cli) documents every flag shown here, [VSR headers](api/headers) lists the receipt headers, and [API and Observability](tutorials/global/api-and-observability) covers the telemetry surfaces.
