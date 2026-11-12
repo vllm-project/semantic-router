@@ -4,6 +4,6 @@ package systemonecodec
 
 var generatedSpecs = []SpecRef{
 	{ID: "systemone/0.2", Path: "config/schemas/systemone/systemone-0.2.schema.yaml", SHA256: "eda58f84b8384be50f4af6176715f7db8d7c2922868472496a4200e78c3f5992", Source: "https://api.typesafe.ai/openapi.json", Version: "0.2.0"},
-	{ID: "vllm-sr/5.0", Path: "config/schemas/systemone/vllm-sr-5.0.extensions.yaml", SHA256: "c40f77cd17c23e1bf3457d77f7c575a6c9b0fa2db71470ba9cdfd0480e094575", Source: "", Version: "5.0"},
+	{ID: "vllm-sr/5.0", Path: "config/schemas/systemone/vllm-sr-5.0.extensions.yaml", SHA256: "fd6f738b6e305fe4acf5413e1d067c17db3157f0aeb5ec7921cd8ff8a6e02989", Source: "", Version: "5.0"},
 	{ID: "vllm-sr/4.0", Path: "config/schemas/systemone/vllm-sr-4.0.openapi.yaml", SHA256: "4e215e8f964ae646debf1ecd3e56e0fca2f77b63a693bf90ea668b90b69e3b9e", Source: "the model runtime contract 4.0.0", Version: "4.0.0"},
 }

@@ -18,7 +18,7 @@ extension_version: "5.0"
 
 # The decision-model families of the model runtime; `all` in an entry means
 # every one of them.
-families: [decision1, decision2, decision3, vela2, vela3, vela3_d3]
+families: [decision1, decision2, decision3, vela2, vela3, vela3_d3, vela3_pico]
 
 # Where a field sits, and the schemas of the standard's description it
 # extends there.
@@ -131,7 +131,7 @@ fields:
   - name: roles
     level: request
     since: "5.0"
-    families: [vela2, vela3, vela3_d3]
+    families: [vela2, vela3, vela3_d3, vela3_pico]
     standard_target: strip
     schema:
       type: object
@@ -157,7 +157,7 @@ fields:
   - name: preset
     level: question
     since: "5.0"
-    families: [decision1, vela2, vela3, vela3_d3]
+    families: [decision1, vela2, vela3, vela3_d3, vela3_pico]
     applies_to: all
     standard_target: strip
     schema: {type: string, minLength: 1}
@@ -168,7 +168,7 @@ fields:
   - name: head
     level: question
     since: "5.0"
-    families: [vela2, vela3, vela3_d3]
+    families: [vela2, vela3, vela3_d3, vela3_pico]
     applies_to: [span]
     standard_target: refuse
     schema: {type: string, enum: [router, broad]}
@@ -188,7 +188,7 @@ fields:
   - name: over
     level: question
     since: "5.0"
-    families: [vela2, vela3, vela3_d3]
+    families: [vela2, vela3, vela3_d3, vela3_pico]
     applies_to: all
     standard_target: refuse
     schema:
@@ -201,7 +201,7 @@ fields:
   - name: overflow
     level: question
     since: "5.0"
-    families: [vela2, vela3, vela3_d3]
+    families: [vela2, vela3, vela3_d3, vela3_pico]
     applies_to: all
     standard_target: strip
     schema: {type: string, enum: [window, truncate]}
@@ -222,7 +222,7 @@ fields:
   - name: threshold
     level: question
     since: "5.0"
-    families: [vela2, vela3, vela3_d3]
+    families: [vela2, vela3, vela3_d3, vela3_pico]
     applies_to: [set, span]
     standard_target: refuse
     schema: {type: number, minimum: 0, maximum: 1}
@@ -254,7 +254,7 @@ fields:
   - name: span
     level: question_type
     since: "5.0"
-    families: [vela2, vela3, vela3_d3]
+    families: [vela2, vela3, vela3_d3, vela3_pico]
     standard_target: refuse
     schema:
       type: object
@@ -270,7 +270,7 @@ fields:
   - name: set
     level: question_type
     since: "5.0"
-    families: [vela2, vela3]
+    families: [vela2, vela3, vela3_pico]
     standard_target: refuse
     schema:
       type: object
@@ -319,7 +319,7 @@ fields:
   - name: abstain_probability
     level: answer
     since: "5.0"
-    families: [vela2, vela3]
+    families: [vela2, vela3, vela3_pico]
     applies_to: [choice, noul]
     standard_target: absent
     schema: {type: number, minimum: 0, maximum: 1}
@@ -372,7 +372,7 @@ fields:
   - name: spans
     level: response
     since: "5.0"
-    families: [vela2, vela3, vela3_d3]
+    families: [vela2, vela3, vela3_d3, vela3_pico]
     standard_target: absent
     schema:
       type: object
@@ -383,7 +383,7 @@ fields:
   - name: sets
     level: response
     since: "5.0"
-    families: [vela2, vela3]
+    families: [vela2, vela3, vela3_pico]
     standard_target: absent
     schema:
       type: object
@@ -392,7 +392,7 @@ fields:
   - name: thresholds
     level: response
     since: "5.0"
-    families: [vela2, vela3, vela3_d3]
+    families: [vela2, vela3, vela3_d3, vela3_pico]
     standard_target: absent
     schema:
       type: object

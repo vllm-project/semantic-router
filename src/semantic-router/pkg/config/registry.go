@@ -138,6 +138,37 @@ var DefaultModelRegistry = []ModelSpec{
 		SharedDeployment:   true,
 		Tags:               []string{"vela", "vela3", "multi-task", "spans"},
 	},
+	// The Vela 3.1 picos answer the same built-in signals as vela3-fast on one
+	// fine-tuned UltraBERT encoder each, reading a whole mixed call in one
+	// forward when it fits 8,192 tokens. Opt-in only: neither is a default.
+	// The model runtime downloads and verifies them; they run at their
+	// published FP32 (src/model-runtime/docs/records/vela31-pico-parity.md).
+	{
+		LocalPath:          "models/vela3.1-pico-380m",
+		RepoID:             "vllm-sr/vela3.1-pico-380m",
+		Revision:           "a79cbf66ee09245ef8f40f66afa9bcbd57ccf5a5",
+		Aliases:            []string{"vela3.1-pico-380m"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call on one 380M encoder: domain, prompt attacks, safety, fact-check need, feedback and modality, with PII and hallucination spans. Supports up to 32K input.",
+		ParameterSize:      "380M",
+		MaxContextLength:   32768,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		Tags:               []string{"vela", "vela3", "pico", "multi-task", "spans"},
+	},
+	{
+		LocalPath:          "models/vela3.1-pico-150m",
+		RepoID:             "vllm-sr/vela3.1-pico-150m",
+		Revision:           "dad77ad7a83c884b3e608a58c13cf25beba00803",
+		Aliases:            []string{"vela3.1-pico-150m"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call on one 150M encoder: domain, prompt attacks, safety, fact-check need, feedback and modality, with PII and hallucination spans. Supports up to 32K input.",
+		ParameterSize:      "150M",
+		MaxContextLength:   32768,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		Tags:               []string{"vela", "vela3", "pico", "multi-task", "spans"},
+	},
 	// Vela 2.0 0.3B answers the built-in domain, Guard, safety, fact-check,
 	// feedback and modality signals as questions, and PII and hallucination
 	// with its span presets. The model runtime downloads and verifies it; on
