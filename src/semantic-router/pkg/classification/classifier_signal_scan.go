@@ -34,9 +34,10 @@ import (
 // when that match alone refuses the request, the stage's scans end there. A
 // window larger than the configured size dilutes what it holds, so one whose
 // answer puts a rule close below its threshold (scan_window.reread_margin) is
-// read again in windows of that size before the rule decides. When the
-// stage's deadline leaves only some windows read, on_unscanned decides
-// (best_effort: on the windows read, once they reach the rule's
+// read again in windows of that size: at once within half the margin, where
+// a diluted match lands, and after the windows still unread further below.
+// When the stage's deadline leaves only some windows read, on_unscanned
+// decides (best_effort: on the windows read, once they reach the rule's
 // min_coverage); when none was, the rule is unknown, which on_unknown decides.
 
 // maxScanWindows bounds the windows of one input, and so the calls its scan
@@ -113,6 +114,10 @@ type guardScan struct {
 	errs      []error
 	done      []bool
 	latency   float64
+	// waiting are the re-reads that wait for the windows still unread, and
+	// rank the highest rank the scan's windows took.
+	waiting []waitingReread
+	rank    int
 }
 
 // scanBudget is how a deployment reads a long input: windows of size bytes,
@@ -346,6 +351,7 @@ func (scan *guardScan) windowCalls(ctx context.Context) []*systemOneCall {
 			scan.errs[index], scan.done[index] = errWindowLimit, true
 		}
 	}
+	scan.rank = len(scan.order)
 	return calls
 }
 
@@ -448,6 +454,7 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 			scan.record(call.window, response, err, latency)
 			more := append(scan.rereadCalls(call, response, err), c.replan(scan)...)
 			more = append(more, scan.takePending()...)
+			more = append(more, scan.waitingCalls()...)
 			modelservice.Fan(ctx, len(more), func(i int) { read(more[i]) })
 		}
 		if bundled {
@@ -496,26 +503,97 @@ func (scan *guardScan) record(window int, response modelservice.Response, err er
 }
 
 // rereadCalls are the calls that read a window larger than the configured
-// size again in windows of that size, when its answer put a rule that one
-// window decides close below its threshold without making it match
-// (closeBelowThreshold): a larger window dilutes what it holds, which a window
-// of the configured size reads as the rule expects. They take the window's
-// rank, so they are read before the windows after it.
+// size again in windows of that size, when its answer left a rule that one
+// window decides short of a match by at most the margin below its threshold
+// (thresholdGap): a larger window dilutes what it holds, which a window of the
+// configured size reads as the rule expects. Within half the margin, where a
+// diluted match lands, they take the window's rank and are read before the
+// windows after it, so a match still ends the scan early; further below, they
+// wait until the windows still unread are read (waitingCalls).
 func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Response, err error) []*systemOneCall {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
 	window := scan.windows[call.window]
-	if err != nil || window.end-window.start <= scan.size || !slices.ContainsFunc(scan.rules, func(asked askedRule) bool {
-		answer, ok := response.Answers[asked.questionID()]
-		return ok && answer.Error == "" && windowDecides(asked.rule) && closeBelowThreshold(asked, answer, scan.rereadMargin)
-	}) {
+	if err != nil || scan.rereadMargin <= 0 || window.end-window.start <= scan.size {
 		return nil
 	}
-	parts := cutWindows(scan.text, window.start, window.end, scan.size, scan.overlap)
+	gap := math.Inf(1)
+	for _, asked := range scan.rules {
+		answer, ok := response.Answers[asked.questionID()]
+		if !ok || answer.Error != "" || !windowDecides(asked.rule) {
+			continue
+		}
+		if below, short := thresholdGap(asked, answer); short {
+			gap = min(gap, below)
+		}
+	}
+	if gap > scan.rereadMargin {
+		return nil
+	}
+	parts := scan.rereadPartsLocked(window)
+	if gap > scan.rereadMargin/2 {
+		scan.waiting = append(scan.waiting, waitingReread{parts: parts, gap: gap})
+		return nil
+	}
 	calls := make([]*systemOneCall, len(parts))
 	for index, part := range parts {
 		calls[index] = scan.addWindowLocked(part, call.request.Window)
 	}
+	return calls
+}
+
+// waitingReread is the parts of a window to read again once the windows
+// still unread are read (rereadCalls), and how far below its threshold the
+// window left its rule.
+type waitingReread struct {
+	parts []scanWindow
+	gap   float64
+}
+
+// rereadPartsLocked are the windows of the configured size that read window
+// again, but for those the scan's cut already read and answered: the parts of
+// a run are the cut's windows it was read in place of, and some of them were
+// read before the scan fell behind.
+func (scan *guardScan) rereadPartsLocked(window scanWindow) []scanWindow {
+	parts := cutWindows(scan.text, window.start, window.end, scan.size, scan.overlap)
+	if window.first < 0 || window.first == window.last {
+		return parts
+	}
+	return slices.DeleteFunc(parts, func(part scanWindow) bool {
+		for index := window.first; index <= window.last; index++ {
+			if cut := scan.windows[index]; cut.start == part.start && cut.end == part.end {
+				return scan.done[index] && scan.errs[index] == nil
+			}
+		}
+		return false
+	})
+}
+
+// waitingCalls are the calls that read again, closest to a match first, the
+// windows whose re-read waited, once the cut's windows and the runs are all
+// read: a window far below its threshold seldom holds a diluted match, and its
+// re-read would take the time the windows still unread need. They rank after
+// every window of the scan.
+func (scan *guardScan) waitingCalls() []*systemOneCall {
+	scan.mu.Lock()
+	defer scan.mu.Unlock()
+	if len(scan.waiting) == 0 {
+		return nil
+	}
+	for index, window := range scan.windows {
+		if window.first >= 0 && !scan.done[index] {
+			return nil
+		}
+	}
+	slices.SortStableFunc(scan.waiting, func(a, b waitingReread) int { return cmp.Compare(a.gap, b.gap) })
+	var calls []*systemOneCall
+	for _, waiting := range scan.waiting {
+		for _, part := range waiting.parts {
+			scan.rank++
+			calls = append(calls, scan.addWindowLocked(part, scan.rank))
+		}
+	}
+	scan.waiting = nil
 	return calls
 }
 
@@ -580,26 +658,29 @@ func windowVerdict(asked askedRule, answer modelservice.Answer) (float64, bool) 
 	return results.SignalValues[signalConfidenceKey(asked.signalType, asked.rule.Name)], slices.Contains(matched, asked.rule.Name)
 }
 
-// closeBelowThreshold reports whether one window's answer leaves asked's rule
-// short of a match by at most margin in log-odds below its threshold, the
-// floor its predicate sets. Dilution lowers a score's log-odds by about the
-// same amount wherever the threshold is, so one margin serves a rule at 0.5
-// and one at 0.995 alike. A rule with no floor (a selection without a
-// predicate) has no threshold to fall short of.
-func closeBelowThreshold(asked askedRule, answer modelservice.Answer, margin float64) bool {
+// thresholdGap is how far below its threshold, the floor its predicate sets,
+// one window's answer leaves asked's rule, in log-odds, and false when the
+// answer makes the rule match or the rule has no floor (a selection without a
+// predicate). Dilution lowers a score's log-odds by about the same amount
+// wherever the threshold is, so one margin serves a rule at 0.5 and one at
+// 0.995 alike.
+func thresholdGap(asked askedRule, answer modelservice.Answer) (float64, bool) {
 	predicate := asked.rule.EffectivePredicate()
-	if margin <= 0 || predicate == nil {
-		return false
+	if predicate == nil {
+		return 0, false
 	}
 	threshold := predicate.GTE
 	if threshold == nil {
 		threshold = predicate.GT
 	}
 	if threshold == nil {
-		return false
+		return 0, false
 	}
 	value, matched := windowVerdict(asked, answer)
-	return !matched && logOdds(value) >= logOdds(*threshold)-margin
+	if matched {
+		return 0, false
+	}
+	return logOdds(*threshold) - logOdds(value), true
 }
 
 // logOdds is p's log-odds, with p held just inside (0, 1).

@@ -230,6 +230,7 @@ func (scan *guardScan) replanLocked(k int) []*systemOneCall {
 			}
 		}
 		calls = append(calls, scan.addWindowLocked(run, rank+position))
+		scan.rank = max(scan.rank, rank+position)
 	}
 	return calls
 }

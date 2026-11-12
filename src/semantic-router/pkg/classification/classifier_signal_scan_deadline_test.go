@@ -45,13 +45,36 @@ func dilutedInjection(state, _ string, question api.Question) (api.Answer, bool)
 // time, perState and perWord for each of its words.
 func dilutingGuardClassifier(t *testing.T, timeout, perState, perWord time.Duration) (*Classifier, *runtimetest.Runtime) {
 	t.Helper()
-	document := strings.NewReplacer("TIMEOUT", fmt.Sprint(timeout.Milliseconds()), "RULE\n", "").Replace(refusingGuardConfig)
+	return guardClassifierAnswering(t, timeout, perState, perWord, 0.995, dilutedInjection)
+}
+
+// scoredGuardClassifier is dilutingGuardClassifier with the jailbreak rule at
+// threshold and every state's P(jailbreak) score(state).
+func scoredGuardClassifier(t *testing.T, timeout, perState time.Duration, threshold float64, score func(state string) float64) (*Classifier, *runtimetest.Runtime) {
+	t.Helper()
+	return guardClassifierAnswering(t, timeout, perState, 0, threshold, func(state, _ string, question api.Question) (api.Answer, bool) {
+		if question.Choices == nil || !slices.ContainsFunc(*question.Choices, func(choice api.ChoiceOption) bool { return choice.Key == "jailbreak" }) {
+			return api.Answer{}, false
+		}
+		attack := score(state)
+		kind, choice := "choice", map[bool]string{true: "jailbreak", false: "benign"}[attack >= 0.5]
+		probabilities := map[string]float64{"benign": 1 - attack, "jailbreak": attack}
+		return api.Answer{Type: &kind, Choice: &choice, Probabilities: &probabilities, Confidence: &attack}, true
+	})
+}
+
+// guardClassifierAnswering serves refusingGuardConfig with the jailbreak rule
+// at threshold from a fake vela3-turbo that answers as answer says.
+func guardClassifierAnswering(t *testing.T, timeout, perState, perWord time.Duration, threshold float64, answer func(state, _ string, question api.Question) (api.Answer, bool)) (*Classifier, *runtimetest.Runtime) {
+	t.Helper()
+	document := strings.NewReplacer("TIMEOUT", fmt.Sprint(timeout.Milliseconds()), "RULE\n", "",
+		"predicate: {gte: 0.995}", fmt.Sprintf("predicate: {gte: %g}", threshold)).Replace(refusingGuardConfig)
 	cfg, err := config.ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	runtime, fake := servingtest.Runtime(t, map[string]runtimetest.Model{
-		"primary": {Family: presets.FamilyVela3D3, MaxInputTokens: 32_768, Answer: dilutedInjection},
+		"primary": {Family: presets.FamilyVela3D3, MaxInputTokens: 32_768, Answer: answer},
 	})
 	classifier, err := buildClassifier(cfg, RecipeRuntimeOptions{Runtime: runtime})
 	if err != nil {
@@ -186,50 +209,131 @@ func TestAGrownWindowCloseToAMatchIsReadAgainAtTheConfiguredSize(t *testing.T) {
 	}
 }
 
+// rereadRule is a jailbreak rule at threshold.
+func rereadRule(threshold float64) askedRule {
+	return askedRule{signalType: config.SignalTypeJailbreak, preset: presets.Jailbreak, rule: config.SystemOneRule{
+		Name: "prompt_attack", Labels: []string{"jailbreak"}, Predicate: &config.NumericPredicate{GTE: &threshold},
+		Question: config.SystemOneQuestion{Type: config.SystemOneQuestionChoice, Choices: []config.SystemOneOption{{Key: "benign"}, {Key: "jailbreak"}}},
+	}}
+}
+
+// rereadAnswer is asked's answer for a window that scores score.
+func rereadAnswer(asked askedRule, score float64) modelservice.Response {
+	choice := map[bool]string{true: "jailbreak", false: "benign"}[score >= 0.5]
+	return modelservice.Response{Answers: map[string]modelservice.Answer{asked.questionID(): {
+		Type: "choice", Choice: choice, Probabilities: map[string]float64{"benign": 1 - score, "jailbreak": score},
+	}}}
+}
+
+// rereadScan is a scan of text whose cut is windows, the first read and the
+// rest not, for asked.
+func rereadScan(text string, asked askedRule, windows []scanWindow) *guardScan {
+	scan := &guardScan{
+		text: text, size: 1024, overlap: 128, rereadMargin: config.DefaultScanWindowRereadMargin, rules: []askedRule{asked}, cut: len(windows),
+		windows: windows, responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)), done: make([]bool, len(windows)),
+		windowState: func(window string) modelservice.Request { return modelservice.Request{State: window} },
+	}
+	scan.done[0] = true
+	return scan
+}
+
 // A window larger than the configured size is read again when its answer
 // leaves a rule just short of the rule's own threshold, wherever that is: the
 // default margin of 3 in log-odds re-reads a rule at 0.5 from about 0.05 and
 // one at 0.995 from about 0.91, not far below either, and never once the
-// window matched.
+// window matched. Within half the margin, where a diluted match lands, the
+// re-read comes at once, at the window's rank; further below, it waits for the
+// windows still unread.
 func TestAGrownWindowIsReadAgainJustBelowItsRulesThreshold(t *testing.T) {
 	text := strings.Repeat("The committee reviewed the quarterly report and agreed to meet again. ", 40)
 	for _, test := range []struct {
 		threshold, score float64
-		reread           bool
+		second           string
 	}{
-		{0.5, 0.45, true},
-		{0.5, 0.06, true},
-		{0.5, 0.03, false},
-		{0.5, 0.6, false},
-		{0.995, 0.99, true},
-		{0.995, 0.92, true},
-		{0.995, 0.85, false},
-		{0.995, 0.997, false},
+		{0.5, 0.45, "at once"},
+		{0.5, 0.06, "later"},
+		{0.5, 0.03, ""},
+		{0.5, 0.6, ""},
+		{0.995, 0.99, "at once"},
+		{0.995, 0.92, "later"},
+		{0.995, 0.85, ""},
+		{0.995, 0.997, ""},
 	} {
-		threshold := test.threshold
-		asked := askedRule{signalType: config.SignalTypeJailbreak, preset: presets.Jailbreak, rule: config.SystemOneRule{
-			Name: "prompt_attack", Labels: []string{"jailbreak"}, Predicate: &config.NumericPredicate{GTE: &threshold},
-			Question: config.SystemOneQuestion{Type: config.SystemOneQuestionChoice, Choices: []config.SystemOneOption{{Key: "benign"}, {Key: "jailbreak"}}},
-		}}
-		scan := &guardScan{
-			text: text, size: 1024, overlap: 128, rereadMargin: config.DefaultScanWindowRereadMargin, rules: []askedRule{asked}, cut: 1,
-			windows:   []scanWindow{{start: 0, end: len(text), first: 0, last: 0}},
-			responses: make([]modelservice.Response, 1), errs: make([]error, 1), done: []bool{true},
-			windowState: func(window string) modelservice.Request { return modelservice.Request{State: window} },
+		asked := rereadRule(test.threshold)
+		scan := rereadScan(text, asked, []scanWindow{{start: 0, end: len(text), first: 0, last: 0}})
+		now := scan.rereadCalls(&systemOneCall{window: 0, request: modelservice.Request{Window: 3}}, rereadAnswer(asked, test.score), nil)
+		later := scan.waitingCalls()
+		got := map[bool]map[bool]string{true: {false: "at once"}, false: {true: "later", false: ""}}[len(now) > 0][len(later) > 0]
+		if got != test.second {
+			t.Fatalf("threshold %v, score %v: %d windows read again at once and %d later, want a second look %q", test.threshold, test.score, len(now), len(later), test.second)
 		}
-		choice := map[bool]string{true: "jailbreak", false: "benign"}[test.score >= 0.5]
-		response := modelservice.Response{Answers: map[string]modelservice.Answer{asked.questionID(): {
-			Type: "choice", Choice: choice, Probabilities: map[string]float64{"benign": 1 - test.score, "jailbreak": test.score},
-		}}}
-		calls := scan.rereadCalls(&systemOneCall{window: 0, request: modelservice.Request{Window: 3}}, response, nil)
-		if (len(calls) > 0) != test.reread {
-			t.Fatalf("threshold %v, score %v: %d windows read again, want a second look: %v", test.threshold, test.score, len(calls), test.reread)
-		}
-		for _, call := range calls {
-			if len(call.request.State) > scan.size || call.request.Window != 3 {
-				t.Fatalf("a window read again holds %d bytes at rank %d, want at most %d at the window's rank", len(call.request.State), call.request.Window, scan.size)
+		for _, call := range append(now, later...) {
+			if len(call.request.State) > scan.size {
+				t.Fatalf("a window read again holds %d bytes, want at most %d", len(call.request.State), scan.size)
 			}
 		}
+		for _, call := range now {
+			if call.request.Window != 3 {
+				t.Fatalf("a re-read at once has rank %d, want the window's 3", call.request.Window)
+			}
+		}
+	}
+}
+
+// A re-read that waits is read once the cut's windows and the runs are all
+// read, closest to a match first, after every window of the scan.
+func TestAWaitingReReadComesAfterTheWindowsStillUnreadClosestFirst(t *testing.T) {
+	text := strings.Repeat("The committee reviewed the quarterly report and agreed to meet again. ", 120)
+	asked := rereadRule(0.5)
+	third := len(text) / 3
+	scan := rereadScan(text, asked, []scanWindow{
+		{start: 0, end: third, first: 0, last: 0}, {start: third, end: 2 * third, first: 1, last: 1}, {start: 2 * third, end: len(text), first: 2, last: 2},
+	})
+	scan.rank = 3
+	if now := scan.rereadCalls(&systemOneCall{window: 0, request: modelservice.Request{Window: 1}}, rereadAnswer(asked, 0.06), nil); len(now) > 0 {
+		t.Fatalf("a window at 0.06 against 0.5 was read again at once (%d windows)", len(now))
+	}
+	scan.done[1] = true
+	if now := scan.rereadCalls(&systemOneCall{window: 1, request: modelservice.Request{Window: 2}}, rereadAnswer(asked, 0.15), nil); len(now) > 0 {
+		t.Fatalf("a window at 0.15 against 0.5 was read again at once (%d windows)", len(now))
+	}
+	if later := scan.waitingCalls(); len(later) > 0 {
+		t.Fatalf("%d re-reads came while a window of the cut was unread", len(later))
+	}
+	scan.done[2] = true
+	later := scan.waitingCalls()
+	if len(later) == 0 {
+		t.Fatal("the waiting re-reads did not come once the cut was read")
+	}
+	if first := scan.windows[later[0].window]; first.start < third || first.start >= 2*third {
+		t.Fatalf("the first waiting re-read starts at byte %d, want the window at 0.15 (bytes %d to %d) first", first.start, third, 2*third)
+	}
+	for index, call := range later {
+		if call.request.Window != 4+index {
+			t.Fatalf("waiting re-read %d has rank %d, want %d, after every window of the scan", index, call.request.Window, 4+index)
+		}
+	}
+	if again := scan.waitingCalls(); len(again) > 0 {
+		t.Fatalf("the waiting re-reads came twice (%d more)", len(again))
+	}
+}
+
+// A run's parts are the cut's windows it was read in place of; those the cut
+// read and answered are not read again.
+func TestARunIsReadAgainOnlyInTheWindowsTheCutLeftUnanswered(t *testing.T) {
+	text := strings.Repeat("The committee reviewed the quarterly report and agreed to meet again. ", 120)
+	cut := scanWindowsOf(text, 1024, 128)
+	for index := range cut {
+		cut[index].first, cut[index].last = index, index
+	}
+	asked := rereadRule(0.5)
+	scan := rereadScan(text, asked, cut)
+	scan.done[1], scan.done[2], scan.done[3] = true, true, true
+	scan.errs[2] = errWindowReplaced
+	run := scanWindow{start: cut[1].start, end: cut[3].end, runeStart: cut[1].runeStart, first: 1, last: 3}
+	parts := scan.rereadPartsLocked(run)
+	if len(parts) != 1 || parts[0].start != cut[2].start || parts[0].end != cut[2].end {
+		t.Fatalf("the run is read again in %d parts, want only the cut's window 2 (bytes %d to %d)", len(parts), cut[2].start, cut[2].end)
 	}
 }
 
@@ -307,6 +411,66 @@ func TestAScanThatFallsBehindReadsTheRestInLargerWindowsThatFit(t *testing.T) {
 	attack := evaluateTurn(classifier, injectedAt(distinctProse(300_000, 7), 0.6))
 	if !slices.Contains(attack.MatchedJailbreakRules, "prompt_attack") || attack.SignalErrorMatches["jailbreak:prompt_attack"] {
 		t.Fatalf("the injection at 60%% was not refused: coverage %v, errors %v", attack.ScanCoverage, attack.SignalErrors)
+	}
+}
+
+// Behind schedule, re-reads far below the threshold wait for the runs still
+// to read. In the worst case, every window of a benign message scores 0.1
+// against a rule at 0.5: inside the default margin, which re-reads from about
+// 0.05, but 2.2 below in log-odds. The scan still reads the whole message in
+// runs by its deadline, as the re-plan alone does. Read first, each run's
+// re-reads left 17% to 44% of the message unread.
+func TestAReplannedScanReadsItsRunsBeforeReReadsFarBelowTheThreshold(t *testing.T) {
+	scale := time.Duration(1)
+	if raceDetector {
+		scale = 3
+	}
+	deadline := 3 * time.Second * scale
+	classifier, _ := scoredGuardClassifier(t, deadline, 20*time.Millisecond*scale, 0.5, func(string) float64 { return 0.1 })
+	for range 5 {
+		classifier.windowPaces.observe("primary", configuredWindow, 20*time.Millisecond*scale)
+		classifier.windowPaces.observe("primary", 30_000, 22*time.Millisecond*scale)
+	}
+
+	results := evaluateTurn(classifier, distinctProse(300_000, 9)+"\n\nSummarize the minutes above.")
+
+	if results.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull || guarded(results) {
+		t.Fatalf("coverage %v (guarded %v): the runs should all be read before the re-reads far below the threshold", results.ScanCoverage, guarded(results))
+	}
+}
+
+// A window close below the threshold is still read again at once: an
+// injection that its grown window holds at 0.4 against a rule at 0.5, 0.4
+// below in log-odds, is read again before any re-read of the benign windows
+// around it (0.1, which wait for the windows still unread), and refused.
+func TestANearThresholdInjectionIsReadAgainBeforeTheWaitingReReads(t *testing.T) {
+	classifier, fake := scoredGuardClassifier(t, 20*time.Second, time.Millisecond, 0.5, func(state string) float64 {
+		switch {
+		case !strings.Contains(state, scanInjection):
+			return 0.1
+		case len(state) > configuredWindow:
+			return 0.4
+		}
+		return 0.7
+	})
+	text := injectedAt(distinctProse(700_000, 10), 0.6)
+
+	results := evaluateTurn(classifier, text)
+
+	if !slices.Contains(results.MatchedJailbreakRules, "prompt_attack") || results.SignalErrorMatches["jailbreak:prompt_attack"] {
+		t.Fatalf("the injection was not refused: coverage %v, errors %v", results.ScanCoverage, results.SignalErrors)
+	}
+	injection := strings.Index(text, scanInjection)
+	for _, state := range guardStates(fake) {
+		if len(state) > configuredWindow || strings.HasPrefix(text, state) || strings.HasSuffix(text, state) {
+			continue
+		}
+		if strings.Contains(state, scanInjection) {
+			break
+		}
+		if at := strings.Index(text, state); at < injection-4*configuredWindow || at > injection+4*configuredWindow {
+			t.Fatalf("a benign window at byte %d was read again before the window holding the injection (byte %d)", at, injection)
+		}
 	}
 }
 
