@@ -20,6 +20,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	responseBody []byte,
 	ctx *RequestContext,
 	completionLatency time.Duration,
+	bodyReplaced bool,
 ) *ext_proc.ProcessingResponse {
 	diagnosticsBeforeBody := len(ctx.ProtocolDiagnostics)
 	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
@@ -83,7 +84,8 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	if hasBufferedWarnings {
 		setResponseBodyHeaderOverwrite(response, headers.VSRWarnings, warnings)
 	}
-	if (rewriteClientBody || !bytes.Equal(finalBody, clientBody)) && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
+	if (rewriteClientBody || bodyReplaced || !bytes.Equal(finalBody, clientBody)) &&
+		response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
 		setResponseBodyMutation(response, finalBody)
 	}
 	return response
@@ -124,7 +126,12 @@ func (r *OpenAIRouter) finalizeResponsePolicy(
 // from irreversible persistence. Fallback can therefore validate the final
 // public wire before committing memory, Responses, and replay side effects.
 type responsePolicyPlan struct {
-	blocked    *ext_proc.ProcessingResponse
+	blocked *ext_proc.ProcessingResponse
+	// refusal is the error a streaming client receives for blocked.
+	refusal *llmprotocol.ProtocolError
+	// finalBody is the answer with the guard's notes, which Router Replay
+	// keeps at commit: a caller that sends the client another form of it
+	// replaces it first.
 	finalBody  []byte
 	response   *ext_proc.ProcessingResponse
 	commitFunc func()
@@ -166,11 +173,13 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	logResponseGuard(ctx, ctx.ResponseGuard)
 	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
-		return &responsePolicyPlan{blocked: refused}
+		return &responsePolicyPlan{blocked: r.encodeImmediateResponseForClient(refused, ctx), refusal: ctx.ImmediateProtocolError}
 	}
 	if rule := ctx.ResponseGuard.blocking(); rule != nil {
+		ctx.ResponsePath = headers.ResponsePathBlocked
 		return &responsePolicyPlan{
-			blocked: r.createErrorResponse(403, responseGuardBlockMessage(rule)),
+			blocked: r.createErrorResponseOnPath(403, responseGuardBlockMessage(rule), ctx.ResponsePath),
+			refusal: responseGuardRefusal(rule),
 			commitFunc: func() {
 				r.recordRouterReplayResponseGuard(ctx)
 				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "response_blocked", false)
@@ -191,17 +200,15 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	}
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
-	return &responsePolicyPlan{
-		finalBody: finalBody,
-		response:  response,
-		commitFunc: func() {
-			r.recordRouterReplayResponseGuard(ctx)
-			r.scheduleSemanticResponseMemoryStore(ctx, memoryResponse)
-			addResponseCostHeaders(ctx, response)
-			r.persistResponseObject(ctx)
-			r.attachRouterReplayResponse(ctx, finalBody, true)
-		},
+	plan := &responsePolicyPlan{finalBody: finalBody, response: response}
+	plan.commitFunc = func() {
+		r.recordRouterReplayResponseGuard(ctx)
+		r.scheduleSemanticResponseMemoryStore(ctx, memoryResponse)
+		addResponseCostHeaders(ctx, response)
+		r.persistResponseObject(ctx)
+		r.attachRouterReplayResponse(ctx, plan.finalBody, true)
 	}
+	return plan
 }
 
 func (r *OpenAIRouter) applySemanticResponseWarnings(

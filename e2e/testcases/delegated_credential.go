@@ -43,11 +43,13 @@ const (
 
 func init() {
 	pkgtestcases.Register("delegated-credential", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Present the delegated credential only to delegated upstreams, a provider backend and a decision-model deployment, by calls made for a request; reject requests without one before the call; refuse Router-own calls",
 		Tags:        []string{"delegated-credential", "security", "authz"},
 		Fn:          testDelegatedCredential,
 	})
 	pkgtestcases.Register("delegated-credential-disabled", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "With the delegated credential contract off, a delegated credential header never reaches an upstream",
 		Tags:        []string{"delegated-credential", "security", "authz"},
 		Fn:          testDelegatedCredentialDisabled,

@@ -98,16 +98,20 @@ func summarizeJailbreak(results *SignalResults, rules []askedRule) {
 			results.JailbreakConfidence = max(results.JailbreakConfidence, float32(probability))
 		}
 	}
-	evidence := false
+	evidence, unread := false, true
 	for _, reference := range results.MatchedJailbreakRules {
 		if strings.Contains(reference, ":") {
 			continue
 		}
 		results.JailbreakDetected = true
-		evidence = evidence || !results.SignalErrorMatches[signalConfidenceKey(config.SignalTypeJailbreak, reference)]
+		key := signalConfidenceKey(config.SignalTypeJailbreak, reference)
+		evidence = evidence || !results.SignalErrorMatches[key]
+		unread = unread && unscanned(strings.TrimPrefix(results.SignalErrors[key], systemOneSignalErrorPrefix))
 	}
 	switch {
 	case !results.JailbreakDetected:
+	case !evidence && unread:
+		results.JailbreakType = JailbreakUnscannedType
 	case !evidence:
 		results.JailbreakType = JailbreakUnavailableType
 	case results.JailbreakScoreAvailable:
@@ -248,7 +252,11 @@ func (c *Classifier) PIIRuleSpans(ctx context.Context, ruleName string, text str
 		return nil, fmt.Errorf("pii rule %q is not declared in this recipe", ruleName)
 	}
 	asked := applicationAsked(c.applicationRules[index])
-	call := &systemOneCall{deployment: c.Config.SystemOneRuleDeployment(asked.rule), request: modelservice.Request{State: text}, rules: []askedRule{asked}}
+	deployment := c.Config.SystemOneRuleDeployment(asked.rule)
+	if scan := newGuardScan(deployment, modelservice.Request{State: text}, c.scanBudgetFor(ctx, deployment)); scan != nil {
+		return c.piiScanSpans(ctx, ruleName, text, asked, scan)
+	}
+	call := &systemOneCall{deployment: deployment, request: modelservice.Request{State: text}, rules: []askedRule{asked}}
 	var answer modelservice.Answer
 	var answered bool
 	var askErr error
@@ -267,6 +275,25 @@ func (c *Classifier) PIIRuleSpans(ctx context.Context, ruleName string, text str
 		return nil, fmt.Errorf("pii rule %q read only part of the text", ruleName)
 	}
 	return CoverRepeatedSpans(text, matchedSpans(asked.rule, answer)), nil
+}
+
+// piiScanSpans is PIIRuleSpans of a text longer than one window: every window
+// must be read whole, and their spans count at their places in the text.
+func (c *Classifier) piiScanSpans(ctx context.Context, ruleName, text string, asked askedRule, scan *guardScan) ([]modelservice.Span, error) {
+	scan.rules = []askedRule{asked}
+	readers, release := c.windowReaders(ctx, []*guardScan{scan})
+	modelservice.Fan(ctx, len(readers), func(i int) { readers[i]() })
+	release()
+	read, reason := scan.answers(asked)
+	if len(read) < len(scan.windows) {
+		return nil, fmt.Errorf("pii rule %q read %d of the text's %d windows: %w: %s", ruleName, len(read), len(scan.windows), modelservice.ErrUnavailable, reason)
+	}
+	for _, entry := range read {
+		if entry.answer.InputCoverage != "complete" {
+			return nil, fmt.Errorf("pii rule %q read only part of the text", ruleName)
+		}
+	}
+	return CoverRepeatedSpans(text, matchedSpans(asked.rule, mergedSpanAnswer(read, scan))), nil
 }
 
 // AskPreset asks the deployment an application signal type's rules that name

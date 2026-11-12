@@ -12,6 +12,26 @@ least_request_choice_count: 2
 
 # Retries, once retry_count is set.
 retry_on: connect-failure,refused-stream
+# The retry_on names Envoy documents, HTTP then gRPC. Any other name fails the
+# load, since both data planes would drop it without a word. The standalone
+# gateway acts on the HTTP conditions it implements and ignores the others.
+retry_on_conditions:
+  - 5xx
+  - gateway-error
+  - reset
+  - reset-before-request
+  - connect-failure
+  - envoy-ratelimited
+  - retriable-4xx
+  - refused-stream
+  - retriable-status-codes
+  - retriable-headers
+  - http3-post-connect-failure
+  - cancelled
+  - deadline-exceeded
+  - internal
+  - resource-exhausted
+  - unavailable
 retry_back_off_base: 25ms
 retry_back_off_max: 250ms
 host_selection_retry_max_attempts: 3

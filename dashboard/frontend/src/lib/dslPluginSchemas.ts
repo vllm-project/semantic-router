@@ -47,7 +47,8 @@ function getSystemPromptPluginFieldSchema(): FieldSchema[] {
       label: 'Mode',
       type: 'select',
       options: ['', 'replace', 'insert'],
-      description: "Replace the caller's system prompt (default) or insert before it",
+      description:
+        "Insert before the caller's system prompt (default), or replace every system and developer instruction the caller sent",
     },
   ]
 }
@@ -139,7 +140,7 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
       key: 'capture_tool_results',
       label: 'Capture Tool Results',
       type: 'boolean',
-      description: 'Store client tool-result text; requires personal data capture',
+      description: 'Store client tool-result text; requires request body and personal data capture',
     },
     { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
     {
@@ -352,12 +353,6 @@ function getRequestParamsPluginFieldSchema(): FieldSchema[] {
       type: 'number',
       placeholder: '1',
       description: 'Maximum allowed value for n (number of completions)',
-    },
-    {
-      key: 'strip_unknown',
-      label: 'Strip Unknown',
-      type: 'boolean',
-      description: 'Remove fields not in the OpenAI spec',
     },
   ]
 }

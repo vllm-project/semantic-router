@@ -53,6 +53,21 @@ func validateWorkflowFinalResumeState(state *workflowPendingToolState, cfg workf
 	return nil
 }
 
+// clearReportedUsage drops the usage of the calls a pending state carries.
+// The turn that made each call reported it, so a resumed turn reports only
+// the calls it makes.
+func clearReportedUsage(state *workflowPendingToolState) {
+	responses := append([]*ModelResponse{state.PlannerResp}, state.CurrentStepResponses...)
+	for _, result := range state.StepResults {
+		responses = append(responses, result.responses...)
+	}
+	for _, resp := range responses {
+		if resp != nil {
+			resp.Usage = TokenUsage{}
+		}
+	}
+}
+
 func (l *WorkflowsLooper) callWorkflowAgentAfterTool(
 	ctx context.Context,
 	req *Request,
@@ -245,13 +260,13 @@ func (l *WorkflowsLooper) finishResumedWorkflow(
 ) (*Response, bool, error) {
 	original := extractOriginalContent(originalRequest)
 	finalResp, interrupt, err := l.synthesizeWorkflowFinal(ctx, req, cfg, state.Plan, original, results, state.PlannerResp, state.WorkerModels)
-	if err != nil {
+	if finalResp, err = workflowFinalOrFallback(req, cfg, results, finalResp, err); err != nil {
 		return nil, false, err
 	}
 	if interrupt != nil {
 		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg, claim)
 	}
-	applyFinalOutputContract(req.OutputContractSpec, finalResp)
+	applyWorkflowOutputContract(req.OutputContractSpec, finalResp, results)
 	summary := summarizeWorkflowExecution(cfg, state.PlannerResp, results, finalResp)
 	trace := buildWorkflowTrace(cfg, state.WorkerModels, state.Plan, results, summary.failed)
 	var out *Response
@@ -271,7 +286,7 @@ func (l *WorkflowsLooper) finishResumedWorkflowFinal(
 	originalRequest *openai.ChatCompletionNewParams,
 	finalResp *ModelResponse,
 ) (*Response, error) {
-	applyFinalOutputContract(req.OutputContractSpec, finalResp)
+	applyWorkflowOutputContract(req.OutputContractSpec, finalResp, state.StepResults)
 	summary := summarizeWorkflowExecution(cfg, state.PlannerResp, state.StepResults, finalResp)
 	trace := buildWorkflowTrace(cfg, state.WorkerModels, state.Plan, state.StepResults, summary.failed)
 	trace.FinalToolTrajectory = workflowToolTurnTraces(state.ToolTrajectory)

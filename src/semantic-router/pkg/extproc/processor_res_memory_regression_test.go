@@ -3,6 +3,8 @@ package extproc
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,6 +46,8 @@ func persistenceRegressionContext(decision string) *RequestContext {
 		SemanticRequest: &llmprotocol.Request{Messages: []llmprotocol.Message{
 			neutralMemoryMessage("user", "My preferred deployment region is eu-central-1."),
 			neutralMemoryMessage("assistant", "I will remember your preferred deployment region."),
+			neutralMemoryMessage("user", "Which cluster size should I start with?"),
+			neutralMemoryMessage("assistant", "Start with three nodes."),
 			neutralMemoryMessage("user", "Explain how to deploy a backend service in that region."),
 		}},
 	}
@@ -139,6 +143,50 @@ func TestScheduleResponseMemoryStore_PartialWriteReportsFailure(t *testing.T) {
 	assert.Equal(t, "persist_error", record.Outcomes[1].Reason)
 	assert.Equal(t, "terminal", record.Outcomes[1].Metadata["phase"])
 	assert.Equal(t, "true", record.Outcomes[1].Metadata["fail_open"])
+}
+
+// The request's last user message is the current turn, not history: a
+// session window (stride 3) is written on the third user turn, and it carries
+// the current question once.
+func TestScheduleResponseMemoryStore_SessionWindowCountsCurrentTurnOnce(t *testing.T) {
+	for _, turns := range []int{2, 3} {
+		t.Run(fmt.Sprintf("turns=%d", turns), func(t *testing.T) {
+			backend := &persistenceRegressionStore{InMemoryStore: memory.NewInMemoryStore()}
+			runner := memory.NewPersistenceRunner(10*time.Second, 1, 1)
+			router := &OpenAIRouter{
+				Config:            &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, AutoStore: true}},
+				MemoryExtractor:   memory.NewMemoryChunkStore(backend),
+				memoryPersistence: runner,
+			}
+			reqCtx := persistenceRegressionContext("session-window")
+			reqCtx.SemanticRequest.Messages = nil
+			for turn := 1; turn < turns; turn++ {
+				reqCtx.SemanticRequest.Messages = append(reqCtx.SemanticRequest.Messages,
+					neutralMemoryMessage("user", fmt.Sprintf("Earlier question number %d about the deployment region.", turn)),
+					neutralMemoryMessage("assistant", fmt.Sprintf("Earlier answer number %d about the deployment region.", turn)))
+			}
+			current := "Which load balancer should I use there for gRPC traffic?"
+			reqCtx.SemanticRequest.Messages = append(reqCtx.SemanticRequest.Messages, neutralMemoryMessage("user", current))
+
+			router.scheduleSemanticResponseMemoryStore(reqCtx, memoryTestResponse("Use a network load balancer with HTTP/2 target groups."))
+			require.NoError(t, runner.RetireAndWait(5*time.Second))
+
+			stored, err := backend.List(context.Background(), memory.ListOptions{UserID: "original-user", Limit: 10})
+			require.NoError(t, err)
+			var sessions []string
+			for _, mem := range stored.Memories {
+				if mem.Source == "session_window_v2" {
+					sessions = append(sessions, mem.Content)
+				}
+			}
+			if turns < 3 {
+				require.Empty(t, sessions, "a %d-turn conversation wrote a stride-3 session window", turns)
+				return
+			}
+			require.Len(t, sessions, 1)
+			require.Equal(t, 1, strings.Count(sessions[0], "Q: "+current), sessions[0])
+		})
+	}
 }
 
 func blockedPersistenceRunner(t *testing.T) (*memory.PersistenceRunner, func()) {

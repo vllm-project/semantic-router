@@ -256,6 +256,7 @@ func assertReferenceConfigDeploymentCoverage(t testingT, deployments map[string]
 		{"limits", reflect.TypeOf(DeploymentLimits{})},
 		{"capabilities", reflect.TypeOf(DeploymentCapabilities{})},
 		{"generation", reflect.TypeOf(DeploymentGeneration{})},
+		{"outlier_detection", reflect.TypeOf(DeploymentOutlierDetection{})},
 	} {
 		assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, items, block.key, "global.model_catalog.deployments"), block.typ, "global.model_catalog.deployments[]."+block.key)
 	}

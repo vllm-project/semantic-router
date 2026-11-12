@@ -436,7 +436,7 @@ in front of the Service sets them, add `identity: {trust_headers: true}` to that
 listener in `config.listeners`, with `trusted_peers` set to the proxy's Pod or
 node CIDRs; memory, authz signals and per-user rate limits then see the user.
 
-**GPU platforms.** `vllm-sr serve --target kubernetes --platform amd|nvidia`
+**GPU platforms.** `vllm-sr serve --target kubernetes --platform rocm|cuda`
 sets `image.repository` to `vllm-sr-rocm` or `vllm-sr-cuda` and adds
 `amd.com/gpu: 1` or `nvidia.com/gpu: 1` to `resources.limits`. Set the same
 values yourself to run the built-in models on a GPU node. The Router runs as

@@ -17,6 +17,7 @@ limitations under the License.
 package extproc
 
 import (
+	"bytes"
 	"context"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -164,12 +165,63 @@ func (r *OpenAIRouter) handleLooperExecution(
 			},
 		), nil
 	}
+	// The response phase never sees a Looper answer, so the decision's
+	// response policy reads it here. Nothing has left yet: even a stream is
+	// rendered from the finished answer.
+	plan := r.prepareResponsePolicy(reqCtx, semanticResponse, clientBody)
+	// Replay keeps the reply the client receives, with its Looper fields and
+	// in stream form for a stream, not the noted answer the policy encoded.
+	reply := r.releaseLooperAnswer(resp, response, clientBody, plan, reqCtx)
+	plan.finalBody = reply.GetImmediateResponse().GetBody()
 	// Replay starts inside the recorder, so its ID only exists now; the reply
 	// boundary adds it to the already-built response.
-	r.recordSuccessfulLooperExecution(
-		resp, request.Model, decision, reqCtx, semanticResponse, clientBody,
-	)
-	return response, nil
+	r.recordSuccessfulLooperExecution(resp, request.Model, decision, reqCtx, plan)
+	return reply, nil
+}
+
+// releaseLooperAnswer is the reply the response policy leaves of a Looper
+// answer: the policy's refusal, in the client's protocol and in stream form
+// for a streaming client, or the answer with the guard's notes.
+func (r *OpenAIRouter) releaseLooperAnswer(
+	resp *looper.Response,
+	response *ext_proc.ProcessingResponse,
+	clientBody []byte,
+	plan *responsePolicyPlan,
+	reqCtx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	streaming := reqCtx.ExpectStreamingResponse
+	if plan.blocked != nil {
+		// A refused answer is never kept, though a stream refuses it with a 200.
+		if state := reqCtx.ResponseObjectState; state != nil {
+			state.PersistenceAttempted = true
+		}
+		if streaming {
+			response.GetImmediateResponse().Body = r.encodeStreamRefusal(reqCtx, plan.refusal)
+			return response
+		}
+		reqCtx.ImmediateProtocolError, reqCtx.ImmediateResponseEncoded = plan.refusal, false
+		return plan.blocked
+	}
+	noted := plan.finalBody
+	if bytes.Equal(noted, clientBody) {
+		return response
+	}
+	if streaming {
+		if noted = r.encodeNotedStream(reqCtx); noted == nil {
+			return response
+		}
+	}
+	// The first render already reported each extension it dropped.
+	diagnostics := reqCtx.ProtocolDiagnostics
+	engine, err := r.protocolEngine()
+	if err == nil {
+		noted, err = finalizeLooperResponseExtensions(engine, noted, resp.RouterExtensions(), reqCtx, streaming)
+	}
+	reqCtx.ProtocolDiagnostics = diagnostics
+	if err == nil {
+		response.GetImmediateResponse().Body = noted
+	}
+	return response
 }
 
 // runLooper executes the decision's Looper algorithm as its built-in request
@@ -296,8 +348,7 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	originalModel string,
 	decision *config.Decision,
 	reqCtx *RequestContext,
-	semanticResponse *llmprotocol.Response,
-	clientBody []byte,
+	plan *responsePolicyPlan,
 ) {
 	// Protocol encoding succeeded and the immediate response is about to be
 	// returned to Envoy, so promote a ready fallback to its terminal disposition
@@ -322,17 +373,10 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	// Update router replay with success status (looper returns immediate response with 200)
 	r.updateRouterReplayStatus(reqCtx, 200, false)
 
-	// Attach response body to router replay record
-	r.attachRouterReplayResponse(reqCtx, clientBody, true)
-
-	// Memory auto_store: the normal response body pipeline (where
-	// scheduleResponseMemoryStore runs) is bypassed by ImmediateResponse.
-	// A buffered looper result is decoded once into the same neutral response
-	// contract used by direct inference. Streaming memory storage is deferred
-	// until a terminal semantic accumulator is available.
-	if semanticResponse != nil {
-		r.scheduleSemanticResponseMemoryStore(reqCtx, semanticResponse)
-	}
+	// The response body pipeline is bypassed by ImmediateResponse, so the
+	// response policy commits here, once Replay is open: Replay, memory and
+	// the Responses object keep only an answer the guard released.
+	plan.commit()
 }
 
 func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper.TokenUsage) {

@@ -40,9 +40,10 @@ algorithm:
 candidate is compared at. By default `multi_factor` compares time per output
 token (TPOT), and a candidate's time to first token (TTFT) when it has no TPOT
 samples; set `latency_metric: ttft` or `tpot` to compare one measurement.
-Latency observations are local to a Router process; they are not a
-cluster-wide scheduler. See [Multi Factor](./multi-factor) for SLO ceilings and
-the other factors.
+Latency is observed on successful responses only, so a model that fails fast
+does not look fast. Latency observations are local to a Router process; they
+are not a cluster-wide scheduler. See [Multi Factor](./multi-factor) for SLO
+ceilings and the other factors.
 
 ### Migrating from latency_aware
 

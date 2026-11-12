@@ -158,7 +158,7 @@ def vela3_config(adapters: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 {"name": "long", "max_tokens": 1_000_000_000_000, "threshold": 0.6},
             ],
             "router_label_sets": {
-                "pii": ["EMAIL", "PERSON", "PHONE"],
+                "pii": ["EMAIL", "EMAIL_ADDRESS", "PERSON", "PHONE", "PHONE_NUMBER"],
                 "halu": ["unsupported"],
                 "toxic": ["toxic"],
             },

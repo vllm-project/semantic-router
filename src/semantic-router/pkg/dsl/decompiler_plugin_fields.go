@@ -65,6 +65,9 @@ func pluginFieldsFastResponse(p *config.DecisionPlugin) map[string]Value {
 	if !ok {
 		return fields
 	}
+	if cfg.Enabled != nil {
+		fields["enabled"] = BoolValue{V: *cfg.Enabled}
+	}
 	if cfg.Message != "" {
 		fields["message"] = StringValue{V: cfg.Message}
 	}
@@ -96,9 +99,6 @@ func pluginFieldsRequestParams(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.MaxN != nil {
 		fields["max_n"] = IntValue{V: *cfg.MaxN}
-	}
-	if cfg.StripUnknown {
-		fields["strip_unknown"] = BoolValue{V: true}
 	}
 	return fields
 }

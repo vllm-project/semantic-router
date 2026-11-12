@@ -28,3 +28,6 @@ recipes:
               backend: vectorstore
               backend_config: {vector_store_id: vs_docs}
               min_confidence_threshold: 0.6
+global:
+  stores:
+    vector_store: {enabled: true, backend_type: memory}

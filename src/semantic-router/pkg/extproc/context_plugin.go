@@ -78,12 +78,16 @@ func memoryDisabledReason(ctx *RequestContext) string {
 // injectContext places one source's context as the plugin's injection mode
 // says: a tool call and its result after the last user message, behind the
 // sources injected before it, or a block of the system prompt after theirs.
+// A tools policy that strips tool history would remove the tool exchange
+// before dispatch, so its context goes in the system prompt.
 func (r *OpenAIRouter) injectContext(ctx *RequestContext, plugin *config.ContextPluginConfig, sourceType, text string) error {
 	request := ctx.SemanticRequest
 	if request == nil {
 		return fmt.Errorf("neutral inference request is unavailable")
 	}
-	if plugin.InjectionMode() == config.ContextInjectionSystemPrompt {
+	policy := resolveDecisionToolsConfig(r.Config, ctx).ActivePolicy()
+	stripsToolHistory := policy.EffectiveMode() == config.ToolsPolicyModeNone && policy.StripToolHistory
+	if plugin.InjectionMode() == config.ContextInjectionSystemPrompt || stripsToolHistory {
 		injectContextIntoSystemPrompt(ctx, request, sourceType, text)
 		return nil
 	}

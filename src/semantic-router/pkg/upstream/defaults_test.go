@@ -38,6 +38,9 @@ type reliabilityDefaults struct {
 	UnhealthyThreshold               int     `yaml:"unhealthy_threshold"`
 	HealthyThreshold                 int     `yaml:"healthy_threshold"`
 	HealthyPanicPercent              int     `yaml:"healthy_panic_percent"`
+
+	// RetryOnConditions are the retry_on names a configuration may use.
+	RetryOnConditions []string `yaml:"retry_on_conditions"`
 }
 
 func loadReliabilityDefaults(t *testing.T) reliabilityDefaults {

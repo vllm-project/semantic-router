@@ -4,9 +4,9 @@
 
 `safety` detects harmful content in the request or the model's answer, optionally in named harm categories.
 A rule without `labels` asks the `harm`
-[preset](../../../system-one/reference#preset-catalog), "Is this request
+[preset](../../../system-one/reference/presets#preset-catalog), "Is this request
 harmful?", with the options `safe` and `unsafe`. A rule with `labels` asks
-which of the 34 [harm categories](../../../system-one/reference#harm-categories)
+which of the 34 [harm categories](../../../system-one/reference/presets#harm-categories)
 apply, and matches the ones it lists.
 
 ## Key Advantages
@@ -64,6 +64,7 @@ recipes:
 | `labels` | Harm categories the rule matches; without them, the rule matches an unsafe request |
 | `predicate` | Without labels, the least probability of `unsafe`: by default the model's calibrated threshold (0.52 on vela3-fast) at the request stage, else 0.5. With labels, the least probability of a listed category; without one, the model's own selection |
 | `stage` | `request` (default) or `response`, which reads the model's answer |
+| `min_coverage` | The share of a long input's windows, 0 to 1, that must have been read to decide on them; below it the rule is unknown. Off by default |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
 
 Every rule without labels shares one question per stage, and every rule with
@@ -73,17 +74,23 @@ crisis: it does not imply malicious intent. Choose the response policy in
 the decision, and keep prompt-attack decisions beside content-risk ones with
 explicit priorities.
 
-The question reads its whole input, in windows when it is longer than one
-forward. Like `jailbreak`, it also reads what `global.router.routing_input`
-removes from the routing text. A model that gives no answer, or that could
-not read the whole input, leaves the rule unknown, and the decision's
-`rules.on_unknown` decides: `fail_request` above returns HTTP 503.
+The question reads its whole input: an input longer than one of the
+deployment's `scan_window`s is read in overlapping windows, the tail first,
+then the head, then the middle by halves, and any window found unsafe, or in a
+listed category, flags the input (see
+[Long inputs](../../../system-one/deploy/performance.md#long-inputs)). Like
+`jailbreak`, it also reads what `global.router.routing_input` removes from the
+routing text. When the deadline ends before every window is read, the rule
+decides on the windows read, once they are its `min_coverage` share of them if
+it sets one; below that share it is unknown. A model that answers no window
+leaves the rule unknown, and the decision's `rules.on_unknown` decides:
+`fail_request` above returns HTTP 503.
 
 ### Harm categories
 
 The categories are the 21 AEGIS 2.0 categories and the 13 MLCommons hazard
 codes vela3-fast was trained on; the
-[reference](../../../system-one/reference#harm-categories) lists them. vela3-fast
+[reference](../../../system-one/reference/presets#harm-categories) lists them. vela3-fast
 answers all 34 with one trained set question. Every other model answers the
 same labels zero-shot, one yes/no question per category, in the same call.
 A topic mention is not automatically harmful; measure the categories you rely
@@ -99,7 +106,7 @@ one is refused at load.
 
 The decision model answers every safety rule, unless the `safety` binding or
 the rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). vela3-fast, the Vela
+[Choose a deployment](../../../system-one/deploy/deployments). vela3-fast, the Vela
 3.0 d3 sizes and Vela 2.0 have trained forms of the safe or unsafe question.
 
 See a complete example:

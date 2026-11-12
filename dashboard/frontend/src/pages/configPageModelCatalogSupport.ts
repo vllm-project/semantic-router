@@ -46,19 +46,31 @@ export function preferredCatalogModelForEntrypoint(
 // effective default follows catalog/compiler_model_provider.go, not a universal
 // OpenAI fallback: a model binding can narrow a provider's supported protocols.
 export const modelAPIFormats = [
-  'openai',
+  'chat_completions',
   'responses',
-  'anthropic',
+  'messages',
   'images',
   'systemone',
 ] as const satisfies readonly NonNullable<ProviderModel['api_format']>[]
 
+// The API names earlier configurations used, which still read as the API.
+const apiFormatAliases: Record<string, (typeof modelAPIFormats)[number]> = {
+  openai: 'chat_completions',
+  anthropic: 'messages',
+}
+
+// canonicalAPIFormat is the API an api_format value names: an alias as its
+// API, anything else as it is.
+export const canonicalAPIFormat = (format?: string): string | undefined =>
+  format ? (apiFormatAliases[format] ?? format) : format
+
 export const protocolForModelAPIFormat = (format?: string): string | undefined => {
-  if (format === 'openai') return 'openai/chat-completions@1'
-  if (format === 'responses') return 'openai/responses@1'
-  if (format === 'anthropic') return 'anthropic/messages@1'
-  if (format === 'images') return 'openai/images@1'
-  if (format === 'systemone') return 'vllm-sr/systemone@1'
+  const api = canonicalAPIFormat(format)
+  if (api === 'chat_completions') return 'openai/chat-completions@1'
+  if (api === 'responses') return 'openai/responses@1'
+  if (api === 'messages') return 'anthropic/messages@1'
+  if (api === 'images') return 'openai/images@1'
+  if (api === 'systemone') return 'vllm-sr/systemone@1'
   return undefined
 }
 

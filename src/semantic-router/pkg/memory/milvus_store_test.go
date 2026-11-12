@@ -4,6 +4,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -368,7 +369,7 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 				entity.NewColumnVarChar("id", []string{"mem_1"}),
 				entity.NewColumnVarChar("content", []string{"The budget is $50k"}),
 				entity.NewColumnVarChar("memory_type", []string{"semantic"}),
-				entity.NewColumnVarChar("metadata", []string{`{"source": "slack", "importance": "high"}`}),
+				entity.NewColumnVarChar("metadata", []string{`{"source":"slack","importance":"high","created_by_user_id":"user-origin","conversation_id":"conversation-123","created_via":"llm_extraction"}`}),
 				entity.NewColumnInt64("created_at", []int64{createdAt.Unix()}),
 			},
 		},
@@ -392,8 +393,35 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 	assert.Equal(t, MemoryTypeSemantic, results[0].Memory.Type)
 	assert.Equal(t, "slack", results[0].Memory.Source)
 	assert.Equal(t, time.Unix(createdAt.Unix(), 0), results[0].Memory.CreatedAt)
+	assert.Equal(t, "user-origin", results[0].Memory.CreatedByUserID)
+	assert.Equal(t, "conversation-123", results[0].Memory.ConversationID)
+	assert.Equal(t, "llm_extraction", results[0].Memory.CreatedVia)
 	assert.Equal(t, float32(0.95), results[0].Score)
 	// Note: "importance": "high" is a string, so it won't be set in Memory.Importance (which is float32)
+}
+
+func TestMemoryMetadataJSON_ProvenanceRoundTrip(t *testing.T) {
+	input := &Memory{
+		UserID:          "owner",
+		CreatedByUserID: "user-origin",
+		ConversationID:  "conversation-123",
+		CreatedVia:      "llm_extraction",
+	}
+
+	raw, err := memoryMetadataJSON(input)
+	require.NoError(t, err)
+
+	var metadata map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &metadata))
+	assert.Equal(t, "user-origin", metadata["created_by_user_id"])
+	assert.Equal(t, "conversation-123", metadata["conversation_id"])
+	assert.Equal(t, "llm_extraction", metadata["created_via"])
+
+	got := &Memory{}
+	populateMemoryFromMetadataString(got, string(raw))
+	assert.Equal(t, input.CreatedByUserID, got.CreatedByUserID)
+	assert.Equal(t, input.ConversationID, got.ConversationID)
+	assert.Equal(t, input.CreatedVia, got.CreatedVia)
 }
 
 func TestMilvusStore_Retrieve_FilterByThreshold(t *testing.T) {
@@ -1246,5 +1274,37 @@ func TestMilvusStore_Retrieve_ProjectScopeWidensPastLegacyCandidates(t *testing.
 			assert.Equal(t, tt.wantTopKs, gotTopKs)
 			assert.Equal(t, tt.wantEfs, gotEfs)
 		})
+	}
+}
+
+// A memory source's min_similarity is any cosine: a bound of zero or less
+// applies as written, and only an unset one takes the store's
+// default_similarity_threshold.
+func TestMilvusStore_Retrieve_KeepsANonPositiveMinSimilarity(t *testing.T) {
+	store, mockClient := setupTestStore()
+	mockClient.SearchFunc = func(context.Context, string, []string, string, []string, []entity.Vector, string, entity.MetricType, int, entity.SearchParam, ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return []client.SearchResult{{
+			ResultCount: 3,
+			Scores:      []float32{0.85, 0.3, -0.1},
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id1", "id2", "id3"}),
+				entity.NewColumnVarChar("content", []string{"c1", "c2", "c3"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic", "semantic", "semantic"}),
+			},
+		}}, nil
+	}
+	for _, tt := range []struct {
+		name string
+		opts RetrieveOptions
+		want int
+	}{
+		{name: "zero", opts: RetrieveOptions{Threshold: 0, ThresholdSet: true}, want: 2},
+		{name: "negative", opts: RetrieveOptions{Threshold: -0.2, ThresholdSet: true}, want: 3},
+		{name: "unset", opts: RetrieveOptions{}, want: 1},
+	} {
+		tt.opts.Query, tt.opts.UserID = "test", "u1"
+		results, err := store.Retrieve(context.Background(), tt.opts)
+		require.NoError(t, err)
+		assert.Len(t, results, tt.want, tt.name)
 	}
 }

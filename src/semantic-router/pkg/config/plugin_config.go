@@ -84,7 +84,14 @@ func (c *ResponseCachePluginConfig) EffectiveRequestControls() ResponseCacheRequ
 
 // FastResponsePluginConfig represents configuration for fast_response plugin.
 type FastResponsePluginConfig struct {
+	// Enabled false turns off the fast_response a decision inherits.
+	Enabled *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Message string `json:"message" yaml:"message"`
+}
+
+// IsEnabled reports whether the fast_response runs: unless enabled is false.
+func (c *FastResponsePluginConfig) IsEnabled() bool {
+	return c != nil && (c.Enabled == nil || *c.Enabled)
 }
 
 // RequestParamsPluginConfig represents configuration for request_params plugin.
@@ -98,12 +105,11 @@ type RequestParamsPluginConfig struct {
 	MaxTokensLimit *int `json:"max_tokens_limit,omitempty" yaml:"max_tokens_limit,omitempty"`
 	// MaxN is the maximum allowed value for n (number of completions).
 	MaxN *int `json:"max_n,omitempty" yaml:"max_n,omitempty"`
-	// StripUnknown if true, removes fields not in the OpenAI spec.
-	StripUnknown bool `json:"strip_unknown,omitempty" yaml:"strip_unknown,omitempty"`
 }
 
 // How system_prompt applies its prompt: insert puts it before the first
-// system block's content, replace takes that block's place.
+// system block's content, replace takes the place of every system and
+// developer block.
 const (
 	SystemPromptModeInsert  = "insert"
 	SystemPromptModeReplace = "replace"
@@ -165,12 +171,13 @@ type RouterReplayPluginConfig struct {
 	CaptureResponseBody bool  `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
 	// CaptureToolResults keeps client tool-result text in the captured request
 	// body and in each client_tool_result step's Output, bounded by
-	// MaxToolTraceBytes. It requires CapturePersonalData, and principals
-	// without replay.detail still read the results redacted.
+	// MaxToolTraceBytes. It requires CapturePersonalData, stores nothing while
+	// CaptureRequestBody is off, and principals without replay.detail still
+	// read the results redacted.
 	CaptureToolResults bool `json:"capture_tool_results,omitempty" yaml:"capture_tool_results,omitempty"`
 	MaxBodyBytes       int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
-	// MaxToolTraceBytes caps each structured tool-trace field (Prompt,
-	// ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
+	// MaxToolTraceBytes caps each structured text field (Prompt,
+	// ToolDefinitions, ToolTraceStep.Text, Arguments and Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that
 	// structured fields remain complete even when the raw body is truncated.
 	MaxToolTraceBytes int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
@@ -262,14 +269,24 @@ func (d *Decision) GetResponseCacheConfig() *ResponseCachePluginConfig {
 
 // GetSystemPromptConfig returns the system_prompt plugin configuration.
 func (d *Decision) GetSystemPromptConfig() *SystemPromptPluginConfig {
-	result := &SystemPromptPluginConfig{}
-	return decodeDecisionPlugin(d, "system_prompt", result)
+	return SystemPromptPluginOf(d.Plugins)
+}
+
+// SystemPromptPluginOf is the system_prompt plugin among a request's
+// plugins, nil without one.
+func SystemPromptPluginOf(plugins []DecisionPlugin) *SystemPromptPluginConfig {
+	return decodePlugin(plugins, DecisionPluginSystemPrompt, &SystemPromptPluginConfig{})
 }
 
 // GetHeaderMutationConfig returns the header_mutation plugin configuration.
 func (d *Decision) GetHeaderMutationConfig() *HeaderMutationPluginConfig {
-	result := &HeaderMutationPluginConfig{}
-	return decodeDecisionPlugin(d, "header_mutation", result)
+	return HeaderMutationPluginOf(d.Plugins)
+}
+
+// HeaderMutationPluginOf is the header_mutation plugin among a request's
+// plugins, nil without one.
+func HeaderMutationPluginOf(plugins []DecisionPlugin) *HeaderMutationPluginConfig {
+	return decodePlugin(plugins, DecisionPluginHeaderMutation, &HeaderMutationPluginConfig{})
 }
 
 // GetRouterReplayConfig returns the router_replay plugin configuration.
@@ -280,14 +297,28 @@ func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
 
 // GetFastResponseConfig returns the fast_response plugin configuration.
 func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
-	result := &FastResponsePluginConfig{}
-	return decodeDecisionPlugin(d, "fast_response", result)
+	return FastResponsePluginOf(d.Plugins)
+}
+
+// FastResponsePluginOf is the fast_response plugin among a request's plugins,
+// nil without one or when disabled.
+func FastResponsePluginOf(plugins []DecisionPlugin) *FastResponsePluginConfig {
+	plugin := decodePlugin(plugins, DecisionPluginFastResponse, &FastResponsePluginConfig{})
+	if !plugin.IsEnabled() {
+		return nil
+	}
+	return plugin
 }
 
 // GetRequestParamsConfig returns the request_params plugin configuration.
 func (d *Decision) GetRequestParamsConfig() *RequestParamsPluginConfig {
-	result := &RequestParamsPluginConfig{}
-	return decodeDecisionPlugin(d, "request_params", result)
+	return RequestParamsPluginOf(d.Plugins)
+}
+
+// RequestParamsPluginOf is the request_params plugin among a request's
+// plugins, nil without one.
+func RequestParamsPluginOf(plugins []DecisionPlugin) *RequestParamsPluginConfig {
+	return decodePlugin(plugins, DecisionPluginRequestParams, &RequestParamsPluginConfig{})
 }
 
 func decodeDecisionPlugin[T any](d *Decision, pluginType string, result *T) *T {

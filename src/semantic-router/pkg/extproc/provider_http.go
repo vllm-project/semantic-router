@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -54,6 +55,17 @@ func providerEndpointScheme(cfg *config.RouterConfig, backendName string, profil
 	return "http"
 }
 
+// providerTLSConfig is the TLS client configuration of a Router-initiated
+// call to a backend: its tls block, so the Router trusts the CA, server name
+// and client certificate the backend's Envoy cluster uses. nil keeps the
+// system roots and the endpoint's host.
+func providerTLSConfig(profile *config.ProviderProfile) (*tls.Config, error) {
+	if profile == nil {
+		return nil, nil
+	}
+	return profile.TLS.ClientConfig()
+}
+
 // providerEndpointPath mirrors primary dispatch for router-initiated provider calls.
 func providerEndpointPath(profile *config.ProviderProfile, format llmprotocol.WireFormat) string {
 	path := requestWirePath(format)
@@ -69,6 +81,7 @@ func providerEndpointPath(profile *config.ProviderProfile, format llmprotocol.Wi
 // configuredProviderAuthorizer uses only configured backend credentials.
 // Router-own preprocessing, probes and shadow calls never forward client
 // keys, and a delegated backend refuses them: they have no user's credential.
+// Like request routing, they send no key to a provider whose auth is none.
 func configuredProviderAuthorizer(
 	cfg *config.RouterConfig,
 	profile *config.ProviderProfile,
@@ -85,7 +98,7 @@ func configuredProviderAuthorizer(
 		})
 		return nil, principal.ErrRouterCall
 	}
-	if cfg == nil {
+	if cfg == nil || providerAuth.Strategy == "none" {
 		return nil, nil
 	}
 	return func(_ context.Context, request *http.Request) error {

@@ -14,7 +14,7 @@ Router's own answers (cache hits, blocks, errors) alike:
 | --- | --- |
 | `x-vsr-schema-version` | The header contract, `3` |
 | `x-vsr-config-version` | The configuration version that served the request |
-| `x-vsr-response-path` | What answered: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback` |
+| `x-vsr-response-path` | What answered: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback` |
 | `x-vsr-selected-recipe`, `x-vsr-selected-decision`, `x-vsr-selected-model` | The routing result; the decision is omitted when no decision matched |
 | `x-vsr-warnings` | Codes of the `response_guard` rules that annotated the answer, and protocol losses |
 | `x-vsr-replay-id`, `x-vsr-cost` | The replay record and the configured price, when enabled |
@@ -97,7 +97,7 @@ To ask the decision model directly, grant it on a listener
 mode, then send a standard request (`state` and `questions`) or a batch
 (`states`, each entry a standard request) to `POST /v1/systemone`; the answers
 come back under `answers`, or under `states.NAME.answers` for a batch. See
-[the System One API](https://vllm-sr.ai/docs/system-one/api).
+[the System One API](https://vllm-sr.ai/docs/system-one/use/api).
 
 ## Delivery
 
@@ -125,7 +125,7 @@ curl -s -w ' http=%{http_code}\n' http://127.0.0.1:8899/v1/images/generations \
 ```
 
 Pass, with an image decision: `http=200` and `x-vsr-response-path:
-image_generation`. Without one: `http=400` with
+upstream`. Without one: `http=400` with
 `"code":"image_route_required"`, before any model is called.
 
 ## Token boundaries and public errors

@@ -70,10 +70,7 @@ func (m *MilvusStore) normalizeRetrieveOpts(opts RetrieveOptions) (limit int, th
 	if limit <= 0 {
 		limit = m.config.DefaultRetrievalLimit
 	}
-	threshold = opts.Threshold
-	if threshold <= 0 {
-		threshold = m.config.DefaultSimilarityThreshold
-	}
+	threshold = opts.minSimilarity(m.config.DefaultSimilarityThreshold)
 	if opts.Query == "" {
 		return 0, 0, fmt.Errorf("query is required")
 	}
@@ -367,6 +364,7 @@ func populateMemoryFromRetrieveMetadata(mem *Memory, metadata map[string]interfa
 	if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
 		mem.LastAccessed = time.Unix(int64(lastAccessed), 0)
 	}
+	applyProvenanceMetadata(mem, metadata)
 }
 
 func hybridRerankCandidates(candidates []*RetrieveResult, opts RetrieveOptions) []*RetrieveResult {

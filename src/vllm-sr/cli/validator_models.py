@@ -79,7 +79,9 @@ def validate_model_references(config: UserConfig) -> list[ValidationError]:
         )
     )
     errors.extend(_built_in_card_claim_errors(config, built_in_cards))
-    errors.extend(_decision_errors(config, aliases, cards, catalogs_by_alias))
+    errors.extend(
+        _decision_errors(config, aliases, cards, catalogs_by_alias, lora_aliases)
+    )
     errors.extend(_default_model_errors(config, aliases, cards, lora_aliases))
     return errors
 
@@ -242,6 +244,7 @@ def _decision_errors(
     aliases: set[str],
     cards: dict[str, Any],
     catalogs_by_alias: dict[str, str],
+    lora_aliases: set[str],
 ) -> list[ValidationError]:
     # Match the canonical Go contract: routing-only metadata can describe
     # external-gateway targets before any Router-owned provider alias exists.
@@ -249,28 +252,66 @@ def _decision_errors(
         return []
     errors: list[ValidationError] = []
     for field_prefix, decision in _all_decisions(config):
-        for model_ref in decision.modelRefs:
-            if model_ref.model not in aliases:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown model '{model_ref.model}'",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
+        field = f"{field_prefix}.{decision.name}"
+        errors.extend(
+            _model_ref_errors(
+                decision.name,
+                decision.modelRefs,
+                f"{field}.modelRefs",
+                aliases,
+                cards,
+                catalogs_by_alias,
+            )
+        )
+        # The Router checks candidate iteration models as it checks modelRefs
+        # and takes a declared LoRA's name as the model in either place. The
+        # modelRefs check above is older and still refuses that name.
+        for index, iteration in enumerate(decision.candidateIterations):
+            errors.extend(
+                _model_ref_errors(
+                    decision.name,
+                    iteration.models,
+                    f"{field}.candidateIterations[{index}].models",
+                    aliases | lora_aliases,
+                    cards,
+                    catalogs_by_alias,
                 )
-                continue
-            if not model_ref.lora_name:
-                continue
-            card = cards.get(catalogs_by_alias[model_ref.model])
-            declared_loras = {
-                adapter.name for adapter in ((card.loras if card else None) or [])
-            }
-            if model_ref.lora_name not in declared_loras:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
+            )
+    return errors
+
+
+def _model_ref_errors(
+    decision: str,
+    model_refs: list[Any],
+    field: str,
+    models: set[str],
+    cards: dict[str, Any],
+    catalogs_by_alias: dict[str, str],
+) -> list[ValidationError]:
+    errors: list[ValidationError] = []
+    for model_ref in model_refs:
+        if model_ref.model not in models:
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision}' references unknown model '{model_ref.model}'",
+                    field=field,
                 )
+            )
+            continue
+        catalog = catalogs_by_alias.get(model_ref.model)
+        if not model_ref.lora_name or catalog is None:
+            continue
+        card = cards.get(catalog)
+        declared_loras = {
+            adapter.name for adapter in ((card.loras if card else None) or [])
+        }
+        if model_ref.lora_name not in declared_loras:
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
+                    field=field,
+                )
+            )
     return errors
 
 

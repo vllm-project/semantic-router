@@ -94,7 +94,18 @@ func normalizeCompletionToolFinishReason(completion map[string]interface{}) {
 		}
 		toolCalls, ok := message["tool_calls"].([]interface{})
 		if ok && len(toolCalls) > 0 {
-			choice["finish_reason"] = "tool_calls"
+			reason, _ := choice["finish_reason"].(string)
+			choice["finish_reason"] = toolCallFinishReason(reason)
 		}
 	}
+}
+
+// toolCallFinishReason is the finish_reason of an answer that calls tools:
+// tool_calls, unless the backend cut or filtered the answer, which keeps the
+// backend's reason so a truncated call is not executed as complete.
+func toolCallFinishReason(reason string) string {
+	if reason == "length" || reason == "content_filter" {
+		return reason
+	}
+	return "tool_calls"
 }

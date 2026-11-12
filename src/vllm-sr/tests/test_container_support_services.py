@@ -30,6 +30,12 @@ def _stub_container_start(monkeypatch):
         "_run_service_start",
         lambda cmd, service: commands.append((cmd, service)) or (0, "", ""),
     )
+    monkeypatch.setattr(
+        container_support_services,
+        "rekey_grafana_admin",
+        lambda *_args, **_kwargs: (0, "", ""),
+    )
+    monkeypatch.delenv("GF_SECURITY_ADMIN_PASSWORD", raising=False)
     return commands, replaced
 
 
@@ -256,6 +262,12 @@ def test_generated_sidecar_configs_are_readable_under_private_umask(
         "_run_service_start",
         lambda cmd, name: commands.append(cmd) or (0, "", ""),
     )
+    monkeypatch.setattr(
+        container_support_services,
+        "rekey_grafana_admin",
+        lambda *_args, **_kwargs: (0, "", ""),
+    )
+    monkeypatch.delenv("GF_SECURITY_ADMIN_PASSWORD", raising=False)
     private_config = tmp_path / "config.yaml"
     private_config.write_text("private operator configuration")
     private_config.chmod(0o600)

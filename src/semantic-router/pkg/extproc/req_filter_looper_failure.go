@@ -63,15 +63,18 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 	finalizeLooperQuorumOutcome(reqCtx, evidence.fusionQuorum, decision, false)
 
 	logging.ComponentErrorEvent("extproc", "looper_execution_failed", failureFields)
-	return r.recordLooperFailure(
-		reqCtx,
-		originalModel,
-		decision,
-		500,
-		"Looper execution failed: "+err.Error(),
-		"looper_execution_failed",
-		evidenceArgs...,
-	)
+	status, message, reason := 500, "Looper execution failed: "+err.Error(), "looper_execution_failed"
+	// A model's rate limit or failure that ended the run reaches the client
+	// with the model's status, as it would without a Looper.
+	if upstream := looper.UpstreamStatus(err); upstream == 429 || upstream >= 500 {
+		status = upstream
+	}
+	// A hop or check refused for want of the request's delegated credential
+	// answers the run 401, with the typed error the refusal records.
+	if r.delegatedCredentialRefusal(reqCtx) != nil {
+		status, message, reason = 401, delegatedCredentialMessage, delegatedCredentialCode
+	}
+	return r.recordLooperFailure(reqCtx, originalModel, decision, status, message, reason, evidenceArgs...)
 }
 
 func looperFailureEvidenceFromError(err error) (looperFailureEvidence, bool) {
