@@ -51,16 +51,17 @@ READER = Reader(
 def api(questions: dict[str, Any]) -> dict[str, Any]:
     """The request as System One spells it: options or labels named in a list become null descriptions."""
     out = {}
-    for qid, question in questions.items():
+    for qid, asked in questions.items():
+        question = asked
         criteria = question.get("criteria")
         if question.get("type") in ("choice", "set") and isinstance(criteria, list):
             question = {
                 **question,
                 "criteria": dict.fromkeys(criteria),
-            }  # noqa: PLW2901
+            }
         labels = question.get("labels")
         if isinstance(labels, list) and all(isinstance(x, str) for x in labels):
-            question = {  # noqa: PLW2901
+            question = {
                 **{k: v for k, v in question.items() if k != "labels"},
                 "criteria": dict.fromkeys(labels),
             }

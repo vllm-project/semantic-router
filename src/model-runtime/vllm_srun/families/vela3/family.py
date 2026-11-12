@@ -43,9 +43,9 @@ from ..vela2.encoder_layout import (
 from ..vela2.layout import Row, SchemaTooLongError, fail_unscanned, read_parts
 from ..vela2.raw import RawRow
 from ..vela2.request import Plan as PartsPlan
-from ..vela3_shared import PRESETS, layout, text, tokens
 from ..vela3_answers import Answerer
 from ..vela3_calls import DECISION_BUDGET, Call, Output, Vela3Item
+from ..vela3_shared import PRESETS, layout, text, tokens
 from .network import Networks
 from .package import (
     BACKBONE_FILE,

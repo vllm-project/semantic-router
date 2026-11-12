@@ -321,15 +321,15 @@ def _jsonable(value: Any) -> Any:
 def _call(function: Any, *args: Any) -> dict[str, Any]:
     try:
         return {"result": _jsonable(function(*args))}
-    except Exception as exc:  # noqa: BLE001 - recorded as the package raised it
+    except Exception as exc:  # recorded as the package raised it
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
-def _core(VS: Any, max_len: int, captured: dict[str, Any]) -> Any:
+def _core(schema: Any, max_len: int, captured: dict[str, Any]) -> Any:
     """``vela3_schema._Core`` on the byte tokenizer, with a stub network that records its inputs."""
     import numpy as np
 
-    core = object.__new__(VS._Core)
+    core = object.__new__(schema._Core)
     core.mk = dict(BYTE_MARKERS)
     core.bos, core.eos, core.pad = (
         BYTE_SPECIAL["bos_token_id"],
@@ -347,9 +347,9 @@ def _core(VS: Any, max_len: int, captured: dict[str, Any]) -> Any:
     return core
 
 
-def _one_pass(VS: Any, parts: list[Any], rows: list[Any], max_len: int) -> Any:
+def _one_pass(schema: Any, parts: list[Any], rows: list[Any], max_len: int) -> Any:
     captured: dict[str, Any] = {}
-    raw = _core(VS, max_len, captured).one_pass([tuple(p) for p in parts], rows)
+    raw = _core(schema, max_len, captured).one_pass([tuple(p) for p in parts], rows)
     if raw is None:
         return None
     return {
@@ -407,9 +407,7 @@ def main() -> None:
         function = getattr(R, name)
         if name == "to_row":
 
-            def function(
-                state: Any, q: Any
-            ) -> Any:  # noqa: E306 - the question part only
+            def function(state: Any, q: Any) -> Any:  # the question part only
                 row = R.to_row("q", state, q)
                 return {
                     "part": row["parts"][0]["text"],

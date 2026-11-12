@@ -335,13 +335,13 @@ def package_request(
     if isinstance(state, dict) and all(isinstance(v, str) for v in state.values()):
         state = {ROLE_KEYS.get(k.lower(), k.lower()): v for k, v in state.items()}
     out = {}
-    for qid, question in questions.items():
-        question = dict(question)  # noqa: PLW2901
+    for qid, asked in questions.items():
+        question = dict(asked)
         preset = question.pop("preset", None)
         if preset in ("pii", "halu"):
             question = {
                 "type": "span",
-                "instructions": schemas[preset]["question"],  # noqa: PLW2901
+                "instructions": schemas[preset]["question"],
                 "criteria": dict(schemas[preset]["labels"]),
                 **{k: v for k, v in question.items() if k in ("over", "threshold")},
             }
@@ -482,15 +482,14 @@ def main() -> None:
         state, questions = request["state"], request["questions"]
         started = time.perf_counter()
         ours, one_pass = accelerator.execute(
-            info, lambda: answer(model, state, questions)
-        )  # noqa: B023
+            info,
+            lambda state=state, questions=questions: answer(model, state, questions),
+        )
         timing["runtime"] += time.perf_counter() - started
         started = time.perf_counter()
         try:
             theirs = reference.system_one(*package_request(state, questions, schemas))
-        except (
-            Exception
-        ) as exc:  # noqa: BLE001 - nothing of the request can be compared
+        except Exception as exc:  # nothing of the request can be compared
             cases.append(
                 {
                     "id": request["id"],
