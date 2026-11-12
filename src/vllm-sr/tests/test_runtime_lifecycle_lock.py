@@ -226,9 +226,9 @@ with acquire_runtime_lifecycle_lock(
     command='vllm-sr serve', state='starting',
     heartbeat_path=heartbeat_file(config),
 ):
-    with config_lock.released():
-        with serve_heartbeat(config, interval=60) as set_state:
-            set_state(SERVE_WAITING)
+    with serve_heartbeat(config, interval=1) as set_state:
+        set_state(SERVE_WAITING)
+        with config_lock.released():
             while True:
                 time.sleep(1)
 """
@@ -266,6 +266,9 @@ def _installer_serve(private_tmp_path: Path):
             break
         time.sleep(0.01)
     else:
+        process.terminate()
+        process.wait(timeout=35)
+        process.stderr.close()
         pytest.fail("installer serve never reported waiting")
     return process, lock_root, config, state_root
 
