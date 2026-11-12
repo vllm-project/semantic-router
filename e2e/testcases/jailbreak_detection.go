@@ -16,6 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("jailbreak-detection", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Test jailbreak detection and blocking functionality",
 		Tags:        []string{"kubernetes", "security", "jailbreak"},
 		Fn:          testJailbreakDetection,

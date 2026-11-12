@@ -43,9 +43,13 @@ type Config struct {
 	ServiceConfig framework.ServiceConfig
 
 	PrerequisiteManifests []string
-	ResourceManifests     []string
-	WaitDeployments       []helpers.DeploymentRef
-	VerifyDeployments     []helpers.DeploymentRef
+	// PrerequisiteWaits are prerequisite deployments the Router needs
+	// running before it starts, such as the provider-mocker embedding
+	// fixture its startup prepares.
+	PrerequisiteWaits []helpers.DeploymentRef
+	ResourceManifests []string
+	WaitDeployments   []helpers.DeploymentRef
+	VerifyDeployments []helpers.DeploymentRef
 }
 
 // Stack composes the common gateway-based E2E deployment lifecycle.
@@ -140,7 +144,10 @@ func (s *Stack) ApplyPrerequisites(ctx context.Context, opts *framework.SetupOpt
 		return nil
 	}
 	s.log(opts.Verbose, "Applying prerequisite manifests")
-	return s.applyManifests(ctx, opts.KubeConfig, s.config.PrerequisiteManifests)
+	if err := s.applyManifests(ctx, opts.KubeConfig, s.config.PrerequisiteManifests); err != nil {
+		return err
+	}
+	return s.waitDeployments(ctx, opts, s.config.PrerequisiteWaits)
 }
 
 // DeployCore installs semantic-router, Envoy Gateway, and Envoy AI Gateway.
@@ -189,12 +196,16 @@ func (s *Stack) ApplyResources(ctx context.Context, opts *framework.SetupOptions
 		}
 	}
 
-	if len(s.config.WaitDeployments) == 0 {
+	return s.waitDeployments(ctx, opts, s.config.WaitDeployments)
+}
+
+func (s *Stack) waitDeployments(ctx context.Context, opts *framework.SetupOptions, deployments []helpers.DeploymentRef) error {
+	if len(deployments) == 0 {
 		return nil
 	}
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-	for _, deployment := range s.config.WaitDeployments {
+	for _, deployment := range deployments {
 		s.log(opts.Verbose, "Waiting for deployment %s/%s", deployment.Namespace, deployment.Name)
 		if err := deployer.WaitForDeployment(ctx, deployment.Namespace, deployment.Name, timeoutDeploymentWait); err != nil {
 			return fmt.Errorf("wait for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)

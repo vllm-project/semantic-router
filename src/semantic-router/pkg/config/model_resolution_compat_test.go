@@ -186,3 +186,34 @@ func routerConfigDocument(data []byte) ([]byte, bool) {
 	}
 	return data, isConfig(probe)
 }
+
+// realModelProfiles are the only E2E profiles that start a model. Every other
+// profile answers its learned signals and embeddings from provider-mocker
+// fixtures, since E2E pins contracts and the release benchmarks measure
+// model quality; a real model there only adds a download and a slow start.
+var realModelProfiles = map[string]bool{
+	"model-runtime":       true,
+	"model-runtime-real":  true,
+	"model-runtime-vela3": true,
+}
+
+func TestE2EProfilesStartNoModelOutsideTheRuntimeProfiles(t *testing.T) {
+	data, err := os.ReadFile(maintainedGolden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var summaries map[string]resolutionSummary
+	if err := json.Unmarshal(data, &summaries); err != nil {
+		t.Fatal(err)
+	}
+	prefix := filepath.Join("e2e", "profiles") + string(filepath.Separator)
+	for _, key := range sortedSummaryKeys(summaries) {
+		profile, file, ok := strings.Cut(strings.TrimPrefix(key, prefix), string(filepath.Separator))
+		if !strings.HasPrefix(key, prefix) || !ok || !strings.HasPrefix(file, "values") {
+			continue
+		}
+		if started := summaries[key].Started; len(started) > 0 && !realModelProfiles[profile] {
+			t.Errorf("%s starts %v; bind its signals and embeddings to the provider-mocker fixtures", key, started)
+		}
+	}
+}

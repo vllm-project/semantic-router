@@ -323,18 +323,22 @@ func (c *Classifier) applyScan(results *SignalResults, mu *sync.Mutex, scan *gua
 				continue
 			}
 		}
+		if asked.toolResultsUnread && c.resolveUnread(results, asked, scan.deployment, unreadToolResult) {
+			continue
+		}
 		c.applyRuleAnswer(results, asked, scanAnswer(rule, read, scan))
 	}
 }
 
 // recordScanCoverage counts how much of its input a guard rule read and, for
-// one read in windows, records it for the trace and the replay record.
+// one read in windows, records it for the trace and the replay record. A
+// rule that missed part of its tool results read its input in part.
 func (c *Classifier) recordScanCoverage(results *SignalResults, asked askedRule, read, windows int) {
 	result := scanCoverageFull
 	switch {
 	case read == 0:
 		result = scanCoverageNone
-	case read < windows:
+	case read < windows || asked.toolResultsUnread:
 		result = scanCoveragePartial
 	}
 	key := signalConfidenceKey(asked.signalType, asked.rule.Name)
@@ -345,7 +349,7 @@ func (c *Classifier) recordScanCoverage(results *SignalResults, asked askedRule,
 	if results.ScanCoverage == nil {
 		results.ScanCoverage = make(map[string]string)
 	}
-	if result == scanCoveragePartial {
+	if result == scanCoveragePartial && read < windows {
 		result = fmt.Sprintf("%s %d/%d", scanCoveragePartial, read, windows)
 	}
 	results.ScanCoverage[key] = result

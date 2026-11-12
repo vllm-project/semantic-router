@@ -14,6 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("chat-completions-request", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "A chat completions request is routed to a selected model and gets a completion back",
 		Tags:        []string{"llm", "functional"},
 		Fn:          testChatCompletionsRequest,

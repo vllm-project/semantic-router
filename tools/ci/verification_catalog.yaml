@@ -346,7 +346,7 @@ verifications:
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 # Authoring tools remain affected/manual contracts, outside product qualification.
 full_cpu:
-  version: 6
+  version: 8
   required:
     - quality
     - generated-contracts
@@ -369,10 +369,12 @@ full_cpu:
     - e2e-unit
     - e2e.standalone
     - e2e.envoy-ai-gateway
-    - e2e.routing-errors
     - e2e.dashboard
     - e2e.remote-embedding
     - e2e.streaming
+    # The only E2E profile that starts a real model through the Router; every
+    # other profile answers its signals from provider-mocker fixtures.
+    - e2e.model-runtime-vela3
     # Deployed security and Responses-state contracts that full qualification
     # must not skip, whatever a PR's paths selected. Redis stays in storage.
     - e2e.authz-rbac
