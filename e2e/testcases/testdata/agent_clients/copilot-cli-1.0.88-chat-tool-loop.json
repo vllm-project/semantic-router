@@ -5,6 +5,9 @@
   "headers": {
     "user-agent": "OpenAI/JS 5.20.1"
   },
+  "identity": {
+    "headers": []
+  },
   "backends": {
     "anthropic.messages.v1": [
       "max_tokens",

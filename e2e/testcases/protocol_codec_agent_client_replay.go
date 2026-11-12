@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -20,10 +21,25 @@ import (
 )
 
 const (
-	agentClientToolMarker  = "__mock_tool_call__"
-	agentClientErrorMarker = "__mock_provider_error__"
-	agentClientResultText  = "tool result accepted"
+	agentClientToolMarker        = "__mock_tool_call__"
+	agentClientErrorMarker       = "__mock_provider_error__"
+	agentClientResultText        = "tool result accepted"
+	agentClientTurn0             = "turn-0"
+	agentClientTurn1             = "turn-1"
+	agentClientSubagentRequest   = "subagent"
+	agentClientTestSessionHeader = "x-vsr-test-session-id"
 )
+
+// agentClientIdentityPlaceholder is the only value an identity header may
+// carry in a capture. Real session, conversation, and agent ids stay out of
+// the fixture.
+var agentClientIdentityPlaceholder = regexp.MustCompile(`^placeholder-[a-z0-9-]+$`)
+
+var agentClientIdentityRequests = map[string]struct{}{
+	agentClientTurn0:           {},
+	agentClientTurn1:           {},
+	agentClientSubagentRequest: {},
+}
 
 //go:embed testdata/agent_clients/*.json
 var agentClientCaptureFiles embed.FS
@@ -31,15 +47,33 @@ var agentClientCaptureFiles embed.FS
 // agentClientCapture is one sanitized client tool loop. The first turn asks for
 // a tool call; the second carries the client's tool call and its result. Backends
 // maps each backend format the capture must pass through to the request fields
-// that must reach that provider.
+// that must reach that provider. Identity records which protection headers the
+// client sent, with values replaced by fixed placeholders. Subagent is an
+// optional child request and is not a third tool-loop turn.
 type agentClientCapture struct {
-	Name     string              `json:"-"`
-	Client   string              `json:"client"`
-	Version  string              `json:"version"`
-	Path     string              `json:"path"`
-	Headers  map[string]string   `json:"headers"`
-	Backends map[string][]string `json:"backends"`
-	Turns    []json.RawMessage   `json:"turns"`
+	Name     string               `json:"-"`
+	Client   string               `json:"client"`
+	Version  string               `json:"version"`
+	Path     string               `json:"path"`
+	Headers  map[string]string    `json:"headers"`
+	Identity *agentClientIdentity `json:"identity"`
+	Backends map[string][]string  `json:"backends"`
+	Turns    []json.RawMessage    `json:"turns"`
+	Subagent json.RawMessage      `json:"subagent,omitempty"`
+}
+
+// agentClientIdentity is the capture's protection identity. An empty Headers
+// list means the capture recorded no identity header.
+type agentClientIdentity struct {
+	Headers []agentClientIdentityHeader `json:"headers"`
+}
+
+// agentClientIdentityHeader names one identity header and the requests that
+// carry it. On is turn-0, turn-1, or subagent.
+type agentClientIdentityHeader struct {
+	Name        string   `json:"name"`
+	Placeholder string   `json:"placeholder"`
+	On          []string `json:"on"`
 }
 
 type agentClientProtocol struct {
@@ -174,7 +208,100 @@ func decodeAgentClientCapture(name string, data []byte) (agentClientCapture, err
 			return capture, fmt.Errorf("%s: unknown backend format %q", name, backendFormat)
 		}
 	}
+	if err := validateAgentClientIdentity(name, capture); err != nil {
+		return capture, err
+	}
 	return capture, nil
+}
+
+func validateAgentClientIdentity(name string, capture agentClientCapture) error {
+	if capture.Identity == nil {
+		return fmt.Errorf("%s: identity is required", name)
+	}
+	seen := make(map[string]struct{}, len(capture.Identity.Headers))
+	needsSubagent := false
+	for _, header := range capture.Identity.Headers {
+		if header.Name == "" || header.Placeholder == "" || len(header.On) == 0 {
+			return fmt.Errorf("%s: identity header needs name, placeholder, and on", name)
+		}
+		if header.Name == agentClientTestSessionHeader {
+			return fmt.Errorf("%s: identity header %q is reserved for replay correlation", name, header.Name)
+		}
+		if _, ok := seen[header.Name]; ok {
+			return fmt.Errorf("%s: duplicate identity header %q", name, header.Name)
+		}
+		seen[header.Name] = struct{}{}
+		if !agentClientIdentityPlaceholder.MatchString(header.Placeholder) {
+			return fmt.Errorf("%s: identity placeholder %q must be a placeholder-* token", name, header.Placeholder)
+		}
+		requests := make(map[string]struct{}, len(header.On))
+		for _, request := range header.On {
+			if _, ok := agentClientIdentityRequests[request]; !ok {
+				return fmt.Errorf("%s: identity header %q has unknown request %q", name, header.Name, request)
+			}
+			if _, ok := requests[request]; ok {
+				return fmt.Errorf("%s: identity header %q repeats request %q", name, header.Name, request)
+			}
+			requests[request] = struct{}{}
+			if request == agentClientSubagentRequest {
+				needsSubagent = true
+			}
+		}
+	}
+	if needsSubagent || len(bytes.TrimSpace(capture.Subagent)) > 0 {
+		if err := validateAgentClientSubagent(name, capture.Subagent); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateAgentClientSubagent(name string, raw json.RawMessage) error {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return fmt.Errorf("%s: subagent must be a JSON object", name)
+	}
+	return nil
+}
+
+// identityHeaders returns the placeholder identity headers recorded for one
+// request. turn-0 and turn-1 are the tool loop; subagent is the optional child.
+func (capture agentClientCapture) identityHeaders(request string) (map[string]string, error) {
+	if capture.Identity == nil {
+		return nil, fmt.Errorf("%s: identity is required", capture.Name)
+	}
+	headers := make(map[string]string)
+	for _, header := range capture.Identity.Headers {
+		for _, on := range header.On {
+			if on != request {
+				continue
+			}
+			if _, exists := headers[header.Name]; exists {
+				return nil, fmt.Errorf("%s: duplicate identity header %s on %s", capture.Name, header.Name, request)
+			}
+			headers[header.Name] = header.Placeholder
+		}
+	}
+	return headers, nil
+}
+
+// agentClientRequestHeaders is the ingress header map for one replayed request.
+// The per-step correlation id stays on x-vsr-test-session-id. Identity
+// placeholders are added beside it and do not replace it.
+func agentClientRequestHeaders(capture agentClientCapture, sessionID, request string) (map[string]string, error) {
+	identity, err := capture.identityHeaders(request)
+	if err != nil {
+		return nil, err
+	}
+	headers := make(map[string]string, len(capture.Headers)+len(identity)+1)
+	for key, value := range capture.Headers {
+		headers[key] = value
+	}
+	for key, value := range identity {
+		headers[key] = value
+	}
+	headers[agentClientTestSessionHeader] = sessionID
+	return headers, nil
 }
 
 func replayAgentClientCaptures(
@@ -252,7 +379,7 @@ func (replay agentClientReplay) toolCallTurn(ctx context.Context, stream bool) (
 	if err != nil {
 		return responsesFunctionCall{}, err
 	}
-	body, sessionID, err := replay.send(ctx, "tool-call", turn, stream, http.StatusOK)
+	body, sessionID, err := replay.send(ctx, "tool-call", agentClientTurn0, turn, stream, http.StatusOK)
 	if err != nil {
 		return responsesFunctionCall{}, err
 	}
@@ -274,7 +401,7 @@ func (replay agentClientReplay) toolResultTurn(ctx context.Context, stream bool,
 	if err != nil {
 		return err
 	}
-	body, sessionID, err := replay.send(ctx, "tool-result", turn, stream, http.StatusOK)
+	body, sessionID, err := replay.send(ctx, "tool-result", agentClientTurn1, turn, stream, http.StatusOK)
 	if err != nil {
 		return err
 	}
@@ -308,7 +435,7 @@ func (replay agentClientReplay) providerErrorTurn(ctx context.Context, stream bo
 	if err != nil {
 		return err
 	}
-	body, sessionID, err := replay.send(ctx, "provider-error", turn, stream, http.StatusTooManyRequests)
+	body, sessionID, err := replay.send(ctx, "provider-error", agentClientTurn0, turn, stream, http.StatusTooManyRequests)
 	if err != nil {
 		return err
 	}
@@ -325,6 +452,7 @@ func (replay agentClientReplay) providerErrorTurn(ctx context.Context, stream bo
 func (replay agentClientReplay) send(
 	ctx context.Context,
 	step string,
+	request string,
 	turn map[string]any,
 	stream bool,
 	wantStatus int,
@@ -334,9 +462,9 @@ func (replay agentClientReplay) send(
 		mode = "streaming"
 	}
 	sessionID := strings.Join([]string{"agent-client", replay.capture.Name, replay.backendFormat, step, mode}, "-")
-	headers := map[string]string{"x-vsr-test-session-id": sessionID}
-	for key, value := range replay.capture.Headers {
-		headers[key] = value
+	headers, err := agentClientRequestHeaders(replay.capture, sessionID, request)
+	if err != nil {
+		return nil, sessionID, err
 	}
 	result, err := sendProtocolMatrixRaw(ctx, replay.session, replay.capture.Path, turn, stream, headers)
 	if err != nil {

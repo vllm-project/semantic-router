@@ -7,6 +7,9 @@
     "user-agent": "claude-cli/2.1.281 (external, sdk-cli)",
     "x-app": "cli"
   },
+  "identity": {
+    "headers": []
+  },
   "backends": {
     "anthropic.messages.v1": [
       "context_management",

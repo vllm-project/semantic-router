@@ -5,6 +5,9 @@
   "headers": {
     "user-agent": "Anthropic/JS 0.94.0"
   },
+  "identity": {
+    "headers": []
+  },
   "backends": {
     "anthropic.messages.v1": [
       "max_tokens",
