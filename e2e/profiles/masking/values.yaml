@@ -16,6 +16,14 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
+      # A second model for the session cases, so a held model and a fresh
+      # decision's model differ.
+      - name: openai/mock-model-b
+        backend_refs:
+          - name: provider-mocker-b
+            provider: vllm
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
   # An explicit entrypoint, not a concrete model name. A concrete model goes
   # through handleSpecifiedModelRouting, which bypasses every recipe-local
   # decision and plugin -- masking would never run and the assertions would
@@ -26,6 +34,8 @@ config:
       default: true
     - model_names: ["vllm-sr/masking"]
       recipe: masking
+    - model_names: ["vllm-sr/agent-session"]
+      recipe: agent-session
   recipes:
     - name: default
       decisions:
@@ -69,9 +79,38 @@ config:
                 signal: personal_data
                 entity_types: []
                 placeholders: {}
+    # Two decisions that allow the same two models in opposite order, so a
+    # fresh decision on the second turn picks the other model and only
+    # session protection keeps the first one.
+    - name: agent-session
+      signals:
+        keywords:
+          - {name: session_plan, operator: OR, keywords: ["e2e-session-plan"], case_sensitive: false}
+          - {name: session_edit, operator: OR, keywords: ["e2e-session-edit"], case_sensitive: false}
+      decisions:
+        - name: session_plan
+          priority: 100
+          rules: {operator: AND, conditions: [{type: keyword, name: session_plan}]}
+          modelRefs: [{model: openai/mock-model}, {model: openai/mock-model-b}]
+        - name: session_edit
+          priority: 100
+          rules: {operator: AND, conditions: [{type: keyword, name: session_edit}]}
+          modelRefs: [{model: openai/mock-model-b}, {model: openai/mock-model}]
   global:
     router:
       strategy: priority
+      # Session protection at its default tuning, keyed on a header only the
+      # session cases send, so the masking cases are never held.
+      learning:
+        enabled: true
+        adaptation: {enabled: false}
+        protection:
+          enabled: true
+          scope: session
+          identity:
+            headers: {session: x-e2e-agent-session, agent: x-e2e-agent-id}
+          tuning:
+            idle_timeout_seconds: 3
     services:
       # The cross-protocol case sends /v1/responses, which needs the Responses
       # object store enabled or the router answers 404 before any masking runs.

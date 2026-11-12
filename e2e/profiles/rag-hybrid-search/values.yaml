@@ -23,18 +23,12 @@ config:
           description: General knowledge and miscellaneous topics
           priority: 1
           rules:
-            operator: OR
-            conditions:
-              - type: domain
-                name: other
+            operator: AND
+            conditions: []
           modelRefs:
             - model: base-model
               lora_name: general-expert
               use_reasoning: false
-      signals:
-        domains:
-          - name: other
-            description: General knowledge and miscellaneous topics
   global:
     model_catalog:
       deployments:

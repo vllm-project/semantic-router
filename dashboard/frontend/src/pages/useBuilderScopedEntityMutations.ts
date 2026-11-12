@@ -119,8 +119,8 @@ export const useBuilderScopedEntityMutations = ({
   );
 
   const selectAddedEntity = useCallback(
-    (kind: EntityKind, name: string) => {
-      setSelection({ kind, name });
+    (kind: EntityKind, name: string, signalType?: string) => {
+      setSelection({ kind, name, signalType });
       setAddingEntity(null);
     },
     [setAddingEntity, setSelection],
@@ -129,7 +129,7 @@ export const useBuilderScopedEntityMutations = ({
   const handleAddSignal = useCallback(
     (signalType: string, name: string, fields: DSLFieldObject) => {
       applyRoutingMutation((source) => dslMutations.addSignal(source, signalType, name, fields));
-      selectAddedEntity("signal", name);
+      selectAddedEntity("signal", name, signalType);
     },
     [applyRoutingMutation, selectAddedEntity],
   );

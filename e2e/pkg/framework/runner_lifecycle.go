@@ -48,6 +48,11 @@ func (r *Runner) Run(ctx context.Context) error {
 	defer r.finalizeReport(state)
 	defer state.runCleanup()
 
+	if _, err := r.selectTestCases(); err != nil {
+		state.exitCode = 1
+		return err
+	}
+
 	if err := r.prepareRuntime(ctx, state); err != nil {
 		state.exitCode = 1
 		return err
