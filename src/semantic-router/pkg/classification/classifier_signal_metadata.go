@@ -46,7 +46,8 @@ type RequestFacts struct {
 	// included, and Videos the current user turn's, all as inline (base64
 	// data URL) media; systemone rules read them as their input asks. Remote
 	// media are never fetched: an image that is not inline is an empty entry,
-	// which leaves a rule that reads images unknown.
+	// which a rule that reads images leaves out, and a coverage: full one
+	// resolves as its on_unscanned says.
 	Turns  []ConversationTurn
 	Images []string
 	Videos []string

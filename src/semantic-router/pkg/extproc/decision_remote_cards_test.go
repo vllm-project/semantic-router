@@ -260,12 +260,12 @@ func (a *imageReadingAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // An image rule reads every image the backend will get, earlier turns and
-// tool results included, and never answers about the text alone. When one
-// is an image no decision model decodes, a remote URL or a GIF, the rule is
-// unknown without a call: the condition's on_error decides, and without one
-// the condition is false. The backend still gets the request as sent.
-func TestAnImageRuleIsUnknownWhenTheTurnsImageCannotBeRead(t *testing.T) {
-	recipe := `    signals: {systemone: [{name: unsafe_image, input: {image: true}, question: {type: noul, instructions: "Does the image show prohibited content?"}}]}
+// tool results included. An image no decision model decodes, a remote URL or
+// a GIF, is left out: a coverage: full rule resolves it as its on_unscanned
+// says, and a truncating rule reads the images it can, as it does with tool
+// results it cannot read. The backend still gets the request as sent.
+func TestAnImageRuleResolvesAnImageItCannotReadAsOnUnscannedSays(t *testing.T) {
+	recipe := `    signals: {systemone: [{name: unsafe_image, input: {image: true}RULE, question: {type: noul, instructions: "Does the image show prohibited content?"}}]}
     decisions:
       - {name: block-unsafe-image, priority: 200, rules: {operator: AND, conditions: [{type: systemone, name: unsafe_image ON_ERROR}]}, modelRefs: [{model: deep}]}
       - {name: everything-else, priority: 10, rules: {operator: AND, conditions: []}, modelRefs: [{model: fast}]}`
@@ -282,24 +282,26 @@ func TestAnImageRuleIsUnknownWhenTheTurnsImageCannotBeRead(t *testing.T) {
 	toolResult := `{"model":"vllm-sr/auto","max_tokens":16,"messages":[{"role":"user","content":"Fetch the picture."},` +
 		`{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"fetch","input":{}}]},` +
 		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + pngData + `"}}]},{"type":"text","text":"Tell me more."}]}]}`
-	matchOnError := ", on_error: match"
+	gif := "data:image/gif;base64,R0lGODlhAQABAAAAACw="
+	full, fullMatch := ", coverage: full", ", coverage: full, on_unscanned: match"
 	for name, tc := range map[string]struct {
-		path, body, onError, sent, route string
-		asked                            int
-		anthropic, responses             bool
+		path, body, rule, onError, sent, route string
+		anthropic, responses                   bool
 	}{
-		"inline png":                {body: current(png), onError: matchOnError, sent: png, route: "deep", asked: 1},
-		"remote url":                {body: current(remote), onError: matchOnError, sent: remote, route: "deep"},
-		"gif data url":              {body: current("data:image/gif;base64,R0lGODlhAQABAAAAACw="), onError: matchOnError, route: "deep"},
-		"remote url without policy": {body: current(remote), sent: remote, route: "fast"},
-		"earlier turn png":          {body: earlier(png), onError: matchOnError, sent: png, route: "deep", asked: 1},
-		"earlier turn remote url":   {body: earlier(remote), onError: matchOnError, sent: remote, route: "deep"},
-		"tool result png":           {path: "/v1/messages", body: toolResult, onError: matchOnError, sent: pngData, route: "deep", asked: 1, anthropic: true},
-		"generated image":           {path: "/v1/responses", body: `{"model":"vllm-sr/auto","store":false,"input":[{"type":"image_generation_call","id":"ig_1","status":"completed","result":"` + pngData + `"},{"role":"user","content":"Tell me more."}]}`, onError: matchOnError, sent: pngData, route: "deep", asked: 1, responses: true},
+		"inline png":                       {body: current(png), sent: png, route: "deep"},
+		"earlier turn png":                 {body: earlier(png), sent: png, route: "deep"},
+		"tool result png":                  {path: "/v1/messages", body: toolResult, sent: pngData, route: "deep", anthropic: true},
+		"generated image":                  {path: "/v1/responses", body: `{"model":"vllm-sr/auto","store":false,"input":[{"type":"image_generation_call","id":"ig_1","status":"completed","result":"` + pngData + `"},{"role":"user","content":"Tell me more."}]}`, sent: pngData, route: "deep", responses: true},
+		"remote url, truncating rule":      {body: current(remote), sent: remote, route: "fast"},
+		"remote url, on_unscanned match":   {body: current(remote), rule: fullMatch, sent: remote, route: "deep"},
+		"gif, on_unscanned match":          {body: current(gif), rule: fullMatch, route: "deep"},
+		"earlier remote url, match":        {body: earlier(remote), rule: fullMatch, sent: remote, route: "deep"},
+		"remote url, unknown and on_error": {body: current(remote), rule: full, onError: ", on_error: match", sent: remote, route: "deep"},
+		"remote url, unknown, no policy":   {body: current(remote), rule: full, sent: remote, route: "fast"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			api := &imageReadingAPI{}
-			raw := remoteCardYAML(strings.Replace(recipe, " ON_ERROR", tc.onError, 1), "{question_types: [noul], modalities: [text, image]}")
+			raw := remoteCardYAML(strings.NewReplacer("RULE", tc.rule, " ON_ERROR", tc.onError).Replace(recipe), "{question_types: [noul], modalities: [text, image]}")
 			// A chat backend takes neither image tool results nor generated
 			// images; a Messages or Responses one reads them.
 			if tc.anthropic {
@@ -338,8 +340,11 @@ func TestAnImageRuleIsUnknownWhenTheTurnsImageCannotBeRead(t *testing.T) {
 			}
 			api.mu.Lock()
 			defer api.mu.Unlock()
-			if len(api.calls) != tc.asked {
-				t.Fatalf("the decision model was asked %d times, want %d: %v", len(api.calls), tc.asked, api.calls)
+			if len(api.calls) != 1 {
+				t.Fatalf("the decision model was asked %d times, want once: %v", len(api.calls), api.calls)
+			}
+			if strings.Contains(api.calls[0], remote) || strings.Contains(api.calls[0], gif) {
+				t.Fatalf("the decision model was sent an image it cannot decode: %s", api.calls[0])
 			}
 		})
 	}
