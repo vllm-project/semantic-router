@@ -507,9 +507,13 @@ func (scan *guardScan) record(window int, response modelservice.Response, err er
 // window decides short of a match by at most the margin below its threshold
 // (thresholdGap): a larger window dilutes what it holds, which a window of the
 // configured size reads as the rule expects. Within half the margin, where a
-// diluted match lands, they take the window's rank and are read before the
-// windows after it, so a match still ends the scan early; further below, they
-// wait until the windows still unread are read (waitingCalls).
+// diluted match lands, they take rank 1 and are read before every window not
+// yet sent, so a match still ends the scan early; further below, they wait
+// until the windows still unread are read (waitingCalls). The window's own
+// rank would not do: the scans of the input's other rules on the deployment
+// read its windows in orders of their own, and in a bundle the call that reads
+// a window for all of them goes at the lowest of their ranks, so the window
+// may have been read long before its rank in this scan comes.
 func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Response, err error) []*systemOneCall {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
@@ -537,7 +541,7 @@ func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Re
 	}
 	calls := make([]*systemOneCall, len(parts))
 	for index, part := range parts {
-		calls[index] = scan.addWindowLocked(part, call.request.Window)
+		calls[index] = scan.addWindowLocked(part, 1)
 	}
 	return calls
 }

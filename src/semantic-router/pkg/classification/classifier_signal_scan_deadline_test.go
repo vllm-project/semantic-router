@@ -69,6 +69,14 @@ func guardClassifierAnswering(t *testing.T, timeout, perState, perWord time.Dura
 	t.Helper()
 	document := strings.NewReplacer("TIMEOUT", fmt.Sprint(timeout.Milliseconds()), "RULE\n", "",
 		"predicate: {gte: 0.995}", fmt.Sprintf("predicate: {gte: %g}", threshold)).Replace(refusingGuardConfig)
+	return guardClassifierOf(t, document, perState, perWord, answer)
+}
+
+// guardClassifierOf serves document from a fake vela3-turbo validated at
+// 32,768 tokens that answers as answer says and reads one state at a time,
+// perState and perWord for each of its words.
+func guardClassifierOf(t *testing.T, document string, perState, perWord time.Duration, answer func(state, _ string, question api.Question) (api.Answer, bool)) (*Classifier, *runtimetest.Runtime) {
+	t.Helper()
 	cfg, err := config.ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -209,6 +217,92 @@ func TestAGrownWindowCloseToAMatchIsReadAgainAtTheConfiguredSize(t *testing.T) {
 	}
 }
 
+// The injection's grown window, at about 0.994 under the guard's 0.995, is
+// read again at once whichever rules read the input on the deployment. Each
+// of their scans reads the windows in an order of its own, and the call that
+// reads a window for all of them goes at the lowest of their ranks, so the
+// window is often read long before its rank in the jailbreak scan; a re-read
+// at that rank waited for the windows ranked before it, and never came when
+// the deadline left them unread. Every window of the input is still one call
+// with every rule's question. Choice questions about anything but the
+// injection get their first option, the benign one, at 0.99, far below any
+// re-read.
+func TestANearThresholdReReadComesAtOnceWhateverRulesShareTheDeployment(t *testing.T) {
+	answer := func(state, id string, question api.Question) (api.Answer, bool) {
+		if answer, ok := dilutedInjection(state, id, question); ok || question.Choices == nil || len(*question.Choices) < 2 {
+			return answer, ok
+		}
+		choices := *question.Choices
+		kind, choice, confidence := "choice", choices[0].Key, 0.99
+		probabilities := map[string]float64{choice: confidence}
+		for _, other := range choices[1:] {
+			probabilities[other.Key] = (1 - confidence) / float64(len(choices)-1)
+		}
+		return api.Answer{Type: &kind, Choice: &choice, Probabilities: &probabilities, Confidence: &confidence}, true
+	}
+	asksJailbreak := func(question api.Question) bool {
+		return question.Choices != nil && slices.ContainsFunc(*question.Choices, func(choice api.ChoiceOption) bool { return choice.Key == "jailbreak" })
+	}
+	for _, test := range []struct {
+		name    string
+		replace []string
+		rules   int
+	}{
+		{"jailbreak alone", []string{
+			"      safety:\n        - name: unsafe_request\n          predicate: {gte: 0.9}\n", "",
+			"            - {type: safety, name: unsafe_request}\n", "",
+		}, 1},
+		{"jailbreak and safety, as in production", nil, 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			document := strings.NewReplacer(append([]string{"TIMEOUT", "60000", "RULE\n", ""}, test.replace...)...).Replace(refusingGuardConfig)
+			for run := range 4 {
+				classifier, fake := guardClassifierOf(t, document, 3*time.Millisecond, 0, answer)
+				text := injectedAt(distinctProse(700_000, 10+run), 0.6)
+
+				results := evaluateTurn(classifier, text)
+
+				if !slices.Contains(results.MatchedJailbreakRules, "prompt_attack") {
+					t.Fatalf("run %d: the injection was not refused: coverage %v, errors %v", run, results.ScanCoverage, results.SignalErrors)
+				}
+				states := guardStates(fake)
+				grown := slices.IndexFunc(states, func(state string) bool {
+					return strings.Contains(state, scanInjection) && len(state) > configuredWindow
+				})
+				reread := slices.IndexFunc(states, func(state string) bool {
+					return strings.Contains(state, scanInjection) && len(state) <= configuredWindow
+				})
+				if grown < 0 || reread < grown {
+					t.Fatalf("run %d: the injection's grown window was call %d and a window of the configured size holding it call %d", run, grown+1, reread+1)
+				}
+				if reread-grown > 8 {
+					t.Fatalf("run %d: the injection's grown window was call %d of %d and its re-read call %d, %d later; want it among the next 8",
+						run, grown+1, len(states), reread+1, reread-grown)
+				}
+				read := map[string]bool{}
+				for _, request := range fake.Decisions() {
+					state, _ := request.State.(string)
+					if state == "" {
+						continue
+					}
+					if read[state] {
+						t.Fatalf("run %d: a state of %d bytes was read twice", run, len(state))
+					}
+					read[state] = true
+					guard := false
+					for _, question := range request.Questions {
+						guard = guard || asksJailbreak(question)
+					}
+					window := len(state) > configuredWindow || strings.HasPrefix(text, state) || strings.HasSuffix(text, state)
+					if guard && window && len(request.Questions) != test.rules {
+						t.Fatalf("run %d: a window of the input was read with %d questions, want one for each of its %d rules", run, len(request.Questions), test.rules)
+					}
+				}
+			}
+		})
+	}
+}
+
 // rereadRule is a jailbreak rule at threshold.
 func rereadRule(threshold float64) askedRule {
 	return askedRule{signalType: config.SignalTypeJailbreak, preset: presets.Jailbreak, rule: config.SystemOneRule{
@@ -242,8 +336,8 @@ func rereadScan(text string, asked askedRule, windows []scanWindow) *guardScan {
 // default margin of 3 in log-odds re-reads a rule at 0.5 from about 0.05 and
 // one at 0.995 from about 0.91, not far below either, and never once the
 // window matched. Within half the margin, where a diluted match lands, the
-// re-read comes at once, at the window's rank; further below, it waits for the
-// windows still unread.
+// re-read comes at once, at rank 1, before every window not yet sent; further
+// below, it waits for the windows still unread.
 func TestAGrownWindowIsReadAgainJustBelowItsRulesThreshold(t *testing.T) {
 	text := strings.Repeat("The committee reviewed the quarterly report and agreed to meet again. ", 40)
 	for _, test := range []struct {
@@ -273,8 +367,8 @@ func TestAGrownWindowIsReadAgainJustBelowItsRulesThreshold(t *testing.T) {
 			}
 		}
 		for _, call := range now {
-			if call.request.Window != 3 {
-				t.Fatalf("a re-read at once has rank %d, want the window's 3", call.request.Window)
+			if call.request.Window != 1 {
+				t.Fatalf("a re-read at once has rank %d, want 1, before every window not yet sent", call.request.Window)
 			}
 		}
 	}
