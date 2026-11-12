@@ -105,7 +105,7 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 		}
 		recordNonUserSignalMessage(result, string(instruction.Role), text)
 	}
-	routing := selector.Walk()
+	routing := selector.Walk(routingUserTexts(selector, request.Messages)...)
 	for index, message := range request.Messages {
 		if message.Role == llmprotocol.RoleUser && selector != nil {
 			var skipped bool
