@@ -447,3 +447,39 @@ class WritesOnlyTheirOwnFiles(unittest.TestCase):
             calibrate.writable(None, Path("/x/labels.jsonl"), calibrate.LABELS_NAME),
             Path("/x/labels.jsonl"),
         )
+
+
+class RuntimeModelTest(unittest.TestCase):
+    """Calibration names the model vSR asks: the configured one on a runtime that serves several."""
+
+    def ctx(self, options):
+        return plan.Context(
+            "vsr@vllm-sr", options, None, Path("/x/decisions.jsonl"), None, {}, {}
+        )
+
+    def test_the_configured_model_wins_over_the_first_listed(self):
+        with mock.patch.object(plan.runtime, "health") as health:
+            got = plan.runtime_model(
+                self.ctx(
+                    {
+                        "runtimeUrl": "https://sr.example/v1/decisions",
+                        "runtimeModel": "model-b",
+                    }
+                )
+            )
+        self.assertEqual(got, "model-b")
+        health.assert_not_called()
+
+    def test_without_one_the_runtime_names_its_model(self):
+        with mock.patch.object(
+            plan.runtime, "health", return_value={"model": "vela3-lite"}
+        ):
+            got = plan.runtime_model(
+                self.ctx(
+                    {
+                        "runtimeUrl": "http://127.0.0.1:8790/v1/decisions",
+                        "runtimeModel": "",
+                    }
+                )
+            )
+        self.assertEqual(got, "vela3-lite")

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -222,9 +223,9 @@ def check_listener_tls(chart: str) -> None:
 def check_cli_kubernetes_values(chart: str) -> None:
     # The keys the CLI's kubernetes target writes for --gateway and --platform.
     for platform, repository, resource in (
-        ("amd", "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm", "amd.com/gpu"),
+        ("rocm", "ghcr.io/vllm-project/semantic-router/vllm-sr-rocm", "amd.com/gpu"),
         (
-            "nvidia",
+            "cuda",
             "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda",
             "nvidia.com/gpu",
         ),
@@ -278,6 +279,20 @@ def check_dashboard_and_ingress(chart: str) -> None:
     )
 
 
+def check_config_override_version(chart: str) -> None:
+    # A configOverride without a version gets the schema the Router loads.
+    source = Path(__file__).resolve().parents[2] / (
+        "src/semantic-router/pkg/config/canonical_config.go"
+    )
+    current = re.search(
+        r'CanonicalConfigVersion = "([^"]+)"', source.read_text()
+    ).group(1)
+    documents = render(chart, {"configOverride": {"listeners": [CLI_LISTENER]}})
+    config_map = find(documents, "ConfigMap", f"{ROUTER}-config")
+    config = yaml.safe_load(config_map["data"]["config.yaml"])
+    assert config["version"] == current, (config["version"], current)
+
+
 CHECKS = (
     check_standalone_default,
     check_extproc,
@@ -285,6 +300,7 @@ CHECKS = (
     check_listener_tls,
     check_cli_kubernetes_values,
     check_dashboard_and_ingress,
+    check_config_override_version,
 )
 
 

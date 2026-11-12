@@ -46,6 +46,11 @@ func applyToolsPolicy(request *llmprotocol.Request, policy *config.ToolsPolicyCo
 	case config.ToolsPolicyModeFiltered:
 		if filtered := filterToolsByPolicy(request.Tools, policy); len(filtered) != len(request.Tools) {
 			request.Tools = filtered
+			// A tool_choice naming a removed tool goes with it, as under none,
+			// and the model chooses among the tools left.
+			if request.ToolChoice.Mode == llmprotocol.ToolChoiceNamed && !policy.Allows(request.ToolChoice.Name) {
+				request.ToolChoice = llmprotocol.ToolChoice{}
+			}
 			request.Generation++
 		}
 	}

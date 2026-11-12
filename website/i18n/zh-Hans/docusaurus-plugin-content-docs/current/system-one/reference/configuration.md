@@ -39,9 +39,9 @@ translation:
 | `predicate` | 答案必须满足的界限：`gt`、`gte`、`lt`、`lte` |
 | `deployment` | 回答问题的部署 |
 | `stage` | `request`（默认）或 `response` |
-| `input` | `history`、`previous_turns`（0 到 32）、`tool_results`、`answer`、`context`、`image`、`audio`、`video` |
+| `input` | `history`、`previous_turns`（0 到 32）、`tool_results`、`request`（`false` 时不读取当前用户轮次）、`answer`、`context`、`image`、`audio`、`video` |
 | `coverage` | `truncate`（默认）或 `full` |
-| `on_unscanned` | 使用 `coverage: full` 时：`match`、`no_match` 或 `unknown`（默认） |
+| `on_unscanned` | 使用 `coverage: full` 时：`match`、`no_match`、`unknown`（默认）或 `best_effort`；`jailbreak` 和 `pii` 规则默认为 `best_effort` |
 | `timeout_ms` | 最长 60,000 |
 
 应用规则接受 `name`、`description`、`deployment`、`timeout_ms`，以及其类型允许的字段：
@@ -52,7 +52,7 @@ translation:
 | `fact_check`、`user_feedbacks` | `labels`、`predicate` |
 | `jailbreak` | `predicate`、`stage`、`input.history`、`on_unknown` |
 | `safety` | `labels`（危害类别）、`predicate`、`stage` |
-| `pii` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results`、`on_unknown` |
+| `pii` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results`、`input.request`、`on_unknown` |
 | `hallucination`、`refusal` | `predicate` |
 | `turn_relation` | `labels`、`input.previous_turns`（默认 4） |
 | `complexity` | `labels` |
@@ -78,7 +78,7 @@ match:
 | `judge.question` | 代替预设的自定义问题：`choice`（候选即其选项）、`noul` 或 `score` |
 | `judge.deployment` | 回答问题的部署；不写时为决策模型 |
 | `judge.top_k`、`judge.min_score`、`judge.min_ratio` | 保留哪些被评判的候选：最好的 `top_k` 个、至少 `min_score` 的、至少达到最佳者 `min_ratio` 的 |
-| `judge.max_candidates` | 评审最多读取的候选数：choice 评审为 255（也是上限），逐个候选的评审默认 64；小于 1，或 choice 评审上大于 255，会导致加载失败 |
+| `judge.max_candidates` | 评审最多读取的候选数：choice 评审为 255（也是上限），逐个候选的评审默认 64、最多 4096；小于 1 或超过上限会导致加载失败 |
 | `judge.on_error` | `skip`（默认；保留召回结果，没有召回时保留原样的候选）或 `fail`（该功能的匹配失败） |
 | `judge.timeout_ms` | 评审调用的截止时间；未设置时使用部署的 `timeout_ms`，再没有则为 1000 ms |
 

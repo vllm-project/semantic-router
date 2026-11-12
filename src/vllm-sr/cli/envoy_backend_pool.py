@@ -5,7 +5,18 @@ from dataclasses import dataclass, fields
 from typing import Any
 from urllib.parse import urlsplit
 
-from cli.models import BackendRef, Model
+from cli.models import BackendRef, Model, UserConfig
+
+
+@dataclass(frozen=True)
+class EnvoyBackendTLS:
+    """The TLS session of an https cluster. Unset fields keep the defaults
+    the template renders: the endpoint's host and the system CA bundle."""
+
+    server_name: str = ""
+    ca_file: str = ""
+    cert_file: str = ""
+    key_file: str = ""
 
 
 @dataclass(frozen=True)
@@ -17,6 +28,7 @@ class BackendRouteSemantics:
     discovery: str
     path: str
     tls_server_name: str
+    tls_files: tuple[str, str, str]
     credential: tuple[str, str]
     auth_header: str
     auth_prefix: str
@@ -32,6 +44,7 @@ class EnvoyBackendGroup:
     endpoints: tuple[dict[str, Any], ...]
     has_https: bool
     uses_dns: bool
+    tls: EnvoyBackendTLS | None = None
 
 
 _SEMANTIC_LABELS = {
@@ -40,6 +53,7 @@ _SEMANTIC_LABELS = {
     "discovery": "DNS/IP discovery",
     "path": "base path",
     "tls_server_name": "TLS server name",
+    "tls_files": "TLS files",
     "credential": "credential source",
     "auth_header": "auth header",
     "auth_prefix": "auth prefix",
@@ -58,6 +72,7 @@ def backend_route_semantics(
     endpoint: dict[str, Any],
 ) -> BackendRouteSemantics:
     """Capture settings that must remain constant across one Envoy cluster."""
+    tls = endpoint.get("tls") or EnvoyBackendTLS()
     return BackendRouteSemantics(
         provider=backend.provider,
         transport=str(endpoint["protocol"]),
@@ -66,7 +81,12 @@ def backend_route_semantics(
         # Envoy 1.34 shares one TLS context and session cache per cluster. Keep
         # that context bound to one server identity; distinct HTTPS hosts must
         # use separate aliases/clusters.
-        tls_server_name=(str(endpoint["address"]) if endpoint["is_https"] else ""),
+        tls_server_name=(
+            (tls.server_name or str(endpoint["address"]))
+            if endpoint["is_https"]
+            else ""
+        ),
+        tls_files=(tls.ca_file, tls.cert_file, tls.key_file),
         credential=_credential_identity(backend),
         auth_header=(backend.auth.header if backend.auth else None) or "",
         auth_prefix=(backend.auth.prefix if backend.auth else None) or "",
@@ -76,8 +96,20 @@ def backend_route_semantics(
     )
 
 
-def project_envoy_backend_group(model: Model) -> EnvoyBackendGroup:
-    """Parse and validate the backend group exactly once for all CLI paths."""
+def default_backend_ca_file(user_config: UserConfig) -> str | None:
+    """providers.defaults.tls.ca_file, the CA of https backends naming none."""
+    tls = user_config.providers.defaults.tls
+    return tls.ca_file if tls else None
+
+
+def project_envoy_backend_group(
+    model: Model, default_ca_file: str | None = None
+) -> EnvoyBackendGroup:
+    """Parse and validate the backend group exactly once for all CLI paths.
+
+    default_ca_file is providers.defaults.tls.ca_file, the CA of every https
+    backend whose own tls names none.
+    """
 
     endpoints: list[dict[str, Any]] = []
     semantics: list[BackendRouteSemantics] = []
@@ -85,7 +117,9 @@ def project_envoy_backend_group(model: Model) -> EnvoyBackendGroup:
     uses_dns = False
     endpoint_names: set[str] = set()
     for index, backend in enumerate(model.backend_refs):
-        endpoint = _project_backend_endpoint(model.name, backend, index)
+        endpoint = _project_backend_endpoint(
+            model.name, backend, index, default_ca_file
+        )
         if endpoint is None:
             continue
         endpoint_name = str(endpoint["name"])
@@ -105,6 +139,10 @@ def project_envoy_backend_group(model: Model) -> EnvoyBackendGroup:
         endpoints=tuple(endpoints),
         has_https=has_https,
         uses_dns=uses_dns,
+        tls=next(
+            (endpoint["tls"] for endpoint in endpoints if endpoint["is_https"]),
+            None,
+        ),
     )
 
 
@@ -112,6 +150,7 @@ def _project_backend_endpoint(
     model_name: str,
     backend: BackendRef,
     index: int,
+    default_ca_file: str | None = None,
 ) -> dict[str, Any] | None:
     endpoint_str = backend.endpoint or ""
     if not endpoint_str:
@@ -164,6 +203,11 @@ def _project_backend_endpoint(
             "HTTPS endpoint must use a DNS hostname so Envoy can "
             "verify its certificate identity"
         )
+    if backend.tls is not None and not is_https:
+        raise ValueError(
+            f"providers.models[{model_name!r}].backend_refs[{index}].tls "
+            "applies to an https:// endpoint"
+        )
 
     return {
         "name": (backend.name or "").strip() or f"backend-{index + 1}",
@@ -176,7 +220,19 @@ def _project_backend_endpoint(
         "is_https": is_https,
         "is_domain": is_domain,
         "extra_headers": dict(backend.headers or {}),
+        "tls": _effective_tls(backend, default_ca_file) if is_https else None,
     }
+
+
+def _effective_tls(backend: BackendRef, default_ca_file: str | None) -> EnvoyBackendTLS:
+    """An https backend's own tls, with the default CA when it names none."""
+    tls = backend.tls
+    return EnvoyBackendTLS(
+        server_name=(tls.server_name if tls else None) or "",
+        ca_file=(tls.ca_file if tls else None) or default_ca_file or "",
+        cert_file=(tls.cert_file if tls else None) or "",
+        key_file=(tls.key_file if tls else None) or "",
+    )
 
 
 def _split_endpoint_path(endpoint: str) -> tuple[str, str]:

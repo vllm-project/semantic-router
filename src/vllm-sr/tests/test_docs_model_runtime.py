@@ -57,6 +57,7 @@ REQUEST_SCHEMAS = {
     "/v1/embeddings": "EmbeddingsRequest",
     "/v1/rerank": "RerankRequest",
     "/v1/bundle": "BundleRequest",
+    "/v1/systemone/batch": "SystemOneBatchRequest",
 }
 # Fragments that are not router configuration documents; the Router's docs
 # test checks that migrate writes legacy.migrated.yaml for legacy.yaml.

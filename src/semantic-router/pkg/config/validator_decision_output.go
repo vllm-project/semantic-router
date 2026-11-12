@@ -95,7 +95,7 @@ func outputWireMismatch(output *DecisionOutput, apiFormat string) string {
 	if !output.GeneratesImages() {
 		return ""
 	}
-	switch format := strings.ToLower(strings.TrimSpace(apiFormat)); {
+	switch format := CanonicalAPIFormat(strings.ToLower(strings.TrimSpace(apiFormat))); {
 	case format == APIFormatResponses:
 		return ""
 	case format == APIFormatImages && output.ImageOnly():
@@ -104,7 +104,7 @@ func outputWireMismatch(output *DecisionOutput, apiFormat string) string {
 		return "answers on the images API, which carries no text; reach it with api_format: responses"
 	default:
 		if format == "" {
-			format = APIFormatOpenAI
+			format = APIFormatChatCompletions
 		}
 		return fmt.Sprintf("answers on the %s API, which cannot carry a generated image; reach it with api_format: images or responses", format)
 	}

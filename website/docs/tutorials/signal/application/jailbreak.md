@@ -65,7 +65,9 @@ recipes:
 | `predicate` | The least probability of `jailbreak`; by default the model's calibrated threshold (0.88 on vela3-fast) at the request stage, else 0.5 |
 | `stage` | `request` (default) or `response`, which reads the model's answer |
 | `input.history` | Also read the earlier user and tool turns |
-| `on_unknown` | Request stage: what the rule reports when its model gives no answer, `no_match` (the default) or `match` |
+| `on_unscanned` | What the rule reports when only some windows of a long input were read: `best_effort` (the default), `match`, `no_match` or `unknown` |
+| `min_coverage` | With `best_effort`, the share of the windows, 0 to 1, that must have been read to decide on them; below it the rule is unknown. Off by default |
+| `on_unknown` | Request stage: what the rule reports when its model gives no answer, `match` (the default) or `no_match` |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
 
 ### What it reads
@@ -79,18 +81,40 @@ evidence. It also reads what `global.router.routing_input` removes from the
 routing text, so a fake memory block or runtime-context turn cannot hide an
 attack.
 
-The question reads its whole input, in windows when the input is longer than
-one forward. Text the model could not read counts as an attack, with the
-match type `unscanned`, so padding a prompt cannot carry an attack past the
-guard.
+The question reads its whole input. An input longer than one of the
+deployment's `scan_window`s, a long pasted document or a long tool output, is
+read in overlapping windows, the tail first, then the head, then the middle by
+halves, so the windows read by any moment are spread over the whole input. Any
+window that finds an attack flags the input, so padding a prompt cannot carry
+an attack past the guard. When a decision that refuses the request
+(`fast_response`) matches on the rule alone, the window that finds the attack
+ends the scan and the request is refused at once. See
+[Long inputs](../../../system-one/deploy/performance.md#long-inputs).
+
+### When only part of the input was read
+
+When the signals' deadline ends before every window is read and no window read
+found an attack, `on_unscanned` decides:
+
+- `best_effort` (the default) decides on the windows read, here no match. With
+  `min_coverage`, it decides only once that share of the windows was read:
+  below it the rule is unknown, for `on_unknown`;
+- `match` matches the request, with the match type `unscanned` (strict);
+- `no_match` does not match;
+- `unknown` leaves the rule unknown, for `on_unknown`.
+
+A window read that found an attack matches whatever `on_unscanned` says: the
+windows not read cannot undo it. A request routed after a partial read carries
+`scan_partial` in `x-vsr-warnings`.
 
 ### When the model gives no answer
 
-A request-stage rule whose model gives no answer (it fails, is overloaded or
-misses its deadline) does not match, which keeps traffic flowing when the
-decision model is down. To fail closed instead, write `on_unknown: match`:
-the rule then matches such a request, with the match type `unavailable`. A
-decision's `rules.on_unknown` still decides how the decision treats it.
+A request-stage rule none of whose windows gets an answer (the model fails, is
+overloaded, or misses the deadline) matches, with the match type
+`unavailable` (`unscanned` when the model could not read the input): a guard
+whose model is down does not pass the request. To keep traffic flowing
+instead, write `on_unknown: no_match`. A decision's `rules.on_unknown` still
+decides how the decision treats such a match.
 
 ```yaml
 recipes:
@@ -98,7 +122,11 @@ recipes:
     signals:
       jailbreak:
         - name: strict_guard
-          on_unknown: match
+          on_unscanned: match
+        - name: half_read_guard
+          min_coverage: 0.5
+        - name: lenient_guard
+          on_unknown: no_match
 ```
 
 `on_unknown` is refused on a response-stage rule: the `response_guard`

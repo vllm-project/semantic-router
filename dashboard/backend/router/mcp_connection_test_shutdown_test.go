@@ -23,7 +23,7 @@ func TestDashboardCloseCancelsMCPConnectionTest(t *testing.T) {
 		defer close(testFinished)
 		testDone <- dashboard.mcpManager.TestConnection(ctx, config)
 	}()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(preconditionBudget)
 	for {
 		if _, err := os.Stat(exitMarker + ".initializing"); err == nil {
 			break
@@ -65,7 +65,7 @@ func TestDashboardCloseRejectsMCPConnectionTest(t *testing.T) {
 	if err := dashboard.Close(); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), preconditionBudget)
 	defer cancel()
 	if err := dashboard.mcpManager.TestConnection(ctx, config); err == nil {
 		t.Fatal("closed manager accepted a connection test")

@@ -160,15 +160,8 @@ func (c *RouterReplayShadowConfig) Validate() error {
 // silently dropped on every shadow call.
 func validateShadowForwardHeaders(names []string) error {
 	for _, name := range names {
-		trimmed := strings.TrimSpace(name)
-		if trimmed == "" {
-			return fmt.Errorf("forward_headers entries cannot be empty")
-		}
-		if strings.HasPrefix(trimmed, ":") {
-			return fmt.Errorf("forward_headers cannot include pseudo-header %q", trimmed)
-		}
-		if IsShadowCredentialHeader(trimmed) {
-			return fmt.Errorf("forward_headers cannot include credential header %q", trimmed)
+		if err := validateForwardedHeaderName("forward_headers", name); err != nil {
+			return err
 		}
 	}
 	return nil

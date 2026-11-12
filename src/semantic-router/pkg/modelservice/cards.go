@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // ModelCard is a served model's description from /v1/models: identity,
@@ -38,6 +39,23 @@ type ModelCard struct {
 	Ready          bool
 	Status         string
 	Reason         string
+	// ValidatedInputTokens is the length a decision model was validated at,
+	// which caps each question; zero when MaxInputTokens is the only cap.
+	ValidatedInputTokens int
+	// Schema is the upstream schema a remote model's API speaks, empty for a
+	// model the model runtime serves.
+	Schema string
+}
+
+// ReportsInputCoverage reports whether the model's answers can prove they
+// read their whole input (input_coverage): every model the runtime serves
+// can, and a remote one when its schema carries it.
+func (c ModelCard) ReportsInputCoverage() bool {
+	if c.Schema == "" {
+		return true
+	}
+	codec, _, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(c.Schema), nil)
+	return err == nil && codec.Capabilities().Has(systemonecodec.CapabilityFullInput)
 }
 
 // EngineArgs are the engine arguments a served model's card reports: how it
@@ -92,6 +110,16 @@ func (c ModelCard) Answers(questionType string) bool {
 		return questionType == "choice" || questionType == "noul" || questionType == "score"
 	}
 	return slices.Contains(c.QuestionTypes, questionType)
+}
+
+// QuestionTokens is the most tokens one question (its state and the question
+// itself) may have: the validated length, else the model's maximum; zero when
+// the card reports neither.
+func (c ModelCard) QuestionTokens() int {
+	if c.ValidatedInputTokens > 0 {
+		return c.ValidatedInputTokens
+	}
+	return c.MaxInputTokens
 }
 
 // HasPreset reports whether the model defines the named question.
@@ -163,6 +191,7 @@ func decodeCard(card api.ModelCard) ModelCard {
 		decoded.MaxInputTokens = deref(card.Limits.MaxInputTokens)
 		decoded.MaxScanTokens = deref(card.Limits.MaxScanTokens)
 		decoded.MaxInputs = deref(card.Limits.MaxInputs)
+		decoded.ValidatedInputTokens = deref(card.Limits.ValidatedInputTokens)
 	}
 	if card.Heads != nil {
 		for _, head := range *card.Heads {

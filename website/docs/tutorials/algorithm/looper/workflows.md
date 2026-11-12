@@ -88,7 +88,7 @@ recipes:
 | Field | Use it for |
 | --- | --- |
 | `output_contract` | Decision-scoped prompt text: benchmark or application format requirements that apply across static Flow, dynamic Flow, Fusion and ReMoM, instead of task-specific prompts hard-coded in an algorithm. |
-| `output_contract_spec` | Typed normalization and post-processing the Router executes, such as choice extraction, terminal-action JSON normalization or reference dereferencing. |
+| `output_contract_spec` | Typed normalization and post-processing the Router executes, such as choice extraction or terminal-action JSON normalization. Only Fusion, ReMoM and Flow decisions accept it, and Flow refuses `reference_selection`, since its final lists worker outputs without numbers. |
 
 Extraction defaults to exact `content` matching. Use `extract.sources` or
 `extract.mode: json_object` only when the decision explicitly permits a wider
@@ -205,6 +205,12 @@ When a worker or the final synthesizer returns `tool_calls`, Flow:
    requested them, without replaying unrelated workers;
 5. continues that agent's tool loop until it produces content, then resumes the
    remaining workflow.
+
+Each response's `usage` counts the model calls made for that request only, so a
+resumed turn does not report the earlier turns' calls again. A resumed
+workflow's final answer follows `output_contract_spec`, and under
+`on_error: skip` a failed final synthesis serves a worker's answer, as on a
+first turn.
 
 Each worker has its own message history. A later step's `access_list`
 exposes only prior step or agent outputs, never another worker's raw tool calls

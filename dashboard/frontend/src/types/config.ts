@@ -28,7 +28,11 @@ export interface ProviderModel {
   backend_refs?: ProviderEndpoint[]
   endpoints?: ProviderEndpoint[]
   access_key?: string
-  api_format?: 'openai' | 'responses' | 'anthropic' | 'images' | 'systemone'
+  // An API name; openai and anthropic are accepted as aliases of
+  // chat_completions and messages, which the Dashboard writes.
+  api_format?: APIName | APIAlias
+  // The version of that API the backends speak, one of its schema IDs.
+  schema?: string
   external_model_ids?: Record<string, string>
   pricing?: {
     currency?: string
@@ -107,6 +111,8 @@ export interface SystemOneInput {
   image?: boolean
   audio?: boolean
   video?: boolean
+  // false leaves the current user turn out: the rule reads only the history or tool results it names
+  request?: boolean
 }
 
 export interface SystemOneSignal {
@@ -128,7 +134,7 @@ export interface SystemOneSignal {
   stage?: 'request' | 'response'
   input?: SystemOneInput
   coverage?: 'truncate' | 'full'
-  on_unscanned?: 'match' | 'no_match' | 'unknown'
+  on_unscanned?: 'best_effort' | 'match' | 'no_match' | 'unknown'
   timeout_ms?: number
 }
 
@@ -148,6 +154,17 @@ export interface SafetySignal {
 // LISTENERS - Network configuration
 // =============================================================================
 
+export type APIName = 'chat_completions' | 'responses' | 'messages' | 'images' | 'systemone'
+export type APIAlias = 'openai' | 'anthropic'
+
+// One API a listener serves: its schema (systemone only), the models it
+// accepts and its settings.
+export interface ListenerAPI {
+  schema?: 'vllm-sr/5.0' | 'vllm-sr/4.0'
+  models?: string[]
+  max_deadline_ms?: number
+}
+
 export interface ListenerTLS {
   cert_file: string
   key_file: string
@@ -164,7 +181,9 @@ export interface Listener {
   port: number
   timeout?: string
   api_keys?: string[]
-  models?: string[]
+  // The APIs the listener serves, by API name (or alias); omitted, the four
+  // LLM APIs and not systemone.
+  apis?: Partial<Record<APIName | APIAlias, ListenerAPI>>
   tls?: ListenerTLS
   identity?: ListenerIdentity
 }
