@@ -26,6 +26,7 @@ working directory, add this directory to `PYTHONPATH`, or install this package.
 | `GET /v1/models` | Configured model metadata |
 | `POST /v1/systemone` | System One decisions for the Router's `systemone` deployments |
 | `GET /v1/systemone/models` | The one System One model it lists, `e2e/fake-systemone` |
+| `POST /v1/embeddings` | Deterministic embeddings for the Router's `openai_embeddings` deployments |
 | `GET /debug/last-request` | Last native request per test session |
 
 Images accept `response_format: b64_json` and `n` from 1 to 4. Images streaming,
@@ -107,6 +108,15 @@ question nothing. Choice, noul and span are the question types it lists; any
 other fails with `invalid_question`. A failed question carries its error in
 its answer, as a model runtime answers it, and the call's other questions are
 answered.
+
+`/v1/embeddings` serves an `openai_embeddings` deployment with
+`endpoint: http://<service>:8000/v1`, `model: e2e/fixture-embedding` and
+`dimensions: 256`. It runs no model. A text carrying `__EMBED_TOPIC__ <key>`
+embeds as that key alone, so every text of one topic has similarity 1 and a
+cache case pins its hits, and polarity flips that only the lexical guard can
+reject, without depending on a model's paraphrase quality. Any other text
+embeds as its words hashed into 256 buckets: a repeated text matches itself
+exactly and unrelated texts stay apart.
 
 ## Image inputs
 

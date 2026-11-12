@@ -19,8 +19,6 @@ const PANE = 'vsr-decisions'
 const PANE_TITLE = 'vSR · decisions'
 const FALLBACK_COLUMNS = 100
 const INLINE_INDENT = 2
-// Rows the pane's frame takes from the surface's height.
-const PANE_CHROME_ROWS = 4
 // How much of a block's end must match the end of a checked answer.
 const BLOCK_PROBE_CHARS = 120
 
@@ -230,6 +228,6 @@ export function registerView(on: On, settings: Settings) {
     // Answers given here are labels /vsr:calibrate fits the thresholds to; with the log off nothing keeps them.
     const labeling =
       (await labelsFile($, settings.log)) === undefined ? undefined : { given, answer: (d: Decision, answer: Answer) => void giveLabel($, settings.log, d, answer) }
-    return dashboard(elements, logo, list, e.props.bodyColumns, (e.viewport?.rows ?? 24) - PANE_CHROME_ROWS, about, act, labeling)
+    return dashboard(elements, logo, list, e.props.bodyColumns, about, act, labeling)
   })
 }

@@ -480,6 +480,9 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	ctx.TargetFormat = dispatch.targetFormat
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticResponse = &candidateResponse
+	// The call was buffered, but the client still reads its own stream, which
+	// is rendered with its own stream options.
+	reqCopy.Stream, reqCopy.StreamOptions = origSemanticRequest.Stream, origSemanticRequest.StreamOptions
 	ctx.SemanticRequest = reqCopy
 	ctx.ResponseEnvelope = translated.Envelope
 	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(translated.Diagnostics)
@@ -639,8 +642,10 @@ type fallbackCandidate struct {
 // encodes its request: reasoning, decision and request parameters,
 // capability checks, codec encoding, provider adaptation and the rate limit,
 // as for the primary. buffered asks for a non-streaming response, which the
-// response-phase fallback needs to answer at once; the native gateway keeps
-// the client's streaming mode.
+// response-phase fallback needs to answer at once, so the call carries none of
+// the client's stream options either; the native gateway keeps the client's
+// streaming mode, and a streamed call asks a Chat backend for its usage as the
+// primary's does.
 func (r *OpenAIRouter) prepareFallbackCandidate(
 	callCtx context.Context,
 	candidateRef *config.ModelRef,
@@ -675,6 +680,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	reqCopy.Model = dispatch.upstreamModel
 	if buffered {
 		reqCopy.Stream = false
+		reqCopy.StreamOptions = llmprotocol.StreamOptions{}
 	}
 	if useReasoning {
 		effort := candidateRef.ReasoningEffort
@@ -734,6 +740,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	if projectionErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
+	requestBackendStreamUsage(dispatch.targetFormat, &projected)
 	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
 	if encodeErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr

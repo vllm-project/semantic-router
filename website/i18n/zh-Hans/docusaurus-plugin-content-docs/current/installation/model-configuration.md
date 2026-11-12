@@ -267,6 +267,7 @@ recipes:
 - **决策。**决策的块接受除 `circuit_breaker` 以外的所有字段，`circuit_breaker` 属于后端。
 - **候选**始终是决策中对该请求仍有资格的排名模型。没有单独的回退列表，提供方模型也没有自己的回退：同一模型的其他副本改由其重试、剔除和健康检查来尝试。
 - **推理。**候选按它自己在 `modelRefs` 中的推理设置（`use_reasoning`、`reasoning_effort`、`reasoning_mode`）发送，并像第一次尝试那样写成其后端的格式。Router 无法准备的候选（例如被其限流拒绝的候选）会被跳过，改试下一个，并以 `fallback_candidate_skipped` 记录日志，注明原因。
+- **流式。**流式请求同样会回退，无论它带有什么 `stream_options`。在 Envoy 之后，Router 以非流式方式调用候选，再按客户端自己的 `stream_options` 把回答以流式发给客户端，因此设置了 `include_usage` 的客户端仍会最后收到用量块。在 standalone 模式下，候选以流式发送，并像第一次尝试那样向 Chat Completions 后端请求用量。
 
 两种网关模式运行相同的策略，只有一处有意的差异：standalone 模式在完全没有后端应答时（例如连接被拒绝或超时）也会回退，而在 Envoy 之后，客户端会收到 Envoy 的回复。这样的失败计为 `503` 或 `504`，因此要在这类失败上回退，请在 `retryable_status_codes` 中保留这两个状态码。响应的任何部分一旦到达客户端，就不再回退。
 

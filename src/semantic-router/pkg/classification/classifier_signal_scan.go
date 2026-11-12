@@ -2,11 +2,13 @@ package classification
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -18,16 +20,18 @@ import (
 // A guard rule (jailbreak, safety or pii, at either stage) reads its whole
 // input. An input longer than one window of its deployment is read in
 // overlapping windows: the tail first, then the head, then the middle in
-// order, each window a state of the stage's call to the deployment. The rule
-// decides on what the windows found: the most alarming window's answer, each
-// label's highest probability for a set question, and every window's spans,
-// at their places in the input, for a span question. When only some windows
-// were read, on_unscanned decides (best_effort: on the windows read); when
-// none was, the rule is unknown, which on_unknown decides.
+// order, each window a call of its own, at most the deployment's
+// scan_window.max_parallel of them in flight, so a window's answers count as
+// soon as it is read. The rule decides on what the windows found: the most
+// alarming window's answer, each label's highest probability for a set
+// question, and every window's spans, at their places in the input, for a
+// span question. When the stage's deadline leaves only some windows read,
+// on_unscanned decides (best_effort: on the windows read); when none was, the
+// rule is unknown, which on_unknown decides.
 
-// maxScanWindows bounds the windows of one input: the ones past it in reading
-// order count as unread.
-const maxScanWindows = 64
+// maxScanWindows bounds the windows of one input, and so the calls its scan
+// holds: the ones past it in reading order count as unread.
+const maxScanWindows = 256
 
 // errWindowLimit marks a window past maxScanWindows.
 var errWindowLimit = errors.New("window_limit")
@@ -57,6 +61,8 @@ type guardScan struct {
 	windows      []scanWindow
 	// windowState is the state a window's call reads.
 	windowState func(window string) modelservice.Request
+	// parallel bounds the windows in flight.
+	parallel int
 
 	mu        sync.Mutex
 	responses []modelservice.Response
@@ -75,23 +81,26 @@ func guardScanned(asked askedRule) bool {
 }
 
 // scanWindowBudget is the size and overlap, in bytes, of deployment's scan
-// windows, at most its card's question cap less the reserve.
-func (c *Classifier) scanWindowBudget(deployment string) (int, int) {
-	tokens, overlap := c.Config.ModelDeployments[deployment].ScanWindowTokens()
+// windows, at most its card's question cap less the reserve, and how many
+// of them are in flight at a time.
+func (c *Classifier) scanWindowBudget(deployment string) (int, int, int) {
+	window := c.Config.ModelDeployments[deployment]
+	tokens, overlap := window.ScanWindowTokens()
 	size := c.budgetBytes(deployment, tokens)
-	return size, max(0, min(overlap*routingViewBytesPerToken, size/2-1))
+	return size, max(0, min(overlap*routingViewBytesPerToken, size/2-1)), window.ScanWindowParallel()
 }
 
 // newGuardScan is the scan of state in windows of size bytes overlapping by
-// overlap, or nil when the state fits one window and is read as it is.
-func newGuardScan(deployment string, state modelservice.Request, size, overlap int) *guardScan {
+// overlap, at most parallel of them in flight, or nil when the state fits
+// one window and is read as it is.
+func newGuardScan(deployment string, state modelservice.Request, size, overlap, parallel int) *guardScan {
 	if stateBytes(state) <= size {
 		return nil
 	}
 	text, windowSize, windowState := scanSource(state, size)
 	windows := scanWindowsOf(text, windowSize, min(overlap, windowSize/2-1))
 	return &guardScan{
-		deployment: deployment, whole: state, text: text, windows: windows, windowState: windowState,
+		deployment: deployment, whole: state, text: text, windows: windows, windowState: windowState, parallel: parallel,
 		responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)),
 	}
 }
@@ -197,7 +206,7 @@ func (scan *guardScan) windowCalls() []*systemOneCall {
 	for rank, index := range order {
 		window := scan.windows[index]
 		request := scan.windowState(scan.text[window.start:window.end])
-		request.Order = rank + 1
+		request.Window, request.Parallel = rank+1, scan.parallel
 		calls[rank] = &systemOneCall{deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index}
 		sent[index] = true
 	}
@@ -207,6 +216,41 @@ func (scan *guardScan) windowCalls() []*systemOneCall {
 		}
 	}
 	return calls
+}
+
+// windowReaders are the work that reads scans' windows. In a stage's bundle
+// every window parks its call at once and the bundle sends them, at most
+// each scan's parallel bound in flight, the lowest rank first; elsewhere each
+// scan has that many readers, which take its windows in reading order. A
+// window not started before the deadline stays unread.
+func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) []func() {
+	var readers []func()
+	for _, scan := range scans {
+		calls := scan.windowCalls()
+		read := func(call *systemOneCall) {
+			if err := ctx.Err(); err != nil {
+				scan.record(call.window, modelservice.Response{}, err, 0)
+				return
+			}
+			response, latency, err := c.sendCall(ctx, call)
+			scan.record(call.window, response, err, latency)
+		}
+		if modelservice.InBundle(ctx) {
+			for _, call := range calls {
+				readers = append(readers, func() { read(call) })
+			}
+			continue
+		}
+		var next atomic.Int64
+		for range min(max(scan.parallel, 1), len(calls)) {
+			readers = append(readers, func() {
+				for rank := int(next.Add(1)) - 1; rank < len(calls); rank = int(next.Add(1)) - 1 {
+					read(calls[rank])
+				}
+			})
+		}
+	}
+	return readers
 }
 
 func (scan *guardScan) record(window int, response modelservice.Response, err error, latency float64) {

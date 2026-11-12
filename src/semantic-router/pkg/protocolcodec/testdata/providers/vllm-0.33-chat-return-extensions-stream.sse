@@ -1,0 +1,16 @@
+data: {"id":"chatcmpl-bcb4da39c90b0385","object":"chat.completion.chunk","created":1794415930,"model":"vllm-small","choices":[{"index":0,"delta":{"role":"assistant","content":""},"logprobs":null,"finish_reason":null}],"prompt_token_ids":[151644,872,198,45764,23811,304,2326,4244,13,151645,198,151644,77091,198,151667,271,151668,271],"prompt_text":"<|im_start|>user\nSay hello in three words.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"}
+
+data: {"id":"chatcmpl-bcb4da39c90b0385","object":"chat.completion.chunk","created":1794415930,"model":"vllm-small","choices":[{"index":0,"delta":{"content":"Hi"},"logprobs":null,"finish_reason":null,"token_ids":[13048]}],"kv_transfer_params":null}
+
+data: {"id":"chatcmpl-bcb4da39c90b0385","object":"chat.completion.chunk","created":1794415930,"model":"vllm-small","choices":[{"index":0,"delta":{"content":"!"},"logprobs":null,"finish_reason":null,"token_ids":[0]}],"kv_transfer_params":null}
+
+data: {"id":"chatcmpl-bcb4da39c90b0385","object":"chat.completion.chunk","created":1794415930,"model":"vllm-small","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":null,"token_ids":[26525]}],"kv_transfer_params":null}
+
+data: {"id":"chatcmpl-bcb4da39c90b0385","object":"chat.completion.chunk","created":1794415930,"model":"vllm-small","choices":[{"index":0,"delta":{"content":" 😊"},"logprobs":null,"finish_reason":null,"token_ids":[232]}],"kv_transfer_params":null}
+
+data: {"id":"chatcmpl-bcb4da39c90b0385","object":"chat.completion.chunk","created":1794415930,"model":"vllm-small","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"stop","stop_reason":null,"token_ids":[151645],"weight_versions":[{"version":"default","start":0,"end":5}]}],"kv_transfer_params":null}
+
+data: {"id":"chatcmpl-bcb4da39c90b0385","object":"chat.completion.chunk","created":1794415930,"model":"vllm-small","choices":[],"usage":{"prompt_tokens":18,"total_tokens":23,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":16,"created_cache_tokens":0},"completion_tokens_details":{"reasoning_tokens":0}},"system_fingerprint":"vllm-0.33.0-c73d649a"}
+
+data: [DONE]
+

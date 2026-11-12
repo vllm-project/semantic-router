@@ -93,12 +93,13 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
 
 - An input longer than one `scan_window` is split into windows that overlap by
   `scan_window.overlap`, so text across a cut is read whole by one of them.
-- The windows are read tail first, then the head, then the middle in order:
-  one batch to a local model, and at most `max_concurrency` calls at a time to a
-  remote API.
+- The windows are read tail first, then the head, then the middle in order,
+  each in a call of its own, at most `scan_window.max_parallel` at a time per
+  deployment. The `jailbreak`, `safety` and `pii` rules that read the same input
+  share each window's call, and a window's answers count as soon as it is read.
 - Any window that finds an attack, a harm or personal data flags the input.
   `pii` spans keep their places in the input, so masking replaces every one.
-- One input reads at most 64 windows; the rest counts as unread.
+- One input reads at most 256 windows; the rest counts as unread.
 
 ```yaml
 global:
@@ -108,7 +109,7 @@ global:
         provider: model_runtime
         artifact: vllm-sr/vela3-fast
         routing_view: {max_tokens: 8192, head_share: 0.25}
-        scan_window: {tokens: 8192, overlap: 512}
+        scan_window: {tokens: 8192, overlap: 512, max_parallel: 4}
       hosted-decision:
         provider: systemone
         endpoint: https://decisions.example.com/v1/systemone
@@ -124,6 +125,7 @@ global:
 | `routing_view.head_share` | 0.25 | 0 to 1 |
 | `scan_window.tokens` | 8,192; 4,096 for `provider: systemone` | 256 to 1,048,576 |
 | `scan_window.overlap` | 512; 256 for `provider: systemone` | 0 to less than half a window |
+| `scan_window.max_parallel` | 4 | 1 to 64 |
 
 **Views and windows are sized in bytes.** A token of `max_tokens` or
 `scan_window.tokens` counts as four bytes, about what a token of prose takes,
@@ -143,11 +145,13 @@ takes T seconds to answer the smallest call, a view of up to
 `(timeout - T) × R` tokens answers in time: an API that reads 2,000 tokens a
 second and takes 2 s for the smallest call reads about 8,000 tokens in a 6 s
 timeout, a `max_tokens` of 8,000 for prose, or about 2,700 if turns are often
-JSON or base64. A scan's windows share the deadline: a local model reads them
-in one batch, and a remote API `max_concurrency` at a time. Windows that do not
-answer in time count as unread, and with `best_effort` the rule decides on the
-windows read. Lower `scan_window.tokens` for a slow API, and raise
-`max_concurrency` or the deadline for inputs you expect to scan in full.
+JSON or base64. A scan's windows share the deadline: the deployment reads
+`scan_window.max_parallel` of them at a time, the tail and the head first, so
+the windows read when the deadline comes are the ones a partial scan decides
+on. A window not read in time counts as unread, and with `best_effort` the rule
+decides on the windows read. Lower `scan_window.tokens` for a slow API, and
+raise the deadline for inputs you expect to scan in full; more windows in
+flight help only while the model has room to batch them.
 
 **Coverage and failures.** When the deadline ends a scan before every window is
 read, `on_unscanned` decides: `best_effort` (the default) decides on the windows

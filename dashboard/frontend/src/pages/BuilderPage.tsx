@@ -27,7 +27,12 @@ import { useBuilderScopedEntityMutations } from './useBuilderScopedEntityMutatio
 import { useReadonly } from '@/contexts/ReadonlyContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { canDeployConfig } from '@/utils/accessControl'
-import type { EntityKind, SectionState, Selection } from './builderPageTypes'
+import {
+  isSelectedSignal,
+  type EntityKind,
+  type SectionState,
+  type Selection,
+} from './builderPageTypes'
 
 // ---------- Component ----------
 
@@ -372,7 +377,7 @@ const BuilderPage: React.FC = () => {
       case 'model':
         return visualAst.models?.find((m) => m.name === selection.name) ?? null
       case 'signal':
-        return visualAst.signals?.find((s) => s.name === selection.name) ?? null
+        return visualAst.signals?.find((s) => isSelectedSignal(selection, s)) ?? null
       case 'projection-partition':
         return (
           visualAst.projectionPartitions?.find((partition) => partition.name === selection.name) ??

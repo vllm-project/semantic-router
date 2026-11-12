@@ -721,56 +721,41 @@
   },
   "e2e/profiles/ai-gateway/values.yaml": {
     "signals": {
-      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.biology": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.business": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.chemistry": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.computer science": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.economics": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.engineering": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.health": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.history": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.law": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.math": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.other": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.philosophy": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.physics": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.psychology": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/jailbreak.jailbreak_standard": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/turn_relation.repeated_billing_question": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
-      "e2e-domain/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.biology": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.business": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.chemistry": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.computer science": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.economics": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.engineering": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.health": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.history": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.law": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.math": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.other": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.philosophy": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.physics": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.psychology": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "e2e-pii-precedence/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
-  },
-  "e2e/profiles/authz-rbac/values.yaml": {
-    "signals": {
-      "default/domain.code": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.general": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     }
   },
-  "e2e/profiles/complexity-routing/values.yaml": {
-    "signals": {
-      "default/complexity.task_difficulty": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    }
-  },
-  "e2e/profiles/conversation-routing/values.yaml": {},
+  "e2e/profiles/authz-rbac/values.yaml": {},
   "e2e/profiles/delegated-credential/values.yaml": {
     "signals": {
       "default/systemone.delegated_check": "systemone http://delegated-gateway.delegated-credential-system.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
@@ -779,13 +764,10 @@
   "e2e/profiles/dynamic-config/values.yaml": {},
   "e2e/profiles/hallucination/values.yaml": {
     "signals": {
-      "default/fact_check.needs_fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/fact_check.no_fact_check_needed": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/fact_check.needs_fact_check": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/fact_check.no_fact_check_needed": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/hallucination.ungrounded_claims": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
+    }
   },
   "e2e/profiles/image-routing/values.yaml": {
     "signals": {
@@ -799,7 +781,6 @@
       "default/jailbreak.guardrail_unreachable": "systemone http://127.0.0.1:1/v1/systemone unreachable-guardrail"
     }
   },
-  "e2e/profiles/long-context-routing/values.yaml": {},
   "e2e/profiles/looper/values.yaml": {},
   "e2e/profiles/masking/values.yaml": {
     "signals": {
@@ -850,9 +831,6 @@
   },
   "e2e/profiles/multi-endpoint/values.yaml": {
     "signals": {
-      "default/domain.code": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.general": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
       "default/jailbreak.jailbreak_dev": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/jailbreak.jailbreak_prod": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/pii.pii_dev": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
@@ -866,82 +844,44 @@
       "default/systemone.tool_output_injection": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
-  "e2e/profiles/preference-routing/values.yaml": {
-    "signals": {
-      "default/systemone.preference": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    }
-  },
   "e2e/profiles/production-stack/prometheus-config.yaml": {
     "error": "config contains unknown fields: unknown field \"evaluation_interval\" in global; unknown field \"scrape_configs\" in top level; unknown field \"scrape_interval\" in global"
   },
   "e2e/profiles/production-stack/values.yaml": {
     "signals": {
-      "default/domain.biology": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.business": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.chemistry": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.computer science": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.economics": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.engineering": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.health": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.history": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.law": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.math": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.other": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.philosophy": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.physics": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/domain.psychology": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.biology": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.business": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.chemistry": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.computer science": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.economics": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.engineering": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.health": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.history": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.law": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.math": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.other": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.philosophy": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.physics": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.psychology": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/jailbreak.jailbreak_standard": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
-      "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0"
-    ]
+    }
   },
   "e2e/profiles/progress-gate/values.yaml": {},
   "e2e/profiles/provider-protocols/values.yaml": {},
-  "e2e/profiles/rag-hybrid-search/values.yaml": {
-    "signals": {
-      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
-  },
+  "e2e/profiles/rag-hybrid-search/values.yaml": {},
   "e2e/profiles/remote-embedding/values.yaml": {
     "signals": {
       "default/systemone.billing_support": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
-  "e2e/profiles/response-api-redis-cluster/values.yaml": {
-    "signals": {
-      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
-  },
-  "e2e/profiles/response-api-redis/values.yaml": {
-    "signals": {
-      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
-  },
-  "e2e/profiles/response-api/values.yaml": {
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
-    ]
-  },
-  "e2e/profiles/response-jailbreak/values.yaml": {
-    "signals": {
-      "default/jailbreak.unsafe_completion": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    }
-  },
+  "e2e/profiles/response-api-redis-cluster/values.yaml": {},
+  "e2e/profiles/response-api-redis/values.yaml": {},
+  "e2e/profiles/response-api/values.yaml": {},
   "e2e/profiles/route-action/values.yaml": {
     "signals": {
-      "default/jailbreak.prompt_attack": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+      "default/jailbreak.prompt_attack": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "response-guard/jailbreak.unsafe_completion": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
   "e2e/profiles/router-replay/values.yaml": {},
@@ -972,45 +912,36 @@
   },
   "e2e/profiles/routing-strategies/values.yaml": {
     "signals": {
-      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.code_keywords": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.biology": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.business": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.chemistry": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.code_keywords": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.computer science": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.economics": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.engineering": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.health": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.history": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.law": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.math": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.other": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.philosophy": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.physics": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/domain.psychology": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/jailbreak.jailbreak_standard": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
+    }
+  },
+  "e2e/profiles/signal-routing/values.yaml": {
+    "signals": {
+      "complexity/complexity.task_difficulty": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "preference/systemone.preference": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+    }
   },
   "e2e/profiles/streaming/values.yaml": {
     "signals": {
-      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.code_keywords": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
       "default/jailbreak.jailbreak_standard": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
-    ]
+    }
   },
-  "e2e/profiles/structure-routing/values.yaml": {},
-  "e2e/profiles/vectorstore-registry/values.yaml": {
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
-    ]
-  }
+  "e2e/profiles/vectorstore-registry/values.yaml": {}
 }

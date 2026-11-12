@@ -14,6 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("chat-completions-request", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Send a chat completions request and verify 200 OK response",
 		Tags:        []string{"llm", "functional"},
 		Fn:          testChatCompletionsRequest,
