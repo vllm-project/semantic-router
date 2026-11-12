@@ -196,7 +196,8 @@ func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	}
 	if item.Status != "" && item.Type != "" && item.Type != "message" &&
 		item.Type != "function_call" && item.Type != "function_call_output" &&
-		item.Type != "custom_tool_call" && item.Type != "custom_tool_call_output" && item.Type != "image_generation_call" {
+		item.Type != "custom_tool_call" && item.Type != "custom_tool_call_output" &&
+		item.Type != "image_generation_call" && item.Type != "reasoning" {
 		return rejectUnsupportedRequestField("input.status", json.RawMessage(`true`))
 	}
 	return nil
