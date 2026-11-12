@@ -311,6 +311,8 @@ func (r *OpenAIRouter) buildLooperRequest(
 					ToolStageGate:         r.looperToolStageGate(request, decision, reqCtx),
 					AnswerChecks:          r.escalateAnswerChecker(decision.Algorithm),
 				}
+				policy := r.Config.ProtocolPolicy()
+				looperReq.ProtocolPolicy = &policy
 				if params := decision.GetRequestParamsConfig(); params != nil && params.MaxTokensLimit != nil {
 					limit := *params.MaxTokensLimit
 					looperReq.MaxTokensLimit = &limit

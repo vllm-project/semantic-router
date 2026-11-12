@@ -116,6 +116,12 @@ carries the matching result. For streaming, check complete tool arguments, the
 terminal event, and final answer. Protocol compatibility alone does not verify
 the model and harness together.
 
+If every request fails with `tool_text_limit`, the harness sends a tool name or
+description over the Router's limit. Claude Code's Artifact tool is over the
+16 KiB description default. Raise
+`global.router.protocol_limits.tool_description_bytes`; see
+[Validation and failure behavior](./protocol-compatibility#validation-and-failure-behavior).
+
 When Router Learning protection is configured, it needs explicit identities.
 The default `scope: conversation` requires both headers on related calls:
 

@@ -157,7 +157,11 @@ func (s *ClassificationAPIServer) writeRequestPluginPreview(w http.ResponseWrite
 	if format == "" {
 		format = llmprotocol.OpenAIChatV1
 	}
-	engine := protocolcodec.NewBuiltinEngine()
+	engine, err := protocolcodec.NewEngine(protocolcodec.NewBuiltinRegistry(), s.currentConfig().ProtocolPolicy())
+	if err != nil {
+		s.writePluginPreviewError(w, err)
+		return
+	}
 	request, envelope, diagnostics, err := engine.DecodeRequestForMutation(format, body)
 	if err != nil {
 		s.writePluginPreviewError(w, err)

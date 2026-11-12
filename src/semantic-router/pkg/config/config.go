@@ -286,6 +286,7 @@ type RouterOptions struct {
 	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
 	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
 	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
+	ProtocolLimits         ProtocolLimitsConfig `yaml:"protocol_limits,omitempty"`
 	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
 	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
 }

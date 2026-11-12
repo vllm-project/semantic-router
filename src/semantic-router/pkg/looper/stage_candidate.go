@@ -44,7 +44,11 @@ func validateLooperStageCandidate(base *Request, body []byte, model string, logp
 			return fmt.Errorf("%w: looper stage wire is invalid", selection.ErrNoEligibleCandidates)
 		}
 	}
-	request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, body)
+	engine, err := protocolcodec.NewEngine(protocolcodec.NewBuiltinRegistry(), base.protocolPolicy())
+	if err != nil {
+		return fmt.Errorf("%w: looper protocol policy is invalid", selection.ErrNoEligibleCandidates)
+	}
+	request, _, _, err := engine.DecodeRequestForMutation(llmprotocol.OpenAIChatV1, body)
 	if err != nil {
 		// Codec diagnostics may include field values; admission errors expose
 		// only the stage model and never its prompt or tool definitions.
@@ -80,4 +84,11 @@ func capLooperStageOutput(base *Request, request *openai.ChatCompletionNewParams
 		}
 	}
 	return nil
+}
+
+func (r *Request) protocolPolicy() llmprotocol.Policy {
+	if r == nil || r.ProtocolPolicy == nil {
+		return llmprotocol.DefaultPolicy()
+	}
+	return *r.ProtocolPolicy
 }

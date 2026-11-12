@@ -29,6 +29,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // Request contains the input for looper execution
@@ -69,6 +70,10 @@ type Request struct {
 	// MaxTokensLimit retains the owning decision's cap after an algorithm
 	// overrides its stage output budget. It does not supply an omitted default.
 	MaxTokensLimit *int
+
+	// ProtocolPolicy is the Router's configured codec policy, so stage checks
+	// accept what ingress accepted. Nil uses the default policy.
+	ProtocolPolicy *llmprotocol.Policy
 
 	// Algorithm defines the execution strategy
 	Algorithm *config.AlgorithmConfig

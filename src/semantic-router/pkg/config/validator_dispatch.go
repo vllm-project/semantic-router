@@ -25,6 +25,7 @@ var (
 		validateModelSelectionConfig,
 		validateGlobalRouterLearningConfig,
 		validateLossyTranslationContracts,
+		validateProtocolLimitContracts,
 		validateRoutingInputContracts,
 		validateRouterHeadersContracts,
 		validateFlowContracts,

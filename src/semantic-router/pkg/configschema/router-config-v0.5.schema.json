@@ -1101,6 +1101,9 @@
           },
           "type": "array"
         },
+        "protocol_limits": {
+          "$ref": "#/$defs/ProtocolLimitsConfig"
+        },
         "routing_input": {
           "$ref": "#/$defs/RoutingInputConfig"
         },
@@ -4940,6 +4943,22 @@
         },
         "preserve_last_n": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProtocolLimitsConfig": {
+      "properties": {
+        "tool_name_bytes": {
+          "type": "integer",
+          "maximum": 1024,
+          "minimum": 0
+        },
+        "tool_description_bytes": {
+          "type": "integer",
+          "maximum": 1048576,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
