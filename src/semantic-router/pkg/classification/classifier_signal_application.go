@@ -253,7 +253,7 @@ func (c *Classifier) PIIRuleSpans(ctx context.Context, ruleName string, text str
 	}
 	asked := applicationAsked(c.applicationRules[index])
 	deployment := c.Config.SystemOneRuleDeployment(asked.rule)
-	if scan := newGuardScan(deployment, modelservice.Request{State: text}, c.scanWindowBudget(deployment)); scan != nil {
+	if scan := newGuardScan(deployment, modelservice.Request{State: text}, c.scanBudgetFor(ctx, deployment)); scan != nil {
 		return c.piiScanSpans(ctx, ruleName, text, asked, scan)
 	}
 	call := &systemOneCall{deployment: deployment, request: modelservice.Request{State: text}, rules: []askedRule{asked}}

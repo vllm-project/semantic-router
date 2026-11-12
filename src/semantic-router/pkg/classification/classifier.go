@@ -35,6 +35,9 @@ type Classifier struct {
 	// applicationRules are the configuration's application signal rules,
 	// compiled into the systemone rules they ask.
 	applicationRules []config.ApplicationRule
+	// windowPaces are the paces its deployments read guard windows at, which
+	// size a long input's windows to the signals' deadline.
+	windowPaces windowPaces
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
 

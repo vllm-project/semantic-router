@@ -276,7 +276,7 @@ func TestTheWindowsOfALongMessageGrowSoTheBoundCoversIt(t *testing.T) {
 	const size, most, overlap = 8192, 31_744, 1024
 	for tokens, fits := range map[int]bool{100_000: true, 1_000_000: true, 1_800_000: false} {
 		text := scanProse(tokens)
-		windows := fittedScanWindows(text, size, most, overlap)
+		windows, _ := sizedScanWindows(text, size, most, overlap, scanBudget{})
 		if fits != (len(windows) <= maxScanWindows) {
 			t.Fatalf("%d tokens: %d windows", tokens, len(windows))
 		}
@@ -293,7 +293,7 @@ func TestTheWindowsOfALongMessageGrowSoTheBoundCoversIt(t *testing.T) {
 			}
 		}
 	}
-	if windows := fittedScanWindows(scanProse(1_000_000), size, size, overlap); len(windows) <= maxScanWindows {
+	if windows, _ := sizedScanWindows(scanProse(1_000_000), size, size, overlap, scanBudget{}); len(windows) <= maxScanWindows {
 		t.Fatalf("without a larger window the model takes, the windows keep their size: %d", len(windows))
 	}
 }

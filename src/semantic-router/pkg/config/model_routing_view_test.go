@@ -46,7 +46,14 @@ func TestRoutingViewAndScanWindowBoundsAreValidated(t *testing.T) {
 		"window":         {ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{Tokens: 64}}, "scan_window.tokens must be between 256 and 1048576"},
 		"overlap":        {ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{Tokens: 1024, Overlap: overlap(512)}}, "scan_window.overlap must be at least 0 and less than half of scan_window.tokens (1024)"},
 		"default window": {ModelDeployment{Provider: SystemOneProvider, ScanWindow: &DeploymentScanWindow{Overlap: overlap(3000)}}, "less than half of scan_window.tokens (4096)"},
-		"chat model":     {ModelDeployment{Provider: OpenAIChatProvider, RoutingView: &DeploymentRoutingView{MaxTokens: 4096}}, "apply to model_runtime and systemone deployments"},
+		"max_tokens":     {ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{Tokens: 2048, MaxTokens: 8192}}, ""},
+		"max_tokens below tokens": {
+			ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{Tokens: 2048, MaxTokens: 1024}}, "scan_window.max_tokens must be at least scan_window.tokens (2048)",
+		},
+		"max_tokens below the default window": {
+			ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{MaxTokens: 4096}}, "scan_window.max_tokens must be at least scan_window.tokens (8192)",
+		},
+		"chat model": {ModelDeployment{Provider: OpenAIChatProvider, RoutingView: &DeploymentRoutingView{MaxTokens: 4096}}, "apply to model_runtime and systemone deployments"},
 	} {
 		err := tc.deployment.validateInputViews()
 		if (tc.err == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tc.err)) {
