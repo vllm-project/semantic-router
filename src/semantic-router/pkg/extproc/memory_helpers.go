@@ -53,6 +53,17 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 	return sessionID, userID, history, nil
 }
 
+// historyBeforeCurrentTurn is the conversation before its last user message,
+// the current turn, which the extractor adds to a session window itself.
+func historyBeforeCurrentTurn(history []llmprotocol.Message) []llmprotocol.Message {
+	for index := len(history) - 1; index >= 0; index-- {
+		if history[index].Role == llmprotocol.RoleUser {
+			return history[:index]
+		}
+	}
+	return history
+}
+
 // deriveSessionIDFromMessages creates a session ID from Chat Completions messages.
 // Uses a hash of the first few messages + userID to group related conversations.
 func deriveSessionIDFromSemanticMessages(messages []llmprotocol.Message, userID string) string {
@@ -235,8 +246,13 @@ func extractTextFromContentParts(parts []responseapi.ContentPart) string {
 }
 
 // extractCurrentUserMessage extracts the current user message from the request context.
-// Supports both Response API and Chat Completions.
+// Supports both Response API and Chat Completions. When routing_input changed
+// the request, it is the routing text, so recalled memories and client
+// metadata are not stored as the user's words.
 func extractCurrentUserMessage(ctx *RequestContext) string {
+	if ctx.RoutingInput.Changed() {
+		return ctx.UserContent
+	}
 	if ctx.SemanticRequest != nil {
 		for index := len(ctx.SemanticRequest.Messages) - 1; index >= 0; index-- {
 			message := ctx.SemanticRequest.Messages[index]

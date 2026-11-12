@@ -102,6 +102,8 @@ func requestDecisionScopedHeaders(ctx context.Context, localPort, query string) 
 		return nil, fmt.Errorf("create chat request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// The algorithm the decision used rides in x-vsr-trace.
+	req.Header.Set("x-vsr-debug", "true")
 
 	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {

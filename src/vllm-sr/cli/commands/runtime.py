@@ -333,6 +333,9 @@ def _execute_serve(
                 available_devices=available_devices,
                 model_options=model_options,
                 observability=observability,
+                image=image,
+                router_image=router_image,
+                image_pull_policy=image_pull_policy,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)

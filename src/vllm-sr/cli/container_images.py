@@ -1,7 +1,9 @@
 """Container image resolution helpers for vLLM Semantic Router."""
 
+import logging
 import os
 import sys
+from contextlib import contextmanager
 
 from cli.consts import (
     DEFAULT_IMAGE_PULL_POLICY,
@@ -30,6 +32,10 @@ RUNTIME_SERVICE_IMAGE_ENV_VARS = {
     "envoy": "VLLM_SR_ENVOY_IMAGE",
     "dashboard": "VLLM_SR_DASHBOARD_IMAGE",
 }
+
+# `always` pulls an image once per command: serve pulls its Router image before
+# it checks a new config, and the start that follows must not pull it again.
+_PULLED_IMAGES: set[str] = set()
 
 
 def _normalize_platform(platform):
@@ -298,6 +304,9 @@ def _resolve_nonrouter_explicit_base_image(service_name, base_image):
 def _ensure_image_available(selected_image, pull_policy):
     image_exists = container_image_exists(selected_image)
     if pull_policy == IMAGE_PULL_POLICY_ALWAYS:
+        if image_exists and selected_image in _PULLED_IMAGES:
+            log.info(f"Image already pulled: {selected_image}")
+            return
         _pull_or_exit(selected_image)
         return
     if pull_policy == IMAGE_PULL_POLICY_IF_NOT_PRESENT:
@@ -318,6 +327,7 @@ def _ensure_image_available(selected_image, pull_policy):
 
 def _pull_or_exit(selected_image, show_not_found=False):
     if container_pull_image(selected_image):
+        _PULLED_IMAGES.add(selected_image)
         return
     log.error(f"Failed to pull image: {selected_image}")
     if show_not_found:
@@ -399,6 +409,47 @@ def get_runtime_images(
         _ensure_image_available(unique_image, pull_policy)
 
     return selected_images
+
+
+def resolve_router_image(image=None, router_image=None, platform=None):
+    """The Router image get_runtime_images selects for these options, unpulled.
+
+    The stack's start logs which images it chose, so this choice is not logged.
+    """
+    with _unlogged():
+        normalized_platform = _resolve_platform_hint(platform)
+        return _resolve_runtime_service_image(
+            "router",
+            explicit_image=router_image,
+            base_image_is_explicit=bool((image or "").strip()),
+            base_image=_resolve_selected_image(image, normalized_platform),
+            normalized_platform=normalized_platform,
+        )
+
+
+def pulled_this_run(image):
+    """Whether this command pulled *image* from its registry."""
+    return image in _PULLED_IMAGES
+
+
+def get_router_image(image=None, router_image=None, pull_policy=None, platform=None):
+    """The Router image get_runtime_images selects, present as the policy says."""
+    selected_image = resolve_router_image(image, router_image, platform)
+    with _unlogged():
+        _ensure_image_available(
+            selected_image, pull_policy or DEFAULT_IMAGE_PULL_POLICY
+        )
+    return selected_image
+
+
+@contextmanager
+def _unlogged():
+    level = log.level
+    log.setLevel(logging.ERROR)
+    try:
+        yield
+    finally:
+        log.setLevel(level)
 
 
 def _show_image_not_found_error(image_name):

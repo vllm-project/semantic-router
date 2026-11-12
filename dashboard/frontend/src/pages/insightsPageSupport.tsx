@@ -2,6 +2,7 @@ import type { Column } from '../components/DataTable'
 import CollapsibleSection from '../components/CollapsibleSection'
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
+import { X_VSR_SELECTED_DECISION } from '../generated/vsrHeaders'
 import { formatDateTime } from '../utils/dateTime'
 import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 import { Link } from 'react-router-dom'
@@ -17,13 +18,14 @@ import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
 import { buildSignalFields, collectSignals } from './insightsRecordSignals'
 import { buildInsightsPluginFields } from './insightsRecordPlugins'
+import { buildProviderCacheSection } from './insightsProviderCache'
 import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
 export { collectSignals } from './insightsRecordSignals'
 
 export const formatInsightsDecisionName = (decision: string): string =>
-  formatRoutingMetadataValue('x-vsr-selected-decision', decision)
+  formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, decision)
 
 export function getInsightsLifecyclePresentation(record: InsightsRecord) {
   const state = record.lifecycle_state || 'unknown'
@@ -438,6 +440,8 @@ export function buildInsightsRecordSections(
       },
     ],
   })
+
+  sections.push(buildProviderCacheSection(record))
 
   const signalFields = buildSignalFields(record.signals)
   if (signalFields.length > 0) {

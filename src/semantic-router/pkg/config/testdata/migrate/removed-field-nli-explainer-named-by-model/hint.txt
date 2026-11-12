@@ -1,0 +1,1 @@
+global.model_catalog.deployments.explainer: removed_field: the deployment of the retired NLI explainer is removed; run `vllm-sr config migrate` (drop it; nothing explains a hallucination with an NLI model)

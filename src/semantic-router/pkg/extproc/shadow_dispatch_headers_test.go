@@ -115,6 +115,39 @@ func TestShadowDispatchForwardsOnlyAllowlistedDecisionHeaders(t *testing.T) {
 	assertNoShadowCredentialHeaders(t, wire)
 }
 
+// Request routing sends no key to a provider whose auth is none, so a shadow
+// call to one sends none either, whatever key the model carries, such as the
+// placeholder key Ollama's OpenAI examples use, with or without auth.header.
+func TestShadowDispatchSendsNoKeyToANoAuthProvider(t *testing.T) {
+	for _, authHeader := range []string{"", "Authorization"} {
+		t.Run("auth.header="+authHeader, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			router, primaryModel := newShadowTestRouter(t, backend)
+			for index := range router.Config.VLLMEndpoints {
+				if router.Config.VLLMEndpoints[index].Name == "shadow-backend" {
+					router.Config.VLLMEndpoints[index].Type = "ollama"
+					router.Config.VLLMEndpoints[index].ProviderProfileName = "shadow-ollama"
+				}
+			}
+			router.Config.ProviderProfiles["shadow-ollama"] = config.ProviderProfile{
+				Type: "ollama", BaseURL: backend.server.URL, AuthHeader: authHeader,
+			}
+			shadowParams := router.Config.ModelConfig[shadowTestModel]
+			shadowParams.AccessKeys = map[string]string{"ollama": "ollama"}
+			router.Config.ModelConfig[shadowTestModel] = shadowParams
+
+			run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), nil)
+			waitForShadow(t, router)
+			if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+				t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+			}
+			if got := backend.headers[0].Values("Authorization"); len(got) != 0 {
+				t.Fatalf("Authorization = %q, want no key sent to a no-auth provider", got)
+			}
+		})
+	}
+}
+
 func TestShadowDispatchNeverForwardsCredentialsEvenWhenListed(t *testing.T) {
 	backend, router, primaryModel := newShadowHeaderTestRouter(t)
 	shadowParams := router.Config.ModelConfig[shadowTestModel]
@@ -266,5 +299,19 @@ func TestShadowHeaderIsSensitive(t *testing.T) {
 	}
 	if shadowHeaderIsSensitive("x-custom-token", "") {
 		t.Error("an empty profile auth header must not match")
+	}
+}
+
+// A request that matches no decision carries its default header_mutation to
+// the primary, so its shadow gets the headers forward_headers names too.
+func TestShadowForwardsTheDefaultHeaderMutationsOfAnUnmatchedRequest(t *testing.T) {
+	ctx := &RequestContext{RequestID: "shadow-defaults"}
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{DefaultPlugins: []config.DecisionPlugin{{
+		Type:          config.DecisionPluginHeaderMutation,
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"add": []map[string]string{{"name": "x-tenant", "value": "acme"}}}),
+	}}}})
+	extra := (&OpenAIRouter{}).shadowExtraHeaders(ctx, nil, &config.RouterReplayShadowConfig{ForwardHeaders: []string{"x-tenant"}})
+	if extra["x-tenant"] != "acme" {
+		t.Fatalf("shadow headers = %v, want the default x-tenant forwarded", extra)
 	}
 }

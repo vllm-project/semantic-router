@@ -51,11 +51,10 @@ func (e *DecisionEngine) evalDecisionWithTrace(
 	policy config.UnknownPolicy,
 ) (nodeEvaluation, *TraceNode) {
 	if decision.Rules.IsEmpty() {
-		return nodeEvaluation{state: evaluationTrue, scored: true}, &TraceNode{
-			NodeType:         "fallback",
-			State:            evaluationTrue.String(),
-			Matched:          true,
-			ConfidenceScored: true,
+		return nodeEvaluation{state: evaluationTrue}, &TraceNode{
+			NodeType: "fallback",
+			State:    evaluationTrue.String(),
+			Matched:  true,
 		}
 	}
 	return e.evalNode(decision.Rules, signals, policy, true)

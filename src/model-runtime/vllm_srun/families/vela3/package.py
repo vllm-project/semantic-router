@@ -22,12 +22,18 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
-from ...registry.artifacts import named_files, read_json, safe_relative, sha256_json
+from ...registry.artifacts import (
+    SUMS_FILE,
+    named_files,
+    read_json,
+    read_sums,
+    safe_relative,
+    sha256_json,
+)
 from ..vela2.encoder_layout import MARKERS
+from ..vela3_shared import CONFIG_FILE, config_file
 
 ENCODER = "vela3-encoder/1"
-CONFIG_FILE = "vela3_config.json"
-SUMS_FILE = "SHA256SUMS"
 BACKBONE_FILE = "model.safetensors"
 COMMON_FILES = ("config.json", CONFIG_FILE, "router_questions.json", "tokenizer.json")
 LORA_TARGETS = (
@@ -100,12 +106,6 @@ class Roster:
     router_tasks: dict[str, tuple[str, tuple[str, ...]]]
 
 
-def _file(value: Any, where: str) -> str:
-    if not isinstance(value, str) or not safe_relative(value):
-        raise PackageError(f"{CONFIG_FILE}: {where} must name a file in the package")
-    return value
-
-
 def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
     """The routing roster and every adapter's file, by adapter name; files the package lacks route off."""
     present = {name for name in _named(config) if (Path(root) / name).is_file()}
@@ -114,7 +114,7 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
     files: dict[str, str] = {}
 
     def take(name: str, value: Any, where: str) -> str | None:
-        file = _file(value, where)
+        file = config_file(value, where)
         if file not in present:
             return None
         files[name] = file
@@ -147,7 +147,9 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
             f"router:{task}" if len(listed) == 1 else f"router:{task}:{index}"
             for index in range(len(listed))
         ]
-        if not all(_file(f, f"router.task_adapters.{task}") in present for f in listed):
+        if not all(
+            config_file(f, f"router.task_adapters.{task}") in present for f in listed
+        ):
             continue
         for name, file in zip(names, listed, strict=True):
             files[name] = file
@@ -213,19 +215,6 @@ class Vela3Package:
         return (self.root / BACKBONE_FILE,)
 
 
-def _sums(root: Path) -> dict[str, str]:
-    path = root / SUMS_FILE
-    if not path.is_file():
-        return {}
-    sums = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        digest, _, name = line.strip().partition(" ")
-        name = name.strip().lstrip("*")
-        if digest and name:
-            sums[name] = digest
-    return sums
-
-
 def _check_markers(config: dict[str, Any]) -> None:
     """Every marker a distinct row of the backbone's embedding table, so no input indexes past it."""
     vocab = config.get("vocab_size")
@@ -269,7 +258,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
         )
         if wrong:
             raise PackageError(f"files differ from the pinned revision: {wrong[:5]}")
-    sums = _sums(root)
+    sums = read_sums(root)
     mismatched = sorted(
         name for name, digest in files.items() if name in sums and sums[name] != digest
     )

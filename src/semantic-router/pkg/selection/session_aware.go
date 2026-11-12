@@ -13,7 +13,6 @@ import (
 
 // SessionAwareConfig configures agentic session-aware model selection.
 type SessionAwareConfig struct {
-	BaseMethod                   SelectionMethod
 	IdleTimeoutSeconds           int
 	MinTurnsBeforeSwitch         int
 	SwitchMargin                 float64
@@ -36,7 +35,6 @@ type SessionAwareConfig struct {
 // DefaultSessionAwareConfig returns the production-oriented default policy.
 func DefaultSessionAwareConfig() *SessionAwareConfig {
 	return &SessionAwareConfig{
-		BaseMethod:                   MethodHybrid,
 		IdleTimeoutSeconds:           300,
 		MinTurnsBeforeSwitch:         1,
 		SwitchMargin:                 0.05,
@@ -79,7 +77,6 @@ func NewSessionAwareSelector(cfg *SessionAwareConfig) *SessionAwareSelector {
 
 func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
 	defaults := DefaultSessionAwareConfig()
-	cfg.BaseMethod = defaultSessionAwareBaseMethod(cfg.BaseMethod, defaults.BaseMethod)
 	cfg.IdleTimeoutSeconds = defaultNonNegativeInt(cfg.IdleTimeoutSeconds, defaults.IdleTimeoutSeconds)
 	cfg.MinTurnsBeforeSwitch = defaultNonNegativeInt(cfg.MinTurnsBeforeSwitch, defaults.MinTurnsBeforeSwitch)
 	cfg.SwitchMargin = defaultNonNegativeFloat(cfg.SwitchMargin, defaults.SwitchMargin)
@@ -95,13 +92,6 @@ func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
 	cfg.RemainingTurnPriorHorizon = defaultPositiveInt(cfg.RemainingTurnPriorHorizon, defaults.RemainingTurnPriorHorizon)
 	cfg.MinRemainingTurnPriorSamples = defaultNonNegativeInt(cfg.MinRemainingTurnPriorSamples, defaults.MinRemainingTurnPriorSamples)
 	return &cfg
-}
-
-func defaultSessionAwareBaseMethod(method, defaultMethod SelectionMethod) SelectionMethod {
-	if method == "" || method == MethodSessionAware {
-		return defaultMethod
-	}
-	return method
 }
 
 func defaultNonNegativeInt(value, defaultValue int) int {
@@ -137,10 +127,6 @@ func defaultAtLeastFloat(value, defaultValue, minimum float64) float64 {
 		return defaultValue
 	}
 	return value
-}
-
-func (s *SessionAwareSelector) Method() SelectionMethod {
-	return MethodSessionAware
 }
 
 func (s *SessionAwareSelector) SetBaseSelector(selector Selector) {
@@ -202,7 +188,8 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	timeout := secondsDuration(s.config.IdleTimeoutSeconds)
 	idleExpired := session.idleExpired(timeout)
 	trace.IdleExpired = idleExpired
-	continuityReset := idleExpired || driftDetected
+	trace.ExplicitRelease = session.ReleaseHonored
+	continuityReset := idleExpired || driftDetected || session.ReleaseHonored
 	if reason := s.sessionHardLockReason(session, continuityReset); reason != "" {
 		return s.forceCurrent(selCtx, base, current, reason, trace)
 	}
@@ -437,22 +424,4 @@ func (s *SessionAwareSelector) newPolicyTrace(
 		trace.SessionID = selCtx.SessionID
 	}
 	return trace
-}
-
-func (s *SessionAwareSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if s.baseSelector == nil {
-		return nil
-	}
-	return s.baseSelector.UpdateFeedback(ctx, feedback)
-}
-
-func (s *SessionAwareSelector) Tier() AlgorithmTier {
-	return TierSupported
-}
-
-func (s *SessionAwareSelector) ExternalDependencies() []Dependency {
-	if s.baseSelector == nil {
-		return nil
-	}
-	return s.baseSelector.ExternalDependencies()
 }

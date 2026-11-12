@@ -8,31 +8,33 @@ import (
 )
 
 func TestEntrypointRankingDoesNotInheritDefaultRecipeStrategy(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 global:
   router:
     strategy: priority
-routing:
-  strategy: confidence
-  signals: &signals
-    domains:
-      - name: law
-      - name: health
-  decisions: &decisions
-    - name: high-priority
-      priority: 100
-      rules: {type: domain, name: law}
-      modelRefs: [{model: model-a}]
-    - name: high-confidence
-      priority: 10
-      rules: {type: domain, name: health}
-      modelRefs: [{model: model-a}]
 recipes:
+  - name: default
+    strategy: confidence
+    signals: &signals
+      domains:
+        - name: law
+        - name: health
+    decisions: &decisions
+      - name: high-priority
+        priority: 100
+        rules: {type: domain, name: law}
+        modelRefs: [{model: model-a}]
+      - name: high-confidence
+        priority: 10
+        rules: {type: domain, name: health}
+        modelRefs: [{model: model-a}]
   - name: independent
-    routing:
-      signals: *signals
-      decisions: *decisions
+    signals: *signals
+    decisions: *decisions
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [public/independent]
     recipe: independent
 `))
@@ -47,7 +49,7 @@ entrypoints:
 		ctx := &RequestContext{}
 		router.resolveEntrypointForRequest(example.model, ctx)
 		profile := cfg.ConfigForRecipe(ctx.Routing.SelectedRecipe())
-		engine := decision.NewDecisionEngine(nil, nil, nil, profile.Decisions, profile.Strategy)
+		engine := decision.NewDecisionEngine(profile.Decisions, profile.Strategy)
 		result, err := engine.EvaluateDecisionsWithSignals(&decision.SignalMatches{
 			DomainRules:       []string{"law", "health"},
 			SignalConfidences: map[string]float64{"domain:law": 0.60, "domain:health": 0.95},

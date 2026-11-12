@@ -5,76 +5,22 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // ReliabilityHeaders are the per-request headers through which the Router
 // asks Envoy's router to apply a decision's reliability block. The block is
 // their only writer.
 var ReliabilityHeaders = []string{
-	"x-envoy-upstream-rq-timeout-ms",
-	"x-envoy-upstream-rq-per-try-timeout-ms",
-	"x-envoy-max-retries",
-	"x-envoy-retry-on",
-	"x-envoy-retriable-status-codes",
+	headers.EnvoyUpstreamRqTimeoutMs,
+	headers.EnvoyUpstreamRqPerTryTimeoutMs,
+	headers.EnvoyMaxRetries,
+	headers.EnvoyRetryOn,
+	headers.EnvoyRetriableStatusCodes,
 }
 
 func isReliabilityHeader(name string) bool {
 	return slices.Contains(ReliabilityHeaders, strings.ToLower(strings.TrimSpace(name)))
-}
-
-// dropReliabilityHeaderMutations removes the reliability headers from every
-// decision's header_mutation plugin, with a warning. Envoy's ext_proc ignored
-// such entries before its filter allowed these headers, so no working config
-// changes behavior, and the reliability block stays the one retry authority.
-func dropReliabilityHeaderMutations(cfg *RouterConfig) {
-	scopes := [][]Decision{cfg.Decisions}
-	for i := range cfg.Recipes {
-		scopes = append(scopes, cfg.Recipes[i].Profile.Decisions)
-	}
-	for _, decisions := range scopes {
-		for i := range decisions {
-			for j := range decisions[i].Plugins {
-				dropReliabilityHeaderMutation(decisions[i].Name, &decisions[i].Plugins[j])
-			}
-		}
-	}
-}
-
-func dropReliabilityHeaderMutation(decision string, plugin *DecisionPlugin) {
-	if NormalizeDecisionPluginType(plugin.Type) != DecisionPluginHeaderMutation || plugin.Configuration == nil {
-		return
-	}
-	var mutation HeaderMutationPluginConfig
-	if plugin.Configuration.DecodeInto(&mutation) != nil {
-		return
-	}
-	var dropped []string
-	keep := func(name string) bool {
-		if isReliabilityHeader(name) {
-			dropped = append(dropped, strings.ToLower(strings.TrimSpace(name)))
-			return false
-		}
-		return true
-	}
-	keepPairs := func(pairs []HeaderPair) []HeaderPair {
-		return slices.DeleteFunc(pairs, func(pair HeaderPair) bool { return !keep(pair.Name) })
-	}
-	mutation.Add, mutation.Update = keepPairs(mutation.Add), keepPairs(mutation.Update)
-	mutation.Delete = slices.DeleteFunc(mutation.Delete, func(name string) bool { return !keep(name) })
-	if len(dropped) == 0 {
-		return
-	}
-	payload, err := NewStructuredPayload(mutation)
-	if err != nil {
-		return
-	}
-	plugin.Configuration = payload
-	logging.ComponentWarnEvent("config", "reliability_header_mutation_dropped", map[string]interface{}{
-		"decision": decision,
-		"headers":  dropped,
-		"reason":   "a decision's reliability block is the only writer of these headers",
-	})
 }
 
 // DecisionReliability overrides, for the requests a decision routes, the
@@ -151,6 +97,9 @@ func validateDecisionReliability(decision Decision) error {
 	}
 	if r.RetryCount != nil && (*r.RetryCount < 0 || *r.RetryCount > 5) {
 		return fmt.Errorf("%s must be between 0 and 5", path("retry_count"))
+	}
+	if err := validateRetryOn(path("retry_on"), r.RetryOn); err != nil {
+		return err
 	}
 	for _, code := range r.RetriableStatusCodes {
 		if code < 100 || code > 599 {

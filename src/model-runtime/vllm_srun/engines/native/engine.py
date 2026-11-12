@@ -36,7 +36,7 @@ from ...scheduler.planner import padded
 from . import fast, models, quantized
 from . import threads as adaptive_threads
 from .adapters import load_adapter_network
-from .encoder import EncoderGraphs
+from .encoder import EncoderGraphs, graph_module
 from .models import branch as branch_module
 from .models.branch import (
     CAUSAL,
@@ -48,6 +48,7 @@ from .models.branch import (
     static_layout,
 )
 from .models.forest import ForestShape
+from .models.gated_lora import Gate, attach_gated
 from .models.lora import attach, fold_scaling
 from .models.packed import Packed, packed_unavailable
 from .models.qwen3_5 import noncausal_masks, rope_index
@@ -120,6 +121,13 @@ class NativeEngineModel(EngineModel):
         self.device = accelerator.torch_device(device_info)
         self.spec = spec
         self.options = options
+        # Gated adapters wrap the placed backbone's Linears before any view or layout copies them.
+        self.gate = Gate()
+        self.gated = (
+            attach_gated(backbone, spec.backbone.gated, self.gate, self.device)
+            if spec.backbone.gated
+            else {}
+        )
         self.residency = residency
         self.reduced_kind = reduced_kind
         self.reduced_skipped = (
@@ -200,7 +208,12 @@ class NativeEngineModel(EngineModel):
             if spec.encoder
             else packed_unavailable(backbone, self.kernels)
         )
-        if self.device.type == "cuda" and not spec.encoder:
+        if self.gated:
+            # Fused layers bypass the wrapped Linears and graphs replay with every adapter off.
+            self.fast["gated_adapters"] = self.gated
+            if self.device.type == "cuda":
+                self.fast["fast_path_skipped"] = "gated adapters run eager"
+        elif self.device.type == "cuda" and not spec.encoder:
             self._install_fast()
         if (
             nvfp4
@@ -209,7 +222,7 @@ class NativeEngineModel(EngineModel):
         ):
             # only graph captures take FlashInfer's product (``accel/flashinfer_nvfp4.py``)
             self.fast["nvfp4_product"] = quantized.use_flashinfer(nvfp4, self.device)
-        if self.device.type == "cuda" and spec.encoder and options.graphs:
+        if spec.encoder and options.graphs and graph_module(self.device) is not None:
             self.encoder_graphs = {
                 name: EncoderGraphs(cast(models.EncoderBackbone, module), self.device)
                 for name, module in self.stacks().items()
@@ -825,7 +838,23 @@ class NativeEngineModel(EngineModel):
         return self.packed_reason is None
 
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
-        return self._with_threads(batch.input_ids.numel(), lambda: self._forward(batch))
+        adapter = batch.adapter
+        padded_text = not (
+            batch.shared_prefix or batch.packed or batch.images is not None
+        )
+        if adapter is not None:
+            if adapter.name not in self.gated:
+                raise ValueError(f"the model has no gated adapter {adapter.name!r}")
+            if not padded_text:
+                raise ValueError("an adapter gate runs padded text rows only")
+        if batch.noncausal and not (padded_text and batch.states is None):
+            raise ValueError("a noncausal forward runs padded text rows only")
+
+        def run() -> ForwardOutput:
+            with self.gate.on(adapter):
+                return self._forward(batch)
+
+        return self._with_threads(batch.input_ids.numel(), run)
 
     def _forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
@@ -842,6 +871,9 @@ class NativeEngineModel(EngineModel):
         with torch.inference_mode(), self.autocast():
             if batch.images is not None:
                 hidden = self._forward_images(batch, input_ids, attention_mask, padded)
+            elif batch.noncausal:
+                # A noncausal request runs eager: the graphs and fast masks hold the model's own layout.
+                hidden = self._forward_noncausal(input_ids, attention_mask, padded)
             elif self.graphs is not None:
                 hidden = self.graphs(input_ids, attention_mask, batch.lengths)
             elif self.masks is not None:
@@ -851,16 +883,23 @@ class NativeEngineModel(EngineModel):
                     masks=self.masks.build(attention_mask, padded),
                 )
             elif self.noncausal:
-                full, linear = noncausal_masks(attention_mask, padded)
-                hidden = self.backbone(
-                    input_ids, attention_mask, masks={"full": full, "linear": linear}
-                )
+                hidden = self._forward_noncausal(input_ids, attention_mask, padded)
             else:
                 hidden = self.backbone(input_ids, attention_mask)
             rows = torch.arange(hidden.shape[0], device=hidden.device)
             gathered = hidden[rows[:, None], gather]
             queried = hidden[rows, query]
         return ForwardOutput(gathered=gathered, query=queried)
+
+    def _forward_noncausal(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, padded: bool
+    ) -> torch.Tensor:
+        """The backbone under the noncausal full-attention mask (eager)."""
+        full, linear = noncausal_masks(attention_mask, padded)
+        hidden: torch.Tensor = self.backbone(
+            input_ids, attention_mask, masks={"full": full, "linear": linear}
+        )
+        return hidden
 
     def _forward_images(
         self,
@@ -1039,6 +1078,19 @@ class NativeEngineModel(EngineModel):
         else:
             input_ids = batch.input_ids.to(self.device)
             rows, width = input_ids.shape
+            # Only NPUs replay padded batches: on CUDA and ROCm the eager padded
+            # layout keeps answers byte-identical to the released runtime.
+            if (
+                graphs is not None
+                and batch.attention_mask is not None
+                and self.device.type == "npu"
+            ):
+                with torch.inference_mode(), context():
+                    replayed = graphs.padded(
+                        input_ids, batch.attention_mask, exits, batch.normalize_exits
+                    )
+                if replayed is not None:
+                    return EncoderOutput(hidden=replayed)
             layout = backbone.padded(batch.attention_mask, rows, width, self.device)
         with torch.inference_mode(), context():
             hidden = backbone.encode(input_ids, layout, exits, batch.normalize_exits)

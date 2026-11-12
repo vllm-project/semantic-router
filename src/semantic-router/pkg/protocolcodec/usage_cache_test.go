@@ -49,8 +49,17 @@ func TestOpenAIResponseCacheUsagePresence(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
+						read, uncached := test.read, test.uncached
+						if target == llmprotocol.OpenAIResponsesV1 && read == nil {
+							// Responses requires an integer cached_tokens, so an
+							// unreported read count goes out, and reads back, as 0.
+							read = llmprotocol.Int64(0)
+							if test.write != nil {
+								uncached = llmprotocol.Int64(10 - *test.write)
+							}
+						}
 						roundtrip := decodeCacheUsageResponse(t, engine, target, encoded, streaming)
-						assertCacheUsage(t, roundtrip.Usage, test.read, test.write, test.uncached)
+						assertCacheUsage(t, roundtrip.Usage, read, test.write, uncached)
 					}
 				})
 			}
@@ -77,6 +86,11 @@ func TestOpenAIResponseCacheUsageRejectsInvalidEvidence(t *testing.T) {
 			for _, streaming := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/stream=%t", format, name, streaming), func(t *testing.T) {
 					engine := NewBuiltinEngine()
+					if name == "unknown field" {
+						// An undeclared usage member never takes part in
+						// accounting; only the conformance contract rejects it.
+						engine = conformanceEngine()
+					}
 					body := cacheUsageFixture(t, format, streaming, details)
 					var err error
 					if streaming {

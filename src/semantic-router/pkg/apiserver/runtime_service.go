@@ -28,18 +28,6 @@ type auxiliaryClassificationService interface {
 	HasClassifier() bool
 }
 
-type classificationReadinessService interface {
-	HasFactCheckClassifier() bool
-	HasHallucinationDetector() bool
-	HasFeedbackDetector() bool
-}
-
-type classificationInventoryReadinessService interface {
-	HasAnyFactCheckClassifier() bool
-	HasAnyHallucinationDetector() bool
-	HasAnyFeedbackDetector() bool
-}
-
 type configUpdateService interface {
 	UpdateConfig(newConfig *config.RouterConfig)
 	RefreshRuntimeConfig(newConfig *config.RouterConfig)
@@ -49,7 +37,6 @@ type classificationService interface {
 	intentClassificationService
 	batchClassificationService
 	auxiliaryClassificationService
-	classificationReadinessService
 	configUpdateService
 }
 
@@ -201,51 +188,6 @@ func (s *liveClassificationService) HasClassifier() bool {
 	svc, release := s.acquire()
 	defer release()
 	return svc.HasClassifier()
-}
-
-func (s *liveClassificationService) HasFactCheckClassifier() bool {
-	svc, release := s.acquire()
-	defer release()
-	return svc.HasFactCheckClassifier()
-}
-
-func (s *liveClassificationService) HasHallucinationDetector() bool {
-	svc, release := s.acquire()
-	defer release()
-	return svc.HasHallucinationDetector()
-}
-
-func (s *liveClassificationService) HasFeedbackDetector() bool {
-	svc, release := s.acquire()
-	defer release()
-	return svc.HasFeedbackDetector()
-}
-
-func (s *liveClassificationService) HasAnyFactCheckClassifier() bool {
-	current, release := s.acquire()
-	defer release()
-	if inventory, ok := current.(classificationInventoryReadinessService); ok {
-		return inventory.HasAnyFactCheckClassifier()
-	}
-	return current.HasFactCheckClassifier()
-}
-
-func (s *liveClassificationService) HasAnyHallucinationDetector() bool {
-	current, release := s.acquire()
-	defer release()
-	if inventory, ok := current.(classificationInventoryReadinessService); ok {
-		return inventory.HasAnyHallucinationDetector()
-	}
-	return current.HasHallucinationDetector()
-}
-
-func (s *liveClassificationService) HasAnyFeedbackDetector() bool {
-	current, release := s.acquire()
-	defer release()
-	if inventory, ok := current.(classificationInventoryReadinessService); ok {
-		return inventory.HasAnyFeedbackDetector()
-	}
-	return current.HasFeedbackDetector()
 }
 
 func (s *liveClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
