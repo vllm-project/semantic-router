@@ -16,6 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("authz-header-spoofing", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Test that client-supplied identity headers are stripped and cannot be used for unauthorized access",
 		Tags:        []string{"authz-rbac", "security", "authz"},
 		Fn:          testAuthzHeaderSpoofing,

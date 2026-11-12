@@ -60,8 +60,8 @@ type UserFeedbackRule struct {
 
 // JailbreakRule matches a prompt injection or jailbreak attempt in the
 // request or, at the response stage, in the model's answer. The whole input
-// is read; text the model could not read counts as an attack, and so does a
-// request whose question gets no answer when OnUnknown is match.
+// is read, in windows when it is longer than one; any window that finds an
+// attack flags the input.
 type JailbreakRule struct {
 	Name        string             `yaml:"name"`
 	Description string             `yaml:"description,omitempty"`
@@ -70,8 +70,12 @@ type JailbreakRule struct {
 	Input       JailbreakRuleInput `yaml:"input,omitempty"`
 	Deployment  string             `yaml:"deployment,omitempty"`
 	TimeoutMs   int                `yaml:"timeout_ms,omitempty"`
+	// OnUnscanned is what the rule reads as when only some of its windows
+	// were read: best_effort (the default) decides on those, match matches,
+	// no_match does not, and unknown leaves the rule to OnUnknown.
+	OnUnscanned string `yaml:"on_unscanned,omitempty" jsonschema:"enum=best_effort,enum=match,enum=no_match,enum=unknown"`
 	// OnUnknown is what a request-stage rule reads as when its deployment
-	// gives no answer: no_match (the default) or match.
+	// gives no answer: match (the default) or no_match.
 	OnUnknown string `yaml:"on_unknown,omitempty" jsonschema:"enum=match,enum=no_match"`
 }
 
@@ -96,9 +100,8 @@ type SafetyRule struct {
 
 // PIIRule matches personal data the model locates in the request: a span of
 // a counted label (every pii label but IgnoreLabels) whose probability
-// satisfies the predicate. Text the model could not read counts as personal
-// data, and so does a request whose question gets no answer when OnUnknown is
-// match.
+// satisfies the predicate. A long input is read in windows, and the spans of
+// every window count, at their places in the input.
 type PIIRule struct {
 	Name         string            `yaml:"name"`
 	Description  string            `yaml:"description,omitempty"`
@@ -107,8 +110,12 @@ type PIIRule struct {
 	Input        PIIRuleInput      `yaml:"input,omitempty"`
 	Deployment   string            `yaml:"deployment,omitempty"`
 	TimeoutMs    int               `yaml:"timeout_ms,omitempty"`
+	// OnUnscanned is what the rule reads as when only some of its windows
+	// were read: best_effort (the default) decides on those, match matches,
+	// no_match does not, and unknown leaves the rule to OnUnknown.
+	OnUnscanned string `yaml:"on_unscanned,omitempty" jsonschema:"enum=best_effort,enum=match,enum=no_match,enum=unknown"`
 	// OnUnknown is what the rule reads as when its deployment gives no
-	// answer: no_match (the default) or match.
+	// answer: match (the default) or no_match.
 	OnUnknown string `yaml:"on_unknown,omitempty" jsonschema:"enum=match,enum=no_match"`
 }
 

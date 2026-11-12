@@ -2,7 +2,12 @@
 
 import pytest
 from cli.models import Condition, Signals, UserConfig
-from cli.models_application import SafetyRule, TurnRelationRule
+from cli.models_application import (
+    JailbreakRule,
+    PIIRule,
+    SafetyRule,
+    TurnRelationRule,
+)
 from pydantic import ValidationError
 
 
@@ -45,6 +50,15 @@ def test_a_safety_rule_names_harm_categories_with_a_predicate_and_stage():
 def test_a_safety_rule_refuses_removed_and_invalid_fields(patch):
     with pytest.raises(ValidationError):
         SafetyRule.model_validate({"name": "unsafe", **patch})
+
+
+@pytest.mark.parametrize("model", [JailbreakRule, PIIRule])
+def test_a_guard_rule_says_what_a_partly_scanned_input_reads_as(model):
+    for value in ("best_effort", "match", "no_match", "unknown"):
+        rule = model.model_validate({"name": "guard", "on_unscanned": value})
+        assert rule.on_unscanned == value
+    with pytest.raises(ValidationError):
+        model.model_validate({"name": "guard", "on_unscanned": "allow"})
 
 
 def test_a_turn_relation_rule_reads_previous_turns():

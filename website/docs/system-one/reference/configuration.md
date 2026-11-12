@@ -41,7 +41,7 @@ A `systemone` rule, under `recipes[].signals.systemone`:
 | `stage` | `request` (default) or `response` |
 | `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `request` (`false` leaves the current user turn out), `answer`, `context`, `image`, `audio`, `video` |
 | `coverage` | `truncate` (default) or `full` |
-| `on_unscanned` | With `coverage: full`: `match`, `no_match` or `unknown` (default) |
+| `on_unscanned` | With `coverage: full`: `match`, `no_match`, `unknown` (default) or `best_effort`; on `jailbreak` and `pii` rules, `best_effort` is the default |
 | `timeout_ms` | Up to 60,000 |
 
 An application rule takes `name`, `description`, `deployment`, `timeout_ms` and

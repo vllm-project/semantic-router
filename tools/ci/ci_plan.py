@@ -19,6 +19,7 @@ from classify_pr_changes import (
     PRODUCTION_RELEASE_IMAGES,
     classify,
     git_changed_files,
+    select_profiles,
 )
 from domain_registry import domain_records, load_domain_registry, matching_domains
 from execution_batches import (
@@ -102,6 +103,26 @@ def resolve_image_sources(plan: dict) -> None:
     )
 
 
+def e2e_scope(name: str, reasons: list[str], paths: list[str], full: bool) -> str:
+    """The case scope an E2E profile runs: full on a full run, p0 when only a
+    domain marked e2e_scope p0 selected it, and standard otherwise, including
+    when the profile's own paths changed."""
+    if full:
+        return "full"
+    p0_reasons = {
+        f"domain:{name}"
+        for name, domain in domain_records().items()
+        if domain.get("e2e_scope") == "p0"
+    }
+    changed = tuple(sorted(set(paths)))
+    direct = name.removeprefix("e2e.") in select_profiles(
+        changed, full=False, suppress_expensive=False
+    )
+    if reasons and not direct and set(reasons) <= p0_reasons:
+        return "p0"
+    return "standard"
+
+
 def make_plan(
     paths: list[str],
     *,
@@ -177,7 +198,7 @@ def make_plan(
             else reasons or ["always" if record.get("always") else "explicit-consumer"]
         )
         if record["executor"] == "e2e":
-            record["baseline_suite"] = "full" if full else "standard"
+            record["baseline_suite"] = e2e_scope(name, reasons, paths, full)
         if waiver := planned_waiver(profile, name):
             record["known_issue_waiver"] = waiver
         record["dispatch_job"] = dispatch_job(record)

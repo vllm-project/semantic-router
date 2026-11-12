@@ -44,6 +44,15 @@ func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface
 		"providers.models[].backend_refs[].auth",
 		"api_key_file",
 	)
+	// A chat backend is always verified.
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, backendRefs, "tls", "providers.models[].backend_refs"),
+		reflect.TypeOf(DeploymentTLS{}),
+		"providers.models[].backend_refs[].tls",
+		"insecure_skip_verify",
+	)
+	assertMapCoversStructFields(t, mustMapAt(t, defaults, "tls"), reflect.TypeOf(ProviderDefaultsTLS{}), "providers.defaults.tls")
 }
 
 func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}) {

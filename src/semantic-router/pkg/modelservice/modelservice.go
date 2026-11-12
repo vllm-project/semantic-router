@@ -74,6 +74,12 @@ type Choice struct {
 // part in windows (Vela 2.0), zero keeping the model's own: a part with more
 // tokens fails the questions that read it whole with scan_budget_exceeded. A
 // model without a scan budget ignores it and every question's Truncate.
+// Window, when positive, makes the state a window of a guard's scan and is
+// its rank in reading order. In a stage's bundle a window travels in a call
+// of its own, with the other calls about the same window, so its answers
+// come back as soon as it is read; at most Parallel of the stage's windows
+// to one deployment are in flight (DefaultWindowParallel when 0), the lowest
+// rank first. Neither is a wire field, and the answers stay as they are.
 type Request struct {
 	Model     string
 	State     string
@@ -82,7 +88,13 @@ type Request struct {
 	Videos    []string
 	Questions []Question
 	MaxTokens int
+	Window    int
+	Parallel  int
 }
+
+// DefaultWindowParallel is how many windows of a stage's guard scans one
+// deployment reads at a time unless the request says otherwise.
+const DefaultWindowParallel = 4
 
 // Answer is one runtime answer. Error is set instead of the values when the
 // runtime could not answer this question. A Set answer holds each label's

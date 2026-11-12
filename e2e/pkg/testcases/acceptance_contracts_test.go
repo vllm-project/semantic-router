@@ -11,7 +11,7 @@ import (
 
 func TestWrapWithAcceptanceContractAppliesFlatThresholds(t *testing.T) {
 	wrapped := wrapWithAcceptanceContract(
-		"domain-classify",
+		"decision-priority-selection",
 		func(ctx context.Context, client *kubernetes.Clientset, opts TestCaseOptions) error {
 			opts.SetDetails(map[string]interface{}{
 				"total_tests":   10,
@@ -34,12 +34,12 @@ func TestWrapWithAcceptanceContractAppliesFlatThresholds(t *testing.T) {
 		t.Fatal("expected acceptance failure")
 	}
 
-	if !strings.Contains(err.Error(), "below minimum 60.00%") {
+	if !strings.Contains(err.Error(), "below minimum 100.00%") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if got := details["minimum_accuracy_rate"]; got != "60.00%" {
-		t.Fatalf("minimum_accuracy_rate = %v, want 60.00%%", got)
+	if got := details["minimum_accuracy_rate"]; got != "100.00%" {
+		t.Fatalf("minimum_accuracy_rate = %v, want 100.00%%", got)
 	}
 }
 
@@ -138,7 +138,7 @@ func TestProgressiveStressContractRejectsOneUnansweredRequest(t *testing.T) {
 func TestWrapWithAcceptanceContractPreservesOriginalError(t *testing.T) {
 	sentinel := errors.New("transport failure")
 	wrapped := wrapWithAcceptanceContract(
-		"domain-classify",
+		"decision-priority-selection",
 		func(ctx context.Context, client *kubernetes.Clientset, opts TestCaseOptions) error {
 			opts.SetDetails(map[string]interface{}{
 				"total_tests":   10,

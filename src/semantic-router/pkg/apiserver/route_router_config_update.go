@@ -274,6 +274,7 @@ type envoyEndpointProjection struct {
 	Protocol     string
 	BaseURL      string
 	ExtraHeaders map[string]string
+	TLS          *config.DeploymentTLS
 }
 
 func envoyDeploymentProjectionFromConfig(
@@ -303,6 +304,7 @@ func envoyDeploymentProjectionFromConfig(
 			Protocol:     endpoint.Protocol,
 			BaseURL:      profile.BaseURL,
 			ExtraHeaders: extraHeaders,
+			TLS:          profile.TLS,
 		})
 		if endpoint.Model == "" {
 			continue
