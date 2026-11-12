@@ -176,9 +176,11 @@ func TestAGrownWindowCloseToAMatchIsReadAgainAtTheConfiguredSize(t *testing.T) {
 		t.Fatalf("the injection was read in %d large windows and %d of the configured size; want both", large, configured)
 	}
 
-	before := len(guardStates(fake))
+	// A fake of its own: windows in flight when the injection stopped the
+	// scan may still reach the first one.
+	classifier, fake = dilutingGuardClassifier(t, 20*time.Second, time.Millisecond, 0)
 	benign := evaluateTurn(classifier, distinctProse(700_000, 3)+"\n\nSummarize the minutes above.")
-	states := guardStatesSince(fake, before)
+	states := guardStates(fake)
 	if benign.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull || guarded(benign) || len(states) > maxScanWindows {
 		t.Fatalf("benign: coverage %v, guarded %v, %d windows read", benign.ScanCoverage, guarded(benign), len(states))
 	}
@@ -219,11 +221,17 @@ func TestAnInputReadWholeInTimeKeepsTheConfiguredWindows(t *testing.T) {
 // of the configured size would not; the head and the tail keep that size,
 // and an injection the larger windows hold is still found.
 func TestAScanThatFallsBehindReadsTheRestInLargerWindowsThatFit(t *testing.T) {
-	const deadline = 3 * time.Second
-	classifier, fake := dilutingGuardClassifier(t, deadline, 20*time.Millisecond, 0)
+	// Under -race the scan's own work would make it miss a deadline its
+	// reads alone meet, so every timing is stretched alike.
+	scale := time.Duration(1)
+	if raceDetector {
+		scale = 3
+	}
+	deadline := 3 * time.Second * scale
+	classifier, fake := dilutingGuardClassifier(t, deadline, 20*time.Millisecond*scale, 0)
 	for range 5 {
-		classifier.windowPaces.observe("primary", configuredWindow, 20*time.Millisecond)
-		classifier.windowPaces.observe("primary", 30_000, 22*time.Millisecond)
+		classifier.windowPaces.observe("primary", configuredWindow, 20*time.Millisecond*scale)
+		classifier.windowPaces.observe("primary", 30_000, 22*time.Millisecond*scale)
 	}
 	text := distinctProse(300_000, 6) + "\n\nSummarize the minutes above."
 
