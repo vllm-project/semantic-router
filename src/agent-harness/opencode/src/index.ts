@@ -1,4 +1,5 @@
 import { registerRouting } from "./routing-hooks.ts";
+import { registerGuard } from "./guard-hooks.ts";
 import { Plugin } from "@opencode/plugin";
 import { DecisionStore } from "./decisions.ts";
 import type { Feedback } from "./decisions.ts";
@@ -71,8 +72,16 @@ export default Plugin.define({
       decisions,
       notify,
     );
+    const closeGuard = await registerGuard(
+      ctx,
+      settings,
+      runtime,
+      decisions,
+      notify,
+    );
     return async () => {
       closeRouting();
+      closeGuard();
       runtime.close();
       await registration.dispose();
     };

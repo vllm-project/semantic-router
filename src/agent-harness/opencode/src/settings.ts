@@ -11,6 +11,7 @@ export const APPS = [
 export type App = (typeof APPS)[number];
 export type Wait = 1000 | 2000 | 3000 | "done";
 export interface Settings {
+  guard: { reviewThreshold: number };
   routing: RoutingSettings;
   runtimeUrl: string;
   runtimeModel: string;
@@ -63,6 +64,7 @@ export function parseSettings(input: unknown): Settings {
     "maxDecisions",
     "maxSessions",
     "routing",
+    "guard",
   ]);
   for (const key of Object.keys(options))
     if (!known.has(key)) throw new Error(`Unknown option: ${key}`);
@@ -114,7 +116,23 @@ export function parseSettings(input: unknown): Settings {
   for (const key of Object.keys(waits))
     if (!["redact", "shield", "guard"].includes(key))
       throw new Error(`Unknown wait: ${key}`);
+  const guard = options.guard === undefined ? {} : options.guard;
+  if (
+    !isRecord(guard) ||
+    Object.keys(guard).some((key) => key !== "reviewThreshold")
+  )
+    throw new Error("Invalid guard options");
+  const reviewThreshold =
+    guard.reviewThreshold === undefined ? 0.9 : guard.reviewThreshold;
+  if (
+    typeof reviewThreshold !== "number" ||
+    !Number.isFinite(reviewThreshold) ||
+    reviewThreshold < 0 ||
+    reviewThreshold > 1
+  )
+    throw new Error("Invalid guard reviewThreshold");
   return {
+    guard: { reviewThreshold },
     routing: parseRouting(options.routing),
     runtimeUrl: url.href,
     runtimeModel: string(options.runtimeModel, "", "runtimeModel"),

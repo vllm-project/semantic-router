@@ -93,6 +93,15 @@ export async function host(t: TestContext, config: Record<string, unknown>) {
   assert.ok(ready, logs);
   return {
     root,
+    async api(path: string, body?: unknown, method?: string): Promise<unknown> {
+      const response = await fetch(url + path, {
+        headers,
+        method: method ?? (body === undefined ? "GET" : "POST"),
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      assert.ok(response.ok, await response.clone().text());
+      return response.status === 204 ? undefined : await response.json();
+    },
     async rpc(method: string, input: unknown) {
       const response = await fetch(`${url}/api/rpc/vsr.opencode.v1/${method}`, {
         method: "POST",

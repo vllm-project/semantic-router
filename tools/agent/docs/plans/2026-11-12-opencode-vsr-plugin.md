@@ -144,10 +144,10 @@ If Gate 0 fails, keep the full acceptance scope pending and record dependencies.
 
 ### Stage 3: guard
 
-- [ ] Port shell decomposition and fixed rules with adversarial fixtures for
+- [x] Port shell decomposition and fixed rules with adversarial fixtures for
   quoting, substitutions, heredocs, pipelines, wrappers and nested shells.
-- [ ] Integrate native approval; track held/approved/declined outcomes.
-- [ ] Verify no side effects before approval, rejection/cancellation behavior,
+- [x] Integrate native approval; track held/approved/declined outcomes.
+- [x] Verify no side effects before approval, rejection/cancellation behavior,
   existing permissions, time budgets, offline rules and strict wait policy.
 
 ### Stage 4: redact and shield
@@ -222,10 +222,10 @@ This prerequisite failure was resolved by the temporary verified toolchain in
 the Stage 1 checkpoint below. The approved delivery is staged implementation on
 one feature branch followed by one complete integration Draft PR.
 
-1. Stage 1 and Stage 2 product code and native fixture tests are implemented;
+1. Stages 1–3 product code and native fixture tests are implemented;
    consult their checkpoints below for the qualification boundaries.
-2. Continue Stage 3: shell decomposition, fixed/model guard rules and native
-   approval with side-effect assertions. Then implement Stages 4–7 in order.
+2. Continue Stage 4: Redact/Shield and outgoing-content assertions. Then implement
+   Stages 5–7 in order.
 3. Keep the remaining checkboxes pending until their evidence exists. Recheck
    overlapping upstream work before final publication.
 
@@ -531,3 +531,44 @@ skips this package's generated lockfile and installed dependencies, matching the
 other npm packages; a random integrity hash had produced a spelling false alarm.
 No dependency integrity data or global spellings were changed. Continue with
 Stage 3; the complete integration Draft PR is still pending.
+
+### Stage 3 implementation checkpoint
+
+Guard now adapts the built-in OpenCode `shell` tool to native permission
+evaluation. Its pure shell scanner/fixed rules and 17 adversarial fixture groups
+are copied locally from Claude shell-policy revision `32e902ba5`, with strict
+TypeScript index annotations and no sibling runtime dependency. Model question
+framing is retained from `d7ab7f587`. Fixed rules act before runtime requests;
+unsupported coverage (over 32,000 UTF-16 units or 12 parts) requires approval.
+Pending-check saturation rejects new calls rather than evicting an active check.
+
+Remaining commands are scored sequentially within one budget. Native deny/ask
+rules cannot be relaxed. Bounded failure leaves native permissions in control
+and records skipped; strict `"done"` has a 60-second maximum and asks on failure.
+Interruption cancels local classification, including a stalled HTTP response.
+Held outcomes settle from native terminal events, keyed by session/message/call;
+an approved command that exits nonzero remains approved. Raw commands leave
+pending memory after their verdict and never enter decision diagnostics. The
+adapter covers built-in shell tool calls; manual shell sessions/custom tools
+remain outside this explicit coverage.
+
+Validation: 45 unit tests and all five packed-artifact native integration tests
+pass, with strict TypeScript and formatting. Native guard assertions use the
+session/permission APIs to hold a real confirmation pending and check filesystem
+markers. They cover allow/reject/cancel, unchanged native ask/deny, approved
+nonzero exit, concurrent sessions sharing model-supplied call IDs, immediate
+HTTP cancellation, fixed rules without runtime calls, bounded failure allowing
+the original permission flow, and strict failure requiring native approval.
+The fixed-rule integration fixture uses only help flags; no destructive command
+or remote download executes. Native TUI presentation remains Stage 5; Gate 0's
+interactive permission feasibility evidence is separate. These are synthetic
+host-behavior tests and add no Vela quality/latency claim.
+
+Stage 3 final validation: `make check` passed for all changed paths, including
+source/security/structure/dependency gates, `harness-check` (797 CI tests, 74
+agent tests and tiny-model checks), clean dependency install, TypeScript/format
+checks and 45 unit tests. All five packed native integration tests passed
+separately. The shell scanner's equivalent `time` option-letter order is `of`
+to avoid a spelling false alarm; a fixture covers both options together. No
+spelling exception or dependency change was introduced. Continue Stage 4; the
+single complete integration Draft PR stays pending.

@@ -36,6 +36,10 @@ export const REASONS = [
   "queue-full",
   "spawn-failed",
   "observation-unavailable",
+  "fixed-rule",
+  "model-risk",
+  "coverage-limit",
+  "native-permission",
 ] as const;
 export type Reason = (typeof REASONS)[number];
 export interface Usage {
@@ -194,6 +198,19 @@ export class DecisionStore {
     if (observation.childSessionID)
       decision.childSessionID = observation.childSessionID;
     if (usage) decision.usage = usage;
+    this.revision++;
+  }
+  settleGuard(
+    sessionID: string,
+    id: string,
+    outcome: "approved" | "declined",
+  ): void {
+    const decision = this.sessions
+      .get(sessionID)
+      ?.decisions.find((item) => item.id === id);
+    if (!decision || decision.app !== "guard" || decision.outcome !== "held")
+      return;
+    decision.outcome = outcome;
     this.revision++;
   }
   label(sessionID: string, decisionID: string, feedback: Feedback): void {

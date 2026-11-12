@@ -1,8 +1,8 @@
 # vSR for OpenCode
 
-This package is under development for OpenCode 2.2.0. Router and Escalate are
+This package is under development for OpenCode 2.2.0. Router, Escalate and Guard are
 implemented with configurable model tiers, session-scoped decision metadata and
-versioned RPC diagnostics. Guard, Redact, Shield, Check and the terminal UI are
+versioned RPC diagnostics. Redact, Shield, Check and the terminal UI are
 later implementation stages.
 
 From this directory, install dependencies and check the package:
@@ -98,6 +98,32 @@ absent; a failed spawn is recorded separately. No estimated savings are claimed.
 Prior human text is held transiently in bounded memory for repeat detection;
 it is never included in decision records or diagnostics. Classification sends
 that text and child tasks to the configured runtime.
+
+Guard covers OpenCode's built-in `shell` tool. It decomposes shell chains while
+preserving quoted text, substitutions, heredocs and pipeline boundaries. Fixed
+rules flag catastrophic deletion, disk/device writes, recursive system-wide
+permission changes, fork bombs and downloads fed to interpreters, including
+common wrappers and nested shell strings. These rules stay active without a
+runtime. They are a bounded shell analysis, not a complete shell sandbox.
+
+Commands exceeding 32,000 UTF-16 code units or 12 parts require native approval.
+Other parts are classified sequentially within one shared budget. A review score
+at least `guard.reviewThreshold` (default 0.9) requires native approval before
+execution. Existing native deny/ask rules remain in force. Rejection or
+interruption prevents execution, and snapshots distinguish held, approved and
+declined commands. A command that was approved and exits nonzero remains
+approved. Checks and outcomes are scoped to session, assistant message and call.
+
+`waits.guard` defaults to 3000 ms. With bounded waits, unavailable classification
+records a skipped check and leaves native permissions in control; fixed rules
+and coverage limits still require approval. `"done"` uses a 60-second maximum
+and requires native approval for any part it could not check, including offline,
+malformed, unsupported and timed-out responses. Cancellation aborts the local
+decision request and prevents the pending command from running. Saturating the
+bounded pending-check capacity rejects new shell attempts until calls finish.
+Manual shell sessions and commands executed through other custom tools are
+outside this adapter's coverage. Classifier framing and pure shell rules are
+ported locally from the Claude plugin, with source revisions in the code.
 
 The HTTP client serializes requests and includes queue time in deadlines. A
 network failure opens a 60-second breaker; HTTP errors, malformed replies and

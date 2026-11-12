@@ -16,6 +16,10 @@ retains session-scoped metadata, and `rpc.ts` defines server/UI messages.
 escalation and cancellation, and `routing-hooks.ts` adapts native prompt,
 context and tool lifecycle events. Classifier question framing is deliberately
 copied into `questions.ts`; sibling plugin imports remain forbidden.
+`guard-policy.ts` owns shared-budget command classification and fixed-rule
+precedence, `shell.ts` retains the baseline shell scanner and its adversarial
+fixtures, and `guard-hooks.ts` tightens native permissions and observes terminal
+outcomes. Pending guards reject saturation instead of dropping active checks.
 
 `test:integration` requires the installed OpenCode 2.2.0 CLI and installs no
 models. It packs/extracts the package and starts an isolated private server.
@@ -25,6 +29,12 @@ pushback, concurrent children and session isolation. They use a synthetic
 generation provider and decision runtime, so they qualify host behavior rather
 than model accuracy. The CLI tests explicitly pass the parent model/variant;
 OpenCode 2.2.0 `run` does not apply the configured default variant consistently.
+Guard integration uses the host's session/permission HTTP APIs to leave native
+approvals pending, then explicitly approves, rejects or interrupts them. It
+checks filesystem markers before/after permission replies, including concurrent
+sessions, failed shell execution, offline fixed rules, bounded/strict failures
+and interruption of a stalled decision HTTP request. No product code responds
+automatically to permission requests.
 
 Tests use Node's built-in test runner, synthetic inputs and loopback HTTP
 servers. Real runtime tests require an explicit separately started model. Do

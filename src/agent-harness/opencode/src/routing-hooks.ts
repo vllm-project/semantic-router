@@ -90,7 +90,7 @@ export async function registerRouting(
     );
     if (route.model) input.model = route.model;
     if (route.decisionID && route.model) {
-      pending.set(`${event.sessionID}:${event.id}`, {
+      pending.set(`${event.sessionID}:${event.messageID}:${event.id}`, {
         sessionID: event.sessionID,
         decisionID: route.decisionID,
       });
@@ -100,7 +100,7 @@ export async function registerRouting(
   });
   await ctx.tool.hook("execute.after", async (event) => {
     if (event.tool !== "subagent") return;
-    const key = `${event.sessionID}:${event.id}`;
+    const key = `${event.sessionID}:${event.messageID}:${event.id}`;
     const selected = pending.get(key);
     pending.delete(key);
     if (!selected) return;
