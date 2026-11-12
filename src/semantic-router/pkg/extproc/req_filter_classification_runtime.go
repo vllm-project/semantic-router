@@ -41,6 +41,9 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", ctx.Routing.RecipeName())
 	}
 
+	facts := signalInput.requestFacts
+	var release func()
+	facts.Context, release = ctx.contextAdmission.signals(facts.Context)
 	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
 		ToolResultTexts:          signalInput.toolResultTexts,
 		ToolResultScanIncomplete: signalInput.toolResultScanIncomplete,
@@ -56,8 +59,15 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		UncompressedText:         signalInput.evaluationText,
 		SkipCompressionSignals:   signalInput.skipCompressionSignals,
 		ConversationFacts:        signalInput.conversationFacts,
-		RequestFacts:             signalInput.requestFacts,
+		RequestFacts:             facts,
 	})
+	release()
+	if admission := ctx.contextAdmission; admission != nil && admission.finished() {
+		if refusal := r.contextAdmissionRefusal(ctx); refusal != nil {
+			signalSpan.SetStatus(codes.Error, "context_window_exceeded")
+			return nil, refusal
+		}
+	}
 	if authzErr != nil {
 		signalSpan.SetStatus(codes.Error, "signal_evaluation_failed")
 		logging.ComponentErrorEvent("extproc", "signal_evaluation_failed", map[string]interface{}{

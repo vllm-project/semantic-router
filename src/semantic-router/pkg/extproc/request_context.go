@@ -297,6 +297,9 @@ type RequestContext struct {
 	// whose window check is logged and counted.
 	contextTokenizers map[string]modelTokenizer
 	contextVerdicts   map[string]struct{}
+	// contextAdmission counts a request whose bytes could exceed a window it
+	// can reach, beside its signals (context_window_parallel.go).
+	contextAdmission *contextAdmission
 	// fallbackMinWindow is the widest window whose backend refused the
 	// request for its length; fallback goes on only to wider windows.
 	fallbackMinWindow int

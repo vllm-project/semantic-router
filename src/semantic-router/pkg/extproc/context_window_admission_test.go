@@ -153,10 +153,10 @@ func TestAPromptInTheBandOfTheWindowReachesTheBackend(t *testing.T) {
 }
 
 // A model that names its tokenizer refuses a prompt of 1,100,000 tokens,
-// beyond W x 1.03: before any signal runs, so no guard reads a window of it,
-// with 400 context_length_exceeded in the client's own protocol, naming the
-// window and the estimated count (#6320).
-func TestANamedTokenizerRefusesBeyondTheNarrowBandBeforeTheSignals(t *testing.T) {
+// beyond W x 1.03, as soon as the count beside the signals has it, with 400
+// context_length_exceeded in the client's own protocol, naming the window and
+// the estimated count (#6320).
+func TestANamedTokenizerRefusesBeyondTheNarrowBand(t *testing.T) {
 	text := promptOfTokens(t, 1_100_000)
 	estimate := routerCountOf(text)
 	for _, tc := range []struct {
@@ -184,7 +184,6 @@ func TestANamedTokenizerRefusesBeyondTheNarrowBandBeforeTheSignals(t *testing.T)
 			require.Nil(t, record.Upstream, "the request reached a backend")
 			require.NotNil(t, record.Response)
 			require.Equal(t, http.StatusBadRequest, record.Response.Status, "%s", record.Response.Body)
-			require.Empty(t, logs.FilterMessage("signal_phase_timing").All(), "a signal ran on a request that cannot run")
 			require.Len(t, logs.FilterMessage("context_tokens_counted").All(), 1)
 			requireWindowChecked(t, logs, "exact", config.DefaultContextWindowMargin, "exceeds")
 			require.InDelta(t, refusals+1, refusalCount(t, "exact"), 1e-9)
@@ -223,7 +222,6 @@ func TestAProxyCountRefusesOnlyBeyondTheWideBand(t *testing.T) {
 	require.Nil(t, refused.Upstream, "the request reached a backend")
 	require.NotNil(t, refused.Response)
 	require.Equal(t, http.StatusBadRequest, refused.Response.Status, "%s", refused.Response.Body)
-	require.Empty(t, logs.FilterMessage("signal_phase_timing").All())
 	require.Contains(t, decodeClientError(t, refused.Response.Body).Error.Message,
 		fmt.Sprintf("your request has an estimated %d input tokens", routerCountOf(text)))
 	requireWindowChecked(t, logs, "proxy", config.DefaultContextWindowProxyMargin, "exceeds")
@@ -546,7 +544,6 @@ func TestAdmissionRefusesThroughADecisionThatDropsTheSystemPrompt(t *testing.T) 
 	record := runLongWindowCase(t, router, "replaced-system-prompt", "/v1/chat/completions", string(body))
 	require.NotNil(t, record.Response)
 	require.Equal(t, http.StatusBadRequest, record.Response.Status, "%s", record.Response.Body)
-	require.Empty(t, logs.FilterMessage("signal_phase_timing").All())
 	require.Len(t, logs.FilterMessage("context_tokens_counted").All(), 1)
 
 	shrink := promptShrink{instructions: true, tools: true}

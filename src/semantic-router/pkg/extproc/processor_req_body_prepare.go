@@ -61,14 +61,16 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	// only pre-routing path for normal request-body processing.
 	history := signalConversationHistoryFromRequest(request, snapshot)
 	applyRequestContextEstimate(snapshot, ctx)
-	if refused := r.admitContextWindow(originalModel, ctx); refused != nil {
-		return requestDecisionState{}, refused
-	}
+	r.startContextAdmission(originalModel, ctx)
 	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(
 		originalModel,
 		history,
 		ctx,
 	)
+	if refusal := r.contextAdmissionRefusal(ctx); refusal != nil {
+		logRoutingFailure(ctx, "context_window_exceeded", routingFailureContextLength.code, refusal)
+		return requestDecisionState{}, r.routingFailureResponse(ctx, refuseForLength(refusal, ctx.SourceFormat))
+	}
 	if decisionErr == nil {
 		decisionErr = r.benchmarkCallLimitCheck(ctx)
 	}

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -157,6 +158,7 @@ func (r *OpenAIRouter) contextTokens(ctx *RequestContext, decision *config.Decis
 	if r == nil || r.Config == nil || ctx == nil || ctx.SemanticRequest == nil {
 		return 0, "", false
 	}
+	r.joinContextAdmission(ctx)
 	tokenizer := r.requestTokenizer(ctx, model)
 	if tokenizer.encoding == nil {
 		return 0, "", false
@@ -192,6 +194,7 @@ func (r *OpenAIRouter) cachedContextTokens(ctx *RequestContext, decision *config
 	if r == nil || r.Config == nil || ctx == nil || ctx.SemanticRequest == nil {
 		return 0, "", false
 	}
+	r.joinContextAdmission(ctx)
 	tokenizer := r.requestTokenizer(ctx, model)
 	if tokenizer.encoding == nil {
 		return 0, "", false
@@ -224,13 +227,46 @@ func logContextCount(ctx *RequestContext, key contextCountKey, count contextCoun
 // text, tool calls and results, tool definitions and output schema, with the
 // template's reserves.
 func countPromptTokens(tokenizer *tokencount.Encoding, request *llmprotocol.Request) int {
+	tokens, _ := countPromptTokensContext(context.Background(), tokenizer, request)
+	return tokens
+}
+
+// countPromptTokensContext is countPromptTokens that stops early, with ctx's
+// error, once ctx ends.
+func countPromptTokensContext(ctx context.Context, tokenizer *tokencount.Encoding, request *llmprotocol.Request) (int, error) {
+	parts, reserve := promptParts(request)
+	return countPromptParts(ctx, tokenizer, parts, reserve)
+}
+
+// countPromptParts counts the parts promptParts took of a prompt.
+func countPromptParts(ctx context.Context, tokenizer *tokencount.Encoding, parts []string, reserve int) (int, error) {
 	var text strings.Builder
+	size := 0
+	for _, part := range parts {
+		size += len(part) + 1
+	}
+	text.Grow(size)
+	for _, part := range parts {
+		text.WriteString(part)
+		text.WriteByte('\n')
+	}
+	tokens, err := tokenizer.CountContext(ctx, text.String())
+	if err != nil {
+		return 0, err
+	}
+	return llmprotocol.SaturatingTokenSum(tokens, reserve), nil
+}
+
+// promptParts are the texts of request that a chat template renders, in
+// order, and the template's reserve for its messages, tool calls and tools.
+// The parts share the request's strings, so taking them copies no text.
+func promptParts(request *llmprotocol.Request) ([]string, int) {
+	var parts []string
 	reserve := contextTemplateReserve
-	write := func(parts ...string) {
-		for _, part := range parts {
-			if part != "" {
-				text.WriteString(part)
-				text.WriteByte('\n')
+	write := func(texts ...string) {
+		for _, text := range texts {
+			if text != "" {
+				parts = append(parts, text)
 			}
 		}
 	}
@@ -271,7 +307,7 @@ func countPromptTokens(tokenizer *tokencount.Encoding, request *llmprotocol.Requ
 		}
 	}
 	write(string(request.OutputFormat.Schema), request.OutputFormat.Name, request.OutputFormat.Description)
-	return llmprotocol.SaturatingTokenSum(tokenizer.Count(text.String()), reserve)
+	return parts, reserve
 }
 
 // requestCarriesMedia reports images, audio, video or files anywhere in the

@@ -8,6 +8,7 @@
 package tokencount
 
 import (
+	"context"
 	"math"
 	"regexp"
 	"runtime"
@@ -156,12 +157,18 @@ var repetition = regexp.MustCompile(`^\d+(,\d*)?$`)
 // spaces between words, where every supported pattern splits anyway, and
 // their parts are counted in parallel.
 func (e *Encoding) Count(text string) int {
+	tokens, _ := e.CountContext(context.Background(), text)
+	return tokens
+}
+
+// CountContext is Count that stops early, with ctx's error, once ctx ends.
+func (e *Encoding) CountContext(ctx context.Context, text string) (int, error) {
 	if text == "" {
-		return 0
+		return 0, ctx.Err()
 	}
 	chunks := splitChunks(text, chunkBytes)
 	if len(chunks) == 1 {
-		return e.countChunk(text)
+		return e.countChunk(text), ctx.Err()
 	}
 	workers := min(len(chunks), runtime.GOMAXPROCS(0))
 	var total atomic.Int64
@@ -171,7 +178,7 @@ func (e *Encoding) Count(text string) int {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for {
+			for ctx.Err() == nil {
 				i := int(next.Add(1)) - 1
 				if i >= len(chunks) {
 					return
@@ -181,7 +188,10 @@ func (e *Encoding) Count(text string) int {
 		}()
 	}
 	wg.Wait()
-	return int(total.Load())
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	return int(total.Load()), nil
 }
 
 // splitChunks cuts text into parts of about size bytes, each cut before a

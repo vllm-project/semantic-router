@@ -6,8 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -321,48 +319,6 @@ func modelRefNames(refs []config.ModelRef) []string {
 	return names
 }
 
-// admitContextWindow refuses, before any signal runs, a request that no model
-// it can reach could serve: its count exceeds every one's window beyond the
-// margin. The byte bound admits most requests for free; a request whose bytes
-// could exceed the widest window is counted in the Router by each reachable
-// model's tokenizer, once, and the counts serve the window checks after the
-// decision too. A recipe that may compress the request waits for those
-// checks; one that may drop the client's instructions or tools refuses only a
-// request still too long without them.
-func (r *OpenAIRouter) admitContextWindow(originalModel string, ctx *RequestContext) *ext_proc.ProcessingResponse {
-	if ctx == nil || ctx.SemanticRequest == nil {
-		return nil
-	}
-	models, shrink := r.reachableContextModels(originalModel, ctx)
-	if len(models) == 0 || shrink.unbounded {
-		return nil
-	}
-	widest := 0
-	for _, model := range models {
-		window := r.contextWindowSize(model)
-		if window <= 0 {
-			return nil
-		}
-		widest = max(widest, window)
-	}
-	if requestContextByteBound(ctx, nil) < widest {
-		return nil
-	}
-	r.countContextModels(ctx, models)
-	refusal := r.contextLengthRefusal(ctx, models, 0, "every model the request can reach")
-	if refusal == nil {
-		return nil
-	}
-	removable := shrink.removableBytes(ctx.SemanticRequest)
-	for _, model := range models {
-		if tokens, kind, _ := r.cachedContextTokens(ctx, nil, model); r.bandVerdict(r.contextWindowSize(model), tokens-removable, kind) != contextExceeds {
-			return nil
-		}
-	}
-	logRoutingFailure(ctx, "context_window_exceeded", routingFailureContextLength.code, refusal)
-	return r.routingFailureResponse(ctx, refuseForLength(refusal, ctx.SourceFormat))
-}
-
 // refuseForLength is contextLengthFailure for a refusal the client gets,
 // counted in llm_context_window_refusals_total.
 func refuseForLength(refusal *contextLengthError, format llmprotocol.WireFormat) routingFailure {
@@ -370,17 +326,6 @@ func refuseForLength(refusal *contextLengthError, format llmprotocol.WireFormat)
 		metrics.RecordContextWindowRefusal(string(refusal.kind))
 	}
 	return contextLengthFailure(refusal, format)
-}
-
-// countContextModels counts the request as sent for every model whose window
-// its bytes could exceed; models that share a tokenizer share its count.
-func (r *OpenAIRouter) countContextModels(ctx *RequestContext, models []string) {
-	bound := requestContextByteBound(ctx, nil)
-	for _, model := range models {
-		if bound >= r.contextWindowSize(model) {
-			r.contextTokens(ctx, nil, model)
-		}
-	}
 }
 
 // promptShrink is how much smaller than the client's prompt the decisions a
