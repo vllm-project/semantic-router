@@ -114,6 +114,16 @@ func validateFallbackForwardRequestHeaders(cfg *RouterConfig) error {
 // Router keeps those from upstreams like the x-authz- set, so no call it
 // makes may copy one.
 func validateForwardedIdentityHeaders(cfg *RouterConfig) error {
+	// The gateway strips these names from client requests, so one that is not
+	// a header name would never be stripped, nor ever be set.
+	for _, field := range []struct{ key, name string }{
+		{"user_id_header", cfg.Authz.Identity.UserIDHeader},
+		{"user_groups_header", cfg.Authz.Identity.UserGroupsHeader},
+	} {
+		if trimmed := strings.TrimSpace(field.name); trimmed != "" && !httpguts.ValidHeaderFieldName(trimmed) {
+			return fmt.Errorf("global.services.authz.identity.%s %q is not an HTTP header name", field.key, trimmed)
+		}
+	}
 	identity := cfg.Authz.Identity.HeaderNames()
 	check := func(path string, names []string) error {
 		for _, name := range names {

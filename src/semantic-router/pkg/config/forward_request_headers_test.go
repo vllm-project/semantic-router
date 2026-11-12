@@ -141,6 +141,10 @@ func TestForwardRequestHeadersRefusesConfiguredIdentityHeaders(t *testing.T) {
 	if _, err := ParseYAMLBytes(withIdentity(forwardHeadersDocument(allowed, allowed, allowed))); err != nil {
 		t.Fatalf("the request id: %v", err)
 	}
+	spaced := strings.Replace(string(withIdentity(forwardHeadersDocument(allowed, allowed, allowed))), "user_id_header: x-user-id", `user_id_header: "X JWT Sub"`, 1)
+	if _, err := ParseYAMLBytes([]byte(spaced)); err == nil || !strings.Contains(err.Error(), `global.services.authz.identity.user_id_header "X JWT Sub" is not an HTTP header name`) {
+		t.Fatalf("an identity header that is not a header name: got %v", err)
+	}
 	for _, tc := range []struct {
 		setting                    string
 		global, recipe, deployment []string
