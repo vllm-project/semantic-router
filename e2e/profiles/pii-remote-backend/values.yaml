@@ -45,6 +45,9 @@ config:
             input:
               tool_results: true
               request: false
+            # A tool result it cannot read as text, such as a screenshot,
+            # counts as personal data.
+            on_unscanned: match
         # An instruction planted in what an agent's tools brought back. A
         # jailbreak rule reads only user turns, so a systemone question asks
         # it about the tool results alone.

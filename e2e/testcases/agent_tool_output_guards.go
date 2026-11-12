@@ -25,11 +25,19 @@ import (
 // marker, see its README).
 func init() {
 	pkgtestcases.Register("agent-tool-output-guards", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Personal data or an instruction in a coding agent's tool result is blocked before dispatch on Chat, Responses and Messages, buffered and streamed",
 		Tags:        []string{"pii", "jailbreak", "coding-agent", "cross-protocol", "security"},
 		Fn:          testAgentToolOutputGuards,
 	})
+	pkgtestcases.Register("agent-tool-output-unreadable", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
+		Description: "A tool result the Router cannot read as text is blocked by a tool-output rule with on_unscanned: match, buffered and streamed",
+		Tags:        []string{"pii", "coding-agent", "fail-closed"},
+		Fn:          testAgentToolOutputUnreadable,
+	})
 	pkgtestcases.Register("agent-tool-output-fails-closed", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "A tool-output guard whose deployment fails blocks the request instead of passing it on every protocol",
 		Tags:        []string{"pii", "jailbreak", "coding-agent", "cross-protocol", "fail-closed"},
 		Fn:          testAgentToolOutputFailsClosed,
@@ -141,7 +149,7 @@ func testAgentToolOutputGuards(ctx context.Context, client *kubernetes.Clientset
 			results: []string{agentToolOutputCleanResult},
 		},
 	}
-	return runAgentToolOutputProbes(ctx, client, opts, probes)
+	return runAgentToolOutputProbes(ctx, client, opts, agentToolLoopProtocols, probes)
 }
 
 func testAgentToolOutputFailsClosed(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -157,13 +165,37 @@ func testAgentToolOutputFailsClosed(ctx context.Context, client *kubernetes.Clie
 			decision: agentToolOutputInjectionDecision, message: agentToolOutputInjectionMessage,
 		},
 	}
-	return runAgentToolOutputProbes(ctx, client, opts, probes)
+	return runAgentToolOutputProbes(ctx, client, opts, agentToolLoopProtocols, probes)
+}
+
+// agentToolOutputPNG is a 1x1 PNG, a screenshot as far as the Router can tell.
+const agentToolOutputPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg=="
+
+// testAgentToolOutputUnreadable sends a Messages tool loop whose tool result
+// is an image. The profile's tool-output PII rule cannot read it and says
+// on_unscanned: match, so the request is blocked rather than passed unread.
+func testAgentToolOutputUnreadable(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	image := []map[string]interface{}{{
+		"type":   "image",
+		"source": map[string]string{"type": "base64", "media_type": "image/png", "data": agentToolOutputPNG},
+	}}
+	protocol := agentToolLoopProtocol{name: "messages", path: "/v1/messages", body: func(user string, _ []string, stream bool) map[string]interface{} {
+		body := messagesToolLoop(user, []string{""}, stream)
+		messages := body["messages"].([]map[string]interface{})
+		messages[len(messages)-1]["content"] = []map[string]interface{}{{"type": "tool_result", "tool_use_id": "toolu_1", "content": image}}
+		return body
+	}}
+	return runAgentToolOutputProbes(ctx, client, opts, []agentToolLoopProtocol{protocol}, []agentToolOutputProbe{{
+		name: "an image tool result", user: agentToolOutputCleanUser,
+		decision: agentToolOutputPIIDecision, message: agentToolOutputPIIMessage,
+	}})
 }
 
 func runAgentToolOutputProbes(
 	ctx context.Context,
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
+	protocols []agentToolLoopProtocol,
 	probes []agentToolOutputProbe,
 ) error {
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
@@ -181,7 +213,7 @@ func runAgentToolOutputProbes(
 
 	runID := fmt.Sprintf("%d", time.Now().UnixNano())
 	observed := map[string]string{}
-	for _, protocol := range agentToolLoopProtocols {
+	for _, protocol := range protocols {
 		for _, stream := range []bool{false, true} {
 			for index, probe := range probes {
 				label := fmt.Sprintf("%s stream=%t: %s", protocol.name, stream, probe.name)
