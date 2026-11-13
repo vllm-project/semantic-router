@@ -10,19 +10,23 @@ import (
 
 // evaluateKeywordSignal evaluates keyword rules against the current text only.
 func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mutex, text string) {
-	c.evaluateKeywordSignalWithHistory(results, mu, text, nil)
+	c.evaluateKeywordSignalWithSources(results, mu, KeywordMatchInput{CurrentText: text}, nil)
 }
 
-// evaluateKeywordSignalWithHistory evaluates keyword rules; rules that opted
-// into include_history also see the prior user messages. A counting rule
-// publishes its count or density as its value, matched or not.
-func (c *Classifier) evaluateKeywordSignalWithHistory(results *SignalResults, mu *sync.Mutex, text string, priorUserMessages []string) {
+// evaluateKeywordSignalWithSources evaluates keyword rules against the content
+// each rule's configuration names: the current user message, the prior user
+// messages for include_history rules, and the request's textual tool results
+// for input.tool_results rules, with whether one of them went unread. The
+// history texts are built here from priorUserMessages, only if a rule reads
+// them. A counting rule publishes its count or density as its value, matched
+// or not.
+func (c *Classifier) evaluateKeywordSignalWithSources(results *SignalResults, mu *sync.Mutex, input KeywordMatchInput, priorUserMessages []string) {
 	start := time.Now()
-	historyText := ""
 	if len(priorUserMessages) > 0 && c.keywordClassifier.HasHistoryRules() {
-		historyText = keywordHistoryText(text, priorUserMessages)
+		input.HistoryText = keywordHistoryText(input.CurrentText, priorUserMessages)
+		input.PriorText = keywordHistoryText("", priorUserMessages)
 	}
-	matches, values, err := c.keywordClassifier.MatchAllWithHistory(text, historyText)
+	matches, values, err := c.keywordClassifier.MatchAllWithSources(input)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 

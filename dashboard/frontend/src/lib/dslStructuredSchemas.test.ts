@@ -111,6 +111,15 @@ describe('DSL structured field schemas', () => {
       expect(predicate.type).toBe('object')
       expect(predicate.fields?.map((field) => field.key)).toEqual(['gt', 'gte', 'lt', 'lte'])
     }
+    const keywordInput = requireField(getSignalFieldSchema('keyword'), 'input')
+    expect(keywordInput.type).toBe('object')
+    expect(keywordInput.fields?.map((field) => field.key)).toEqual(
+      expect.arrayContaining(['tool_results', 'request']),
+    )
+    expect(requireField(getSignalFieldSchema('keyword'), 'on_unscanned')).toMatchObject({
+      type: 'select',
+      options: ['best_effort', 'match', 'no_match'],
+    })
     expect(requireField(getSignalFieldSchema('authz'), 'subjects').type).toBe('object[]')
 
     const metadataPredicate = requireField(getSignalFieldSchema('metadata'), 'predicate')

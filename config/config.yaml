@@ -371,6 +371,25 @@ recipes:
           keywords: ["local model only", "do not upload to cloud"]
           case_sensitive: false
           include_history: true
+        # input adds the request's textual tool results, each matched on its
+        # own, and request: false leaves the current user turn out, so this
+        # rule reads only what an agent's tools brought back. on_unscanned
+        # decides a tool result the Router cannot read as text, such as an
+        # image, when no keyword was found in the text read: match counts it
+        # as a match (strict); a keyword found counts regardless. Matched keywords are
+        # reported as the configured patterns, so a secret a tool read never
+        # reaches headers, logs or Router Replay. The full gitleaks-derived
+        # rule set is in fragments/signal/keyword/credentials.yaml.
+        - name: credential_cloud_keys
+          description: Cloud provider access key ids in the output of an agent's tools.
+          operator: OR
+          method: regex
+          keywords: ['\b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16})\b']
+          case_sensitive: true
+          input:
+            tool_results: true
+            request: false
+          on_unscanned: match
         # count and density make an OR rule match on how often its keywords
         # occur: count on the number of occurrences, density on occurrences per
         # 1,000 characters. Either is published as keyword:<rule>.

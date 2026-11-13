@@ -261,3 +261,51 @@ ROUTE route (description = "Inspect cohort"%son_unknown = "fail_request") {
 		})
 	}
 }
+
+// A keyword rule's input and on_unscanned survive compiling, decompiling and
+// compiling again, with request false kept apart from unset.
+func TestKeywordInputRoundTrip(t *testing.T) {
+	input := `
+SIGNAL keyword "credentials" {
+  operator: "OR"
+  method: "regex"
+  case_sensitive: true
+  keywords: ["AKIA[0-9A-Z]{16}"]
+  input: {tool_results: true, request: false}
+  on_unscanned: "match"
+}
+
+ROUTE "credential-route" {
+  PRIORITY 100
+  WHEN keyword("credentials")
+  MODEL "model-a"
+}`
+
+	check := func(t *testing.T, cfg *config.RouterConfig, stage string) {
+		t.Helper()
+		if len(cfg.KeywordRules) != 1 {
+			t.Fatalf("%s: keyword rules = %#v, want one", stage, cfg.KeywordRules)
+		}
+		rule := cfg.KeywordRules[0]
+		if !rule.Input.ToolResults || rule.Input.ReadsRequest() || rule.OnUnscanned != config.KeywordUnscannedMatch {
+			t.Fatalf("%s: rule = %#v, want input.tool_results, input.request false and on_unscanned match", stage, rule)
+		}
+	}
+	cfg := mustCompilePolicyDSL(t, input)
+	check(t, cfg, "compiled")
+
+	source, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	for _, want := range []string{`tool_results: true`, `request: false`, `on_unscanned: "match"`} {
+		if !strings.Contains(source, want) {
+			t.Fatalf("decompiled DSL missing %s:\n%s", want, source)
+		}
+	}
+	check(t, mustCompilePolicyDSL(t, source), "round trip")
+
+	if _, errs := Compile(strings.Replace(input, `method: "regex"`, `method: "bm25"`, 1)); len(errs) == 0 {
+		t.Fatal("a bm25 rule that reads the tool results compiled; want the contract error")
+	}
+}
