@@ -41,8 +41,8 @@ vllm-sr serve --target kubernetes --config config.yaml
 
 ## standalone 模式下 Router 做什么
 
-- **listener：** `listeners` 中的每一项都以 HTTP/1.1 和 HTTP/2（明文下为 h2c）提供服务，`timeout` 作为空闲超时，
-  请求体上限 500 MiB，最多 50,000 个连接，与 Envoy 模板的限制一致。
+- **listener：** `listeners` 中的每一项都以 HTTP/1.1 和 HTTP/2（明文下为 h2c）提供服务。`timeout` 限制读取请求的时间（客户端停止发送请求体时返回 408）和空闲连接保持的时间，
+  不限制后端仍在流式返回的响应。请求体上限 500 MiB，每个 listener 最多 50,000 个连接，与 Envoy 模板的限制一致。
 - **API key：** 设置 `api_keys` 后，客户端需以 `Authorization: Bearer <key>` 或 `api-key: <key>` 发送其中之一；
   其他请求得到 OpenAI 风格的 401。key 在请求到达 provider 之前被移除。
 - **模型白名单：** 设置 `models` 后，该 listener 只接受这些请求模型（见[模型白名单](#model-allow-list)）。

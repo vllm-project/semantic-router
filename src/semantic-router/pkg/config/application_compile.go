@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -29,6 +30,9 @@ type ApplicationRule struct {
 	// match, which matches when its deployment gives no answer, so a guard
 	// whose model is down does not pass the request.
 	FailClosed bool
+	// MinCoverage is the share of a long input's windows a guard rule that
+	// read only some of them must have read to decide on them (0: any).
+	MinCoverage float64
 }
 
 // ApplicationCollections are the collections a configuration writes each
@@ -67,15 +71,16 @@ type applicationRuleSpec struct {
 	predicate                     *NumericPredicate
 	input                         SystemOneInput
 	onUnscanned, onUnknown        string
+	minCoverage                   float64
 	timeoutMs                     int
 }
 
 // failsClosed reports whether the compiled rule matches when its deployment
-// gives no answer: a request-stage jailbreak or pii rule with on_unknown:
-// match.
+// gives no answer: a request-stage jailbreak or pii rule unless its
+// on_unknown is no_match.
 func (spec applicationRuleSpec) failsClosed() bool {
 	guard := spec.signalType == SignalTypeJailbreak || spec.signalType == SignalTypePII
-	return guard && spec.stage != SystemOneStageResponse && spec.onUnknown == string(RuleOnUnknownMatch)
+	return guard && spec.stage != SystemOneStageResponse && spec.onUnknown != string(RuleOnUnknownNoMatch)
 }
 
 // ApplicationRules compiles the scope's application signal rules, by type in
@@ -130,7 +135,7 @@ func (c *RouterConfig) applicationRuleSpecs() []applicationRuleSpec {
 		specs = append(specs, applicationRuleSpec{
 			signalType: SignalTypeJailbreak, preset: presets.Jailbreak, stage: r.EffectiveStage(), name: r.Name,
 			description: r.Description, deployment: r.Deployment, predicate: r.Predicate, input: SystemOneInput{History: r.Input.History},
-			onUnscanned: SystemOneUnscannedMatch, onUnknown: r.OnUnknown, timeoutMs: r.TimeoutMs,
+			onUnscanned: cmp.Or(r.OnUnscanned, SystemOneUnscannedBestEffort), onUnknown: r.OnUnknown, minCoverage: r.MinCoverage, timeoutMs: r.TimeoutMs,
 		})
 	}
 	for _, r := range c.SafetyRules {
@@ -140,15 +145,16 @@ func (c *RouterConfig) applicationRuleSpecs() []applicationRuleSpec {
 		}
 		specs = append(specs, applicationRuleSpec{
 			signalType: SignalTypeSafety, preset: preset, stage: r.EffectiveStage(), name: r.Name,
-			description: r.Description, deployment: r.Deployment, labels: r.Labels, predicate: r.Predicate, timeoutMs: r.TimeoutMs,
+			description: r.Description, deployment: r.Deployment, labels: r.Labels, predicate: r.Predicate,
+			onUnscanned: SystemOneUnscannedBestEffort, minCoverage: r.MinCoverage, timeoutMs: r.TimeoutMs,
 		})
 	}
 	for _, r := range c.PIIRules {
 		specs = append(specs, applicationRuleSpec{
 			signalType: SignalTypePII, preset: presets.PII, name: r.Name, description: r.Description,
 			deployment: r.Deployment, ignoreLabels: r.IgnoreLabels, predicate: r.Predicate,
-			input: SystemOneInput{History: r.Input.History, ToolResults: r.Input.ToolResults, Request: r.Input.Request}, onUnscanned: SystemOneUnscannedMatch,
-			onUnknown: r.OnUnknown, timeoutMs: r.TimeoutMs,
+			input:       SystemOneInput{History: r.Input.History, ToolResults: r.Input.ToolResults, Request: r.Input.Request},
+			onUnscanned: cmp.Or(r.OnUnscanned, SystemOneUnscannedBestEffort), onUnknown: r.OnUnknown, minCoverage: r.MinCoverage, timeoutMs: r.TimeoutMs,
 		})
 	}
 	for _, r := range c.HallucinationRules {
@@ -217,7 +223,7 @@ func (c *RouterConfig) compileApplicationRule(spec applicationRuleSpec) Applicat
 	if preset.Full {
 		rule.Coverage, rule.OnUnscanned = SystemOneCoverageFull, spec.onUnscanned
 	}
-	compiled := ApplicationRule{Type: spec.signalType, Preset: spec.preset, Rule: rule, FailClosed: spec.failsClosed()}
+	compiled := ApplicationRule{Type: spec.signalType, Preset: spec.preset, Rule: rule, FailClosed: spec.failsClosed(), MinCoverage: spec.minCoverage}
 	if rule.Predicate == nil && calibratedPredicateApplies(preset, rule.Labels) {
 		threshold, calibrated := c.calibratedThreshold(c.SystemOneRuleDeployment(rule), spec.preset, preset.Stage)
 		if !calibrated {

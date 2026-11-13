@@ -7,12 +7,34 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// hfCommand stores the detected HuggingFace CLI command ("hf" or "huggingface-cli")
-var hfCommand string
+// hfCommand stores the detected HuggingFace CLI command ("hf" or "huggingface-cli").
+// Tokenizer downloads run beside model downloads, so it is read and written
+// under hfCommandMu.
+var (
+	hfCommandMu sync.Mutex
+	hfCommand   string
+)
+
+func setHFCommand(command string) {
+	hfCommandMu.Lock()
+	defer hfCommandMu.Unlock()
+	hfCommand = command
+}
+
+// detectedHFCommand is the detected CLI command, "hf" before any detection.
+func detectedHFCommand() string {
+	hfCommandMu.Lock()
+	defer hfCommandMu.Unlock()
+	if hfCommand == "" {
+		return "hf"
+	}
+	return hfCommand
+}
 
 // ErrGatedModelSkipped is a sentinel error indicating a gated model was gracefully skipped
 var ErrGatedModelSkipped = fmt.Errorf("gated model skipped")
@@ -82,10 +104,7 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 	args := buildDownloadArgs(spec)
 
 	// Use detected CLI command, default to "hf"
-	cliCmd := hfCommand
-	if cliCmd == "" {
-		cliCmd = "hf"
-	}
+	cliCmd := detectedHFCommand()
 	cmd := exec.CommandContext(ctx, cliCmd, args...)
 
 	// Set environment variables
@@ -141,11 +160,12 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 
 // buildDownloadArgs assembles the huggingface-cli argument list for spec.
 //
-// Every exclude pattern gets its own `--exclude` flag. The typer-based `hf download`
-// takes `--exclude` as a repeatable single-value option, so `--exclude a b c` keeps
-// only `a` and treats `b` and `c` as extra positional filenames; the legacy
-// `huggingface-cli download` accepted `nargs=*`. Repeating the flag is the form both
-// CLIs parse the same way, whichever one the image ends up installing.
+// Every include and exclude pattern gets its own flag. The typer-based `hf download`
+// takes `--include` and `--exclude` as repeatable single-value options, so
+// `--exclude a b c` keeps only `a` and treats `b` and `c` as extra positional
+// filenames; the legacy `huggingface-cli download` accepted `nargs=*`. Repeating the
+// flag is the form both CLIs parse the same way, whichever one the image ends up
+// installing.
 func buildDownloadArgs(spec ModelSpec) []string {
 	args := []string{
 		"download",
@@ -158,6 +178,11 @@ func buildDownloadArgs(spec ModelSpec) []string {
 		args = append(args, "--revision", spec.Revision)
 	}
 
+	for _, pattern := range spec.IncludePatterns {
+		if pattern != "" {
+			args = append(args, "--include", pattern)
+		}
+	}
 	for _, pattern := range spec.ExcludePatterns {
 		if pattern == "" {
 			continue
@@ -353,7 +378,7 @@ func CheckHuggingFaceCLIContext(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, "hf", "env")
 	output, err := cmd.CombinedOutput()
 	if err == nil {
-		hfCommand = "hf"
+		setHFCommand("hf")
 		// Extract version from output
 		lines := strings.Split(string(output), "\n")
 		for _, line := range lines {
@@ -379,7 +404,7 @@ func CheckHuggingFaceCLIContext(ctx context.Context) error {
 		return fmt.Errorf("huggingface-cli not found: %w\nPlease install it with: pip install huggingface_hub[cli]", helpErr)
 	}
 
-	hfCommand = "huggingface-cli"
+	setHFCommand("huggingface-cli")
 	logging.Infof("Found huggingface-cli (using legacy command)")
 	return nil
 }

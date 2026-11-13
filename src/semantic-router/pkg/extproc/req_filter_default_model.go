@@ -37,16 +37,18 @@ func (r *OpenAIRouter) selectDecisionDefaultRuntimeModel(
 		return "", entropy.ReasoningDecision{}, err
 	}
 	selectedModel := r.Config.DefaultModel
-	if r.modelNameExceedsContextWindow(selectedModel, ctx.VSRContextTokenCount) {
-		if r.modelNameExceedsContextWindow(selectedModel, contextTokensWithoutReserves(ctx, ctx.VSRContextTokenCount)) {
-			return "", entropy.ReasoningDecision{}, fmt.Errorf(
-				"%w: decision %q requires %d request tokens but the configured default model has a smaller context window",
-				errNoContextEligibleDecisionModel,
-				decisionName,
-				ctx.VSRContextTokenCount,
-			)
+	if r.modelExceedsContextWindow(ctx, selectedModel, ctx.VSRContextTokenCount) {
+		withoutReserves := contextTokensWithoutReserves(ctx, ctx.VSRContextTokenCount)
+		if refusal := r.contextLengthRefusal(ctx, []string{selectedModel}, withoutReserves, fmt.Sprintf("the default model of decision %q", decisionName)); refusal != nil {
+			return "", entropy.ReasoningDecision{}, refusal
 		}
-		dropContextReserves(ctx, decisionName)
+		if r.modelExceedsContextWindow(ctx, selectedModel, withoutReserves) {
+			r.keepUnprovenContextModels(ctx, []config.ModelRef{{Model: selectedModel}}, nil, withoutReserves, 1, decisionName)
+		} else {
+			dropContextReserves(ctx, decisionName)
+		}
+	} else {
+		r.dropReservesTheCountOverrules(ctx, []string{selectedModel}, decisionName)
 	}
 	ctx.VSRSelectedModel = selectedModel
 	ctx.VSRSelectionMethod = "default"

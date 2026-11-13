@@ -132,7 +132,7 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     })
   })
 
-  test('saves the default local provider without edits', async ({ page }) => {
+  test('saves the default local provider without edits and writes nothing', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1100 })
     await mockRemoteEmbeddingDashboard(page)
 
@@ -153,12 +153,7 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     await modal.getByRole('button', { name: 'Save' }).click()
 
     await expect(modal).toBeHidden()
-    await expect.poll(() => updateBody).not.toBeNull()
-    expect(updateBody).toMatchObject({
-      model_catalog: { embeddings: { default: { deployment: 'vela-embedding' } } },
-    })
-    expect(updateBody).not.toHaveProperty('model_catalog.embeddings.semantic')
-    expect(updateBody).not.toHaveProperty('model_catalog.deployments')
+    expect(updateBody).toBeNull()
   })
 
   test('keeps service availability inside desktop and mobile layouts', async ({ page }) => {

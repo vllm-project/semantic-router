@@ -101,6 +101,15 @@ export interface BackendRefAuth {
   api_key_file?: string
 }
 
+/** How an https backend is verified, by Envoy and by the Router's own calls. */
+export interface BackendRefTLS {
+  // Replaces the system roots for this backend.
+  ca_file?: string
+  server_name?: string
+  cert_file?: string
+  key_file?: string
+}
+
 export interface BackendRefEntry {
   name?: string
   /** host:port with protocol, or a full URL. */
@@ -113,6 +122,7 @@ export interface BackendRefEntry {
   api_key?: string
   auth?: BackendRefAuth
   headers?: Record<string, string>
+  tls?: BackendRefTLS
 }
 
 export interface ModelReasoningConfig {
@@ -161,6 +171,8 @@ export interface ProviderModelConfig {
 export interface ProviderDefaultsConfig {
   model?: string
   reasoning_effort?: string
+  /** The CA bundle of every https backend whose own tls names none. */
+  tls?: { ca_file: string }
 }
 
 export interface ProvidersConfig {
@@ -660,6 +672,11 @@ export interface CanonicalModelCatalogConfig {
   kbs?: Array<Record<string, unknown>>
   admission?: Record<string, Record<string, unknown>>
   signal_timeout_ms?: number
+  on_signal_overload?: {
+    action?: 'refuse' | 'retry'
+    wait_ms?: number
+    retry_after_seconds?: number
+  }
 }
 
 export interface RouterLearningConfig {

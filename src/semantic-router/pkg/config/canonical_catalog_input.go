@@ -38,6 +38,7 @@ func canonicalCatalogInput(canonical *CanonicalConfig) (modelcatalog.CompileInpu
 type catalogInputBuilder struct {
 	input             modelcatalog.CompileInput
 	builtIn           *modelcatalog.Registry
+	defaultTLS        *ProviderDefaultsTLS
 	benchmarks        map[string]modelcatalog.BenchmarkDefinition
 	cards             map[string]RoutingModel
 	boundCards        map[string]struct{}
@@ -63,7 +64,7 @@ func newCatalogInputBuilder(canonical *CanonicalConfig) (*catalogInputBuilder, e
 		return nil, err
 	}
 	return &catalogInputBuilder{
-		input: input, builtIn: builtIn, benchmarks: benchmarks, cards: cards,
+		input: input, builtIn: builtIn, defaultTLS: canonical.Providers.Defaults.TLS, benchmarks: benchmarks, cards: cards,
 		boundCards:        make(map[string]struct{}, len(canonical.Providers.Models)),
 		configuredCards:   make(map[string]struct{}, len(canonical.Providers.Models)),
 		materializedCards: make(map[string]struct{}, len(canonical.Providers.Models)),
@@ -87,6 +88,7 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	alias := catalogModelAlias(model, cardID)
 	for backendIndex, backend := range model.BackendRefs {
 		instance, binding := catalogProviderBinding(builder.builtIn, model, backend, backendIndex)
+		instance.TLS = effectiveBackendTLS(backend.TLS, builder.defaultTLS, backendEndpointURL(builder.builtIn, backend))
 		builder.input.Providers = append(builder.input.Providers, instance)
 		alias.Providers = append(alias.Providers, binding)
 	}

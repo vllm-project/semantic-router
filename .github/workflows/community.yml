@@ -17,9 +17,13 @@ permissions:
 jobs:
   title-format:
     name: Check title format
+    # An issue's title can only change when it is opened, reopened or edited;
+    # labels, assignees and milestones leave it as it was.
     if: >-
       (github.event_name == 'issues'
-      && github.event.issue.user.type != 'Bot')
+      && github.event.issue.user.type != 'Bot'
+      && (github.event.action == 'opened' || github.event.action == 'reopened'
+      || (github.event.action == 'edited' && github.event.changes.title != null)))
       || (github.event_name == 'pull_request'
       && !github.event.pull_request.draft
       && github.event.pull_request.user.type != 'Bot')
@@ -130,6 +134,8 @@ jobs:
       && startsWith(github.event.comment.body, '/')
       && github.event.comment.body != '/accept'
       && github.event.comment.body != '/netlify'
+      && !startsWith(github.event.comment.body, '/ci ')
+      && github.event.comment.body != '/ci'
     runs-on: ubuntu-latest
     permissions:
       contents: read

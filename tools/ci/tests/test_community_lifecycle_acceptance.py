@@ -32,6 +32,10 @@ def comment(actor: str, body: str = "/accept") -> dict:
     return {"body": body, "user": {"login": actor}}
 
 
+def queued_comment(actor: str, body: str = "/accept", kind: str = "User") -> dict:
+    return {"body": body, "author": {"__typename": kind, "login": actor}}
+
+
 def cross_reference(number: int, *, state="open", pull_request=True, repo=REPO):
     source = {
         "number": number,
@@ -44,7 +48,12 @@ def cross_reference(number: int, *, state="open", pull_request=True, repo=REPO):
 
 
 class FakeAcceptanceApi:
-    """Serve acceptance endpoints, record every request, and spend a budget."""
+    """Serve acceptance endpoints, record every request, and spend a budget.
+
+    ``queue`` maps each queued issue, newest first, to its comments as GraphQL
+    returns them. Like the real client, GraphQL requests leave the REST budget
+    untouched.
+    """
 
     def __init__(
         self,
@@ -52,7 +61,7 @@ class FakeAcceptanceApi:
         *,
         comments=None,
         timelines=None,
-        listing=None,
+        queue=None,
         permissions=None,
         failing_requests=None,
         budget=None,
@@ -60,14 +69,35 @@ class FakeAcceptanceApi:
         self.issues = {int(issue["number"]): issue for issue in issues}
         self.comments = comments or {}
         self.timelines = timelines or {}
-        self.listing = listing or {}
+        self.queue = queue or {}
         self.permissions = permissions or {}
         self.failing_requests = set(failing_requests or ())
         self.rate_limit_remaining = budget
         self.requests: list[tuple[str, str]] = []
+        self.queries: list[dict] = []
         self.fetched: list[int] = []
         self.added: dict[int, set[str]] = {}
         self.removed: dict[int, set[str]] = {}
+
+    def queue_page(self, variables: dict) -> dict:
+        self.queries.append(variables)
+        start = int(variables["cursor"] or 0)
+        numbers = list(self.queue)[start : start + 50]
+        end = start + len(numbers)
+        nodes = [
+            {
+                "number": number,
+                "comments": {
+                    "totalCount": len(self.queue[number]),
+                    "nodes": self.queue[number][-100:],
+                },
+            }
+            for number in numbers
+        ]
+        page_info = {"hasNextPage": end < len(self.queue), "endCursor": str(end)}
+        return {
+            "data": {"repository": {"issues": {"pageInfo": page_info, "nodes": nodes}}}
+        }
 
     def request(
         self,
@@ -78,18 +108,18 @@ class FakeAcceptanceApi:
         ignore_not_found: bool = False,
     ):
         self.requests.append((method, endpoint))
-        if self.rate_limit_remaining is not None:
+        if self.rate_limit_remaining is not None and endpoint != "graphql":
             self.rate_limit_remaining -= 1
         if (method, endpoint) in self.failing_requests:
             raise RuntimeError(f"API failure for {method} {endpoint}")
+        if endpoint == "graphql":
+            return self.queue_page(payload["variables"])
 
         parsed = urlparse(endpoint)
         query = parse_qs(parsed.query)
         parts = parsed.path.split("/")
         if parts[3] == "collaborators":
             return {"permission": self.permissions.get(unquote(parts[4]), "read")}
-        if parts[3:] == ["issues"]:
-            return self.listing.get(int(query["page"][0]), [])
 
         number = int(parts[4])
         tail = parts[5:]
@@ -330,59 +360,94 @@ class AcceptanceSweepTests(AcceptanceTestCase):
             )
         return output.getvalue()
 
-    def test_sweep_collects_candidates_before_writing_and_accepts_valid_ones(
+    def test_sweep_reads_the_queue_in_pages_before_writing_and_accepts_valid_ones(
         self,
     ) -> None:
-        page_size = community_lifecycle_github.API_PAGE_SIZE
-        first_page = [issue(100 + index, comments=0) for index in range(page_size - 3)]
-        first_page += [issue(1), issue(2), issue(3, pull_request={"url": "example"})]
+        queue = {number: [] for number in range(100, 153)}
+        queue |= {
+            1: [queued_comment("maintainer")],
+            2: [queued_comment("observer", "/accept please")],
+            4: [queued_comment("maintainer")],
+        }
         client = FakeAcceptanceApi(
             [issue(1), issue(2), issue(4)],
-            listing={1: first_page, 2: [issue(4)]},
-            comments={
-                1: {1: [comment("maintainer")]},
-                2: {1: [comment("observer", "/accept please")]},
-                4: {1: [comment("maintainer")]},
-            },
+            queue=queue,
             permissions={"maintainer": "write"},
         )
 
         output = self.sweep(client)
 
-        listing = [
-            endpoint for _, endpoint in client.requests if "/issues?" in endpoint
-        ]
-        self.assertEqual(len(listing), 2)
-        last_listing = max(
+        self.assertEqual([query["cursor"] for query in client.queries], [None, "50"])
+        last_read = max(
             index
             for index, (_, endpoint) in enumerate(client.requests)
-            if "/issues?" in endpoint
+            if endpoint == "graphql"
         )
         first_write = min(
             index
-            for index, (method, _) in enumerate(client.requests)
-            if method != "GET"
+            for index, (method, endpoint) in enumerate(client.requests)
+            if method != "GET" and endpoint != "graphql"
         )
-        self.assertLess(last_listing, first_write)
-        self.assertIn("labels=needs-acceptance", listing[0])
-        self.assertIn("sort=updated&direction=desc", listing[0])
+        self.assertLess(last_read, first_write)
         self.assertEqual(client.added, {1: {"accepted"}, 4: {"accepted"}})
         self.assertEqual(client.fetched, [1, 4])
-        self.assertFalse(
-            any(path.endswith("/issues/100/comments") for path in client.endpoints())
-        )
-        self.assertNotIn(f"/repos/{REPO}/issues/comments", client.endpoints())
+        self.assertFalse(any("/comments" in path for path in client.endpoints()))
+        self.assertIn("56 open issue(s) awaiting acceptance", output)
         self.assertIn("2 accepted", output)
-        self.assertIn("1 without `/accept`", output)
+        self.assertIn("54 without `/accept`", output)
+
+    def test_sweep_reads_a_thread_longer_than_the_queue_page_comment_by_comment(
+        self,
+    ) -> None:
+        chatter = [f"comment {index}" for index in range(100)]
+        client = FakeAcceptanceApi(
+            [issue(7)],
+            queue={
+                7: [queued_comment("maintainer")]
+                + [queued_comment("reporter", body) for body in chatter]
+            },
+            comments={
+                7: {
+                    1: [comment("maintainer")]
+                    + [comment("reporter", body) for body in chatter[:99]],
+                    2: [comment("reporter", chatter[99])],
+                }
+            },
+            permissions={"maintainer": "write"},
+        )
+
+        self.sweep(client)
+
+        self.assertEqual(client.added, {7: {"accepted"}})
+        self.assertEqual(
+            [path for path in client.endpoints() if path.endswith("/comments")],
+            [f"repos/{REPO}/issues/7/comments"] * 2,
+        )
+
+    def test_sweep_keeps_the_login_rest_reports_for_bot_authors(self) -> None:
+        client = FakeAcceptanceApi(
+            [issue(1), issue(2)],
+            queue={
+                1: [queued_comment("github-actions", kind="Bot")],
+                2: [queued_comment("github-actions")],
+            },
+        )
+
+        self.sweep(client)
+
+        self.assertEqual(client.added, {1: {"accepted"}})
+        self.assertEqual(
+            [path for path in client.endpoints() if "/collaborators/" in path],
+            [f"repos/{REPO}/collaborators/github-actions/permission"],
+        )
 
     def test_sweep_stops_at_the_reserve_and_leaves_the_rest_for_the_next_run(
         self,
     ) -> None:
-        candidates = [issue(number) for number in range(1, 6)]
+        numbers = range(1, 6)
         client = FakeAcceptanceApi(
-            candidates,
-            listing={1: candidates},
-            comments={number: {1: [comment("maintainer")]} for number in range(1, 6)},
+            [issue(number) for number in numbers],
+            queue={number: [queued_comment("maintainer")] for number in numbers},
             permissions={"maintainer": "write"},
             budget=12,
         )
@@ -394,19 +459,47 @@ class AcceptanceSweepTests(AcceptanceTestCase):
         self.assertIn("Stopped with", output)
         self.assertIn("3 issue(s) remain for the next run", output)
 
-    def test_sweep_passes_its_lookback_window_to_the_listing(self) -> None:
-        client = FakeAcceptanceApi([], listing={1: []})
+    def test_sweep_asks_for_open_issues_with_the_label_and_the_lookback_window(
+        self,
+    ) -> None:
+        client = FakeAcceptanceApi([])
 
         self.sweep(client, since="2026-11-01T00:00:00Z")
+        self.sweep(client)
 
-        self.assertIn("since=2026-11-01T00%3A00%3A00Z", client.requests[0][1])
+        self.assertEqual(
+            [query["since"] for query in client.queries],
+            ["2026-11-01T00:00:00Z", None],
+        )
+        self.assertEqual(
+            {query["label"] for query in client.queries}, {"needs-acceptance"}
+        )
+        query = community_lifecycle_github.ACCEPTANCE_QUEUE_QUERY
+        self.assertIn("states: OPEN", query)
+        self.assertIn("orderBy: {field: UPDATED_AT, direction: DESC}", query)
+
+    def test_sweep_fails_before_any_write_when_the_queue_cannot_be_read(self) -> None:
+        client = FakeAcceptanceApi(
+            [issue(1)],
+            queue={1: [queued_comment("maintainer")]},
+            permissions={"maintainer": "write"},
+            failing_requests={("POST", "graphql")},
+        )
+
+        with self.assertRaises(RuntimeError):
+            self.sweep(client)
+
+        self.assertEqual(client.requests, [("POST", "graphql")])
+        self.assertEqual(client.added, {})
 
     def test_sweep_reports_failures_after_processing_the_rest(self) -> None:
         failing = ("POST", f"repos/{REPO}/issues/1/labels")
         client = FakeAcceptanceApi(
             [issue(1), issue(2)],
-            listing={1: [issue(1), issue(2)]},
-            comments={1: {1: [comment("maintainer")]}, 2: {1: [comment("maintainer")]}},
+            queue={
+                1: [queued_comment("maintainer")],
+                2: [queued_comment("maintainer")],
+            },
             permissions={"maintainer": "write"},
             failing_requests={failing},
         )
@@ -480,6 +573,22 @@ class GitHubClientTests(unittest.TestCase):
         )
         self.assertIsNone(result)
         self.assertEqual(client.rate_limit_remaining, 3)
+
+    def test_only_the_rest_budget_is_recorded(self) -> None:
+        client = community_lifecycle_github.GitHubClient()
+        recorded = []
+        for resource, remaining in (("graphql", 9876), ("core", 42), ("graphql", 9875)):
+            stdout = (
+                f"HTTP/2.0 200 OK\nX-Ratelimit-Resource: {resource}\n"
+                f"X-Ratelimit-Remaining: {remaining}\n\n{{}}"
+            )
+            completed = subprocess.CompletedProcess([], 0, stdout, "")
+            with mock.patch.object(
+                community_lifecycle_github.subprocess, "run", return_value=completed
+            ):
+                client.request("graphql", method="POST", payload={})
+            recorded.append(client.rate_limit_remaining)
+        self.assertEqual(recorded, [None, 42, 42])
 
 
 if __name__ == "__main__":

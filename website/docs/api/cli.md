@@ -70,6 +70,9 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config schema`](#vllm-sr-config-schema) | Discover the canonical config contract progressively. |
 | [`vllm-sr config validate`](#vllm-sr-config-validate) | Validate configuration file. |
 | [`vllm-sr config versions`](#vllm-sr-config-versions) | List the configuration history, newest first. |
+| [`vllm-sr connect`](#vllm-sr-connect) | Point an agent harness at a Router gateway (System Two). |
+| [`vllm-sr connect claude-code`](#vllm-sr-connect-claude-code) | Route Claude Code's model calls through the gateway. |
+| [`vllm-sr connect codex`](#vllm-sr-connect-codex) | Route Codex CLI through the gateway with a profile of its own. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
 | [`vllm-sr instance`](#vllm-sr-instance) | Inspect the serving state of an existing local instance. |
 | [`vllm-sr instance models`](#vllm-sr-instance-models) | Print actual native model cards for readiness checks, without inference. |
@@ -965,6 +968,61 @@ List the configuration history, newest first.
 | `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
+| `--help` | Show this message and exit. Default: false. |
+
+## `vllm-sr connect` {#vllm-sr-connect}
+
+```text
+Usage: vllm-sr connect [OPTIONS] COMMAND [ARGS]...
+```
+
+Point an agent harness at a Router gateway (System Two).
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect claude-code` {#vllm-sr-connect-claude-code}
+
+```text
+Usage: vllm-sr connect claude-code [OPTIONS]
+```
+
+Route Claude Code's model calls through the gateway.
+
+| Parameter | Description |
+| --- | --- |
+| `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
+| `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
+| `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
+| `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
+| `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
+| `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick. Claude Code then neither assumes 200,000 nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--yes` | Write without asking. Default: false. |
+| `--scope CHOICE` | user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.  [default: user] Choices: user, project. |
+| `--status-line` | Also show in Claude Code's status line which models answered, the last first. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect codex` {#vllm-sr-connect-codex}
+
+```text
+Usage: vllm-sr connect codex [OPTIONS]
+```
+
+Route Codex CLI through the gateway with a profile of its own.
+
+| Parameter | Description |
+| --- | --- |
+| `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
+| `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
+| `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
+| `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
+| `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
+| `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick. Claude Code then neither assumes 200,000 nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--yes` | Write without asking. Default: false. |
+| `--profile TEXT` | The Codex profile to write.  [default: vllm-sr] |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr dashboard` {#vllm-sr-dashboard}

@@ -57,7 +57,9 @@ func (decoder *responsesStreamDecoder) validateResponsesToolDone(wire responsesE
 		complete = wire.Input
 	}
 	if len(arguments) == 0 {
-		if wire.Type == "response.function_call_arguments.done" && !isJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) {
+		// A cut call's arguments stop inside an object; the stream state decides it at the terminal event.
+		if wire.Type == "response.function_call_arguments.done" && !isJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) &&
+			!isTruncatedJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) {
 			return invalidProviderResponse("invalid_stream_tool_arguments", "Responses function-call done arguments must be a JSON object")
 		}
 		decoder.toolArguments[index] = []byte(complete)
@@ -101,7 +103,7 @@ func (decoder *responsesStreamDecoder) applyResponsesItemStart(event *llmprotoco
 	event.Role = llmprotocol.RoleAssistant
 	switch item.Type {
 	case "function_call", "custom_tool_call":
-		call := llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}
+		call := llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments, Namespace: item.Namespace}
 		if item.Type == "custom_tool_call" {
 			call.Kind, call.Arguments = llmprotocol.ToolKindCustom, item.Input
 		}
@@ -275,9 +277,9 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItemKind(
 ) error {
 	switch item.Type {
 	case "function_call":
-		event.ToolCall = &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}
+		event.ToolCall = &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments, Namespace: item.Namespace}
 	case "custom_tool_call":
-		event.ToolCall = &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input}
+		event.ToolCall = &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input, Namespace: item.Namespace}
 	case "message":
 		if decoder.itemKinds[responsesWireOutputIndex(wire)] == llmprotocol.ContentToolCall {
 			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_item_kind_mismatch", "upstream completed a tool item as a message", nil)

@@ -21362,6 +21362,13 @@
                               }
                             }
                           },
+                          "scan_coverage": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "selected_model": {
                             "type": "string"
                           },
@@ -23793,6 +23800,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
                           "conversation_id": {
                             "type": "string"
                           },
@@ -26174,6 +26184,13 @@
                             "type": "string"
                           }
                         }
+                      }
+                    },
+                    "scan_coverage": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
                       }
                     },
                     "selected_model": {
@@ -32978,6 +32995,13 @@
                     "routing_decision": {
                       "type": "string"
                     },
+                    "scan_coverage": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "selected_model": {
                       "type": "string"
                     },
@@ -34540,6 +34564,13 @@
                         },
                         "routing_decision": {
                           "type": "string"
+                        },
+                        "scan_coverage": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
                         },
                         "selected_model": {
                           "type": "string"
@@ -39022,6 +39053,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },
@@ -39732,6 +39766,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },
@@ -47834,6 +47871,9 @@
                         }
                       }
                     },
+                    "instance_id": {
+                      "type": "string"
+                    },
                     "message": {
                       "type": "string"
                     },
@@ -48051,6 +48091,9 @@
                           "type": "string"
                         }
                       }
+                    },
+                    "instance_id": {
+                      "type": "string"
                     },
                     "message": {
                       "type": "string"

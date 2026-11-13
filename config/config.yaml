@@ -50,6 +50,11 @@ providers:
   defaults:
     model: qwen3-8b
     reasoning_effort: medium
+    # The CA bundle of every https backend whose own tls names no ca_file. It
+    # replaces the system roots for those backends, in Envoy and in the
+    # Router's own calls, so it must hold every CA they chain to.
+    tls:
+      ca_file: /etc/vllm-sr/certs/example-corp-ca.pem
   models:
     - name: qwen3-8b
       reasoning:
@@ -75,6 +80,14 @@ providers:
       external_model_ids:
         openai: qwen3-8b
         analytics: qwen3-routing
+      # The tokenizer a long prompt is counted with for the context window
+      # check: a Hugging Face repo id (optional @revision), whose
+      # tokenizer.json the Router downloads beside its models, a built-in
+      # encoding (o200k_base, cl100k_base) or a local tokenizer.json.
+      # Omitted, it is the repo of the card's open-weights source, as here,
+      # or the id a self-hosted engine serves the model under; a model with
+      # neither counts with global.router.context_window.proxy_tokenizer.
+      tokenizer: Qwen/Qwen3-8B
       # A backend connects with the shape a deployment uses: endpoint
       # (host:port with protocol, or a full URL), auth and headers. The key
       # comes from auth.api_key_env; it is never written here.
@@ -150,6 +163,15 @@ providers:
           provider: openai-compatible
           auth:
             credential: delegated
+          # A backend behind a private CA: ca_file replaces the system roots
+          # for it, so it holds the issuing intermediate and the root;
+          # server_name is the name its certificate carries; cert_file and
+          # key_file present a client certificate. Absolute paths.
+          tls:
+            ca_file: /etc/vllm-sr/certs/example-corp-ca.pem
+            server_name: gateway.example.com
+            cert_file: /etc/vllm-sr/certs/router.crt
+            key_file: /etc/vllm-sr/certs/router.key
           weight: 100
     - name: qwen3-32b
       reasoning:
@@ -199,6 +221,10 @@ providers:
         completion_per_1m: 4.0
       external_model_ids:
         openai: llava-omni-preview
+      # Request capabilities the backends reject, as vLLM rejects min_p and
+      # logit_bias under speculative decoding: the Router sends this model
+      # requests without those fields and reports each in x-vsr-warnings.
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
       backend_refs:
         - name: omni-primary
           provider: vllm
@@ -432,6 +458,9 @@ recipes:
           description: Content risk, independent of prompt attacks.
           predicate:
             gte: 0.52
+          # A long input read only in part decides on the windows read once
+          # they are a quarter of them; below that the rule is unknown.
+          min_coverage: 0.25
         - name: unsafe-privacy
           description: Requests that seek or expose private information.
           labels: ["PII/Privacy"]
@@ -521,8 +550,16 @@ recipes:
             history: true
           deployment: primary
           timeout_ms: 300
-          # A request whose deployment gives no answer matches (fail closed);
-          # the default, no_match, passes it.
+          # A long input is read in windows. When the time runs out before
+          # every window is read, best_effort (the default) decides on the
+          # windows read; match matches the request (strict), and unknown
+          # leaves the rule to on_unknown.
+          on_unscanned: best_effort
+          # best_effort decides only once it has read half the windows;
+          # below that the rule is unknown, which on_unknown decides.
+          min_coverage: 0.5
+          # A request none of whose windows the deployment answers matches
+          # (fail closed, the default); no_match passes it.
           on_unknown: match
         # stage: response asks about the model's output instead of the prompt, so
         # this rule only exists once the model has answered; the selected
@@ -564,6 +601,7 @@ recipes:
             tool_results: true
           deployment: primary
           timeout_ms: 300
+          on_unscanned: match
           on_unknown: match
         # An agent's user turn carries its harness's own instructions, such
         # as a commit trailer with an email address, so this rule reads only
@@ -576,6 +614,7 @@ recipes:
             tool_results: true
             request: false
           deployment: primary
+          min_coverage: 0.5
         # The masking plugin of static_business_route masks what this rule
         # detects in the request as it is sent.
         - name: business_contact_pii
@@ -2089,6 +2128,8 @@ recipes:
         consecutive_failures: 3
         cooldown_period: 30s
         half_open_probes: 1
+      # Replaces global.router.fallback's list for this recipe.
+      forward_request_headers: [x-user-id]
 
   - name: native-handwritten
     description: Complete typed requests use explicit native stages and an algorithm execution budget.
@@ -2150,6 +2191,11 @@ global:
         consecutive_failures: 3
         cooldown_period: 30s
         half_open_probes: 1
+      # Client request headers a fallback attempt the Router sends itself
+      # copies, when the client sent them, over a backend's static header of
+      # the same name. Credential, framing and identity headers and the
+      # Router's own cannot be listed.
+      forward_request_headers: [x-user-id, x-request-id]
     streamed_body:
       enabled: true
       max_bytes: 1048576
@@ -2175,6 +2221,8 @@ global:
     # those backends as user text, for chat templates that accept a system
     # message only first. content.file sends each file in the conversation as
     # a short note to a model whose capabilities leave out file_input.
+    # tools.defer_loading sends tools that a coding agent marks for tool search
+    # in full, for every backend format.
     # reasoning.signature drops the signature an Anthropic backend puts on its
     # thinking, which Chat and Responses clients cannot carry. store sends a
     # request's store: true without it to a backend that keeps no completions,
@@ -2192,6 +2240,17 @@ global:
       strip_blocks:
         - start: '<relevant-memories>'
           end: '</relevant-memories>'
+    # The check of a prompt against the context windows of the models that
+    # can serve it, counted beside the signals. A count with a model's own
+    # tokenizer within margin of a window (3%) is left to the backend; beyond
+    # it the prompt is refused with 400 context_length_exceeded at once.
+    # Models without a loaded tokenizer count with the proxy tokenizer, whose
+    # count can be a quarter off theirs, and refuse only beyond proxy_margin
+    # (30%). These are the defaults.
+    context_window:
+      margin: 0.03
+      proxy_margin: 0.30
+      proxy_tokenizer: o200k_base
     model_selection:
       enabled: true
     learning:
@@ -2319,8 +2378,8 @@ global:
     authz:
       fail_open: false
       identity:
-        user_id_header: x-user-id
-        user_groups_header: x-user-groups
+        user_id_header: x-auth-request-user
+        user_groups_header: x-auth-request-groups
       providers:
         - type: header-injection
           headers:
@@ -2821,7 +2880,10 @@ global:
       # The same API behind a gateway with its own header and path prefix;
       # prefix "" sends the bare key. capabilities declares the question types,
       # presets and input modalities the model answers and reads, used only
-      # when GET <endpoint>/models lists none for it.
+      # when GET <endpoint>/models lists none for it. forward_request_headers
+      # copies the client's x-user-id, which the gateway attributes usage by,
+      # onto each call made for a request; calls the Router makes on its own
+      # behalf carry none, and no answer is kept for another request.
       decision-gateway:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
@@ -2831,6 +2893,7 @@ global:
           header: Ocp-Apim-Subscription-Key
           prefix: ""
           api_key_file: /run/secrets/systemone-gateway-key
+        forward_request_headers: [x-user-id]
         capabilities:
           question_types: [choice, noul, score]
           presets: [pii, halu]
@@ -2853,6 +2916,33 @@ global:
         auth:
           api_key_env: SYSTEMONE_STANDARD_KEY
         timeout_ms: 6000
+        # A routing question (a rule that does not read its whole input)
+        # reads at most max_tokens of a long input: its head (head_share of
+        # it) and its tail around a marker. A guard rule (jailbreak, safety,
+        # pii) reads all of it, in windows of scan_window.tokens that overlap
+        # by scan_window.overlap, each a call of its own, max_parallel (4) at
+        # a time. Both are sized in bytes, four a token, so
+        # dense text such as JSON or base64 holds up to about three times as
+        # many tokens: size them so that a call on it fits timeout_ms. A
+        # systemone deployment defaults to 4096 for both and a model_runtime
+        # one to 8192; neither ever exceeds the model's validated length.
+        # Between its head and its tail, a long input that needs more than
+        # 256 windows, or whose scan falls behind the signals' deadline while
+        # larger windows would be read in time at the deployment's measured
+        # pace, reads larger ones, up to scan_window.max_tokens (by default
+        # the model's validated length). A larger window whose answer leaves a
+        # rule short of its threshold by at most reread_margin in log-odds
+        # (3: from about 0.91 for a rule at 0.995, 0.05 for one at 0.5) is read
+        # again in windows of scan_window.tokens.
+        routing_view:
+          max_tokens: 4096
+          head_share: 0.25
+        scan_window:
+          tokens: 4096
+          overlap: 256
+          max_parallel: 4
+          max_tokens: 8192
+          reread_margin: 3
         capabilities:
           question_types: [choice, noul, score]
           modalities: [text, image]
@@ -2933,6 +3023,22 @@ global:
     # second), or 45 s for a served request. A rule still waiting for its
     # answer is unknown.
     signal_timeout_ms: 0
+    # A request whose signals could not be read because the decision runtime
+    # refused their calls as overloaded (its request queue full). refuse
+    # (default): a rule that fails closed refuses it, as on any failure, and
+    # one that fails open does not match. retry asks every such call again,
+    # whatever its rule's failure policy, for up to wait_ms (at most 60000)
+    # within the signals' deadline. Then a request that only rules it could
+    # not read refuse, or that one of them would refuse, gets an error the
+    # client retries instead: 429 with the code overloaded, or 529
+    # overloaded_error for Anthropic Messages, with Retry-After
+    # (retry_after_seconds, at most 60, else wait_ms rounded up, at least 1)
+    # and x-vsr-warnings: guard_overloaded. wait_ms and retry_after_seconds
+    # apply only to retry.
+    on_signal_overload:
+      action: refuse
+      wait_ms: 0
+      retry_after_seconds: 0
   plugins:
     - type: context
       configuration:

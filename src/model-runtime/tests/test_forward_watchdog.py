@@ -8,9 +8,11 @@ import subprocess
 import sys
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 from starlette.testclient import TestClient
+from vllm_srun import runtime as runtime_module
 from vllm_srun.api import server
 from vllm_srun.api.app import create_app
 from vllm_srun.cli import build_parser, config_from_args
@@ -26,8 +28,8 @@ from .test_server import SOURCE, free_port, request, wait_ready
 REQUEST = {"state": STATE, "questions": QUESTIONS}
 
 
-def hold(served):
-    """Make the model's forwards wait for the returned event before they run."""
+def hold(served, error=None):
+    """Make the model's forwards wait for the returned event before they run, or raise ``error`` then."""
     gate = threading.Event()
     model = served.model
     for name in ("run", "run_shared", "run_approximate"):
@@ -37,6 +39,8 @@ def hold(served):
 
         def held(*args, _run=run, **kwargs):
             gate.wait()
+            if error is not None:
+                raise error
             return _run(*args, **kwargs)
 
         setattr(model, name, held)
@@ -167,6 +171,49 @@ def test_a_forward_timeout_of_zero_turns_the_watchdog_off(qwen3_package):
         assert runtime.stalls() == [] and runtime.health.ready
         gate.set()
         answer.join(timeout=10)
+    finally:
+        gate.set()
+        runtime.stop()
+
+
+@pytest.mark.parametrize("restart", [False, True])
+def test_a_device_fault_from_a_stalled_forward_keeps_the_model_degraded(
+    qwen3_package, monkeypatch, restart
+):
+    # The watchdog thread is off: the test flags the stall and its return itself.
+    runtime = start_runtime(
+        qwen3_package, forward_timeout_seconds=0, exit_on_device_error=restart
+    )
+    served = runtime.served[0]
+    fault = RuntimeError("injected device fault")
+    monkeypatch.setattr(served.scheduler, "device_fault", lambda error: error is fault)
+    restarts = []
+    monkeypatch.setattr(
+        runtime_module.threading,
+        "Timer",
+        lambda seconds, _: SimpleNamespace(start=lambda: restarts.append(seconds)),
+    )
+    gate = hold(served, fault)
+    client = TestClient(create_app(runtime))
+    responses = []
+    answer = threading.Thread(
+        target=lambda: responses.append(client.post("/v1/decisions", json=REQUEST)),
+        daemon=True,
+    )
+    try:
+        answer.start()
+        wait_until(lambda: served.scheduler.forward is not None)
+        served.watch(1, time.monotonic() + 2)
+        assert served.stalled is not None and served.health.state == "degraded"
+        gate.set()
+        answer.join(timeout=10)
+        assert responses[0].status_code == 500
+        served.watch(1, time.monotonic())
+        assert served.stalled is None
+        assert client.get("/health").status_code == 503
+        assert served.health.state == "degraded"
+        assert served.health.reason == "RuntimeError: injected device fault"
+        assert restarts == ([0.5] if restart else [])
     finally:
         gate.set()
         runtime.stop()

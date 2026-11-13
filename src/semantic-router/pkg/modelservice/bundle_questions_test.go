@@ -38,7 +38,12 @@ type asker struct {
 
 // runStage runs the askers as declared participants of one bundle.
 func runStage(window time.Duration, askers ...asker) (*Bundle, []error) {
-	stage, bundle := WithBundle(context.Background(), window)
+	return runStageIn(context.Background(), window, askers...)
+}
+
+// runStageIn is runStage in a stage of ctx, whose deadline its askers keep.
+func runStageIn(ctx context.Context, window time.Duration, askers ...asker) (*Bundle, []error) {
+	stage, bundle := WithBundle(ctx, window)
 	errs := make([]error, len(askers))
 	var wg sync.WaitGroup
 	type joined struct {
@@ -427,5 +432,83 @@ func TestAStateCallIsCachedUnderEveryStateItAsks(t *testing.T) {
 	both("one", "three")
 	if calls := len(runtime.Decisions()); calls != 2 {
 		t.Fatalf("another text is another call: %d calls", calls)
+	}
+}
+
+// A caller that pauses before asking again, as one whose call the runtime
+// refused as overloaded does, holds back none of the stage's other work,
+// and keeps the questions to its deployments for the call it makes next:
+// they travel with it in one call.
+func TestAPausedAskerKeepsItsDeploymentsQuestionsForItsNextCall(t *testing.T) {
+	runtime := runtimetest.New(jointVela2("vela"))
+	encoders := runtimetest.New(classifyHead("domain"))
+	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela"}, encoders: {"domain"}})
+	paused, classified := make(chan struct{}), make(chan struct{})
+	held := false
+	_, errs := runStage(5*time.Second,
+		asker{deployments: []string{"vela"}, ask: func(ctx context.Context) error {
+			resume := Pause(ctx)
+			close(paused)
+			select {
+			case <-classified:
+			case <-time.After(time.Second):
+				held = true
+			}
+			resume()
+			_, err := lease.Decide(ctx, "vela", Request{State: "one", Questions: []Question{choiceQuestion("first")}})
+			return err
+		}},
+		asker{deployments: []string{"vela"}, ask: func(ctx context.Context) error {
+			<-paused
+			_, err := lease.Decide(ctx, "vela", Request{State: "two", Questions: []Question{choiceQuestion("second")}})
+			return err
+		}},
+		asker{ask: func(ctx context.Context) error {
+			<-paused
+			defer close(classified)
+			_, err := lease.Classify(ctx, "domain", classifyText("law"))
+			return err
+		}},
+	)
+	if err := errors.Join(errs...); err != nil || held {
+		t.Fatalf("errors %v, the other work held back by the paused asker: %v", err, held)
+	}
+	if calls, _ := runtime.Bundles(); calls != 1 || len(runtime.Decisions()) != 1 {
+		t.Fatalf("the paused asker's questions and the other asker's went in %d calls", calls)
+	}
+}
+
+// An unbundled call of a paused asker goes out on its own at once, while the
+// bundle keeps the other askers' questions to its deployment for the call
+// the paused asker makes in the bundle next.
+func TestAnUnbundledCallGoesOutOnItsOwn(t *testing.T) {
+	runtime := runtimetest.New(jointVela2("vela"))
+	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela"}})
+	parked := make(chan struct{})
+	alone := -1
+	_, errs := runStage(5*time.Second,
+		asker{deployments: []string{"vela"}, ask: func(ctx context.Context) error {
+			resume := Pause(ctx)
+			<-parked
+			time.Sleep(20 * time.Millisecond)
+			if _, err := lease.Decide(Unbundled(ctx), "vela", Request{State: "probe", Questions: []Question{choiceQuestion("probe")}}); err != nil {
+				return err
+			}
+			alone = len(runtime.Decisions())
+			resume()
+			_, err := lease.Decide(ctx, "vela", Request{State: "one", Questions: []Question{choiceQuestion("first")}})
+			return err
+		}},
+		asker{deployments: []string{"vela"}, ask: func(ctx context.Context) error {
+			close(parked)
+			_, err := lease.Decide(ctx, "vela", Request{State: "two", Questions: []Question{choiceQuestion("second")}})
+			return err
+		}},
+	)
+	if err := errors.Join(errs...); err != nil {
+		t.Fatal(err)
+	}
+	if calls, _ := runtime.Bundles(); alone != 1 || calls != 1 || len(runtime.Decisions()) != 2 {
+		t.Fatalf("the unbundled call went with %d calls sent, then %d bundles and %d calls in all", alone, calls, len(runtime.Decisions()))
 	}
 }
