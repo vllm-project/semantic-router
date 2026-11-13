@@ -49,6 +49,8 @@ const (
 	// (/v1/images/generations), used to sink responses hosted image_generation
 	// requests to diffusion backends.
 	APIFormatImages = string(apiregistry.Images)
+	// APIFormatVideos selects the OpenAI Videos job dialect (/v1/videos).
+	APIFormatVideos = string(apiregistry.Videos)
 	// APIFormatOpenAI and APIFormatAnthropic are aliases of
 	// APIFormatChatCompletions and APIFormatMessages.
 	APIFormatOpenAI    = "openai"

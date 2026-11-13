@@ -39,6 +39,11 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
 		return r.createErrorResponse(502, "The selected model returned an invalid response")
 	}
+	if ctx.SourceFormat == llmprotocol.OpenAIVideosV1 {
+		if stampVideoResponse(ctx, semanticResponse) || ctx.videosCreate {
+			ctx.ResponseBodyNeedsRewrite = true
+		}
+	}
 	decodedDiagnosticsEnd := len(ctx.ProtocolDiagnostics)
 	clientBody := responseBody
 	// Same-format Chat usually forwards upstream bytes. When codec translation

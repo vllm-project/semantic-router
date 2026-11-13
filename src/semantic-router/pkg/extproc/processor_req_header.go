@@ -81,6 +81,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if responseAPIResp, err := r.handleResponseAPIRequestHeaders(method, path, ctx); err != nil || responseAPIResp != nil {
 		return responseAPIResp, err
 	}
+	if videosResp, err := r.handleVideosRequestHeaders(method, path, ctx); err != nil || videosResp != nil {
+		return videosResp, err
+	}
 	validationResp, requiresBody := r.classifyRequestHeaders(method, path)
 	if validationResp != nil {
 		return validationResp, nil
@@ -89,6 +92,11 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if requiresBody && v.RequestHeaders.GetEndOfStream() {
 		return r.rejectBodylessInferenceRequest(ctx), nil
 	}
+	mutation := r.buildRequestHeadersMutation(ctx, path)
+	return newContinueRequestHeadersResponse(mutation), nil
+}
+
+func (r *OpenAIRouter) buildRequestHeadersMutation(ctx *RequestContext, path string) *ext_proc.HeaderMutation {
 	mutation := buildIdentityEncodingRequestMutation(ctx.identity)
 	r.appendDelegatedCredentialRemoval(mutation)
 	mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
@@ -96,7 +104,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		// The Azure client key authenticates to the Router, never to a provider.
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
 	}
-	return newContinueRequestHeadersResponse(mutation), nil
+	return mutation
 }
 
 func startRequestHeaderSpan(

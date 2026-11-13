@@ -29,6 +29,13 @@ func (r *OpenAIRouter) handleRequestBody(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	ctx.ProcessingStartTime = time.Now()
+	// A Videos status, content or delete call carries no body: the header stage
+	// already decoded its route from the id, so there is nothing to decode and
+	// nothing to route.
+	if ctx.videosRoute != "" {
+		ctx.SemanticRequest = &llmprotocol.Request{Generation: 1, Model: ctx.videosRoute}
+		return continueRequestBodyResponse(), nil
+	}
 	requestBody := v.RequestBody.GetBody()
 	if isCountTokensRequest(ctx) {
 		requestBody = withCountTokensOutputLimit(requestBody)
@@ -116,10 +123,25 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 	)
 }
 
+// continueRequestBodyResponse forwards a request body the Router has no reason
+// to change.
+func continueRequestBodyResponse() *ext_proc.ProcessingResponse {
+	return &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{
+				Response: &ext_proc.CommonResponse{Status: ext_proc.CommonResponse_CONTINUE},
+			},
+		},
+	}
+}
+
 // handleModelRouting handles model selection and routing logic
 // decisionName, reasoningDecision, and selectedModel are pre-computed from ProcessRequest
 func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, originalModel string, decisionName string, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	if rejected := r.imagesEntryRejection(ctx); rejected != nil {
+		return rejected, nil
+	}
+	if rejected := r.videosEntryRejection(ctx); rejected != nil {
 		return rejected, nil
 	}
 	if changed, err := r.applyPreDispatchToolsPolicy(ctx); err != nil {
@@ -138,16 +160,6 @@ func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, original
 			return unavailable, nil
 		}
 	}
-	response := &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_RequestBody{
-			RequestBody: &ext_proc.BodyResponse{
-				Response: &ext_proc.CommonResponse{
-					Status: ext_proc.CommonResponse_CONTINUE,
-				},
-			},
-		},
-	}
-
 	if !isEntrypoint {
 		return r.handleSpecifiedModelRouting(request, originalModel, decisionName, ctx)
 	}
@@ -158,7 +170,7 @@ func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, original
 		reasoningDecision,
 		selectedModel,
 		ctx,
-		response,
+		continueRequestBodyResponse(),
 	)
 }
 

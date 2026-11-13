@@ -72,7 +72,7 @@ func TestAnAPINamedTwiceIsRefused(t *testing.T) {
 
 func TestListenerAPIEntriesAreCheckedByTheRegistry(t *testing.T) {
 	for apis, want := range map[string]string{
-		"      realtime: {}":                                `api "realtime" is not supported; the apis are chat_completions, responses, messages, images, systemone`,
+		"      realtime: {}":                                `api "realtime" is not supported; the apis are chat_completions, responses, messages, images, videos, systemone`,
 		"      chat_completions: {schema: openai/v1}":       "apis.chat_completions.schema: invalid_value: api chat_completions has one schema, openai/v1, so a listener names none",
 		"      chat_completions: {max_deadline_ms: 5}":      "apis.chat_completions.max_deadline_ms: invalid_value: the chat_completions API takes no max_deadline_ms setting",
 		"      systemone: {schema: systemone/0.2}":          "a listener serves api systemone in vllm-sr/5.0 or vllm-sr/4.0",
@@ -94,7 +94,7 @@ func TestListenerAPIEntriesAreCheckedByTheRegistry(t *testing.T) {
 
 func TestAListenerWithoutAPIsServesTheLLMAPIs(t *testing.T) {
 	listener := Listener{Name: "plain"}
-	if got := strings.Join(listener.ServedAPIs(), ","); got != "chat_completions,responses,messages,images" {
+	if got := strings.Join(listener.ServedAPIs(), ","); got != "chat_completions,responses,messages,images,videos" {
 		t.Fatalf("served %s", got)
 	}
 	if models, restricted := listener.LLMModels(); models != nil || restricted {
@@ -157,10 +157,10 @@ recipes:
 		t.Fatalf("%v\n%s", err, migrated)
 	}
 	public := cfg.Listeners[0]
-	if got := strings.Join(public.ServedAPIs(), ","); got != "chat_completions,responses,messages,images,systemone" {
+	if got := strings.Join(public.ServedAPIs(), ","); got != "chat_completions,responses,messages,images,videos,systemone" {
 		t.Fatalf("public serves %s\n%s", got, migrated)
 	}
-	for _, name := range []string{"chat_completions", "responses", "messages", "images"} {
+	for _, name := range []string{"chat_completions", "responses", "messages", "images", "videos"} {
 		if api := public.APIs[name]; strings.Join(api.Models, ",") != "m" {
 			t.Fatalf("%s models %v", name, api.Models)
 		}

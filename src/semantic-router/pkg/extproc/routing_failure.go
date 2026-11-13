@@ -57,6 +57,10 @@ var (
 		status: http.StatusBadRequest, category: llmprotocol.ErrorInvalidRequest,
 		code: "image_route_required", message: "the Images API needs a route that answers with a generated image",
 	}
+	routingFailureVideoRouteRequired = routingFailure{
+		status: http.StatusBadRequest, category: llmprotocol.ErrorUnsupportedFeature,
+		code: "unsupported_capability", message: "the Videos API needs a decision that answers with a generated video",
+	}
 )
 
 // routingFailureResponse answers a request with failure. The client's error

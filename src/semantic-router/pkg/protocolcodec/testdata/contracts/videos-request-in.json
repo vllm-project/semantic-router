@@ -1,0 +1,11 @@
+{
+  "model": "vllm-sr/video",
+  "prompt": "A lighthouse at dusk",
+  "seconds": "8",
+  "size": "1280x720",
+  "width": 1280,
+  "height": 720,
+  "fps": 24,
+  "num_frames": 192,
+  "quality": "high"
+}

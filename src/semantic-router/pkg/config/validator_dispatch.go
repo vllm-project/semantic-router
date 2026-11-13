@@ -31,6 +31,7 @@ var (
 		validateFlowContracts,
 		validateModelAdmissionContracts,
 		validateModelSignalTimeoutContracts,
+		validateVideoEntryContracts,
 		validateBackendTLSFiles,
 		validateModelDeploymentContracts,
 		validateFallbackForwardRequestHeaders,
