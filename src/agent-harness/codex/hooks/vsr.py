@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -127,29 +128,73 @@ def guard(event: dict, opts: dict) -> dict:
     }
 
 
+WORD = re.compile(r"[A-Za-z0-9]")
+OCTET = r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+IPV4 = re.compile(rf"{OCTET}(?:\.{OCTET}){{3}}(?:/\d{{1,2}})?(?::\d{{1,5}})?", re.A)
+IPV6 = re.compile(
+    r"\[?[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:%\w+)?\]?(?::\d{1,5})?", re.A
+)
+
+
+def placed(text: str, span: dict) -> tuple[int, int] | None:
+    """Where a span stands in `text`, read as the Claude Code plugin's `piiIn` reads it.
+
+    By its offsets when they hold its text, else where its text first is. A span that stops
+    inside a word runs to the word's end. The model tags version numbers such as the 2.32 of
+    2.32.3 as IP_ADDRESS, so an IP span is kept only as a whole IPv4 or IPv6 address.
+    """
+    start, end, said = span.get("start"), span.get("end"), span["text"]
+    if not (isinstance(start, int) and isinstance(end, int) and start >= 0) or (
+        text[start:end] != said
+    ):
+        start = text.find(said)
+        end = start + len(said)
+    if start < 0:
+        return None
+    while start > 0 and WORD.match(text[start - 1]) and WORD.match(text[start]):
+        start -= 1
+    while end < len(text) and WORD.match(text[end]) and WORD.match(text[end - 1]):
+        end += 1
+    value = text[start:end]
+    if PII_TAGS[span["label"]] != "ip" or IPV4.fullmatch(value):
+        return start, end
+    if ":" in value and IPV6.fullmatch(value):
+        return start, end
+    left, right = start, end
+    while left > 0 and text[left - 1] in "0123456789.":
+        left -= 1
+    while right < len(text) and text[right] in "0123456789.":
+        right += 1
+    left += len(text[left:right]) - len(text[left:right].lstrip("."))
+    right -= len(text[left:right]) - len(text[left:right].rstrip("."))
+    if not IPV4.fullmatch(text[left:right]):
+        return None
+    return min(start, left), max(end, right)
+
+
 def hide(text: str, spans: list, least: float) -> tuple[str, dict]:
-    """The text with each personal-data span at or over `least` replaced by its tag."""
-    kept = sorted(
-        (
-            s
-            for s in spans
-            if isinstance(s, dict)
-            and s.get("label") in PII_TAGS
-            and (s.get("probability") or 0) >= least
-            and isinstance(s.get("start"), int)
-            and isinstance(s.get("end"), int)
-            and 0 <= s["start"] < s["end"] <= len(text)
-        ),
-        key=lambda s: s["start"],
-    )
-    out, at, counts = [], 0, {}
-    for span in kept:
-        if span["start"] < at:
+    """The text with each personal-data span at or over `least` replaced by its tag; of two
+    that overlap, the one that starts first stays."""
+    kept = []
+    for span in spans:
+        if not (
+            isinstance(span, dict)
+            and span.get("label") in PII_TAGS
+            and isinstance(span.get("text"), str)
+            and span["text"]
+            and (span.get("probability") or 0) >= least
+        ):
             continue
-        tag = PII_TAGS[span["label"]]
-        out.append(text[at : span["start"]] + f"[vsr:{tag}]")
+        at = placed(text, span)
+        if at:
+            kept.append((*at, PII_TAGS[span["label"]]))
+    out, at, counts = [], 0, {}
+    for start, end, tag in sorted(kept, key=lambda k: (k[0], -k[1])):
+        if start < at:
+            continue
+        out.append(text[at:start] + f"[vsr:{tag}]")
         counts[tag] = counts.get(tag, 0) + 1
-        at = span["end"]
+        at = end
     out.append(text[at:])
     return "".join(out), counts
 

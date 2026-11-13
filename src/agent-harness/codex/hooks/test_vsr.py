@@ -62,6 +62,17 @@ class Runtime:
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}/v1/decisions"
 
 
+def span(label: str, text: str, value: str, probability: float = 0.9) -> dict:
+    start = text.index(value)
+    return {
+        "label": label,
+        "start": start,
+        "end": start + len(value),
+        "text": value,
+        "probability": probability,
+    }
+
+
 def run(mode: str, event: dict, env: dict) -> dict:
     out = io.StringIO()
     with mock.patch.dict(os.environ, env, clear=False), mock.patch(
@@ -118,17 +129,10 @@ class HooksTest(unittest.TestCase):
     def test_redact_puts_tags_where_the_output_had_personal_data_and_tells_codex_whose_they_are(
         self,
     ):
-        start = CSV.index("Mina Park")
-        email = CSV.index("mina.park@example.com")
         self.runtime.spans = [
-            {"label": "PERSON", "start": start, "end": start + 9, "probability": 0.99},
-            {
-                "label": "EMAIL_ADDRESS",
-                "start": email,
-                "end": email + 21,
-                "probability": 0.98,
-            },
-            {"label": "PERSON", "start": 0, "end": 4, "probability": 0.3},
+            span("PERSON", CSV, "Mina Park", 0.99),
+            span("EMAIL_ADDRESS", CSV, "mina.park@example.com", 0.98),
+            span("PERSON", CSV, "name", 0.3),
         ]
         reply = run("post", bash("head -2 customers.csv", CSV), self.env)
         self.assertEqual(reply["decision"], "block")
@@ -141,6 +145,47 @@ class HooksTest(unittest.TestCase):
             reply["systemMessage"],
             "▚▞ vSR redacted · 2 items hidden: email, name · the output of head -2 customers.csv",
         )
+
+    def test_spans_are_placed_as_the_claude_code_plugin_places_them(self):
+        wrong = {**span("PERSON", "x Mina Park", "Mina Park"), "start": 0, "end": 9}
+        for text, found, hidden in [
+            # a span that stops inside a word runs to the word's end
+            (
+                "ask Minako now",
+                span("PERSON", "ask Minako now", "Mina"),
+                "ask [vsr:name] now",
+            ),
+            # offsets that miss the span's text give way to where the text is
+            ("x Mina Park", wrong, "x [vsr:name]"),
+            # a version number tagged as an address stays
+            (
+                "requests==2.32.3",
+                span("IP_ADDRESS", "requests==2.32.3", "2.32"),
+                "requests==2.32.3",
+            ),
+            # an address the model cut short is hidden whole
+            (
+                "connect to 192.168.1.20 now",
+                span("IP_ADDRESS", "connect to 192.168.1.20 now", "192.168.1"),
+                "connect to [vsr:ip] now",
+            ),
+            (
+                "the host is 10.0.0.12.",
+                span("IP_ADDRESS", "the host is 10.0.0.12.", "10.0.0"),
+                "the host is [vsr:ip].",
+            ),
+            (
+                "listen on 192.168.1.20:8080",
+                span("IP_ADDRESS", "listen on 192.168.1.20:8080", "168.1.20"),
+                "listen on [vsr:ip]:8080",
+            ),
+            (
+                "the host fe80::1 answered",
+                span("IP_ADDRESS", "the host fe80::1 answered", "fe80::1"),
+                "the host [vsr:ip] answered",
+            ),
+        ]:
+            self.assertEqual(vsr.hide(text, [found], 0.5)[0], hidden)
 
     def test_shield_adds_a_note_for_an_output_that_gives_orders(self):
         self.runtime.jailbreak = 0.95
@@ -158,9 +203,7 @@ class HooksTest(unittest.TestCase):
         self,
     ):
         self.runtime.jailbreak = 0.95
-        self.runtime.spans = [
-            {"label": "PERSON", "start": 11, "end": 20, "probability": 0.99}
-        ]
+        self.runtime.spans = [span("PERSON", CSV, "Mina Park", 0.99)]
         reply = run("post", bash("cat x", CSV), self.env)
         self.assertEqual(reply["decision"], "block")
         self.assertIn("vSR shield:", reply["reason"])
