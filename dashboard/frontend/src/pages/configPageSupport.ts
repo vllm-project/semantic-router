@@ -911,6 +911,8 @@ export interface KeywordSignal {
   ngram_threshold?: number
   ngram_arity?: number
   include_history?: boolean
+  input?: { tool_results?: boolean; request?: boolean }
+  on_unscanned?: 'best_effort' | 'match' | 'no_match'
   count?: NumericPredicate
   density?: NumericPredicate
 }

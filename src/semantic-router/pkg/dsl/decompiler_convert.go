@@ -42,6 +42,12 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	if kw.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
 	}
+	if input := keywordInputValue(kw.Input); len(input) > 0 {
+		fields["input"] = ObjectValue{Fields: input}
+	}
+	if kw.OnUnscanned != "" {
+		fields["on_unscanned"] = StringValue{V: kw.OnUnscanned}
+	}
 	if kw.Count != nil {
 		fields["count"] = numericPredicateObject(kw.Count)
 	}
@@ -312,4 +318,18 @@ func routeParamSize(modelConfig map[string]config.ModelParams, model string) str
 		return ""
 	}
 	return mc.ParamSize
+}
+
+// keywordInputValue is a keyword rule's input as DSL fields: the parts it
+// reads besides the current user turn, and request false when it leaves the
+// turn out. An input that reads only the turn has no fields.
+func keywordInputValue(input config.KeywordRuleInput) map[string]Value {
+	fields := map[string]Value{}
+	if input.ToolResults {
+		fields["tool_results"] = BoolValue{V: true}
+	}
+	if !input.ReadsRequest() {
+		fields["request"] = BoolValue{V: false}
+	}
+	return fields
 }

@@ -254,6 +254,17 @@ class Listener(BaseModel):
         return None if entry is None else entry.models
 
 
+class KeywordInput(BaseModel):
+    """What a keyword rule reads besides the current user turn."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Also match each textual tool result in the request on its own.
+    tool_results: bool = False
+    # False leaves the current user turn out, as a pii rule's input does.
+    request: bool | None = None
+
+
 class KeywordSignal(BaseModel):
     """Keyword-based signal configuration."""
 
@@ -264,6 +275,10 @@ class KeywordSignal(BaseModel):
     case_sensitive: bool = False
     # Also match prior user messages; False keeps current-turn-only matching.
     include_history: bool = False
+    input: Optional[KeywordInput] = None
+    # What a rule that reads the tool results reports when one of them is
+    # not text: best_effort (the default) decides on the text read.
+    on_unscanned: Optional[Literal["best_effort", "match", "no_match"]] = None
     # At most one: an OR rule matches on how often its keywords occur, as a
     # count or as occurrences per 1,000 characters.
     count: Optional[NumericPredicate] = None
@@ -278,6 +293,27 @@ class KeywordSignal(BaseModel):
             raise ValueError(
                 f"{measure} counts the keywords an OR rule finds; "
                 f"operator {self.operator!r} matches on which keywords occur"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_input(self):
+        reads_request = self.input is None or self.input.request is not False
+        tool_results = self.input is not None and self.input.tool_results
+        if not reads_request and not tool_results and not self.include_history:
+            raise ValueError(
+                "input.request: false leaves the current user turn out, so the "
+                "rule reads input.tool_results or include_history"
+            )
+        if self.on_unscanned is not None and not tool_results:
+            raise ValueError(
+                "on_unscanned decides a tool result the Router cannot read as "
+                "text, so the rule reads input.tool_results"
+            )
+        if tool_results and (self.count is not None or self.density is not None):
+            raise ValueError(
+                "input.tool_results matches on which keywords occur in a tool "
+                "result; count and density count one text"
             )
         return self
 

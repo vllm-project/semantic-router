@@ -12,8 +12,9 @@ import (
 // evaluation. Keeping optional values named avoids positional interface{}
 // arguments and makes new signal context additive without changing call order.
 type SignalEvaluationInput struct {
-	// ToolResultTexts contains request-scoped textual tool results for PII
-	// source selection, separate from content-free RequestFacts.
+	// ToolResultTexts contains request-scoped textual tool results for the
+	// pii, systemone and keyword rules that read input.tool_results, separate
+	// from content-free RequestFacts.
 	ToolResultTexts          []string
 	ToolResultScanIncomplete bool
 	Text                     string

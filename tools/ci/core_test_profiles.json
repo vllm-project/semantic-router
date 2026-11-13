@@ -37,6 +37,13 @@
       "reason": "Compares the Router's set, span, PII and hallucination answers with POST /v1/systemone on the pinned Vela 2.0 0.3B the published-model runner serves on CPU (VLLM_SRUN_VELA2_ENDPOINT); each published-model test must pass without skipping."
     },
     {
+      "package": "./pkg/classification",
+      "test": "TestCredentialKeywordRulesAccuracy",
+      "source": "src/semantic-router/pkg/classification/keyword_credentials_eval_test.go",
+      "profile": "external-creddata",
+      "reason": "Scores the credential keyword rules on a separately downloaded Samsung CredData checkout (SR_CREDDATA_DIR); TestCredentialFragmentRulesCompileAndReadToolResults covers the rule set in core."
+    },
+    {
       "package": "./pkg/extproc",
       "test": "TestMemoryEmbeddingIdentityPersistent",
       "source": "src/semantic-router/pkg/extproc/router_memory_identity_integration_test.go",

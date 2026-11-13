@@ -3266,11 +3266,34 @@
         "include_history": {
           "type": "boolean"
         },
+        "input": {
+          "$ref": "#/$defs/KeywordRuleInput"
+        },
+        "on_unscanned": {
+          "type": "string",
+          "enum": [
+            "best_effort",
+            "match",
+            "no_match"
+          ]
+        },
         "count": {
           "$ref": "#/$defs/NumericPredicate"
         },
         "density": {
           "$ref": "#/$defs/NumericPredicate"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "KeywordRuleInput": {
+      "properties": {
+        "tool_results": {
+          "type": "boolean"
+        },
+        "request": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,

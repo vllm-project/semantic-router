@@ -58,6 +58,17 @@ func (c *Compiler) compileKeywordSignal(s *SignalDecl) {
 	if v, ok := getBoolField(s.Fields, "include_history"); ok {
 		rule.IncludeHistory = v
 	}
+	if input, ok := s.Fields["input"].(ObjectValue); ok {
+		if v, ok := getBoolField(input.Fields, "tool_results"); ok {
+			rule.Input.ToolResults = v
+		}
+		if v, ok := getBoolField(input.Fields, "request"); ok {
+			rule.Input.Request = &v
+		}
+	}
+	if v, ok := getStringField(s.Fields, "on_unscanned"); ok {
+		rule.OnUnscanned = v
+	}
 	var err error
 	if rule.Count, err = numericPredicateField(s.Fields, "count"); err != nil {
 		c.addError(s.Pos, "keyword signal %q: %v", s.Name, err)

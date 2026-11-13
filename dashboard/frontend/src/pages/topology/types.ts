@@ -34,6 +34,8 @@ export interface KeywordSignalConfig {
   operator: 'AND' | 'OR'
   keywords: string[]
   case_sensitive: boolean
+  input?: { tool_results?: boolean; request?: boolean }
+  on_unscanned?: 'best_effort' | 'match' | 'no_match'
   count?: NumericPredicateConfig
   density?: NumericPredicateConfig
 }
