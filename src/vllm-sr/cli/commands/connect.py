@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import textwrap
 from pathlib import Path
 
 import click
@@ -15,7 +16,7 @@ import yaml
 from cli import harness_connect as hc
 from cli import harness_router_check as rc
 from cli.chat_client import resolve_chat_base_url
-from cli.terminal import echo, heading, success, warning
+from cli.terminal import echo, heading, output_width, success, warning
 
 
 def _options(command):
@@ -323,8 +324,15 @@ def _probe(gateway: str, harness: str, model: str, token: str) -> None:
         success(
             f"{result.name}: ok (model {result.model or 'not reported'}; {result.detail})"
         )
-        for item in result.warnings:
-            echo(f"  x-vsr-warnings: {item}")
+        for note in result.warnings:
+            echo(
+                textwrap.fill(
+                    f"note: {note}",
+                    output_width(),
+                    initial_indent="  ",
+                    subsequent_indent="    ",
+                )
+            )
 
 
 def _undo(manifest_dir: Path) -> None:

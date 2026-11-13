@@ -7,6 +7,7 @@ gateway can serve other clients too.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -412,10 +413,40 @@ def _result(name: str, url: str, response, problem: str, detail: str) -> ProbeRe
         name=name,
         model=headers.get("x-vsr-selected-model", ""),
         detail=f"{url}: {problem}" if problem else detail,
-        warnings=[
-            w.strip() for w in headers.get("x-vsr-warnings", "").split(",") if w.strip()
-        ],
+        warnings=warning_notes(headers.get("x-vsr-warnings", "")),
     )
+
+
+# A member of an RFC 8941 list or parameter list: anything up to the separator,
+# with quoted strings, which may hold the separator, kept whole.
+_LIST_MEMBER = re.compile(r'(?:[^,"]|"(?:[^"\\]|\\.)*")+')
+_PARAM = re.compile(r'(?:[^;"]|"(?:[^"\\]|\\.)*")+')
+
+
+def warning_notes(value: str) -> list[str]:
+    """x-vsr-warnings in words: a protocol loss as its field, action and reason, a
+    truncated list as how many were left out, and any other code as it is."""
+    notes = []
+    for member in _LIST_MEMBER.findall(value):
+        code, *params = [part.strip() for part in _PARAM.findall(member)]
+        if not code:
+            continue
+        values = {}
+        for param in params:
+            key, _, raw = param.partition("=")
+            if raw.startswith('"'):
+                raw = re.sub(r"\\(.)", r"\1", raw[1:-1])
+            values[key] = raw
+        if code == "protocol":
+            notes.append(
+                f"{values.get('field') or 'the request'} {values.get('action', 'changed')}:"
+                f" {values.get('reason', 'no reason given')}"
+            )
+        elif code == "truncated":
+            notes.append(f"{values.get('count', 'more')} more left out of the header")
+        else:
+            notes.append(code)
+    return notes
 
 
 def probe_gateway(

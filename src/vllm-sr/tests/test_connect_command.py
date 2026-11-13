@@ -105,6 +105,13 @@ def _stage(body: dict) -> str:
     )
 
 
+# A translation loss whose reason holds a comma, as the Router writes it: an RFC 8941 list.
+PLAIN_WARNINGS = (
+    'protocol;action=approximated;reason="stop_sequence, absent, read as null";'
+    'field="stop_sequence", truncated;count=2'
+)
+
+
 @pytest.fixture
 def gateway():
     """A stub gateway that records each request and answers like the Router: JSON
@@ -125,6 +132,8 @@ def gateway():
             kind = "application/json" if stage == "plain" else "text/event-stream"
             self.send_header("content-type", kind)
             self.send_header("x-vsr-selected-model", "agent-model")
+            if stage == "plain":
+                self.send_header("x-vsr-warnings", PLAIN_WARNINGS)
             self.end_headers()
             if stage == "plain":
                 self.wfile.write(json.dumps(reply or {"error": "not_found"}).encode())
@@ -394,6 +403,10 @@ def test_probe_checks_a_plain_reply_then_a_streamed_tool_loop(gateway):
     url, seen, _ = gateway
     plain, loop = rc.probe_gateway(url, "claude-code", "vllm-sr/auto", "tok")
     assert (plain.name, plain.ok, plain.model) == ("Basic reply", True, "agent-model")
+    assert plain.warnings == [
+        "stop_sequence approximated: stop_sequence, absent, read as null",
+        "2 more left out of the header",
+    ]
     assert (loop.name, loop.ok) == ("Streamed tool loop", True)
     assert loop.detail == "called the tool and answered its result"
     (_, first, auth), (_, call, _), (path, answer, _) = seen
@@ -530,6 +543,10 @@ def test_cli_writes_probes_and_undoes(tmp_path, gateway, monkeypatch):
     result = CliRunner().invoke(main, ["connect", "codex", "--base-url", url, "--yes"])
     assert result.exit_code == 0, result.output
     assert "Basic reply: ok" in result.output
+    assert (
+        "  note: stop_sequence approximated: stop_sequence, absent, read as null\n"
+        in result.output
+    )
     assert "Streamed tool loop: ok" in result.output
     assert seen[-1][0] == "/v1/responses"
     # Codex refuses to start while a provider's env_key names an unset variable,
