@@ -106,8 +106,10 @@ test('a short reply keeps the model the turn before it ran on, and is read with 
   expect(texts).toContain('≈  KEPT  your turn stays on Opus')
   // No threshold decided it, so calibration does not learn from it.
   expect(logLines(reply).at(-1)?.learnable).toBe(false)
+  // a second short reply still reads the task, not the reply before it
+  await turn($, 't3', 'continue', 1)
   const asked = reply.bodies?.filter(body => 'complexity' in body.questions).map(body => body.state)
-  expect(asked).toEqual([HARD, `${HARD}\n\n${YES}`])
+  expect(asked).toEqual([HARD, `${HARD}\n\n${YES}`, `${HARD}\n\ncontinue`])
   expect(texts).toContain("short reply: keeps the last turn's model, not Sonnet")
 })
 
@@ -276,6 +278,23 @@ test('after /clear a move re-reads nothing, so the cache does not hold it', TURN
   await turn($, 't2', EASY, 1)
 
   expect(made.at(-1)?.model).toBe('sonnet')
+})
+
+test('two prompts queued behind a running turn, the same text twice, each run on their own answer', TURNS, async ($, on) => {
+  const reply: Reply = { complexity: { score: 1.8, confidence: 0.9 } }
+  engine(on, reply)
+  session(on, { now: 'claude-sonnet-5-5' })
+  const made = steps(on)
+
+  await submit($, HARD)
+  await submit($, HARD)
+  for (const turnId of ['t1', 't2']) {
+    await $.turn.start({ turnId, text: HARD })
+    for await (const _ of $.turn.step({ turnId, index: 0, model: 'claude-sonnet-5-5', effort: 'medium', messageCount: 1 })) void _
+    await $.turn.complete({ turnId, answer: 'done' } as never)
+  }
+
+  expect(made.map(one => one.model)).toEqual(['opus', 'opus'])
 })
 
 test('a turn you did not type runs where the last one did', TURNS, async ($, on) => {

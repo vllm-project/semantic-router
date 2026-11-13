@@ -41,10 +41,10 @@ const turnPrompt = atom({ plugin: 'vsr', key: 'turnPrompt' } as const, '')
 
 type Asked = Classified<{ complexity: Steps; steps: Steps | null }>
 
-// Your prompts and the router's question on each, asked as each is submitted so its turn waits for it once, by text: a
-// prompt queued behind a running turn keeps its own answer. A turn that starts on another text (a continuation, a
-// notification) is not a prompt to route.
-const asked = new Map<string, Promise<Asked>>()
+// Your prompts and the router's question on each, asked as each is submitted so its turn waits for it once, by text and
+// in order: a prompt queued behind a running turn, the same text sent twice included, keeps its own answer. A turn that
+// starts on another text (a continuation, a notification) is not a prompt to route.
+const asked = new Map<string, Promise<Asked>[]>()
 
 const isRouting = (settings: Settings) => settings.apps.router && settings.routerTurns
 const wordsIn = (text: string) => text.trim().split(/\s+/).length
@@ -88,15 +88,17 @@ export async function modelPicked($: EngineInterface, e: ClassicEventOf['classic
 export function askTurn($: EngineInterface, e: PromptSubmitInput, settings: Settings) {
   if (!isRouting(settings) || e.isMeta || e.command || e.text.trim() === '' || !PERSON_ORIGINS.has(e.origin.kind)) return
   const answer = (async (): Promise<Asked> => {
-    const prior = await read($, turnPrompt)
-    await update($, turnPrompt, () => e.text)
+    // "yes, do it" is as hard as the task it agrees to: the last prompt that was not a short reply, so "continue" after
+    // it still reads the task.
+    const isShort = wordsIn(e.text) <= SHORT_REPLY_WORDS
+    const task = await read($, turnPrompt)
+    if (!isShort) await update($, turnPrompt, () => e.text)
     const without = await readNoScore($)
     if (without !== '') return { ok: false, why: `${without} answers no score questions`, latencyMs: 0 }
-    // "yes, do it" is as hard as what it agrees to.
-    const state = wordsIn(e.text) <= SHORT_REPLY_WORDS && prior !== '' ? `${prior}\n\n${e.text}` : e.text
+    const state = isShort && task !== '' ? `${task}\n\n${e.text}` : e.text
     return classify($, settings.runtime, state, { complexity: COMPLEXITY, steps: STEPS }, QUICK_ANSWER_MS, parseAnswers)
   })()
-  asked.set(e.text, answer)
+  asked.set(e.text, [...(asked.get(e.text) ?? []), answer])
 }
 
 // The effort a turn starts at when it keeps its tier: none when the steps answer is unsure, so it keeps the last one.
@@ -202,8 +204,9 @@ async function bind($: EngineInterface, turnId: string, route: TurnRoute | null,
 
 export async function startTurn($: EngineInterface, e: TurnStartInput, settings: Settings) {
   if (e.agentId !== undefined) return
-  const mine = asked.get(e.text)
-  asked.delete(e.text)
+  const [mine, ...later] = asked.get(e.text) ?? []
+  if (later.length > 0) asked.set(e.text, later)
+  else asked.delete(e.text)
   await update($, turnBound, () => null)
   if (!isRouting(settings) || (await read($, turnPaused)) !== '') return
   const session = await $.session.model()
@@ -211,6 +214,8 @@ export async function startTurn($: EngineInterface, e: TurnStartInput, settings:
   // A turn you did not type runs where the last one did.
   if (mine === undefined) return bind($, e.turnId, current, session)
   const answer = await mine
+  // A model you picked while the router was asking stands.
+  if ((await read($, turnPaused)) !== '') return
   const at = await stamp($)
   const anchor = { id: at, at, scope: 'turn' as const, prompt: e.text, task: e.text }
   if (!answer.ok) {
