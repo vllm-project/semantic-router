@@ -23,7 +23,7 @@ type InMemoryStore struct {
 
 // NewInMemoryStore creates a new in-memory memory store with default embedding config.
 func NewInMemoryStore() *InMemoryStore {
-	return NewInMemoryStoreWithConfig(EmbeddingConfig{Model: EmbeddingModelMMBERT})
+	return NewInMemoryStoreWithConfig(defaultEmbeddingConfig())
 }
 
 // NewInMemoryStoreWithConfig creates a new in-memory memory store with custom embedding config.
@@ -198,7 +198,7 @@ func (s *InMemoryStore) List(ctx context.Context, opts ListOptions) (*ListResult
 	}, nil
 }
 
-// Get retrieves a memory by ID.
+// Get retrieves an independent copy of a memory by ID.
 func (s *InMemoryStore) Get(ctx context.Context, id string) (*Memory, error) {
 	if !s.enabled {
 		return nil, fmt.Errorf("store not enabled")
@@ -212,7 +212,13 @@ func (s *InMemoryStore) Get(ctx context.Context, id string) (*Memory, error) {
 		return nil, fmt.Errorf("memory not found: %s", id)
 	}
 
-	return mem, nil
+	return cloneMemory(mem), nil
+}
+
+func cloneMemory(mem *Memory) *Memory {
+	cloned := *mem
+	cloned.Embedding = append([]float32(nil), mem.Embedding...)
+	return &cloned
 }
 
 // Update modifies an existing memory.
@@ -248,6 +254,16 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 	}
 	if memory.Source != "" {
 		existing.Source = memory.Source
+	}
+
+	if memory.CreatedByUserID != "" {
+		existing.CreatedByUserID = memory.CreatedByUserID
+	}
+	if memory.ConversationID != "" {
+		existing.ConversationID = memory.ConversationID
+	}
+	if memory.CreatedVia != "" {
+		existing.CreatedVia = memory.CreatedVia
 	}
 
 	logging.Debugf("InMemoryStore: updated memory id=%s", id)

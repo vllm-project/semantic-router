@@ -1,0 +1,38 @@
+/* Cormorant Garamond (SIL OFL, OFL-Cormorant.txt) for the homepage's display type. */
+@font-face {
+  font-family: 'Cormorant Garamond';
+  src: url('CormorantGaramond.woff2') format('woff2');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Cormorant Garamond';
+  src: url('CormorantGaramond-Italic.woff2') format('woff2');
+  font-weight: 300 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Until Cormorant arrives: Times-metric faces scaled to its widths at weight 500, so the swap moves nothing. Each
+ * override is divided by its face's size-adjust, which keeps Cormorant's line box (ascent 91.9 %, descent 29 %). */
+@font-face {
+  font-family: 'Cormorant Fallback';
+  src: local('Times New Roman'), local('Times'), local('Liberation Serif'), local('Tinos');
+  size-adjust: 97.4%;
+  ascent-override: 94.4%;
+  descent-override: 29.8%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Cormorant Fallback';
+  font-style: italic;
+  src: local('Times New Roman Italic'), local('TimesNewRomanPS-ItalicMT'), local('Times Italic'),
+    local('Liberation Serif Italic'), local('Tinos Italic');
+  size-adjust: 88.6%;
+  ascent-override: 103.8%;
+  descent-override: 32.7%;
+  line-gap-override: 0%;
+}

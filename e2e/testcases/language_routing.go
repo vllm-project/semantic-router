@@ -23,7 +23,7 @@ func init() {
 func testLanguageRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	return runSignalRoutingTest(ctx, client, opts, signalRoutingConfig{
 		TestDataPath:   "e2e/testcases/testdata/language_routing_cases.json",
-		MatchedHeader:  "x-vsr-matched-language",
+		SignalType:     "language",
 		TargetDecision: targetLanguageDecision,
 		ResultsTitle:   "LANGUAGE ROUTING TEST RESULTS",
 		LogLabel:       "Language",

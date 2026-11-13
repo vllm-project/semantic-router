@@ -6,11 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
@@ -48,7 +53,7 @@ func TestAnthropicAdaptiveRequestDispatchesToChatAndResponses(t *testing.T) {
 			if dispatch.targetFormat != target {
 				t.Fatalf("target = %q, want %q", dispatch.targetFormat, target)
 			}
-			if err = router.candidateCapabilityMismatch(config.ModelRef{Model: "chat"}, &request, nil, nil, nil); err != nil {
+			if err = router.candidateCapabilityMismatch(config.ModelRef{Model: "chat"}, &request, nil, nil, nil, true); err != nil {
 				t.Fatalf("selection disagrees with dispatch: %v", err)
 			}
 			body, err := router.encodeDispatchRequest(ctx)
@@ -464,5 +469,59 @@ func TestAnthropicOmittedDisplayFiltersStreamingChatReasoning(t *testing.T) {
 	}
 	if bytes.Contains(public, []byte("private thinking")) || bytes.Contains(public, []byte("thinking_delta")) || !bytes.Contains(public, []byte("public answer")) {
 		t.Fatalf("stream leaked reasoning or lost answer: %s", public)
+	}
+}
+
+// TestSystemMessageProjectionKeepsTheCountOutOfTheMetricLabel sends requests
+// with one, two and three mid-conversation system messages. x-vsr-warnings
+// names each request's count, while llm_translation_lossy_total keeps one
+// series for the projection, so a conversation's length never adds a series.
+func TestSystemMessageProjectionKeepsTheCountOutOfTheMetricLabel(t *testing.T) {
+	router := routingTestRouter("chat")
+	router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldSystemMessageRole}
+	const label = "N system messages sent as user text in place"
+	counter := metrics.TranslationLossyTotal.WithLabelValues("anthropic", "openai", "approximated", label)
+	before := testutil.ToFloat64(counter)
+	for count := 1; count <= 3; count++ {
+		messages := []string{`{"role":"user","content":"Fix the build"}`}
+		for range count {
+			messages = append(messages, `{"role":"system","content":"Note: a file changed on disk."}`, `{"role":"user","content":"go on"}`)
+		}
+		request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1,
+			[]byte(`{"model":"chat","max_tokens":64,"messages":[`+strings.Join(messages, ",")+`]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
+		ctx.ProtocolEnvelope = envelope
+		if _, err = router.prepareProviderDispatch(&request, "chat", "", false, ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = router.encodeDispatchRequest(ctx); err != nil {
+			t.Fatal(err)
+		}
+		want := fmt.Sprintf(`protocol;action=approximated;reason="%d system messages sent as user text in place";field="messages[].role"`, count)
+		if got := responseWarnings(ctx); got != want {
+			t.Fatalf("x-vsr-warnings = %s, want %s", got, want)
+		}
+	}
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		if family.GetName() != "llm_translation_lossy_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, pair := range metric.GetLabel() {
+				if pair.GetName() == "reason" && strings.Contains(pair.GetValue(), "system messages") && pair.GetValue() != label {
+					t.Errorf("llm_translation_lossy_total has a per-request series reason=%q", pair.GetValue())
+				}
+			}
+		}
+	}
+	if got := testutil.ToFloat64(counter) - before; got != 3 {
+		t.Fatalf("llm_translation_lossy_total{reason=%q} rose by %v, want 3", label, got)
 	}
 }

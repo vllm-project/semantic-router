@@ -5,9 +5,14 @@ import (
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const exactCacheHitBody = `{"id":"chatcmpl-cache","object":"chat.completion","created":123,"model":"gpt-4o",` +
@@ -44,44 +49,60 @@ func exactCacheHitResponse(t *testing.T, router *OpenAIRouter, ctx *RequestConte
 	return response
 }
 
-// TestExactCacheHitEmitsDetailUnderDebug pins the debug-surface half of the
-// #2205 contract on the exact fast path (#2911): an exact hit owns similarity
-// 1, so a request that opted into x-vsr-debug must see that score inline, along
-// with the category and matched keywords the semantic path already emits.
-func TestExactCacheHitEmitsDetailUnderDebug(t *testing.T) {
-	response := exactCacheHitResponse(t, &OpenAIRouter{},
-		exactCacheHitContext(map[string]string{headers.VSRDebug: "true"}))
+// An exact hit owns similarity 1. A request allowed the debug headers sees
+// it in the trace with the matched keywords; every caller sees the cache
+// path and the decision whose cache answered.
+func TestExactCacheHitReportsItsSimilarityInTheTrace(t *testing.T) {
+	ctx := exactCacheHitContext(map[string]string{headers.VSRDebug: "true"})
+	response := exactCacheHitResponse(t, &OpenAIRouter{}, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 
-	if v := immediateHeaderValue(response, headers.VSRCacheHit); v != "true" {
-		t.Errorf("cache-hit: expected \"true\", got %q", v)
+	set := response.GetImmediateResponse().GetHeaders().GetSetHeaders()
+	if v := headerValuesByName(set)[headers.VSRResponsePath]; v != headers.ResponsePathCache {
+		t.Errorf("response path: expected cache, got %q", v)
 	}
-	if v := immediateHeaderValue(response, "x-vsr-cache-similarity"); v != "1.0000" {
-		t.Errorf("cache-similarity: expected \"1.0000\", got %q", v)
+	if v := headerValuesByName(set)[headers.VSRSelectedDecision]; v != "math" {
+		t.Errorf("selected decision: expected math, got %q", v)
 	}
-	if v := immediateHeaderValue(response, headers.VSRSelectedCategory); v != "math" {
-		t.Errorf("selected-category: expected \"math\", got %q", v)
-	}
-	if v := immediateHeaderValue(response, headers.VSRMatchedKeywords); v != "prove,theorem" {
-		t.Errorf("matched-keywords: expected \"prove,theorem\", got %q", v)
+	trace := traceOf(t, set)
+	if trace[headers.TraceCacheSimilarity] != "1.0" || trace[headers.TraceSignals] != `("keyword:prove" "keyword:theorem")` {
+		t.Errorf("trace = %v, want similarity 1.0 and the matched keywords", trace)
 	}
 }
 
-// TestExactCacheHitDemotesDetailWithoutDebug is the other half of the same
-// contract: without the opt-in the intermediate detail stays off the lean
-// surface, exactly as it does for a semantic hit.
-func TestExactCacheHitDemotesDetailWithoutDebug(t *testing.T) {
-	response := exactCacheHitResponse(t, &OpenAIRouter{}, exactCacheHitContext(nil))
+// Without the opt-in the trace stays off the response, exactly as it does
+// for a semantic hit.
+func TestExactCacheHitKeepsTheTraceFromOtherCallers(t *testing.T) {
+	ctx := exactCacheHitContext(nil)
+	response := exactCacheHitResponse(t, &OpenAIRouter{}, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 
-	if v := immediateHeaderValue(response, headers.VSRCacheHit); v != "true" {
-		t.Errorf("cache-hit: expected \"true\", got %q", v)
+	if trace := traceOf(t, response.GetImmediateResponse().GetHeaders().GetSetHeaders()); trace != nil {
+		t.Errorf("a caller without debug got the trace %v", trace)
 	}
-	for _, key := range []string{
-		"x-vsr-cache-similarity",
-		headers.VSRSelectedCategory,
-		headers.VSRMatchedKeywords,
-	} {
-		if v := immediateHeaderValue(response, key); v != "" {
-			t.Errorf("lean surface must omit demoted header %q, got %q", key, v)
+}
+
+// Replay keeps what the client received from an exact hit, once, the same way
+// a semantic hit records it.
+func TestExactCacheHitRecordsTheAnswerTheClientReceived(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+		recorder.SetCapturePolicy(true, true, 1<<20)
+		ctx := exactCacheHitContext(nil)
+		ctx.SourceFormat = llmprotocol.OpenAIChatV1
+		ctx.ExpectStreamingResponse = streaming
+		ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, CaptureRequestBody: true, CaptureResponseBody: true}
+		ctx.SemanticRequest = testNeutralRequest("gpt-4o", "Prove the theorem.")
+		ctx.SemanticRequest.Stream = streaming
+
+		client := exactCacheHitResponse(t, &OpenAIRouter{ReplayRecorder: recorder}, ctx).GetImmediateResponse().GetBody()
+		record, found := recorder.GetRecord(ctx.RouterReplayID)
+		require.True(t, found)
+		require.Equal(t, string(client), record.ResponseBody, "streaming=%t", streaming)
+		types := make([]string, 0, len(record.ToolTrace.Steps))
+		for _, step := range record.ToolTrace.Steps {
+			types = append(types, step.Type)
 		}
+		require.Equal(t, []string{replayToolStepUserInput, replayToolStepAssistantFinalResponse}, types, "streaming=%t", streaming)
 	}
 }

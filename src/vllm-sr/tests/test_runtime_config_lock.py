@@ -115,11 +115,11 @@ def test_serve_fails_fast_when_runtime_config_is_already_mutating(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "recipes": [{"name": "default", "decisions": [{"name": "default"}]}],
             },
             sort_keys=False,
         ),
@@ -178,7 +178,7 @@ def test_serve_lock_matches_deployment_for_parent_paths(
     (config_dir / "config.yaml").write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],

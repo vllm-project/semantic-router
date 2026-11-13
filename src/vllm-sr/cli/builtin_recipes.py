@@ -10,10 +10,7 @@ from typing import Any
 import yaml
 
 from cli.catalog_provider_projection import validate_provider_model_configuration
-from cli.commands.runtime_kb import (
-    validate_kb_source_output_location,
-    validate_kb_sources,
-)
+from cli.config_recipe_scopes import add_recipe
 from cli.config_yaml import safe_load_router_config
 from cli.decision_model import DEFAULT_DECISION_MODEL, configured_decision_model
 from cli.model_bundle import MODEL_BUNDLE_FILES
@@ -71,9 +68,7 @@ def list_builtin_recipes(version: str = DEFAULT_CHANNEL) -> dict[str, Any]:
                         "description": recipe.get("description", ""),
                         "decisions": [
                             _decision_requirements(decision)
-                            for decision in recipe.get("routing", {}).get(
-                                "decisions", []
-                            )
+                            for decision in recipe.get("decisions", [])
                         ],
                     }
                     for recipe in document.get("recipes", [])
@@ -136,10 +131,23 @@ def _bundle_decision_model(
     return selected
 
 
+def _copy_missing_plugins(candidate: dict[str, Any], plugins: Any) -> None:
+    """The bundle's default plugins, of the types candidate's global.plugins
+    does not declare."""
+    if not isinstance(plugins, list) or not plugins:
+        return
+    target = candidate.setdefault("global", {}).setdefault("plugins", [])
+    declared = {plugin.get("type") for plugin in target if isinstance(plugin, dict)}
+    for plugin in plugins:
+        if isinstance(plugin, dict) and plugin.get("type") not in declared:
+            target.append(copy.deepcopy(plugin))
+
+
 def apply_builtin_runtime_defaults(
     candidate: dict[str, Any], bundle_document: dict[str, Any]
 ) -> None:
-    """Fill omitted learning, replay and decision-model settings; authored ones win.
+    """Fill omitted learning, replay, default-plugin and decision-model settings;
+    authored ones win.
 
     These are configuration-wide defaults, materialized during initialization.
     Runtime parsing does not infer policy from built-in recipe names.
@@ -153,6 +161,7 @@ def apply_builtin_runtime_defaults(
     decision_model = _bundle_decision_model(candidate, bundle_document)
     if decision_model:
         defaults["model_catalog"] = decision_model
+    _copy_missing_plugins(candidate, bundle_global.get("plugins"))
     if not defaults:
         return
 
@@ -177,7 +186,6 @@ def compose_builtin_recipe(
     *,
     bundle: str,
     config: dict[str, Any],
-    config_path: Path,
     bindings: Any,
     model_names: Sequence[str],
     version: str = DEFAULT_CHANNEL,
@@ -185,12 +193,11 @@ def compose_builtin_recipe(
 ) -> dict[str, Any]:
     """Return a validated copy of config that publishes one installed recipe.
 
-    config is the provider config read from config_path, which anchors its
-    config-relative KB sources. Every selected decision is bound to
-    operator-supplied provider model refs, and the new entrypoint serves
-    model_names, the first as its primary name. The original package, provider
-    document, and authored model metadata are unchanged. Algorithm contracts
-    and minimum pools remain authoritative.
+    config is a provider config as load_provider_config reads it. Every selected
+    decision is bound to operator-supplied provider model refs, and the new
+    entrypoint serves model_names, the first as its primary name. The original
+    package, provider document, and authored model metadata are unchanged.
+    Algorithm contracts and minimum pools remain authoritative.
     """
     _, document, _ = _bundle(bundle, version)
     recipes = [
@@ -201,14 +208,13 @@ def compose_builtin_recipe(
             f"Bundle '{bundle}' has no recipe '{name}'; run recipe builtin list"
         )
     selected = copy.deepcopy(recipes[0])
-    validate_kb_sources(config, config_path)
     candidate = copy.deepcopy(config)
     models = {
         model["name"] for model in candidate.get("providers", {}).get("models", [])
     }
     if not isinstance(bindings, dict):
         raise ValueError("Bindings must map each decision name to a list of modelRefs")
-    decisions = selected["routing"]["decisions"]
+    decisions = selected["decisions"]
     excluded = set(excluded_decisions)
     unknown_exclusions = excluded - {decision["name"] for decision in decisions}
     if unknown_exclusions:
@@ -216,7 +222,7 @@ def compose_builtin_recipe(
     decisions = [decision for decision in decisions if decision["name"] not in excluded]
     if not decisions:
         raise ValueError("At least one recipe decision must remain")
-    selected["routing"]["decisions"] = decisions
+    selected["decisions"] = decisions
     declared = {decision["name"] for decision in decisions}
     expected = {
         decision["name"] for decision in decisions if _requires_backend(decision)
@@ -265,7 +271,7 @@ def compose_builtin_recipe(
 
     if any(recipe["name"] == name for recipe in candidate.get("recipes", [])):
         raise ValueError(f"Config already contains recipe '{name}'")
-    candidate.setdefault("recipes", []).append(selected)
+    add_recipe(candidate, selected)
     candidate.setdefault("entrypoints", []).append(
         {"model_names": list(model_names), "recipe": name}
     )
@@ -274,7 +280,7 @@ def compose_builtin_recipe(
     # deployment, so callers must start from a provider config, not setup mode.
     if (candidate.get("setup") or {}).get("mode"):
         raise ValueError("Start from an explicit provider config, not setup mode")
-    _validate_composition(candidate, config_path)
+    _validate_composition(candidate)
     return candidate
 
 
@@ -282,12 +288,10 @@ def _render_config(config: dict[str, Any]) -> str:
     return yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
 
 
-def _validate_composition(candidate: dict[str, Any], config_path: Path) -> None:
+def _validate_composition(candidate: dict[str, Any]) -> None:
     # Validate the rendered document, typed exactly as the file will load.
     parsed = parse_user_config_data(
-        safe_load_router_config(_render_config(candidate)),
-        str(config_path),
-        log_summary=False,
+        safe_load_router_config(_render_config(candidate)), log_summary=False
     )
     errors = validate_user_config(parsed, log_summary=False)
     if errors:
@@ -322,12 +326,10 @@ def initialize_builtin_recipe(
     if output.exists():
         raise ValueError(f"Output file already exists: {output}")
     config = load_provider_config(config_path)
-    validate_kb_source_output_location(config, config_path, output)
     candidate = compose_builtin_recipe(
         name,
         bundle=bundle,
         config=config,
-        config_path=config_path,
         bindings=yaml.safe_load(bindings_path.read_text(encoding="utf-8")),
         model_names=[model_name],
         version=version,
@@ -343,6 +345,6 @@ def initialize_builtin_recipe(
         "catalog_version": version,
         "output": str(output.resolve()),
         "valid": True,
-        "decisions": len(candidate["recipes"][-1]["routing"]["decisions"]),
+        "decisions": len(candidate["recipes"][-1]["decisions"]),
         "excluded_decisions": sorted(set(excluded_decisions)),
     }

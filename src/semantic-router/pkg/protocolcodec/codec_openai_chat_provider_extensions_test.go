@@ -139,10 +139,19 @@ func TestOpenAIChatResponseTranslatesLiteLLMReply(t *testing.T) {
 	}
 }
 
-func TestOpenAIChatRequestRejectsLiteLLMProviderSpecificFields(t *testing.T) {
+func TestOpenAIChatRequestDropsLiteLLMProviderSpecificFields(t *testing.T) {
 	raw := []byte(`{"model":"client-model","messages":[{"role":"user","content":"ok","provider_specific_fields":{"reasoning":"x"}}]}`)
-	_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, raw)
-	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_messages_provider_specific_fields")
+	request, envelope, diagnostics, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, raw)
+	if err != nil {
+		t.Fatalf("DecodeRequestForMutation() error = %v", err)
+	}
+	if len(request.Messages) != 1 || request.Messages[0].Content[0].Text != "ok" {
+		t.Fatalf("messages = %+v", request.Messages)
+	}
+	assertDiagnosticFields(t, diagnostics, "messages[].provider_specific_fields")
+	if envelope.Request != nil {
+		t.Fatal("the source bytes still carry provider_specific_fields and must not be replayed")
+	}
 }
 
 func TestOpenAIChatResponseStillRejectsUnknownProviderFields(t *testing.T) {

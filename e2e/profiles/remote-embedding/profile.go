@@ -24,6 +24,8 @@ const (
 var gatewayResources = []string{
 	"deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml",
 	"deploy/kubernetes/routing-strategies/aigw-resources/gwapi-resources.yaml",
+	// Serves the System One fixture billing_support asks.
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
 // Profile validates text embedding routing through an external OpenAI-compatible provider.
@@ -40,6 +42,7 @@ func NewProfile() *Profile {
 			ResourceManifests:        gatewayResources,
 			WaitDeployments: []helpers.DeploymentRef{
 				{Namespace: "default", Name: "vllm-llama3-8b-instruct"},
+				{Namespace: "default", Name: "provider-mocker"},
 			},
 		}),
 	}
@@ -52,7 +55,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile contract.
 func (p *Profile) Description() string {
-	return "Tests OpenAI-compatible remote embedding provider startup and deterministic text embedding routing"
+	return "Tests the OpenAI-compatible remote embedding provider as the response cache's recall source, with System One routing, and the Router's error codes through Envoy without a provider default"
 }
 
 // Setup deploys the mock provider before the router because startup probes call it immediately.
@@ -87,9 +90,10 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	return nil
 }
 
-// GetTestCases returns the strict remote embedding contract test.
+// GetTestCases returns the remote embedding contract and the Router's error
+// codes through Envoy, which need a policy without a provider default.
 func (p *Profile) GetTestCases() []string {
-	return []string{"remote-embedding-routing"}
+	return []string{"remote-embedding-routing", "routing-error-codes"}
 }
 
 // GetServiceConfig returns the shared gateway service configuration.

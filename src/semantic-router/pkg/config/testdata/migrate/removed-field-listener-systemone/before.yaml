@@ -1,0 +1,25 @@
+# A listener's systemone block, which is now its systemone API in apis, in
+# the vllm-sr/4.0 contract its clients speak, beside the LLM APIs.
+version: v0.5
+listeners:
+  - name: decisions
+    port: 8899
+    systemone:
+      models: [d3]
+      max_deadline_ms: 120000
+providers:
+  defaults: {model: m}
+  models:
+    - name: m
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+    - name: d3
+      api_format: systemone
+      provider_model_id: d3
+      backend_refs:
+        - provider: systemone-compatible
+          endpoint: http://127.0.0.1:8900/v1
+recipes:
+  - name: default

@@ -19,6 +19,21 @@ func TestRequestParamsBlockedOutputIsDefaultedBeforeCap(t *testing.T) {
 	}
 }
 
+// A route whose backends run speculative decoding can remove the two sampling
+// controls such a vLLM backend rejects.
+func TestRequestParamsBlocksMinPAndLogitBias(t *testing.T) {
+	minP := 0.05
+	request := &llmprotocol.Request{Sampling: llmprotocol.Sampling{MinP: &minP, LogitBias: map[string]float64{"42": -100}}}
+	result, err := ApplyRequestParams(request, &config.RequestParamsPluginConfig{BlockedParams: []string{"min_p", "logit_bias"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Sampling.MinP != nil || request.Sampling.LogitBias != nil || !result.Changed ||
+		len(result.Blocked) != 2 || result.Blocked[0] != "min_p" || result.Blocked[1] != "logit_bias" {
+		t.Fatalf("request params did not block min_p and logit_bias: sampling=%+v result=%+v", request.Sampling, result)
+	}
+}
+
 func TestRequestParamsBlocksPromptCacheKey(t *testing.T) {
 	request := &llmprotocol.Request{PromptCacheKey: "codex-session"}
 	result, err := ApplyRequestParams(request, &config.RequestParamsPluginConfig{BlockedParams: []string{"prompt_cache_key"}})

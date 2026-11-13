@@ -289,17 +289,27 @@ func decodeResponsesOutput(
 	return output, nil
 }
 
-func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) (llmprotocol.OutputItem, error) {
-	if err := validateResponsesOutputItemStatus(item); err != nil {
-		return llmprotocol.OutputItem{}, err
-	}
-	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
+const responsesItemMetadataReason = "response item metadata has no protocol-neutral representation"
+
+// responsesItemMetadataFields names the output item metadata that the neutral
+// contract cannot carry. Buffered and streamed replies drop the same set.
+func responsesItemMetadataFields(item responsesItemWire) map[string]bool {
+	return map[string]bool{
+		"output.async":             len(item.Async) > 0,
 		"output.caller":            len(item.Caller) > 0,
 		"output.encrypted_content": len(item.EncryptedContent) > 0,
 		"output.namespace":         item.Namespace != "",
 		"output.phase":             len(item.Phase) > 0,
 		"output.status":            item.Status != "" && item.Type != "image_generation_call",
-	}, "response item metadata has no protocol-neutral representation")
+	}
+}
+
+func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) (llmprotocol.OutputItem, error) {
+	if err := validateResponsesOutputItemStatus(item); err != nil {
+		return llmprotocol.OutputItem{}, err
+	}
+	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1,
+		responsesItemMetadataFields(item), responsesItemMetadataReason)
 	id := item.ID
 	if id == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
 		id = llmprotocol.StableID("response-output", fmt.Sprint(index), item.Type, item.CallID)
@@ -499,17 +509,19 @@ func applyResponsesStopReason(
 	diagnostics *llmprotocol.Diagnostics,
 ) error {
 	switch stopReason {
-	case llmprotocol.StopMaxTokens, llmprotocol.StopContentFilter:
+	case llmprotocol.StopMaxTokens, llmprotocol.StopContextWindow, llmprotocol.StopContentFilter:
 		wire.Status = "incomplete"
 		reason := "max_output_tokens"
 		if stopReason == llmprotocol.StopContentFilter {
 			reason = "content_filter"
+		} else if stopReason == llmprotocol.StopContextWindow {
+			appendContextWindowProjection(diagnostics, policy, source, llmprotocol.OpenAIResponsesV1)
 		}
 		wire.IncompleteDetails = &struct {
 			Reason string `json:"reason"`
 		}{Reason: reason}
 		return nil
-	case llmprotocol.StopPaused, llmprotocol.StopContextWindow, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
+	case llmprotocol.StopPaused, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
 		return appendLossy(diagnostics, policy, source, llmprotocol.OpenAIResponsesV1, "response.stop_reason", "Responses cannot represent the source terminal reason")
 	default:
 		return nil
@@ -545,8 +557,11 @@ func encodeResponsesUsage(usage llmprotocol.Usage) *responsesUsageWire {
 		InputTokens:  tokenValue(usage.InputTotal),
 		OutputTokens: tokenValue(usage.OutputTotal),
 		TotalTokens:  tokenValue(usage.Total),
+		// The Responses schema requires an integer cached_tokens, and Codex CLI
+		// fails the turn without one. An unreported cache read is sent as 0, as
+		// vLLM's own Responses server does; an unreported cache write is omitted.
 		InputTokensDetails: &responsesInputUsageDetails{
-			CachedTokens: usage.InputCacheRead.Value, CacheWriteTokens: usage.InputCacheWrite.Value,
+			CachedTokens: llmprotocol.Int64(tokenValue(usage.InputCacheRead)), CacheWriteTokens: usage.InputCacheWrite.Value,
 		},
 		OutputTokensDetails: &responsesOutputUsageDetails{ReasoningTokens: tokenValue(usage.OutputReasoning)},
 	}

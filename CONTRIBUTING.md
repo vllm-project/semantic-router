@@ -106,9 +106,9 @@ tag; `--image-pull-policy never` prevents pulling missing images.
 For the AMD local image:
 
 ```bash
-make vllm-sr-dev VLLM_SR_PLATFORM=amd
+make vllm-sr-dev VLLM_SR_PLATFORM=rocm
 VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
-  vllm-sr serve --image-pull-policy never --platform amd
+  vllm-sr serve --image-pull-policy never --platform rocm
 ```
 
 If you customize `DOCKER_TAG`, `DOCKER_REGISTRY`, or the Make image variables,
@@ -230,7 +230,7 @@ This authorizes the affected work and reruns the original PR workflow.
 `/ci run full` requests the complete CPU inventory. Narrower scopes are
 documented in the [testing strategy](tools/agent/docs/testing-strategy.md#product-layers-and-execution-policy).
 Valid scopes accumulate for the same revision; partial authorization does not
-waive the remaining checks. A new head, base, or merge revision requires fresh
+waive the remaining checks. A new head revision requires fresh
 authorization.
 
 The command handler reacts with 👀 when it receives a request and 🚀 after it

@@ -1,0 +1,1 @@
+vllm_endpoints: removed_section: top-level vllm_endpoints belongs to the layout before config v0.3; run `vllm-sr config migrate` (its place in the v0.5 layout)

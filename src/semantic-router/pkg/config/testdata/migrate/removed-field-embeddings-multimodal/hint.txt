@@ -1,0 +1,1 @@
+global.model_catalog.embeddings.multimodal: removed_field: embeddings.multimodal is removed: embeddings serve text recall alone; run `vllm-sr config migrate` (nothing; a decision about an image asks a systemone question with input.image)

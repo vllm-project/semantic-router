@@ -124,7 +124,7 @@ func TestShadowBudgetNoReserveAccountsOnCompletion(t *testing.T) {
 	// The admission reservation is the dimension that binds early; without it
 	// the token cap can only be observed on completion. Configurations that
 	// need the cap to bind at admission are rejected at load time by
-	// ShadowDispatchPluginConfig.Validate.
+	// RouterReplayShadowConfig.Validate.
 	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100}, 0)
 	if _, ok := b.TryEnter(); !ok {
 		t.Fatal("first arm must be admitted")
