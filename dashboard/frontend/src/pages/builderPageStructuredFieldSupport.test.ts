@@ -5,7 +5,6 @@ import { serializeFields, type FieldSchema } from '@/lib/dslMutations'
 import {
   normalizeStructuredObject,
   normalizeStructuredObjectList,
-  normalizeStructuredStringMatrix,
   removeStructuredObjectListItem,
   requiredStructuredFieldErrors,
   structuredItemLabel,
@@ -21,10 +20,6 @@ describe('Builder structured field interactions', () => {
     })
     expect(normalizeStructuredObjectList('[{"name":"worker","models":["qwen"]}]')).toEqual([
       { name: 'worker', models: ['qwen'] },
-    ])
-    expect(normalizeStructuredStringMatrix('[ ["first", "then"], ["先", "再"] ]')).toEqual([
-      ['first', 'then'],
-      ['先', '再'],
     ])
   })
 
@@ -45,10 +40,7 @@ describe('Builder structured field interactions', () => {
       models: ['qwen-32b'],
     })
 
-    expect(updated).toEqual([
-      { name: 'planner' },
-      { name: 'reviewer', models: ['qwen-32b'] },
-    ])
+    expect(updated).toEqual([{ name: 'planner' }, { name: 'reviewer', models: ['qwen-32b'] }])
     expect(removeStructuredObjectListItem(updated, 0)).toEqual([
       { name: 'reviewer', models: ['qwen-32b'] },
     ])

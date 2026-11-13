@@ -1,0 +1,10 @@
+{
+  "theme.docs.versions.unmaintainedVersionLabel": {
+    "message": "This is documentation for {siteTitle} {versionLabel}, a released version.",
+    "description": "The label used to tell the user that he's browsing an unmaintained doc version"
+  },
+  "theme.docs.versions.latestVersionSuggestionLabel": {
+    "message": "For the latest documentation, built from main, see the {latestVersionLink}.",
+    "description": "The label used to tell the user to check the latest version"
+  }
+}

@@ -1,0 +1,1 @@
+mom_registry: removed_section: top-level mom_registry belongs to the layout before config v0.3; run `vllm-sr config migrate` (its place in the v0.5 layout)

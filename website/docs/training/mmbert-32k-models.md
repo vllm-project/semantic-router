@@ -1,17 +1,18 @@
 ---
-title: Train Vela Embedding and Reranker
-sidebar_label: Embedding and Reranking
+title: Train Vela Embedding
+sidebar_label: Embedding
 ---
 
-# Train Vela Embedding and Reranker
+# Train Vela Embedding
 
-Use Vela Embedding to find relevant documents efficiently, then Vela Reranker
-to improve the order of a smaller candidate set. Both adapt the shared
-[Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)
-and support a choice of encoder depth and output dimension.
+Vela Embedding finds candidates for the Router's recall features: the
+response cache, memory and RAG. It adapts the shared
+[Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M) and
+supports a choice of encoder depth and output dimension. Embeddings serve
+recall only; the decision model judges what recall finds.
 
-To use the published models without training, follow
-[Embeddings and reranking](../model-runtime/guides/embeddings.md).
+To use the published model without training, follow
+[Embeddings](../model-runtime/guides/embeddings.md).
 
 ## Embedding model: bi-encoder
 
@@ -24,16 +25,6 @@ similarity or paraphrase examples when your application also compares requests,
 groups related text, or detects repeated questions. Include the languages and
 domains your index will serve.
 
-## Reranking model: cross-encoder
-
-The reranker reads a query and a candidate document together, then returns a
-relevance score. Run it on the candidates returned by retrieval.
-
-Train with complete candidate lists and relevance judgments. Hard negatives
-from your retrieval system help the model distinguish plausible but incorrect
-results. Keep documents with unknown relevance separate from judged negatives.
-The score orders candidates; it is not a probability that a document is correct.
-
 ## Choose depth, dimension, and context
 
 | Setting | Available choices | Tradeoff |
@@ -42,14 +33,10 @@ The score orders candidates; it is not a probability that a document is correct.
 | Dimension | 64, 128, 256, 512, 768 | Smaller embedding vectors reduce index storage and comparison cost |
 | Input limit | Up to 32,768 tokens | Longer inputs require more memory and time |
 
-Training supervises all 20 depth/dimension combinations. Reranker has a trained
-scoring head for each combination; reducing its dimension does not skip encoder
-layers. Evaluate the combination you intend to deploy.
-
-For embedding, use the same model revision, depth, and dimension for queries
-and indexed documents. Rebuild the index when these settings change. For
-reranking, the input budget covers the query, document, and special tokens
-together.
+Training supervises all 20 depth/dimension combinations. Evaluate the
+combination you intend to deploy. Use the same model revision, depth, and
+dimension for queries and indexed documents, and rebuild the index when these
+settings change.
 
 ## Prepare a training run
 
@@ -69,9 +56,9 @@ Choose one starting point:
 
 - **New task:** download Vela Encoder and initialize the task from that complete
   checkpoint.
-- **Continue a task:** download Vela Embedding or Reranker and select
-  `initialization: "continued_task"`. This keeps the trained encoder and heads
-  while starting a new optimizer.
+- **Continue a task:** download Vela Embedding and select
+  `initialization: "continued_task"`. This keeps the trained encoder while
+  starting a new optimizer.
 - **Resume an interrupted run:** use `--resume` to restore its optimizer and
   progress.
 
@@ -94,9 +81,9 @@ uv run --locked --project src/training/model_embeddings/mmbert_32k \
   --output /data/retrieval/run --device cuda
 ```
 
-The configuration selects `task: "embedding"` or `task: "reranker"`, datasets,
-input budgets, training steps, and evaluation intervals. Start with a small
-budget and inspect the first development results before extending the run.
+The configuration selects `task: "embedding"`, datasets, input budgets,
+training steps, and evaluation intervals. Start with a small budget and
+inspect the first development results before extending the run.
 
 ## Evaluate the trained checkpoint
 
@@ -113,14 +100,11 @@ uv run --locked --project src/training/model_embeddings/mmbert_32k \
   --output /data/retrieval/evaluation --device cpu --token-budget 32768
 ```
 
-Replace the checkpoint path with a step your run saved. For a reranker, set
-`--task reranker`. Use development results to choose a checkpoint, then run a
-separate final comparison on held-out data.
-
-For embedding, compare retrieval, similarity, and multilingual transfer.
-For reranking, keep candidate lists fixed and compare ranking metrics such as
-nDCG. Measure short and long inputs separately, along with latency and memory
-at each deployed depth/dimension.
+Replace the checkpoint path with a step your run saved. Use development
+results to choose a checkpoint, then run a separate final comparison on
+held-out data. Compare retrieval, similarity, and multilingual transfer, and
+measure short and long inputs separately, along with latency and memory at
+each deployed depth/dimension.
 
 A full MMTEB result requires its complete selected benchmark and matching
 evaluation protocol. A task subset can diagnose gaps, but cannot establish an
@@ -128,14 +112,14 @@ overall benchmark score or leaderboard rank.
 
 ## Deploy the result
 
-Use [local model bindings](../model-runtime/deploy.md) to select the
-checkpoint and serving engine. Test the selected depth, dimension, and input
-limit through [route preview](../model-runtime/troubleshooting.md).
-An ONNX deployment needs graphs exported from the same trained weights.
+Declare the checkpoint as an embedding deployment and name it where recall
+uses it ([Embeddings](../model-runtime/guides/embeddings.md)); a store indexed
+with the earlier model must be re-indexed. Test recall through a real request
+before routing traffic to it.
 
 ## Earlier mmBERT workflows
 
-The original foundation, embedding, and reranker recipes remain in the
+The original foundation and embedding recipes remain in the
 [workflow README](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_embeddings/mmbert_32k).
 Their checked-in historical configurations reproduce the earlier mmBERT
-workflow. Use the Vela starting points above for new Vela task training.
+workflow. Use the Vela starting points above for new training.

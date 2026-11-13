@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -47,8 +48,8 @@ func (s *serviceTestStore) StoreExact(_ context.Context, write CacheWrite) error
 func (s *serviceTestStore) LookupSemantic(
 	_ context.Context,
 	_ SemanticLookup,
-) (CacheResult, error) {
-	return CacheResult{HitKind: HitKindMiss}, nil
+) (SemanticRecall, error) {
+	return SemanticRecall{}, nil
 }
 
 func (s *serviceTestStore) StoreSemantic(_ context.Context, _ CacheWrite) error {
@@ -138,6 +139,39 @@ func TestResponseCacheServiceSingleflightCoalescesConcurrentMisses(t *testing.T)
 	wait.Wait()
 	if got := upstreamCalls.Load(); got != 1 {
 		t.Fatalf("upstream calls = %d, want 1", got)
+	}
+}
+
+// A leader whose request ends without storing, because it failed, was
+// canceled or was not cacheable, gives its miss up when the lease ends, so
+// abandoned misses do not accumulate. Within the lease it still leads.
+func TestResponseCacheServiceDropsAbandonedSingleflightLeases(t *testing.T) {
+	service := NewResponseCacheService(newServiceTestStore(), ResponseCacheServiceOptions{
+		SingleflightWait:  time.Second,
+		SingleflightLease: 50 * time.Millisecond,
+	})
+	for i := range 100 {
+		_, lease, err := service.LookupExactCoalesced(context.Background(), ExactLookup{Identity: serviceTestIdentity(fmt.Sprint(i))})
+		if err != nil || !lease.Leader {
+			t.Fatalf("lookup %d: leader = %t, err = %v", i, lease.Leader, err)
+		}
+	}
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, lease, _ := service.LookupExactCoalesced(canceled, ExactLookup{Identity: serviceTestIdentity("0")}); lease.Leader {
+		t.Fatal("a second lookup within the lease took over the miss")
+	}
+	inflight := func() int {
+		service.mu.Lock()
+		defer service.mu.Unlock()
+		return len(service.inflight)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for inflight() != 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := inflight(); got != 0 {
+		t.Fatalf("abandoned misses kept after their lease: %d", got)
 	}
 }
 

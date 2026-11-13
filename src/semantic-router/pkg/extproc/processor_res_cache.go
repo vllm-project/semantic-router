@@ -7,6 +7,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -23,8 +25,27 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if !r.semanticCacheEnabledForRequest(ctx) {
 		return
 	}
+	// A streamed request's hit streams the entry back, so an answer the stream
+	// encoder cannot write, such as a generated image, would fail every hit.
+	if ctx.ExpectStreamingResponse && ctx.SemanticResponse != nil && !r.streamsFromCache(ctx) {
+		metrics.RecordCacheWriteSkipped("stream_content_unsupported")
+		return
+	}
 	if ctx.CacheWriteBypass {
 		metrics.RecordCacheWriteSkipped("request_no_store")
+		return
+	}
+	// An answer the output limit cut inside a tool call is the asking
+	// client's to keep; a hit would give another request the cut call.
+	if response := ctx.SemanticResponse; response != nil &&
+		llmprotocol.TruncatedToolCall(*response, llmprotocol.DefaultPolicy().Limits.JSONDepth) != nil {
+		metrics.RecordCacheWriteSkipped("tool_call_cut")
+		return
+	}
+	// A cache hit runs no guard, so an answer is kept only as the guard let it
+	// through.
+	if reason := ctx.ResponseGuard.cacheSkipReason(); reason != "" {
+		metrics.RecordCacheWriteSkipped(reason)
 		return
 	}
 
@@ -58,9 +79,20 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 		return
 	}
 
+	// A fallback candidate answered, so the answer belongs to the candidate's
+	// selected-model partition, not to the primary's the lookup used.
+	if ctx.ResponsePath == headers.ResponsePathFallback && ctx.CacheSelectedModel != ctx.VSRSelectedModel {
+		ctx.CacheSelectedModel = ctx.VSRSelectedModel
+		ctx.CacheIdentity = responseCacheIdentity(ctx, ctx.CacheRequestModel)
+	}
+
+	// Without a plugin ttl_seconds the entry lives the store's ttl_seconds,
+	// which a caller's ttl and ttl_turns may only shorten.
 	ttlSeconds := -1
-	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
+	if plugin := requestResponseCache(ctx); plugin != nil && plugin.TTLSeconds != nil {
+		ttlSeconds = *plugin.TTLSeconds
+	} else if r.Config != nil && r.Config.SemanticCache.TTLSeconds > 0 {
+		ttlSeconds = r.Config.SemanticCache.TTLSeconds
 	}
 	ttlSeconds = applyResponseCacheRequestTTL(ctx, ttlSeconds)
 	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)
@@ -116,4 +148,14 @@ func (r *OpenAIRouter) addSemanticCacheEntry(
 		ResponseBody: responseBody,
 		TTL:          cache.TTLPolicyFromLegacySeconds(ttlSeconds),
 	})
+}
+
+// streamsFromCache reports whether a cache hit can stream the request's
+// answer back.
+func (r *OpenAIRouter) streamsFromCache(ctx *RequestContext) bool {
+	engine, err := r.protocolEngine()
+	if err == nil {
+		_, _, err = encodeCachedSemanticStream(engine, ctx, *ctx.SemanticResponse, nil)
+	}
+	return err == nil
 }

@@ -134,10 +134,7 @@ func ownedReplayModel(
 	outcome *routerruntime.RouterOutcome,
 	record routerreplay.RoutingRecord,
 ) (string, string) {
-	replayModel := strings.TrimSpace(record.SelectedModel)
-	if replayModel == "" && record.RouteDiagnostics != nil {
-		replayModel = strings.TrimSpace(record.RouteDiagnostics.SelectedModel)
-	}
+	replayModel := answeringReplayModel(record)
 	if replayModel == "" {
 		return "", "owned routing event has no selected model binding"
 	}
@@ -153,6 +150,23 @@ func ownedReplayModel(
 		return "", "outcome model binding does not match the owned routing event"
 	}
 	return replayModel, ""
+}
+
+// answeringReplayModel is the model whose answer the client received. The
+// record keeps the routed model, so when a fallback candidate's answer was
+// served, the completed fallback outcome the router appended names it instead.
+// A candidate whose answer a response policy blocked served only a refusal.
+func answeringReplayModel(record routerreplay.RoutingRecord) string {
+	for _, outcome := range record.Outcomes {
+		if model := strings.TrimSpace(outcome.TargetRef); outcome.Source == "fallback" && outcome.Verdict == "completed" && model != "" {
+			return model
+		}
+	}
+	model := strings.TrimSpace(record.SelectedModel)
+	if model == "" && record.RouteDiagnostics != nil {
+		model = strings.TrimSpace(record.RouteDiagnostics.SelectedModel)
+	}
+	return model
 }
 
 func (rt *routerLearningRuntime) claimIdempotencyKey(

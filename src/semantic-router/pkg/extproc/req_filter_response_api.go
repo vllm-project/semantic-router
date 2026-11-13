@@ -339,8 +339,10 @@ func (f *ResponseAPIFilter) buildInputItemsList(stored *responseapi.StoredRespon
 	if stored.Instructions != "" {
 		contentParts := []responseapi.ContentPart{{Type: "input_text", Text: stored.Instructions}}
 		contentJSON, _ := json.Marshal(contentParts)
+		// Derive this synthesized item's identity from the response so repeated
+		// reads, including of old records, stay stable without writing to storage.
 		items = append(items, responseapi.InputItem{
-			ID:      responseapi.GenerateItemID(),
+			ID:      responseapi.ItemIDPrefix + "instructions_" + stored.ID,
 			Type:    "message",
 			Role:    "system",
 			Content: contentJSON,

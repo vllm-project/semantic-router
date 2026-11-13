@@ -113,37 +113,41 @@ kubectl get deployment,service \
   -l app.kubernetes.io/instance=my-router
 ```
 
-Send a direct request with the concrete model name, or add canonical routing
-under `spec.config.routing` to expose automatic or policy-driven behavior.
+Send a direct request with the concrete model name, or add canonical recipes
+under `spec.config.recipes` to expose automatic or policy-driven behavior.
 
 ## Add routing policy
 
-`spec.config.routing` accepts the canonical routing object. The example below
-adds a catch-all decision over the discovered model:
+`spec.config.recipes` accepts canonical recipes; the fields of the recipe named
+`default` replace the Operator's default recipe's. `spec.config.entrypoints`
+and `spec.config.plugins` accept canonical `entrypoints` and `global.plugins`,
+and `spec.config.models` states the facts of a discovered model by name. The
+example below adds a catch-all decision over the discovered model:
 
 ```yaml
 spec:
   config:
-    routing:
-      strategy: priority
-      modelCards:
-        - name: local/model
-          modality: text
-          capabilities: [chat]
-      decisions:
-        - name: default-route
-          description: Route unmatched requests to the discovered local model.
-          priority: 1
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/model
+    models:
+      - name: local/model
+        capabilities: [chat]
+    recipes:
+      - name: default
+        strategy: priority
+        decisions:
+          - name: default-route
+            description: Route unmatched requests to the discovered local model.
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: local/model
 ```
 
+`spec.config.routing` is removed; a resource that sets it is refused.
+
 The remaining `spec.config` fields are Operator adapters for shared Router
-settings such as response cache, classifiers, tools, observability, and
-reasoning families. They are translated into canonical `global` and provider
+settings such as the response cache, reasoning effort, API and observability. They are translated into canonical `global` and provider
 sections. Consult the CRD reference rather than copying fields from a local
 `config.yaml` into arbitrary CR paths.
 
@@ -305,6 +309,11 @@ spec:
 
 Omit the hostname to let OpenShift allocate one, or provide a hostname covered
 by your DNS and certificate configuration.
+
+In standalone mode the Route sends clients to the Router's inference listener,
+Service port 8801 (`http-8801`), and so does a `spec.ingress` path without
+`servicePort`. With `spec.gateway.existingRef` the Router serves no HTTP
+inference port, so send clients through that Gateway.
 
 ## Secrets
 

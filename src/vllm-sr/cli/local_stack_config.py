@@ -3,7 +3,7 @@
 `vllm-sr serve` never hands the Router the source file as written: it adds the
 stack's own wiring -- a management listener the published port reaches, the
 endpoints of the stack's service and store containers, tracing, knowledge-base
-paths -- and the platform and algorithm defaults the stack was started with.
+paths -- and the algorithm override the stack was started with.
 `config plan` and `config apply` send a source file with that same wiring when
 they talk to a local stack, so the Router keeps every connection `serve` made,
 and a later `serve` of the same file finds the document it would have written.
@@ -59,7 +59,6 @@ class LocalStack:
 
     layout: RuntimeStackLayout
     state_dir: Path
-    platform: str | None
     algorithm: str | None
 
     def owns(self, config_path: Path) -> bool:
@@ -114,7 +113,6 @@ def local_stack() -> LocalStack | None:
     return LocalStack(
         layout=layout,
         state_dir=Path(state_dir),
-        platform=env.get("VLLM_SR_PLATFORM") or env.get("DASHBOARD_PLATFORM") or None,
         algorithm=env.get(RUNTIME_ALGORITHM_OVERRIDE_ENV) or None,
     )
 
@@ -126,7 +124,6 @@ def stack_document(stack: LocalStack, config_path: Path) -> str:
         config_path,
         stack.algorithm,
         is_setup_mode_config(config_path),
-        stack.platform,
     ).decode("utf-8")
 
 
@@ -151,7 +148,6 @@ def save_pending_restart(stack: LocalStack, config_path: Path, detail: str) -> P
             config_path,
             stack.algorithm,
             is_setup_mode_config(config_path),
-            stack.platform,
         )
         materialize_runtime_config(
             config_path,

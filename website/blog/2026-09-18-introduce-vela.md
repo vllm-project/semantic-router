@@ -169,4 +169,4 @@ Explore Vela's architectures below, from task-specific prediction heads to multi
 
 **The weights are out. Let's put them to work.**
 
-[**Get the models →**](https://huggingface.co/collections/vllm-sr/vela-10) · [**Try a routing recipe →**](/docs/tutorials/global/vela-models) · [**Join the community →**](https://github.com/vllm-project/semantic-router)
+[**Get the models →**](https://huggingface.co/collections/vllm-sr/vela-10) · [**Try a routing recipe →**](/docs/v0.4/tutorials/global/vela-models) · [**Join the community →**](https://github.com/vllm-project/semantic-router)

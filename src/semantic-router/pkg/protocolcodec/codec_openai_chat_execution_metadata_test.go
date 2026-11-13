@@ -196,19 +196,43 @@ func TestOpenAIChatResponseRejectsUnsupportedNonNullOutputExtensions(t *testing.
 	}
 }
 
+// vLLM's serving metadata is opaque: any value decodes, even under the
+// conformance contract, is reported as dropped from the neutral response and
+// is replayed unchanged to a Chat client.
+func TestOpenAIChatResponseAcceptsNonNullVLLMServingMetadata(t *testing.T) {
+	tests := map[string]struct{ from, to, field string }{
+		"prompt_logprobs": {`"prompt_logprobs":null`, `"prompt_logprobs":[null,{"11":{"logprob":-0.5}}]`, "prompt_logprobs"},
+		"prompt_text":     {`"prompt_text":null`, `"prompt_text":"rendered prompt"`, "prompt_text"},
+		"ec_transfer":     {`"ec_transfer_params":null`, `"ec_transfer_params":{"do_remote_encode":true}`, "ec_transfer_params"},
+		"metrics":         {`"metrics":null`, `"metrics":{"time_to_first_token_ms":12.5}`, "metrics"},
+		"routed_experts":  {`"routed_experts":null`, `"routed_experts":"k05VTVBZ"`, "choices.routed_experts"},
+		"weight_versions": {`"routed_experts":null`, `"routed_experts":null,"weight_versions":[{"version":"v1","start":0,"end":1}]`, "choices.weight_versions"},
+		"kv_transfer":     {`"kv_transfer_params":{}`, `"kv_transfer_params":{"do_remote_prefill":true,"remote_engine_id":"e1"}`, "kv_transfer_params"},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			raw := []byte(strings.Replace(vLLMChatResponseExtensionsFixture, test.from, test.to, 1))
+			translated, err := conformanceEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, raw, nil)
+			if err != nil {
+				t.Fatalf("TranslateResponse() error = %v", err)
+			}
+			if !bytes.Equal(translated.Body, raw) {
+				t.Fatal("same-format response was not replayed byte-for-byte")
+			}
+			if !hasServingMetadataDiagnostic(translated.Diagnostics, test.field) {
+				t.Fatalf("no serving metadata diagnostic for %s in %+v", test.field, translated.Diagnostics)
+			}
+		})
+	}
+}
+
 func TestOpenAIChatResponseRejectsInvalidClosedExecutionMetadata(t *testing.T) {
 	engine := NewBuiltinEngine()
 	tests := map[string]string{
-		"non_null_prompt_logprobs": strings.Replace(vLLMChatResponseExtensionsFixture, `"prompt_logprobs":null`, `"prompt_logprobs":[]`, 1),
-		"non_null_prompt_text":     strings.Replace(vLLMChatResponseExtensionsFixture, `"prompt_text":null`, `"prompt_text":"private prompt"`, 1),
-		"non_null_ec_transfer":     strings.Replace(vLLMChatResponseExtensionsFixture, `"ec_transfer_params":null`, `"ec_transfer_params":{}`, 1),
-		"non_null_metrics":         strings.Replace(vLLMChatResponseExtensionsFixture, `"metrics":null`, `"metrics":{}`, 1),
-		"non_null_routed_experts":  strings.Replace(vLLMChatResponseExtensionsFixture, `"routed_experts":null`, `"routed_experts":[]`, 1),
-		"nested_kv_field":          strings.Replace(vLLMChatResponseExtensionsFixture, `"kv_transfer_params":{}`, `"kv_transfer_params":{"future":true}`, 1),
-		"unknown_service_tier":     strings.Replace(vLLMChatResponseExtensionsFixture, `"service_tier":"default"`, `"service_tier":"future"`, 1),
-		"non_scalar_stop_reason":   strings.Replace(vLLMChatResponseExtensionsFixture, `"stop_reason":106`, `"stop_reason":true`, 1),
-		"fractional_stop_reason":   strings.Replace(vLLMChatResponseExtensionsFixture, `"stop_reason":106`, `"stop_reason":1.5`, 1),
-		"exponent_stop_reason":     strings.Replace(vLLMChatResponseExtensionsFixture, `"stop_reason":106`, `"stop_reason":1e3`, 1),
+		"unknown_service_tier":   strings.Replace(vLLMChatResponseExtensionsFixture, `"service_tier":"default"`, `"service_tier":"future"`, 1),
+		"non_scalar_stop_reason": strings.Replace(vLLMChatResponseExtensionsFixture, `"stop_reason":106`, `"stop_reason":true`, 1),
+		"fractional_stop_reason": strings.Replace(vLLMChatResponseExtensionsFixture, `"stop_reason":106`, `"stop_reason":1.5`, 1),
+		"exponent_stop_reason":   strings.Replace(vLLMChatResponseExtensionsFixture, `"stop_reason":106`, `"stop_reason":1e3`, 1),
 		"nested_usage_field": strings.Replace(
 			vLLMChatResponseExtensionsFixture,
 			`"prompt_tokens_details":{"cached_tokens":1,"audio_tokens":0}`,
@@ -282,8 +306,17 @@ func TestOpenAIChatStreamAcceptsClosedVLLMExecutionMetadataAndRejectsFutureField
 		t.Fatalf("DecodeResponseStream future field error = %v", decodeErr)
 	}
 
-	nestedFuture := bytes.Replace(frame, []byte(`"kv_transfer_params":{}`), []byte(`"kv_transfer_params":{"future":true}`), 1)
-	assertChatStreamRejected(t, conformanceEngine(), context, nestedFuture, "invalid_upstream_json")
+	// The handshake inside kv_transfer_params is opaque serving metadata.
+	handshake := bytes.Replace(frame, []byte(`"kv_transfer_params":{}`), []byte(`"kv_transfer_params":{"do_remote_decode":true}`), 1)
+	handshakeStream, streamErr := conformanceEngine().NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, context)
+	if streamErr != nil {
+		t.Fatal(streamErr)
+	}
+	if _, _, diagnostics, pushErr := handshakeStream.Push(handshake); pushErr != nil {
+		t.Fatalf("Push() with a KV-transfer handshake error = %v", pushErr)
+	} else if !hasServingMetadataDiagnostic(diagnostics, "stream.kv_transfer_params") {
+		t.Fatalf("no serving metadata diagnostic for the handshake in %+v", diagnostics)
+	}
 	withLogprobs := bytes.Replace(frame, []byte(`"logprobs":null`), []byte(`"logprobs":{"content":[]}`), 1)
 	assertChatStreamRejected(t, engine, context, withLogprobs, "unsupported_upstream_stream_logprobs")
 }

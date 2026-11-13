@@ -30,7 +30,7 @@ func TestDashboardConfigReadRequiresCanonicalDeployedYAML(t *testing.T) {
 	}{
 		{name: "active profile", body: string(canonical)},
 		{name: "legacy file is not a usable deployment", body: "model: base-model\nmodel_config: {}\ndecisions: []\n", wantErr: true},
-		{name: "version alone is insufficient", body: "version: v0.3\n", wantErr: true},
+		{name: "version alone is insufficient", body: "version: v0.5\n", wantErr: true},
 		{name: "malformed YAML", body: "[", wantErr: true},
 	}
 	for _, test := range tests {

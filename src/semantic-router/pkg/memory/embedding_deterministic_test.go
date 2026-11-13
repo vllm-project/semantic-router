@@ -8,7 +8,7 @@ import (
 func TestGenerateEmbeddingUsesDeterministicTestMode(t *testing.T) {
 	t.Setenv(deterministicEmbeddingsEnv, "1")
 
-	cfg := EmbeddingConfig{Model: EmbeddingModelMMBERT, Dimension: 384}
+	cfg := EmbeddingConfig{Deployment: "vela-embedding", Dimension: 384}
 	got, err := GenerateEmbedding("My dog is a golden retriever named Max", cfg)
 	if err != nil {
 		t.Fatalf("GenerateEmbedding() error = %v", err)
@@ -29,7 +29,7 @@ func TestGenerateEmbeddingUsesDeterministicTestMode(t *testing.T) {
 func TestDeterministicEmbeddingKeepsRelatedMemorySearchAboveThreshold(t *testing.T) {
 	t.Setenv(deterministicEmbeddingsEnv, "1")
 
-	cfg := EmbeddingConfig{Model: EmbeddingModelMMBERT, Dimension: 384}
+	cfg := EmbeddingConfig{Deployment: "vela-embedding", Dimension: 384}
 	stored, err := GenerateEmbedding("My dog's name is Max and he is a golden retriever", cfg)
 	if err != nil {
 		t.Fatalf("GenerateEmbedding(stored) error = %v", err)
@@ -59,7 +59,7 @@ func TestDeterministicEmbeddingKeepsRelatedMemorySearchAboveThreshold(t *testing
 func TestDeterministicEmbeddingDoesNotApplySemanticRules(t *testing.T) {
 	t.Setenv(deterministicEmbeddingsEnv, "1")
 
-	cfg := EmbeddingConfig{Model: EmbeddingModelMMBERT, Dimension: 4096}
+	cfg := EmbeddingConfig{Deployment: "vela-embedding", Dimension: 4096}
 	dog, err := GenerateEmbedding("dog", cfg)
 	if err != nil {
 		t.Fatalf("GenerateEmbedding(dog) error = %v", err)

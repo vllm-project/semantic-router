@@ -1,0 +1,293 @@
+config:
+  version: v0.5
+  listeners: []
+  providers:
+    defaults:
+      # general-expert, not a profile-specific name: the shared AIGatewayRoute
+      # in deploy/kubernetes/ai-gateway/aigw-resources/ matches x-ai-eg-model
+      # exactly against six names (math-, science-, social-, humanities-, law-
+      # and general-expert). A model outside that list has no route, so every
+      # request 404s at the gateway while the router itself stays healthy.
+      model: general-expert
+    models:
+      - name: general-expert
+        provider_model_id: general-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  # One recipe per signal, each behind its own entrypoint, so the signals'
+  # decisions never compete for priority (#3178) and one deployment serves all
+  # five cases.
+  entrypoints:
+    - model_names: [vllm-sr/auto]
+      recipe: structure
+      default: true
+    - model_names: [vllm-sr/structure]
+      recipe: structure
+    - model_names: [vllm-sr/context]
+      recipe: context
+    - model_names: [vllm-sr/conversation]
+      recipe: conversation
+    - model_names: [vllm-sr/complexity]
+      recipe: complexity
+    - model_names: [vllm-sr/preference]
+      recipe: preference
+  recipes:
+    # From the former structure-routing profile.
+    - name: structure
+      signals:
+        keywords:
+          - name: many_questions
+            description: Prompts that contain many explicit questions.
+            operator: OR
+            method: regex
+            keywords: ['[?？]']
+            count:
+              gte: 4
+          - name: numbered_steps
+            description: Prompts that contain numbered list items such as "1. ..."
+            operator: OR
+            method: regex
+            keywords: ['(?m)^\s*\d+\.\s+']
+      decisions:
+        - name: many_questions_routing
+          description: Route requests with four or more explicit questions.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: many_questions
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: numbered_steps_routing
+          description: Route requests that contain numbered steps.
+          priority: 90
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: numbered_steps
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route for requests matching no request-shape rule.
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+    # From the former long-context-routing profile.
+    - name: context
+      signals:
+        context:
+          - name: long_context
+            description: Requests estimated at 500 tokens or more.
+            min_tokens: "500"
+      decisions:
+        - name: long_context_routing
+          description: Route requests whose estimated token count matches the long_context band.
+          priority: 2000
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: long_context
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route for requests below the long_context threshold
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+    # From the former conversation-routing profile.
+    - name: conversation
+      signals:
+        conversation:
+          - name: multi_turn_user
+            description: At least two user messages - the conversation has history.
+            feature:
+              type: count
+              source:
+                type: message
+                role: user
+            predicate:
+              gte: 2
+          - name: has_developer_message
+            description: Request includes a developer (system-like) message.
+            feature:
+              type: exists
+              source:
+                type: message
+                role: developer
+      decisions:
+        - name: multi_turn_user_routing
+          description: Route requests whose conversation signal matches multi_turn_user.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: multi_turn_user
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: has_developer_message_routing
+          description: Route requests whose conversation signal matches has_developer_message.
+          priority: 90
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: has_developer_message
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route for requests matching no conversation rule.
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+    # From the former complexity-routing profile.
+    - name: complexity
+      signals:
+        # The System One fixture answers the complexity preset; each decision
+        # reads the label it chose.
+        complexity:
+          - name: task_difficulty
+            description: Separates demanding reasoning requests from simple lookup or copy requests.
+      decisions:
+        - name: complexity_hard_routing
+          description: Route requests the complexity signal rates hard.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: complexity
+                name: task_difficulty
+                label: hard
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: complexity_easy_routing
+          description: Route requests the complexity signal rates easy.
+          priority: 90
+          rules:
+            operator: AND
+            conditions:
+              - type: complexity
+                name: task_difficulty
+                label: easy
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route, reached when the request rates medium.
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+    # From the former preference-routing profile.
+    - name: preference
+      signals:
+        systemone:
+          - name: preference
+            deployment: fake-systemone
+            question:
+              type: choice
+              instructions: Which response preference does the request express?
+              choices:
+                - key: terse_answers
+                  description: 'Users who prefer short, direct responses with no elaboration. Examples: keep it concise; bullet points only, no explanation; answer in one short paragraph; just give me the short version'
+                - key: detailed_answers
+                  description: 'Users who want thorough, step-by-step explanations with reasoning. Examples: explain your reasoning in detail; walk me through this step by step; give me a comprehensive, thorough explanation; don''t skip any steps, explain everything'
+                - key: none
+                  description: The request expresses none of these preferences.
+      decisions:
+        - name: terse_preference_routing
+          description: Route requests whose preference signal matches terse_answers.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: systemone
+                name: preference
+                label: terse_answers
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: detailed_preference_routing
+          description: Route requests whose preference signal matches detailed_answers.
+          priority: 90
+          rules:
+            operator: AND
+            conditions:
+              - type: systemone
+                name: preference
+                label: detailed_answers
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route for requests matching no preference rule.
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      deployments:
+        # provider-mocker's System One fixture answers the complexity and
+        # preference rules, so each case's label is pinned by its
+        # __SYSTEMONE_CHOICE__ marker
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          schema: vllm-sr/4.0
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      bindings:
+        complexity: fake-systemone
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 3600
+        max_responses: 1000
+
+resources:
+  # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
+  # and the helm wait burns its full 60m timeout. Loading an embedding model
+  # needs at least the headroom the other model-backed profiles settled on.
+  limits:
+    memory: 6Gi
+    cpu: "2"
+  requests:
+    memory: 2Gi
+    cpu: 250m

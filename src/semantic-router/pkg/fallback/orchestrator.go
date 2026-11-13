@@ -80,6 +80,11 @@ func (o *Orchestrator) EvaluateAttempt(
 	}
 
 	classification := o.classifier.Classify(attempt.Error, attempt.StatusCode)
+	if attempt.ContextLengthExceeded {
+		classification = ClassificationResult{
+			Retryable: true, TriggerClass: TriggerClassContextLength, Reason: "context_length_exceeded",
+		}
+	}
 	attempt.TriggerClass = classification.TriggerClass
 	attempt.Retryable = classification.Retryable
 	if attempt.ErrorMessage == "" && attempt.Error != nil {
