@@ -1108,6 +1108,7 @@
               "tool_result.is_error",
               "messages[].role",
               "content.file",
+              "tool_result.content",
               "reasoning.signature",
               "store"
             ]

@@ -182,7 +182,7 @@ func TestChatGroupingIsLimitedToResponsesSource(t *testing.T) {
 				request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: id, Name: "lookup", Arguments: "{}"}}}})
 			}
 			var actual chatRequestWire
-			if err := appendChatMessages(&actual, request); err != nil {
+			if err := appendChatMessages(&actual, request, false); err != nil {
 				t.Fatal(err)
 			}
 			var want []chatMessageWire

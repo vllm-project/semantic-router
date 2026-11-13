@@ -40,7 +40,7 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 		return nil, diagnostics, validationErr
 	}
 	wire := encodeChatBaseRequest(request)
-	if encodeErr := appendChatMessages(&wire, request); encodeErr != nil {
+	if encodeErr := appendChatMessages(&wire, request, toolResultMediaAsUser(policy)); encodeErr != nil {
 		return nil, diagnostics, encodeErr
 	}
 	if len(wire.Messages) == 0 {
@@ -62,6 +62,9 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
 	if err := appendToolResultErrorLoss(&diagnostics, request, policy, llmprotocol.OpenAIChatV1); err != nil {
+		return diagnostics, err
+	}
+	if err := appendToolResultMediaLoss(&diagnostics, request, policy); err != nil {
 		return diagnostics, err
 	}
 	for _, message := range request.Messages {
@@ -114,7 +117,7 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 	return wire
 }
 
-func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) error {
+func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request, mediaAsUser bool) error {
 	for _, instruction := range request.Instructions {
 		encoded, err := encodeChatMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content, Name: instruction.Name})
 		if err != nil {
@@ -122,9 +125,20 @@ func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) erro
 		}
 		wire.Messages = append(wire.Messages, encoded)
 	}
+	// Images and files from a run of tool results follow the last of them as
+	// one user message, so the tool messages stay adjacent to their calls.
+	var media []llmprotocol.Content
 	for _, message := range responsesAssistantTurns(request) {
 		if len(message.Content) == 0 && message.ReasoningEffort != "" {
 			continue
+		}
+		if mediaAsUser {
+			var moved []llmprotocol.Content
+			message, moved = splitToolResultMedia(message)
+			if err := flushChatToolResultMedia(wire, &media, message.Role == llmprotocol.RoleTool); err != nil {
+				return err
+			}
+			media = append(media, moved...)
 		}
 		encoded, err := encodeChatMessage(message)
 		if err != nil {
@@ -132,6 +146,19 @@ func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) erro
 		}
 		wire.Messages = append(wire.Messages, encoded)
 	}
+	return flushChatToolResultMedia(wire, &media, false)
+}
+
+func flushChatToolResultMedia(wire *chatRequestWire, media *[]llmprotocol.Content, insideToolRun bool) error {
+	if insideToolRun || len(*media) == 0 {
+		return nil
+	}
+	encoded, err := encodeChatMessage(llmprotocol.Message{Role: llmprotocol.RoleUser, Content: *media})
+	if err != nil {
+		return err
+	}
+	wire.Messages = append(wire.Messages, encoded)
+	*media = nil
 	return nil
 }
 

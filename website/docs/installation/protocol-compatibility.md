@@ -241,6 +241,17 @@ blocks are omitted:
 | Non-empty text, including whitespace | The same text |
 | A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
 
+### Images and files in tool results
+
+Chat Completions tool messages carry text only, so an image or file inside a
+tool result, such as the image a coding agent returns after reading an image
+file, fails toward a Chat backend with `tool_result_media`. Listing
+`tool_result.content` in `global.router.allow_lossy_translation` sends that
+content as one user message right after the run of tool results, keeps the
+text of each result in its tool message, and leaves a short text in a result
+that had none. `x-vsr-warnings` then reports an `approximated` diagnostic for
+`tool_result.content`. The backend model must accept images.
+
 ### Anthropic Messages clients on other backends
 
 For an Anthropic Messages client using a Chat Completions or Responses
@@ -435,8 +446,8 @@ tools or error translation.
   `lossy_translation` error for a loss an operator may accept, such as
   `tool_result.is_error`, names the `global.router.allow_lossy_translation`
   setting that accepts it. The `unsupported_capability` errors for files,
-  signed reasoning and stored completions don't; their sections above name
-  the setting.
+  signed reasoning and stored completions and the `tool_result_media` error
+  don't; their sections above name the setting.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
   Responses requests. By default the Router rejects this translation with
   `lossy_translation`, while a false or absent flag remains supported and
@@ -455,7 +466,8 @@ tools or error translation.
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-warnings` and in `llm_translation_lossy_total`. The list
   also accepts `messages[].role` for system messages inside the conversation
-  and `content.file` for files a model cannot read, both described above,
+  and `content.file` for files a model cannot read and `tool_result.content`
+  for images and files in tool results, all described above,
   `reasoning.signature` (see the signed thinking note above), `store` (see
   stored completions above), and every other lossy translation still fails
   closed.
