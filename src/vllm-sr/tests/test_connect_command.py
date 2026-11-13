@@ -451,6 +451,15 @@ def test_probe_refuses_a_200_that_is_not_a_reply(gateway):
     replies["/v1/messages"]["result"] = [MESSAGES_EVENTS[0], MESSAGES_EVENTS[-1]]
     loop = rc.probe_gateway(url, "claude-code", "m", "t")[1]
     assert not loop.ok and "has no text" in loop.detail
+    assert "output tokens" not in loop.detail
+    # a model that thinks until the token limit names the limit, not the gateway
+    replies["/v1/messages"]["result"] = [
+        MESSAGES_EVENTS[0],
+        {"type": "message_delta", "delta": {"stop_reason": "max_tokens"}},
+        MESSAGES_EVENTS[-1],
+    ]
+    loop = rc.probe_gateway(url, "claude-code", "m", "t")[1]
+    assert not loop.ok and f"used all {rc.PROBE_TOKENS} output tokens" in loop.detail
 
 
 def test_probe_answers_every_tool_call_and_says_when_none_came(gateway):
@@ -640,7 +649,9 @@ def test_cli_takes_the_gateway_from_the_configurations_listener(tmp_path, monkey
 
 def test_vsr_is_pointed_at_the_listeners_system_one(monkeypatch, capsys):
     connect_command = importlib.import_module("cli.commands.connect")
-    doc = {"listeners": [{"port": 8899, "apis": {"systemone": {"models": ["vela3-fast"]}}}]}
+    doc = {
+        "listeners": [{"port": 8899, "apis": {"systemone": {"models": ["vela3-fast"]}}}]
+    }
     inputs = {"router": "false", "runtimeUrl": "http://127.0.0.1:8790/v1/decisions"}
     monkeypatch.setattr(connect_command, "_vsr_plugin", lambda env: {"inputs": inputs})
     connect_command._check_vsr({}, "http://localhost:8899", doc)

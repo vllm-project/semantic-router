@@ -212,6 +212,10 @@ def check_router_config(doc: dict, harness: str) -> list[RouterFinding]:
 # --- probes ------------------------------------------------------------------------
 
 
+# Room for a model that thinks before it calls the tool or answers its result.
+PROBE_TOKENS = 1024
+
+
 def _probe_request(harness: str, model: str) -> tuple[str, dict, dict]:
     if harness == "claude-code":
         return (
@@ -219,7 +223,7 @@ def _probe_request(harness: str, model: str) -> tuple[str, dict, dict]:
             {"anthropic-version": "2023-06-01"},
             {
                 "model": model,
-                "max_tokens": 256,
+                "max_tokens": PROBE_TOKENS,
                 "messages": [
                     {"role": "user", "content": "What time is it? Use the tool."}
                 ],
@@ -237,7 +241,7 @@ def _probe_request(harness: str, model: str) -> tuple[str, dict, dict]:
         {},
         {
             "model": model,
-            "max_output_tokens": 256,
+            "max_output_tokens": PROBE_TOKENS,
             "input": "What time is it? Use the tool.",
             "tools": [{"type": "function", **PROBE_TOOL}],
         },
@@ -262,7 +266,15 @@ def _reply_of(harness: str, events: list[dict]) -> tuple[dict | None, str]:
             for event in events
             if event.get("type") == "content_block_delta"
         )
-        return {"content": blocks, "text": text}, ""
+        stop = next(
+            (
+                (event.get("delta") or {}).get("stop_reason")
+                for event in events
+                if event.get("type") == "message_delta"
+            ),
+            None,
+        )
+        return {"content": blocks, "text": text, "stop_reason": stop}, ""
     done = next(
         (
             event["response"]
@@ -447,4 +459,12 @@ def probe_gateway(
             final, problem = _reply_of(harness, events)
             if final is not None and not _text_of(harness, final):
                 problem = "the answer to the tool result has no text"
+                if (
+                    final.get("stop_reason") == "max_tokens"
+                    or final.get("status") == "incomplete"
+                ):
+                    problem += (
+                        f": the model used all {PROBE_TOKENS} output tokens first, most"
+                        " likely thinking; turn reasoning off for this route or run the check again"
+                    )
     return [plain, _result("Streamed tool loop", url, response, problem, detail)]
