@@ -326,7 +326,7 @@ func (state *responsesMessageEncodingState) appendToolCall(call *llmprotocol.Too
 	}
 	item := responsesItemWire{
 		Type: "function_call", ID: state.itemID("function_call"),
-		CallID: call.ID, Name: call.Name, Arguments: call.Arguments,
+		CallID: call.ID, Name: call.Name, Namespace: call.Namespace, Arguments: call.Arguments,
 	}
 	if call.Kind == llmprotocol.ToolKindCustom {
 		item.Type, item.Input = "custom_tool_call", call.Arguments

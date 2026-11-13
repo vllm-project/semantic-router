@@ -162,10 +162,11 @@ func (AnthropicMessagesCodec) DecodeRequest(body []byte, policy llmprotocol.Poli
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	request := decodeAnthropicBaseRequest(wire)
-	if err := decodeAnthropicRequestFields(wire, &request, policy); err != nil {
+	var diagnostics llmprotocol.Diagnostics
+	if err := decodeAnthropicRequestFields(wire, &request, policy, &diagnostics); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.AnthropicMessagesV1, body, request.Generation, policy), nil, nil
+	return request, requestEnvelope(llmprotocol.AnthropicMessagesV1, body, request.Generation, policy), diagnostics, nil
 }
 
 func validateAnthropicRequestWire(wire anthropicRequestWire) error {
@@ -206,7 +207,12 @@ func validateAnthropicRequestWire(wire anthropicRequestWire) error {
 	return nil
 }
 
-func decodeAnthropicRequestFields(wire anthropicRequestWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeAnthropicRequestFields(
+	wire anthropicRequestWire,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	if err := decodeAnthropicOutputConfig(wire.OutputConfig, request); err != nil {
 		return err
 	}
@@ -222,7 +228,7 @@ func decodeAnthropicRequestFields(wire anthropicRequestWire, request *llmprotoco
 	if err := decodeAnthropicMessages(wire.Messages, request, policy); err != nil {
 		return err
 	}
-	if err := decodeAnthropicTools(wire.Tools, request, policy); err != nil {
+	if err := decodeAnthropicTools(wire.Tools, request, policy, diagnostics); err != nil {
 		return err
 	}
 	return decodeAnthropicToolChoice(wire.ToolChoice, request)
@@ -360,7 +366,12 @@ func decodeAnthropicMessages(messages []anthropicMessageWire, request *llmprotoc
 	return nil
 }
 
-func decodeAnthropicTools(raw json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeAnthropicTools(
+	raw json.RawMessage,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil
 	}
@@ -384,7 +395,7 @@ func decodeAnthropicTools(raw json.RawMessage, request *llmprotocol.Request, pol
 		}
 		if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 			"tools.allowed_callers":       toolWire.AllowedCallers,
-			"tools.defer_loading":         toolWire.DeferLoading,
+			"tools.defer_loading":         optInDeferLoading(toolWire.DeferLoading, policy, llmprotocol.AnthropicMessagesV1, diagnostics),
 			"tools.eager_input_streaming": toolWire.EagerInputStreaming,
 			"tools.input_examples":        toolWire.InputExamples,
 		}); err != nil {
