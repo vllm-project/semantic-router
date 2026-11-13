@@ -448,6 +448,19 @@ domains:
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 
+  # The CLI unit suite checks the Dashboard image's build and entrypoint
+  # (src/vllm-sr/tests/test_dashboard_dockerfile_surface.py). Not part of
+  # vllm-sr-cli, whose match publishes the CLI on main.
+  cli-checked-dashboard-image:
+    owner: vllm-sr-cli
+    paths:
+      - dashboard/backend/Dockerfile
+      - dashboard/backend/entrypoint.sh
+      - dashboard/backend/entrypoint_permissions.py
+      - dashboard/backend/handlers/logs.go
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
+
   # The CLI unit suite checks the snippets of these pages, and that their
   # translations show the same snippets (src/vllm-sr/tests/test_docs_model_runtime.py),
   # and the agent skill's command lines (src/vllm-sr/tests/test_agent_skill.py).
