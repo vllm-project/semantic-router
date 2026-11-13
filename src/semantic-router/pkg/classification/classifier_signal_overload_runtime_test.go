@@ -350,6 +350,30 @@ func TestAScanThatWaitedForCapacityLearnsNoPace(t *testing.T) {
 	}
 }
 
+// A scan that falls behind its deadline reads the rest in larger windows
+// even when its windows waited for capacity first: it judges its pace from
+// when the runtime answered again. Here a 300,000-token message that the
+// re-plan reads whole by a 3 s deadline is still read whole after a 200 ms
+// overload at its start; without the re-plan it was read 120 of 189
+// windows, and an injection in the rest was missed.
+func TestAScanThatWaitedForCapacityStillReadsTheRestInLargerWindows(t *testing.T) {
+	scale := time.Duration(1)
+	if raceDetector {
+		scale = 3
+	}
+	deadline := 3 * time.Second * scale
+	classifier, fake, busy := busyRuntimeClassifier(t, overloadGuardDocument(deadline, "{action: retry, wait_ms: 2000}", ""), 20*time.Millisecond*scale)
+	for range 5 {
+		classifier.windowPaces.observe("primary", configuredWindow, 20*time.Millisecond*scale)
+		classifier.windowPaces.observe("primary", 30_000, 22*time.Millisecond*scale)
+	}
+	busy.setFree(time.Now().Add(200 * time.Millisecond))
+	results := evaluateTurn(classifier, distinctProse(300_000, 9)+"\n\nSummarize the minutes above.")
+	if coverage := results.ScanCoverage["jailbreak:prompt_attack"]; coverage != scanCoverageFull || grownReads(fake) == 0 {
+		t.Fatalf("after a 200 ms overload the message was read %v, %d windows grown; errors %v", results.ScanCoverage, grownReads(fake), results.SignalErrors)
+	}
+}
+
 // An injection diluted in a long message is caught when the runtime is
 // overloaded for 1 s first, at a deadline the scan meets without the wait.
 func TestAnInjectionInALongMessageIsCaughtAfterAWaitForCapacity(t *testing.T) {

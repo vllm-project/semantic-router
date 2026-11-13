@@ -62,15 +62,28 @@ type scanPace struct {
 	pending           []*systemOneCall
 	cutRead           time.Time
 	waited            bool
+	resumed           time.Time
+	readAtResume      int
 }
 
 // markWaited records that a window of the scan waited for its deployment to
-// have capacity (on_signal_overload): the scan's time then says nothing of
-// how fast the deployment reads.
-func (scan *guardScan) markWaited() {
+// have capacity (on_signal_overload): the scan's time until then says
+// nothing of how fast the deployment reads. Once the first such window is
+// answered, the scan judges its pace from then on, over the windows it reads
+// since.
+func (scan *guardScan) markWaited(answered bool) {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
 	scan.pace.waited = true
+	if !answered || !scan.pace.resumed.IsZero() {
+		return
+	}
+	scan.pace.resumed, scan.pace.readAtResume = time.Now(), 0
+	for index := range scan.cut {
+		if scan.done[index] && scan.errs[index] == nil {
+			scan.pace.readAtResume++
+		}
+	}
 }
 
 // windowPace is one deployment's learned pace: the decayed weight of its
@@ -182,16 +195,21 @@ func (c *Classifier) replan(scan *guardScan) []*systemOneCall {
 // replanRuns is how many of a scan's windows left it reads as one, or 0
 // when it keeps them: before it read scanPaceRounds rounds of its windows
 // in flight, when it is not behind, when no k fits, once it judged or
-// another scan of its input re-planned it, once its stage's scans ended, and
-// once a window waited for capacity, after which its time says nothing of
-// how fast its deployment reads.
+// another scan of its input re-planned it, and once its stage's scans ended.
+// A scan whose window waited for capacity judges its pace from when such a
+// window was last answered, over the windows read since, and not while one
+// still waits.
 func (c *Classifier) replanRuns(scan *guardScan) int {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
 	pace := &scan.pace
-	if pace.judged || pace.waited || !pace.at.IsZero() || pace.deadline.IsZero() || scan.most <= scan.grown ||
-		pace.stage != nil && pace.stage.ctx.Err() != nil {
+	if pace.judged || !pace.at.IsZero() || pace.deadline.IsZero() || scan.most <= scan.grown ||
+		pace.stage != nil && pace.stage.ctx.Err() != nil || pace.waited && pace.resumed.IsZero() {
 		return 0
+	}
+	from, base := pace.started, 0
+	if pace.waited {
+		from, base = pace.resumed, pace.readAtResume
 	}
 	read, left := 0, 0
 	for index := range scan.cut {
@@ -202,11 +220,11 @@ func (c *Classifier) replanRuns(scan *guardScan) int {
 			read++
 		}
 	}
-	if left == 0 || read < scanPaceRounds*max(scan.parallel, 1) {
+	if left == 0 || read-base < scanPaceRounds*max(scan.parallel, 1) {
 		return 0
 	}
 	now := time.Now()
-	perWindow, timeLeft := now.Sub(pace.started)/time.Duration(read), pace.deadline.Sub(now)
+	perWindow, timeLeft := now.Sub(from)/time.Duration(read-base), pace.deadline.Sub(now)
 	if time.Duration(left)*perWindow <= timeLeft {
 		return 0
 	}

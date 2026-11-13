@@ -46,6 +46,9 @@ import (
 const (
 	overloadBackoffFirst = 100 * time.Millisecond
 	overloadBackoffMost  = time.Second
+	// overloadJoin is how soon after a stage's round for a deployment
+	// another of its waiting calls rides that round instead of taking one.
+	overloadJoin = 50 * time.Millisecond
 	// overloadRounds is how many times a stage's calls to a deployment ask
 	// again while it waits for capacity.
 	overloadRounds = 3
@@ -158,10 +161,11 @@ type overloadWait struct {
 }
 
 // deploymentRounds are a stage's rounds for one deployment: how many it has
-// had, how many of its calls wait for one, and the one they are to ask
-// again in.
+// had and when the last of them was, how many of its calls wait for one, and
+// the one they are to ask again in.
 type deploymentRounds struct {
 	taken   int
+	last    time.Time
 	waiting int
 	next    *overloadRound
 }
@@ -218,6 +222,17 @@ func (w *overloadWait) round(ctx context.Context, deployment string, gate *overl
 		if at.Before(now) {
 			at = now
 		}
+	} else {
+		// The deployment answers again: the stage asks at once, a little
+		// apart from the other stages that waited for it.
+		at = now.Add(rand.N(overloadBackoffFirst/2 + 1))
+	}
+	// A stage's rounds are a step apart at least, so a deployment that
+	// answers some calls and refuses others does not spend them at once.
+	if !rounds.last.IsZero() {
+		if earliest := rounds.last.Add(overloadStep(rounds.taken)); at.Before(earliest) {
+			at = earliest
+		}
 	}
 	if at.After(until) {
 		at = until
@@ -255,8 +270,21 @@ func (w *overloadWait) asks(deployment string, round *overloadRound, gate *overl
 		return round.asks, false
 	}
 	round.decided = true
-	claimed, busy := gate.claim(now)
 	rounds := w.roundsOfLocked(deployment)
+	// A stage takes one round for a deployment at a time: a call that
+	// reaches another round of its stage just after one was taken rides it,
+	// and one that comes sooner than a step after it waits for a later one.
+	if !rounds.last.IsZero() {
+		since := now.Sub(rounds.last)
+		if since < overloadJoin {
+			round.asks = true
+			return true, false
+		}
+		if since < min(overloadBackoffFirst<<rounds.taken, overloadBackoffMost)/2 {
+			return false, false
+		}
+	}
+	claimed, busy := gate.claim(now)
 	if !claimed {
 		return false, false
 	}
@@ -265,6 +293,7 @@ func (w *overloadWait) asks(deployment string, round *overloadRound, gate *overl
 	}
 	round.asks = true
 	rounds.taken++
+	rounds.last = now
 	return true, false
 }
 

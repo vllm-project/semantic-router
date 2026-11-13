@@ -168,6 +168,34 @@ func TestWaitingRequestsAskAnOverloadedDeploymentOneRoundAtATime(t *testing.T) {
 	}
 }
 
+// A stage takes one round for a deployment at a time, whichever round its
+// waiting calls reach: a call that reaches another round just after one was
+// taken rides it, one that comes sooner than a step after it waits, and a
+// round a step later takes another. So a deployment that answers some calls
+// and refuses others does not spend a request's rounds at once.
+func TestAStageTakesOneRoundForADeploymentAtATime(t *testing.T) {
+	wait := &overloadWait{wait: 2 * time.Second, rounds: map[string]*deploymentRounds{}}
+	gate := &overloadGate{}
+	now := time.Now()
+	ask := func(after time.Duration) bool {
+		together, alone := wait.asks("kai", &overloadRound{at: now.Add(after)}, gate, now.Add(after))
+		return together && !alone
+	}
+	taken := func() int { return wait.roundsOfLocked("kai").taken }
+	if !ask(0) || taken() != 1 {
+		t.Fatalf("the first round: taken %d", taken())
+	}
+	if !ask(10*time.Millisecond) || taken() != 1 {
+		t.Fatalf("a call 10 ms after the round asks in it without taking another: taken %d", taken())
+	}
+	if ask(60*time.Millisecond) || taken() != 1 {
+		t.Fatalf("a call 60 ms after the round waits for a later one: taken %d", taken())
+	}
+	if !ask(150*time.Millisecond) || taken() != 2 {
+		t.Fatalf("a round 150 ms later takes the second: taken %d", taken())
+	}
+}
+
 // A refusal is the overloaded rules' only when the decisions would not
 // refuse had those rules stayed unknown: a genuine match of another rule, a
 // failure for another reason, or a decision that does not refuse keeps the

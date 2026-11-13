@@ -501,7 +501,7 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 		return c.decider().Decide(callCtx, deployment, request)
 	})
 	if waited && call.scan != nil {
-		call.scan.markWaited()
+		call.scan.markWaited(err == nil)
 	}
 	if err != nil && !answersGivenUp(ctx) && !call.reread {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))

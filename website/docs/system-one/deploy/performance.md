@@ -105,7 +105,10 @@ With `action: retry`:
   - A request's calls to one model ask again together, in rounds, so the
     questions one call carried travel in one call again.
 - **Bound the load.** A request's calls to a model ask again in at most 3
-  rounds: at a quarter of its wait, at half and at its end.
+  rounds, a step apart at least: at a quarter of its wait, at half and at its
+  end. Its calls that reach a round just after another of them took one ask
+  in that round, so a model that answers some calls and refuses others does
+  not spend a request's rounds at once.
   - While the model refuses calls as overloaded, one waiting request's round
     asks it per step, however many requests wait. The step is jittered, from
     100 ms doubling to 1 s.
@@ -115,8 +118,10 @@ With `action: retry`:
   - The first answer to any call opens the model again, and every request
     waiting for it has its round then.
 - **Learn no pace from the wait.** A guard scan that waited learns no pace for
-  its model, and does not judge from its time that it fell behind: its time
-  says nothing of how fast the model reads.
+  its model: its time says nothing of how fast the model reads. It judges
+  whether it fell behind only from when the model answered it again, over
+  the windows it read since, so a long input it can no longer read whole in
+  windows of the configured size is still read in larger ones.
 - **Answer a retryable error.** If the model still does not answer, the Router
   answers an error the client retries in two cases:
   - Only rules that failed closed on the overloaded model refuse the request.
