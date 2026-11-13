@@ -503,7 +503,8 @@ routing history lists the session's calls in order and names the subagent of
 each one by a short hash of its agent identity header, or `main` for the main
 conversation. The hash is recorded only when `identity.headers.agent` names that
 header (see [Session identification](../../api/session-identification)); without
-it, every call shows `main`.
+it, every call shows `main`. A viewer without `replay.detail` gets no hash, as
+with the rest of the redacted session policy, so every call shows `main` there too.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 
