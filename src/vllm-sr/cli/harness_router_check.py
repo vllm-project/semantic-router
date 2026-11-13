@@ -451,6 +451,8 @@ def probe_gateway(
         detail = (
             "the model answered without calling the tool, so the loop was not tested"
         )
+        if _hit_token_limit(first):
+            detail = _token_limit("before calling the tool, so the loop was not tested")
     elif first is not None:
         response, events, problem = _post(
             url, headers, _with_result(harness, call, first), timeout
@@ -459,12 +461,23 @@ def probe_gateway(
             final, problem = _reply_of(harness, events)
             if final is not None and not _text_of(harness, final):
                 problem = "the answer to the tool result has no text"
-                if (
-                    final.get("stop_reason") == "max_tokens"
-                    or final.get("status") == "incomplete"
-                ):
-                    problem += (
-                        f": the model used all {PROBE_TOKENS} output tokens first, most"
-                        " likely thinking; turn reasoning off for this route or run the check again"
-                    )
+                if _hit_token_limit(final):
+                    problem += ": " + _token_limit("before writing any")
     return [plain, _result("Streamed tool loop", url, response, problem, detail)]
+
+
+def _token_limit(where: str) -> str:
+    return (
+        f"the model reached the check's {PROBE_TOKENS}-token output limit {where},"
+        " most likely while thinking; turn reasoning off for this route or run the"
+        " check again"
+    )
+
+
+def _hit_token_limit(reply: dict) -> bool:
+    """Whether a finished reply stopped at its output-token limit: a Messages
+    stop reason, or a Responses reply left incomplete for that reason."""
+    return (
+        reply.get("stop_reason") == "max_tokens"
+        or (reply.get("incomplete_details") or {}).get("reason") == "max_output_tokens"
+    )

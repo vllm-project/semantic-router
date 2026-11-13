@@ -459,7 +459,23 @@ def test_probe_refuses_a_200_that_is_not_a_reply(gateway):
         MESSAGES_EVENTS[-1],
     ]
     loop = rc.probe_gateway(url, "claude-code", "m", "t")[1]
-    assert not loop.ok and f"used all {rc.PROBE_TOKENS} output tokens" in loop.detail
+    assert not loop.ok and f"{rc.PROBE_TOKENS}-token output limit" in loop.detail
+    # and a model that runs out before it calls the tool says so too
+    replies["/v1/messages"]["tool"] = replies["/v1/messages"]["result"]
+    loop = rc.probe_gateway(url, "claude-code", "m", "t")[1]
+    assert loop.ok and "output limit before calling the tool" in loop.detail
+    replies["/v1/messages"]["tool"] = MESSAGES_EVENTS
+    # a Responses reply cut for another reason, such as a content filter, is not a token limit
+    replies["/v1/responses"]["tool"] = RESPONSES_EVENTS
+    incomplete = {
+        "type": "response.completed",
+        "response": {"object": "response", "status": "incomplete", "output": []},
+    }
+    for reason, says in (("max_output_tokens", True), ("content_filter", False)):
+        incomplete["response"]["incomplete_details"] = {"reason": reason}
+        replies["/v1/responses"]["result"] = [incomplete]
+        loop = rc.probe_gateway(url, "codex", "m", "t")[1]
+        assert not loop.ok and ("output limit" in loop.detail) is says
 
 
 def test_probe_answers_every_tool_call_and_says_when_none_came(gateway):
