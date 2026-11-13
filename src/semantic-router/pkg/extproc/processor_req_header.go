@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -27,6 +28,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	r.captureDelegatedCredential(ctx)
 	if r.Config != nil {
 		ctx.sessionIDHeaders = r.Config.Headers.SessionIDHeaderNames()
+		ctx.identity = r.Config.Authz.Identity
 	}
 	r.gateDebugHeaders(ctx)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
@@ -52,7 +54,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		mutation := buildLooperInternalHeaderRemovalMutation()
+		mutation := buildLooperInternalHeaderRemovalMutation(ctx.identity)
 		r.appendDelegatedCredentialRemoval(mutation)
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 		// Per-user keys reach a provider only as its credential, which a
@@ -87,7 +89,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if requiresBody && v.RequestHeaders.GetEndOfStream() {
 		return r.rejectBodylessInferenceRequest(ctx), nil
 	}
-	mutation := buildIdentityEncodingRequestMutation()
+	mutation := buildIdentityEncodingRequestMutation(ctx.identity)
 	r.appendDelegatedCredentialRemoval(mutation)
 	mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 	if isAzureOpenAIPath(path) {
@@ -243,7 +245,7 @@ func extractHeaderValue(header interface {
 	return headerValue
 }
 
-func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
+func buildIdentityEncodingRequestMutation(identity config.IdentityConfig) *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
 		SetHeaders: []*core.HeaderValueOption{{
 			Header: &core.HeaderValue{
@@ -251,7 +253,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: providerBoundRemovals(),
+		RemoveHeaders: providerBoundRemovals(identity),
 	}
 }
 

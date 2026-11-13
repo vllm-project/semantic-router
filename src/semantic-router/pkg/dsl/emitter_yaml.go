@@ -302,7 +302,7 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 	if err := yaml.Unmarshal(replacementBytes, &replacement); err != nil {
 		return nil, fmt.Errorf("failed to re-parse routing scopes: %w", err)
 	}
-	for _, field := range []string{"adaptations", "reliability", "fallback"} {
+	for _, field := range BaseDecisionFields() {
 		preserveBaseRecipeDecisionField(replacement["recipes"], base["recipes"], field)
 	}
 	mergeModelFacts(base, replacement)

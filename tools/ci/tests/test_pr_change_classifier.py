@@ -25,6 +25,7 @@ from ci_plan import (  # noqa: E402
 )
 from classify_pr_changes import (  # noqa: E402
     CLI_RUNTIME_IMAGES,
+    PRODUCTION_RELEASE_IMAGES,
     classify,
     full_e2e_profiles,
 )
@@ -45,11 +46,7 @@ class SelectionTests(unittest.TestCase):
         expected_by_source = {
             "signal_routing_helpers.go": {
                 "envoy-ai-gateway",
-                "structure-routing",
-                "conversation-routing",
-                "complexity-routing",
-                "long-context-routing",
-                "preference-routing",
+                "signal-routing",
             },
             "failover_during_traffic.go": {"production-stack"},
             "streaming_body.go": {"streaming"},
@@ -62,20 +59,61 @@ class SelectionTests(unittest.TestCase):
                 self.assertNotIn("e2e.response-api-redis", selected)
                 self.assertNotIn("e2e.response-api-redis-cluster", selected)
 
-    def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
+    def test_dashboard_frontend_changes_run_the_dashboard_lane_without_approval(self):
+        # CI static checks skip the Dashboard lint hook because this lane lints
+        # the whole frontend; it must stay selected and automatic for them.
+        for options in ({}, {"require_approval": True}):
+            plan = make_plan(
+                ["dashboard/frontend/src/App.tsx"], source_sha=SHA, **options
+            )
+            self.assertIn("dashboard", plan["expected_verification_ids"])
+            self.assertNotIn(
+                "dashboard",
+                [record["id"] for record in plan.get("deferred_verifications", [])],
+            )
+
+    def test_request_path_changes_run_the_p0_cases_of_their_e2e_profiles(self):
+        guards = ("envoy-ai-gateway", "masking", "pii-remote-backend")
+
+        def scopes(paths, **options):
+            plan = make_plan(paths, source_sha=SHA, **options)
+            return {
+                record["profile"]: record["baseline_suite"]
+                for record in plan["verifications"]
+                if record["executor"] == "e2e" and record["profile"] in guards
+            }
+
+        source = "src/semantic-router/pkg/extproc/processor.go"
+        self.assertEqual(scopes([source]), dict.fromkeys(guards, "p0"))
+        # A profile whose own files change, or that another domain selects,
+        # keeps its standard cases beside the request-path change.
+        self.assertEqual(
+            scopes([source, "e2e/profiles/masking/values.yaml"]),
+            {
+                "envoy-ai-gateway": "p0",
+                "masking": "standard",
+                "pii-remote-backend": "p0",
+            },
+        )
+        self.assertEqual(
+            scopes([source, "e2e/testcases/cache.go"])["envoy-ai-gateway"], "standard"
+        )
+        self.assertEqual(scopes([source], full=True), dict.fromkeys(guards, "full"))
+
+    def test_no_route_contract_keeps_a_required_gateway_profile_without_fallback(self):
         for path in (
-            "e2e/profiles/routing-errors/values.yaml",
+            "e2e/profiles/remote-embedding/values.yaml",
             "e2e/testcases/routing_error_codes.go",
             "src/semantic-router/pkg/extproc/routing_failure.go",
             "src/semantic-router/pkg/extproc/req_filter_classification_runtime.go",
         ):
             with self.subTest(path=path):
-                self.assertIn("e2e.routing-errors", classify([path]).selected_jobs)
-        self.assertIn("e2e.routing-errors", full_cpu_ids())
-        record = make_plan([], source_sha=SHA, requested=("e2e.routing-errors",))[
+                self.assertIn("e2e.remote-embedding", classify([path]).selected_jobs)
+        self.assertIn("e2e.remote-embedding", full_cpu_ids())
+        record = make_plan([], source_sha=SHA, requested=("e2e.remote-embedding",))[
             "verifications"
         ][0]
-        self.assertEqual(record["profile"], "routing-errors")
+        self.assertEqual(record["profile"], "remote-embedding")
         self.assertEqual(set(record["images"]), {"vllm-sr", "provider-mocker"})
 
     def test_manual_platform_selection_uses_the_same_plan_contract_and_build(self):
@@ -213,6 +251,7 @@ class SelectionTests(unittest.TestCase):
                         [path],
                         source_sha=SHA,
                         profile=profile,
+                        full=profile == "main",
                         publish=profile == "main",
                     )
                     self.assertIn("local.cli", plan["expected_verification_ids"])
@@ -347,7 +386,7 @@ class SelectionTests(unittest.TestCase):
         }
         baseline = make_plan([], source_sha=SHA, full=True)
         self.assertTrue(set(cases).isdisjoint(baseline["expected_verification_ids"]))
-        self.assertEqual(len(baseline["verifications"]), 25)
+        self.assertEqual(len(baseline["verifications"]), 28)
         self.assertEqual(len(baseline["component_batches"]), 5)
         for identity, path in cases.items():
             with self.subTest(identity=identity):
@@ -413,7 +452,7 @@ class SelectionTests(unittest.TestCase):
             affected = make_plan([path], source_sha=SHA)
             for options in (
                 {"profile": "pr", "full": True},
-                {"profile": "main", "publish": True},
+                {"profile": "main", "full": True, "publish": True},
             ):
                 with self.subTest(path=path, options=options):
                     complete = make_plan([path], source_sha=SHA, **options)
@@ -430,7 +469,7 @@ class SelectionTests(unittest.TestCase):
         for profile, flags in (
             ("nightly", []),
             ("release", []),
-            ("main", ["--publish"]),
+            ("main", ["--publish", "--full"]),
         ):
             with (
                 self.subTest(profile=profile),
@@ -487,7 +526,7 @@ class SelectionTests(unittest.TestCase):
         baseline = make_plan(["e2e/profiles/ai-gateway/profile.go"], source_sha=SHA)
         self.assertIn("provider-mocker", baseline["images"])
 
-    def test_main_push_runs_source_checks_without_republishing_artifacts(self):
+    def test_unpublished_main_run_checks_source_without_artifacts(self):
         for path in (
             "README.md",
             "src/vllm-sr/cli/core.py",
@@ -503,8 +542,38 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(plan["deferred_verifications"], [])
                 self.assertFalse(plan["approval_required"])
 
-    def test_explicit_main_publication_qualifies_all_commit_addressed_images(self):
-        plan = make_plan(["README.md"], source_sha=SHA, profile="main", publish=True)
+    def test_main_push_publishes_its_complete_set_after_automatic_checks(self):
+        records = verification_records(load_domain_registry())
+        for path, helm in (
+            ("README.md", False),
+            ("src/semantic-router/pkg/config/loader.go", False),
+            ("deploy/helm/semantic-router/values.yaml", True),
+        ):
+            with self.subTest(path=path):
+                plan = make_plan([path], source_sha=SHA, profile="main", publish=True)
+                self.assertFalse(plan["full_cpu"])
+                self.assertTrue(plan["publication"])
+                self.assertTrue(
+                    all(
+                        records[name]["execution"] == "automatic"
+                        for name in plan["expected_verification_ids"]
+                    )
+                )
+                self.assertIn("cli-package", plan["expected_verification_ids"])
+                self.assertEqual(
+                    plan["publish_images"], list(PRODUCTION_RELEASE_IMAGES)
+                )
+                self.assertEqual(plan["images"], sorted(PRODUCTION_RELEASE_IMAGES))
+                self.assertTrue(plan["multiarch"])
+                self.assertTrue(plan["publish_python"])
+                self.assertEqual(plan["publish_helm"], helm)
+        unpublished = make_plan(["README.md"], source_sha=SHA, profile="main")
+        self.assertNotIn("cli-package", unpublished["expected_verification_ids"])
+
+    def test_main_publication_dispatch_qualifies_all_commit_addressed_images(self):
+        plan = make_plan(
+            ["README.md"], source_sha=SHA, profile="main", full=True, publish=True
+        )
         self.assertTrue(plan["publish_python"])
         self.assertTrue(plan["publish_helm"])
         self.assertTrue(plan["full_cpu"])

@@ -39,39 +39,37 @@ func redactPayload(payload any) bool {
 	case map[string]any:
 		return redactObjectPayload(typed)
 	case []any:
-		return redactRecordItems(typed)
+		return redactEach(typed, redactRecordMap)
 	default:
 		return false
 	}
 }
 
+// redactObjectPayload redacts a record, a list's records, and a trajectory's
+// messages and routes. A trajectory route repeats a record's route
+// diagnostics, so it is redacted the same way.
 func redactObjectPayload(payload map[string]any) bool {
 	changed := redactRecordMap(payload)
-	if messages, ok := payload["messages"].([]any); ok && redactTrajectoryMessages(messages) {
-		changed = true
-	}
-	if data, ok := payload["data"].([]any); ok && redactRecordItems(data) {
-		changed = true
-	}
-	return changed
-}
-
-func redactTrajectoryMessages(messages []any) bool {
-	changed := false
-	for _, item := range messages {
-		message, ok := item.(map[string]any)
-		if ok && redactTrajectoryMessageMap(message) {
+	for _, list := range []struct {
+		field  string
+		redact func(map[string]any) bool
+	}{
+		{"messages", redactTrajectoryMessageMap},
+		{"data", redactRecordMap},
+		{"routes", redactRouteDiagnosticsMap},
+	} {
+		if items, ok := payload[list.field].([]any); ok && redactEach(items, list.redact) {
 			changed = true
 		}
 	}
 	return changed
 }
 
-func redactRecordItems(items []any) bool {
+func redactEach(items []any, redact func(map[string]any) bool) bool {
 	changed := false
 	for _, item := range items {
-		record, ok := item.(map[string]any)
-		if ok && redactRecordMap(record) {
+		object, ok := item.(map[string]any)
+		if ok && redact(object) {
 			changed = true
 		}
 	}

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -51,6 +52,10 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 	if ctx.IsStreamingResponse {
 		return r.handleSemanticStreamingResponseBody(responseBody, endOfStream, ctx)
 	}
+	// Recovery and redaction replace this slice before the pipeline copies
+	// it. Compare with the decoded upstream body so same-format Chat still
+	// emits BodyMutation. Gzip replacement stays in deliverUpstreamResponseBody.
+	incomingBody := responseBody
 	recoveredBody, recoveryErr := r.handleContextRecoveryFollowup(
 		ctx.TraceContext,
 		responseBody,
@@ -61,7 +66,7 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 			"request_id": ctx.RequestID,
 			"error":      recoveryErr.Error(),
 		})
-		if contextRecoveryFailClosed(ctx) {
+		if contextRecoveryFailClosed(r.Config, ctx) {
 			return r.createErrorResponse(502, "Context recovery followup failed")
 		}
 		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
@@ -69,14 +74,19 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 		responseBody = recoveredBody
 	}
 
-	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency)
+	return r.handleNonStreamingResponseBody(
+		responseBody,
+		ctx,
+		completionLatency,
+		!bytes.Equal(responseBody, incomingBody),
+	)
 }
 
-func contextRecoveryFailClosed(ctx *RequestContext) bool {
+func contextRecoveryFailClosed(cfg *config.RouterConfig, ctx *RequestContext) bool {
 	if ctx == nil {
 		return false
 	}
-	plugin := contextCompression(ctx.VSRSelectedDecision)
+	plugin := contextCompression(requestPlugins(cfg, ctx))
 	return plugin != nil &&
 		plugin.Compress.EffectiveFailureMode() == config.ContextCompressionFailureClosed
 }

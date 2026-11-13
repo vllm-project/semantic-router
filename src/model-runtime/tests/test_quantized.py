@@ -7,6 +7,7 @@ import pytest
 import torch
 from torch import nn
 from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.config import EngineArgs
 from vllm_srun.engines.native.engine import NativeEngine
 from vllm_srun.engines.native.quantized import Int4Linear
 from vllm_srun.errors import PackageError
@@ -38,9 +39,9 @@ STATES = (
 )
 
 
-def answers(package):
+def answers(package, dtype="auto"):
     """The answers to ``STATES`` and the engine's (int4 layers, parameters, bytes)."""
-    runtime = start_runtime(package)
+    runtime = start_runtime(package, engine_args=EngineArgs(dtype=dtype))
     try:
         out = []
         for state in STATES:
@@ -86,8 +87,9 @@ def test_an_int4_package_answers_as_its_dequantized_weights_do(
     plain = write_quantized_fixture(
         d3_text_package, tmp_path / "plain", symmetric=symmetric, dequantized=True
     )
-    got, (layers, parameters, size) = answers(packed)
-    want, (plain_layers, plain_parameters, plain_size) = answers(plain)
+    # W4A16: the packed weights multiply BF16 activations, as the plain package's do at bfloat16.
+    got, (layers, parameters, size) = answers(packed, "bfloat16")
+    want, (plain_layers, plain_parameters, plain_size) = answers(plain, "bfloat16")
     assert got == want
     # MLPs in all four layers, GDN projections in three, attention in one
     assert (layers, plain_layers) == (4 * 3 + 3 * 3 + 4, 0)

@@ -44,7 +44,7 @@ func TestSystemOneBudgetIncludesSignalsAndVariesByDecision(t *testing.T) {
 listeners:
   - name: native
     port: 8801
-    systemone: {models: [vllm-sr/auto]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
 providers:
   models:
     - {name: kai, api_format: systemone, deployment: local-kai}

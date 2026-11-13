@@ -41,8 +41,8 @@ vllm-sr serve --target kubernetes --config config.yaml
 
 ## standalone 模式下 Router 做什么
 
-- **listener：** `listeners` 中的每一项都以 HTTP/1.1 和 HTTP/2（明文下为 h2c）提供服务，`timeout` 作为空闲超时，
-  请求体上限 500 MiB，最多 50,000 个连接，与 Envoy 模板的限制一致。
+- **listener：** `listeners` 中的每一项都以 HTTP/1.1 和 HTTP/2（明文下为 h2c）提供服务。`timeout` 限制读取请求的时间（客户端停止发送请求体时返回 408）和空闲连接保持的时间，
+  不限制后端仍在流式返回的响应。请求体上限 500 MiB，每个 listener 最多 50,000 个连接，与 Envoy 模板的限制一致。
 - **API key：** 设置 `api_keys` 后，客户端需以 `Authorization: Bearer <key>` 或 `api-key: <key>` 发送其中之一；
   其他请求得到 OpenAI 风格的 401。key 在请求到达 provider 之前被移除。
 - **模型白名单：** 设置 `models` 后，该 listener 只接受这些请求模型（见[模型白名单](#model-allow-list)）。
@@ -60,21 +60,19 @@ vllm-sr serve --target kubernetes --config config.yaml
         key_file: certs/tls.key
   ```
 
-- **边缘的信任边界：** 客户端发送的身份 header（`x-authz-*`，以及 `global.services.authz.identity` 指定的名称，
-  除非 listener 信任它们，见[身份 header](#identity-headers)）和只有可信代理才能设置的代理控制 header 都不会进入路由
-  或到达后端。后者包括 `x-envoy-internal` 以及 Envoy 的重试、超时
-  和追踪控制，例如 `x-envoy-max-retries`、`x-envoy-retry-on` 和 `x-envoy-upstream-rq-timeout-ms`。Router 之后的基于
-  Envoy 的组件（sidecar、模型服务前的网关）会听从可信调用方发来的这些 header，而 Router 正是这样的调用方，否则客户端就能
-  借道设置那里的重试和超时；剥离它们能让 Router 的可靠性策略始终是唯一的重试和超时权威。这份清单就是 Envoy 从外部请求中
-  剥离的那一份，并保持这么窄。
+- **边缘的信任边界：** 客户端发送的两类 header 永远不会进入路由或到达后端：
+  - 身份 header（`x-authz-*`，以及 `global.services.authz.identity` 指定的名称），除非 listener 信任它们（见[身份 header](#identity-headers)）；
+  - 只有可信代理才能设置的代理控制 header：`x-envoy-internal` 以及 Envoy 的重试、超时和追踪控制，例如 `x-envoy-max-retries`、`x-envoy-retry-on` 和 `x-envoy-upstream-rq-timeout-ms`。这份清单就是 Envoy 从外部请求中剥离的那一份。
+
+  Router 之后的基于 Envoy 的组件（例如 sidecar 或模型服务前的网关）会听从 Router 发来的这些控制。剥离它们能让 Router 的可靠性策略始终是唯一的重试和超时权威。
 - **探针：** 进程运行时 `GET /health` 就会应答；路由核心可以接收流量后 `GET /ready` 才应答。Prometheus 指标仍在
   Router 的指标端口（9190）。
 - **重新加载：** Router 原地重新加载配置。修改 listener 的地址、端口、超时或 `tls` 路径，或者新增、删除 listener，
-  都会以 `restart_required` 被拒绝，直到 Router 重启；API key 和模型白名单可原地重新加载。
+  都会以 `restart_required` 被拒绝，直到 Router 重启；API key、`apis` 及其模型白名单和身份信任可原地重新加载。
 
 ### 模型白名单 {#model-allow-list}
 
-listener 的 `models` 列出它接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
+listener `apis` 中某个 API 的 `models` 列出该 API 接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
 listener 仍可使用所有模型：
 
 ```yaml
@@ -86,7 +84,9 @@ listeners:
     address: 0.0.0.0
     port: 8899
     api_keys: ["${WORKSHOP_KEY}"]
-    models: [vllm-sr/auto]
+    apis:
+      chat_completions: {models: [vllm-sr/auto]}
+      responses: {models: [vllm-sr/auto]}
 ```
 
 - 名称精确匹配（区分大小写，请求值去除首尾空白后比较），不展开别名：请列出客户端可能发送的每个名称。为空或不设置时，
@@ -140,10 +140,16 @@ Memory 和 router replay 会记录每个请求的用户。没有信任身份的 
 - 匹配 `user` 或 `group` 的限流规则；
 - 解析按用户 API key 的 `global.services.authz.providers`。
 
-请在认证代理之后的 listener 上打开 `identity.trust_headers`，或者在能认证客户端、并删除客户端所发身份 header 的网关之后用
-`--gateway extproc` 运行它们。CLI 生成的 Envoy listener 不认证任何人，所以同样需要在认证代理之后打开
-`identity.trust_headers`；否则每个请求都是匿名的，角色绑定会拒绝它要评估的请求。令牌桶限流、mTLS、JWT 或 OIDC 以及高级路由匹配已计划在
-standalone 模式中支持；在那之前它们同样需要 Envoy。
+有两种方式提供身份来源：
+
+- **Standalone：** 在认证代理之后的 listener 上设置 `identity.trust_headers`。
+- **`--gateway extproc`：** 在能认证客户端、并删除客户端所发身份 header 的网关之后运行。CLI 生成的 Envoy listener 不认证任何人，所以它同样需要在认证代理之后设置 `identity.trust_headers`。
+
+否则每个请求都是匿名的，角色绑定会拒绝它要评估的请求。
+
+:::note
+令牌桶限流、mTLS、JWT 或 OIDC 以及高级路由匹配已计划在 standalone 模式中支持。在那之前，它们需要 Envoy。
+:::
 
 ## 目标与平台
 
@@ -166,14 +172,14 @@ GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/
 - **在 CPU 上运行轻松：** 默认决策模型 vela3-fast（加载后约 7 GB）、307M 的 Vela embedding 模型、Vela Omni Nano，以及
   Decision 2.0 的 Kai-0.6B 和 Eos-0.8B 决策模型。
 - **更大的模型：** 在 CPU 上每个参数约需 4 字节，因此 2B 的决策模型约需 8 GB。请把 Docker 虚拟机的内存（Docker
-  Desktop：Settings、Resources）调到高于配置中各模型所需，或选用更小的模型。参见[选择模型](../model-runtime/choose-a-model)。
+  Desktop：Settings、Resources）调到高于配置中各模型所需，或选用更小的模型。参见[选择模型](../model-runtime/get-started/choose-a-model)。
 
 ## `vllm-sr serve` 的选项
 
 `vllm-sr serve [MODEL]` 每次默认启动 Router；`--engine`（`-e`）启动 Engine。
 两者使用同一前端和模型池，保留已保存的路由配置。Dashboard 只展示启动模式，
 不提供运行时切换入口。MODEL 只覆盖默认判断 deployment 的 artifact；未填写的
-引擎参数和副本位置保留原值，全新配置默认 Vela 2.0 0.3B。
+引擎参数和副本位置保留原值，全新配置默认 Vela 3.0 vela3-fast。
 
 | 范围 | 选项 |
 | --- | --- |

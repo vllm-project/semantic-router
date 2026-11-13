@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -34,7 +35,10 @@ func (r *OpenAIRouter) personalDataReplayAllowed(ctx *RequestContext) bool {
 // A record whose prompt no routing evidence covers is written without it; the
 // prompt is read after routing and attached once found clean, so a request
 // never waits for Replay's privacy check. At most replayPromptChecks run at
-// once, and a record whose check cannot start keeps its prompt withheld.
+// once, and a record whose check cannot start keeps its prompt withheld. Nor
+// does a check start that could not read the prompt whole in its time: it
+// would end incomplete_read and withhold the prompt anyway, after taking the
+// decision model from the requests that follow.
 const (
 	replayPromptChecks       = 2
 	replayPromptCheckTimeout = 30 * time.Second
@@ -45,6 +49,9 @@ var replayPromptCheckSlots = make(chan struct{}, replayPromptChecks)
 // replayPromptEvidence reads a prompt with a recipe's PII rules (tests replace it).
 var replayPromptEvidence = (*classification.Classifier).ReplayPromptEvidence
 
+// replayPromptReadable reports whether that read could finish in time (tests replace it).
+var replayPromptReadable = (*classification.Classifier).ReplayPromptReadable
+
 // attachPromptOnceVerified reads the request's exact prompt in the background
 // and attaches stored, the prompt the record withheld, when that read is
 // complete and clean.
@@ -52,6 +59,12 @@ func (r *OpenAIRouter) attachPromptOnceVerified(ctx *RequestContext, recorder *r
 	classifier := r.classifierForRequest(ctx)
 	prompt := replayPrompt(ctx, ctx.SemanticRequest)
 	if classifier == nil || classifier.Config == nil || !classifier.Config.ReplayNeedsPIIEvidence() || prompt == "" {
+		return
+	}
+	if !replayPromptReadable(classifier, prompt, replayPromptCheckTimeout, guardReadShort(ctx)) {
+		logging.ComponentDebugEvent("extproc", "router_replay_prompt_check_skipped", map[string]interface{}{
+			"request_id": ctx.RequestID, "reason": "unreadable_in_time",
+		})
 		return
 	}
 	select {
@@ -84,6 +97,21 @@ func (r *OpenAIRouter) attachPromptOnceVerified(ctx *RequestContext, recorder *r
 			})
 		}
 	}()
+}
+
+// guardReadShort reports whether the request's guard scans ran out of time on
+// its input: a guard rule read it only in part, and no guard rule matched,
+// which would have ended the scans early instead.
+func guardReadShort(ctx *RequestContext) bool {
+	if len(ctx.VSRMatchedJailbreak)+len(ctx.VSRMatchedSafety)+len(ctx.VSRMatchedPII) > 0 {
+		return false
+	}
+	for _, coverage := range ctx.VSRScanCoverage {
+		if strings.HasPrefix(coverage, "partial") {
+			return true
+		}
+	}
+	return false
 }
 
 // No existing response-stage task scans personal data. A request-stage clean

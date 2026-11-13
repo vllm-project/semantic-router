@@ -1,7 +1,5 @@
 package testmatrix
 
-import "fmt"
-
 // RouterSmoke is the smallest shared router check that heavy environments reuse.
 var RouterSmoke = []string{
 	"chat-completions-request",
@@ -16,8 +14,7 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
-	"chat-completions-stress-request",
-	"domain-classify",
+	"domain-routing",
 	"semantic-cache",
 	// Polarity guard of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
@@ -45,7 +42,7 @@ var BaselineRouterContract = []string{
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
 	// Unknown names fail even with a global default (issue #4653). The
-	// routing-errors profile covers no_route without that fallback configured.
+	// remote-embedding profile covers no_route without that fallback configured.
 	"unknown-model-error-codes",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
@@ -56,9 +53,7 @@ var BaselineRouterContract = []string{
 	// for (issue #3182)
 	"streaming-usage-settlement",
 	// Session observability
-	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
-	"session-pricing-response-api",
 	// Keyword routing of event payloads (issue #3178)
 	"event-routing",
 	// Language signal rule matching and routing (issue #3178)
@@ -169,29 +164,8 @@ func Combine(groups ...[]string) []string {
 	return combined
 }
 
-// BaselineStress lists the expensive pressure cases within the canonical inventory.
-var BaselineStress = []string{
-	"chat-completions-stress-request",
-	"chat-completions-progressive-stress",
-}
-
-// BaselineCases selects a qualification scope without a second functional allowlist.
-func BaselineCases(suite string) ([]string, error) {
-	if suite == "full" {
-		return append([]string(nil), BaselineRouterContract...), nil
-	}
-	if suite != "" && suite != "standard" {
-		return nil, fmt.Errorf("unknown baseline suite %q", suite)
-	}
-	stress := make(map[string]bool, len(BaselineStress))
-	for _, name := range BaselineStress {
-		stress[name] = true
-	}
-	var cases []string
-	for _, name := range BaselineRouterContract {
-		if !stress[name] {
-			cases = append(cases, name)
-		}
-	}
-	return cases, nil
+// BaselineCases is the canonical baseline inventory. Which of its cases a
+// scope runs is the cases' own priority (pkg/testcases InScope).
+func BaselineCases() []string {
+	return append([]string(nil), BaselineRouterContract...)
 }

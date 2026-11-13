@@ -37,7 +37,11 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	if ctx == nil || request == nil {
 		return nil
 	}
-	plugin := contextCompression(ctx.VSRSelectedDecision)
+	var routerConfig *config.RouterConfig
+	if r != nil {
+		routerConfig = r.Config
+	}
+	plugin := contextCompression(requestPlugins(routerConfig, ctx))
 	if plugin == nil {
 		return nil
 	}

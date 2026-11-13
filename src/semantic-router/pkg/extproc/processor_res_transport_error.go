@@ -52,7 +52,7 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 		ctx.UpstreamErrorMetricRecorded = true
 	}
 	source, target := responseWireFormats(ctx)
-	translated, err := engine.TranslateTransportError(source, target, body, nil)
+	translated, err := engine.TranslateTransportError(source, target, body, normalizeUpstreamContextLength(ctx.UpstreamStatusCode))
 	if err != nil {
 		if !isConnectTimeout {
 			metrics.RecordRequestError(ctx.RequestModel, "invalid_upstream_error")

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 )
 
 // DeploymentStatus is the observable state of one deployment. Restarts counts
@@ -245,7 +246,8 @@ func (l *Lease) lookup(deployment string) (member, bool) {
 func (l *Lease) call(deployment string) (member, error) {
 	m, ok := l.lookup(deployment)
 	if !ok {
-		requestsTotal.WithLabelValues(deployment, ErrorReason(ErrUnknownDeployment)).Inc()
+		// The name can be caller text: a label per name would grow without bound.
+		requestsTotal.WithLabelValues(consts.UnknownLabel, ErrorReason(ErrUnknownDeployment)).Inc()
 		return member{}, ErrUnknownDeployment
 	}
 	if m.pool != nil {

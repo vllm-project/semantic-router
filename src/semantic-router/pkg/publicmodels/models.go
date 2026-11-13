@@ -3,7 +3,11 @@
 // names, descriptions, and provider branding.
 package publicmodels
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+import (
+	"sort"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 const (
 	routerOwner           = "vllm-semantic-router"
@@ -87,9 +91,20 @@ func (b *modelListBuilder) appendBackendModels(cfg *config.RouterConfig) {
 	if cfg == nil || !cfg.ListBackendModels {
 		return
 	}
-	for _, model := range cfg.GetAllModels() {
-		if !cfg.IsSystemOneBackend(model) {
-			b.append(model, upstreamEndpointOwner, "", passthroughRoute())
+	// List, in a stable order, exactly the names a direct request is served
+	// for, LoRA adapters included.
+	names := make([]string, 0, len(cfg.ModelConfig))
+	for model, params := range cfg.ModelConfig {
+		names = append(names, model)
+		for _, adapter := range params.LoRAs {
+			names = append(names, adapter.Name)
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if !cfg.IsSystemOneBackend(name) &&
+			(cfg.RoutesModelToBackend(name) || cfg.UsesExternalGatewayDispatch(name)) {
+			b.append(name, upstreamEndpointOwner, "", passthroughRoute())
 		}
 	}
 }

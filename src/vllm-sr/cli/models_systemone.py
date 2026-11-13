@@ -121,6 +121,30 @@ class SystemOneInput(BaseModel):
     image: bool = False
     audio: bool = False
     video: bool = False
+    # False leaves the current user turn out: the rule reads only the earlier
+    # user turns or the tool results it names, and is not asked before they
+    # hold text.
+    request: bool | None = None
+
+
+def turnless_input_error(reads, stage: str | None) -> str | None:
+    """What is wrong with an input that leaves the current user turn out."""
+    if reads.request is not False:
+        return None
+    if (stage or "request") != "request":
+        return "input.request: false applies to a request-stage rule"
+    if not reads.history and not reads.tool_results:
+        return (
+            "input.request: false leaves the current user turn out, so the rule "
+            "reads input.history or input.tool_results"
+        )
+    media = (getattr(reads, key, False) for key in ("image", "audio", "video"))
+    if getattr(reads, "previous_turns", 0) > 0 or any(media):
+        return (
+            "input.request: false reads only the earlier user turns and the tool "
+            "results; drop input.previous_turns and the media inputs"
+        )
+    return None
 
 
 class SystemOneRule(BaseModel):
@@ -142,7 +166,7 @@ class SystemOneRule(BaseModel):
     stage: Literal["request", "response"] | None = None
     input: SystemOneInput | None = None
     coverage: Literal["truncate", "full"] | None = None
-    on_unscanned: Literal["match", "no_match", "unknown"] | None = None
+    on_unscanned: Literal["best_effort", "match", "no_match", "unknown"] | None = None
     timeout_ms: int | None = Field(default=None, ge=0, le=MAX_SYSTEMONE_TIMEOUT_MS)
 
     @model_validator(mode="after")
@@ -199,6 +223,8 @@ class SystemOneRule(BaseModel):
                 "set stage: response, or read the request's tool results with "
                 "input.tool_results"
             )
+        if error := turnless_input_error(reads, self.stage):
+            raise ValueError(error)
         if self.on_unscanned is not None and self.coverage != "full":
             raise ValueError("on_unscanned applies only to a rule with coverage: full")
 

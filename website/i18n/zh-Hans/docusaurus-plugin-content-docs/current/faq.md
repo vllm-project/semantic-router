@@ -13,12 +13,13 @@ translation:
 
 ## 它是 AI 网关，还是其他系统？ {#is-it-an-ai-gateway-or-something-else}
 
-它由 Frontend、可选的 Decision Engine 和模型运行时组成。Frontend 接收请求，
-Decision Engine 根据信号与策略选择模型或有界多模型工作流。默认的 standalone
-网关自行转发请求；使用 `--gateway extproc` 可接入 Envoy。
+它由三部分组成：
 
-模型运行时执行 Router 的判断、embedding 等模型任务，Chat 后端独立运行。
-TLS 终止与集群级 Pod 调度仍由部署环境负责。
+- **Frontend** 接收请求。默认的 standalone 网关自行转发请求；使用 `--gateway extproc` 可接入 Envoy。
+- **可选的 Decision Engine** 根据信号与策略选择模型或有界多模型工作流。
+- **模型运行时**执行 Router 的判断、embedding 等模型任务。
+
+Chat 后端独立运行。TLS 终止与集群级 Pod 调度仍由部署环境负责。
 
 架构见[组件架构](overview/component-architecture)，多模型执行见
 [Mixture of Models](overview/mom-model-family)。
@@ -30,10 +31,10 @@ TLS 终止与集群级 Pod 调度仍由部署环境负责。
 
 ```bash
 # Router：位置参数指定提供路由判断的模型
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
+vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 
 # Engine：共享 Frontend 和运行时，不启用 Chat 路由
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve vllm-sr/d3-edge -e
 ```
 
 `serve` 默认启动 Router；只传模型不会改变模式。`--engine` 可缩写为 `-e`。
@@ -41,7 +42,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 
 ## Router 能否同时提供 System One？ {#can-router-also-expose-system-one}
 
-可以。通过 listener 的 `systemone.models` 授权发布原生模型，再调用
+可以。通过 listener 的 `apis.systemone.models` 授权发布原生模型，再调用
 `/v1/systemone`；`/v1/decisions` 是别名。原生模型发现使用
 `/v1/systemone/models`，Chat 模型发现使用 `/v1/models`。
 
@@ -49,7 +50,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 `api: systemone` 入口，并在 listener 中授权其 `vllm-sr/auto` 名称，运行原生 escalate。
 默认 Chat 入口不会隐式开启原生路由。配置和请求示例见
 [System One escalate 指南](tutorials/algorithm/looper/escalate#on-system-one)和
-[快速开始](model-runtime/quickstart)。
+[快速开始](./model-runtime/get-started/quickstart)。
 
 ## 如何与 Agent Harness 配合？ {#how-does-it-work-with-an-agent-harness}
 
@@ -60,7 +61,7 @@ Harness 管理 Agent 循环、工具和任务状态。它调用稳定模型入�
 
 ## 如何衡量路由准确性和业务价值？ {#how-do-we-measure-routing-accuracy-and-business-value}
 
-分类器准确率不足以回答这个问题。需要验证路由配方能否相对于强单模型基线，**保持回答质量，同时降低成本和延迟**。这需要配对证据，不能仅靠变更前后的个别观察。
+信号准确率不足以回答这个问题。需要验证路由配方能否相对于强单模型基线，**保持回答质量，同时降低成本和延迟**。这需要配对证据，不能仅靠变更前后的个别观察。
 
 仓库使用 **sr-bench**：固定用例、评分器版本、请求参数和价格；在同一批用例上运行最强单模型和当前混合模型；将质量与 `100 × (1 − candidate cost / baseline cost)` 一起阅读。解释结果时遵循两个原则：
 
@@ -101,7 +102,7 @@ Router 自身的 Serving Engine 也会在它所调用模型（决策模型和嵌
 
 在对话中切换模型可能造成前缀缓存损失、工具行为变化和连续性中断。应把切换作为明确的权衡，而不是默认优化：
 
-- **连续性重要时优先保持模型。** 会话范围的学习默认保护已有选择（内置初始化默认开启保护、关闭在线适应），前提是 Router 能识别对话。默认 `scope: conversation` 要求同时提供 `x-session-id` 和 `x-conversation-id`；只发送一个请求头不会保持模型。只有显式配置 `scope: session` 时，才只需 session 标识。
+- **连续性重要时优先保持模型。** 会话范围的学习默认保护已有选择（内置初始化默认开启保护、关闭在线适应），前提是客户端发送 `x-session-id`。在默认的 `scope: conversation` 下，`x-conversation-id` 为 session 中的每个对话命名；没有它时，Router 按对话的开头为其命名。没有 `x-session-id` 的请求不会保持模型。
 - **只按明确的升级策略切换。** 仅仅“更便宜”不足以成为迁移对话的理由。
 - **验证连续性，而不仅是请求送达。** 检查续接、工具完成、纠正、模型故障和对话重置时实际使用的模型。观测到的建议不等于已执行的保持策略。
 
@@ -122,4 +123,4 @@ signal → policy / decision → algorithm / model → plugin → endpoint sched
 
 交付、路由正确性和回答质量是三个独立结果。明确说明未测量的部分，不要据此推断成功。
 
-[CLI 参考](api/cli)说明这里使用的全部参数，[VSR 标头](troubleshooting/vsr-headers)列出回执头，[API 与可观测性](tutorials/global/api-and-observability)介绍遥测方式。
+[CLI 参考](api/cli)说明这里使用的全部参数，[VSR 标头](api/headers)列出回执头，[API 与可观测性](tutorials/global/api-and-observability)介绍遥测方式。

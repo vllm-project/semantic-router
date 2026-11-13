@@ -9,7 +9,13 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from . import ollama_fixture, openrouter_fixture, vllm_fixture, workflow_chat
+from . import (
+    held_stream,
+    ollama_fixture,
+    openrouter_fixture,
+    vllm_fixture,
+    workflow_chat,
+)
 from .chat_request import ChatRequest, build_chat_content
 from .chat_wire import (
     build_chat_custom_tool_response,
@@ -200,16 +206,19 @@ async def chat_completions(request: Request):
         )
 
     stall_sec = extract_mock_frame_stall(req)
+    chunks = generate_chat_stream(
+        req,
+        response,
+        content,
+        usage,
+        created_ts,
+        complete=not chat_contains(req, "__mock_incomplete_stream__"),
+        stall_seconds=stall_sec,
+    )
+    if chat_contains(req, held_stream.MARKER):
+        chunks = held_stream.hold(request.headers.get(SESSION_HEADER, ""), chunks)
     return StreamingResponse(
-        generate_chat_stream(
-            req,
-            response,
-            content,
-            usage,
-            created_ts,
-            complete=not chat_contains(req, "__mock_incomplete_stream__"),
-            stall_seconds=stall_sec,
-        ),
+        chunks,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

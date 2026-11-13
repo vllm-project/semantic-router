@@ -19,6 +19,7 @@ import (
 type responseHeaderOutcome struct {
 	statusCode   int
 	isSuccessful bool
+	bodyStreamed bool
 }
 
 func (r *OpenAIRouter) handleLooperResponseHeaders(
@@ -38,7 +39,9 @@ func (r *OpenAIRouter) handleLooperResponseHeaders(
 	if requiresClientResponseRewrite(ctx) || ctx.IsStreamingResponse {
 		mutation = &ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}}
 	}
-	return buildResponseHeadersContinueResponse(mutation, ctx.IsStreamingResponse)
+	// Body mode follows the provider, not the client: a JSON answer forced into
+	// streamed reads is split by transport and cannot be bridged back.
+	return buildResponseHeadersContinueResponse(mutation, outcome.bodyStreamed)
 }
 
 func evaluateResponseHeaderOutcome(
@@ -52,7 +55,9 @@ func evaluateResponseHeaderOutcome(
 
 	outcome.statusCode = getStatusFromHeaders(v.ResponseHeaders.Headers)
 	outcome.isSuccessful = outcome.statusCode >= 200 && outcome.statusCode < 300
+	outcome.bodyStreamed = outcome.isSuccessful && isStreamingContentType(v.ResponseHeaders.Headers)
 	if ctx != nil {
+		ctx.UpstreamBodyStreamed = outcome.bodyStreamed
 		ctx.IsStreamingResponse = outcome.isSuccessful &&
 			(isStreamingContentType(v.ResponseHeaders.Headers) || isResponseAPIStreamRequest(ctx))
 	}
@@ -100,15 +105,20 @@ func annotateUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOut
 }
 
 func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
-	if ctx == nil ||
-		ctx.IsStreamingResponse ||
-		ctx.TTFTRecorded ||
-		ctx.ProcessingStartTime.IsZero() ||
-		ctx.RequestModel == "" {
+	if ctx == nil || ctx.ProcessingStartTime.IsZero() {
+		return
+	}
+	recordNonStreamingFirstResponse(ctx, time.Since(ctx.ProcessingStartTime))
+}
+
+// recordNonStreamingFirstResponse records how long the request's model took
+// to answer a non-streaming response.
+func recordNonStreamingFirstResponse(ctx *RequestContext, elapsed time.Duration) {
+	if ctx.IsStreamingResponse || ctx.TTFTRecorded || ctx.RequestModel == "" {
 		return
 	}
 
-	ttft := time.Since(ctx.ProcessingStartTime).Seconds()
+	ttft := elapsed.Seconds()
 	if ttft <= 0 {
 		return
 	}

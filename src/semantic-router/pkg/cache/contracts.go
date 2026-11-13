@@ -165,6 +165,9 @@ type CacheResult struct {
 	Age           time.Duration        `json:"-"`
 	AgeKnown      bool                 `json:"-"`
 	ExpiresAt     time.Time            `json:"expires_at,omitempty"`
+	// RequestID names the request that wrote a semantic hit's entry, so
+	// the store can count the hit its caller serves.
+	RequestID string `json:"-"`
 }
 
 type BackendCapabilities struct {
@@ -205,6 +208,9 @@ type InvalidationResult struct {
 	DryRun          bool  `json:"dry_run"`
 	MatchedEstimate int64 `json:"matched_estimate"`
 	Deleted         int64 `json:"deleted"`
+	// CountUnknown reports that the backend cannot count the entries the
+	// call reaches, so the zero counts do not mean that it reaches none.
+	CountUnknown bool `json:"count_unknown,omitempty"`
 }
 
 type CacheAdmin interface {

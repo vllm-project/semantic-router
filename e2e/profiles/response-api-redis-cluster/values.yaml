@@ -23,19 +23,11 @@ config:
           description: Default catch-all decision
           priority: 1
           rules:
-            operator: OR
-            conditions:
-              - type: domain
-                name: other
+            operator: AND
+            conditions: []
           modelRefs:
             - model: openai/gpt-oss-20b
               use_reasoning: false
-      signals:
-        domains:
-          - name: other
-            description: General knowledge and miscellaneous topics
-            labels:
-              - other
   global:
     router:
       strategy: priority
