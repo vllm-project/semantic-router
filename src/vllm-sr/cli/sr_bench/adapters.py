@@ -123,6 +123,9 @@ def _initialize():
                 not in {"scicode", "tau3", "terminal-bench-2.1"},
                 weight=BENCHMARK_WEIGHTS[identity],
             )
+        from .router_flow_gpqa import ADAPTER  # noqa: PLC0415 - registry cycle
+
+        found[ADAPTER.id] = ADAPTER
         # Only the operator's installed Python environment supplies entry points.
         for entry in entry_points(group="vllm_sr.sr_bench.adapters"):
             value = entry.load()
