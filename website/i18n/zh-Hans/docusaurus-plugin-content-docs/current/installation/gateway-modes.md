@@ -140,7 +140,7 @@ Kubernetes 删除 pod 时，先运行容器的 `preStop` hook（如果有），�
 
 1. **`preStop`：** Router 仍在服务，负载均衡器和 Service 的 endpoints 在此期间把 pod 移出轮转。
 2. **排空：** `GET /ready` 返回 503，listener 关闭，所有协议（HTTP/1.1、基于 TLS 的 HTTP/2 和 h2c）上正在处理的请求有
-   `global.router.drain_timeout_seconds` 秒完成。最后一个请求一结束，排空就结束。
+   `global.router.drain_timeout_seconds` 秒完成：未设置时为 25 秒；设置为 `0` 时不排空，正在处理的请求只剩下面的 5 秒。最后一个请求一结束，排空就结束。
 3. **5 秒**，供 Router 自身的资源退役。
 
 请给 pod 至少 preStop + 排空 + 5 秒的宽限期，并留出余量：宽限期用完时，Kubernetes 会强制终止 Router，不管它在做什么。

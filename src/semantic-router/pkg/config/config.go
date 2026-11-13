@@ -289,7 +289,7 @@ type RouterOptions struct {
 	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
 	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
 	ContextWindow          ContextWindowConfig  `yaml:"context_window,omitempty"`
-	DrainTimeoutSeconds    int                  `yaml:"drain_timeout_seconds,omitempty"`
+	DrainTimeoutSeconds    *int                 `yaml:"drain_timeout_seconds,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend

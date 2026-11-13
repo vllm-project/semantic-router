@@ -191,8 +191,9 @@ after the deletion began. The Router uses that time in three parts:
    Service's endpoints take the pod out of rotation.
 2. **The drain:** `GET /ready` answers 503, the listeners close, and the
    requests in flight on every protocol (HTTP/1.1, HTTP/2 over TLS and h2c)
-   have `global.router.drain_timeout_seconds` to finish. The drain ends as
-   soon as the last of them does.
+   have `global.router.drain_timeout_seconds` to finish: 25 when it is unset,
+   and none for `0`, which leaves the requests in flight only the 5 s below.
+   The drain ends as soon as the last of them does.
 3. **5 s** for the Router's own resources to retire.
 
 Give the pod a grace period of at least preStop + drain + 5 s, with some

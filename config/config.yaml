@@ -2188,9 +2188,10 @@ global:
     list_backend_models: true
     clear_route_cache: true
     # Standalone mode: how long, in seconds, the listeners let the requests in
-    # flight finish once the Router begins to shut down (25 by default, at most
-    # 86400). In Kubernetes, give the pod a terminationGracePeriodSeconds of at
-    # least its preStop delay + this + 5, with some margin.
+    # flight finish once the Router begins to shut down (25 when unset, at most
+    # 86400; 0 is no drain). In Kubernetes, give the pod a
+    # terminationGracePeriodSeconds of at least its preStop delay + this + 5,
+    # with some margin.
     drain_timeout_seconds: 25
     fallback:
       version: 1
