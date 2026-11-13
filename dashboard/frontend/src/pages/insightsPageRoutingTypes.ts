@@ -89,6 +89,7 @@ export interface InsightsTrajectoryRoute {
   session_policy_applied: boolean
   session_action?: string
   session_reason?: string
+  agent?: string
   lifecycle_state: string
   response_status?: number
   duration_ms: number

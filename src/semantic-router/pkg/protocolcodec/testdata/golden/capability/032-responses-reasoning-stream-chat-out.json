@@ -56,5 +56,11 @@
         "event": ""
       }
     ]
-  }
+  },
+  "diagnostics": [
+    {
+      "field": "output.status",
+      "action": "dropped"
+    }
+  ]
 }

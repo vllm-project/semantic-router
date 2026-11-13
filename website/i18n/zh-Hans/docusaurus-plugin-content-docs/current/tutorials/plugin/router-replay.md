@@ -352,7 +352,7 @@ make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
 
 ## 查看结果 {#read-the-results}
 
-在 Dashboard 中打开 **Insights**，或使用[回放 API](../../api/router#router-replay) 过滤记录并查看会话。成本是[根据记录的 token 和配置的费率得出的估算](../../api/router#router-replay)，不是账单。缺失的价格和用量保持未知。
+在 Dashboard 中打开 **Insights**，或使用[回放 API](../../api/router#router-replay) 过滤记录并查看会话。搜索按请求 ID、配方或会话 ID 查找记录，因此 Agent Harness 发送的会话 ID（例如 Claude Code 的 `x-claude-code-session-id`）能找到该会话的每次调用。记录的页头会说明该请求在会话中的位置。会话路由历史先给出摘要：发起调用的 Agent、作答的模型及次数、模型切换次数、调用的结束情况，以及从第一次调用开始到最后一次调用结束的时长。其下每次调用占一行，当前页面的请求会被标出，模型切换会被高亮。子代理按首次调用的顺序显示为 `subagent 1`、`subagent 2` 等，Agent 身份标头的短哈希在该行的提示中，主对话显示为 `main`。只有 `identity.headers.agent` 指定了该标头时才会记录哈希（见[会话标识](../../api/session-identification)）；未设置时每次调用都显示为 `main`。Codex 的根线程（Agent ID 与会话 ID 相同）显示为 `main`。没有 `replay.detail` 权限的查看者拿不到哈希（与被脱敏的会话策略一致），因此子代理的调用在那里显示为 `hidden`。成本是[根据记录的 token 和配置的费率得出的估算](../../api/router#router-replay)，不是账单。缺失的价格和用量保持未知。
 
 每条记录的 `route_diagnostics` 解释该路由：
 

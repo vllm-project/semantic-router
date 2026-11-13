@@ -2221,6 +2221,8 @@ global:
     # those backends as user text, for chat templates that accept a system
     # message only first. content.file sends each file in the conversation as
     # a short note to a model whose capabilities leave out file_input.
+    # tools.defer_loading sends tools that a coding agent marks for tool search
+    # in full, for every backend format.
     # reasoning.signature drops the signature an Anthropic backend puts on its
     # thinking, which Chat and Responses clients cannot carry. store sends a
     # request's store: true without it to a backend that keeps no completions,

@@ -646,6 +646,31 @@ func appendProviderFieldOmission(
 	}}, policy.Limits.Diagnostics)
 }
 
+// optInDeferLoading returns a tool's defer_loading value for the usual
+// rejection. When the operator accepts the loss it drops the value instead, so
+// the tool reaches the backend with its full definition, and reports the loss
+// once per request.
+func optInDeferLoading(
+	value json.RawMessage,
+	policy llmprotocol.Policy,
+	source llmprotocol.WireFormat,
+	diagnostics *llmprotocol.Diagnostics,
+) json.RawMessage {
+	trimmed := bytes.TrimSpace(value)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) ||
+		!slices.Contains(policy.AllowedLossyFields, llmprotocol.LossyFieldToolDeferLoading) {
+		return value
+	}
+	for _, diagnostic := range *diagnostics {
+		if diagnostic.Field == llmprotocol.LossyFieldToolDeferLoading {
+			return nil
+		}
+	}
+	appendProviderFieldOmission(diagnostics, policy, source, llmprotocol.LossyFieldToolDeferLoading,
+		"tools are sent in full instead of loading on demand and tool references reach the backend as the tool name")
+	return nil
+}
+
 func hasParticipantNames(request llmprotocol.Request) bool {
 	for _, instruction := range request.Instructions {
 		if instruction.Name != "" {

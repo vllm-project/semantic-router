@@ -58,6 +58,9 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	if history == nil || len(history.Instructions) == 0 && len(history.Messages) == 0 {
 		return false, nil
 	}
+	if err := llmprotocol.ClaimHistoryToolNames(request, *history); err != nil {
+		return false, err
+	}
 	// The developer and system items of the stored input decode as
 	// instructions, as they do at ingress. In turn order they follow this
 	// request's top-level instructions and precede the developer and system
