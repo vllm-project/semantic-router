@@ -48,7 +48,6 @@ global:
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
-        max_prompt_bytes: 65536
         max_tool_trace_bytes: 0
         max_tool_trace_steps: 100
 ```
@@ -65,7 +64,7 @@ field. Storage, retention and asynchronous writes are global service settings.
 | Tool results | redacted |
 | `max_records` | 10,000 |
 | `max_body_bytes` | 4,096 bytes per body |
-| `max_prompt_bytes` | 65,536 bytes (64 KiB) of the prompt, under `raw` and `verified` |
+| `max_prompt_bytes` | unset: the prompt keeps `max_tool_trace_bytes`'s bound when that is set, else 65,536 bytes (64 KiB), under `raw` and `verified` |
 | `max_tool_trace_bytes` | no per-field limit |
 | `max_tool_trace_steps` | 100 |
 
@@ -87,8 +86,9 @@ decision, model, signals, scores, timing, token usage and ids.
 - **`raw`** keeps what the capture switches allow without checking it, so
   records can hold secrets and personal data. Restrict who reads them with
   `replay.read` and `replay.detail`, and choose a retention. A record keeps
-  up to `max_prompt_bytes` of the prompt, 64 KiB by default. The request's
-  tool trace also keeps each user turn, bounded by `max_tool_trace_bytes`, so
+  the prompt up to [its limit](#bound-the-prompt), 64 KiB unless
+  `max_prompt_bytes` or `max_tool_trace_bytes` is set. The request's tool
+  trace also keeps each user turn, bounded by `max_tool_trace_bytes` alone, so
   set that too where requests carry long inputs.
 - **`verified`** is described in
   [Keep personal data out of Replay](#keep-personal-data-out-of-replay).
@@ -117,7 +117,6 @@ plugins:
       capture_request_body: true
       capture_response_body: false
       max_body_bytes: 4096
-      max_prompt_bytes: 4096
       max_tool_trace_bytes: 4096
       max_tool_trace_steps: 100
 ```
@@ -128,7 +127,10 @@ How the limits count:
   characters, so they can be slightly shorter than the limit.
 - **A truncated raw body** may no longer be complete JSON; check its
   truncation flag.
-- **The prompt** has a limit of its own, `max_prompt_bytes`. A cut prompt has
+- **The prompt** has a limit of its own, `max_prompt_bytes`, and keeps
+  `max_tool_trace_bytes`'s bound where no layer sets it; see
+  [Bound the prompt](#bound-the-prompt). In the fragment above it keeps 4,096
+  bytes, from `max_tool_trace_bytes`. A cut prompt has
   `prompt_truncated: true`, with the whole prompt's size in
   `prompt_original_bytes` and its SHA-256 in `prompt_original_sha256`, so the
   record still identifies it.
@@ -159,7 +161,9 @@ How the layers combine:
   recipe or decision can still opt in.
 - **Omitted fields inherit** from the layer below. An explicit `false` is an
   override, and `max_prompt_bytes: 0`, `max_tool_trace_bytes: 0` or
-  `max_tool_trace_steps: 0` removes that limit.
+  `max_tool_trace_steps: 0` removes that limit. Where no layer sets
+  `max_prompt_bytes`, the prompt's limit falls back as
+  [Bound the prompt](#bound-the-prompt) describes.
 - **Before a decision is selected,** a rejected request uses its recipe's
   capture defaults; a decision's override applies once it is selected.
 
@@ -173,13 +177,49 @@ limits, removes the limit instead. These zeros override an inherited value,
 so omit a field to inherit it.
 :::
 
+### Bound the prompt
+
+Under `raw` and `verified` a record keeps the prompt up to a limit, the first
+of these that applies:
+
+1. **`max_prompt_bytes`** from the most specific layer that sets it: the
+   decision, then its recipe, then `global.plugins`. An explicit value wins
+   over the fallbacks below, even over a `max_tool_trace_bytes` set on a more
+   specific layer, and `0` keeps the whole prompt.
+2. **`max_tool_trace_bytes`**, as the layers resolve it, when no layer sets
+   `max_prompt_bytes` and it is above `0`. It bounded the prompt before
+   `max_prompt_bytes` existed, so such a configuration keeps its bound.
+3. **65,536 bytes (64 KiB)** otherwise.
+
+To bound the prompt apart from tool traces, set both:
+
+```yaml
+max_tool_trace_bytes: 262144 # tool definitions and trace steps
+max_prompt_bytes: 65536 # the prompt; 0 keeps it whole
+```
+
+:::note Upgrading
+`max_prompt_bytes` is new. Where no layer sets it:
+
+- **A configuration with `max_tool_trace_bytes` above `0`** keeps the prompt
+  bound it had.
+- **A `raw` or `verified` configuration with neither limit**, or with
+  `max_tool_trace_bytes: 0`, keeps the first 64 KiB of a longer prompt, where
+  it kept the whole prompt. Set `max_prompt_bytes: 0` to keep whole prompts.
+- **Under `none`** a record keeps no prompt, as before.
+
+A shadow's `capture_response_body: true` now keeps its excerpt of the shadow's
+answer under `raw` only; under `verified` the outcome keeps the answer's sizes
+and SHA-256 alone. See [Replay and audit capture](#replay-and-audit-capture).
+:::
+
 ### Keep personal data out of Replay
 
 Set `prompt_capture: verified` globally or on a decision's `router_replay`
 plugin to keep each request's prompt only when it has no personal data:
 
 - **Kept:** routing evidence, the model, signals and the detected PII types,
-  and the prompt once it is found clean, up to `max_prompt_bytes`.
+  and the prompt once it is found clean, up to [its limit](#bound-the-prompt).
 - **Omitted:** request and response bodies, tool definitions and tool traces,
   and the prompt of a request with personal data.
 - **Requests never wait for the check.** Unless a routing decision already

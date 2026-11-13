@@ -156,7 +156,8 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
       label: 'Max Prompt Bytes',
       type: 'number',
       placeholder: '65536',
-      description: 'Bytes of the prompt a record keeps under raw or verified capture; 0 keeps the whole prompt',
+      description:
+        'Bytes of the prompt a record keeps under raw or verified capture; 0 keeps the whole prompt. Unset, it follows max_tool_trace_bytes when that is set, else 65536',
     },
     {
       key: 'shadow',

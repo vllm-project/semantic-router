@@ -1183,7 +1183,8 @@ class RouterReplayPluginConfig(BaseModel):
     default), raw or verified. capture_personal_data is its deprecated form,
     which the Router loads as prompt_capture with a warning: false as verified
     and true as raw. max_prompt_bytes bounds the prompt a record keeps under
-    raw and verified: 65536 when omitted, and 0 keeps the whole prompt.
+    raw and verified, and 0 keeps the whole prompt; where no layer sets it, the
+    prompt keeps max_tool_trace_bytes's bound when that is above 0, else 65536.
     """
 
     model_config = ConfigDict(extra="forbid")

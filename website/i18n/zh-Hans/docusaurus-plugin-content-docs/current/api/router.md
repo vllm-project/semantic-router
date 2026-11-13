@@ -285,7 +285,7 @@ Dashboard Insights 将这些路由与已记录的信号、投影、候选分数�
 
 `capture_request_body: false` 会让整条记录都不含请求文本：请求体、`prompt`、`tool_definitions`，以及 `tool_trace` 中每个请求步骤的文本、参数和结果。`capture_response_body: false` 对响应体、响应步骤、`hallucination_spans`，以及回退结果 `execution_record` 中提供方返回的内容同样处理；每个失败的尝试只保留状态码和固定的原因。这些步骤保留类型、工具名、调用 ID 和状态。被省略的文本直接缺失，不标记为 `content_redacted`；该标记仍只表示对读者角色隐藏的内容，以及 `capture_tool_results` 未保留的工具结果。`max_tool_trace_bytes` 也会截断步骤文本，此时轨迹中的用户和助手消息带有 `content_truncated`。
 
-`prompt` 会在 UTF-8 字符边界处截断到 `max_prompt_bytes`，默认 65,536 字节（64 KiB）；`max_prompt_bytes: 0` 保留完整提示词。被截断的记录带有 `prompt_truncated: true`，并在 `prompt_original_bytes` 中记录完整提示词的字节数、在 `prompt_original_sha256` 中记录其 SHA-256。对没有 `replay.detail` 的调用者，这个哈希与提示词一起脱敏。
+`prompt` 会在 UTF-8 字符边界处截断到它的上限：`max_prompt_bytes`；没有任何一层设置它时为 `max_tool_trace_bytes`；两者都没设置时为 65,536 字节（64 KiB）。`max_prompt_bytes: 0` 保留完整提示词。被截断的记录带有 `prompt_truncated: true`，并在 `prompt_original_bytes` 中记录完整提示词的字节数、在 `prompt_original_sha256` 中记录其 SHA-256。对没有 `replay.detail` 的调用者，这个哈希与提示词一起脱敏。
 
 启用 bearer 认证时，回放调用者需要 `replay.read`。提示词、响应、工具及其他敏感细节保持脱敏，除非主体还拥有 `replay.detail`。所有回放读取路由使用同一套脱敏：没有 `replay.detail` 时，轨迹 `routes` 中的 `selection_reasoning` 和 `session_reason` 与记录的 `route_diagnostics` 一样返回为空。即使 API 通常返回脱敏视图，也应将回放存储视为可能敏感。
 

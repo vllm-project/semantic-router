@@ -587,9 +587,10 @@ and tool results that `capture_tool_results` keeps out. `max_tool_trace_bytes`
 cuts step text too, and a trajectory's user and assistant messages then carry
 `content_truncated`.
 
-`prompt` is cut to `max_prompt_bytes`, 65,536 bytes (64 KiB) by default, on a
-UTF-8 character boundary; `max_prompt_bytes: 0` keeps it whole. A cut record
-carries `prompt_truncated: true` with the whole prompt's size in
+`prompt` is cut on a UTF-8 character boundary to its limit: `max_prompt_bytes`,
+or `max_tool_trace_bytes` where no layer sets `max_prompt_bytes`, or 65,536
+bytes (64 KiB) when neither is set; `max_prompt_bytes: 0` keeps it whole. A cut
+record carries `prompt_truncated: true` with the whole prompt's size in
 `prompt_original_bytes` and its SHA-256 in `prompt_original_sha256`. The hash
 is redacted with the prompt for callers without `replay.detail`.
 

@@ -30,7 +30,8 @@ const (
 	// truncation policy is "drop oldest" so the most recent steps stay.
 	defaultRouterReplayMaxToolTraceSteps = 100
 	// defaultRouterReplayMaxPromptBytes caps the prompt a record keeps under
-	// raw and verified capture: 64 KiB, about 16K tokens of English text,
+	// raw and verified capture when neither max_prompt_bytes nor
+	// max_tool_trace_bytes is set: 64 KiB, about 16K tokens of English text,
 	// keeps nearly every chat prompt whole and the head of a long one, so
 	// 10,000 records of 1M-token prompts take some 640 MiB, not 40 GB.
 	defaultRouterReplayMaxPromptBytes = 64 << 10
@@ -45,7 +46,6 @@ func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 		CaptureRequestBody:  true,
 		CaptureResponseBody: true,
 		MaxBodyBytes:        defaultRouterReplayMaxBodyBytes,
-		MaxPromptBytes:      defaultRouterReplayMaxPromptBytes,
 		MaxToolTraceSteps:   defaultRouterReplayMaxToolTraceSteps,
 	}
 }
@@ -123,10 +123,28 @@ func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
 	default:
 		return fmt.Errorf("prompt_capture must be none, raw or verified, not %q", p.PromptCapture)
 	}
-	if p.MaxPromptBytes < 0 {
+	if p.MaxPromptBytes != nil && *p.MaxPromptBytes < 0 {
 		return fmt.Errorf("max_prompt_bytes cannot be negative; 0 keeps the whole prompt")
 	}
 	return nil
+}
+
+// PromptByteLimit is how many bytes of the prompt a record keeps under raw and
+// verified, 0 for the whole prompt: max_prompt_bytes from the most specific
+// layer that sets it; where none does, max_tool_trace_bytes when that is above
+// 0, since it bounded the prompt before max_prompt_bytes existed and no
+// configuration may keep more of the prompt after an upgrade; else 64 KiB.
+func (p *RouterReplayPluginConfig) PromptByteLimit() int {
+	switch {
+	case p == nil:
+		return defaultRouterReplayMaxPromptBytes
+	case p.MaxPromptBytes != nil:
+		return *p.MaxPromptBytes
+	case p.MaxToolTraceBytes > 0:
+		return p.MaxToolTraceBytes
+	default:
+		return defaultRouterReplayMaxPromptBytes
+	}
 }
 
 // CapturesRawContent reports whether records keep request and response text

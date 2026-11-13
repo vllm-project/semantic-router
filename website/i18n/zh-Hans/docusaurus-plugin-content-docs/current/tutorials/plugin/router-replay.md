@@ -45,7 +45,6 @@ global:
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
-        max_prompt_bytes: 65536
         max_tool_trace_bytes: 0
         max_tool_trace_steps: 100
 ```
@@ -59,7 +58,7 @@ global:
 | 工具结果 | 脱敏 |
 | `max_records` | 10,000 |
 | `max_body_bytes` | 每个 body 4,096 字节 |
-| `max_prompt_bytes` | 提示词 65,536 字节（64 KiB），在 `raw` 和 `verified` 下 |
+| `max_prompt_bytes` | 未设置时：设置了 `max_tool_trace_bytes` 则提示词沿用它的上限，否则 65,536 字节（64 KiB），在 `raw` 和 `verified` 下 |
 | `max_tool_trace_bytes` | 不限制单个字段 |
 | `max_tool_trace_steps` | 100 |
 
@@ -74,7 +73,7 @@ global:
 | `verified` | 只保留提示词，且要等配方的 `pii` 规则完整读过并确认不含个人数据 | 是，在决策模型上读取 |
 
 - **`none`** 不保留任何请求或响应文本，无论 `capture_request_body`、`capture_response_body`、`capture_tool_results` 和影子的 `capture_response_body` 如何设置；它也不读取任何内容检查个人数据，因此回放不会给决策模型增加工作。
-- **`raw`** 不经检查就保留采集开关允许的内容，因此记录可能包含密钥和个人数据。请用 `replay.read` 和 `replay.detail` 限制谁能读取，并选择保留期限。记录最多保留 `max_prompt_bytes` 的提示词，默认 64 KiB。请求的工具轨迹也会保留每个用户轮次，受 `max_tool_trace_bytes` 限制；请求带有长输入时，也请设置它。
+- **`raw`** 不经检查就保留采集开关允许的内容，因此记录可能包含密钥和个人数据。请用 `replay.read` 和 `replay.detail` 限制谁能读取，并选择保留期限。记录保留的提示词以[它的上限](#bound-the-prompt)为限；除非设置了 `max_prompt_bytes` 或 `max_tool_trace_bytes`，上限为 64 KiB。请求的工具轨迹也会保留每个用户轮次，只受 `max_tool_trace_bytes` 限制；请求带有长输入时，也请设置它。
 - **`verified`** 见[不把个人数据写入回放](#keep-personal-data-out-of-replay)。
 
 `capture_personal_data` 是这项设置已弃用的写法。Router 会把它当作 `prompt_capture` 加载，并给出 `renamed_field` 警告；`vllm-sr config migrate` 会改写它：
@@ -98,7 +97,6 @@ plugins:
       capture_request_body: true
       capture_response_body: false
       max_body_bytes: 4096
-      max_prompt_bytes: 4096
       max_tool_trace_bytes: 4096
       max_tool_trace_steps: 100
 ```
@@ -107,7 +105,7 @@ plugins:
 
 - **按 UTF-8 字节计算**，适用于 body 和结构化文本。摘录在完整字符处结束，因此可能比上限略短。
 - **被截断的原始 body** 可能不再是完整的 JSON；请检查它的截断标志。
-- **提示词**有自己的上限 `max_prompt_bytes`。被截断的提示词带有 `prompt_truncated: true`，并在 `prompt_original_bytes` 中记录完整提示词的字节数、在 `prompt_original_sha256` 中记录其 SHA-256，因此记录仍能标识它。
+- **提示词**有自己的上限 `max_prompt_bytes`；没有任何一层设置它时，沿用 `max_tool_trace_bytes` 的上限，见[限制提示词](#bound-the-prompt)。上面的片段中，提示词按 `max_tool_trace_bytes` 保留 4,096 字节。被截断的提示词带有 `prompt_truncated: true`，并在 `prompt_original_bytes` 中记录完整提示词的字节数、在 `prompt_original_sha256` 中记录其 SHA-256，因此记录仍能标识它。
 - **工具轨迹**有自己的上限，与请求体和响应体分开。`max_tool_trace_bytes` 限制每个结构化文本字段：工具定义，以及每个轨迹步骤的文本、参数和输出。被截断的步骤带有 `truncated: true`。
 
 在 `raw` 和 `verified` 下，body 开关覆盖的范围如下（在 `none` 下，记录不保留任何文本）：
@@ -120,7 +118,7 @@ plugins:
 
 - **让某个决策退出采集**：设置 `configuration: {enabled: false}`。
 - **修改整个部署的默认值**：在 `global.plugins` 的 `router_replay` 插件上设置 `enabled: false`，或者不写这个插件。配方或决策仍可单独开启。
-- **省略的字段沿用**更通用一层的值。显式的 `false` 是一次覆盖；`max_prompt_bytes: 0`、`max_tool_trace_bytes: 0` 或 `max_tool_trace_steps: 0` 会取消对应的上限。
+- **省略的字段沿用**更通用一层的值。显式的 `false` 是一次覆盖；`max_prompt_bytes: 0`、`max_tool_trace_bytes: 0` 或 `max_tool_trace_steps: 0` 会取消对应的上限。没有任何一层设置 `max_prompt_bytes` 时，提示词的上限按[限制提示词](#bound-the-prompt)所述回退。
 - **在选出决策之前**，被拒绝的请求使用其配方的采集默认值；选出决策后，决策的覆盖才生效。
 
 这些设置不会改变提供方的保留策略，也不会删除已有记录。
@@ -129,11 +127,36 @@ plugins:
 显式的 `max_body_bytes: 0` 回退为 4,096 字节；对 memory 存储，`max_records: 0` 回退为 200 条记录。`max_prompt_bytes: 0` 与工具轨迹的上限一样，表示取消上限。这些零值会覆盖继承来的值，所以要继承某个字段，请省略它。
 :::
 
+### 限制提示词 {#bound-the-prompt}
+
+在 `raw` 和 `verified` 下，记录保留的提示词以一个上限为限，取下列第一条适用的：
+
+1. **`max_prompt_bytes`**，取自设置了它的最具体的一层：先是决策，再是其配方，最后是 `global.plugins`。显式的值优先于下面的回退，即使更具体的一层设置了 `max_tool_trace_bytes` 也是如此；`0` 保留完整提示词。
+2. **`max_tool_trace_bytes`**，按各层组合后的值，前提是没有任何一层设置 `max_prompt_bytes` 且它大于 `0`。在 `max_prompt_bytes` 出现之前，它就限制着提示词，因此这类配置保持原来的上限。
+3. 其余情况为 **65,536 字节（64 KiB）**。
+
+要让提示词的上限与工具轨迹分开，请同时设置两者：
+
+```yaml
+max_tool_trace_bytes: 262144 # 工具定义和轨迹步骤
+max_prompt_bytes: 65536 # 提示词；0 保留完整提示词
+```
+
+:::note 升级
+`max_prompt_bytes` 是新增的设置。没有任何一层设置它时：
+
+- **`max_tool_trace_bytes` 大于 `0` 的配置**保持原来的提示词上限。
+- **两个上限都没设置**（或 `max_tool_trace_bytes: 0`）**的 `raw` 或 `verified` 配置**，对更长的提示词只保留前 64 KiB，而以前保留完整提示词。要保留完整提示词，请设置 `max_prompt_bytes: 0`。
+- **在 `none` 下**，记录照旧不保留提示词。
+
+另外，影子请求的 `capture_response_body: true` 现在只在 `raw` 下保留影子回答的摘录；在 `verified` 下，结果只保留回答的大小和 SHA-256。见[回放与审计采集](#replay-and-audit-capture)。
+:::
+
 ### 不把个人数据写入回放 {#keep-personal-data-out-of-replay}
 
 在全局或某个决策的 `router_replay` 插件上设置 `prompt_capture: verified`，只在请求的提示词不含个人数据时保留它：
 
-- **保留的：**路由证据、模型、信号和检测到的 PII 类型，以及确认不含个人数据的提示词，最多 `max_prompt_bytes`。
+- **保留的：**路由证据、模型、信号和检测到的 PII 类型，以及确认不含个人数据的提示词，以[它的上限](#bound-the-prompt)为限。
 - **省略的：**请求体和响应体、工具定义和工具轨迹，以及含个人数据的请求的提示词。
 - **请求从不等待这项检查。**除非某个路由决策已经用 PII 信号读过提示词，记录会先在不含提示词的情况下写入。随后，配方配置的 PII 规则只读取最新一条用户消息；这次读取没有发现个人数据时，提示词才会加入记录。这类读取同时最多两个，每个最长 30 秒。无法在这段时间内读完的读取不会开始，提示词照旧不加入记录，与读取超时的结果相同：例如按决策模型实测的速度 30 秒读不完的消息；在这一速度测得之前，还包括路由时防护扫描已经超时的消息。
 

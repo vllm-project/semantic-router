@@ -1237,7 +1237,9 @@ recipes:
               max_body_bytes: 4096
               # The prompt a record keeps under raw or verified, cut on a
               # character boundary with the whole prompt's size and SHA-256.
-              # 65536 (64 KiB) is the default; 0 keeps the whole prompt.
+              # An explicit value on any layer wins, and 0 keeps the whole
+              # prompt. Where no layer sets it, the prompt keeps
+              # max_tool_trace_bytes's bound when that is above 0, else 65536.
               max_prompt_bytes: 65536
               # 0 = no truncation (the documented default). Set to a positive
               # byte cap to independently limit structured tool-trace fields
@@ -3092,7 +3094,8 @@ global:
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
-        # The prompt a record keeps under raw or verified; 0 keeps it whole.
-        max_prompt_bytes: 65536
+        # max_prompt_bytes is left unset, so the prompt keeps the bound of a
+        # max_tool_trace_bytes above 0 on any layer, else 65536 bytes (64 KiB).
+        # Set it to bound the prompt on its own; 0 keeps the whole prompt.
         max_tool_trace_bytes: 0
         max_tool_trace_steps: 100

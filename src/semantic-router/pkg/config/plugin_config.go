@@ -180,8 +180,9 @@ type RouterReplayPluginConfig struct {
 	MaxBodyBytes       int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 	// MaxPromptBytes caps the prompt a record keeps under raw and verified,
 	// cut on a UTF-8 boundary; a cut record keeps the whole prompt's size and
-	// SHA-256. Unset is 64 KiB, and 0 means no limit.
-	MaxPromptBytes int `json:"max_prompt_bytes,omitempty" yaml:"max_prompt_bytes,omitempty" jsonschema:"minimum=0"`
+	// SHA-256. 0 means no limit. Nil where no layer sets it, so that
+	// PromptByteLimit can fall back to MaxToolTraceBytes.
+	MaxPromptBytes *int `json:"max_prompt_bytes,omitempty" yaml:"max_prompt_bytes,omitempty" jsonschema:"minimum=0"`
 	// MaxToolTraceBytes caps each structured tool text field
 	// (ToolDefinitions, ToolTraceStep.Text, Arguments and Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that

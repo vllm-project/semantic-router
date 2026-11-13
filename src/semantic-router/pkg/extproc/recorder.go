@@ -116,7 +116,7 @@ func (r *OpenAIRouter) startRouterReplay(
 		CaptureRequestBody:  policy.CapturesRequestText(),
 		CaptureResponseBody: policy.CapturesResponseText(),
 		MaxBodyBytes:        resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
-		MaxPromptBytes:      policy.MaxPromptBytes,
+		MaxPromptBytes:      policy.PromptByteLimit(),
 		MaxToolTraceBytes:   policy.MaxToolTraceBytes,
 		MaxToolTraceSteps:   policy.MaxToolTraceSteps,
 	})
