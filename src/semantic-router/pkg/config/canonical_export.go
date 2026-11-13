@@ -128,6 +128,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			RoutingInput:          cfg.RoutingInput,
 			Headers:               cfg.Headers,
 			ContextWindow:         cfg.ContextWindow,
+			DrainTimeoutSeconds:   cfg.DrainTimeoutSeconds,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
