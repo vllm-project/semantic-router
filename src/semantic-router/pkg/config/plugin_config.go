@@ -178,8 +178,12 @@ type RouterReplayPluginConfig struct {
 	// read the results redacted.
 	CaptureToolResults bool `json:"capture_tool_results,omitempty" yaml:"capture_tool_results,omitempty"`
 	MaxBodyBytes       int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
-	// MaxToolTraceBytes caps each structured text field (Prompt,
-	// ToolDefinitions, ToolTraceStep.Text, Arguments and Output).
+	// MaxPromptBytes caps the prompt a record keeps under raw and verified,
+	// cut on a UTF-8 boundary; a cut record keeps the whole prompt's size and
+	// SHA-256. Unset is 64 KiB, and 0 means no limit.
+	MaxPromptBytes int `json:"max_prompt_bytes,omitempty" yaml:"max_prompt_bytes,omitempty" jsonschema:"minimum=0"`
+	// MaxToolTraceBytes caps each structured tool text field
+	// (ToolDefinitions, ToolTraceStep.Text, Arguments and Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that
 	// structured fields remain complete even when the raw body is truncated.
 	MaxToolTraceBytes int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
@@ -225,8 +229,9 @@ type RouterReplayShadowConfig struct {
 	// upstream statuses. All attempts share the same deadline.
 	MaxRetries int `json:"max_retries,omitempty" yaml:"max_retries,omitempty"`
 	// CaptureResponseBody stores a bounded excerpt of the shadow output text
-	// in the replay outcome, unless the request's prompt_capture is none. Off
-	// by default: only hashes and sizes are kept.
+	// in the replay outcome when the request's prompt_capture is raw, which
+	// alone keeps generated text. Off by default: only hashes and sizes are
+	// kept.
 	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
 	// MaxCaptureBytes bounds the stored excerpt when CaptureResponseBody is on.
 	MaxCaptureBytes int `json:"max_capture_bytes,omitempty" yaml:"max_capture_bytes,omitempty"`

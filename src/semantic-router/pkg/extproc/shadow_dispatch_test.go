@@ -331,24 +331,37 @@ func TestShadowDispatchCapturesBoundedExcerpt(t *testing.T) {
 	}
 }
 
-// Under prompt_capture: none a record keeps no text, so the shadow's own
-// capture_response_body stores no excerpt; the outcome keeps its sizes and
-// hash.
-func TestShadowDispatchKeepsNoExcerptUnderPromptCaptureNone(t *testing.T) {
-	backend := newShadowTestBackend(t)
-	router, primaryModel := newShadowTestRouter(t, backend)
-	cfg := shadowTestPluginConfig()
-	cfg.CaptureResponseBody = true
+// Only raw capture keeps generated text, so the shadow's own
+// capture_response_body stores an excerpt of its answer under raw alone:
+// under none and verified the outcome keeps its sizes and hash only.
+func TestShadowDispatchKeepsAnExcerptOnlyUnderRawCapture(t *testing.T) {
+	for _, test := range []struct {
+		mode    string
+		excerpt bool
+	}{
+		{config.PromptCaptureNone, false},
+		{config.PromptCaptureVerified, false},
+		{config.PromptCaptureRaw, true},
+	} {
+		t.Run(test.mode, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			router, primaryModel := newShadowTestRouter(t, backend)
+			cfg := shadowTestPluginConfig()
+			cfg.CaptureResponseBody = true
 
-	run := runShadowRequest(t, router, primaryModel, cfg, nil)
-	waitForShadow(t, router)
+			run := runShadowRequest(t, router, primaryModel, cfg, func(ctx *RequestContext) {
+				ctx.RouterReplayPluginConfig.PromptCapture = test.mode
+			})
+			waitForShadow(t, router)
 
-	outcome := singleShadowOutcome(t, run)
-	if _, ok := outcome.Metadata["response_excerpt"]; ok {
-		t.Fatalf("an excerpt of the shadow's answer was stored under prompt_capture: none: %v", outcome.Metadata)
-	}
-	if outcome.Metadata["response_sha256"] == "" || outcome.Metadata["response_bytes"] == "" {
-		t.Fatalf("the outcome lost its sizes or hash: %v", outcome.Metadata)
+			outcome := singleShadowOutcome(t, run)
+			if _, kept := outcome.Metadata["response_excerpt"]; kept != test.excerpt {
+				t.Fatalf("excerpt kept %v, want %v: %v", kept, test.excerpt, outcome.Metadata)
+			}
+			if outcome.Metadata["response_sha256"] == "" || outcome.Metadata["response_bytes"] == "" {
+				t.Fatalf("the outcome lost its sizes or hash: %v", outcome.Metadata)
+			}
+		})
 	}
 }
 

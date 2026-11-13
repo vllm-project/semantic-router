@@ -29,6 +29,11 @@ const (
 	// flows without losing the user query at the head of the timeline; the
 	// truncation policy is "drop oldest" so the most recent steps stay.
 	defaultRouterReplayMaxToolTraceSteps = 100
+	// defaultRouterReplayMaxPromptBytes caps the prompt a record keeps under
+	// raw and verified capture: 64 KiB, about 16K tokens of English text,
+	// keeps nearly every chat prompt whole and the head of a long one, so
+	// 10,000 records of 1M-token prompts take some 640 MiB, not 40 GB.
+	defaultRouterReplayMaxPromptBytes = 64 << 10
 )
 
 // DefaultRouterReplayPluginConfig leaves PromptCapture unset, which is none,
@@ -40,6 +45,7 @@ func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 		CaptureRequestBody:  true,
 		CaptureResponseBody: true,
 		MaxBodyBytes:        defaultRouterReplayMaxBodyBytes,
+		MaxPromptBytes:      defaultRouterReplayMaxPromptBytes,
 		MaxToolTraceSteps:   defaultRouterReplayMaxToolTraceSteps,
 	}
 }
@@ -110,13 +116,17 @@ func personalDataPromptCapture(capture bool) string {
 }
 
 // ValidatePromptCapture refuses a prompt_capture other than none, raw or
-// verified.
+// verified, and a negative max_prompt_bytes.
 func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
 	switch p.PromptCapture {
 	case "", PromptCaptureNone, PromptCaptureRaw, PromptCaptureVerified:
-		return nil
+	default:
+		return fmt.Errorf("prompt_capture must be none, raw or verified, not %q", p.PromptCapture)
 	}
-	return fmt.Errorf("prompt_capture must be none, raw or verified, not %q", p.PromptCapture)
+	if p.MaxPromptBytes < 0 {
+		return fmt.Errorf("max_prompt_bytes cannot be negative; 0 keeps the whole prompt")
+	}
+	return nil
 }
 
 // CapturesRawContent reports whether records keep request and response text

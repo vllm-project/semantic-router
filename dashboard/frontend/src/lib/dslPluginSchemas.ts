@@ -152,6 +152,13 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
     },
     { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
     {
+      key: 'max_prompt_bytes',
+      label: 'Max Prompt Bytes',
+      type: 'number',
+      placeholder: '65536',
+      description: 'Bytes of the prompt a record keeps under raw or verified capture; 0 keeps the whole prompt',
+    },
+    {
       key: 'shadow',
       label: 'Shadow',
       type: 'object',

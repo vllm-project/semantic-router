@@ -45,6 +45,7 @@ global:
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
+        max_prompt_bytes: 65536
         max_tool_trace_bytes: 0
         max_tool_trace_steps: 100
 ```
@@ -58,6 +59,7 @@ global:
 | 工具结果 | 脱敏 |
 | `max_records` | 10,000 |
 | `max_body_bytes` | 每个 body 4,096 字节 |
+| `max_prompt_bytes` | 提示词 65,536 字节（64 KiB），在 `raw` 和 `verified` 下 |
 | `max_tool_trace_bytes` | 不限制单个字段 |
 | `max_tool_trace_steps` | 100 |
 
@@ -72,7 +74,7 @@ global:
 | `verified` | 只保留提示词，且要等配方的 `pii` 规则完整读过并确认不含个人数据 | 是，在决策模型上读取 |
 
 - **`none`** 不保留任何请求或响应文本，无论 `capture_request_body`、`capture_response_body`、`capture_tool_results` 和影子的 `capture_response_body` 如何设置；它也不读取任何内容检查个人数据，因此回放不会给决策模型增加工作。
-- **`raw`** 不经检查就保留采集开关允许的内容，因此记录可能包含密钥和个人数据。请用 `replay.read` 和 `replay.detail` 限制谁能读取，并选择保留期限。提示词受 `max_tool_trace_bytes` 而不是 `max_body_bytes` 限制，要限制长提示词，请设置前者。
+- **`raw`** 不经检查就保留采集开关允许的内容，因此记录可能包含密钥和个人数据。请用 `replay.read` 和 `replay.detail` 限制谁能读取，并选择保留期限。记录最多保留 `max_prompt_bytes` 的提示词，默认 64 KiB。请求的工具轨迹也会保留每个用户轮次，受 `max_tool_trace_bytes` 限制；请求带有长输入时，也请设置它。
 - **`verified`** 见[不把个人数据写入回放](#keep-personal-data-out-of-replay)。
 
 `capture_personal_data` 是这项设置已弃用的写法。Router 会把它当作 `prompt_capture` 加载，并给出 `renamed_field` 警告；`vllm-sr config migrate` 会改写它：
@@ -96,6 +98,7 @@ plugins:
       capture_request_body: true
       capture_response_body: false
       max_body_bytes: 4096
+      max_prompt_bytes: 4096
       max_tool_trace_bytes: 4096
       max_tool_trace_steps: 100
 ```
@@ -104,7 +107,8 @@ plugins:
 
 - **按 UTF-8 字节计算**，适用于 body 和结构化文本。摘录在完整字符处结束，因此可能比上限略短。
 - **被截断的原始 body** 可能不再是完整的 JSON；请检查它的截断标志。
-- **工具轨迹**有自己的上限，与请求体和响应体分开。`max_tool_trace_bytes` 限制每个结构化文本字段：提示词、工具定义，以及每个轨迹步骤的文本、参数和输出。被截断的步骤带有 `truncated: true`。
+- **提示词**有自己的上限 `max_prompt_bytes`。被截断的提示词带有 `prompt_truncated: true`，并在 `prompt_original_bytes` 中记录完整提示词的字节数、在 `prompt_original_sha256` 中记录其 SHA-256，因此记录仍能标识它。
+- **工具轨迹**有自己的上限，与请求体和响应体分开。`max_tool_trace_bytes` 限制每个结构化文本字段：工具定义，以及每个轨迹步骤的文本、参数和输出。被截断的步骤带有 `truncated: true`。
 
 在 `raw` 和 `verified` 下，body 开关覆盖的范围如下（在 `none` 下，记录不保留任何文本）：
 
@@ -116,20 +120,20 @@ plugins:
 
 - **让某个决策退出采集**：设置 `configuration: {enabled: false}`。
 - **修改整个部署的默认值**：在 `global.plugins` 的 `router_replay` 插件上设置 `enabled: false`，或者不写这个插件。配方或决策仍可单独开启。
-- **省略的字段沿用**更通用一层的值。显式的 `false` 是一次覆盖；`max_tool_trace_bytes: 0` 或 `max_tool_trace_steps: 0` 会取消对应的上限。
+- **省略的字段沿用**更通用一层的值。显式的 `false` 是一次覆盖；`max_prompt_bytes: 0`、`max_tool_trace_bytes: 0` 或 `max_tool_trace_steps: 0` 会取消对应的上限。
 - **在选出决策之前**，被拒绝的请求使用其配方的采集默认值；选出决策后，决策的覆盖才生效。
 
 这些设置不会改变提供方的保留策略，也不会删除已有记录。
 
 :::note 零值
-显式的 `max_body_bytes: 0` 回退为 4,096 字节；对 memory 存储，`max_records: 0` 回退为 200 条记录。这些零值会覆盖继承来的值，所以要继承某个字段，请省略它。
+显式的 `max_body_bytes: 0` 回退为 4,096 字节；对 memory 存储，`max_records: 0` 回退为 200 条记录。`max_prompt_bytes: 0` 与工具轨迹的上限一样，表示取消上限。这些零值会覆盖继承来的值，所以要继承某个字段，请省略它。
 :::
 
 ### 不把个人数据写入回放 {#keep-personal-data-out-of-replay}
 
 在全局或某个决策的 `router_replay` 插件上设置 `prompt_capture: verified`，只在请求的提示词不含个人数据时保留它：
 
-- **保留的：**路由证据、模型、信号和检测到的 PII 类型，以及确认不含个人数据的提示词。
+- **保留的：**路由证据、模型、信号和检测到的 PII 类型，以及确认不含个人数据的提示词，最多 `max_prompt_bytes`。
 - **省略的：**请求体和响应体、工具定义和工具轨迹，以及含个人数据的请求的提示词。
 - **请求从不等待这项检查。**除非某个路由决策已经用 PII 信号读过提示词，记录会先在不含提示词的情况下写入。随后，配方配置的 PII 规则只读取最新一条用户消息；这次读取没有发现个人数据时，提示词才会加入记录。这类读取同时最多两个，每个最长 30 秒。无法在这段时间内读完的读取不会开始，提示词照旧不加入记录，与读取超时的结果相同：例如按决策模型实测的速度 30 秒读不完的消息；在这一速度测得之前，还包括路由时防护扫描已经超时的消息。
 
@@ -239,7 +243,7 @@ plugins:
 | `timeout_seconds` | `30` | 排队等待加执行的截止时间，所有重试共用。 |
 | `max_response_bytes` | `1048576` | 读取的最大影子响应体。更大的响应体以 `response_too_large` 失败。 |
 | `max_retries` | `0` | 遇到传输错误或可重试状态码时的额外尝试次数，上限为 `3`。 |
-| `capture_response_body` | `false` | 在结果中保存影子文本的有上限摘录，`prompt_capture: none` 时除外。默认关闭，只保留大小、token 数和 SHA-256。 |
+| `capture_response_body` | `false` | 在结果中保存影子文本的有上限摘录，仅在 `prompt_capture: raw` 下。默认关闭，只保留大小、token 数和 SHA-256。 |
 | `max_capture_bytes` | `4096` | 开启采集时摘录的上限。 |
 | `tls_skip_verify` | `false` | 对证书由内部 CA 签发的 https 影子后端跳过证书校验。该设置只作用于影子 HTTP 客户端，不配置主后端的传输。 |
 | `forward_headers` | `[]` | 影子副本可以携带的决策 `header_mutation` 名称，不区分大小写匹配。决策为主后端设置的其他内容都不会转发，因此像 `X-Internal-Token` 这样的自定义凭据只留在主请求路径上。已知的凭据载体（`Authorization`、`Proxy-Authorization`、`Cookie`、`x-api-key`、`api-key`、`x-goog-api-key`、`x-user-*-key` 请求头）即使被列出，也会在加载配置时被拒绝，并在运行时被丢弃。 |
@@ -283,7 +287,7 @@ plugins:
 | 结果 | `source: shadow_dispatch`、`target: model`、`target_ref: <shadow model>`、判定和原因 |
 | 元数据 | 主请求和影子请求的身份；主模型和影子模型及其后端；决策和配方；抽样率；入队、开始和结束时间戳；排队等待和延迟；尝试次数；状态码；响应大小；停止原因；token 数；影子文本的 SHA-256 |
 
-回放脱敏对影子结果的作用与对记录其他部分相同：没有内容权限的查看者能看到路由和耗时字段，但看不到 `target_ref`、`reason` 或 `metadata`。影子请求的 `capture_response_body` 是它自己的设置：在 `raw` 和 `verified` 下，无论 `prompt_capture` 还允许保留什么，它都决定是否保留摘录；在 `none` 下，记录不保留任何摘录。除非回放存储及其读者已获准接触提示词级的内容，否则请保持它关闭。参见片段：
+回放脱敏对影子结果的作用与对记录其他部分相同：没有内容权限的查看者能看到路由和耗时字段，但看不到 `target_ref`、`reason` 或 `metadata`。影子请求的 `capture_response_body` 是它自己的设置，只在 `raw` 下保留摘录，因为只有 `raw` 保留主模型的回答：生成的文本可能重复提示词，而 `verified` 只检查提示词。在 `none` 和 `verified` 下，记录不保留任何摘录。除非回放存储及其读者已获准接触提示词级的内容，否则请保持它关闭。参见片段：
 [`config/fragments/plugin/router-replay/shadow.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/shadow.yaml)。
 
 ### 导出比较数据集 {#export-a-comparison-dataset}

@@ -1235,9 +1235,13 @@ recipes:
               # prompt_capture: raw; use it for development or audit.
               capture_tool_results: false
               max_body_bytes: 4096
+              # The prompt a record keeps under raw or verified, cut on a
+              # character boundary with the whole prompt's size and SHA-256.
+              # 65536 (64 KiB) is the default; 0 keeps the whole prompt.
+              max_prompt_bytes: 65536
               # 0 = no truncation (the documented default). Set to a positive
               # byte cap to independently limit structured tool-trace fields
-              # (prompt, tool_definitions, and each tool-call's arguments/output)
+              # (tool_definitions, and each step's text, arguments and output)
               # without having to shrink max_body_bytes.
               max_tool_trace_bytes: 0
               # Cap the number of tool-trace steps retained per record. Long
@@ -3088,5 +3092,7 @@ global:
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
+        # The prompt a record keeps under raw or verified; 0 keeps it whole.
+        max_prompt_bytes: 65536
         max_tool_trace_bytes: 0
         max_tool_trace_steps: 100

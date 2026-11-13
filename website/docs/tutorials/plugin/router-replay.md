@@ -48,6 +48,7 @@ global:
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
+        max_prompt_bytes: 65536
         max_tool_trace_bytes: 0
         max_tool_trace_steps: 100
 ```
@@ -64,6 +65,7 @@ field. Storage, retention and asynchronous writes are global service settings.
 | Tool results | redacted |
 | `max_records` | 10,000 |
 | `max_body_bytes` | 4,096 bytes per body |
+| `max_prompt_bytes` | 65,536 bytes (64 KiB) of the prompt, under `raw` and `verified` |
 | `max_tool_trace_bytes` | no per-field limit |
 | `max_tool_trace_steps` | 100 |
 
@@ -84,9 +86,10 @@ decision, model, signals, scores, timing, token usage and ids.
   data, so Replay adds no work for the decision model.
 - **`raw`** keeps what the capture switches allow without checking it, so
   records can hold secrets and personal data. Restrict who reads them with
-  `replay.read` and `replay.detail`, and choose a retention. The prompt is
-  bounded by `max_tool_trace_bytes`, not `max_body_bytes`, so set it to cap a
-  long prompt.
+  `replay.read` and `replay.detail`, and choose a retention. A record keeps
+  up to `max_prompt_bytes` of the prompt, 64 KiB by default. The request's
+  tool trace also keeps each user turn, bounded by `max_tool_trace_bytes`, so
+  set that too where requests carry long inputs.
 - **`verified`** is described in
   [Keep personal data out of Replay](#keep-personal-data-out-of-replay).
 
@@ -114,6 +117,7 @@ plugins:
       capture_request_body: true
       capture_response_body: false
       max_body_bytes: 4096
+      max_prompt_bytes: 4096
       max_tool_trace_bytes: 4096
       max_tool_trace_steps: 100
 ```
@@ -124,10 +128,14 @@ How the limits count:
   characters, so they can be slightly shorter than the limit.
 - **A truncated raw body** may no longer be complete JSON; check its
   truncation flag.
+- **The prompt** has a limit of its own, `max_prompt_bytes`. A cut prompt has
+  `prompt_truncated: true`, with the whole prompt's size in
+  `prompt_original_bytes` and its SHA-256 in `prompt_original_sha256`, so the
+  record still identifies it.
 - **Tool traces** have their own limits, separate from the request and
   response bodies. `max_tool_trace_bytes` bounds each structured text field:
-  the prompt, tool definitions, and each trace step's text, arguments and
-  output. A cut step has `truncated: true`.
+  tool definitions, and each trace step's text, arguments and output. A cut
+  step has `truncated: true`.
 
 What the body switches cover, under `raw` and `verified` (under `none` a
 record keeps no text at all):
@@ -150,8 +158,8 @@ How the layers combine:
   `router_replay` plugin in `global.plugins`, or leaving that plugin out. A
   recipe or decision can still opt in.
 - **Omitted fields inherit** from the layer below. An explicit `false` is an
-  override, and `max_tool_trace_bytes: 0` or `max_tool_trace_steps: 0`
-  removes that limit.
+  override, and `max_prompt_bytes: 0`, `max_tool_trace_bytes: 0` or
+  `max_tool_trace_steps: 0` removes that limit.
 - **Before a decision is selected,** a rejected request uses its recipe's
   capture defaults; a decision's override applies once it is selected.
 
@@ -160,7 +168,8 @@ records.
 
 :::note Zero values
 Explicit `max_body_bytes: 0` falls back to 4,096 bytes, and `max_records: 0`
-to 200 records for the memory store. These zeros override an inherited value,
+to 200 records for the memory store. `max_prompt_bytes: 0`, like the tool-trace
+limits, removes the limit instead. These zeros override an inherited value,
 so omit a field to inherit it.
 :::
 
@@ -170,7 +179,7 @@ Set `prompt_capture: verified` globally or on a decision's `router_replay`
 plugin to keep each request's prompt only when it has no personal data:
 
 - **Kept:** routing evidence, the model, signals and the detected PII types,
-  and the prompt once it is found clean.
+  and the prompt once it is found clean, up to `max_prompt_bytes`.
 - **Omitted:** request and response bodies, tool definitions and tool traces,
   and the prompt of a request with personal data.
 - **Requests never wait for the check.** Unless a routing decision already
@@ -329,7 +338,7 @@ plugins:
 | `timeout_seconds` | `30` | Deadline for queue wait plus execution, shared by all retries. |
 | `max_response_bytes` | `1048576` | Largest shadow response body that is read. Larger bodies fail with `response_too_large`. |
 | `max_retries` | `0` | Extra attempts on transport errors or retryable statuses. Capped at `3`. |
-| `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome, except under `prompt_capture: none`. Off by default; only sizes, tokens, and a SHA-256 are kept. |
+| `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome, under `prompt_capture: raw` only. Off by default; only sizes, tokens, and a SHA-256 are kept. |
 | `max_capture_bytes` | `4096` | Excerpt bound when capture is on. |
 | `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. This setting applies only to the shadow HTTP client; it does not configure primary backend transport. |
 | `forward_headers` | `[]` | Decision `header_mutation` names the shadow copy may carry, matched case-insensitively. Nothing else a decision sets for the primary backend is forwarded, so a custom credential such as `X-Internal-Token` stays on the primary path. Known credential carriers (`Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the `x-user-*-key` headers) are rejected at config load and dropped at run time even if listed. |
@@ -390,8 +399,9 @@ replay record. Outcomes are append-only:
 Replay redaction applies to shadow outcomes as it does to the rest of the
 record: viewers without content rights see the routing and timing fields, but
 not `target_ref`, `reason` or `metadata`. The shadow's `capture_response_body`
-is its own: under `raw` and `verified` it keeps its excerpt whatever else
-`prompt_capture` allows, and under `none` no record keeps one. Keep it off
+is its own, and keeps its excerpt only under `raw`, which alone keeps the
+primary's answer: generated text can repeat the prompt, and `verified` checks
+the prompt only. Under `none` and `verified` no record keeps one. Keep it off
 unless the replay store and its readers are cleared for prompt-level content.
 See the fragment:
 [`config/fragments/plugin/router-replay/shadow.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/shadow.yaml).

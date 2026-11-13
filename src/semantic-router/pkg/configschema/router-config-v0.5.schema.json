@@ -6089,6 +6089,10 @@
         "max_body_bytes": {
           "type": "integer"
         },
+        "max_prompt_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
         "max_tool_trace_bytes": {
           "type": "integer"
         },

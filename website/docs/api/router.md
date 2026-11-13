@@ -587,6 +587,11 @@ and tool results that `capture_tool_results` keeps out. `max_tool_trace_bytes`
 cuts step text too, and a trajectory's user and assistant messages then carry
 `content_truncated`.
 
+`prompt` is cut to `max_prompt_bytes`, 65,536 bytes (64 KiB) by default, on a
+UTF-8 character boundary; `max_prompt_bytes: 0` keeps it whole. A cut record
+carries `prompt_truncated: true` with the whole prompt's size in
+`prompt_original_bytes` and its SHA-256 in `prompt_original_sha256`.
+
 Every Replay read route applies the same redaction. Without `replay.detail`,
 trajectory `routes` return `selection_reasoning` and `session_reason` empty,
 as the record's `route_diagnostics` do.
