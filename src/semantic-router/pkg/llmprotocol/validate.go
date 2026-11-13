@@ -712,7 +712,7 @@ func validateTextContent(content Content, limits Limits) error {
 }
 
 func hasNonTextFields(content Content) bool {
-	return content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil || content.URL != "" || content.Data != "" ||
+	return content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil || content.GeneratedAudio != nil || content.URL != "" || content.Data != "" ||
 		content.FileID != "" || content.Filename != "" || content.MediaType != "" || content.Detail != "" ||
 		(content.Kind != ContentReasoning && (content.Signature != "" || content.Reasoning != ""))
 }
@@ -721,7 +721,11 @@ func validateMediaContent(content Content, limits Limits) error {
 	if err := validateMediaBounds(content, limits); err != nil {
 		return err
 	}
-	if content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil || content.Text != "" ||
+	// A generated audio artifact is the audio kind's own payload; any other kind
+	// carrying it is cross-kind contamination.
+	audioInWrongKind := content.GeneratedAudio != nil && content.Kind != ContentAudio
+	if content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil ||
+		audioInWrongKind || content.Text != "" ||
 		content.Signature != "" || len(content.Citations) != 0 {
 		return NewError(ErrorInvalidRequest, "invalid_content", "media content contains fields from another content kind", nil)
 	}
@@ -748,6 +752,16 @@ func validateMediaBounds(content Content, limits Limits) error {
 	if limits.MediaDataBytes > 0 && len(content.Data) > limits.MediaDataBytes {
 		return NewError(ErrorInvalidRequest, "media_data_limit", "inline media exceeds the configured limit", nil)
 	}
+	if audio := content.GeneratedAudio; audio != nil {
+		if limits.MediaDataBytes > 0 && len(audio.Data) > limits.MediaDataBytes {
+			return NewError(ErrorInvalidRequest, "media_data_limit", "inline media exceeds the configured limit", nil)
+		}
+		// ID is a reference; the transcript is answer text and stays bounded by
+		// the body limit rather than the media-reference limit.
+		if limits.MediaReferenceBytes > 0 && len(audio.ID) > limits.MediaReferenceBytes {
+			return NewError(ErrorInvalidRequest, "media_reference_limit", "media reference exceeds the configured limit", nil)
+		}
+	}
 	for _, reference := range []string{content.URL, content.FileID, content.Filename, content.MediaType, content.Detail} {
 		if limits.MediaReferenceBytes > 0 && len(reference) > limits.MediaReferenceBytes {
 			return NewError(ErrorInvalidRequest, "media_reference_limit", "media reference exceeds the configured limit", nil)
@@ -763,10 +777,23 @@ func mediaSourceCount(content Content) int {
 			sources++
 		}
 	}
+	if content.GeneratedAudio != nil {
+		sources++
+	}
 	return sources
 }
 
 func validateMediaSource(content Content) error {
+	if content.GeneratedAudio != nil {
+		if content.MediaType != "" {
+			return NewError(ErrorInvalidRequest, "invalid_content", "generated audio cannot carry an input media type", nil)
+		}
+		decoder := base64.NewDecoder(base64.StdEncoding.Strict(), strings.NewReader(content.GeneratedAudio.Data))
+		if _, err := io.Copy(io.Discard, decoder); err != nil {
+			return NewError(ErrorInvalidRequest, "invalid_media_data", "generated audio must be valid base64", err)
+		}
+		return nil
+	}
 	if content.URL != "" {
 		return validateMediaURL(content.URL)
 	}
@@ -828,7 +855,7 @@ func validateToolResultContent(content Content, blocks *int, limits Limits, dept
 }
 
 func hasToolControlForeignFields(content Content) bool {
-	return content.Text != "" || content.URL != "" || content.Data != "" || len(content.Citations) != 0 ||
+	return content.Text != "" || content.URL != "" || content.Data != "" || len(content.Citations) != 0 || content.GeneratedAudio != nil ||
 		content.FileID != "" || content.MediaType != "" || content.Filename != "" ||
 		content.Detail != "" || content.Signature != "" || content.GeneratedImage != nil
 }

@@ -178,7 +178,6 @@ func TestOpenAIChatResponseExtensionEnvelopeRoundTripAndUnknownRejection(t *test
 func TestOpenAIChatResponseRejectsUnsupportedNonNullOutputExtensions(t *testing.T) {
 	engine := NewBuiltinEngine()
 	for field, replacement := range map[string]string{
-		"audio":         `"audio":{"id":"audio_1","data":"AA==","expires_at":9,"transcript":"OK"}`,
 		"function_call": `"function_call":{"name":"legacy","arguments":"{}"}`,
 	} {
 		t.Run(field, func(t *testing.T) {

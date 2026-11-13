@@ -83,13 +83,13 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			name: "OpenAI Chat Completions",
 			wire: chatRequestWire{},
 			semantic: fields(
-				"frequency_penalty", "logit_bias", "max_completion_tokens", "max_tokens", "messages", "metadata", "model",
-				"n", "parallel_tool_calls", "presence_penalty", "prompt_cache_key", "reasoning_effort",
+				"audio", "frequency_penalty", "logit_bias", "max_completion_tokens", "max_tokens", "messages", "metadata", "model",
+				"modalities", "n", "parallel_tool_calls", "presence_penalty", "prompt_cache_key", "reasoning_effort",
 				"response_format", "seed", "stop", "store", "stream", "temperature", "tool_choice", "tools",
 				"top_p", "user",
 			),
 			unsupported: fields(
-				"audio", "function_call", "functions", "logprobs", "modalities", "moderation",
+				"function_call", "functions", "logprobs", "moderation",
 				"prediction", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
 			),

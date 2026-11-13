@@ -66,6 +66,18 @@ func TestInputEstimateIncludesConstrainedOutputSchema(t *testing.T) {
 	}
 }
 
+func TestInputEstimateCountsReplayedGeneratedAudio(t *testing.T) {
+	request := Request{Messages: []Message{{Role: RoleAssistant}}}
+	before := EstimateInput(&request)
+	request.Messages[0].Content = []Content{
+		{Kind: ContentAudio, GeneratedAudio: &GeneratedAudio{ID: "audio_1", Data: "UklGRg==", Transcript: "hi"}},
+	}
+	after := EstimateInput(&request)
+	if after.StructuredBytes-before.StructuredBytes != len("UklGRg==") || !after.HasNonText {
+		t.Fatalf("replayed audio payload was not reserved: before=%+v after=%+v", before, after)
+	}
+}
+
 func TestInputEstimateIncludesReasoningContinuityHistory(t *testing.T) {
 	request := Request{Messages: []Message{{Role: RoleAssistant}}}
 	before := EstimateInput(&request)

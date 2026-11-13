@@ -270,7 +270,7 @@ func TestOfficialUnsupportedRequestFieldsFailWithTypedErrors(t *testing.T) {
 			format: llmprotocol.OpenAIChatV1,
 			base:   map[string]any{"model": "m", "messages": []any{map[string]any{"role": "user", "content": "hello"}}},
 			fields: fields(
-				"audio", "function_call", "functions", "logprobs", "modalities", "moderation",
+				"function_call", "functions", "logprobs", "moderation",
 				"prediction", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "web_search_options",
 			),

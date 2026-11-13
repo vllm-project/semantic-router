@@ -69,8 +69,8 @@
       "outcome": {
         "status": "error",
         "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_audio"
+          "category": "invalid_request",
+          "code": "audio_requires_modality"
         }
       }
     },
@@ -228,10 +228,15 @@
     {
       "name": "modalities",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_modalities"
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
         }
       }
     },

@@ -591,3 +591,28 @@ func validSemanticRequest() Request {
 func authoritativeTestCount(value int64) TokenCount {
 	return TokenCount{Value: Int64(value), Provenance: UsageAuthoritative}
 }
+
+func TestGeneratedAudioTranscriptIsNotAMediaReference(t *testing.T) {
+	limits := DefaultPolicy().Limits
+	limits.MediaReferenceBytes = 16
+	response := Response{
+		Generation: 1, ID: "resp", Model: "m",
+		Usage: Usage{State: UsageUnavailable},
+		Output: []OutputItem{{ID: "out", Role: RoleAssistant, Content: []Content{{
+			Kind: ContentAudio,
+			GeneratedAudio: &GeneratedAudio{
+				ID: "audio_1", Data: "UklGRg==",
+				// Longer than the reference limit: a transcript is answer text,
+				// not a provider-scoped reference.
+				Transcript: "0123456789abcdef0123456789abcdef",
+			},
+		}}}},
+	}
+	if err := ValidateResponse(response, limits); err != nil {
+		t.Fatalf("transcript was capped as a media reference: %v", err)
+	}
+	response.Output[0].Content[0].GeneratedAudio.ID = "audio_identifier_longer_than_the_limit"
+	if err := ValidateResponse(response, limits); err == nil {
+		t.Fatal("oversized audio id was accepted")
+	}
+}

@@ -1,6 +1,62 @@
 package protocolcodec
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+import (
+	"encoding/json"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
+
+func decodeChatAudioOutputOptions(raw json.RawMessage, audio *chatAudioRequestWire) (*llmprotocol.AudioOutputOptions, error) {
+	var modalities []string
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &modalities); err != nil {
+			return nil, invalidChatModalities(err)
+		}
+	}
+	hasAudio := false
+	for _, modality := range modalities {
+		switch modality {
+		case "text":
+		case "audio":
+			hasAudio = true
+		default:
+			return nil, invalidChatModalities(nil)
+		}
+	}
+	if audio != nil && !hasAudio {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "audio_requires_modality", "Chat audio output requires the audio modality", nil)
+	}
+	if !hasAudio {
+		return nil, nil
+	}
+	options := &llmprotocol.AudioOutputOptions{}
+	if audio != nil {
+		options.Voice, options.Format = audio.Voice, audio.Format
+	}
+	return options, nil
+}
+
+func invalidChatModalities(cause error) error {
+	return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_modalities", "Chat modalities may contain only text and audio", cause)
+}
+
+// decodeChatMessageAudio admits message.audio on an assistant message only: in
+// Chat, audio is the assistant's spoken answer or a reference to one, never an
+// attachment on a user, system or tool turn.
+func decodeChatMessageAudio(role llmprotocol.Role, wire *chatAudioOutputWire) (llmprotocol.Content, error) {
+	if role != llmprotocol.RoleAssistant {
+		return llmprotocol.Content{}, llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest, "audio_requires_assistant_role",
+			"Chat message audio is only valid on an assistant message", nil,
+		)
+	}
+	return llmprotocol.Content{
+		Kind: llmprotocol.ContentAudio,
+		GeneratedAudio: &llmprotocol.GeneratedAudio{
+			ID: wire.ID, Data: wire.Data, ExpiresAt: wire.ExpiresAt, Transcript: wire.Transcript,
+		},
+	}, nil
+}
 
 // Wire format names belong to the codec. Neutral media always uses MIME types,
 // so routing and other consumers do not need provider-specific format aliases.
@@ -18,6 +74,27 @@ func decodeChatAudioContent(part chatContentWire) (llmprotocol.Content, error) {
 }
 
 func (state *chatMessageEncodingState) appendAudio(content llmprotocol.Content) error {
+	if audio := content.GeneratedAudio; audio != nil {
+		if content.Cache != nil {
+			return unsupportedChatCacheDirective(string(content.Kind))
+		}
+		// Chat carries one audio per message, on the assistant turn only.
+		if state.wire.Role != "assistant" {
+			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "audio_requires_assistant_role", "Chat message audio is only valid on an assistant message", nil)
+		}
+		if state.wire.Audio != nil {
+			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "multiple_audio_outputs", "Chat Completions carries one audio artifact per message", nil)
+		}
+		state.wire.Audio = &chatAudioOutputWire{
+			ID: audio.ID, Data: audio.Data, ExpiresAt: audio.ExpiresAt, Transcript: audio.Transcript,
+		}
+		return nil
+	}
+	// Without a generated artifact this is an input-audio content part, which an
+	// assistant reply cannot carry.
+	if state.wire.Role == "assistant" {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "audio_requires_generated_artifact", "Chat assistant content audio must carry the generated artifact", nil)
+	}
 	var format string
 	switch content.MediaType {
 	case "audio/wav":

@@ -53,8 +53,12 @@ func EstimateInput(request *Request) InputEstimate {
 				images = SaturatingTokenSum(images, 1)
 			case ContentAudio, ContentVideo, ContentFile:
 				estimate.HasNonText = true
-				estimate.StructuredBytes = SaturatingTokenSum(estimate.StructuredBytes, len(content.URL), len(content.Data), len(content.FileID))
-				mediaBytes = SaturatingTokenSum(mediaBytes, len(content.URL), len(content.Data), len(content.FileID))
+				audioData := ""
+				if content.GeneratedAudio != nil {
+					audioData = content.GeneratedAudio.Data
+				}
+				estimate.StructuredBytes = SaturatingTokenSum(estimate.StructuredBytes, len(content.URL), len(content.Data), len(content.FileID), len(audioData))
+				mediaBytes = SaturatingTokenSum(mediaBytes, len(content.URL), len(content.Data), len(content.FileID), len(audioData))
 			case ContentToolCall:
 				framing = SaturatingTokenSum(framing, InputToolCallFramingTokens)
 				if content.ToolCall != nil {

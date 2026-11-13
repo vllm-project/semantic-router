@@ -18,6 +18,23 @@
       }
     },
     {
+      "name": "audio_output",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "user",
+            "content": "say hi"
+          }
+        ],
+        "modalities": ["text", "audio"],
+        "audio": {
+          "voice": "alloy",
+          "format": "wav"
+        }
+      }
+    },
+    {
       "name": "file_data",
       "body": {
         "model": "client-model",

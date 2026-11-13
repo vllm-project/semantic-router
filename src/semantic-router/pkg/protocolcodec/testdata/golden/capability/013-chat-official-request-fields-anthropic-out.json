@@ -45,8 +45,8 @@
       "outcome": {
         "status": "error",
         "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_audio"
+          "category": "invalid_request",
+          "code": "audio_requires_modality"
         }
       }
     },
@@ -198,11 +198,28 @@
     {
       "name": "modalities",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_modalities"
-        }
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
       }
     },
     {
