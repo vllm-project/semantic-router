@@ -7,7 +7,7 @@
       {"role": "assistant", "content": "I'm sorry to hear that. Could you tell me which charge on the invoice looks incorrect?"},
       {"role": "user", "content": "The invoice is still wrong. Please fix the invoice amount."},
       {"role": "assistant", "content": "I've flagged the invoice for review. Is there anything else wrong with the invoice?"},
-      {"role": "user", "content": "The invoice is still wrong and hasn't been fixed. I need the invoice corrected now."}
+      {"role": "user", "content": "The invoice is still wrong and hasn't been fixed. I need the invoice corrected now. __SYSTEMONE_CHOICE__ reask"}
     ],
     "expected_decision": "reask_escalation",
     "expected_matched_signal": "repeated_billing_question",
@@ -21,7 +21,7 @@
       {"role": "assistant", "content": "Let me look into that duplicate charge for you."},
       {"role": "user", "content": "You still haven't refunded the duplicate charge on my subscription."},
       {"role": "assistant", "content": "I apologize for the delay, checking the status now."},
-      {"role": "user", "content": "The duplicate subscription charge is still not refunded, please fix this."}
+      {"role": "user", "content": "The duplicate subscription charge is still not refunded, please fix this. __SYSTEMONE_CHOICE__ reask"}
     ],
     "expected_decision": "reask_escalation",
     "expected_matched_signal": "repeated_billing_question",

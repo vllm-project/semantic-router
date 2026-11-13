@@ -1,5 +1,6 @@
 import type { Column } from '../components/DataTable'
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
+import { X_VSR_SELECTED_DECISION } from '../generated/vsrHeaders'
 import styles from './ConfigPage.module.css'
 import { isSingleConditionRules } from './configPageDecisionFormSupport'
 import type { DecisionConfig } from './configPageSupport'
@@ -12,7 +13,7 @@ export const decisionColumns: Column<DecisionConfig>[] = [
     sortable: true,
     render: (row) => (
       <span style={{ fontWeight: 600 }}>
-        {formatRoutingMetadataValue('x-vsr-selected-decision', row.name)}
+        {formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, row.name)}
       </span>
     ),
   },

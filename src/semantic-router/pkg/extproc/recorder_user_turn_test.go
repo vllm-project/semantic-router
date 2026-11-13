@@ -47,7 +47,7 @@ func recordReplayUserTurn(t *testing.T, router *OpenAIRouter, format llmprotocol
 	ctx := &RequestContext{
 		SourceFormat: format, TraceContext: t.Context(),
 		Headers:                  map[string]string{"x-session-id": "shared-session", "x-conversation-id": conversation},
-		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true},
+		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true, CaptureRequestBody: true, CaptureResponseBody: true},
 	}
 	request, immediate := router.prepareProtocolRequest(body, ctx)
 	require.Nil(t, immediate)
@@ -182,15 +182,87 @@ func TestReplayUserTurnUsesHistoryBeforeContextChanges(t *testing.T) {
 				require.NoError(t, router.applyContextTransformationPlan(ctx, request))
 				require.Len(t, request.Messages, 1)
 			} else {
-				request.Messages = append([]llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Saved context."}}}}, request.Messages...)
-				ctx.MemoryMessageIndexes = map[int]struct{}{0: {}}
+				request.Messages = append(request.Messages, memoryExchange("memory-call", "Saved context.")...)
+				ctx.MemoryToolCallIDs = map[string]struct{}{"memory-call": {}}
 				require.NoError(t, router.applyContextTransformationPlan(ctx, request))
-				require.Len(t, request.Messages, 4)
+				require.Len(t, request.Messages, 5)
 			}
 			router.startRouterReplay(ctx, "public", "backend", "route")
 			record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 			require.True(t, found)
 			require.Equal(t, 1, record.TurnIndex)
 		})
+	}
+}
+
+// Claude Code sends tool results with text, such as a system reminder, in the
+// same user message. The text continues the tool loop; it is not a new turn.
+func TestReplayAnthropicToolResultWithTextContinuesTheTurn(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}, ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)), ReplayStoreShared: true}
+	user := `{"role":"user","content":"Fix the bug."}`
+	call := `{"role":"assistant","content":[{"type":"tool_use","id":"call-%d","name":"lookup","input":{}}]}`
+	result := `{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-%d","content":"ready"},{"type":"text","text":"reminder %d"}]}`
+	messages := []string{user}
+	for cycle := 0; cycle <= 2; cycle++ {
+		if cycle > 0 {
+			messages = append(messages, fmt.Sprintf(call, cycle), fmt.Sprintf(result, cycle, cycle))
+		}
+		body := fmt.Sprintf(`{"model":"public","max_tokens":64,"messages":[%s]}`, strings.Join(messages, ","))
+		ctx, record := recordReplayUserTurn(t, router, llmprotocol.AnthropicMessagesV1, []byte(body), "conversation-a")
+		require.Zero(t, record.TurnIndex, "hop %d: a tool result with text does not start another user turn", cycle)
+		captureOriginalContextHistory(ctx)
+		require.Zero(t, replayUserTurnIndex(ctx), "hop %d: the history snapshot keeps the text with its tool result", cycle)
+	}
+	messages = append(messages, `{"role":"assistant","content":"Done."}`, `{"role":"user","content":"Now run the tests."}`)
+	body := fmt.Sprintf(`{"model":"public","max_tokens":64,"messages":[%s]}`, strings.Join(messages, ","))
+	_, next := recordReplayUserTurn(t, router, llmprotocol.AnthropicMessagesV1, []byte(body), "conversation-a")
+	require.Equal(t, 1, next.TurnIndex)
+
+	response := router.handleRouterReplayTrajectoryAPI("GET", "session_id=shared-session").GetImmediateResponse()
+	var trajectory routerReplayTrajectoryResponse
+	require.NoError(t, json.Unmarshal(response.Body, &trajectory))
+	require.Equal(t, 4, trajectory.RecordCount)
+	require.Equal(t, 2, trajectory.TurnCount)
+	type step struct {
+		Role, Content, Call string
+		Turn                int
+	}
+	got := make([]step, 0, len(trajectory.Messages))
+	for _, message := range trajectory.Messages {
+		s := step{Role: message.Role, Content: message.Content, Call: message.ToolCallID, Turn: message.TurnIndex}
+		if len(message.ToolCalls) > 0 {
+			s.Call = message.ToolCalls[0].ID
+		}
+		got = append(got, s)
+	}
+	require.Equal(t, []step{
+		{Role: "user", Content: "Fix the bug."},
+		{Role: "assistant", Call: "call-1"},
+		{Role: "tool", Call: "call-1"},
+		{Role: "user", Content: "reminder 1"},
+		{Role: "assistant", Call: "call-2"},
+		{Role: "tool", Call: "call-2"},
+		{Role: "user", Content: "reminder 2"},
+		{Role: "user", Content: "Now run the tests.", Turn: 1},
+	}, got)
+}
+
+// Only text sent in the same client message as a tool result continues the
+// turn. A separate user message after a tool result opens the next one.
+func TestReplayUserMessageAfterToolResultStartsATurn(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}, ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)), ReplayStoreShared: true}
+	for _, tc := range []struct {
+		format llmprotocol.WireFormat
+		body   string
+	}{
+		{llmprotocol.OpenAIChatV1, `{"model":"public","messages":[{"role":"user","content":"Check Paris weather"},` +
+			`{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"weather","arguments":"{}"}}]},` +
+			`{"role":"tool","tool_call_id":"call-1","content":"Sunny"},{"role":"user","content":"What is 2+2?"}]}`},
+		{llmprotocol.AnthropicMessagesV1, `{"model":"public","max_tokens":64,"messages":[{"role":"user","content":"Check Paris weather"},` +
+			`{"role":"assistant","content":[{"type":"tool_use","id":"call-1","name":"weather","input":{}}]},` +
+			`{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-1","content":"Sunny"}]},{"role":"user","content":"What is 2+2?"}]}`},
+	} {
+		_, record := recordReplayUserTurn(t, router, tc.format, []byte(tc.body), "conversation-"+string(tc.format))
+		require.Equal(t, 1, record.TurnIndex, "%s: the second question is its own turn", tc.format)
 	}
 }

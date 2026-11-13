@@ -44,6 +44,15 @@ The PR, main, weekly, and explicit qualification entrypoints share one verificat
   artifacts. A trusted status publisher exposes the branch-protection check
   **PR Gate**, including an explicit waiting state for committer authorization.
 
+An E2E case that fails is also a check-run annotation titled with its profile
+and case. Each profile's report, in the job summary, lists its failed cases and
+its five slowest cases above the full list.
+
+E2E Kubernetes jobs skip the hosted runner's toolchain cleanup while the root
+disk has at least 40G free, and record the disk in use when the batch ends.
+Within a job, later profiles reuse the Helm chart dependencies the first one
+built for the same `Chart.lock`.
+
 Display categories, execution workers, and verification identities are separate.
 Catalog IDs identify results even when a display name changes. Job names describe
 the execution boundary; model names and feature cases appear in its report.
@@ -60,9 +69,8 @@ Platform and Kubernetes contracts share workers only when their execution
 target, runtime, device, platform, setup environment, batch policy, image
 dependencies and resource class are compatible. The `integration` policy runs
 at most three contracts within its declared time budget; `exclusive` keeps a
-contract alone. Vela Omni explicitly selects exclusive execution. Batch limits
-and setup allowances live in the catalog, and total job deadlines cannot exceed
-360 minutes. Each Kubernetes profile
+contract alone. Batch limits and setup allowances live in the catalog, and
+total job deadlines cannot exceed 360 minutes. Each Kubernetes profile
 creates and destroys its own cluster. Teardown failure stops the worker, since
 its remaining contracts could otherwise run against contaminated state.
 Heavy model profiles remain isolated. Recipes use three balanced standalone
@@ -116,6 +124,34 @@ platform profile must justify its distinct assertion and public support claim.
 Storage backend semantics belong in their storage contracts, while Operator
 qualification owns configuration conversion, reconciliation and a routed request.
 
+Within the E2E layer, every case has a priority, set where it is registered:
+
+| Priority | Cases | Scopes that run it |
+| --- | --- | --- |
+| P0 | Contracts whose break reaches users or fails open: the routed request, routing refusals, guardrail blocks and no-dispatch, PII and jailbreak detection, identity and credential boundaries | `p0`, `standard`, `full` |
+| P1 (default) | Per-feature contracts, run when changed paths select their profile | `standard`, `full` |
+| P2 | Expensive qualification such as load stages | `full` |
+
+A PR runs the `standard` scope and `/ci run full` and Nightly the `full` scope.
+The `p0` scope runs P0 cases alone. A PR that changes the Router's request path
+(the `router-request-path` domain: `extproc`, `classification`, `decision`,
+`selection`, `config`, `masking`, `responseapi`) selects the baseline, masking
+and pii-remote-backend profiles in that scope, because their unit tests alone
+never reach the client boundary; a profile whose own files change, or that
+another domain selects, keeps `standard`. Locally, `p0` is a quick check of a
+profile; a profile with no P0 case stops before its cluster is built. Model
+quality is not an E2E priority: E2E answers decision questions with the System
+One fixture, and the release benchmarks measure the models.
+
+Only the `model-runtime*` profiles start a model. Every other profile binds its
+learned signals to the provider-mocker System One fixture and its embeddings to
+the provider-mocker embedding fixture, and a case pins the answer it needs with
+a marker such as `__SYSTEMONE_CHOICE__ <key>` or `__EMBED_TOPIC__ <key>`, so its
+floor is every request. `TestE2EProfilesStartNoModelOutsideTheRuntimeProfiles`
+fails when a profile starts a model again. A profile that binds an embedding
+fixture deploys provider-mocker as a prerequisite, because the Router prepares
+its embedding deployments before it reports ready.
+
 A layer is not a dependency rule: a configuration change can require checks in
 several layers. `domains.yaml` remains the only changed-path selector. Tests do
 not become optional merely because their filenames contain `test`.
@@ -124,9 +160,9 @@ not become optional merely because their filenames contain `test`.
 | --- | --- |
 | PR | Automatic affected checks; required expensive checks wait for `/ci run`. PR Gate stays pending with **Waiting for committer approval** while authorization is the only missing requirement. |
 | PR with `/ci run full` | The complete versioned CPU inventory, including baseline stress cases. |
-| Main push | Automatic affected source, deterministic router and product checks. No image or CLI publication. Reviewed PRs and the merge queue own affected live qualification. |
-| Main dispatch with `publish=true` | Full CPU qualification and a complete commit-addressed development image/CLI set; the CLI publishes only after its images succeed. |
-| Weekly Qualification | Monday full CPU qualification and nightly-channel image/Helm publication. The historical `nightly-build.yml` filename and channel remain compatible. |
+| Main push | Automatic affected source, deterministic router and product checks, then the commit's complete development image/CLI set: six multi-arch images under the commit SHA, `latest`, the development CLI, and the `0.0.0-latest` chart when the chart changed. A newer push cancels this run while it is queued or qualifying, and checks this commit's changes itself; a publication that started always finishes. `latest` moves only forward: a run whose commit main has already published past keeps only its SHA tags. The CLI publishes only after its images succeed. Reviewed PRs and the merge queue own affected live qualification. |
+| Main dispatch with `publish=true` | Full CPU qualification, then the same publication, including the chart. |
+| Nightly Qualification | Daily full CPU qualification of the newest main commit and nightly-channel image/Helm publication. Images and chart share the run's date, and a published date never moves: a later run on the same date publishes nothing. A scheduled run skips a commit that another run already passed or is still qualifying; a dispatch cancels the qualification it supersedes and a scheduled run waits for one, never cancelling a publication; a failed first attempt re-runs its failed jobs once while it is still main's newest commit, so don't re-run it by hand first. |
 | Release tag | Artifact/version pipeline: build and publish images, Helm, and Python with aligned versions. It does not invoke another full CPU suite; the catalog retains a release qualification profile for explicit use. |
 
 The trusted publisher updates one bot comment per PR with the deferred
@@ -144,7 +180,10 @@ comment `/ci run` on a PR to authorize all affected work. `/ci run models`,
 `storage`, `product`, `e2e`, `operator`, or `performance` authorizes only that
 scope; multiple scopes may be listed, and valid approvals for the same revision
 accumulate. A partial approval does not waive the other required contracts or
-image builds. `/ci run full` adds the full CPU inventory.
+image builds. `/ci run full` adds the full CPU inventory. Authorized reruns reuse
+successful automatic receipts from the same repository PR workflow run only
+when the head, merge revision, base, and contract digest match; missing, failed,
+or invalid evidence runs again.
 
 Command feedback uses 👀 for receipt, 🚀 after the rerun API succeeds, and 😕
 with an actionable bot reply for rejected requests or a trigger that could not
@@ -214,11 +253,10 @@ traces core assertions, replacement coverage, and remaining weak test oracles.
 | Contract | Local command | Required evidence |
 | --- | --- | --- |
 | Core | `make test-and-build-local` | Router logic, registered Go tools, selector parity, and local core checks. |
-| Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, image calibration, and model-selection tests. |
+| Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, and model-selection tests. |
 | Dashboard | `make dashboard-check`; `make dashboard-test-wasm`; `make dashboard-test-e2e-evaluation` | Frontend and backend tests, compiled WASM behavior, and browser acceptance. |
 | Model runtime | `make model-runtime-test` | Families, engines, scheduling, the HTTP contract, and golden answers on CPU. |
-| Published models | `make test-models` | Classifier, cache, and Omni real-model tests serving the pinned Vela 1.0 packages through a managed model runtime, and the pinned Vela 2.0 0.3B and 0.8B served on CPU answering the Router's questions in one decisions call per stage, within tolerance of their recorded answers, without a skip. |
-| Image-routing conformance | `make verify-image-routing-calibration` | Prepared Nano identity, every authored scored image, prototype provenance, frozen threshold/validation assertions, and multimodal profile package tests. |
+| Published models | `make test-models` | Cache and Omni real-model tests serving the pinned Vela 1.0 packages through a managed model runtime, and the pinned Vela 2.0 0.3B and 0.8B served on CPU answering the Router's questions in one decisions call per stage, within tolerance of their recorded answers, without a skip. |
 | Local Stack serving contracts | `make vllm-sr-test-integration` | Live `serve`/`stop`, mounts, environment, pull policy, request behavior, and service isolation. |
 | Local Stack memory contracts | `USE_DETERMINISTIC_MEMORY_EMBEDDINGS=0 make memory-test-integration` | Vela embedding, persistent retrieval, injection, user isolation, and persistence failure behavior. |
 | Kubernetes | `make verify PROFILE=envoy-ai-gateway` | Deployment and routed requests through the selected profile. |
@@ -247,8 +285,8 @@ standalone SSE; the streaming profile exercises the maintained Envoy ExtProc pat
 
 E2E framework units run once in the component executor, independently of the
 selected Kind profiles. Their Go inventory and execution report must agree;
-missing or skipped tests fail. The soak client and multimodal profile package
-retain their dedicated `soak-tools` and image-calibration owners.
+missing or skipped tests fail. The soak client retains its dedicated
+`soak-tools` owner.
 
 Core discovers external Go tools from
 [`go-tools.mk`](../../make/go-tools.mk), including sources outside the Router Go
@@ -291,8 +329,9 @@ cache does not activate optional inference during ordinary core tests.
 A build identity includes its source revision, platform, and build inputs.
 CI builds each selected image once, checks its content digest when loading it,
 and reuses that read-only artifact across suites. If the exact provider fixture
-has not yet been published by an explicit Main publication, PR and weekly runs
-build and qualify their own candidate; registry access failures still fail.
+has not yet been published by a Main publication dispatch (a push publishes no
+fixture), PR and nightly runs build and qualify their own candidate; registry
+access failures still fail.
 Containers, databases, networks, and volumes are not shared between suites.
 Image publication promotes the qualified OCI archive. CLI publication uploads
 the wheel and source distribution already checked from an isolated installation.
@@ -362,7 +401,7 @@ the affected verification; do not remove a required case to make the Gate green.
 
 For Preview failures, inspect the per-probe signals, decisions, and latency in
 the conformance report. The built-in MoM inventory includes all five entrypoints
-and 347 probes. Performance CI reports numerical regressions as warnings;
+and 366 probes. Performance CI reports numerical regressions as warnings;
 benchmark execution, complete inventory, and matching model identities remain
 required. The explicit local `make perf-check` still fails on allocation
 regressions. Go allocation metrics do not measure native memory or GPU memory;
@@ -377,9 +416,9 @@ see [`perf/README.md`](../../../perf/README.md).
    its product layer, automatic/approved policy, logical category, executor,
    inventory, runtime/device, execution target, services and build dependencies.
    Choose a batch policy independently; the default component policy is one
-   contract per job. Kubernetes profiles can declare execution target, runtime,
-   device, setup environment and batch policy in the domain registry. Keep
-   concrete case discovery in its testing framework.
+   contract per job. Kubernetes profiles can declare execution target, setup
+   environment and batch policy in the domain registry. Keep concrete case
+   discovery in its testing framework.
 3. Extend the executor only when the new check has different execution needs.
    Emit actual case outcomes and consumed artifact identities. Add negative
    coverage proving that missing cases or dependencies cannot pass.

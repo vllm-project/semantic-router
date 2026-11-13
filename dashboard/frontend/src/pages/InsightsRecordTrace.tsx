@@ -139,6 +139,9 @@ function TraceMessage({ message }: { message: InsightsTrajectoryMessage }) {
       {message.content ? (
         <div className={styles.recordTraceMarkdown}>
           <MarkdownRenderer content={message.content} />
+          {message.content_truncated ? (
+            <span>Text truncated at the configured tool trace byte limit</span>
+          ) : null}
         </div>
       ) : (
         <span className={styles.recordTraceRedacted}>
@@ -195,7 +198,12 @@ function ToolResult({ message }: { message: InsightsTrajectoryMessage }) {
       </summary>
       <div className={styles.recordTraceToolBody}>
         {message.content ? (
-          <pre>{formatTracePayload(message.content)}</pre>
+          <>
+            <pre>{formatTracePayload(message.content)}</pre>
+            {message.content_truncated ? (
+              <span>Result truncated at the configured tool trace byte limit</span>
+            ) : null}
+          </>
         ) : (
           <span>
             {message.content_redacted
@@ -240,7 +248,13 @@ function buildRecordTraceFallback(record: InsightsRecord): InsightsTrajectoryMes
   for (const step of record.tool_trace?.steps ?? []) {
     switch (step.type) {
       case 'user_input':
-        messages.push({ role: 'user', content: step.text, turn_index: record.turn_index ?? 0 })
+        messages.push({
+          role: 'user',
+          content: step.text,
+          content_truncated: Boolean(step.text && step.truncated),
+          content_redacted: step.content_redacted,
+          turn_index: record.turn_index ?? 0,
+        })
         break
       case 'assistant_tool_call':
         messages.push({
@@ -259,7 +273,8 @@ function buildRecordTraceFallback(record: InsightsRecord): InsightsTrajectoryMes
       case 'client_tool_result':
         messages.push({
           role: 'tool',
-          content: step.text,
+          content: step.output || step.text,
+          content_truncated: Boolean(step.output && step.truncated),
           tool_call_id: step.tool_call_id,
           tool_name: step.tool_name,
           status: step.status === 'failed' ? 'failed' : 'succeeded',
@@ -271,6 +286,7 @@ function buildRecordTraceFallback(record: InsightsRecord): InsightsTrajectoryMes
         messages.push({
           role: 'assistant',
           content: step.text,
+          content_truncated: Boolean(step.text && step.truncated),
           content_redacted: step.content_redacted,
           turn_index: record.turn_index ?? 0,
         })

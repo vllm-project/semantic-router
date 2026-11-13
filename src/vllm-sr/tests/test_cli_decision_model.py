@@ -7,16 +7,14 @@ from contextlib import nullcontext
 import pytest
 import yaml
 from cli import decision_model, runtime_lifecycle, runtime_service_status
-from cli.commands import runtime_config_mutation, runtime_paths, runtime_serve_config
+from cli.commands import runtime_paths, runtime_serve_config
+from cli.config_schema.validation import validate_config_structure
 from cli.k8s_backend import K8sBackend
 from cli.models import UserConfig
 from cli.runtime_stack import resolve_runtime_stack
 from cli.validator import validate_user_config
 
-SOURCE = (
-    "version: v0.3\nlisteners:\n- name: main\n  address: 0.0.0.0\n  port: 8888\n"
-    "global:\n  model_catalog:\n    deployments:\n      candidate:\n        provider: model_runtime\n        artifact: vllm-sr/Decision-2.0-Kai-0.6B\n        device: cpu\n      gpu:\n        provider: model_runtime\n        artifact: vllm-sr/Vela-2.0-4B\n        device: rocm\n  services:\n    observability:\n      tracing:\n        enabled: false\n"
-)
+SOURCE = "version: v0.5\nlisteners:\n  - name: main\n    address: 0.0.0.0\n    port: 8888\nglobal:\n  model_catalog:\n    deployments:\n      candidate:\n        provider: model_runtime\n        artifact: vllm-sr/Decision-2.0-Kai-0.6B\n        device: cpu\n      gpu:\n        provider: model_runtime\n        artifact: vllm-sr/Vela-2.0-4B\n        device: rocm\n  services:\n    observability:\n      tracing:\n        enabled: false\n"
 
 
 def _system(document):
@@ -138,33 +136,40 @@ def _document(system=None):
         "defaults": {"model": "small"},
         "models": [{"name": "small", "backend_refs": [{"endpoint": "small:8000"}]}],
     }
-    document["routing"] = {
-        "modelCards": [{"name": "small"}],
-        "signals": {"decision": [dict(QUESTION)]},
-        "decisions": [
-            {
-                "name": "tools",
-                "priority": 10,
-                "rules": {
-                    "operator": "AND",
-                    "conditions": [{"type": "decision", "name": "needs_tools"}],
-                },
-                "modelRefs": [{"model": "small"}],
-            }
-        ],
-    }
+    document["recipes"] = [
+        {
+            "name": "default",
+            "signals": {"systemone": [dict(QUESTION)]},
+            "decisions": [
+                {
+                    "name": "tools",
+                    "priority": 10,
+                    "rules": {
+                        "operator": "AND",
+                        "conditions": [{"type": "systemone", "name": "needs_tools"}],
+                    },
+                    "modelRefs": [{"model": "small"}],
+                }
+            ],
+        }
+    ]
     if system is not None:
         document["global"]["model_catalog"]["system"] = system
     return document
 
 
-def test_config_validate_checks_the_decision_model():
+def test_config_validate_leaves_the_decision_model_to_the_router():
     assert _validate(_document()) == []
     assert _validate(_document({"decision_model": {"deployment": "candidate"}})) == []
-    errors = _validate(_document({"decision_model": "Decision-2.0-Nox-4B"}))
-    assert any("decision_model must be" in error for error in errors), errors
-    errors = _validate(_document({"decision_model": {"deployment": "missing"}}))
-    assert any("unknown deployment" in error for error in errors), errors
+    assert validate_config_structure(
+        _document({"decision_model": "Decision-2.0-Nox-4B"})
+    )
+    missing = _document({"decision_model": {"deployment": "missing"}})
+    assert _validate(missing) == []
+    with pytest.raises(ValueError, match="unknown deployment 'missing'"):
+        runtime_serve_config._check_served_decision_model(
+            missing, "cpu", local_host=True
+        )
 
 
 def test_status_reads_the_routers_active_decision_model(monkeypatch):
@@ -211,18 +216,3 @@ def test_kubernetes_status_reads_the_live_config(monkeypatch, tmp_path):
     )
     backend = K8sBackend(namespace="vllm-sr", chart_dir=str(tmp_path))
     assert backend._live_decision_model() == "candidate"
-
-
-def test_gpu_platforms_put_the_safety_module_on_the_gpu(monkeypatch):
-    monkeypatch.delenv("VLLM_SR_ROCM_PRESERVE_CPU", raising=False)
-    monkeypatch.delenv("VLLM_SR_ROCM_FORCE_GPU", raising=False)
-    config = {
-        "global": {
-            "model_catalog": {"modules": {"safety": {"safety": {"use_cpu": True}}}}
-        }
-    }
-    assert runtime_config_mutation.apply_platform_gpu_defaults(config, "rocm")
-    assert (
-        config["global"]["model_catalog"]["modules"]["safety"]["safety"]["use_cpu"]
-        is False
-    )

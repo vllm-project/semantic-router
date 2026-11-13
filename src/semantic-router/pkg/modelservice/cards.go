@@ -4,14 +4,15 @@ import (
 	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // ModelCard is a served model's description from /v1/models: identity,
-// surfaces, the question types and presets a decision model answers, heads,
-// embedding and rerank exits, limits and placement. Preparation checks every
-// task binding against it. MaxScanTokens is the scan budget of a decision
-// model that reads a long state part in windows (Vela 2.0), zero for one that
-// reads one bounded input.
+// surfaces, the question types and presets a decision model answers and the
+// input modalities it reads, heads, embedding and rerank exits, limits and
+// placement. Preparation checks every task binding against it. MaxScanTokens
+// is the scan budget of a decision model that reads a long state part in
+// windows (Vela 2.0), zero for one that reads one bounded input.
 type ModelCard struct {
 	ID             string
 	Family         string
@@ -22,6 +23,7 @@ type ModelCard struct {
 	Surfaces       []string
 	QuestionTypes  []string
 	Presets        []string
+	Modalities     []string
 	Heads          []HeadCard
 	Embedding      *EmbeddingCard
 	Rerank         *RerankCard
@@ -37,6 +39,23 @@ type ModelCard struct {
 	Ready          bool
 	Status         string
 	Reason         string
+	// ValidatedInputTokens is the length a decision model was validated at,
+	// which caps each question; zero when MaxInputTokens is the only cap.
+	ValidatedInputTokens int
+	// Schema is the upstream schema a remote model's API speaks, empty for a
+	// model the model runtime serves.
+	Schema string
+}
+
+// ReportsInputCoverage reports whether the model's answers can prove they
+// read their whole input (input_coverage): every model the runtime serves
+// can, and a remote one when its schema carries it.
+func (c ModelCard) ReportsInputCoverage() bool {
+	if c.Schema == "" {
+		return true
+	}
+	codec, _, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(c.Schema), nil)
+	return err == nil && codec.Capabilities().Has(systemonecodec.CapabilityFullInput)
 }
 
 // EngineArgs are the engine arguments a served model's card reports: how it
@@ -93,9 +112,39 @@ func (c ModelCard) Answers(questionType string) bool {
 	return slices.Contains(c.QuestionTypes, questionType)
 }
 
+// QuestionTokens is the most tokens one question (its state and the question
+// itself) may have: the validated length, else the model's maximum; zero when
+// the card reports neither.
+func (c ModelCard) QuestionTokens() int {
+	if c.ValidatedInputTokens > 0 {
+		return c.ValidatedInputTokens
+	}
+	return c.MaxInputTokens
+}
+
 // HasPreset reports whether the model defines the named question.
 func (c ModelCard) HasPreset(name string) bool {
 	return c.Serves("decisions") && slices.Contains(c.Presets, name)
+}
+
+// AnsweredTypes are the question types the model answers on /v1/decisions.
+func (c ModelCard) AnsweredTypes() []string {
+	answered := []string{}
+	for _, questionType := range []string{"choice", "noul", "score", "set", "span"} {
+		if c.Answers(questionType) {
+			answered = append(answered, questionType)
+		}
+	}
+	return answered
+}
+
+// ReadModalities are the input modalities the model reads; a card that lists
+// none reads text.
+func (c ModelCard) ReadModalities() []string {
+	if len(c.Modalities) == 0 {
+		return []string{"text"}
+	}
+	return slices.Clone(c.Modalities)
 }
 
 // Head returns the named head, or the primary (first) head when name is empty.
@@ -126,7 +175,7 @@ func (h HeadCard) Accepts(input string) bool {
 func decodeCard(card api.ModelCard) ModelCard {
 	decoded := ModelCard{
 		ID: card.Id, Family: card.Family, Surfaces: append([]string(nil), card.Surfaces...), Ready: card.Ready,
-		QuestionTypes: derefSlice(card.QuestionTypes), Presets: derefSlice(card.Presets),
+		QuestionTypes: derefSlice(card.QuestionTypes), Presets: derefSlice(card.Presets), Modalities: derefSlice(card.Modalities),
 		Repo: deref(card.Repo), Revision: deref(card.Revision), ModelSHA256: deref(card.ModelSha256),
 		ManifestSHA256: deref(card.ManifestSha256), Numerics: string(deref(card.Numerics)), Engine: deref(card.Engine),
 		Accelerator: deref(card.Accelerator), Device: deref(card.Device), Dtype: deref(card.Dtype),
@@ -142,6 +191,7 @@ func decodeCard(card api.ModelCard) ModelCard {
 		decoded.MaxInputTokens = deref(card.Limits.MaxInputTokens)
 		decoded.MaxScanTokens = deref(card.Limits.MaxScanTokens)
 		decoded.MaxInputs = deref(card.Limits.MaxInputs)
+		decoded.ValidatedInputTokens = deref(card.Limits.ValidatedInputTokens)
 	}
 	if card.Heads != nil {
 		for _, head := range *card.Heads {

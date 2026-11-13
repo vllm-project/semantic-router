@@ -25,12 +25,15 @@ import json
 import sys
 import time
 from dataclasses import asdict, dataclass
+from http import HTTPStatus
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import requests
+from router_trace import routing_headers, warning_codes
 
 from .datasets import HallucinationSample, get_dataset
+
+FALSE_POSITIVE_EXAMPLES = 5
 
 
 @dataclass
@@ -44,19 +47,18 @@ class DetectionResult:
     model_used: str
 
     # Hallucination detection results (from response headers)
-    hallucination_detected: Optional[bool] = None
-    hallucination_spans: Optional[str] = None
+    hallucination_detected: bool | None = None
 
     # Efficiency metrics (from response headers)
-    fact_check_needed: Optional[bool] = None  # Was fact-check classification triggered?
+    fact_check_needed: bool | None = None  # Was fact-check classification triggered?
     detection_skipped: bool = False  # Was detection skipped due to non-factual query?
 
     # Ground truth (if available)
-    gt_is_faithful: Optional[bool] = None
+    gt_is_faithful: bool | None = None
 
     # Metrics
-    latency_ms: Optional[float] = None
-    error: Optional[str] = None
+    latency_ms: float | None = None
+    error: str | None = None
 
 
 @dataclass
@@ -90,7 +92,7 @@ class BenchmarkResults:
     p99_latency_ms: float
 
     # Individual results
-    results: List[dict] = None  # type: ignore  # Initialized in __post_init__
+    results: list[dict] = None  # type: ignore  # Initialized in __post_init__
 
     # Efficiency metrics (two-stage pipeline savings)
     fact_check_needed_count: int = 0  # Queries that needed fact-checking
@@ -116,14 +118,14 @@ class HallucinationBenchmark:
     ):
         self.endpoint = endpoint.rstrip("/")
         self.timeout = timeout
-        self.results: List[DetectionResult] = []
-        self.available_models: List[str] = []
+        self.results: list[DetectionResult] = []
+        self.available_models: list[str] = []
 
-    def discover_models(self) -> List[str]:
+    def discover_models(self) -> list[str]:
         """Discover available models from /v1/models endpoint."""
         try:
             resp = requests.get(f"{self.endpoint}/v1/models", timeout=10)
-            if resp.status_code != 200:
+            if resp.status_code != HTTPStatus.OK:
                 print(f"❌ Failed to get models: HTTP {resp.status_code}")
                 return []
 
@@ -147,7 +149,7 @@ class HallucinationBenchmark:
         try:
             # Try /v1/models as health check
             resp = requests.get(f"{self.endpoint}/v1/models", timeout=10)
-            if resp.status_code == 200:
+            if resp.status_code == HTTPStatus.OK:
                 print(f"✓ Endpoint {self.endpoint} is healthy")
                 return True
             else:
@@ -198,37 +200,34 @@ class HallucinationBenchmark:
                     "max_tokens": 512,
                     "temperature": 0.7,
                 },
+                headers={"X-VSR-Debug": "true"},
                 timeout=self.timeout,
             )
 
             latency_ms = (time.time() - start_time) * 1000
             result.latency_ms = latency_ms
 
-            if response.status_code != 200:
+            if response.status_code != HTTPStatus.OK:
                 result.error = f"HTTP {response.status_code}: {response.text[:200]}"
                 return result
 
             # Parse response
             data = response.json()
-            if "choices" in data and data["choices"]:
+            if data.get("choices"):
                 content = data["choices"][0].get("message", {}).get("content", "")
                 result.response_length = len(content)
 
-            # Extract hallucination detection headers
-            headers = response.headers
-            result.hallucination_detected = (
-                headers.get("x-vsr-hallucination-detected", "").lower() == "true"
-            )
-            result.hallucination_spans = headers.get("x-vsr-hallucination-spans", "")
-
-            # Extract efficiency-related headers
-            result.fact_check_needed = (
-                headers.get("x-vsr-fact-check-needed", "").lower() == "true"
-            )
+            # The Router reports a detected hallucination and an unverified
+            # factual answer as x-vsr-warnings codes, and the fact-check signal
+            # it matched in x-vsr-trace.
+            headers = routing_headers(response.headers)
+            warnings = warning_codes(headers.get("x-vsr-warnings"))
+            result.hallucination_detected = "hallucination" in warnings
+            result.fact_check_needed = "needs_fact_check" in headers.get(
+                "matched_fact_check", ""
+            ).split(",")
             # Detection is skipped if fact-check says not needed, or if unverified (no context)
-            unverified = (
-                headers.get("x-vsr-unverified-factual-response", "").lower() == "true"
-            )
+            unverified = "unverified_factual" in warnings
             result.detection_skipped = not result.fact_check_needed or unverified
 
         except requests.exceptions.Timeout:
@@ -242,15 +241,15 @@ class HallucinationBenchmark:
 
     def run_benchmark(
         self,
-        samples: List[HallucinationSample],
+        samples: list[HallucinationSample],
         model: str,
         include_context: bool = True,
         verbose: bool = True,
     ) -> BenchmarkResults:
         """Run the benchmark on a list of samples."""
-        from tqdm import tqdm
+        from tqdm import tqdm  # noqa: PLC0415
 
-        print(f"\nRunning hallucination detection benchmark...")
+        print("\nRunning hallucination detection benchmark...")
         print(f"  Endpoint: {self.endpoint}")
         print(f"  Model: {model}")
         print(f"  Samples: {len(samples)}")
@@ -282,11 +281,6 @@ class HallucinationBenchmark:
                 tqdm.write("")
                 tqdm.write(f"🚨 HALLUCINATION DETECTED [{detected_count}]")
                 tqdm.write(f"   Question: {result.question[:80]}...")
-                if result.hallucination_spans:
-                    spans_preview = result.hallucination_spans[:150]
-                    tqdm.write(
-                        f"   Spans: {spans_preview}{'...' if len(result.hallucination_spans) > 150 else ''}"
-                    )
                 if result.gt_is_faithful is not None:
                     gt_label = (
                         "✅ Correct"
@@ -340,10 +334,6 @@ class HallucinationBenchmark:
         )
         accuracy = (tp + tn) / total_with_gt if total_with_gt > 0 else 0.0
 
-        # False positive rates and specificity
-        false_positive_rate = fp / (fp + tn) if (fp + tn) > 0 else 0.0
-        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-
         if fp > 0:
             print(f"\n⚠️  False Positives Detected: {fp}")
             false_positive_samples = []
@@ -357,22 +347,20 @@ class HallucinationBenchmark:
                         {
                             "sample_id": r.sample_id,
                             "question": r.question[:100],
-                            "spans": r.hallucination_spans,
                         }
                     )
 
                 if false_positive_samples:
                     print("\nFalse Positive Examples:")
                     for i, fp_sample in enumerate(
-                        false_positive_samples[:5], 1
+                        false_positive_samples[:FALSE_POSITIVE_EXAMPLES], 1
                     ):  # Show first 5
                         print(f"\n  {i}. Sample ID: {fp_sample['sample_id']}")
                         print(f"     Question: {fp_sample['question']}...")
-                        print(f"     Flagged spans: {fp_sample['spans']}")
 
-                    if len(false_positive_samples) > 5:
+                    if len(false_positive_samples) > FALSE_POSITIVE_EXAMPLES:
                         print(
-                            f"\n  ... and {len(false_positive_samples) - 5} more false positives"
+                            f"\n  ... and {len(false_positive_samples) - FALSE_POSITIVE_EXAMPLES} more false positives"
                         )
 
         # Latency metrics
@@ -398,17 +386,14 @@ class HallucinationBenchmark:
         # - Fact-check classifier (ModernBERT-base): ~12ms (prompt only)
         # - LettuceDetect-large: ~45ms base + ~0.02ms per character
         # These are empirical measurements on CPU; GPU would be faster
-        CLASSIFIER_TIME_MS = (
-            12.0  # Fact-check classifier time (ModernBERT-base, prompt only)
-        )
-        DETECTION_BASE_MS = 45.0  # Base detection time (ModernBERT-large)
-        DETECTION_PER_CHAR_MS = 0.02  # Additional time per character (large model)
+        detection_base_ms = 45.0  # Base detection time (ModernBERT-large)
+        detection_per_char_ms = 0.02  # Additional time per character (large model)
 
         estimated_detection_times = []
         actual_detection_times = []
         for r in successful:
             # Estimated time if we ran detection on everything
-            est_time = DETECTION_BASE_MS + (r.context_length * DETECTION_PER_CHAR_MS)
+            est_time = detection_base_ms + (r.context_length * detection_per_char_ms)
             estimated_detection_times.append(est_time)
 
             # Actual time (0 if skipped, otherwise estimated)
@@ -458,22 +443,22 @@ class HallucinationBenchmark:
 def print_results(results: BenchmarkResults):
     """Print benchmark results."""
     print("\n" + "=" * 60)
-    print(f"HALLUCINATION DETECTION BENCHMARK")
+    print("HALLUCINATION DETECTION BENCHMARK")
     print("=" * 60)
 
-    print(f"\n📌 Configuration:")
+    print("\n📌 Configuration:")
     print("-" * 40)
     print(f"  Dataset:  {results.dataset_name}")
     print(f"  Endpoint: {results.endpoint}")
     print(f"  Model:    {results.model}")
 
-    print(f"\n📊 Request Statistics:")
+    print("\n📊 Request Statistics:")
     print("-" * 40)
     print(f"  Total samples:  {results.total_samples}")
     print(f"  Successful:     {results.successful_requests}")
     print(f"  Failed:         {results.failed_requests}")
 
-    print(f"\n📋 Detection Results:")
+    print("\n📋 Detection Results:")
     print("-" * 40)
     print(f"  Hallucinations detected: {results.total_hallucinations_detected}")
 
@@ -484,7 +469,7 @@ def print_results(results: BenchmarkResults):
         + results.false_negatives
     )
     if total_gt > 0:
-        print(f"\n🎯 Accuracy Metrics (vs ground truth):")
+        print("\n🎯 Accuracy Metrics (vs ground truth):")
         print("-" * 40)
         print(f"  True Positives:  {results.true_positives}")
         print(f"  False Positives: {results.false_positives}")
@@ -495,16 +480,16 @@ def print_results(results: BenchmarkResults):
         print(f"  F1 Score:  {results.f1_score:.4f}")
         print(f"  Accuracy:  {results.accuracy:.4f}")
     else:
-        print(f"\n⚠️ No ground truth labels available for accuracy metrics")
+        print("\n⚠️ No ground truth labels available for accuracy metrics")
 
-    print(f"\n⏱️ Latency:")
+    print("\n⏱️ Latency:")
     print("-" * 40)
     print(f"  Average: {results.avg_latency_ms:.2f} ms")
     print(f"  P50:     {results.p50_latency_ms:.2f} ms")
     print(f"  P99:     {results.p99_latency_ms:.2f} ms")
 
     # Efficiency metrics - two-stage pipeline savings
-    print(f"\n⚡ Two-Stage Pipeline Efficiency:")
+    print("\n⚡ Two-Stage Pipeline Efficiency:")
     print("-" * 40)
     print(
         f"  Fact-check needed:     {results.fact_check_needed_count}/{results.successful_requests} queries"
@@ -526,7 +511,7 @@ def print_results(results: BenchmarkResults):
         print(f"     saving {results.time_saved_ms:.0f}ms of detection compute.")
 
     # Show sample results
-    print(f"\n🔍 Sample Results (first 5):")
+    print("\n🔍 Sample Results (first 5):")
     print("-" * 60)
     for r in results.results[:5]:
         detected = "🚨" if r.get("hallucination_detected") else "✅"

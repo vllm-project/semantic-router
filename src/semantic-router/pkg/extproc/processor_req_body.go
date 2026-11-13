@@ -6,6 +6,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -29,6 +30,9 @@ func (r *OpenAIRouter) handleRequestBody(
 ) (*ext_proc.ProcessingResponse, error) {
 	ctx.ProcessingStartTime = time.Now()
 	requestBody := v.RequestBody.GetBody()
+	if isCountTokensRequest(ctx) {
+		requestBody = withCountTokensOutputLimit(requestBody)
+	}
 	request, earlyResponse := r.prepareProtocolRequest(requestBody, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
@@ -45,6 +49,11 @@ func (r *OpenAIRouter) handleRequestBody(
 	if rejected := r.listenerModelRejection(originalModel, ctx); rejected != nil {
 		return rejected, nil
 	}
+	if isCountTokensRequest(ctx) {
+		// Token budgets admit a count by its input, as they admit a turn.
+		applyRequestContextEstimate(snapshot, ctx)
+		return r.handleCountTokens(request, originalModel, ctx)
+	}
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}
@@ -56,10 +65,14 @@ func (r *OpenAIRouter) handleRequestBody(
 		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 	ctx.UserContent = snapshot.UserContent
+	observeRoutingInput(ctx, snapshot.RoutingInput)
 	ctx.RequestImageURL = snapshot.FirstImageURL
 	ctx.RequestAudio = snapshot.FirstAudio
 
 	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, request, snapshot, ctx)
+	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
+		return refused, nil
+	}
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
@@ -106,6 +119,9 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 // handleModelRouting handles model selection and routing logic
 // decisionName, reasoningDecision, and selectedModel are pre-computed from ProcessRequest
 func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, originalModel string, decisionName string, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if rejected := r.imagesEntryRejection(ctx); rejected != nil {
+		return rejected, nil
+	}
 	if changed, err := r.applyPreDispatchToolsPolicy(ctx); err != nil {
 		return nil, err
 	} else if changed {
@@ -209,7 +225,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 			return r.imageFileDispatchFailure(err, ctx)
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
-		r.handleToolSelectionForRequest(request, response, ctx)
+		r.applyToolsPlugin(request, response, ctx)
 		finalized, err := r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 		if err != nil {
 			return nil, err
@@ -260,7 +276,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	}()
 
 	// Handle tool selection
-	r.handleToolSelectionForRequest(request, response, ctx)
+	r.applyToolsPlugin(request, response, ctx)
 	response, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 	if err != nil {
 		return nil, err
@@ -311,7 +327,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 	defer r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
 
 	// Handle tool selection
-	r.handleToolSelectionForRequest(request, response, ctx)
+	r.applyToolsPlugin(request, response, ctx)
 	response, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 	if err != nil {
 		return nil, err
@@ -327,10 +343,8 @@ func (r *OpenAIRouter) unavailableModelResponse(
 	model string,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	if r != nil && r.Config != nil {
-		if len(r.Config.GetEndpointsForModel(model)) > 0 {
-			return nil
-		}
+	if r != nil && r.Config.RoutesModelToBackend(model) {
+		return nil
 	}
 	requestID := ""
 	if ctx != nil {
@@ -341,6 +355,7 @@ func (r *OpenAIRouter) unavailableModelResponse(
 		"code":       routingFailureModelNotFound.code,
 		"model":      model,
 	})
-	metrics.RecordRequestError(model, "model_not_found")
+	// The name is client text: a label per name would grow without bound.
+	metrics.RecordRequestError(consts.UnknownLabel, "model_not_found")
 	return r.routingFailureResponse(ctx, routingFailureModelNotFound)
 }

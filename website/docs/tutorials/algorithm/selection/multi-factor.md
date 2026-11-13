@@ -9,7 +9,7 @@ weighted or lexicographic objective.
 | Factor | Source | Direction |
 | --- | --- | --- |
 | Quality | Versioned Overall, capability, or operator index | Higher is better |
-| Latency | Observed TTFT or TPOT at the selected percentile | Lower is better |
+| Latency | TTFT or TPOT observed on successful responses, at the selected percentile | Lower is better |
 | Cost | Input/output pricing applied to this request's token budget | Lower is better |
 | Load | Current in-flight requests in this Router process | Lower is better |
 
@@ -19,13 +19,16 @@ both the final objective value and intelligence score tie, higher coverage is
 the deterministic tie-breaker.
 
 Set `latency_metric: ttft` to favor a fast first token, or `tpot` to favor fast
-streaming after generation starts. With either setting, a missing measurement
-stays unknown; the other metric is never substituted. Lexicographic selection
-compares latency only when every candidate still in the objective has a
-measurement. With no measurements or partial coverage, it skips latency and
-continues to the next priority. A measured model therefore cannot exclude an
-unmeasured model simply because it received the first request after startup.
-Omitting the setting preserves the existing TPOT-then-TTFT behavior.
+streaming after generation starts. Omitting it keeps the TPOT-then-TTFT
+behavior.
+
+- **No substitution.** With either setting, a missing measurement stays
+  unknown; the other metric is never used instead.
+- **Lexicographic needs full coverage.** It compares latency only when every
+  candidate still in the objective has a measurement. Otherwise it skips
+  latency and moves to the next priority.
+- **No first-request advantage.** A measured model therefore cannot exclude an
+  unmeasured one just because it received the first request after startup.
 
 ## What Problem Does It Solve?
 
@@ -37,7 +40,8 @@ auditable decision policy.
 
 Use `multi_factor` when a decision has at least two candidate models and must
 optimize a quality/latency/cost/load trade-off. Use `static` when order alone is
-the policy, or `latency_aware` when latency is the only selection signal.
+the policy. When latency is the only selection signal, weight `multi_factor` on
+latency alone, as [Latency-Aware Selection](./latency-aware) shows.
 
 ## Configuration
 
@@ -85,14 +89,21 @@ session protection, and dispatch. These steps cannot restore a model excluded
 by an earlier quality or cost band. Recorded scores may still include excluded
 models to explain the selection.
 
-Preview returns `selection_trace` for lexicographic selection. Insights saves
-the same structure under `route_diagnostics.selection_trace`: reached stages,
-measurement coverage, available values, skipped stages, elimination reasons,
-and the final objective survivors. Unknown values stay absent, while measured
-zero remains zero. These are the base selector's candidates before Router
-Learning; the actual selected model is reported separately. Live measurements
-can change after a Preview, so its trace explains that observation rather than
-guaranteeing a later route.
+Preview returns `selection_trace` for lexicographic selection, and Insights
+saves the same structure under `route_diagnostics.selection_trace`:
+
+- the stages reached and skipped, with measurement coverage and the available
+  values;
+- elimination reasons, and the final objective survivors.
+
+Unknown values stay absent, while a measured zero remains zero. The trace shows
+the base selector's candidates before Router Learning; the selected model is
+reported separately.
+
+:::note
+Live measurements can change after a Preview, so its trace explains that
+observation; it does not guarantee a later route.
+:::
 
 ```yaml
 algorithm:
@@ -166,11 +177,14 @@ for operator-defined evidence.
 
 ## Cost and SLOs
 
-Input cost is calculated from the request's pre-routing token estimate. Output
-cost uses `max_output_tokens` when the caller supplies it. If neither is known,
-the selector falls back to the configured per-million-token rates. This same
-request mix is used for the cost factor, `max_cost_per_1m`, and the `cheapest`
-fallback.
+| Cost part | Source |
+| --- | --- |
+| Input | The request's pre-routing token estimate |
+| Output | `max_output_tokens`, when the caller supplies it |
+| Neither known | The configured per-million-token rates |
+
+The same request mix feeds the cost factor, `max_cost_per_1m` and the
+`cheapest` fallback.
 
 ```yaml
 multi_factor:
@@ -183,11 +197,25 @@ multi_factor:
   on_no_candidates: cheapest
 ```
 
-SLO ceilings are enforced only when the corresponding observation is available.
-If every candidate is excluded, `on_no_candidates` chooses `cheapest`, `first`,
-or `fail`. `fail` is a strict policy: the Router returns HTTP 503 and never
-substitutes the first configured candidate. Eval dry-runs report the selection
-as unavailable for the same request.
+SLO ceilings are enforced only when the corresponding observation is
+available. If every candidate is excluded, `on_no_candidates` chooses:
+
+- `cheapest` or `first`;
+- `fail`, a strict policy: the Router returns HTTP 503 and never substitutes
+  the first configured candidate. Eval dry-runs report the selection as
+  unavailable for the same request.
+
+## Cache affinity
+
+A provider's prompt cache belongs to one model, so switching models in the
+middle of a conversation recomputes its whole context. On a continuing
+conversation (a later turn, carried history, a `previous_response_id` or a
+`prompt_cache_key`), the weighted objective adds a bounded bonus to the
+candidate that served the session's earlier turns:
+
+- **A tie-breaker.** It grows with the share of the request the cache would
+  reuse, and never outweighs a clear quality, cost or SLO difference.
+- **Lexicographic order holds.** The bonus applies only within the final band.
 
 ## Parameters
 

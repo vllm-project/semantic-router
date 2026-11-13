@@ -2,16 +2,24 @@ package responseapi
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-	_ "github.com/vllm-project/semantic-router/e2e/testcases"
+	"github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-const valuesFile = "e2e/profiles/response-api/values.yaml"
+const (
+	valuesFile = "e2e/profiles/response-api/values.yaml"
+	// optInValuesFile configures a second Router that accepts the
+	// tool-result failure loss the main Router rejects.
+	optInValuesFile = "e2e/profiles/response-api/tool-result-opt-in-values.yaml"
+)
 
 var resourceManifests = []string{
-	"deploy/kubernetes/response-api/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
@@ -26,7 +34,11 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "response-api",
 			SemanticRouterValuesFile: valuesFile,
-			ResourceManifests:        resourceManifests,
+			// provider-mocker serves the embedding fixture, which the Router
+			// prepares as it starts.
+			PrerequisiteManifests: []string{"deploy/kubernetes/response-api/provider-mocker.yaml"},
+			PrerequisiteWaits:     []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
+			ResourceManifests:     resourceManifests,
 		}),
 	}
 }
@@ -41,14 +53,41 @@ func (p *Profile) Description() string {
 	return "Tests Response API endpoints (POST/GET/DELETE /v1/responses)"
 }
 
-// Setup deploys the shared gateway stack and Response API resources.
+// Setup deploys the shared gateway stack and Response API resources, then the
+// opt-in Router next to them.
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
-	return p.stack.Setup(ctx, opts)
+	if err := p.stack.Setup(ctx, opts); err != nil {
+		return err
+	}
+	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
+	release := optInRelease()
+	release.Set = map[string]string{
+		"image.repository": helm.RouterImageRepository,
+		"image.tag":        opts.ImageTag,
+		"image.pullPolicy": "Never",
+	}
+	if err := deployer.Install(ctx, release); err != nil {
+		return fmt.Errorf("install the opt-in Router: %w", err)
+	}
+	return deployer.WaitForDeployment(ctx, release.Namespace, release.ReleaseName, 10*time.Minute)
 }
 
-// Teardown removes the shared gateway stack and Response API resources.
+// Teardown removes the opt-in Router, then the shared gateway stack and
+// Response API resources.
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
+	release := optInRelease()
+	if err := helm.NewDeployer(opts.KubeConfig, opts.Verbose).Uninstall(ctx, release.ReleaseName, release.Namespace); err != nil && opts.Verbose {
+		fmt.Printf("[response-api] Warning: failed to uninstall the opt-in Router: %v\n", err)
+	}
 	return p.stack.Teardown(ctx, opts)
+}
+
+func optInRelease() helm.InstallOptions {
+	release := helm.SemanticRouterRelease.Clone()
+	release.ReleaseName = testcases.ToolResultOptInRelease
+	release.Namespace = testcases.ToolResultOptInNamespace
+	release.ValuesFiles = []string{optInValuesFile}
+	return release
 }
 
 // GetTestCases returns the list of test cases for this profile.
@@ -86,6 +125,9 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-chat-custom-tool-kind-switch",
 		"protocol-codec-responses-custom-tool-loop",
 		"protocol-codec-responses-backend-tool-lifecycle",
+		"protocol-codec-tool-result-error-opt-in",
+		"protocol-codec-unreadable-file-opt-in",
+		"protocol-codec-anthropic-system-messages-opt-in",
 		"protocol-codec-anthropic-cache-tool-loop-responses",
 		"protocol-codec-anthropic-adaptive-responses",
 		"protocol-codec-anthropic-per-message-effort",

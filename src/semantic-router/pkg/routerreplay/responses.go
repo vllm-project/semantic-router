@@ -16,18 +16,19 @@ type ListResponse struct {
 }
 
 type AggregateResponse struct {
-	Object               string                `json:"object"`
-	RecordCount          int                   `json:"record_count"`
-	Lifecycle            LifecycleSummary      `json:"lifecycle"`
-	Summary              AggregateCostSummary  `json:"summary"`
-	ModelSelection       []AggregateValue      `json:"model_selection"`
-	DecisionDistribution []AggregateValue      `json:"decision_distribution"`
-	SignalDistribution   []AggregateValue      `json:"signal_distribution"`
-	TokenVolume          AggregateTokenVolume  `json:"token_volume"`
-	TokenBreakdown       AggregateTokenBuckets `json:"token_breakdown"`
-	AvailableRecipes     []string              `json:"available_recipes"`
-	AvailableDecisions   []string              `json:"available_decisions"`
-	AvailableModels      []string              `json:"available_models"`
+	Object               string                        `json:"object"`
+	RecordCount          int                           `json:"record_count"`
+	Lifecycle            LifecycleSummary              `json:"lifecycle"`
+	Summary              AggregateCostSummary          `json:"summary"`
+	ProviderCache        AggregateProviderCacheSummary `json:"provider_cache"`
+	ModelSelection       []AggregateValue              `json:"model_selection"`
+	DecisionDistribution []AggregateValue              `json:"decision_distribution"`
+	SignalDistribution   []AggregateValue              `json:"signal_distribution"`
+	TokenVolume          AggregateTokenVolume          `json:"token_volume"`
+	TokenBreakdown       AggregateTokenBuckets         `json:"token_breakdown"`
+	AvailableRecipes     []string                      `json:"available_recipes"`
+	AvailableDecisions   []string                      `json:"available_decisions"`
+	AvailableModels      []string                      `json:"available_models"`
 }
 
 type LifecycleSummary struct {
@@ -56,6 +57,42 @@ type CurrencyCostSummary struct {
 	BaselineSpend   float64 `json:"baseline_spend"`
 	ActualSpend     float64 `json:"actual_spend"`
 	CostRecordCount int     `json:"cost_record_count"`
+}
+
+// AggregateProviderCacheSummary totals the same-model provider prompt-cache
+// counterfactual over settled records: completed, not served from the Router
+// cache, with complete usage and captured prices. NetSavings is NoCacheSpend
+// minus ActualSpend, so requests whose cache writes cost more than their
+// reads saved reduce it; no request is clamped at zero. Flat amounts are
+// populated only when exactly one currency exists.
+type AggregateProviderCacheSummary struct {
+	NoCacheSpend    float64                      `json:"no_cache_spend"`
+	ActualSpend     float64                      `json:"actual_spend"`
+	NetSavings      float64                      `json:"net_savings"`
+	Currency        string                       `json:"currency,omitempty"`
+	PricedRecords   int                          `json:"priced_records"`
+	ExcludedRecords int                          `json:"excluded_records"`
+	ByCurrency      []ProviderCacheCurrencyTotal `json:"by_currency,omitempty"`
+	ByDecision      []ProviderCacheSpendEntry    `json:"by_decision"`
+	BySelectedModel []ProviderCacheSpendEntry    `json:"by_selected_model"`
+}
+
+type ProviderCacheCurrencyTotal struct {
+	Currency      string  `json:"currency"`
+	NoCacheSpend  float64 `json:"no_cache_spend"`
+	ActualSpend   float64 `json:"actual_spend"`
+	NetSavings    float64 `json:"net_savings"`
+	PricedRecords int     `json:"priced_records"`
+}
+
+// ProviderCacheSpendEntry is one decision or selected model in one currency.
+type ProviderCacheSpendEntry struct {
+	Name          string  `json:"name"`
+	Currency      string  `json:"currency"`
+	NoCacheSpend  float64 `json:"no_cache_spend"`
+	ActualSpend   float64 `json:"actual_spend"`
+	NetSavings    float64 `json:"net_savings"`
+	PricedRecords int     `json:"priced_records"`
 }
 
 type AggregateValue struct {
@@ -100,7 +137,9 @@ type TrajectoryMessage struct {
 	ToolCalls      []TrajectoryToolCall `json:"tool_calls,omitempty"`
 	ToolCallID     string               `json:"tool_call_id,omitempty"`
 	ToolName       string               `json:"tool_name,omitempty"`
-	TurnIndex      int                  `json:"turn_index"`
+	// ContentTruncated marks message text or a tool result cut at max_tool_trace_bytes.
+	ContentTruncated bool `json:"content_truncated,omitempty"`
+	TurnIndex        int  `json:"turn_index"`
 }
 
 type TrajectoryResponse struct {

@@ -51,16 +51,16 @@ func TestBufferedResponseDiagnosticsReachBodyHeaderAndMetrics(t *testing.T) {
 		t.Fatalf("buffered response failed: response=%v error=%v", bodyResponse, err)
 	}
 	warning := protocolDiagnosticsHeader(bodyResponse.GetResponseBody().GetResponse().GetHeaderMutation())
-	if !strings.Contains(warning, "early_test") || !strings.Contains(warning, ";stop_details") {
+	if !strings.Contains(warning, "early_test") || !strings.Contains(warning, `;field="stop_details"`) {
 		t.Fatalf("body header omitted early or late diagnostic: %q", warning)
 	}
-	if len(warning) > lossinessHeaderSizeLimit || testutil.ToFloat64(earlyCounter) != earlyBefore+1 ||
+	if len(warning) > warningsSizeLimit || testutil.ToFloat64(earlyCounter) != earlyBefore+1 ||
 		testutil.ToFloat64(lateCounter) != lateBefore+1 {
 		t.Fatalf("diagnostic limit or accounting failed: warning=%q early=%v late=%v", warning,
 			testutil.ToFloat64(earlyCounter)-earlyBefore, testutil.ToFloat64(lateCounter)-lateBefore)
 	}
 	for _, option := range bodyResponse.GetResponseBody().GetResponse().GetHeaderMutation().GetSetHeaders() {
-		if option.GetHeader().GetKey() == headers.VSRProtocolWarnings &&
+		if option.GetHeader().GetKey() == headers.VSRWarnings &&
 			option.GetAppendAction() != core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD {
 			t.Fatal("late diagnostics must replace the early warning header")
 		}
@@ -79,12 +79,12 @@ func TestBufferedResponsePartialCacheWarningIsRecordedOnce(t *testing.T) {
 	counter := metrics.TranslationLossyTotal.WithLabelValues("anthropic", "openai", "dropped", reason)
 	before := testutil.ToFloat64(counter)
 	body := []byte(`{"id":"response_1","model":"source-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12,"prompt_tokens_details":{"cached_tokens":1}}}`)
-	response := router.handleNonStreamingResponseBody(body, ctx, 0)
+	response := router.handleNonStreamingResponseBody(body, ctx, 0, false)
 	if response.GetResponseBody() == nil {
 		t.Fatalf("buffered response failed: %+v", response)
 	}
 	warning := protocolDiagnosticsHeader(response.GetResponseBody().GetResponse().GetHeaderMutation())
-	if strings.Count(warning, ";usage.cache") != 1 {
+	if strings.Count(warning, `;field="usage.cache`) != 1 {
 		t.Fatalf("partial cache usage should emit one warning: %q", warning)
 	}
 	if got := testutil.ToFloat64(counter); got != before+1 {
@@ -97,7 +97,7 @@ func TestBufferedResponsePartialCacheWarningIsRecordedOnce(t *testing.T) {
 
 func protocolDiagnosticsHeader(mutation *ext_proc.HeaderMutation) string {
 	for _, option := range mutation.GetSetHeaders() {
-		if option.GetHeader().GetKey() == headers.VSRProtocolWarnings {
+		if option.GetHeader().GetKey() == headers.VSRWarnings {
 			return string(option.GetHeader().GetRawValue()) + option.GetHeader().GetValue()
 		}
 	}

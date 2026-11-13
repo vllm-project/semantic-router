@@ -13,6 +13,7 @@ type streamState struct {
 	policy                llmprotocol.Policy
 	providerID            string
 	providerModel         string
+	streamModel           string // the model PreferProviderModel fixed at the first event
 	sequence              uint64
 	events                int
 	wireFrames            int
@@ -29,6 +30,7 @@ type streamState struct {
 	contentBlocks         map[streamContentKey]bool
 	contentKinds          map[streamContentKey]llmprotocol.ContentKind
 	reasoningScopes       map[streamContentKey]llmprotocol.ReasoningScope
+	reasoningDetails      map[streamContentKey]llmprotocol.ReasoningDetail
 	itemTextBytes         map[streamContentKey]int
 	itemTextRunes         map[streamContentKey]int64
 	itemCitations         map[streamContentKey]int
@@ -38,6 +40,30 @@ type streamState struct {
 	imageProgressRank     map[int]int
 	imageProgressSeen     map[int]map[llmprotocol.ImageGenerationStatus]bool
 	nextPartialImageIndex map[int]int64
+	reportedUnknownFields map[string]bool
+	// a tool call whose arguments ended before forming a JSON object; only a
+	// max_tokens stop explains one, which the terminal event decides
+	cutToolArguments bool
+}
+
+// appendStreamUnknownFields reports each unknown upstream member once per
+// stream. A gateway field that rides every frame would otherwise add one
+// diagnostic per frame and crowd later losses out of the bounded list.
+func (state *streamState) appendStreamUnknownFields(
+	diagnostics *llmprotocol.Diagnostics,
+	format llmprotocol.WireFormat,
+	paths []string,
+) {
+	for _, path := range paths {
+		if state.reportedUnknownFields[path] {
+			continue
+		}
+		if state.reportedUnknownFields == nil {
+			state.reportedUnknownFields = make(map[string]bool, 4)
+		}
+		state.reportedUnknownFields[path] = true
+		appendProviderFieldOmission(diagnostics, state.policy, format, path, unknownUpstreamFieldReason)
+	}
 }
 
 func (state *streamState) observeProviderStreamBytes(chunk []byte) error {
@@ -134,11 +160,30 @@ func (state *streamState) prepareEvent(event llmprotocol.Event) (llmprotocol.Eve
 	if event.ResponseID == "" {
 		event.ResponseID = state.context.ResponseID
 	}
-	if state.context.PublicModel != "" {
-		event.Model = state.context.PublicModel
+	if model := state.publicModel(event.Model); model != "" {
+		event.Model = model
 	}
 	state.ensureCollections()
 	return state.prepareLifecycleEvent(event)
+}
+
+// publicModel is the model the stream's events carry. A decoder knows the
+// provider's model once the provider names it, and an encoder receives it on
+// the decoded events. With PreferProviderModel the first event fixes it, so a
+// provider that names its model late leaves the whole stream on PublicModel.
+func (state *streamState) publicModel(eventModel string) string {
+	if !state.context.PreferProviderModel {
+		return state.context.PublicModel
+	}
+	if state.streamModel == "" {
+		for _, model := range []string{state.providerModel, eventModel, state.context.PublicModel} {
+			if model != "" {
+				state.streamModel = model
+				break
+			}
+		}
+	}
+	return state.streamModel
 }
 
 func validStreamEventType(eventType llmprotocol.EventType) bool {
@@ -165,6 +210,7 @@ func (state *streamState) ensureCollections() {
 		state.contentBlocks = make(map[streamContentKey]bool)
 		state.contentKinds = make(map[streamContentKey]llmprotocol.ContentKind)
 		state.reasoningScopes = make(map[streamContentKey]llmprotocol.ReasoningScope)
+		state.reasoningDetails = make(map[streamContentKey]llmprotocol.ReasoningDetail)
 		state.itemTextBytes = make(map[streamContentKey]int)
 		state.itemTextRunes = make(map[streamContentKey]int64)
 		state.itemCitations = make(map[streamContentKey]int)
@@ -212,6 +258,11 @@ func (state *streamState) prepareStartEvent(event llmprotocol.Event) (llmprotoco
 }
 
 func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.Event, error) {
+	if state.cutToolArguments && isOutputItemEvent(event.Type) {
+		// A limit cuts only the final output, so a later item means the call's
+		// arguments were malformed rather than cut.
+		return llmprotocol.Event{}, nonObjectToolArgumentsError()
+	}
 	switch event.Type {
 	case llmprotocol.EventOutputItemStarted:
 		return state.startItem(event)
@@ -223,6 +274,15 @@ func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.E
 		return state.completeItem(event)
 	}
 	return event, nil
+}
+
+func isOutputItemEvent(eventType llmprotocol.EventType) bool {
+	switch eventType {
+	case llmprotocol.EventOutputItemStarted, llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta,
+		llmprotocol.EventToolCallDelta, llmprotocol.EventImageGenerationProgress, llmprotocol.EventOutputItemCompleted:
+		return true
+	}
+	return false
 }
 
 func (state *streamState) startItem(event llmprotocol.Event) (llmprotocol.Event, error) {
@@ -406,6 +466,27 @@ func (state *streamState) observeContentKind(key streamContentKey, kind llmproto
 }
 
 func (state *streamState) observeReasoningScope(key streamContentKey, event llmprotocol.Event) error {
+	if event.Content != nil && event.Content.ReasoningDetail != nil {
+		if event.Content.Kind != llmprotocol.ContentReasoning || event.Delta != "" || event.Content.Text != "" || event.Content.Signature != "" || event.Content.Reasoning != "" {
+			return invalidProviderResponse("invalid_reasoning_detail", "Upstream continuity delta contains unrelated fields")
+		}
+		detail := *event.Content.ReasoningDetail
+		if current, found := state.reasoningDetails[key]; found {
+			merged, err := llmprotocol.MergeReasoningDetail(current, detail)
+			if err != nil {
+				return invalidProviderResponse("reasoning_detail_identity_mismatch", "Upstream reasoning detail changed identity or type")
+			}
+			detail = merged
+		}
+		if err := llmprotocol.ValidateReasoningDetail(detail, state.policy.Limits); err != nil {
+			return invalidProviderResponse("invalid_reasoning_detail", "Upstream reasoning detail is invalid or exceeds the configured limit")
+		}
+		state.reasoningDetails[key] = detail
+		return nil
+	}
+	if _, found := state.reasoningDetails[key]; found {
+		return invalidProviderResponse("stream_content_kind_mismatch", "Upstream stream changed a continuity block to plain text")
+	}
 	if event.Content == nil || event.Content.Kind != llmprotocol.ContentReasoning || event.Content.Reasoning == "" {
 		return nil
 	}

@@ -2,22 +2,28 @@ package config
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
-// overrides, organized into explicit platform modules.
+// overrides, organized into explicit platform modules. Stores and services
+// say where the Router keeps state; a plugin turns a feature on.
 type CanonicalGlobal struct {
 	Router       CanonicalRouterGlobal      `yaml:"router"`
 	Services     CanonicalServiceGlobal     `yaml:"services"`
 	Stores       CanonicalStoreGlobal       `yaml:"stores"`
 	Integrations CanonicalIntegrationGlobal `yaml:"integrations"`
 	ModelCatalog CanonicalModelCatalog      `yaml:"model_catalog"`
+	// Plugins are the default plugins of every decision, and of a request that
+	// matches no decision. A recipe's plugin of the same type overrides one
+	// field by field, and a decision's plugin overrides the recipe's.
+	Plugins []DecisionPlugin `yaml:"plugins,omitempty"`
 }
 
 // CanonicalRouterGlobal captures router-engine control knobs.
@@ -32,6 +38,17 @@ type CanonicalRouterGlobal struct {
 	ModelSelection    ModelSelectionConfig     `yaml:"model_selection"`
 	Learning          RouterLearningConfig     `yaml:"learning,omitempty"`
 	Fallback          *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	// AllowLossyTranslation names protocol losses translated with a warning
+	// instead of rejected. Every other loss keeps failing closed.
+	AllowLossyTranslation []string `yaml:"allow_lossy_translation,omitempty"`
+	// RoutingInput chooses the user text that routing reads.
+	RoutingInput RoutingInputConfig `yaml:"routing_input,omitempty"`
+	// Headers governs the optional response headers, such as who may turn on
+	// the debug headers.
+	Headers RouterHeadersConfig `yaml:"headers,omitempty"`
+	// ContextWindow governs the check of a prompt against the context
+	// windows of the models that can serve it.
+	ContextWindow ContextWindowConfig `yaml:"context_window,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -68,130 +85,45 @@ type CanonicalStoreGlobal struct {
 // CanonicalIntegrationGlobal groups external helper services used by the router.
 type CanonicalIntegrationGlobal struct {
 	KVTransfer *KVTransferConfig `yaml:"kv_transfer,omitempty"`
-	Tools      ToolsConfig       `yaml:"tools"`
 	Looper     LooperConfig      `yaml:"looper"`
 }
 
-// CanonicalModelCatalog groups router-owned model assets and the module
-// configs that resolve through those assets.
+// CanonicalModelCatalog groups the Router's model assets: the deployments,
+// their bindings and admission, and the embedding and decision models.
 type CanonicalModelCatalog struct {
 	Bindings    map[string]ModelBinding    `yaml:"bindings,omitempty"`
 	Deployments map[string]ModelDeployment `yaml:"deployments,omitempty"`
 	Embeddings  CanonicalEmbeddingModels   `yaml:"embeddings"`
 	System      CanonicalSystemModels      `yaml:"system"`
-	External    []ExternalModelConfig      `yaml:"external,omitempty"`
-	KBs         []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
-	Modules     CanonicalModelModules      `yaml:"modules"`
 	Admission   map[string]AdmissionConfig `yaml:"admission,omitempty"`
 	// SignalTimeoutMs is the deadline of a request's model-runtime signals,
 	// below the request's; 0 derives it from the request's deadline.
 	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
 }
 
-// CanonicalEmbeddingModels groups embedding-related model assets.
+// CanonicalEmbeddingModels names the embedding deployment recall uses, the
+// way system.decision_model names the decision model's. Default embeds for
+// every store and collection that names none of its own: the pre-declared
+// vela-embedding, started only when a recall consumer needs it.
 type CanonicalEmbeddingModels struct {
-	Semantic EmbeddingModels `yaml:"semantic"`
+	Default EmbeddingModelBinding `yaml:"default,omitempty"`
 }
 
-// CanonicalModelModules groups configurable capability modules built on top of
-// router-owned model assets.
-type CanonicalModelModules struct {
-	Safety                  SafetyModelsConfig              `yaml:"safety"`
-	PromptCompression       PromptCompressionConfig         `yaml:"prompt_compression"`
-	PromptGuard             CanonicalPromptGuardModule      `yaml:"prompt_guard"`
-	Classifier              CanonicalClassifierModule       `yaml:"classifier"`
-	Complexity              ComplexityModelConfig           `yaml:"complexity"`
-	HallucinationMitigation CanonicalHallucinationModule    `yaml:"hallucination_mitigation"`
-	FeedbackDetector        CanonicalFeedbackDetectorModule `yaml:"feedback_detector"`
-	ModalityDetector        ModalityDetectorConfig          `yaml:"modality_detector"`
+// EmbeddingModelBinding names the deployment that embeds for recall.
+type EmbeddingModelBinding struct {
+	Deployment string `yaml:"deployment" json:"deployment" jsonschema:"required,minLength=1"`
 }
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
 	// DecisionModel selects the shared default judgment deployment.
-	DecisionModel         DecisionModelBinding `yaml:"decision_model,omitempty"`
-	Safety                string               `yaml:"safety,omitempty"`
-	Hazard                string               `yaml:"hazard,omitempty"`
-	PromptGuard           string               `yaml:"prompt_guard,omitempty"`
-	DomainClassifier      string               `yaml:"domain_classifier,omitempty"`
-	PIIClassifier         string               `yaml:"pii_classifier,omitempty"`
-	FactCheckClassifier   string               `yaml:"fact_check_classifier,omitempty"`
-	HallucinationDetector string               `yaml:"hallucination_detector,omitempty"`
-	FeedbackDetector      string               `yaml:"feedback_detector,omitempty"`
-}
-
-// CanonicalPromptGuardModule keeps prompt-guard settings visible as a module
-// while resolving the concrete model from the shared system-model catalog.
-type CanonicalPromptGuardModule struct {
-	PromptGuardConfig `yaml:",inline"`
-	ModelRef          string `yaml:"model_ref,omitempty"`
-}
-
-// CanonicalClassifierModule exposes classifier submodules explicitly.
-type CanonicalClassifierModule struct {
-	Domain     CanonicalCategoryModule `yaml:"domain"`
-	MCP        MCPCategoryModel        `yaml:"mcp"`
-	PII        CanonicalPIIModule      `yaml:"pii"`
-	Preference PreferenceModelConfig   `yaml:"preference"`
-}
-
-type CanonicalCategoryModule struct {
-	CategoryModel `yaml:",inline"`
-	ModelRef      string `yaml:"model_ref,omitempty"`
-}
-
-type CanonicalPIIModule struct {
-	PIIModel `yaml:",inline"`
-	ModelRef string `yaml:"model_ref,omitempty"`
-}
-
-// CanonicalHallucinationModule keeps the mitigation block readable by splitting
-// fact-check and detector responsibilities.
-type CanonicalHallucinationModule struct {
-	Enabled   bool                           `yaml:"enabled,omitempty"`
-	FactCheck CanonicalFactCheckModule       `yaml:"fact_check"`
-	Detector  CanonicalHallucinationDetector `yaml:"detector"`
-}
-
-type CanonicalFactCheckModule struct {
-	FactCheckModelConfig `yaml:",inline"`
-	ModelRef             string `yaml:"model_ref,omitempty"`
-}
-
-type CanonicalHallucinationDetector struct {
-	HallucinationModelConfig `yaml:",inline"`
-	ModelRef                 string `yaml:"model_ref,omitempty"`
-}
-
-type CanonicalFeedbackDetectorModule struct {
-	FeedbackDetectorConfig `yaml:",inline"`
-	ModelRef               string `yaml:"model_ref,omitempty"`
-}
-
-func (m CanonicalClassifierModule) runtimeConfig() Classifier {
-	return Classifier{
-		CategoryModel:    m.Domain.CategoryModel,
-		MCPCategoryModel: m.MCP,
-		PIIModel:         m.PII.PIIModel,
-		PreferenceModel:  m.Preference.WithDefaults(),
-	}
-}
-
-func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationConfig {
-	return HallucinationMitigationConfig{
-		Enabled:            m.Enabled,
-		FactCheckModel:     m.FactCheck.FactCheckModelConfig,
-		HallucinationModel: m.Detector.HallucinationModelConfig,
-	}
+	DecisionModel DecisionModelBinding `yaml:"decision_model,omitempty"`
 }
 
 func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPayload) (CanonicalGlobal, error) {
 	defaults := DefaultCanonicalGlobal()
 	if rawOverride == nil && override == nil {
-		if err := applyDecisionModel(&defaults, nil); err != nil {
-			return CanonicalGlobal{}, err
-		}
-		if err := resolveModuleModelRefs(&defaults); err != nil {
+		if err := validateDecisionModel(&defaults); err != nil {
 			return CanonicalGlobal{}, err
 		}
 		return defaults, nil
@@ -201,39 +133,13 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err != nil {
 		return CanonicalGlobal{}, err
 	}
-	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
-	if err := rejectLegacyPromptGuardProtocol(rawOverride); err != nil {
+	if err := validateDecisionModel(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
-	if err := applyDecisionModel(&resolved, rawOverride); err != nil {
-		return CanonicalGlobal{}, err
+	if name := resolved.ModelCatalog.Embeddings.Default.Deployment; name == "" || name != strings.TrimSpace(name) {
+		return CanonicalGlobal{}, fmt.Errorf("global.model_catalog.embeddings.default.deployment must name a declared deployment")
 	}
-	if err := resolveModuleModelRefs(&resolved); err != nil {
-		return CanonicalGlobal{}, err
-	}
-	normalizeModuleOperatingPoints(&resolved, rawOverride)
 	return resolved, nil
-}
-
-// Representation defaults belong to the default mmBERT model. Selecting a
-// different family must not silently request mmBERT's layer 22 from that owner.
-func normalizeSparseCanonicalEmbeddingOverride(resolved *CanonicalGlobal, raw *StructuredPayload) {
-	if raw == nil {
-		return
-	}
-	global, err := raw.AsStringMap()
-	if err != nil {
-		return
-	}
-	catalog := nestedStringMap(global["model_catalog"])
-	embeddings := nestedStringMap(catalog["embeddings"])
-	semantic := nestedStringMap(embeddings["semantic"])
-	settings := nestedStringMap(semantic["embedding_config"])
-	if model, ok := settings["model_type"].(string); ok && strings.TrimSpace(model) != "" && strings.ToLower(strings.TrimSpace(model)) != "mmbert" {
-		if !hasRawKey(settings, "target_layer") {
-			resolved.ModelCatalog.Embeddings.Semantic.EmbeddingConfig.TargetLayer = 0
-		}
-	}
 }
 
 func mergeCanonicalGlobalOverride(
@@ -257,9 +163,44 @@ func mergeCanonicalGlobalOverride(
 	return resolved, nil
 }
 
-func hasRawKey(raw map[string]interface{}, key string) bool {
-	_, ok := raw[key]
-	return ok
+// refuseEmptyGlobalValue refuses an empty value in global or its mappings.
+// Merged onto the defaults, it would replace them with zero values.
+func refuseEmptyGlobalValue(global interface{}) error {
+	data, err := yaml.Marshal(DefaultCanonicalGlobal())
+	if err != nil {
+		return err
+	}
+	defaults, err := parseRawConfigMap(data)
+	if err != nil {
+		return err
+	}
+	path, replaced := emptyMappingValue(global, defaults, "global")
+	switch {
+	case path == "":
+		return nil
+	case len(nestedStringMap(replaced)) > 0:
+		return fmt.Errorf("%s is empty: remove it to keep its defaults, or give it fields", path)
+	default:
+		return fmt.Errorf("%s is empty: remove it to keep its default, or give it a value", path)
+	}
+}
+
+// emptyMappingValue returns the path of the first empty value in value or its
+// mappings, or "", and the default it replaces. Lists are replaced whole, so
+// their items are not checked.
+func emptyMappingValue(value, defaults interface{}, path string) (string, interface{}) {
+	switch value.(type) {
+	case nil:
+		return path, defaults
+	case map[string]interface{}, map[interface{}]interface{}:
+		fields, defaultFields := nestedStringMap(value), nestedStringMap(defaults)
+		for _, key := range slices.Sorted(maps.Keys(fields)) {
+			if empty, replaced := emptyMappingValue(fields[key], defaultFields[key], path+"."+key); empty != "" {
+				return empty, replaced
+			}
+		}
+	}
+	return "", nil
 }
 
 func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
@@ -289,6 +230,10 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
 	cfg.Fallback = router.Fallback.Clone()
+	cfg.AllowLossyTranslation = router.AllowLossyTranslation
+	cfg.RoutingInput = router.RoutingInput
+	cfg.Headers = router.Headers
+	cfg.ContextWindow = router.ContextWindow
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
@@ -311,32 +256,14 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
 	cfg.KVTransfer = integrations.KVTransfer
-	cfg.Tools = integrations.Tools
 	cfg.Looper = integrations.Looper
-	if integrations.Looper.Endpoint != "" {
-		logging.ComponentWarnEvent("config", "looper_endpoint_deprecated", map[string]interface{}{
-			"field":  "global.integrations.looper.endpoint",
-			"reason": "the Router makes Looper calls in process; the field is ignored and goes in the next release",
-			"fix":    "remove it, or run vllm-sr config migrate",
-		})
-	}
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
 	cfg.DecisionModel = modelCatalog.System.DecisionModel.Deployment
+	cfg.EmbeddingDeployment = modelCatalog.Embeddings.Default.Deployment
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
-	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
-	cfg.EmbeddingModels = modelCatalog.Embeddings.Semantic
-	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), modelCatalog.KBs...)
-	cfg.PromptCompression = modelCatalog.Modules.PromptCompression
-	cfg.PromptGuard = modelCatalog.Modules.PromptGuard.PromptGuardConfig
-	cfg.Classifier = modelCatalog.Modules.Classifier.runtimeConfig()
-	cfg.ComplexityModel = modelCatalog.Modules.Complexity.WithDefaults()
-	cfg.HallucinationMitigation = modelCatalog.Modules.HallucinationMitigation.runtimeConfig()
-	cfg.FeedbackDetector = modelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
-	cfg.ModalityDetector = modelCatalog.Modules.ModalityDetector
-	cfg.SafetyModels = modelCatalog.Modules.Safety
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 	cfg.ModelSignalTimeoutMs = modelCatalog.SignalTimeoutMs
 }
@@ -350,117 +277,4 @@ func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]Admissio
 		cloned[key] = value
 	}
 	return cloned
-}
-
-func resolveModuleModelRefs(global *CanonicalGlobal) error {
-	if global == nil {
-		return nil
-	}
-
-	var err error
-	for name, head := range map[string]*SequenceHeadModelConfig{
-		"safety": &global.ModelCatalog.Modules.Safety.Safety,
-		"hazard": &global.ModelCatalog.Modules.Safety.Hazard,
-	} {
-		if head.ModelID, err = resolveSystemModelRef(head.ModelRef, head.ModelID, global.ModelCatalog.System); err != nil {
-			return fmt.Errorf("global.model_catalog.modules.safety.%s: %w", name, err)
-		}
-	}
-	if global.ModelCatalog.Modules.PromptGuard.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.PromptGuard.ModelRef,
-		global.ModelCatalog.Modules.PromptGuard.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.prompt_guard: %w", err)
-	}
-	if global.ModelCatalog.Modules.Classifier.Domain.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.Classifier.Domain.ModelRef,
-		global.ModelCatalog.Modules.Classifier.Domain.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.classifier.domain: %w", err)
-	}
-	if global.ModelCatalog.Modules.Classifier.PII.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.Classifier.PII.ModelRef,
-		global.ModelCatalog.Modules.Classifier.PII.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.classifier.pii: %w", err)
-	}
-	if global.ModelCatalog.Modules.HallucinationMitigation.FactCheck.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.HallucinationMitigation.FactCheck.ModelRef,
-		global.ModelCatalog.Modules.HallucinationMitigation.FactCheck.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.fact_check: %w", err)
-	}
-	if global.ModelCatalog.Modules.HallucinationMitigation.Detector.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.HallucinationMitigation.Detector.ModelRef,
-		global.ModelCatalog.Modules.HallucinationMitigation.Detector.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.hallucination_mitigation.detector: %w", err)
-	}
-	if global.ModelCatalog.Modules.FeedbackDetector.ModelID, err = resolveSystemModelRef(
-		global.ModelCatalog.Modules.FeedbackDetector.ModelRef,
-		global.ModelCatalog.Modules.FeedbackDetector.ModelID,
-		global.ModelCatalog.System,
-	); err != nil {
-		return fmt.Errorf("global.model_catalog.modules.feedback_detector: %w", err)
-	}
-	return nil
-}
-
-func resolveSystemModelRef(ref string, explicitModelID string, catalog CanonicalSystemModels) (string, error) {
-	if explicitModelID != "" {
-		return explicitModelID, nil
-	}
-	if ref == "" {
-		return "", nil
-	}
-
-	var modelID string
-	switch ref {
-	case "safety":
-		modelID = catalog.Safety
-	case "hazard":
-		modelID = catalog.Hazard
-	case "prompt_guard":
-		modelID = catalog.PromptGuard
-	case "domain_classifier":
-		modelID = catalog.DomainClassifier
-	case "pii_classifier":
-		modelID = catalog.PIIClassifier
-	case "fact_check_classifier":
-		modelID = catalog.FactCheckClassifier
-	case "hallucination_detector":
-		modelID = catalog.HallucinationDetector
-	case "feedback_detector":
-		modelID = catalog.FeedbackDetector
-	default:
-		return "", fmt.Errorf("unknown model_ref %q", ref)
-	}
-	if modelID == "" {
-		return "", fmt.Errorf("model_ref %q is not configured in global.model_catalog.system", ref)
-	}
-	return modelID, nil
-}
-
-// rejectLegacyPromptGuardProtocol refuses the legacy protocol key, which the
-// migration command converts to a named backend.
-func rejectLegacyPromptGuardProtocol(rawOverride *StructuredPayload) error {
-	if rawOverride == nil || rawOverride.IsEmpty() {
-		return nil
-	}
-	var global map[string]interface{}
-	if err := rawOverride.DecodeInto(&global); err != nil {
-		return err
-	}
-	catalog := nestedStringMap(global["model_catalog"])
-	modules := nestedStringMap(catalog["modules"])
-	raw := nestedStringMap(modules["prompt_guard"])
-	if protocol, ok := raw["protocol"].(string); ok && strings.TrimSpace(protocol) != "" {
-		return fmt.Errorf("global.model_catalog.modules.prompt_guard.protocol is legacy; run vllm-sr config migrate to declare a named backend")
-	}
-	return nil
 }

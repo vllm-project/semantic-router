@@ -15,36 +15,99 @@ type chatResponseWire struct {
 	Model   string `json:"model"`
 	// OpenRouter names the upstream that served the request. It is metadata,
 	// not part of the model's answer.
-	Provider            *string                   `json:"provider,omitempty"`
-	Choices             []chatChoiceWire          `json:"choices"`
-	Usage               *chatUsageWire            `json:"usage,omitempty"`
-	Metadata            map[string]string         `json:"metadata,omitempty"`
-	Moderation          json.RawMessage           `json:"moderation,omitempty"`
-	Error               *chatErrorWire            `json:"error,omitempty"`
-	ServiceTier         *chatServiceTierWire      `json:"service_tier,omitempty"`
-	SystemFingerprint   *string                   `json:"system_fingerprint,omitempty"`
-	PromptLogprobs      *chatNullOnlyWire         `json:"prompt_logprobs,omitempty"`
-	PromptTokenIDs      []int64                   `json:"prompt_token_ids,omitempty"`
-	PromptText          *chatNullOnlyWire         `json:"prompt_text,omitempty"`
-	PromptRoutedExperts *chatNullOnlyWire         `json:"prompt_routed_experts,omitempty"`
-	KVTransferParams    *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
-	ECTransferParams    *chatNullOnlyWire         `json:"ec_transfer_params,omitempty"`
-	Metrics             *chatNullOnlyWire         `json:"metrics,omitempty"`
-	DoRemoteDecode      *bool                     `json:"do_remote_decode,omitempty"`
-	DoRemotePrefill     *bool                     `json:"do_remote_prefill,omitempty"`
-	RemoteBlockIDs      []int64                   `json:"remote_block_ids,omitempty"`
-	RemoteEngineID      *string                   `json:"remote_engine_id,omitempty"`
-	RemoteHost          *string                   `json:"remote_host,omitempty"`
-	RemotePort          *int64                    `json:"remote_port,omitempty"`
+	Provider          *string              `json:"provider,omitempty"`
+	Choices           []chatChoiceWire     `json:"choices"`
+	Usage             *chatUsageWire       `json:"usage,omitempty"`
+	Metadata          map[string]string    `json:"metadata,omitempty"`
+	Moderation        json.RawMessage      `json:"moderation,omitempty"`
+	Error             *chatErrorWire       `json:"error,omitempty"`
+	ServiceTier       *chatServiceTierWire `json:"service_tier,omitempty"`
+	SystemFingerprint *string              `json:"system_fingerprint,omitempty"`
+	PromptTokenIDs    []int64              `json:"prompt_token_ids,omitempty"`
+	// vLLM's serving metadata: prompt logprobs and text, routed experts, the
+	// KV and encoder-cache transfer handshakes and per-request metrics. Each
+	// is opaque and not model output, whatever its value; a same-format reply
+	// forwards it unchanged.
+	PromptLogprobs      json.RawMessage `json:"prompt_logprobs,omitempty"`
+	PromptText          json.RawMessage `json:"prompt_text,omitempty"`
+	PromptRoutedExperts json.RawMessage `json:"prompt_routed_experts,omitempty"`
+	KVTransferParams    json.RawMessage `json:"kv_transfer_params,omitempty"`
+	ECTransferParams    json.RawMessage `json:"ec_transfer_params,omitempty"`
+	Metrics             json.RawMessage `json:"metrics,omitempty"`
+	DoRemoteDecode      *bool           `json:"do_remote_decode,omitempty"`
+	DoRemotePrefill     *bool           `json:"do_remote_prefill,omitempty"`
+	RemoteBlockIDs      []int64         `json:"remote_block_ids,omitempty"`
+	RemoteEngineID      *string         `json:"remote_engine_id,omitempty"`
+	RemoteHost          *string         `json:"remote_host,omitempty"`
+	RemotePort          *int64          `json:"remote_port,omitempty"`
 	// Groq attaches its request id here; it is provider metadata, not output.
 	XGroq json.RawMessage `json:"x_groq,omitempty"`
 	// Groq reports per-model usage for compound requests and null otherwise.
 	UsageBreakdown json.RawMessage `json:"usage_breakdown,omitempty"`
+	// Cerebras reports serving timing metadata on every response. It is
+	// provider timing metadata, not output content.
+	TimeInfo json.RawMessage `json:"time_info,omitempty"`
+	// Perplexity Sonar responses carry model source citations and search
+	// results at the top level. Neither has a neutral slot here, so both are
+	// dropped with a diagnostic instead of failing the strict decode.
+	Citations     json.RawMessage `json:"citations,omitempty"`
+	SearchResults json.RawMessage `json:"search_results,omitempty"`
+}
+
+// hasTimeInfo reports Cerebras's top-level serving timing metadata.
+func (wire chatResponseWire) hasTimeInfo() bool {
+	return len(wire.TimeInfo) > 0 && !bytes.Equal(bytes.TrimSpace(wire.TimeInfo), []byte("null"))
 }
 
 // hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.
 func (wire chatResponseWire) hasUsageBreakdown() bool {
-	return len(wire.UsageBreakdown) > 0 && !bytes.Equal(bytes.TrimSpace(wire.UsageBreakdown), []byte("null"))
+	return jsonFieldPresent(wire.UsageBreakdown)
+}
+
+// jsonFieldPresent reports a raw JSON field that carries a value rather than
+// being absent or null.
+func jsonFieldPresent(raw json.RawMessage) bool {
+	return len(raw) > 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
+
+// hasCitations reports Perplexity's top-level source citations.
+func (wire chatResponseWire) hasCitations() bool {
+	return jsonFieldPresent(wire.Citations)
+}
+
+// hasSearchResults reports Perplexity's top-level search results.
+func (wire chatResponseWire) hasSearchResults() bool {
+	return jsonFieldPresent(wire.SearchResults)
+}
+
+const vllmServingMetadataReason = "vLLM serving metadata is not model output; a same-format replay forwards it unchanged"
+
+// vllmMetadataPresent reports a serving metadata member that carries a value.
+// Absent, null and empty members are the defaults vLLM and vLLM-Omni send.
+func vllmMetadataPresent(raw json.RawMessage) bool {
+	switch string(bytes.TrimSpace(raw)) {
+	case "", "null", "{}", "[]":
+		return false
+	}
+	return true
+}
+
+// vllmServingMetadata reports which vLLM serving metadata members carry a
+// value, for the dropped-field diagnostics.
+func (wire chatResponseWire) vllmServingMetadata() map[string]bool {
+	fields := map[string]bool{
+		"prompt_logprobs":       vllmMetadataPresent(wire.PromptLogprobs),
+		"prompt_text":           vllmMetadataPresent(wire.PromptText),
+		"prompt_routed_experts": vllmMetadataPresent(wire.PromptRoutedExperts),
+		"kv_transfer_params":    vllmMetadataPresent(wire.KVTransferParams),
+		"ec_transfer_params":    vllmMetadataPresent(wire.ECTransferParams),
+		"metrics":               vllmMetadataPresent(wire.Metrics),
+	}
+	for _, choice := range wire.Choices {
+		fields["choices.routed_experts"] = fields["choices.routed_experts"] || vllmMetadataPresent(choice.RoutedExperts)
+		fields["choices.weight_versions"] = fields["choices.weight_versions"] || vllmMetadataPresent(choice.WeightVersions)
+	}
+	return fields
 }
 
 // hasLegacyKVTransferMetadata recognizes the flat KV-transfer response
@@ -68,7 +131,10 @@ type chatChoiceWire struct {
 	ProviderSpecificFields json.RawMessage     `json:"provider_specific_fields,omitempty"`
 	StopReason             *chatStopReasonWire `json:"stop_reason,omitempty"`
 	TokenIDs               []int64             `json:"token_ids,omitempty"`
-	RoutedExperts          *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	// vLLM's per-token expert routing and the weight versions that sampled
+	// the output: opaque serving metadata, like the top-level members above.
+	RoutedExperts  json.RawMessage `json:"routed_experts,omitempty"`
+	WeightVersions json.RawMessage `json:"weight_versions,omitempty"`
 }
 
 type chatServiceTierWire string
@@ -87,22 +153,6 @@ func (tier *chatServiceTierWire) UnmarshalJSON(raw []byte) error {
 		return fmt.Errorf("unsupported chat service tier")
 	}
 }
-
-// chatNullOnlyWire closes provider fields which this protocol version only
-// observes as null. A future non-null representation must be modeled before it
-// can cross the strict provider boundary.
-type chatNullOnlyWire struct{}
-
-func (*chatNullOnlyWire) UnmarshalJSON(raw []byte) error {
-	if !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return fmt.Errorf("chat execution field must be null")
-	}
-	return nil
-}
-
-// An empty object is the complete supported kv-transfer marker. Provider
-// additions fail decode under DisallowUnknownFields.
-type chatKVTransferParamsWire struct{}
 
 type chatStopReasonWire struct {
 	Text    *string
@@ -258,6 +308,29 @@ func validateChatChunkChoiceExtensions(choice chatChunkChoiceWire) error {
 		)
 	}
 	return validateChatOutputExtensions(choice.Delta.Audio, choice.Delta.LegacyFunctionCall)
+}
+
+// validateChatChunkModality admits vLLM-Omni's text chunks only. An audio or
+// other media chunk carries encoded media in delta.content, which must not be
+// read as answer text.
+func validateChatChunkModality(modality *string) error {
+	if modality == nil || *modality == "text" {
+		return nil
+	}
+	if *modality == "audio" {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"unsupported_upstream_audio",
+			"upstream Chat output audio is unsupported",
+			nil,
+		)
+	}
+	return llmprotocol.NewError(
+		llmprotocol.ErrorUpstreamUnavailable,
+		"unsupported_upstream_modality",
+		"upstream Chat output modality is unsupported",
+		nil,
+	)
 }
 
 func validateChatOutputExtensions(

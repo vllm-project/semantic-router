@@ -193,45 +193,26 @@ func parseSearchMatches(searchResult interface{}) []*searchMatch {
 	return matches
 }
 
-// GLIDE represents results as a map; choose the best eligible candidate rather
-// than assuming iteration order or letting a polarity rejection end the search.
-func selectValkeyPolarityMatch(searchResult interface{}, queryTokens []string, threshold float32, metric string) (*searchMatch, float32) {
-	var best *searchMatch
-	var bestSimilarity, rejectedSimilarity float32
-	hasScore := false
+// GLIDE represents results as a map; rank the eligible candidates rather than
+// assuming iteration order or letting a polarity rejection end the search.
+func selectValkeyPolarityMatches(searchResult interface{}, queryTokens []string, bounds SimilarityBounds, metric string) SimilarEntries {
+	ranked := similarHits{bounds: bounds}
 	for _, candidate := range parseSearchMatches(searchResult) {
 		similarity := float32(valkeyutil.DistanceToSimilarity(metric, candidate.distance))
-		if !hasScore || similarity > rejectedSimilarity {
-			rejectedSimilarity = similarity
-			hasScore = true
-		}
+		ranked.saw(similarity)
 		body, bodyOK := candidate.responseBody.(string)
-		if similarity < threshold || !bodyOK || body == "" ||
+		if similarity < bounds.MinSimilarity || !bodyOK || body == "" ||
 			!semanticCandidateMatchesPolarity(queryTokens, candidate.query) {
 			continue
 		}
-		_, expiresAt := valkeyTiming(candidate)
+		storedAt, expiresAt := valkeyTiming(candidate)
 		if !expiresAt.IsZero() && !time.Now().Before(expiresAt) {
 			continue
 		}
-		if best == nil || similarity > bestSimilarity {
-			best, bestSimilarity = candidate, similarity
-		}
+		hit := lookupResultFromTimestamps([]byte(body), similarity, storedAt, expiresAt)
+		hit.Query = candidate.query
+		hit.NegationGuard = negationGuardOutcomeFor(queryTokens, candidate.query)
+		ranked.add(hit)
 	}
-	if best == nil {
-		return nil, rejectedSimilarity
-	}
-	return best, bestSimilarity
-}
-
-// extractResponseBody returns the response bytes from a search match, or nil if missing/empty.
-func extractResponseBody(match *searchMatch) []byte {
-	if match == nil {
-		return nil
-	}
-	s, ok := match.responseBody.(string)
-	if !ok || s == "" {
-		return nil
-	}
-	return []byte(s)
+	return ranked.entries()
 }

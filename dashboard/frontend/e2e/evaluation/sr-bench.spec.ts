@@ -1905,7 +1905,7 @@ test('displays and downloads a matching server-captured recipe', async ({ page }
                 config_hash: configHash,
                 captured_at: '2026-09-18T00:00:00Z',
                 recipe_sha256: 'd'.repeat(64),
-                recipes: { balance: { decisions: [] } },
+                recipes: [{ name: 'balance', decisions: [] }],
                 redacted: true,
               },
             },

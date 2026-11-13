@@ -11,9 +11,13 @@ positions (``|i - j| <= window``), with rotary positions of that layer's own
 The padded layout passes the additive float masks the modeling code builds
 (0 where a key is read, the dtype's minimum elsewhere) to every layer, so the
 padded CPU path selects the same SDPA backend and is bit-identical to it. On
-GPUs, rows of ``BLOCKS_FROM`` tokens or more skip those ``width x width``
-masks: global layers read a key mask and local layers attend in query blocks
-(``blocked_attention``), within the GPU parity bar. The packed layout runs the ModernBERT layout (``modernbert.packed_layout``):
+the CPU those masks never take ``width x width`` memory: global layers read a
+key mask and local layers attend ``LOCAL_QUERIES`` queries at a time over
+every key, which leaves each query's SDPA reduction unchanged. On GPUs, rows of
+``BLOCKS_FROM`` tokens or more skip those masks too: global layers read a key
+mask and local layers attend in query blocks (``blocked_attention``), within
+the GPU parity bar. The packed layout runs the ModernBERT layout
+(``modernbert.packed_layout``):
 boolean masks per grid, local layers in query blocks on long rows; it is the
 approximate path.
 """
@@ -42,10 +46,17 @@ from .modernbert import (
 )
 
 MODEL_TYPE = "ultrabert"
-# Row width from which the padded path attends without dense masks, by device
-# type (vela3-fast, FP32, MI300X): one row of 3,072 tokens is still faster with
-# them. The CPU keeps them, the path that is bit-identical to the package.
+# Row width from which the padded GPU path attends without dense masks, by
+# device type (vela3-fast, FP32, MI300X): one row of 3,072 tokens is still
+# faster with them. The CPU takes key masks at every width (below).
 BLOCKS_FROM = {"cuda": 4096}
+# Queries per CPU SDPA call of a local layer on padded rows: each call builds
+# its own ``[rows, 1, LOCAL_QUERIES, width]`` slice of the dense mask.
+LOCAL_QUERIES = 1024
+# The CPU SDPA kernel blocks queries one way from this many queries on and
+# another way below, which changes the bits, so no chunk of a longer row is
+# shorter: a short tail joins the chunk before it.
+SDPA_QUERY_BLOCKS = 768
 # cos / sin per rope theta for each grid width of a layout.
 Rotary = dict[int, dict[float, tuple[torch.Tensor, torch.Tensor]]]
 
@@ -159,6 +170,47 @@ def blocked_attention(
     return out.reshape(rows, heads, count * block, dim)[:, :, :width]
 
 
+def local_attention(
+    kernels: KernelSet,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    key_mask: torch.Tensor,
+    window: int,
+    scale: float,
+) -> torch.Tensor:
+    """Local attention of padded ``[rows, heads, width, dim]`` rows in query chunks.
+
+    Every chunk reads all keys with its rows of the dense additive mask, built
+    from ``key_mask`` (``[rows, 1, 1, width]``), and holds at least
+    ``SDPA_QUERY_BLOCKS`` queries when the row does, so each query's output is
+    the one a single call over the whole ``[width, width]`` mask returns.
+    """
+    rows, width = key_mask.shape[0], query.shape[2]
+    keys = torch.arange(width, device=query.device)
+    minimum = torch.finfo(key_mask.dtype).min
+    out = torch.empty_like(query)
+    starts = list(range(0, width, LOCAL_QUERIES))
+    if len(starts) > 1 and width - starts[-1] < SDPA_QUERY_BLOCKS:
+        starts.pop()
+    for start, stop in zip(starts, [*starts[1:], width], strict=True):
+        # Only keys in [first, last) lie within the window of some chunk query.
+        first, last = max(0, start - window), min(width, stop + window)
+        far = (keys[None, first:last] - keys[start:stop, None]).abs() > window
+        mask = key_mask.new_full((rows, 1, stop - start, width), minimum)
+        mask[..., first:last] = key_mask[..., first:last].masked_fill(far, minimum)
+        out[:, :, start:stop] = kernels("sdpa")(
+            query[:, :, start:stop],
+            key,
+            value,
+            mask,
+            scale=scale,
+            is_causal=False,
+            enable_gqa=False,
+        )
+    return out
+
+
 class UltraBertRotary(nn.Module):
     """cos / sin per rope theta for positions ``0..T-1``; computed, never loaded."""
 
@@ -222,8 +274,9 @@ class UltraBertRMSNorm(nn.Module):
 
 
 class UltraBertAttention(nn.Module):
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any], window: int | None = None):
         super().__init__()
+        self.window = window
         hidden = config["hidden_size"]
         heads = config["num_attention_heads"]
         if config.get("num_key_value_heads", heads) != heads:
@@ -301,15 +354,22 @@ class UltraBertAttention(nn.Module):
         )
         value = value.view(shape).transpose(1, 2)
         blocks = group.band if kind == SLIDING else None
+        mask = group.masks.get(kind)
         if blocks is not None:
             local = banded_attention if group.packed else blocked_attention
             output = local(kernels, query, key, value, blocks, self.scaling)
+        elif kind == SLIDING and mask is not None and mask.shape[-2] < width:
+            # A key mask on a local layer: the CPU padded layout.
+            assert self.window is not None
+            output = local_attention(
+                kernels, query, key, value, mask, self.window, self.scaling
+            )
         else:
             output = kernels("sdpa")(
                 query,
                 key,
                 value,
-                group.masks.get(kind),
+                mask,
                 scale=self.scaling,
                 is_causal=False,
                 enable_gqa=False,
@@ -347,7 +407,7 @@ class UltraBertLayer(nn.Module):
         self.kind = FULL if window is None else SLIDING
         self.theta = theta
         eps = config.get("rms_norm_eps", 1e-6)
-        self.self_attn = UltraBertAttention(config)
+        self.self_attn = UltraBertAttention(config, window)
         self.mlp = UltraBertMLP(config)
         self.input_layernorm = UltraBertRMSNorm(config["hidden_size"], eps)
         self.post_attention_layernorm = UltraBertRMSNorm(config["hidden_size"], eps)
@@ -418,9 +478,12 @@ class UltraBertBackbone(nn.Module):
     ) -> Layout:
         """Padded ``[rows, width]`` rows with the modeling code's mask values, padding or not.
 
-        Rows of ``BLOCKS_FROM`` tokens or more (by device type) skip the dense
-        ``[rows, 1, width, width]`` masks: global layers read a key mask, or
-        none without padding, and local layers attend in query blocks.
+        On the CPU every layer gets the ``[rows, 1, 1, width]`` key mask
+        instead: local layers then attend in query chunks (``local_attention``)
+        and global layers broadcast it, both bit-identical to the dense masks.
+        On GPUs, rows of ``BLOCKS_FROM`` tokens or more (by device type) skip
+        the dense ``[rows, 1, width, width]`` masks: global layers read a key
+        mask, or none without padding, and local layers attend in query blocks.
         """
         if attention_mask is None:
             valid = torch.ones(rows, width, dtype=torch.bool, device=device)
@@ -429,17 +492,22 @@ class UltraBertBackbone(nn.Module):
         dtype = self.embed_tokens.weight.dtype
         if not dtype.is_floating_point or dtype == torch.float64:
             dtype = torch.float32
-        limit = BLOCKS_FROM.get(torch.device(device).type)
-        if not self.window or limit is None or width < limit:
-            masks = additive_masks(valid, rows, width, self.window, dtype)
-            return Layout((Group(rows, width, dict(masks)),))
-        key_valid = None if bool(valid.all()) else valid
-        full = None
-        if key_valid is not None:
+        kind = torch.device(device).type
+        limit = BLOCKS_FROM.get(kind)
+        if self.window and limit is not None and width >= limit:
+            key_valid = None if bool(valid.all()) else valid
+            full = None
+            if key_valid is not None:
+                minimum = torch.finfo(dtype).min
+                full = torch.where(key_valid, 0.0, minimum).to(dtype)[:, None, None, :]
+            blocks = additive_band(key_valid, rows, width, self.window, dtype, device)
+            return Layout((Group(rows, width, {FULL: full}, band=blocks),))
+        if kind == "cpu":
             minimum = torch.finfo(dtype).min
-            full = torch.where(key_valid, 0.0, minimum).to(dtype)[:, None, None, :]
-        blocks = additive_band(key_valid, rows, width, self.window, dtype, device)
-        return Layout((Group(rows, width, {FULL: full}, band=blocks),))
+            key = torch.where(valid, 0.0, minimum).to(dtype)[:, None, None, :]
+            return Layout((Group(rows, width, {FULL: key, SLIDING: key}),))
+        masks = additive_masks(valid, rows, width, self.window, dtype)
+        return Layout((Group(rows, width, dict(masks)),))
 
     def masked(
         self, valid: torch.Tensor, rows: int, width: int, device: torch.device | str

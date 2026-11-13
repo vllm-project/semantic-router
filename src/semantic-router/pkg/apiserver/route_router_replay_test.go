@@ -10,6 +10,9 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
@@ -167,6 +170,11 @@ func TestRouterReplayViewerRedactionCoversListDetailAndTrajectory(t *testing.T) 
 			path: "/api/v1/observability/replays/trajectory?session_id=session-1",
 			body: `{"object":"router_replay.trajectory","session_id":"session-1","messages":[{"role":"user","content":"private-canary"},{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"lookup","arguments":"private-canary"}}]},{"role":"tool","content":"private-canary","tool_call_id":"call-1"}]}`,
 		},
+		{
+			name: "captured tool results",
+			path: "/api/v1/observability/replays/replay-2",
+			body: `{"id":"replay-2","decision":"agent-loop","request_body":"{\"messages\":[{\"role\":\"tool\",\"content\":\"private-canary\"}]}","tool_trace":{"steps":[{"type":"client_tool_result","tool_call_id":"call-1","status":"succeeded","output":"private-canary","truncated":true}]}}`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -207,5 +215,74 @@ func TestRouterReplayManagementRouteReturnsNotFoundWithoutRuntime(t *testing.T) 
 	)
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404; body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+// Every Replay read route serves a principal without replay.detail the same
+// redacted view, driven through the Router's own replay handler.
+func TestRouterReplayEveryReadRouteRedactsRecordedTextForViewer(t *testing.T) {
+	const (
+		viewerAccessFixture   = "viewer-replay-routes-token"
+		operatorAccessFixture = "operator-replay-routes-token"
+		private               = "private-canary"
+	)
+	t.Setenv("VSR_VIEWER_ROUTES_TOKEN", viewerAccessFixture)
+	t.Setenv("VSR_OPERATOR_ROUTES_TOKEN", operatorAccessFixture)
+	cfg := &config.RouterConfig{ManagementAPI: config.ManagementAPIConfig{Auth: config.ManagementAPIAuthConfig{
+		Mode: config.ManagementAuthModeBearer,
+		Tokens: []config.ManagementAPITokenRef{
+			{Env: "VSR_VIEWER_ROUTES_TOKEN", Role: "viewer"},
+			{Env: "VSR_OPERATOR_ROUTES_TOKEN", Role: "operator"},
+		},
+		Roles: config.DefaultManagementAPIRoles(),
+	}}}
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID: "replay-1", SessionID: "session-1", Decision: "safe-decision", SelectedModel: "model-a",
+		Prompt: private, RequestBody: private, ResponseBody: private,
+		RouteDiagnostics: &routerreplay.RouteDiagnostics{
+			SelectedModel: "model-a", SelectionReasoning: private, SessionReason: private, DecisionReason: private,
+		},
+		ToolTrace: &routerreplay.ToolTrace{Steps: []routerreplay.ToolTraceStep{
+			{Type: "user_input", Source: "request", Role: "user", Text: private},
+			{Type: "assistant_final_response", Source: "response", Role: "assistant", Text: private},
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	router := &extproc.OpenAIRouter{ReplayRecorder: recorder}
+	extproc.NewRouterServiceForSnapshot(router, nil)
+	registry := routerruntime.NewRegistry(cfg)
+	registry.SetReplayRuntime(router)
+	mux := (&ClassificationAPIServer{config: cfg, runtimeRegistry: registry}).setupRoutes()
+
+	for _, test := range []struct{ route, path string }{
+		{"list", "/api/v1/observability/replays"},
+		{"list with details", "/api/v1/observability/replays?showDetails=true"},
+		{"record", "/api/v1/observability/replays/replay-1"},
+		{"trajectory", "/api/v1/observability/replays/trajectory?session_id=session-1"},
+		{"aggregate", "/api/v1/observability/replays/aggregate"},
+		{"dataset", "/api/v1/observability/replays/dataset?seed=s&split=train:1"},
+		{"judge tasks", "/api/v1/observability/replays/dataset/judge-tasks?seed=s&split=train:1&blinding_key=k"},
+	} {
+		t.Run(test.route, func(t *testing.T) {
+			viewer := serveReplayManagementRequest(mux, test.path, viewerAccessFixture)
+			if test.route == "judge tasks" {
+				assertReplayStatus(t, viewer, http.StatusForbidden, "viewer")
+				return
+			}
+			assertReplayStatus(t, viewer, http.StatusOK, "viewer")
+			if bytes.Contains(viewer.Body.Bytes(), []byte(private)) {
+				t.Fatalf("viewer read recorded text on %s: %s", test.path, viewer.Body.String())
+			}
+		})
+	}
+	// The detail view of the same session still carries the reasoning, so the
+	// viewer checks above read a route that returns it.
+	operator := serveReplayManagementRequest(mux, "/api/v1/observability/replays/trajectory?session_id=session-1", operatorAccessFixture)
+	assertReplayStatus(t, operator, http.StatusOK, "operator")
+	if !bytes.Contains(operator.Body.Bytes(), []byte(`"selection_reasoning":"`+private)) {
+		t.Fatalf("operator trajectory lost the routing reasoning: %s", operator.Body.String())
 	}
 }

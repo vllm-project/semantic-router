@@ -46,9 +46,14 @@ def test_router_default_and_explicit_engine_share_serve(monkeypatch, args, engin
 
 def test_no_engine_flag_enables_routing_without_discarding_saved_policy():
     document = {
-        "version": "v0.3",
-        "routing": {"decisions": [{"name": "saved"}]},
-        "listeners": [{"name": "public", "models": ["router/auto"]}],
+        "version": "v0.5",
+        "recipes": [{"name": "default", "decisions": [{"name": "saved"}]}],
+        "listeners": [
+            {
+                "name": "public",
+                "apis": {"chat_completions": {"models": ["router/auto"]}},
+            }
+        ],
     }
     original = deepcopy(document)
     assert apply_instance_options(document, engine=True)
@@ -56,16 +61,16 @@ def test_no_engine_flag_enables_routing_without_discarding_saved_policy():
     assert apply_instance_options(document)
     assert document["global"]["router"]["enabled"] is True
     assert not apply_instance_options(document)
-    assert document["routing"] == original["routing"]
+    assert document["recipes"] == original["recipes"]
     assert document["listeners"] == original["listeners"]
 
 
 def test_engine_bootstrap_has_native_grant_and_no_invented_provider():
-    document = {"version": "v0.3", "setup": {"mode": True}}
+    document = {"version": "v0.5", "setup": {"mode": True}}
     apply_instance_options(document, engine=True, model_options=options(MODEL))
     assert "setup" not in document
     assert "providers" not in document and "routing" not in document
-    assert document["listeners"][0]["systemone"]["models"] == [MODEL]
+    assert document["listeners"][0]["apis"]["systemone"]["models"] == [MODEL]
     assert document["global"]["model_catalog"]["system"]["decision_model"] == {
         "deployment": "primary"
     }
@@ -83,21 +88,23 @@ def test_a_state_once_d3_serves_at_its_built_in_release_without_the_hub(
         raise AssertionError("a built-in model resolves without the Hub")
 
     monkeypatch.setattr(HfApi, "model_info", no_hub)
-    document = {"version": "v0.3", "setup": {"mode": True}}
+    document = {"version": "v0.5", "setup": {"mode": True}}
     apply_instance_options(
         document, engine=True, model_options=options(model), platform="rocm"
     )
     deployment = document["global"]["model_catalog"]["deployments"]["primary"]
     assert deployment["artifact"] == model
     assert deployment["revision"] == builtin_releases()[model]
-    assert document["listeners"][0]["systemone"]["models"] == [model]
+    assert document["listeners"][0]["apis"]["systemone"]["models"] == [model]
 
 
 def test_generated_engine_bootstrap_preserves_listener_settings():
     document = build_bootstrap_config()
     original = deepcopy(document["listeners"][0])
     apply_instance_options(document, engine=True, model_options=options(MODEL))
-    assert document["listeners"] == [{**original, "systemone": {"models": [MODEL]}}]
+    assert document["listeners"] == [
+        {**original, "apis": {"systemone": {"models": [MODEL]}}}
+    ]
 
 
 @pytest.mark.parametrize(
@@ -105,13 +112,13 @@ def test_generated_engine_bootstrap_preserves_listener_settings():
     [
         {"address": "127.0.0.1", "port": 9999},
         {"api_keys": ["private-test-key"]},
-        {"models": ["vllm-sr/auto"]},
-        {"systemone": {"models": [MODEL]}},
+        {"apis": {"chat_completions": {"models": ["vllm-sr/auto"]}}},
+        {"apis": {"systemone": {"models": [MODEL]}}},
         {
             "address": "127.0.0.1",
             "port": 9999,
             "api_keys": ["private-test-key"],
-            "systemone": {"models": [MODEL]},
+            "apis": {"systemone": {"models": [MODEL]}},
         },
     ],
 )
@@ -137,7 +144,7 @@ def declaration(resource):
                 "deployments": {"chosen": resource},
             }
         },
-        "listeners": [{"name": "main", "systemone": {"models": ["judge"]}}],
+        "listeners": [{"name": "main", "apis": {"systemone": {"models": ["judge"]}}}],
     }
 
 
@@ -166,7 +173,7 @@ def test_model_only_keeps_placement_engine_args_identity_and_grants():
     assert result["max_num_seqs"] == 64 and result["dtype"] == "bfloat16"
     assert result["input"] == {"max_tokens": 4096, "overflow": "window"}
     assert result["public_name"] == "judge"
-    assert document["listeners"][0]["systemone"]["models"] == ["judge"]
+    assert document["listeners"][0]["apis"]["systemone"]["models"] == ["judge"]
 
 
 def test_same_artifact_keeps_revision_and_engine_args_when_unspecified():
@@ -217,7 +224,7 @@ def test_saved_revision_off_the_release_pin_names_the_pin(monkeypatch):
 
 
 def test_new_multi_gpu_workers_use_available_devices():
-    document = {"version": "v0.3"}
+    document = {"version": "v0.5"}
     apply_instance_options(
         document,
         model_options=options(MODEL, data_parallel_size=2),
@@ -341,7 +348,7 @@ def test_engine_flags_set_the_default_deployments_engine_args(monkeypatch):
         "dtype": "bfloat16",
         "enable_shared_context": False,
     }
-    document = {"version": "v0.3"}
+    document = {"version": "v0.5"}
     apply_instance_options(document, model_options=calls[0]["model_options"])
     primary = document["global"]["model_catalog"]["deployments"]["primary"]
     assert {name: primary[name] for name in ENGINE_ARGUMENTS} == {
@@ -391,7 +398,7 @@ def test_help_and_instance_commands_have_no_mode_bypass():
 def test_routing_enabled_is_strictly_boolean(enabled):
     with pytest.raises(ValueError, match="enabled must be a boolean"):
         UserConfig.model_validate(
-            {"version": "v0.3", "global": {"router": {"enabled": enabled}}}
+            {"version": "v0.5", "global": {"router": {"enabled": enabled}}}
         )
 
 
@@ -409,9 +416,9 @@ def test_startup_mode_preserves_source_and_resets_engine_without_flag(
     source.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [{"name": "private", "address": "0.0.0.0", "port": 8899}],
-                "routing": {"strategy": "confidence"},
+                "recipes": [{"name": "default", "strategy": "confidence"}],
                 "global": {
                     "services": {"observability": {"tracing": {"enabled": False}}}
                 },
@@ -431,14 +438,15 @@ def test_startup_mode_preserves_source_and_resets_engine_without_flag(
     assert prepare(True)["global"]["router"]["enabled"] is False
     router = prepare()
     assert router["global"]["router"]["enabled"] is True
-    assert router["routing"]["strategy"] == "confidence"
-    assert "systemone" not in router["listeners"][0]
+    assert router["recipes"][0]["strategy"] == "confidence"
+    assert "apis" not in router["listeners"][0]
     assert source.read_bytes() == before
 
 
 def test_serve_projects_host_ids_once_and_forwards_the_existing_mask(
     tmp_path, monkeypatch
 ):
+    monkeypatch.setattr(execution_platform.sys, "platform", "linux")
     monkeypatch.setattr(
         execution_platform,
         "_host_devices",
@@ -457,7 +465,7 @@ def test_serve_projects_host_ids_once_and_forwards_the_existing_mask(
     source.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "private", "address": "127.0.0.1", "port": 8899}
                 ],
@@ -498,7 +506,7 @@ def test_serve_projects_host_ids_once_and_forwards_the_existing_mask(
     assert len(primary["revision"]) == 40
     assert deployed["env_vars"]["ROCR_VISIBLE_DEVICES"] == "7,3"
     assert document["global"]["router"]["enabled"] is False
-    assert "systemone" not in document["listeners"][0]
+    assert "apis" not in document["listeners"][0]
     assert source.read_bytes() == before
 
 

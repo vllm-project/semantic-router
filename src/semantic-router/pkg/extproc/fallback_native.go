@@ -66,35 +66,74 @@ func (f *sessionFallback) Next(callCtx context.Context, outcome routing.Outcome)
 		return routing.FallbackStep{}, errSessionEnded
 	}
 	r, ctx := f.session.router, f.session.ctx
+	failed := f.current
 	orch := r.fallbackOrchestratorForContext(ctx)
 	if !nativeFallbackApplies(orch, ctx) {
-		return f.end(), nil
+		return f.endAfter(failed, outcome), nil
 	}
 	record := f.record(orch)
 	evaluation := orch.EvaluateAttempt(callCtx, record, f.failedAttempt(outcome), fallbackCommitState(ctx))
 	if !evaluation.CanFallback || totalTimeoutSpent(orch, ctx, record) {
-		return f.end(), nil
+		return f.endAfter(failed, outcome), nil
 	}
 	for {
 		index, err := orch.SelectNextCandidateIndex(record, len(ctx.VSREligibleModelRefs),
 			func(i int) string { return candidateModelIdentity(ctx.VSREligibleModelRefs[i]) },
 			func(model string) (string, error) { return r.fallbackBackendName(ctx, model), nil })
 		if err != nil {
-			return f.end(), nil
+			return f.endAfter(failed, outcome), nil
 		}
 		step, prepared, err := f.prepare(callCtx, orch, &ctx.VSREligibleModelRefs[index])
 		if err == nil {
 			return step, nil
 		}
 		// A candidate that cannot be prepared is skipped, unless the request's
-		// time has run out, as in the response-phase fallback.
+		// time has run out or the request cannot pay for it, as in the
+		// response-phase fallback.
 		if !prepared.CanFallback {
 			if record.FinalStatus == "" {
 				record.FinalStatus = fallbackHaltStatus(err)
 			}
-			return f.end(), nil
+			return f.refusal(f.endAfter(failed, outcome))
 		}
 	}
+}
+
+// endAfter ends the chain after the call outcome describes. When a candidate
+// made that call, the client gets the candidate's outcome, not the primary's:
+// see failedAttemptResponse. The primary's own failure goes on as it is.
+func (f *sessionFallback) endAfter(failed *fallbackCandidate, outcome routing.Outcome) routing.FallbackStep {
+	step := f.end()
+	if failed == nil {
+		return step
+	}
+	r, ctx := f.session.router, f.session.ctx
+	answer := r.failedAttemptResponse(ctx, failedOutcomeAttempt(failed, outcome))
+	appendConfigVersionToImmediateResponse(answer, ctx)
+	appendRoutedResponseHeaders(answer, ctx)
+	if effect, err := routingEffect(answer); err == nil {
+		step.Immediate = routing.RenderImmediate(effect.Immediate, routing.DefaultLimits)
+	}
+	return step
+}
+
+// refusal answers a chain that ended at a candidate refused for want of the
+// request's delegated credential with the request's 401, as the
+// response-phase fallback answers it; any other end keeps step.
+func (f *sessionFallback) refusal(step routing.FallbackStep) (routing.FallbackStep, error) {
+	r, ctx := f.session.router, f.session.ctx
+	refused := r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
+	if refused == nil {
+		return step, nil
+	}
+	appendConfigVersionToImmediateResponse(refused, ctx)
+	appendRoutedResponseHeaders(refused, ctx)
+	effect, err := routingEffect(refused)
+	if err != nil {
+		return routing.FallbackStep{}, err
+	}
+	step.Immediate = routing.RenderImmediate(effect.Immediate, routing.DefaultLimits)
+	return step, nil
 }
 
 // prepare builds the candidate's call from the primary's dispatch state.
@@ -113,12 +152,15 @@ func (f *sessionFallback) prepare(
 	candidate, prepared, err := s.router.prepareFallbackCandidate(callCtx, ref, ctx, false)
 	if err != nil {
 		f.restore()
+		logSkippedFallbackCandidate(ctx, ref, prepared, err)
 		return routing.FallbackStep{}, prepared, err
 	}
 	call, err := s.candidateCall(candidate)
 	if err != nil {
 		f.restore()
-		return routing.FallbackStep{}, fallback.EvaluationResult{CanFallback: true}, err
+		prepared = fallback.EvaluationResult{CanFallback: true}
+		logSkippedFallbackCandidate(ctx, ref, prepared, err)
+		return routing.FallbackStep{}, prepared, err
 	}
 	call.Reliability = nil
 	if override := f.candidateReliability(orch, call.Route); override != nil {
@@ -233,13 +275,21 @@ func (f *sessionFallback) failedAttempt(outcome routing.Outcome) fallback.Attemp
 		Duration:   outcome.Duration,
 		Discarded:  true,
 	}
+	body := failedReplyBody(outcome)
+	if !outcome.Local {
+		format, _ := responseWireFormats(f.session.ctx)
+		if f.current != nil {
+			format = f.current.dispatch.targetFormat
+		}
+		f.session.router.noteLengthRefusal(f.session.ctx, &attempt, format, body)
+	}
 	if f.current != nil {
-		attempt.ErrorMessage = string(outcome.Body)
+		attempt.ErrorMessage = string(body)
 		return attempt
 	}
 	message := fmt.Sprintf("upstream returned status %d", outcome.Status)
-	if len(outcome.Body) > 0 {
-		message = fmt.Sprintf("upstream returned status %d: %s", outcome.Status, outcome.Body)
+	if len(body) > 0 {
+		message = fmt.Sprintf("upstream returned status %d: %s", outcome.Status, body)
 	}
 	attempt.Error, attempt.ErrorMessage = errors.New(message), message
 	return attempt
@@ -263,6 +313,8 @@ func (f *sessionFallback) succeeded(status int) {
 	ctx.ResponseVendor = resolveResponseVendor(candidate.dispatch.profile)
 	ctx.RequestModel = candidate.model
 	ctx.VSRSelectedModel = candidate.model
+	// The response phases credit this success to the request's backend.
+	ctx.primaryBackendName = candidate.dispatch.backendName
 	ctx.ResponsePath = headers.ResponsePathFallback
 
 	orch := r.fallbackOrchestratorForContext(ctx)

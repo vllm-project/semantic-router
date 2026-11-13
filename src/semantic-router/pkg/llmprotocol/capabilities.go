@@ -58,6 +58,8 @@ const (
 	// a JSON Schema function tool cannot represent.
 	CapabilityCustomTools
 	CapabilityTextVerbosity
+	CapabilityReasoningContinuity
+	CapabilitySamplingLogitBias
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -129,6 +131,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningBudget, "reasoning_budget"},
 		{CapabilitySamplingTopK, "sampling_top_k"},
 		{CapabilitySamplingMinP, "sampling_min_p"},
+		{CapabilitySamplingLogitBias, "sampling_logit_bias"},
 		{CapabilityRepetitionPenalty, "repetition_penalty"},
 		{CapabilityCacheIsolation, "cache_isolation"},
 		{CapabilitySamplingSeed, "sampling_seed"},
@@ -145,6 +148,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityImageGeneration, "image_generation"},
 		{CapabilityCustomTools, "custom_tools"},
 		{CapabilityTextVerbosity, "text_verbosity"},
+		{CapabilityReasoningContinuity, "reasoning_continuity"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -199,6 +203,9 @@ func requestSamplingCapabilities(request Request) Capability {
 	if request.Sampling.MinP != nil {
 		required |= CapabilitySamplingMinP
 	}
+	if len(request.Sampling.LogitBias) > 0 {
+		required |= CapabilitySamplingLogitBias
+	}
 	if request.Sampling.RepetitionPenalty != nil {
 		required |= CapabilityRepetitionPenalty
 	}
@@ -226,7 +233,9 @@ func requestStateCapabilities(request Request) Capability {
 	if len(request.Metadata) > 0 {
 		required |= CapabilityRequestMetadata
 	}
-	if request.Store != nil {
+	// store: false asks for nothing a backend that keeps no completions does
+	// not already do.
+	if request.Store != nil && *request.Store {
 		required |= CapabilityRequestStorage
 	}
 	if request.AutoStore != nil {
@@ -328,6 +337,9 @@ func RequiredResponseCapabilities(response Response) CapabilitySet {
 // has no approximation in another public wire format.
 func RequiredEventCapabilities(event Event) CapabilitySet {
 	var required CapabilitySet
+	if event.Content != nil && event.Content.ReasoningDetail != nil {
+		required.bits |= CapabilityReasoningContinuity
+	}
 	if event.MatchedStopSequence != "" {
 		required.bits |= CapabilityMatchedStopSequence
 	}
@@ -356,6 +368,9 @@ func capabilityForRequestContent(content Content) Capability {
 	case ContentToolResult:
 		return requestToolResultCapabilities(content.ToolResult) | cache
 	case ContentReasoning:
+		if content.ReasoningDetail != nil {
+			return CapabilityReasoning | CapabilityReasoningContinuity | cache
+		}
 		return reasoningContentCapabilities(content.Signature) | cache
 	case ContentGeneratedImage:
 		return CapabilityImageGeneration | cache
@@ -375,6 +390,9 @@ func capabilityForResponseContent(content Content) Capability {
 	case ContentToolResult:
 		return responseToolResultCapabilities(content.ToolResult)
 	case ContentReasoning:
+		if content.ReasoningDetail != nil {
+			return CapabilityReasoning | CapabilityReasoningContinuity
+		}
 		return reasoningContentCapabilities(content.Signature)
 	case ContentGeneratedImage:
 		return CapabilityImageGeneration
@@ -463,6 +481,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_budget":      CapabilityReasoningBudget,
 		"sampling_top_k":        CapabilitySamplingTopK,
 		"sampling_min_p":        CapabilitySamplingMinP,
+		"sampling_logit_bias":   CapabilitySamplingLogitBias,
 		"repetition_penalty":    CapabilityRepetitionPenalty,
 		"cache_isolation":       CapabilityCacheIsolation,
 		"sampling_seed":         CapabilitySamplingSeed,
@@ -479,6 +498,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"image_generation":      CapabilityImageGeneration,
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
+		"reasoning_continuity":  CapabilityReasoningContinuity,
 	}
 	var set CapabilitySet
 	for _, name := range names {

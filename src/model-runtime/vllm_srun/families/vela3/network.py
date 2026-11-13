@@ -6,8 +6,11 @@ engine's adapter branch of that name). An input belongs to a ``Call``: the
 forward calls the released runtime makes for one request (all its decision
 questions; one router group on one adapter; one span question), each batched
 as that runtime batches it, by length, greedily under a token budget and a row
-limit. Inputs of different calls never share a forward, so a request's answers
-do not depend on what else runs with it.
+limit. In ``run`` inputs of different calls never share a forward, so a
+request's answers do not depend on what else runs with it. On a GPU a batch
+that merges concurrent requests (``run_approximate``) lets equal calls of
+different requests share forwards, which only padding and GEMM shapes tell
+apart.
 
 Each network reads its own marker head (``heads.marker.MarkerHead``, readout
 ``both``): the backbone's from ``model.safetensors``, an adapter's from its
@@ -26,6 +29,7 @@ import torch
 
 from ...heads.marker import MarkerHead
 from ...plugins.base import EncoderBatch, EngineModel
+from ...scheduler.planner import length_class
 from ..vela2.encoder_layout import EncoderSequence, batch_indices, split_outputs
 from ..vela2.members import INDEX_INPUTS, read_tensors
 from .package import BACKBONE_FILE, Vela3Package
@@ -37,13 +41,18 @@ HEAD_PREFIXES = ("norm.", "w_", "log_tau", "cls_mlp.")
 DECISION_BUDGET = 65536
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True)
 class Call:
-    """One forward call of the released runtime: its network and batching (token budget, row limit)."""
+    """One forward call of the released runtime: its network and batching (token budget, row limit).
+
+    ``turn`` counts the request's earlier calls of the same network and limits,
+    so equal calls come from different requests, never from one.
+    """
 
     network: str | None
     budget: int
     rows: int | None = None
+    turn: int = 0
 
 
 @dataclass(eq=False)
@@ -61,11 +70,15 @@ class Vela3Item:
 Output = tuple[list["NDArray[np.float32]"], "NDArray[np.float32] | None"]
 
 
-def batches(items: list[Vela3Item]) -> list[list[int]]:
-    """The released runtime's forwards over ``items``: per call, by length under its budget and row limit."""
-    calls: dict[int, list[int]] = {}
+def batches(items: list[Vela3Item], merged: bool = False) -> list[list[int]]:
+    """The released runtime's forwards over ``items``: per call, by length under its budget and row limit.
+
+    ``merged`` batches equal calls together, so concurrent requests share forwards,
+    each holding rows of one length class so a long request does not pad short ones.
+    """
+    calls: dict[object, list[int]] = {}
     for index, item in enumerate(items):
-        calls.setdefault(id(item.call), []).append(index)
+        calls.setdefault(item.call if merged else id(item.call), []).append(index)
     groups: list[list[int]] = []
     for members in calls.values():
         call = items[members[0]].call
@@ -75,6 +88,10 @@ def batches(items: list[Vela3Item]) -> list[list[int]]:
             if current and (
                 (call.rows is not None and len(current) + 1 > call.rows)
                 or width * (len(current) + 1) > call.budget
+                or (
+                    merged
+                    and length_class(width) != length_class(len(items[current[0]].ids))
+                )
             ):
                 groups.append(current)
                 current = []
@@ -127,10 +144,10 @@ class Networks:
                 seen[id(parameter)] = parameter.numel()
         return sum(seen.values())
 
-    def run(self, items: list[Vela3Item]) -> list[Output]:
+    def run(self, items: list[Vela3Item], merged: bool = False) -> list[Output]:
         """Each input's (option logits per question, word x label block), in the released forwards."""
         results: list[Any] = [None] * len(items)
-        for group in batches(items):
+        for group in batches(items, merged):
             batch = [items[index].sequence for index in group]
             network = items[group[0]].call.network
             for index, value in zip(group, self._forward(batch, network), strict=True):

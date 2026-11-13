@@ -143,4 +143,4 @@ kubectl get events -n <namespace> --sort-by=.lastTimestamp
 
 - [Container Connectivity](./container-connectivity)
 - [Security Hardening](../installation/security-hardening)
-- [Quickstart](/docs/installation)
+- [Quickstart](/docs/v0.4/installation)

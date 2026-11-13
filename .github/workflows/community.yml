@@ -17,12 +17,19 @@ permissions:
 jobs:
   title-format:
     name: Check title format
+    # An issue's title can only change when it is opened, reopened or edited;
+    # labels, assignees and milestones leave it as it was.
     if: >-
       (github.event_name == 'issues'
-      && github.event.issue.user.type != 'Bot')
+      && github.event.issue.user.type != 'Bot'
+      && (github.event.action == 'opened' || github.event.action == 'reopened'
+      || (github.event.action == 'edited' && github.event.changes.title != null)))
       || (github.event_name == 'pull_request'
       && !github.event.pull_request.draft
       && github.event.pull_request.user.type != 'Bot')
+    concurrency:
+      group: community-title-format-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,11 +44,14 @@ jobs:
 
   linked-issue:
     name: Check linked accepted issue
+    # Review events only signal the trusted label-sync workflow.
     if: >-
-      (github.event_name == 'pull_request'
-      || github.event_name == 'pull_request_review')
+      github.event_name == 'pull_request'
       && !github.event.pull_request.draft
       && github.event.pull_request.user.type != 'Bot'
+    concurrency:
+      group: community-linked-issue-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -105,12 +115,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      checks: read
       issues: write
+      pull-requests: write
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Reconcile every explicit acceptance decision
+      - name: Reconcile the commented issue and its linked pull requests
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/ci/community_lifecycle.py accept-issue --event "$GITHUB_EVENT_PATH"
@@ -122,6 +134,8 @@ jobs:
       && startsWith(github.event.comment.body, '/')
       && github.event.comment.body != '/accept'
       && github.event.comment.body != '/netlify'
+      && !startsWith(github.event.comment.body, '/ci ')
+      && github.event.comment.body != '/ci'
     runs-on: ubuntu-latest
     permissions:
       contents: read

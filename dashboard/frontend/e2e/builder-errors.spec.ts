@@ -7,8 +7,8 @@ test.use({ screenshot: 'only-on-failure' })
 
 // These tests use the production Go compiler through its HTTP handler.
 // Only server data is a fixture; malformed config and DSL are parsed normally.
-const invalidConfig = 'version: v0.3\nrouting:\n  unknown_field: true\n'
-const validConfig = `version: v0.3
+const invalidConfig = 'version: v0.5\nrecipes:\n  - name: default\n    unknown_field: true\n'
+const validConfig = `version: v0.5
 providers:
   models:
     - name: model-a
@@ -16,10 +16,14 @@ providers:
         - name: local
           endpoint: localhost:8000
           protocol: http
-routing:
-  modelCards:
-    - name: model-a
-      modality: text
+recipes:
+  - name: default
+    decisions:
+      - name: default_route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: model-a
 `
 
 test.beforeEach(async ({ page }) => {

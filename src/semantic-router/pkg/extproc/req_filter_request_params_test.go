@@ -13,7 +13,7 @@ import (
 func TestApplySemanticRequestParamsNilDecision(t *testing.T) {
 	r := &OpenAIRouter{}
 	request := llmprotocol.Request{Model: "x"}
-	changed, err := r.applySemanticRequestParams(nil, &request, config.DefaultRecipeName)
+	changed, err := r.applySemanticRequestParams(nil, &request, "")
 	if err != nil || changed || request.Model != "x" {
 		t.Fatalf("nil decision changed request: changed=%v request=%+v err=%v", changed, request, err)
 	}
@@ -25,7 +25,6 @@ func TestApplySemanticRequestParamsBlocksAndCapsNeutralFields(t *testing.T) {
 		"blocked_params":   []string{"frequency_penalty", "prompt_cache_key", "custom_evil_field"},
 		"max_tokens_limit": 500,
 		"max_n":            1,
-		"strip_unknown":    true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +44,7 @@ func TestApplySemanticRequestParamsBlocksAndCapsNeutralFields(t *testing.T) {
 			FrequencyPenalty: llmprotocol.Float64(0.5),
 		},
 	}
-	changed, err := r.applySemanticRequestParams(decision, &request, config.DefaultRecipeName)
+	changed, err := r.applySemanticRequestParams(decision.GetRequestParamsConfig(), &request, decision.Name)
 	if err != nil {
 		t.Fatal(err)
 	}

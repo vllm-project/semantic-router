@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SystemStatus } from '../utils/routerRuntime'
 import type { RouterConfig } from './dashboardPageTypes'
 import type { CanonicalGlobalConfig } from './configPageSupport'
 import { responseErrorMessage } from './configPageRequestErrors'
+import { withCanonicalLayout, withRoutingView } from './configPageCanonicalLayout'
 import {
   readDecisionModelApplyResult,
   type DecisionModelActivation,
@@ -44,7 +45,10 @@ export function useDecisionModelManagement() {
   const activationObservation = useDashboardObservation<DecisionModelActivation>(
     '/api/router/api/v1/config/hash',
   )
-  const config = configObservation.data
+  const config = useMemo(
+    () => (configObservation.data ? withRoutingView(configObservation.data) : configObservation.data),
+    [configObservation.data],
+  )
   // Authored config and effective defaults are different contracts. Cache both,
   // but never make runtime observations wait for either configuration view.
   const global = globalObservation.data
@@ -137,7 +141,7 @@ export function useDecisionModelManagement() {
       const response = await fetch('/api/router/config/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mutate(current)),
+        body: JSON.stringify(withCanonicalLayout(mutate(withRoutingView(current)))),
       })
       const result = await readDecisionModelApplyResult(response)
       setApplyResult(result)

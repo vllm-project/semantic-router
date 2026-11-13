@@ -1,0 +1,1 @@
+recipes[default].signals.events: removed_signal_type: the events signal is removed; run `vllm-sr config migrate` (keywords rules with operator: OR over each rule's terms)

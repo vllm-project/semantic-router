@@ -53,7 +53,7 @@ repeated request.
 
 | Objective | Question (threshold) | Decides |
 | --- | --- | --- |
-| Balanced | `correction` (0.6) | The user says an answer was wrong: the recovery lane. A repeated request also recovers; the built-in re-ask judgment compares the last two user turns. |
+| Balanced | `correction` (0.6) | The user says an answer was wrong: the recovery lane. A repeated request also recovers; the turn relation question reads the previous user turn and its answer. |
 | Balanced | `deliberate` (0.3), `verification` (0.7) | Careful reasoning about trade-offs, a root cause or several exact constraints, or an explicit request to verify or cite: the deliberate lane. Inputs of 12K tokens or more take it too. |
 | Speed | `heavy` (0.5) | A detailed design, a thorough review or a deep analysis: the heavy lane. Inputs of 16K tokens or more take it too. |
 | Cost | `depth` (0.6) | A hard problem that needs investigation or careful multi-step reasoning: bounded local reasoning. Inputs of 16K tokens or more take it too. |
