@@ -49,6 +49,13 @@ bearer token; keep the token out of `vsr.json`. With Codex pointed at a Router t
 `vllm-sr connect codex`, set `runtimeUrl` to that listener's `/v1/decisions` and `runtimeModel` to the
 System One model it publishes, so one listener serves both the agent's calls and vSR's questions.
 
+That listener can also turn `guard`, `redact` and `shield` on or off for every plugin pointed at it,
+under `apis.systemone.vsr` in the Router's config or as checkboxes in the Dashboard (Config › Global
+Config › vSR agent plugins).
+vSR reads the listener's listing (`GET /v1/systemone/models`) at most once a minute and keeps the
+answer in `vsr-listener.json` in the Codex home. An app you name in `vsr.json` stays yours; the
+listener sets the others.
+
 ## What you see
 
 Each decision is one line in the transcript, starting with vSR's mark:

@@ -14,10 +14,12 @@ went unchecked.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -36,6 +38,10 @@ DEFAULTS = {
     "redactPii": 0.7,
     "timeoutSeconds": 3.0,
 }
+# The apps a Router listener's vsr profile (listeners[].apis.systemone.vsr, set in its config
+# or the Dashboard) can turn on or off here, and how long its answer is kept in the Codex home.
+PROFILE_APPS = ("guard", "shield", "redact")
+PROFILE_SECONDS = 60
 # The most of one output the decision model reads; the rest goes to Codex unchecked, and the
 # line vSR draws says so.
 MAX_CHARS = 16000
@@ -43,14 +49,18 @@ MARK = "▚▞ vSR"
 
 
 def settings() -> dict:
-    """The defaults, then `vsr.json` in the Codex home, then VSR_* variables."""
+    """The defaults, then `vsr.json` in the Codex home, then VSR_* variables. The listener's
+    profile sets the apps `vsr.json` leaves out, as the Claude Code plugin lets it."""
     found = dict(DEFAULTS)
     home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
-    try:
-        saved = json.loads((home / "vsr.json").read_text())
-        found.update({k: v for k, v in saved.items() if k in DEFAULTS})
-    except (OSError, ValueError):
-        pass
+    saved = {}
+    with contextlib.suppress(OSError, ValueError, AttributeError):
+        saved = {
+            k: v
+            for k, v in json.loads((home / "vsr.json").read_text()).items()
+            if k in DEFAULTS
+        }
+    found.update(saved)
     for name, env in (
         ("runtimeUrl", "VSR_RUNTIME_URL"),
         ("runtimeModel", "VSR_RUNTIME_MODEL"),
@@ -58,7 +68,44 @@ def settings() -> dict:
         if os.environ.get(env):
             found[name] = os.environ[env]
     found["runtimeToken"] = os.environ.get("VSR_RUNTIME_TOKEN", "")
+    for app, on in listener_profile(found, home).items():
+        found[app] = saved.get(app, on)
     return found
+
+
+def listener_profile(opts: dict, home: Path) -> dict:
+    """The apps the listener's System One listing turns on or off, asked at most once a minute:
+    Codex runs this file once per tool call, so the answer waits in the Codex home."""
+    url = (
+        re.sub(r"/v1/decisions/?$", "", opts["runtimeUrl"].rstrip("/"))
+        + "/v1/systemone/models"
+    )
+    kept = home / "vsr-listener.json"
+    try:
+        held = json.loads(kept.read_text())
+        if held["url"] == url and time.time() - held["at"] < PROFILE_SECONDS:
+            return held["profile"]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    headers = (
+        {"Authorization": f"Bearer {opts['runtimeToken']}"}
+        if opts["runtimeToken"]
+        else {}
+    )
+    profile = {}
+    try:
+        with urllib.request.urlopen(
+            urllib.request.Request(url, headers=headers), timeout=1.5
+        ) as response:
+            vsr = json.loads(response.read()).get("vsr") or {}
+        profile = {
+            app: vsr[app] for app in PROFILE_APPS if isinstance(vsr.get(app), bool)
+        }
+    except (OSError, ValueError, AttributeError):
+        pass
+    with contextlib.suppress(OSError):
+        kept.write_text(json.dumps({"url": url, "at": time.time(), "profile": profile}))
+    return profile
 
 
 def ask(app: str, given: object, opts: dict) -> dict:

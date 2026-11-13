@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import shutil
 import threading
 import unittest
 from contextlib import redirect_stdout
@@ -23,11 +24,27 @@ class Runtime:
     def __init__(self):
         self.review, self.jailbreak, self.spans, self.status = 0.1, 0.01, [], 200
         self.seen: list[dict] = []
+        # The listener's vsr profile its listing answers, and how often the listing was asked for.
+        self.vsr: dict | None = None
+        self.listings = 0
         runtime = self
 
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
                 pass
+
+            def do_GET(self):
+                runtime.listings += 1
+                listing = (
+                    {"models": []}
+                    if runtime.vsr is None
+                    else {"models": [], "vsr": runtime.vsr}
+                )
+                data = json.dumps(listing).encode()
+                self.send_response(200 if self.path == "/v1/systemone/models" else 404)
+                self.send_header("content-length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
 
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers["content-length"])))
@@ -242,9 +259,7 @@ class HooksTest(unittest.TestCase):
     def test_settings_come_from_vsr_json_in_the_codex_home_and_apps_turn_off(self):
         home = Path(self.id().replace(".", "_"))
         home.mkdir(exist_ok=True)
-        self.addCleanup(
-            lambda: (home / "vsr.json").unlink(missing_ok=True) or home.rmdir()
-        )
+        self.addCleanup(shutil.rmtree, home, True)
         (home / "vsr.json").write_text(
             json.dumps({"guard": False, "runtimeUrl": self.runtime.url, "unknown": 1})
         )
@@ -258,6 +273,34 @@ class HooksTest(unittest.TestCase):
             {},
         )
         self.assertEqual(self.runtime.seen, [])
+
+    def test_the_listener_turns_apps_off_unless_vsr_json_names_them_and_is_asked_once_a_minute(
+        self,
+    ):
+        home = Path(self.id().replace(".", "_"))
+        home.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / "vsr.json").write_text(json.dumps({"guard": True}))
+        self.runtime.vsr = {"guard": False, "redact": False, "router_turns": True}
+        self.runtime.review, self.runtime.spans = 0.99, [
+            span("EMAIL_ADDRESS", CSV, "mina.park@example.com")
+        ]
+        env = {**self.env, "CODEX_HOME": str(home)}
+
+        self.assertIn(
+            "permissionDecision", json.dumps(run("pre", bash("rm -rf /"), env))
+        )
+        self.assertEqual(run("post", bash("cat customers.csv", CSV), env), {})
+        self.assertEqual(self.runtime.listings, 1)
+
+        self.runtime.vsr = None
+        (home / "vsr-listener.json").write_text(
+            json.dumps({"url": self.runtime.url, "at": 0, "profile": {}})
+        )
+        self.assertIn(
+            "[vsr:", json.dumps(run("post", bash("cat customers.csv", CSV), env))
+        )
+        self.assertEqual(self.runtime.listings, 2)
 
 
 if __name__ == "__main__":
