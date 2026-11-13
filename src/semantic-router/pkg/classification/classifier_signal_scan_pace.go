@@ -48,8 +48,9 @@ const (
 // started and when its deadline is, the context each window of its cut is
 // read under and the function that cancels it, whether it judged that it
 // fell behind, and once it re-planned, when, the bytes of its larger windows
-// and the calls that read them that its readers have yet to take; and when
-// its cut's windows and runs were all read, once re-reads waited for them.
+// and the calls that read them that its readers have yet to take; when its
+// cut's windows and runs were all read, once re-reads waited for them; and
+// whether a window waited for its deployment to have capacity.
 type scanPace struct {
 	stage             *scanStop
 	started, deadline time.Time
@@ -60,6 +61,29 @@ type scanPace struct {
 	size              int
 	pending           []*systemOneCall
 	cutRead           time.Time
+	waited            bool
+	resumed           time.Time
+	readAtResume      int
+}
+
+// markWaited records that a window of the scan waited for its deployment to
+// have capacity (on_signal_overload): the scan's time until then says
+// nothing of how fast the deployment reads. Once the first such window is
+// answered, the scan judges its pace from then on, over the windows it reads
+// since.
+func (scan *guardScan) markWaited(answered bool) {
+	scan.mu.Lock()
+	defer scan.mu.Unlock()
+	scan.pace.waited = true
+	if !answered || !scan.pace.resumed.IsZero() {
+		return
+	}
+	scan.pace.resumed, scan.pace.readAtResume = time.Now(), 0
+	for index := range scan.cut {
+		if scan.done[index] && scan.errs[index] == nil {
+			scan.pace.readAtResume++
+		}
+	}
 }
 
 // windowPace is one deployment's learned pace: the decayed weight of its
@@ -172,13 +196,19 @@ func (c *Classifier) replan(scan *guardScan) []*systemOneCall {
 // when it keeps them: before it read scanPaceRounds rounds of its windows
 // in flight, when it is not behind, when no k fits, once it judged or
 // another scan of its input re-planned it, and once its stage's scans ended.
+// A scan whose window waited for capacity judges its pace only once the
+// first such window was answered: from then, over the windows read since.
 func (c *Classifier) replanRuns(scan *guardScan) int {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
 	pace := &scan.pace
 	if pace.judged || !pace.at.IsZero() || pace.deadline.IsZero() || scan.most <= scan.grown ||
-		pace.stage != nil && pace.stage.ctx.Err() != nil {
+		pace.stage != nil && pace.stage.ctx.Err() != nil || pace.waited && pace.resumed.IsZero() {
 		return 0
+	}
+	from, base := pace.started, 0
+	if pace.waited {
+		from, base = pace.resumed, pace.readAtResume
 	}
 	read, left := 0, 0
 	for index := range scan.cut {
@@ -189,11 +219,11 @@ func (c *Classifier) replanRuns(scan *guardScan) int {
 			read++
 		}
 	}
-	if left == 0 || read < scanPaceRounds*max(scan.parallel, 1) {
+	if left == 0 || read-base < scanPaceRounds*max(scan.parallel, 1) {
 		return 0
 	}
 	now := time.Now()
-	perWindow, timeLeft := now.Sub(pace.started)/time.Duration(read), pace.deadline.Sub(now)
+	perWindow, timeLeft := now.Sub(from)/time.Duration(read-base), pace.deadline.Sub(now)
 	if time.Duration(left)*perWindow <= timeLeft {
 		return 0
 	}
@@ -285,14 +315,18 @@ func (scan *guardScan) peers() []*guardScan {
 
 // observePace records how long a scan took per window it read, over its
 // cut's windows read or, once it re-planned, over its larger ones read since,
-// unless its caller gave up on it or the runtime turned every window away:
-// neither says how fast the deployment reads. A scan the deadline cut before
-// any window was read took at least the time it had for one.
+// unless its caller gave up on it, the runtime turned every window away or a
+// window waited for capacity: none says how fast the deployment reads. A
+// scan the deadline cut before any window was read took at least the time it
+// had for one.
 func (c *Classifier) observePace(scan *guardScan, cause error) {
 	if cause != nil && !errors.Is(cause, errScanDecided) && !errors.Is(cause, context.DeadlineExceeded) {
 		return
 	}
 	pace := &scan.pace
+	if pace.waited {
+		return
+	}
 	from, size := pace.started, scan.grown
 	if !pace.at.IsZero() {
 		from, size = pace.at, pace.size

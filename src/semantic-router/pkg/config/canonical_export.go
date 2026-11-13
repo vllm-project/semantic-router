@@ -158,12 +158,13 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
 	return CanonicalModelCatalog{
-		Deployments:     cloneModelMap(cfg.ModelDeployments),
-		Bindings:        cloneModelMap(cfg.GlobalModelBindings),
-		Embeddings:      CanonicalEmbeddingModels{Default: EmbeddingModelBinding{Deployment: cfg.EmbeddingDeployment}},
-		System:          canonicalSystemModelsFromRouterConfig(cfg),
-		Admission:       cloneAdmissionMap(cfg.ModelAdmission),
-		SignalTimeoutMs: cfg.ModelSignalTimeoutMs,
+		Deployments:      cloneModelMap(cfg.ModelDeployments),
+		Bindings:         cloneModelMap(cfg.GlobalModelBindings),
+		Embeddings:       CanonicalEmbeddingModels{Default: EmbeddingModelBinding{Deployment: cfg.EmbeddingDeployment}},
+		System:           canonicalSystemModelsFromRouterConfig(cfg),
+		Admission:        cloneAdmissionMap(cfg.ModelAdmission),
+		SignalTimeoutMs:  cfg.ModelSignalTimeoutMs,
+		OnSignalOverload: cloneSignalOverloadPolicy(cfg.ModelSignalOverload),
 	}
 }
 
