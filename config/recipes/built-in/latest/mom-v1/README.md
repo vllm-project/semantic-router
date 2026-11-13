@@ -358,7 +358,7 @@ See the [conformance guide](../../../CONFORMANCE.md) for commands.
 The probes are calibrated on Vela 2.0 0.8B: through the router, with its
 container limited to 4 CPUs, all 366 reach their expected decision. Re-run them with the
 decision model you deploy. Because the decision model reads long inputs slowly
-on a CPU, CI splits the bundle's probes into 16 jobs of similar cost
+on a CPU, CI splits the bundle's probes into 8 jobs of similar cost
 (`evaluation.shards` in `probes.yaml`) and merges their reports.
 
 ## Limitations
