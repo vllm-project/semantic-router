@@ -79,6 +79,15 @@ func TestTruncateToolTraceStepCutsRawCopiesOnlyUnderARawLimit(t *testing.T) {
 	require.Equal(t, "short", step.RawOutput)
 }
 
+// A step whose text the policy leaves out keeps neither cut flag.
+func TestOmittedStepTextKeepsNoCutFlag(t *testing.T) {
+	trace := &ToolTrace{Steps: []ToolTraceStep{{
+		Source: ToolTraceSourceResponse, Text: "answer", RawOutput: "answer", Truncated: true, RawTruncated: true,
+	}}}
+	omitUncapturedStepText(trace, recorderPolicy{captureRequestBody: true})
+	require.Equal(t, ToolTraceStep{Source: ToolTraceSourceResponse}, trace.Steps[0])
+}
+
 // A record's trace is bounded as its policy says on both write paths: when the
 // record is added and when its trace is replaced with the response's.
 func TestRecorderBoundsTheTraceOnEveryWritePath(t *testing.T) {

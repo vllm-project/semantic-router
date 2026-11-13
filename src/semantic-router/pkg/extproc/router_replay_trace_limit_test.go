@@ -10,7 +10,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-func replayTraceRecord(t *testing.T, limits map[string]interface{}, messages []llmprotocol.Message) routerreplay.RoutingRecord {
+// replayTraceRecord records one request under raw with limits and, when an
+// answer is given, attaches it as the response.
+func replayTraceRecord(t *testing.T, limits map[string]interface{}, messages []llmprotocol.Message, answer ...string) routerreplay.RoutingRecord {
 	t.Helper()
 	plugin := map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureRaw, "capture_request_body": true}
 	for key, value := range limits {
@@ -22,6 +24,12 @@ func replayTraceRecord(t *testing.T, limits map[string]interface{}, messages []l
 	ctx.SemanticRequest.Messages = messages
 	ctx.RouterReplayPluginConfig = cfg.EffectiveRouterReplayConfig(nil)
 	router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
+	for _, text := range answer {
+		ctx.SemanticResponse = &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+			Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+		}}}
+		router.attachRouterReplayResponse(ctx, []byte(`{"object":"chat.completion"}`), true)
+	}
 	record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 	if !ok {
 		t.Fatal("missing record")
@@ -106,6 +114,19 @@ func TestReplayBoundsTheRequestTraceByDefault(t *testing.T) {
 		trace := record.ToolTrace
 		if replayTraceBytes(trace) > 64<<10 || len(trace.Steps) == 0 || trace.DroppedStepCount != 100-len(trace.Steps) {
 			t.Fatalf("%d steps of %d bytes kept under a 64 KiB total", len(trace.Steps), replayTraceBytes(trace))
+		}
+	})
+	t.Run("the answer's update keeps the request trace's drops counted", func(t *testing.T) {
+		for _, limits := range []map[string]interface{}{
+			{"capture_response_body": true},
+			{"capture_response_body": true, "max_tool_trace_bytes": 0, "max_tool_trace_steps": 50},
+		} {
+			trace := replayTraceRecord(t, limits, conversation, "Final answer.").ToolTrace
+			last := trace.Steps[len(trace.Steps)-1]
+			if last.Text != "Final answer." || len(trace.Steps)+trace.DroppedStepCount != 101 || !trace.StepsTruncated {
+				t.Fatalf("%v: %d steps kept and %d dropped of 101 (truncated %v), the last %.16q",
+					limits, len(trace.Steps), trace.DroppedStepCount, trace.StepsTruncated, last.Text)
+			}
 		}
 	})
 }
