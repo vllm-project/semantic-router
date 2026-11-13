@@ -154,10 +154,13 @@ func recordPrivacyEvidence(results *SignalResults, call *systemOneCall, response
 // ReplayPromptReadable reports whether ReplayPromptEvidence could read prompt
 // whole within within: a prompt that one window of each pii rule's deployment
 // holds is one call, and is always readable. A longer one is not readable
-// when the request's own guard scan of it ran out of time (guardReadShort),
 // when it needs more windows than one scan reads, or when its windows would
 // take longer than scanReadShare of within at the deployment's measured pace.
-// Without a pace yet, it is readable.
+// Before the deployment has a pace, it is readable unless the request's own
+// guard scans ran out of time on its input (guardReadShort). Once it has one,
+// the pace decides alone: a guard scan may read more than the prompt (earlier
+// turns, tool results), or end in part on windows that failed, and its
+// deadline is not within.
 func (c *Classifier) ReplayPromptReadable(prompt string, within time.Duration, guardReadShort bool) bool {
 	if c == nil || c.Config == nil {
 		return true
@@ -171,15 +174,18 @@ func (c *Classifier) ReplayPromptReadable(prompt string, within time.Duration, g
 		if len(prompt) <= budget.size {
 			continue
 		}
-		if guardReadShort {
+		windows, grown := cutScanWindows(prompt, budget.size, budget.most, budget.overlap)
+		if len(windows) > maxScanWindows {
 			return false
 		}
 		perCall, perByte, ok := c.windowPaces.line(deployment, budget.parallel)
 		if !ok {
+			if guardReadShort {
+				return false
+			}
 			continue
 		}
-		windows, grown := cutScanWindows(prompt, budget.size, budget.most, budget.overlap)
-		if len(windows) > maxScanWindows || float64(len(windows))*(perCall+perByte*float64(grown)) > scanReadShare*within.Seconds() {
+		if float64(len(windows))*(perCall+perByte*float64(grown)) > scanReadShare*within.Seconds() {
 			return false
 		}
 	}
