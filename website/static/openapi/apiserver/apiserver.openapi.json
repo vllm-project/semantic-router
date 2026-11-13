@@ -23800,6 +23800,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
                           "conversation_id": {
                             "type": "string"
                           },
@@ -39050,6 +39053,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },
@@ -39760,6 +39766,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },

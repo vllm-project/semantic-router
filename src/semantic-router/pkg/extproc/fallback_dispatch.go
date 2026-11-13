@@ -181,6 +181,8 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		callCtx = context.Background()
 	}
 
+	source, _ := responseWireFormats(ctx)
+	r.noteLengthRefusal(ctx, &primaryOutcome, source, body)
 	evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, primaryOutcome, commit)
 	if !evalResult.CanFallback {
 		logging.ComponentDebugEvent("extproc", "fallback_not_allowed", map[string]interface{}{
@@ -245,7 +247,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 				"request_id": ctx.RequestID,
 				"attempts":   len(ctx.FallbackRecord.Attempts),
 			})
-			return nil
+			break
 		}
 		nextCandidate := &ctx.VSREligibleModelRefs[candIdx]
 
@@ -267,7 +269,10 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		}
 	}
 
-	return r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
+	if refused := r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx); refused != nil {
+		return refused
+	}
+	return r.failedAttemptResponse(ctx, ctx.fallbackLastFailure)
 }
 
 // fallbackHaltStatus names why a chain stopped at a candidate that could not
@@ -366,6 +371,10 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 
 	if callErr != nil || statusCode < 200 || statusCode >= 300 {
 		attemptOutcome.ErrorMessage = string(resBody)
+		if callErr == nil {
+			r.noteLengthRefusal(ctx, &attemptOutcome, dispatch.targetFormat, resBody)
+		}
+		ctx.fallbackLastFailure = failedCandidateAttempt(dispatch, statusCode, resBody, callErr)
 		evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 		logging.ComponentWarnEvent("extproc", "fallback_candidate_attempt_failed", map[string]interface{}{
 			"request_id":        ctx.RequestID,
@@ -653,6 +662,9 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	buffered bool,
 ) (*fallbackCandidate, fallback.EvaluationResult, error) {
 	candidateModel := candidateModelIdentity(*candidateRef)
+	if err := r.fallbackWindowSkip(ctx, candidateRef); err != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, err
+	}
 	useReasoning := r.candidateReasoningChoice(ctx, candidateModel)
 	dispatch, err := r.resolveProviderDispatchForCandidate(
 		candidateModel, ctx.VSRSelectedDecisionName, useReasoning, ctx,

@@ -39,6 +39,9 @@ const (
 	TriggerClass5xx           TriggerClass = "upstream_5xx"
 	TriggerClassRateLimit     TriggerClass = "rate_limit"
 	TriggerClassProtocolError TriggerClass = "protocol_error"
+	// TriggerClassContextLength: the backend refused the prompt as longer
+	// than its context window; only a wider window can serve it.
+	TriggerClassContextLength TriggerClass = "context_length"
 )
 
 // FallbackPolicy defines the bounded execution parameters for cross-model fallback.
@@ -408,6 +411,10 @@ type AttemptOutcome struct {
 	Cost              float64       `json:"cost,omitempty"`
 	Currency          string        `json:"currency,omitempty"`
 	Discarded         bool          `json:"discarded"`
+	// ContextLengthExceeded marks a backend's refusal of the prompt as longer
+	// than its window. Such a client error may still fall back, to a
+	// candidate with a wider window.
+	ContextLengthExceeded bool `json:"context_length_exceeded,omitempty"`
 	// ForwardedHeaders names the client request headers an attempt the
 	// Router sent itself copied (forward_request_headers); never their values.
 	ForwardedHeaders []string `json:"forwarded_headers,omitempty"`

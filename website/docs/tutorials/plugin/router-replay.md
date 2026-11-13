@@ -140,7 +140,12 @@ Set `capture_personal_data: false` globally or on a decision's
   read the prompt with a PII signal, the record is first written without it.
   The recipe's configured PII rules then read the latest user message alone,
   and the prompt is added to the record once that read finds no personal
-  data.
+  data. At most two such reads run at once, each for up to 30 seconds. A read
+  that could not finish in that time does not start, and the prompt stays
+  out, as it would when the read ran out of time. That covers a message
+  longer than the decision model reads in 30 seconds at its measured pace
+  and, until that pace is measured, one whose guard scan ran out of time
+  during routing.
 
 When PII evidence is unavailable, the `pii` rule's model gives no answer, or
 the recipe has no `pii` rule, capture omits content conservatively. A PII signal is
@@ -491,6 +496,21 @@ Keep datasets out of this repository.
 
 Open **Insights** in the Dashboard, or use the
 [Replay API](../../api/router#router-replay) to filter records and inspect a session.
+The search finds a record by its request id, its recipe or its session id, so
+the session id an agent harness sends, such as Claude Code's
+`x-claude-code-session-id`, finds every call of that session. A record's header
+says where the request sits in its session, and the session routing history
+opens with a summary: the agents that called, the models that answered and how
+often, how many times the model switched, how the calls ended, and the time from
+the first call's start to the last one's end. Below it each call is one row, the
+request on the page marked and a model switch highlighted. Subagents are named
+`subagent 1`, `subagent 2` and so on in order of their first call, with the
+short hash of the agent identity header in the row's title, and the main
+conversation is `main`. The hash is recorded only when `identity.headers.agent`
+names that header (see [Session identification](../../api/session-identification));
+without it, every call shows `main`. A Codex root thread, whose agent and session
+ids are equal, is `main`. A viewer without `replay.detail` gets no hash, as with
+the rest of the redacted session policy, so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 

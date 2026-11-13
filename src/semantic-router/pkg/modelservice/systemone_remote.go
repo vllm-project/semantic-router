@@ -480,7 +480,11 @@ func (d *systemOneDeployment) exchange(ctx context.Context, method, path string,
 		if errors.As(cause, &urlErr) {
 			cause = urlErr.Err
 		}
-		d.reportFailure(remote.StatusCode, "transport", cause)
+		// A call its caller cancelled did not fail at the deployment; once
+		// reported, it would also hide the deployment's next real failure.
+		if !callerCancelled(ctx, cause) {
+			d.reportFailure(remote.StatusCode, "transport", cause)
+		}
 		return 0, nil, cause
 	}
 	return 0, nil, err
@@ -648,6 +652,13 @@ func (d *systemOneDeployment) checkListed(ctx context.Context) {
 			"deployment": d.name, "schema": string(d.schemaID()), "reason": reason, "question_types": d.declaredCard().QuestionTypes,
 		})
 	}
+}
+
+// callerCancelled reports a call that failed because its caller cancelled it,
+// whatever cause the cancel carried, rather than because of the deployment.
+// A call past its deadline is not one: a slow deployment is its failure.
+func callerCancelled(ctx context.Context, err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, ErrSignalsAbandoned) || errors.Is(ctx.Err(), context.Canceled)
 }
 
 // reportFailure logs each kind of failure once per deployment and generation;

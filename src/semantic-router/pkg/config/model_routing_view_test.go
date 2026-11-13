@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -29,6 +30,13 @@ func TestRoutingViewAndScanWindowDefaultsByProvider(t *testing.T) {
 	if tokens, overlap := local.ScanWindowTokens(); tokens != 1024 || overlap != 0 {
 		t.Fatalf("a deployment's own windows win: %d tokens overlapping %d", tokens, overlap)
 	}
+	if margin := local.ScanWindowRereadMargin(); margin != 3 {
+		t.Fatalf("the default reread margin is 3, got %v", margin)
+	}
+	local.ScanWindow.RereadMargin = &half
+	if margin := local.ScanWindowRereadMargin(); margin != 0.5 {
+		t.Fatalf("a deployment's own reread margin wins: %v", margin)
+	}
 }
 
 func TestRoutingViewAndScanWindowBoundsAreValidated(t *testing.T) {
@@ -52,6 +60,17 @@ func TestRoutingViewAndScanWindowBoundsAreValidated(t *testing.T) {
 		},
 		"max_tokens below the default window": {
 			ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{MaxTokens: 4096}}, "scan_window.max_tokens must be at least scan_window.tokens (8192)",
+		},
+		"reread_margin":      {ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{RereadMargin: share(2.5)}}, ""},
+		"reread_margin zero": {ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{RereadMargin: share(0)}}, ""},
+		"reread_margin negative": {
+			ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{RereadMargin: share(-1)}}, "scan_window.reread_margin must be between 0 and 20",
+		},
+		"reread_margin too large": {
+			ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{RereadMargin: share(25)}}, "scan_window.reread_margin must be between 0 and 20",
+		},
+		"reread_margin not a number": {
+			ModelDeployment{Provider: ModelRuntimeProvider, ScanWindow: &DeploymentScanWindow{RereadMargin: share(math.NaN())}}, "scan_window.reread_margin must be between 0 and 20",
 		},
 		"chat model": {ModelDeployment{Provider: OpenAIChatProvider, RoutingView: &DeploymentRoutingView{MaxTokens: 4096}}, "apply to model_runtime and systemone deployments"},
 	} {

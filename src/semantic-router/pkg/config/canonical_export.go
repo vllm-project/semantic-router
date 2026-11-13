@@ -127,6 +127,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			AllowLossyTranslation: cfg.AllowLossyTranslation,
 			RoutingInput:          cfg.RoutingInput,
 			Headers:               cfg.Headers,
+			ContextWindow:         cfg.ContextWindow,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -157,12 +158,13 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
 	return CanonicalModelCatalog{
-		Deployments:     cloneModelMap(cfg.ModelDeployments),
-		Bindings:        cloneModelMap(cfg.GlobalModelBindings),
-		Embeddings:      CanonicalEmbeddingModels{Default: EmbeddingModelBinding{Deployment: cfg.EmbeddingDeployment}},
-		System:          canonicalSystemModelsFromRouterConfig(cfg),
-		Admission:       cloneAdmissionMap(cfg.ModelAdmission),
-		SignalTimeoutMs: cfg.ModelSignalTimeoutMs,
+		Deployments:      cloneModelMap(cfg.ModelDeployments),
+		Bindings:         cloneModelMap(cfg.GlobalModelBindings),
+		Embeddings:       CanonicalEmbeddingModels{Default: EmbeddingModelBinding{Deployment: cfg.EmbeddingDeployment}},
+		System:           canonicalSystemModelsFromRouterConfig(cfg),
+		Admission:        cloneAdmissionMap(cfg.ModelAdmission),
+		SignalTimeoutMs:  cfg.ModelSignalTimeoutMs,
+		OnSignalOverload: cloneSignalOverloadPolicy(cfg.ModelSignalOverload),
 	}
 }
 
@@ -253,6 +255,7 @@ func canonicalProviderModelFromRuntime(
 		Pricing:          params.Pricing,
 		Reliability:      params.Reliability,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
+		Tokenizer:        params.Tokenizer,
 		BackendRefs: canonicalProviderBackendRefs(
 			name,
 			params,

@@ -46,6 +46,9 @@ type CanonicalRouterGlobal struct {
 	// Headers governs the optional response headers, such as who may turn on
 	// the debug headers.
 	Headers RouterHeadersConfig `yaml:"headers,omitempty"`
+	// ContextWindow governs the check of a prompt against the context
+	// windows of the models that can serve it.
+	ContextWindow ContextWindowConfig `yaml:"context_window,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -96,6 +99,9 @@ type CanonicalModelCatalog struct {
 	// SignalTimeoutMs is the deadline of a request's model-runtime signals,
 	// below the request's; 0 derives it from the request's deadline.
 	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
+	// OnSignalOverload is what a request gets when a rule that fails closed
+	// could not be read because the decision runtime was overloaded.
+	OnSignalOverload *SignalOverloadPolicy `yaml:"on_signal_overload,omitempty"`
 }
 
 // CanonicalEmbeddingModels names the embedding deployment recall uses, the
@@ -230,6 +236,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.AllowLossyTranslation = router.AllowLossyTranslation
 	cfg.RoutingInput = router.RoutingInput
 	cfg.Headers = router.Headers
+	cfg.ContextWindow = router.ContextWindow
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
@@ -262,6 +269,7 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 	cfg.ModelSignalTimeoutMs = modelCatalog.SignalTimeoutMs
+	cfg.ModelSignalOverload = cloneSignalOverloadPolicy(modelCatalog.OnSignalOverload)
 }
 
 func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {

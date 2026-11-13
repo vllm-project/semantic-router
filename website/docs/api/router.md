@@ -426,8 +426,8 @@ its retrieval calls.
 When the Router cannot route a request, it answers the request itself and calls
 no backend. The error uses the client's protocol. In OpenAI Chat Completions and
 Responses errors, `error.code` is a stable reason code and `error.message` a
-short message. Apart from the budget errors, the message names no model,
-decision, or request content:
+short message. Apart from the budget and context-length errors, the message
+names no model, decision, or request content:
 
 ```json
 {"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
@@ -437,8 +437,9 @@ decision, or request content:
 | --- | --- | --- | --- |
 | `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
 | `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
-| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it, even without the estimate's reserves for structured data and media: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
+| `context_length_exceeded` | 400 | `invalid_request_error` | The Router's count puts the request beyond the band around the `context_window_size` of every model that could serve it (3% with a model's own tokenizer, 30% with the proxy tokenizer): beside the signals, for every model the request can reach, which cancels the signals still running, or after the decision, for its candidates. `param` is `messages`, and the message names the widest window and the request's estimated count, as OpenAI's does: `This model's maximum context length is 1048576 tokens. However, your request has an estimated 1100000 input tokens. Please reduce the length of the input.` Anthropic Messages clients get `prompt is too long: 1100000 tokens > 1048576 maximum`. See [the context window check](../installation/model-configuration#check-prompts-against-the-context-window). The [request budget check](#request-budget-errors) answers the same code. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
+| `overloaded` | 429 | `rate_limit_error` | The request's guard could not be read because its decision model was overloaded, and `global.model_catalog.on_signal_overload` is `retry`. Either only rules that failed closed on it refuse the request, or a rule it could not read would refuse it, even one that fails open. Anthropic Messages clients get `529` with `overloaded_error`. The response carries `Retry-After` and `x-vsr-warnings: guard_overloaded`. See [when the decision model is overloaded](../system-one/deploy/performance#when-the-decision-model-is-overloaded). |
 | `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. The `on_unknown` member of `x-vsr-trace` names the decision. |
 | `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
 | `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
@@ -485,7 +486,11 @@ truncate requests by themselves; opt into
 These counts are estimates. A backend can still reject a request; its valid
 HTTP status and meaningful message are retained. vLLM integer codes are exposed
 as strings in OpenAI-compatible errors: `BadRequestError` with `code: 400`
-becomes `invalid_request_error` with `code: "400"`.
+becomes `invalid_request_error` with `code: "400"`. A backend's refusal of a
+prompt longer than its window (vLLM's `param: input_tokens`, or a message about
+the context length, window or size, or Anthropic's `prompt is too long`) gets
+the code `context_length_exceeded` instead, and keeps the backend's message,
+which names its window and the prompt's count.
 
 A streaming request rejected before generation receives the same non-2xx JSON
 error, not a successful SSE stream. When Replay is enabled, it records the

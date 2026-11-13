@@ -288,6 +288,7 @@ type RouterOptions struct {
 	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
 	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
 	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
+	ContextWindow          ContextWindowConfig  `yaml:"context_window,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend
@@ -311,6 +312,7 @@ func (s SkipProcessingConfig) IsEnabled() bool {
 type InlineModels struct {
 	ModelAdmission       map[string]AdmissionConfig `yaml:"model_admission,omitempty"`
 	ModelSignalTimeoutMs int                        `yaml:"model_signal_timeout_ms,omitempty"`
+	ModelSignalOverload  *SignalOverloadPolicy      `yaml:"model_signal_overload,omitempty"`
 	GlobalModelBindings  map[string]ModelBinding    `yaml:"global_model_bindings,omitempty"`
 	ModelDeployments     map[string]ModelDeployment `yaml:"model_deployments,omitempty"`
 	// DecisionModel is global.model_catalog.system.decision_model, resolved

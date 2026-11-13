@@ -124,13 +124,16 @@ const (
 )
 
 // Warning codes in VSRWarnings: a request-stage guard rule that read only
-// part of a long input; a response_guard rule over a hallucination signal
-// (unverified_factual when the answer could not be checked), over a
-// response-stage jailbreak signal, or over any other signal; a protocol
-// translation loss, with its action, reason and field; and the marker of
-// warnings left out to keep the header bounded, with their count.
+// part of a long input; a retryable error answered instead of a refusal or
+// a forward that rules unread on an overloaded decision runtime decide; a
+// response_guard rule over a hallucination signal (unverified_factual when
+// the answer could not be checked), over a response-stage jailbreak signal,
+// or over any other signal; a protocol translation loss, with its action,
+// reason and field; and the marker of warnings left out to keep the header
+// bounded, with their count.
 const (
 	WarningScanPartial       = "scan_partial"
+	WarningGuardOverloaded   = "guard_overloaded"
 	WarningHallucination     = "hallucination"
 	WarningUnverifiedFactual = "unverified_factual"
 	WarningJailbreak         = "response_jailbreak"

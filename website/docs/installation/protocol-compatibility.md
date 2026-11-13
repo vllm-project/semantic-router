@@ -214,6 +214,7 @@ instead of being silently dropped.
 | Token logit bias (`logit_bias`) | Supported | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
+| Deferred tool loading (`tools[].defer_loading`) | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full |
 
 This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
@@ -289,6 +290,24 @@ that:
   `content.file`.
 - **Capable models are unaffected.** A model that declares `file_input`, or
   declares no capabilities, still receives the file.
+
+### Deferred tool loading
+
+`tools[].defer_loading` asks the provider's tool search to load a tool on
+demand. The Messages format carries it, but the Router's protocol-neutral
+request has no field for it, so the Router rejects it at ingress with
+`unsupported_tools_defer_loading` whatever the backend format, Messages
+included. Claude Code sets it on its first call, retries without it, and then
+sends every tool definition on every call.
+
+Listing `tools.defer_loading` in `global.router.allow_lossy_translation` keeps
+tool search on:
+
+- **Tools in full.** The Router sends each deferred tool in full.
+- **References by name.** A `tool_reference` block in a tool result reaches the
+  backend as the tool's name.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for
+  `tools.defer_loading`.
 
 ### Sampling controls a backend rejects
 
@@ -434,7 +453,8 @@ tools or error translation.
   that cannot be represented return a typed protocol error. A
   `lossy_translation` error for a loss an operator may accept, such as
   `tool_result.is_error`, names the `global.router.allow_lossy_translation`
-  setting that accepts it. The `unsupported_capability` errors for files,
+  setting that accepts it, and so does the `unsupported_tools_defer_loading`
+  error. The `unsupported_capability` errors for files,
   signed reasoning and stored completions don't; their sections above name
   the setting.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
@@ -455,7 +475,8 @@ tools or error translation.
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-warnings` and in `llm_translation_lossy_total`. The list
   also accepts `messages[].role` for system messages inside the conversation
-  and `content.file` for files a model cannot read, both described above,
+  and `content.file` for files a model cannot read and `tools.defer_loading`
+  for deferred tool loading, all described above,
   `reasoning.signature` (see the signed thinking note above), `store` (see
   stored completions above), and every other lossy translation still fails
   closed.
@@ -580,15 +601,11 @@ its own turn the same way, which ends the Codex run.
   Responses backend. A Chat Completions or Messages backend can't request a
   summary, so the Router accepts the turn and reports the dropped setting in
   `x-vsr-warnings`.
-- **Unsupported:** multi-agent namespace tools and hosted web search. Disable
-  them in the Codex `config.toml` that points at the Router; these settings
-  were checked with Codex CLI 0.156.1:
+- **Unsupported:** hosted web search. Disable it in the Codex `config.toml`
+  that points at the Router:
 
 ```toml
 web_search = "disabled"
-
-[features]
-multi_agent = false
 ```
 
 Point Codex at the Router through a model provider of your own, not
@@ -612,3 +629,61 @@ name = "vLLM Semantic Router"
 base_url = "http://localhost:8899/v1"
 wire_api = "responses"
 ```
+
+### Namespace tools: multi-agent and MCP
+
+Codex groups tools into Responses `namespace` tools: `multi_agent_v1` holds
+`spawn_agent` and the other multi-agent tools when `multi_agent` is on, and each
+MCP server's tools arrive in a namespace named `mcp__<server>` by default. The
+Router accepts them, so `multi_agent` no longer needs to be disabled. This was
+checked with Codex CLI 0.166.0 on Chat, Responses and Messages backends.
+
+- Every backend, a Responses backend included, receives each namespaced tool as
+  one tool named `<namespace>__<name>`, for example `mcp__echo__echo` or
+  `multi_agent_v1__spawn_agent`. The namespace's description precedes the
+  tool's own.
+- A flat name keeps to 64 characters of letters, digits, `_` and `-`. A longer
+  name, or one with other characters, is shortened and made unique with a hash
+  of the namespace and name; a call in a later turn maps to the same name.
+- A request in which two different tools would get the same flat name fails
+  with `tool_namespace_collision`, whether the tools are declared or called in
+  the input history or in history retained behind `previous_response_id`. For
+  example, `mcp__a` with `b__c` and `mcp__a__b` with `c` both flatten to
+  `mcp__a__b__c`. A namespace inside a namespace, a hosted tool inside a
+  namespace, and a named `tool_choice` that selects a namespaced tool by its
+  own name are rejected.
+- The model's calls reach Codex with `namespace` and the tool's own `name`,
+  buffered and streamed. Calls in the input history, including history
+  retained behind `previous_response_id`, are sent to the backend under the
+  flat name.
+- A custom tool inside a namespace follows the custom-tool rules above, so it
+  cannot reach a Messages backend.
+- Tool filters, conversation signals and Router Replay see the flat name.
+
+A multi-agent child is a separate Codex request. Codex CLI 0.166.0 sends it with
+the parent's `session-id`, its own `thread-id`, `x-codex-parent-thread-id`
+naming the parent, and `x-openai-subagent: collab_spawn`. Its tools keep the
+MCP namespaces but not `multi_agent_v1`.
+
+`spawn_agent` can start a child on another model. Codex checks the model name
+against its own model catalog before it sends the child's request, and the
+Router answers a name its entrypoints do not publish with `model_not_found`.
+Publish the name in an entrypoint's `model_names`:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto, vllm-sr/cheap]
+    recipe: default
+```
+
+Then give Codex a catalog that lists every name it may use, with
+`model_catalog_json` in `config.toml`. Codex also decides the request shape from
+the catalog entry, so base each entry on an entry the Router accepts.
+`codex debug models --bundled` prints the bundled catalog. In Codex CLI 0.166.0,
+copy its `gpt-5.5` entry, set `slug` and `display_name` to the Router model name,
+and set `supports_search_tool` to `false`, because Codex otherwise replaces the
+namespaces with a `tool_search` tool, which the Router does not support. For a
+Messages backend, also set `apply_patch_tool_type` to `null`, because Codex
+otherwise sends `apply_patch` as a custom tool. The `gpt-6` entries send tools
+in an `additional_tools` input item with `reasoning.context`, which the Router
+rejects.
