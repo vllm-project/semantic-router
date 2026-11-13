@@ -55,6 +55,7 @@ describe('router defaults structured schemas', () => {
       ['router_replay', 'capture_personal_data'],
       ['router_replay', 'capture_tool_results'],
       ['router_replay', 'max_prompt_bytes'],
+      ['router_replay', 'max_tool_trace_total_bytes'],
       ['memory', 'enabled'],
       ['response_cache', 'enabled'],
       ['response_cache', 'similarity_threshold'],

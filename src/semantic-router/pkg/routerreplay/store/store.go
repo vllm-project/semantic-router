@@ -76,8 +76,9 @@ type ToolTrace struct {
 	ToolNames []string        `json:"tool_names,omitempty"`
 	Steps     []ToolTraceStep `json:"steps,omitempty"`
 	// StepsTruncated is true when older Steps were dropped to enforce the
-	// MaxToolTraceSteps cap. Long agent sessions can otherwise produce
-	// hundreds of steps per record and OOM the router (see issue #1835).
+	// MaxToolTraceSteps cap or the MaxToolTraceTotalBytes budget. Long agent
+	// sessions can otherwise produce hundreds of steps per record and OOM the
+	// router (see issue #1835).
 	StepsTruncated bool `json:"steps_truncated,omitempty"`
 	// DroppedStepCount records how many steps were dropped from the head of
 	// the timeline when StepsTruncated is true. Zero when no truncation
@@ -114,6 +115,9 @@ type ToolTraceStep struct {
 	APIType string `json:"api_type,omitempty"`
 	// Truncated is true when Text, Arguments or Output was cut to MaxToolTraceBytes.
 	Truncated bool `json:"truncated,omitempty"`
+	// RawTruncated is true when RawArguments or RawOutput was cut too, which
+	// only the default trace limit does: a configured one keeps them whole.
+	RawTruncated bool `json:"raw_truncated,omitempty"`
 }
 
 // LooperUsage is content-free token accounting for one Looper attempt.

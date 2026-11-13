@@ -1185,6 +1185,9 @@ class RouterReplayPluginConfig(BaseModel):
     and true as raw. max_prompt_bytes bounds the prompt a record keeps under
     raw and verified, and 0 keeps the whole prompt; where no layer sets it, the
     prompt keeps max_tool_trace_bytes's bound when that is above 0, else 65536.
+    Where no layer sets max_tool_trace_bytes, each tool text field keeps 65536
+    bytes, raw copies included, and max_tool_trace_total_bytes, the steps' text
+    in all, defaults to 262144; 0 removes either limit.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1199,6 +1202,7 @@ class RouterReplayPluginConfig(BaseModel):
     max_body_bytes: Optional[int] = Field(default=None, ge=0)
     max_prompt_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
+    max_tool_trace_total_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
     shadow: Optional["RouterReplayShadowConfig"] = None
 

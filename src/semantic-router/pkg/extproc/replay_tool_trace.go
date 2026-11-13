@@ -265,7 +265,12 @@ func mergeReplayToolTraces(
 		}
 		steps = append(steps, step)
 	}
-	return newReplayToolTrace(steps)
+	merged := newReplayToolTrace(steps)
+	if merged != nil {
+		merged.StepsTruncated = left.StepsTruncated || right.StepsTruncated
+		merged.DroppedStepCount = left.DroppedStepCount + right.DroppedStepCount
+	}
+	return merged
 }
 
 func newReplayToolTrace(steps []routerreplay.ToolTraceStep) *routerreplay.ToolTrace {
@@ -317,7 +322,8 @@ func replayToolTraceStepsEqual(left, right routerreplay.ToolTraceStep) bool {
 		left.Status == right.Status && left.ContentRedacted == right.ContentRedacted &&
 		left.Arguments == right.Arguments && left.RawArguments == right.RawArguments &&
 		left.RawOutput == right.RawOutput && left.Output == right.Output &&
-		left.APIType == right.APIType && left.Truncated == right.Truncated
+		left.APIType == right.APIType && left.Truncated == right.Truncated &&
+		left.RawTruncated == right.RawTruncated
 }
 
 func replayToolTraceStepLabel(stepType string) string {

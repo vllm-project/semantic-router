@@ -1241,11 +1241,18 @@ recipes:
               # prompt. Where no layer sets it, the prompt keeps
               # max_tool_trace_bytes's bound when that is above 0, else 65536.
               max_prompt_bytes: 65536
-              # 0 = no truncation (the documented default). Set to a positive
-              # byte cap to independently limit structured tool-trace fields
+              # The bytes each structured tool-trace field keeps
               # (tool_definitions, and each step's text, arguments and output)
-              # without having to shrink max_body_bytes.
+              # without having to shrink max_body_bytes; 0 = no truncation.
+              # Where no layer sets it, each field keeps 65536, raw copies
+              # included. A value set on any layer keeps raw copies whole and
+              # max_tool_trace_total_bytes unset means no total.
               max_tool_trace_bytes: 0
+              # The bytes all steps of a record keep together, raw copies
+              # included: the oldest are dropped first, the newest always
+              # kept; 0 = no total. Where no layer sets it, 262144 while
+              # max_tool_trace_bytes is unset too.
+              max_tool_trace_total_bytes: 262144
               # Cap the number of tool-trace steps retained per record. Long
               # agent sessions (many sequential tool calls) can otherwise grow
               # the trace unbounded and OOM the router (#1835). 0 = no cap.
@@ -3102,5 +3109,8 @@ global:
         # max_prompt_bytes is left unset, so the prompt keeps the bound of a
         # max_tool_trace_bytes above 0 on any layer, else 65536 bytes (64 KiB).
         # Set it to bound the prompt on its own; 0 keeps the whole prompt.
-        max_tool_trace_bytes: 0
+        # max_tool_trace_bytes and max_tool_trace_total_bytes are left unset
+        # too, so a record keeps 65536 bytes per tool text field, raw copies
+        # included, and 262144 bytes of trace steps in all. Setting
+        # max_tool_trace_bytes, 0 included, keeps the trace as before.
         max_tool_trace_steps: 100
