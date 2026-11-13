@@ -281,6 +281,7 @@ func TestRoutingRejectionsReturnTheirReasonCode(t *testing.T) {
 			router := &OpenAIRouter{ReplayRecorder: recorder}
 			replayConfig := config.DefaultRouterReplayPluginConfig()
 			replayConfig.Enabled = true
+			replayConfig.PromptCapture = config.PromptCaptureRaw
 			replayConfig.CaptureResponseBody = true
 			ctx := &RequestContext{
 				RequestID: "rejected-request", SourceFormat: llmprotocol.OpenAIChatV1,

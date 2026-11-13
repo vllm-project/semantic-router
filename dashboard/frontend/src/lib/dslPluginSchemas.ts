@@ -133,6 +133,14 @@ const routerReplayShadowFields: FieldSchema[] = [
 function getRouterReplayPluginFieldSchema(): FieldSchema[] {
   return [
     { key: 'enabled', label: 'Enabled', type: 'boolean' },
+    {
+      key: 'prompt_capture',
+      label: 'Prompt Capture',
+      type: 'select',
+      options: ['', 'none', 'raw', 'verified'],
+      description:
+        'What a record keeps besides routing data: none (default), raw text, or the prompt once the pii rules find it clean',
+    },
     { key: 'max_records', label: 'Max Records', type: 'number', placeholder: '10000' },
     { key: 'capture_request_body', label: 'Capture Request Body', type: 'boolean' },
     { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
@@ -140,7 +148,7 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
       key: 'capture_tool_results',
       label: 'Capture Tool Results',
       type: 'boolean',
-      description: 'Store client tool-result text; requires request body and personal data capture',
+      description: 'Store client tool-result text; requires request body capture and raw prompt capture',
     },
     { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
     {

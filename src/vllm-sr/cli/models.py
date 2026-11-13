@@ -1179,11 +1179,16 @@ class RouterReplayPluginConfig(BaseModel):
 
     Omitted fields inherit the shared service policy. Explicit false and zero
     remain present so a decision can disable capture or remove a trace limit.
+    prompt_capture is what a record keeps besides routing data: none (the
+    default), raw or verified. capture_personal_data is its deprecated form,
+    which the Router loads as prompt_capture with a warning: false as verified
+    and true as raw.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: Optional[StrictBool] = None
+    prompt_capture: Optional[Literal["none", "raw", "verified"]] = None
     capture_request_body: Optional[StrictBool] = None
     capture_response_body: Optional[StrictBool] = None
     capture_personal_data: Optional[StrictBool] = None

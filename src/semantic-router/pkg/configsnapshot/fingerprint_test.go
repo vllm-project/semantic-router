@@ -103,7 +103,7 @@ func TestSettingsFingerprintTracksGlobalPlugins(t *testing.T) {
 	}
 	cfg := &config.RouterConfig{GlobalPlugins: replay(map[string]interface{}{"enabled": true})}
 	before := settingsFingerprint(cfg)
-	cfg.GlobalPlugins = replay(map[string]interface{}{"enabled": true, "capture_personal_data": false})
+	cfg.GlobalPlugins = replay(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureVerified})
 	if settingsFingerprint(cfg) == before {
 		t.Fatal("global.plugins was omitted from the settings fingerprint")
 	}

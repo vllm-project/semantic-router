@@ -1,6 +1,24 @@
 package config
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+import (
+	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
+
+// What a replay record keeps of the request and its answer besides routing
+// data (the decision, model, signals, timing, ids and usage).
+const (
+	// PromptCaptureNone keeps no request or response text, and reads no
+	// prompt for personal data. It is the default.
+	PromptCaptureNone = "none"
+	// PromptCaptureRaw keeps the prompt, and the bodies and tool traces the
+	// capture switches allow, as they came.
+	PromptCaptureRaw = "raw"
+	// PromptCaptureVerified keeps the exact prompt alone, once the recipe's
+	// pii rules read it whole and find no personal data.
+	PromptCaptureVerified = "verified"
+)
 
 const (
 	defaultRouterReplayMaxRecords   = 10000
@@ -13,6 +31,8 @@ const (
 	defaultRouterReplayMaxToolTraceSteps = 100
 )
 
+// DefaultRouterReplayPluginConfig leaves PromptCapture unset, which is none,
+// so that a deprecated capture_personal_data still decides where it is set.
 func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 	return RouterReplayPluginConfig{
 		Enabled:             true,
@@ -63,23 +83,79 @@ func RouterReplayPolicyOf(plugins []DecisionPlugin) *RouterReplayPluginConfig {
 	return &base
 }
 
-// CapturesPersonalData reports the resolved content policy. An omitted setting
-// preserves the established capture behavior.
-func (p *RouterReplayPluginConfig) CapturesPersonalData() bool {
-	return p == nil || p.CapturePersonalData == nil || *p.CapturePersonalData
+// PromptCaptureMode is the policy's prompt capture mode: the prompt_capture
+// set, else what a deprecated capture_personal_data meant, else none. A value
+// loading refuses is none too, so that no unknown mode keeps text.
+func (p *RouterReplayPluginConfig) PromptCaptureMode() string {
+	if p == nil {
+		return PromptCaptureNone
+	}
+	mode := p.PromptCapture
+	if mode == "" && p.CapturePersonalData != nil {
+		mode = personalDataPromptCapture(*p.CapturePersonalData)
+	}
+	if mode == PromptCaptureRaw || mode == PromptCaptureVerified {
+		return mode
+	}
+	return PromptCaptureNone
+}
+
+// personalDataPromptCapture is the prompt capture mode a deprecated
+// capture_personal_data value meant.
+func personalDataPromptCapture(capture bool) string {
+	if capture {
+		return PromptCaptureRaw
+	}
+	return PromptCaptureVerified
+}
+
+// ValidatePromptCapture refuses a prompt_capture other than none, raw or
+// verified.
+func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
+	switch p.PromptCapture {
+	case "", PromptCaptureNone, PromptCaptureRaw, PromptCaptureVerified:
+		return nil
+	}
+	return fmt.Errorf("prompt_capture must be none, raw or verified, not %q", p.PromptCapture)
+}
+
+// CapturesRawContent reports whether records keep request and response text
+// as it came, without reading it for personal data.
+func (p *RouterReplayPluginConfig) CapturesRawContent() bool {
+	return p.PromptCaptureMode() == PromptCaptureRaw
+}
+
+// VerifiesPrompt reports whether records keep the prompt alone, once the
+// recipe's pii rules find it clean.
+func (p *RouterReplayPluginConfig) VerifiesPrompt() bool {
+	return p.PromptCaptureMode() == PromptCaptureVerified
+}
+
+// CapturesRequestText reports whether a record may hold request text at all:
+// the prompt, the body and the request's tool trace. prompt_capture: none
+// holds none, whatever capture_request_body says.
+func (p *RouterReplayPluginConfig) CapturesRequestText() bool {
+	return p != nil && p.CaptureRequestBody && p.PromptCaptureMode() != PromptCaptureNone
+}
+
+// CapturesResponseText reports the same for the answer: the body, its tool
+// trace, detector excerpts and provider replies.
+func (p *RouterReplayPluginConfig) CapturesResponseText() bool {
+	return p != nil && p.CaptureResponseBody && p.PromptCaptureMode() != PromptCaptureNone
 }
 
 // CapturesToolResults reports whether client tool-result text is stored.
-// Configuration loading refuses it without personal-data capture; requiring
-// both here keeps a policy built outside that path redacted.
+// Tool results are raw client data, so only raw capture stores them;
+// configuration loading refuses them with verified.
 func (p *RouterReplayPluginConfig) CapturesToolResults() bool {
-	return p != nil && p.CaptureToolResults && p.CapturesPersonalData()
+	return p != nil && p.CaptureToolResults && p.CapturesRawContent()
 }
 
 // ReplayNeedsPIIEvidence marks existing PII rules as consumers whenever an
-// enabled global default or possible selected decision can suppress personal
-// content. No rules means no model dependency: capture will omit unverified
-// content conservatively at runtime.
+// enabled global default or possible selected decision keeps prompts only
+// once verified. none and raw read no prompt for personal data. No rules
+// means no model dependency: verified capture omits the prompt
+// conservatively at runtime.
 func (c *RouterConfig) ReplayNeedsPIIEvidence() bool {
 	if c == nil || len(c.PIIRules) == 0 {
 		return false
@@ -91,11 +167,11 @@ func (c *RouterConfig) replayNeedsPIIEvidenceForDecisions(decisions []Decision) 
 	if c == nil || len(c.PIIRules) == 0 {
 		return false
 	}
-	if policy := c.EffectiveRouterReplayConfig(nil); policy != nil && !policy.CapturesPersonalData() {
+	if c.EffectiveRouterReplayConfig(nil).VerifiesPrompt() {
 		return true
 	}
 	for i := range decisions {
-		if policy := c.EffectiveRouterReplayConfig(&decisions[i]); policy != nil && !policy.CapturesPersonalData() {
+		if c.EffectiveRouterReplayConfig(&decisions[i]).VerifiesPrompt() {
 			return true
 		}
 	}
