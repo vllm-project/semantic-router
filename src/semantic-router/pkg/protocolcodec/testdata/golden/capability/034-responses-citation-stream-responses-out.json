@@ -234,6 +234,10 @@
   },
   "diagnostics": [
     {
+      "field": "output.status",
+      "action": "dropped"
+    },
+    {
       "field": "stream.logprobs",
       "action": "dropped"
     },
