@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 
 # Router for replay.py run, in standalone mode without Envoy or models.
 # Inference on 18899, management API on 18080, the recorded backend on 18771.
@@ -6,7 +6,6 @@ version: v0.3
 # The probe decision prefers strong once a request reaches 2K tokens, so the
 # decision changes inside a run as the history grows. Set
 # global.router.learning.protection.scope to session to compare scopes.
-
 listeners:
   - name: http-18899
     address: 127.0.0.1
@@ -41,31 +40,29 @@ providers:
           protocol: http
           provider: vllm
 
-routing:
-  modelCards:
-    - name: cheap
-    - name: strong
-  signals:
-    context:
-      - name: context_2k
-        min_tokens: 2K
-  decisions:
-    - name: long_context_to_strong
-      description: Probe decision. A request of 2K tokens or more prefers strong.
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: context
-            name: context_2k
-      modelRefs: [{model: strong}, {model: cheap}]
-      algorithm: {type: static}
-    - name: default_cheap
-      description: Every other request prefers cheap.
-      priority: 100
-      rules: {}
-      modelRefs: [{model: cheap}, {model: strong}]
-      algorithm: {type: static}
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: context_2k
+          min_tokens: 2K
+    decisions:
+      - name: long_context_to_strong
+        description: Probe decision. A request of 2K tokens or more prefers strong.
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: context_2k
+        modelRefs: [{model: strong}, {model: cheap}]
+        algorithm: {type: static}
+      - name: default_cheap
+        description: Every other request prefers cheap.
+        priority: 100
+        rules: {}
+        modelRefs: [{model: cheap}, {model: strong}]
+        algorithm: {type: static}
 
 entrypoints:
   - model_names: ["vllm-sr/auto"]
@@ -91,9 +88,6 @@ global:
           stability_weight: 1.0
       state_store:
         backend: local
-  stores:
-    response_cache:
-      enabled: false
   services:
     observability:
       tracing:
@@ -104,10 +98,13 @@ global:
       auth:
         mode: disabled
     router_replay:
-      enabled: true
       store_backend: memory
       async_writes: false
-      capture_personal_data: false
-      capture_request_body: false
-      capture_response_body: false
-      max_records: 100000
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
+        capture_request_body: false
+        capture_response_body: false
+        capture_personal_data: false
+        max_records: 100000
