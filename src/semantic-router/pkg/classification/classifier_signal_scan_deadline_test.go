@@ -179,6 +179,48 @@ func TestAnInjectionAtTheEndOfA700KMessageIsReadAtTheConfiguredSize(t *testing.T
 	}
 }
 
+// An injection at the very end of a 700,000-token message that its tail holds
+// just under the guard's threshold is refused. The tail, read first at the
+// configured size, holds it behind about 8 KB of earlier text at about 0.9942,
+// under 0.995 and close to it, so the message's last half window is read
+// again, where it holds the injection at about 0.9970. A benign message's tail
+// is read once.
+func TestAnInjectionItsTailHoldsJustUnderTheThresholdIsReadAgainInTheLastHalfWindow(t *testing.T) {
+	const question = "\n\nSummarize the minutes above."
+	score := func(state string) float64 {
+		if !strings.Contains(state, scanInjection) {
+			return 0.01
+		}
+		return 0.9999 - 0.7e-6*float64(len(state))
+	}
+	endsTheMessage := func(fake *runtimetest.Runtime) []int {
+		var sizes []int
+		for _, state := range guardStates(fake) {
+			if strings.HasSuffix(state, question) {
+				sizes = append(sizes, len(state))
+			}
+		}
+		return sizes
+	}
+	classifier, fake := scoredGuardClassifier(t, 20*time.Second, time.Millisecond, 0.995, score)
+
+	results := evaluateTurn(classifier, distinctProse(700_000, 4)+" "+scanInjection+question)
+
+	if !slices.Contains(results.MatchedJailbreakRules, "prompt_attack") || results.SignalErrorMatches["jailbreak:prompt_attack"] {
+		t.Fatalf("the injection at the end was not refused: jailbreak %v, coverage %v, errors %v",
+			results.MatchedJailbreakRules, results.ScanCoverage, results.SignalErrors)
+	}
+	if sizes := endsTheMessage(fake); len(sizes) != 2 || sizes[0] <= configuredWindow*3/4 || sizes[1] > configuredWindow/2 {
+		t.Fatalf("read the message's end in windows of %v bytes; want its tail, then its last half window of at most %d", sizes, configuredWindow/2)
+	}
+
+	classifier, fake = scoredGuardClassifier(t, 20*time.Second, time.Millisecond, 0.995, score)
+	benign := evaluateTurn(classifier, distinctProse(700_000, 5)+question)
+	if guarded(benign) || len(endsTheMessage(fake)) != 1 {
+		t.Fatalf("benign: guarded %v, the end read in windows of %v bytes; want its tail once", guarded(benign), endsTheMessage(fake))
+	}
+}
+
 // A window larger than the configured size whose answer comes close to a
 // match is read again in windows of that size: an injection at 60% of a
 // 700,000-token message reads at about 0.994 in its 13 KB window, under the
