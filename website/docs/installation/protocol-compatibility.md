@@ -214,6 +214,7 @@ instead of being silently dropped.
 | Token logit bias (`logit_bias`) | Supported | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
+| Deferred tool loading (`tools[].defer_loading`) | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full |
 
 This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
@@ -289,6 +290,24 @@ that:
   `content.file`.
 - **Capable models are unaffected.** A model that declares `file_input`, or
   declares no capabilities, still receives the file.
+
+### Deferred tool loading
+
+`tools[].defer_loading` asks the provider's tool search to load a tool on
+demand. The Messages format carries it, but the Router's protocol-neutral
+request has no field for it, so the Router rejects it at ingress with
+`unsupported_tools_defer_loading` whatever the backend format, Messages
+included. Claude Code sets it on its first call, retries without it, and then
+sends every tool definition on every call.
+
+Listing `tools.defer_loading` in `global.router.allow_lossy_translation` keeps
+tool search on:
+
+- **Tools in full.** The Router sends each deferred tool in full.
+- **References by name.** A `tool_reference` block in a tool result reaches the
+  backend as the tool's name.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for
+  `tools.defer_loading`.
 
 ### Sampling controls a backend rejects
 
@@ -434,7 +453,8 @@ tools or error translation.
   that cannot be represented return a typed protocol error. A
   `lossy_translation` error for a loss an operator may accept, such as
   `tool_result.is_error`, names the `global.router.allow_lossy_translation`
-  setting that accepts it. The `unsupported_capability` errors for files,
+  setting that accepts it, and so does the `unsupported_tools_defer_loading`
+  error. The `unsupported_capability` errors for files,
   signed reasoning and stored completions don't; their sections above name
   the setting.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
@@ -455,7 +475,8 @@ tools or error translation.
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-warnings` and in `llm_translation_lossy_total`. The list
   also accepts `messages[].role` for system messages inside the conversation
-  and `content.file` for files a model cannot read, both described above,
+  and `content.file` for files a model cannot read and `tools.defer_loading`
+  for deferred tool loading, all described above,
   `reasoning.signature` (see the signed thinking note above), `store` (see
   stored completions above), and every other lossy translation still fails
   closed.
