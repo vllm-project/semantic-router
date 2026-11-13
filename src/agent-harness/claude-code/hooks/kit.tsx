@@ -81,6 +81,10 @@ export type Reply = {
   files?: Record<string, string>
   // What `$.store` holds at the start, and the environment.
   store?: Record<string, unknown>
+  // What the listener's System One listing answers (GET /v1/systemone/models), when set.
+  listing?: object
+  // How many times the listing was asked for.
+  listings?: number
   env?: Record<string, string>
 }
 
@@ -175,6 +179,10 @@ export function engine(on: On, reply: Reply) {
   on('tool.check', () => reply.bottom ?? BOTTOM)
   on('http.fetch', (_, e) => {
     reply.urls?.push(e.url)
+    if (e.url.endsWith('/v1/systemone/models') && reply.listing !== undefined) {
+      reply.listings = (reply.listings ?? 0) + 1
+      return answered(reply.listing)
+    }
     reply.headers?.push(e.init?.headers)
     if (e.url.endsWith('/health')) return reply.offline || reply.fails ? REFUSED : answered({ status: 'ok' })
     if (reply.hangs) return new Promise(() => {})

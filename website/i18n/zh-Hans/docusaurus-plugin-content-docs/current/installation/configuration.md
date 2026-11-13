@@ -59,6 +59,7 @@ global:
 | `apis.<api>.models` | 某个 API 只接受的请求模型。 | 该类全部模型 |
 | `apis.systemone.schema` | listener 对客户端使用的 System One schema：`vllm-sr/5.0`，或 `vllm-sr/4.0`（同时接受旧契约的全部请求形式）。见 [System One schema](../system-one/use/schemas.md)。 | `vllm-sr/5.0` |
 | `apis.systemone.max_deadline_ms` | System One 请求等待模型的最长时间。 | 10 分钟 |
+| `apis.systemone.vsr` | 指向该 listener 的 vSR 智能体插件的行为：`redact`、`shield`、`guard`、`check`、`escalate`、`router` 和 `router_turns` 的开关，以及 `router_goal`（`quality`、`balanced` 或 `save`）。listing（`GET /v1/systemone/models`）把它交给插件，这里设置的每个字段优先于插件自己的选项。Dashboard 在 Config › Global Config › vSR agent plugins 中以复选框编辑它。 | 插件自己的选项 |
 | `tls.cert_file`、`tls.key_file` | 单向 TLS。 | 关闭 |
 | `identity.trust_headers`、`identity.trusted_peers` | listener 在 standalone 模式下信任的身份来源。 | 无 |
 

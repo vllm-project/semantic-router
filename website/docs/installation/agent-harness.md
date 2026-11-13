@@ -260,6 +260,19 @@ echo '{"runtime": "remote", "runtimeModel": "vela3-lite",
   | claude plugin configure vsr@vllm-sr --values-stdin
 ```
 
+The listener can also set which of vSR's apps run, for every plugin pointed at
+it, under `systemone.vsr`; the Dashboard shows the same fields as checkboxes under
+Config › Global Config › vSR agent plugins. Each field set there wins over the plugin's own option, so turning
+`redact` off here turns it off in every session that uses this listener, from
+its next prompt a minute or more later. A choice a person makes in Claude Code
+with `/vsr` stays theirs until `/vsr follow`:
+
+```yaml
+      systemone:
+        models: [vela3-lite]
+        vsr: {redact: true, guard: true, router: false}
+```
+
 System One checks the listener's API keys too. On a listener with keys, add
 `"runtimeToken"` with the key, which `vllm-sr connect` fills in from
 `$VLLM_SR_API_KEY` in the command it prints.

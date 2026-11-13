@@ -40,6 +40,13 @@ listeners:
         # however long a request's options.deadline_ms asks for (10 minutes by
         # default).
         max_deadline_ms: 600000
+        # What the vSR agent plugins pointed at this listener turn on. Each
+        # field set here wins over the plugin's own option; one left out keeps
+        # it.
+        vsr:
+          redact: true
+          guard: true
+          router_turns: false
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:

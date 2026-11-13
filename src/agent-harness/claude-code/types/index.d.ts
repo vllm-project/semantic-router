@@ -242,6 +242,8 @@ declare module 'claude-code' {
       lastTurnUsage: TurnUsage | null
       // The prompt you sent last: a short reply is read with it.
       turnPrompt: string
+      // What the listener's vsr profile changes from the plugin's options, as the session last said it.
+      profileNote: string
     }
   }
 }

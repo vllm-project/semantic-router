@@ -145,10 +145,12 @@ async function markReachable($: EngineInterface) {
 const baseOf = (url: string) => url.replace(/\/v1\/decisions\/?$/, '').replace(/\/$/, '')
 export const healthUrlOf = (url: string) => `${baseOf(url)}/health`
 export const modelsUrlOf = (url: string) => `${baseOf(url)}/v1/models`
+// A System One API's listing: its models, and the listener's vsr profile beside them.
+export const listingUrlOf = (url: string) => `${baseOf(url)}/v1/systemone/models`
 // The runtime's model and the question types it answers, from a System One API's model list or the one model
 // vllm-srun lists; undefined when neither names it with its types.
 export async function modelOf($: EngineInterface, runtime: Runtime): Promise<{ id: string; types: string[] } | undefined> {
-  for (const url of [`${baseOf(runtime.url)}/v1/systemone/models`, modelsUrlOf(runtime.url)]) {
+  for (const url of [listingUrlOf(runtime.url), modelsUrlOf(runtime.url)]) {
     const text = await $.http.fetch(url, { headers: headersOf(runtime) }).then(r => (r.ok ? r.text : ''), () => '')
     let data: unknown
     try {
