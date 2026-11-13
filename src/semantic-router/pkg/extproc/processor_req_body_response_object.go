@@ -3,6 +3,8 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -23,7 +25,7 @@ func (r *OpenAIRouter) materializeResponseObjectContext(request *llmprotocol.Req
 		return false, nil
 	}
 
-	changed, err := r.prependStoredResponseHistory(request, state.ConversationHistory)
+	changed, err := r.prependStoredResponseHistory(request, state.ConversationHistory, state.Input)
 	if err != nil {
 		return false, err
 	}
@@ -40,6 +42,7 @@ func (r *OpenAIRouter) materializeResponseObjectContext(request *llmprotocol.Req
 func (r *OpenAIRouter) prependStoredResponseHistory(
 	request *llmprotocol.Request,
 	stored []*responseapi.StoredResponse,
+	input []responseapi.InputItem,
 ) (bool, error) {
 	if len(stored) == 0 {
 		return false, nil
@@ -52,11 +55,31 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	if err != nil {
 		return false, fmt.Errorf("materialize retained Responses history: %w", err)
 	}
-	if len(history) == 0 {
+	if history == nil || len(history.Instructions) == 0 && len(history.Messages) == 0 {
 		return false, nil
 	}
-	request.Messages = append(history, request.Messages...)
+	// The developer and system items of the stored input decode as
+	// instructions, as they do at ingress. In turn order they follow this
+	// request's top-level instructions and precede the developer and system
+	// items of its own input, which decode after them. The earlier request's
+	// top-level instructions are not carried over.
+	at := max(0, len(request.Instructions)-instructionInputItems(input))
+	request.Instructions = slices.Insert(request.Instructions, at, history.Instructions...)
+	request.Messages = append(history.Messages, request.Messages...)
 	return true, nil
+}
+
+// instructionInputItems counts the developer and system messages of a
+// request's input, which the Responses decoder reads as instructions.
+func instructionInputItems(items []responseapi.InputItem) int {
+	count := 0
+	for _, item := range items {
+		role := strings.ToLower(strings.TrimSpace(item.Role))
+		if item.Type == responseapi.ItemTypeMessage && (role == "developer" || role == "system") {
+			count++
+		}
+	}
+	return count
 }
 
 func clearResponseObjectControls(request *llmprotocol.Request) bool {
@@ -75,7 +98,7 @@ func clearResponseObjectControls(request *llmprotocol.Request) bool {
 func materializeStoredResponseHistory(
 	engine *protocolcodec.Engine,
 	storedResponses []*responseapi.StoredResponse,
-) ([]llmprotocol.Message, error) {
+) (*llmprotocol.Request, error) {
 	if engine == nil {
 		return nil, fmt.Errorf("protocol engine is unavailable")
 	}
@@ -97,7 +120,7 @@ func materializeStoredResponseHistory(
 	if err != nil {
 		return nil, err
 	}
-	return request.Messages, nil
+	return &request, nil
 }
 
 func storedResponseItems(storedResponses []*responseapi.StoredResponse) ([]json.RawMessage, error) {

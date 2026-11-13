@@ -41,6 +41,7 @@ global:
     deployments:
       remote:
         provider: systemone
+        schema: vllm-sr/5.0
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: CAPABILITY_TEST_KEY}
@@ -180,6 +181,7 @@ global:
       lite: {provider: model_runtime, artifact: vllm-sr/vela3-lite}
       remote:
         provider: systemone
+        schema: vllm-sr/5.0
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: CAPABILITY_TEST_KEY}

@@ -8,7 +8,7 @@ translation:
 
 # 会话标识 {#session-identification}
 
-路由学习保护要求客户端为相关轮次提供稳定、显式的身份。回放和遥测可以使用派生的回退身份，但这些回退身份不会启用保护。
+路由学习保护要求客户端为相关轮次提供稳定、显式的 session 身份。对于没有提供身份的请求，回放和遥测也会按其对话开头的指纹分组，但该指纹永远不会启用保护。
 
 推理连接与工具循环验证见[接入 Agent Harness](../installation/agent-harness)。
 
@@ -21,7 +21,11 @@ x-session-id: tenant-42:session-7
 x-conversation-id: conversation-3
 ```
 
-在整个 session 内保持 `x-session-id` 稳定，并在其中每个 conversation 内保持 `x-conversation-id` 稳定。conversation 保护需要两者；`scope: session` 只需要 session 请求头。若自定义了请求头名称，请使用配置中的名称。缺少必需身份时，请求仍会正常路由，但保护不会保持模型。
+在整个 session 内保持 `x-session-id` 稳定，并在其中每个 conversation 内保持 `x-conversation-id` 稳定。`scope: session` 只读取 session 请求头。若自定义了请求头名称，请使用配置中的名称。
+
+在 `scope: conversation` 下，带有 session 请求头但没有 conversation 请求头的请求仍按 conversation 保持模型。Router 按对话的开头为其命名，使用的是[Chat 与 Messages API 优先级](#chat-and-messages-api-priority)中描述的指纹。agent 的主线程与其旁路调用（例如生成标题的请求）会保持各自的模型。如果 harness 自己跟踪对话，请发送 `x-conversation-id`：它会取代指纹，并且在对话开头发生变化（例如压缩上下文）后仍保持不变。Replay 会把通过指纹识别的对话的身份来源记录为 `message_hash`。
+
+没有 session 请求头时，请求仍会正常路由，但保护不会保持模型。
 
 Replay 在具有显式身份时使用相同配置的会话和对话请求头名称。记录对话 ID 不会改变保护范围，也不会在 session 范围下重置模型归属。
 
@@ -34,11 +38,13 @@ Responses API 将显式对话成员关系与响应链路分开。请求中的 `c
 1. Agent Harness、其他客户端或受信任网关提供的 `x-session-id`。
 2. Anthropic Messages 请求上的 `x-claude-code-session-id`。
 3. Anthropic `metadata.user_id`，存储时加 `ant-md-` 前缀。
-4. 由消息历史和已认证用户身份生成的指纹。
-5. 没有用户身份时，由消息结构生成的指纹。
+4. 由第一条用户消息和已认证用户身份生成的指纹。
+5. 没有已认证用户时，由对话开头生成的指纹，存储时加 `cc-start-` 前缀：取系统与开发者指令以及第一条用户消息各自的前 512 个字符；网关设置了已认证租户（`x-authz-tenant-id`）时也计入该租户。
 6. 由 `x-request-id` 派生的哈希，作为最终回退。
 
-该顺序使显式会话键保持稳定，同时仍为只发送消息历史的客户端提供可用回退。派生指纹不应视为持久的应用标识符：编辑历史或更改身份上下文都可能改变它们。
+该顺序使显式会话键保持稳定，同时仍为只发送消息历史的客户端提供可用回退。同一对话的每个请求都会重复其开头，因此没有 session 请求头的客户端在整个对话中获得同一个会话 id：Replay 将其显示为一条轨迹，会话遥测在各轮之间累积，每一轮都能看到上一轮使用的模型。Router 只保存哈希。设置了 `USER_SCOPE_NAMESPACE_SECRET` 时，该哈希是以此密钥计算的 HMAC-SHA256，与响应缓存的作用域相同：没有该密钥的人无法从 id 验证猜测的对话开头，另一个部署对同样的开头也会得到不同的 id。未设置该密钥时为普通 SHA-256。
+
+开头相同的两个对话（相同的指令和第一条消息，且属于同一租户）会共享这个 id。它们的 Replay、遥测和上一轮模型查询会因此合并；保护、粘性工具状态和 KV 放置则不会，因为派生指纹永远不会启用它们。派生指纹也不是持久的应用标识符：客户端改写历史开头（例如压缩历史）后会得到新的指纹。
 
 ## 隐私与稳定性 {#privacy-and-stability}
 

@@ -64,12 +64,12 @@ type ProjectionScoreDeclJSON struct {
 
 // ProjectionScoreInputJSON is the JSON form of ProjectionScoreInputDecl.
 type ProjectionScoreInputJSON struct {
-	SignalType  string  `json:"signalType"`
-	SignalName  string  `json:"signalName"`
-	Weight      float64 `json:"weight"`
-	ValueSource string  `json:"valueSource,omitempty"`
-	Match       float64 `json:"match,omitempty"`
-	Miss        float64 `json:"miss,omitempty"`
+	SignalType  string   `json:"signalType"`
+	SignalName  string   `json:"signalName"`
+	Weight      float64  `json:"weight"`
+	ValueSource string   `json:"valueSource,omitempty"`
+	Match       *float64 `json:"match,omitempty"`
+	Miss        float64  `json:"miss,omitempty"`
 }
 
 // ProjectionMappingDeclJSON is the JSON form of ProjectionMappingDecl.

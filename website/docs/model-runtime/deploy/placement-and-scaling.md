@@ -104,8 +104,9 @@ worker's load accounting.
 
 A worker whose forward hangs can keep answering `/health`, so readiness alone
 does not take it out of dispatch. The pool counts, per replica, the exchanges
-in a row that run out of their caller's deadline, and ejects a replica that
-reaches `consecutive_timeouts`. Each field is optional:
+in a row that run out of their deadline, the caller's or the deployment's
+`timeout_ms`, and ejects a replica that reaches `consecutive_timeouts`. Each
+field is optional:
 
 ```yaml
 global:
@@ -125,7 +126,11 @@ global:
 ```
 
 - A cancellation, a refused request or a failure neither counts nor resets the
-  count; a successful answer starts it again.
+  count; a successful answer starts it again. An exchange past `timeout_ms`
+  counts, and like a failure it also takes the replica out of dispatch for a
+  short backoff (0.1 s, doubling to 3.2 s) and probes its `/health`, so a hung
+  replica stays mostly out of dispatch even while ejection is off or held
+  back.
 - An ejected replica leaves dispatch for `base_ejection_ms`, and the Router
   probes its `/health` at once. When the cool-down ends the replica returns; its
   next timeout ejects it again for twice as long, up to `max_ejection_ms`. A

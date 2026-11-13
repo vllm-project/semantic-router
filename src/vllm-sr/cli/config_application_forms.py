@@ -406,7 +406,8 @@ def _application_field_forms(data: dict[str, Any]) -> Iterator[Form]:
         "pii",
         PII_REMOVED_FIELDS,
         "a pii rule's threshold, pii_types_allowed, include_history and source are its predicate, ignore_labels and input",
-        "predicate: {gte: <threshold>}, ignore_labels, input.history, input.tool_results",
+        "predicate: {gte: <threshold>}, ignore_labels, input.history, input.tool_results; "
+        "source: tool_result is input: {tool_results: true, request: false}",
     )
 
 

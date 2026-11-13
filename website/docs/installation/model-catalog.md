@@ -64,8 +64,10 @@ global:
         provider: systemone              # or openai_chat, openai_embeddings
         endpoint: https://api.example.com/v1/systemone  # full URL; unix:///abs.sock for an attached runtime
         model: vllm-sr/d3-ultra          # the remote model; an attached runtime's served model
+        schema: vllm-sr/5.0
         auth: {header: Authorization, prefix: Bearer, api_key_env: EXAMPLE_KEY}  # or api_key_file: /abs/path
         headers: {X-Org: acme}           # non-secret headers only
+        forward_request_headers: [x-user-id]  # client headers each call made for a request copies
         timeout_ms: 1500                 # per attempt
         max_retries: 1                   # transport retries within the caller's deadline
         tls: {ca_file: /etc/ssl/ca.pem, server_name: api.example.com, insecure_skip_verify: false}
@@ -102,6 +104,7 @@ deployment with `endpoint`) and every remote provider.
 | `model` | The model the remote API answers with; on an attached runtime, the served model | Required for `systemone`, `openai_chat`, `openai_embeddings` |
 | `auth` | `header` (default `Authorization`), `prefix` (default `Bearer`; `""` sends the bare key), and exactly one of `api_key_env` or `api_key_file` (an absolute path, read on each call so a rotated key applies), or `credential: delegated`: each call made for a client request carries the credential the authenticator issued that user ([Security Hardening](security-hardening#delegate-the-users-credential-to-an-upstream)) | A key is never written in the configuration; `credential: delegated` takes no key, and not on `model_runtime` |
 | `headers` | Further non-secret headers | `Authorization`, `Proxy-Authorization`, `X-Api-Key`, `Api-Key`, `Ocp-Apim-Subscription-Key`, `Cookie` and the `auth` header are refused |
+| `forward_request_headers` | Client request headers each call made for a client request copies; see [Forward client headers](#forward-client-headers) | `systemone`, `openai_chat` and `openai_embeddings` only; credential, framing and identity headers, the `auth` header and the Router's own are refused |
 | `timeout_ms` | Bound of one attempt | systemone ≤ 60000; others ≤ 300000 |
 | `max_retries` | Transport retries after the first attempt, within the caller's deadline | 0–10; not on an attached runtime |
 | `tls` | `ca_file`, `server_name`, `cert_file` and `key_file` (a client certificate), `insecure_skip_verify` | `https` only; files are absolute paths |
@@ -111,6 +114,32 @@ deployment with `endpoint`) and every remote provider.
 
 Redirects are refused, so a credential never follows a redirect to another
 host.
+
+### Forward client headers
+
+A call to a remote deployment carries the deployment's `headers` and its
+credential, and none of the client's headers. To pass some through, such as
+the `x-user-id` an upstream gateway attributes usage by, list them in
+`forward_request_headers`; [R4](#r4-system-one-behind-a-gateway-with-its-own-auth-header)
+shows a gateway that does.
+
+- **Which calls.** Each call made for a client request copies the listed
+  headers the client sent with a value, matched in any letter case: the
+  decision and signal questions of a chat request or of a System One API
+  request, a memory query rewrite, an embedding. A call the Router makes on
+  its own behalf never does: a models listing, the capability discovery at
+  startup, a warm-up or health probe.
+- **Precedence.** The client's value replaces a `headers` value of the same
+  name, which stays the default for a client that sends none. The `auth`
+  header is always the Router's own.
+- **Answers.** A `systemone` deployment that forwards request headers keeps
+  no answer for another request, as with `credential: delegated`: its API may
+  answer by them.
+- **Names.** Only `systemone`, `openai_chat` and `openai_embeddings`
+  deployments take the list. It refuses what a fallback attempt's list
+  refuses
+  ([Carry client headers on a fallback attempt](model-configuration.md#carry-client-headers-on-a-fallback-attempt)),
+  with the deployment's own `auth` header among the credentials.
 
 ## Bindings and rule deployments
 
@@ -203,6 +232,7 @@ global:
         provider: systemone
         endpoint: https://judge.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: JUDGE_KEY}
         timeout_ms: 5000
 recipes:
@@ -229,10 +259,13 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           header: Ocp-Apim-Subscription-Key
           prefix: ""                     # no Bearer prefix
           api_key_file: /run/secrets/systemone-key
+        headers: {x-user-id: anonymous}  # sent when the client sends none
+        forward_request_headers: [x-user-id]  # the gateway attributes usage by it
         timeout_ms: 3000
         capabilities: {question_types: [choice, noul, score], presets: [pii, halu]}
     system:
@@ -281,6 +314,7 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}
 ```
 

@@ -24,7 +24,7 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 	}
 
 	var globalRecorder *routerreplay.Recorder
-	if policy := cfg.EffectiveRouterReplayConfig(nil); policy != nil {
+	if policy := preDecisionReplayPolicy(cfg); policy != nil {
 		globalRecorder, err = createReplayRecorder("global", backend, policy, &cfg.RouterReplay)
 		if err != nil {
 			_ = closeReplayRecorders(nil, replayRecorders, false)
@@ -33,6 +33,18 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 	}
 	shareReplayOutcomeQueueWithFallback(replayRecorders, globalRecorder)
 	return replayRecorders, globalRecorder, false, nil
+}
+
+// preDecisionReplayPolicy sizes the store for requests without a decision. A
+// recipe's defaults layer its own plugins over the global ones, so a recipe
+// can record before a decision when the global plugins do not. Each request
+// still captures under its own recipe's policy.
+func preDecisionReplayPolicy(cfg *config.RouterConfig) *config.RouterReplayPluginConfig {
+	policy := cfg.EffectiveRouterReplayConfig(nil)
+	for i := 0; policy == nil && i < len(cfg.Recipes); i++ {
+		policy = config.RouterReplayPolicyOf(cfg.Recipes[i].Profile.DefaultPlugins)
+	}
+	return policy
 }
 
 func shareReplayOutcomeQueueWithFallback(recorders map[string]*routerreplay.Recorder, fallback *routerreplay.Recorder) {

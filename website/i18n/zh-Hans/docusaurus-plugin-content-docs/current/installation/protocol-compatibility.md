@@ -34,7 +34,7 @@ client endpoint -> client codec -> routing -> backend codec -> model endpoint
 
 公共监听器还提供 `GET /v1/models`。完整的方法和路径清单、Responses 对象操作以及请求示例见 [Router API](../api/router)。
 
-原生 **System One** API 是独立的类型化接口，用于直接调用判断模型，不经过本页的 Chat 协议转换矩阵。Router 和 Engine 模式都可以提供它，但 listener 必须通过 `systemone.models` 显式授予模型访问权限。见[组件架构](../overview/component-architecture#keep-public-and-worker-apis-distinct)。
+原生 **System One** API 是独立的类型化接口，用于直接调用判断模型，不经过本页的 Chat 协议转换矩阵。Router 和 Engine 模式都可以提供它，但 listener 必须通过 `apis.systemone.models` 显式授予模型访问权限。见[组件架构](../overview/component-architecture#keep-public-and-worker-apis-distinct)。
 
 ## 后端模型协议
 
@@ -55,7 +55,7 @@ client endpoint -> client codec -> routing -> backend codec -> model endpoint
 
 对于每种后端格式，`endpoint` 中的完整 URL 命名完整的上游 API 根。其路径会被保留，并且协议操作后缀恰好追加一次；仅当 URL 没有路径时，才使用协议的默认 `/v1` 基路径。`chat_path` 仅适用于 Chat Completions。
 
-使用 `--gateway extproc` 时，对于 HTTPS 后端，生成的 Envoy cluster 会同时验证服务器证书链及其 DNS 主机名。HTTPS 副本池必须保持一个主机名，因为受支持的 Envoy 运行时在 cluster 内共享其 TLS 上下文；对不同的 HTTPS 主机使用单独的模型别名。IP 字面量 HTTPS 目标会被拒绝，而不是悄悄削弱主机名验证。与 `vllm-sr serve` 一起使用的自定义 Envoy 镜像必须在 `/etc/ssl/certs/ca-certificates.crt` 提供系统 CA 包；当该信任存储不可用时，启动校验会失败，而不是悄悄禁用验证。
+使用 `--gateway extproc` 时，对于 HTTPS 后端，生成的 Envoy cluster 会同时验证服务器证书链及其 DNS 主机名。HTTPS 副本池必须保持一个主机名和一个 `tls` 块，因为受支持的 Envoy 运行时在 cluster 内共享其 TLS 上下文；对不同的 HTTPS 主机使用单独的模型别名。IP 字面量 HTTPS 目标会被拒绝，而不是悄悄削弱主机名验证。后端的 `tls.ca_file`（未设置时为 `providers.defaults.tls.ca_file`）指定其证书必须链接到的 CA 包，见[信任私有 CA](backend-target-compatibility#trust-a-private-ca)。两者都未设置时，与 `vllm-sr serve` 一起使用的自定义 Envoy 镜像必须在 `/etc/ssl/certs/ca-certificates.crt` 提供系统 CA 包；当该信任存储不可用时，启动校验会失败，而不是悄悄禁用验证。
 
 ## 客户端到后端矩阵
 
@@ -93,10 +93,13 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 | Seed 以及频率或存在惩罚 | Supported | Not supported | Not supported |
 | `top_k` 采样 | Supported 扩展 | Not supported | 非负值 Supported |
 | `min_p`、重复惩罚和缓存盐 | Supported 扩展 | Not supported | Not supported |
+| Token logit 偏置（`logit_bias`） | Supported | Not supported | Not supported |
 | 停止序列 | Supported | Not supported | Supported |
 | 原生响应或会话状态字段 | Not supported | Supported | Not supported |
 
 此表描述编解码器表示，而不是模型能力。例如，OpenAI 兼容服务器可以接受 Chat 请求形状，同时对特定模型拒绝图像或工具。在将它们加入路由池之前，先限定实际端点和模型 revision。
+
+Messages 没有图像 detail 级别，也没有文档文件名。发往 `anthropic` 后端时，`auto` 以外的图像 `detail` 和文件 `filename` 会被省略，`x-vsr-warnings` 会将其分别报告为 `dropped`。
 
 对于使用 Chat Completions 或 Responses 后端的 Anthropic Messages 客户端，
 `thinking.type: adaptive` 使用后端模型的默认推理行为，`output_config.effort` 会保留。
@@ -121,7 +124,7 @@ Chat Completions 客户端可以用 `store: true` 要求提供方保存补全，
 去掉 `store` 发送这类请求，并在 `x-vsr-warnings` 中为 `store` 报告 `dropped` 诊断。
 Chat Completions 和 Responses 后端仍按客户端发送的原样收到 `store`。
 
-Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。
+Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。存储输入中的 developer 和 system 项按轮次顺序作为指令重放：位于当前请求的顶层 `instructions` 之后，并位于当前请求自身输入中的 developer 和 system 项之前。之前请求的顶层 `instructions` 不会沿用。
 
 Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它们的
 `custom_tool_call` 和 `custom_tool_call_output` 项在 Chat 或 Responses 后端上保留
@@ -129,6 +132,32 @@ Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它�
 `unsupported_capability` 拒绝它们。Responses 的 `text.verbosity` 映射到 Chat 的
 `verbosity` 字段；Messages 没有对应字段，因此 Router 丢弃这个输出详细程度提示，
 并在 `x-vsr-warnings` 中报告 `text.verbosity`。
+
+### 后端拒绝的采样控制 {#sampling-controls-a-backend-rejects}
+
+有些后端会拒绝其线路格式定义的采样控制。例如，运行推测解码（speculative
+decoding）的 vLLM 后端会以 HTTP 400 拒绝任何携带 `min_p` 或 `logit_bias` 的请求。
+在模型的 `unsupported_capabilities` 中列出这类控制：
+
+```yaml
+providers:
+  models:
+    - name: qwen3-mtp
+      api_format: chat_completions
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
+      backend_refs:
+        - name: mtp-pool
+          endpoint: mtp-server:8000
+          provider: vllm
+```
+
+- **仅对该模型省略。** 发给该模型的请求，无论它是决策的选择还是回退候选，到达时都不带所列字段。
+- **会报告。** `x-vsr-warnings` 会为每个被省略的字段（`min_p` 或 `logit_bias`）报告 `dropped` 诊断。
+- **其他模型不受影响。** 同一决策的其他模型仍会收到这些字段。
+
+该列表接受 `sampling_min_p` 和 `sampling_logit_bias`；其他名称会在加载时失败。网关会把模型的请求分摊到它的各个
+`backend_refs`，因此只要其中任何一个拒绝某个控制，就应列出它。若要为决策路由到的每个模型移除某个控制，请改为在该决策的
+[`request_params`](../tutorials/plugin/request-params) `blocked_params` 中列出它。
 
 ## 配置后端格式
 
@@ -157,10 +186,16 @@ providers:
 ## 校验和失败行为
 
 - 即使客户端和后端格式匹配，公共请求也会被解码为中立契约。未知或不支持的请求字段会失败关闭。
-- 跨协议请求保留共享语义。无法表示的目标特定功能会返回类型化协议错误。
+- Chat 请求接受但不转发客户端库在回放 assistant 消息时添加的字段：LiteLLM 的 `provider_specific_fields`（存放其消息类型没有的回复字段），以及 openai SDK 自己的解析结果 `parsed` 和 `tool_calls[].function.parsed_arguments`。取值不为 null 的字段报告为 `dropped`。与其他 Responses 输入项一样，reasoning 项可以带有 `status`，openai SDK 的流式辅助方法会设置它。
+- 跨协议请求保留共享语义。无法表示的目标特定功能会返回类型化协议错误。对于运维人员可以接受的损失（例如 `tool_result.is_error`），`lossy_translation` 错误会指出接受该损失的 `global.router.allow_lossy_translation` 设置；`unsupported_capability` 错误不会指出。
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。
+- vLLM 的服务元数据无论取值如何都不会导致回复失败：回复或流式块顶层的 `prompt_logprobs`、`prompt_text`、`prompt_routed_experts`、`kv_transfer_params`、`ec_transfer_params` 和 `metrics`，以及 choices 中的 `routed_experts` 和 `weight_versions`。Chat 客户端原样收到这些字段；取值不为 null 或空时报告为 `dropped`。在 vLLM-Omni 的流中，`modality` 不是 `text` 的块会以 `unsupported_upstream_audio`（或 `unsupported_upstream_modality`）失败，因为其 `delta.content` 承载的是编码后的媒体，而不是回答文本。
+- Chat 提供方以 `finish_reason: "stop"` 结束强制指定的工具调用。对于以这种方式结束且包含 `tool_use` 块的轮次，Anthropic Messages 客户端会收到 `stop_reason: "tool_use"`。因达到输出上限、命中停止序列或拒绝而结束的轮次保留原停止原因。
+- 当输出上限在工具调用中途截断一个非流式回复时，客户端收到带有上限停止原因的回复：Chat 为 `finish_reason: "length"`，Responses 为原因为 `max_output_tokens` 的 incomplete 响应，Anthropic Messages 为 `stop_reason: "max_tokens"`。Chat 和 Responses 客户端收到的调用参数与后端发送的一致。由于 `tool_use.input` 必须是对象，Messages 客户端收到的是模型在截断前已完成的成员，Router 会为 `content.tool_use.input` 报告 `approximated` 诊断。只有回复中的最后一个调用可以被截断。不是 JSON 对象开头的参数，或者被截断的调用之后还有其他输出，仍会使回复失败。
+- Chat 流的一个 chunk 可以包含多个 `index` 相同的 `tool_calls` 条目，vLLM 的工具解析器在最后一个 chunk 中补发调用的剩余部分时就是这样。这些条目按顺序续写同一个调用，与 OpenAI SDK 的拼接方式一致。`index` 相同但指向不同调用的条目会以 `duplicate_stream_tool_index` 失败。
+- Anthropic 的 `model_context_window_exceeded` 停止以 `finish_reason: "length"` 到达 Chat 客户端，并以原因为 `max_output_tokens` 的 incomplete 响应到达 Responses 客户端，与 vLLM 报告输出达到 `max_model_len` 的方式一致。Router 会为 `response.stop_reason` 报告 `approximated` 诊断。`pause_turn` 停止对这些客户端仍会失败。
 - 适用时，`x-vsr-warnings` 以及 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员会暴露翻译细节。参见 [VSR 路由标头](../api/headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。
 
 仓库在编解码器测试、Envoy ExtProc 边界，以及 18 单元格部署矩阵中成对验证全部三种协议：三种客户端格式 × 三种后端格式 × 缓冲或流式模式。完整的验证和扩展契约见[已实现的编解码器设计](../proposals/multi-protocol-adaptor)。
@@ -177,6 +212,8 @@ Codex CLI 使用 Responses 端点并发送若干兼容性字段，Router 按下�
 | `text.verbosity` | 转发到 `responses` 后端，映射为 `openai` Chat 后端的 `verbosity`，在 `anthropic` Messages 后端上报告为 `dropped`。仅接受 `low`、`medium` 和 `high`。 |
 
 每个被接受但未转发的字段都会作为 `dropped` 项出现在 `x-vsr-warnings` 中。
+
+在 Responses 输出中，`usage.input_tokens_details.cached_tokens` 始终是 Responses schema 要求的整数：后端未报告缓存读取计数时（例如未启用 `--enable-prompt-tokens-details` 的 vLLM Chat 服务）为 `0`，这也是 vLLM 自身 Responses 服务的输出。后端未报告缓存写入计数时省略 `cache_write_tokens`。已报告的零和正数计数会保留。Codex CLI 遇到 `null` 计数或缺少 `cached_tokens` 的详情对象时会使该轮失败。
 
 Codex 也可以请求推理摘要。Router 会将 `reasoning.summary` 转发到 Responses 后端。
 Chat Completions 或 Messages 后端不能请求摘要，因此 Router 接受该轮请求，并在

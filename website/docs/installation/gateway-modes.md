@@ -47,9 +47,11 @@ See the [release note](../release-notes/standalone-mode).
 ## What a standalone Router does
 
 - **Listeners:** each entry of `listeners` is served with HTTP/1.1 and HTTP/2
-  (h2c in cleartext), with its `timeout` bounding a whole call including its
-  streamed response, a stalled stream, and an idle connection, a 500 MiB request
-  body limit and at most 50,000 connections, the limits of the Envoy template.
+  (h2c in cleartext). Its `timeout` bounds reading a request, so a client that
+  stops sending its body gets 408, and how long an idle connection stays open;
+  it does not bound a response the backend is still streaming. A request body
+  is limited to 500 MiB and a listener to 50,000 connections, the limits of the
+  Envoy template.
 - **API keys:** with `api_keys` set, a client sends one of them as
   `Authorization: Bearer <key>` or `api-key: <key>`; other requests get an
   OpenAI-style 401. The key is removed before the request reaches a provider.
@@ -91,12 +93,13 @@ See the [release note](../release-notes/standalone-mode).
   metrics port (9190).
 - **Reloads:** the Router reloads its config in place. A change to a listener's
   address, port, timeout or `tls` paths, or a new or removed listener, is
-  rejected as `restart_required` until the Router restarts; API keys and model
-  allow-lists reload in place.
+  rejected as `restart_required` until the Router restarts; API keys, `apis`
+  with their model allow-lists, and identity trust reload in place.
 
 ### Model allow-list
 
-A listener's `models` lists the only request `model` values it accepts. Use it
+An API's `models` in a listener's `apis` lists the only request `model` values
+it accepts there. Use it
 to give a public key access to the router's auto model and nothing else, while
 an internal listener keeps every model:
 
@@ -109,7 +112,9 @@ listeners:
     address: 0.0.0.0
     port: 8899
     api_keys: ["${WORKSHOP_KEY}"]
-    models: [vllm-sr/auto]
+    apis:
+      chat_completions: {models: [vllm-sr/auto]}
+      responses: {models: [vllm-sr/auto]}
 ```
 
 - Names match exactly (case-sensitive, after trimming the request value), and

@@ -23,8 +23,10 @@ Partitions follow these rules:
 
 - partitions only accept `domain` members
 - `default` is required and must also appear in `members`
+- a decision or projection that reads any member makes the runtime evaluate every member, so the winner does not depend on which members decisions read
 - if several members matched, the runtime keeps one winner
 - if no member matched, the runtime synthesizes the `default` member into the matched set
+- if no member matched and a member's signal failed, the runtime does not synthesize the `default` and marks the `default` member failed too: decisions that read the failed member or the `default` resolve through their `on_unknown` policy
 
 Supported semantics:
 
@@ -71,7 +73,7 @@ PROJECTION partition balance_domain_partition {
 | `semantics` | winner-selection mode: `exclusive` or `softmax_exclusive` |
 | `temperature` | only meaningful for `softmax_exclusive`; lower values make the winner more decisive |
 | `members` | existing `domain` signal names to coordinate |
-| `default` | fallback member synthesized when none of the members matched |
+| `default` | fallback member synthesized when every member was evaluated and none matched |
 
 ## When to Use
 
@@ -89,7 +91,7 @@ Do not use partitions when:
 - the competing lanes are intents rather than subject areas; one [`systemone`](../signal/systemone) `choice` question chooses one of them
 - you need a reusable named tier like `balance_reasoning`; that belongs in a mapping, not a partition
 
-Partitions make no additional model calls; they coordinate results produced by
-their member signals. A configured default is a routing fallback, not evidence
+Partitions ask no question of their own; they coordinate the results of their
+member signals, which all run once a decision reads any of them. A configured default is a routing fallback, not evidence
 that the default actually matched. See a complete example in
 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

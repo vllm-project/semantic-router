@@ -12,7 +12,7 @@ import (
 
 func TestDeploymentAuthorizerPresentsOnlyTheRequestsDelegatedCredential(t *testing.T) {
 	prefix := ""
-	authorize := DeploymentAuthorizer(&config.DeploymentAuth{Credential: config.CredentialDelegated, Header: "X-Gateway-Key", Prefix: &prefix}, nil)
+	authorize := DeploymentAuthorizer(&config.DeploymentAuth{Credential: config.CredentialDelegated, Header: "X-Gateway-Key", Prefix: &prefix}, nil, nil)
 	request, _ := http.NewRequest(http.MethodPost, "https://decisions.example/v1/systemone", nil)
 	if err := authorize(principal.ForRequest(context.Background(), "alice-key"), request); err != nil {
 		t.Fatal(err)

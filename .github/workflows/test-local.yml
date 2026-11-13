@@ -43,6 +43,7 @@ jobs:
         if: fromJSON(inputs.verification).suite == 'cli'
         with:
           go-version: "1.25"
+          cache-dependency-path: '**/go.sum'
       - uses: ./.github/actions/load-ci-images
         if: inputs.prebuilt-images
         with:

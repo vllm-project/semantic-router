@@ -43,7 +43,7 @@ func (r *OpenAIRouter) applyProtectionPreflight(input routerLearningInput) route
 		preflight.identity = identity
 		if input.ctx != nil {
 			input.ctx.VSRLearningSessionID = identity.memoryKey
-			input.ctx.VSRLearningConversationID = identity.conversationID
+			input.ctx.VSRLearningConversationID = identity.declaredConversationID()
 		}
 	}
 	if mode == config.DecisionAdaptationModeBypass {
@@ -573,6 +573,27 @@ func protectionSessionID(ctx *RequestContext, cfg config.RouterLearningProtectio
 	return pinnedSessionID(ctx)
 }
 
+// protectionConversationID is the conversation id protection keys on and
+// whether the Router derived it: the configured conversation header, else,
+// under scope conversation and only beside a session id, the request's
+// conversation start. A session that sends no conversation header thus keeps
+// each of its conversations, such as an agent's main thread and its side
+// calls, under its own key instead of sharing one.
+func protectionConversationID(
+	ctx *RequestContext,
+	cfg config.RouterLearningProtectionConfig,
+	sessionID string,
+) (string, bool) {
+	if conversationID := strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))); conversationID != "" {
+		return conversationID, false
+	}
+	if sessionID == "" || cfg.EffectiveScope() != config.RouterLearningScopeConversation {
+		return "", false
+	}
+	conversationID := ctx.conversationStart()
+	return conversationID, conversationID != ""
+}
+
 func (r *OpenAIRouter) protectionIdentity(
 	ctx *RequestContext,
 	cfg config.RouterLearningProtectionConfig,
@@ -581,7 +602,7 @@ func (r *OpenAIRouter) protectionIdentity(
 	sessionID, sessionHeader := protectionSessionID(ctx, cfg)
 	conversationHeader := cfg.HeaderName("conversation")
 	agentHeader := cfg.HeaderName("agent")
-	conversationID := strings.TrimSpace(headerValueCI(ctx, conversationHeader))
+	conversationID, conversationDerived := protectionConversationID(ctx, cfg, sessionID)
 	agentID := ""
 	if agentHeader != "" {
 		agentID = strings.TrimSpace(headerValueCI(ctx, agentHeader))
@@ -602,14 +623,15 @@ func (r *OpenAIRouter) protectionIdentity(
 		components = append(components, "agent", agentID)
 	}
 	return routerLearningIdentity{
-		sessionID:          sessionID,
-		conversationID:     conversationID,
-		memoryKey:          sessiontelemetry.RoutingSessionKey(config.DefaultRecipeName, components...),
-		scope:              scope,
-		sessionHeader:      sessionHeader,
-		conversationHeader: conversationHeader,
-		agentID:            agentID,
-		agentHeader:        agentHeader,
+		sessionID:           sessionID,
+		conversationID:      conversationID,
+		conversationDerived: conversationDerived,
+		memoryKey:           sessiontelemetry.RoutingSessionKey(config.DefaultRecipeName, components...),
+		scope:               scope,
+		sessionHeader:       sessionHeader,
+		conversationHeader:  conversationHeader,
+		agentID:             agentID,
+		agentHeader:         agentHeader,
 	}, true
 }
 
