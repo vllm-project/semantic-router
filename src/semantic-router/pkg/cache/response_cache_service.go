@@ -343,26 +343,25 @@ func (s *ResponseCacheService) Stats(ctx context.Context) (CacheStats, error) {
 	return stats, nil
 }
 
+// Invalidate advances the epoch of one partition, which turns its entries
+// into misses. Advancing the global epoch is Flush's: a selector without a
+// partition is refused. No backend counts a partition's entries, so the
+// result says the count is unknown.
 func (s *ResponseCacheService) Invalidate(
 	_ context.Context,
 	selector CacheSelector,
 	dryRun bool,
 ) (InvalidationResult, error) {
-	if selector.Partition == nil && selector.Epoch == "" {
-		return InvalidationResult{}, fmt.Errorf("invalidation requires a partition or epoch selector")
+	if selector.Partition == nil {
+		return InvalidationResult{}, fmt.Errorf("invalidation requires selector.partition; flush advances the global epoch")
 	}
-	result := InvalidationResult{DryRun: dryRun}
+	result := InvalidationResult{DryRun: dryRun, CountUnknown: true}
 	if dryRun {
 		metrics.RecordResponseCacheInvalidation(string(s.Capabilities().Backend), "invalidate", true)
 		return result, nil
 	}
 	s.mu.Lock()
-	if selector.Partition != nil {
-		key := selector.Partition.Key()
-		s.partitionEpochs[key]++
-	} else {
-		s.globalEpoch++
-	}
+	s.partitionEpochs[selector.Partition.Key()]++
 	s.mu.Unlock()
 	s.l1.clear()
 	s.invalidations.Add(1)
@@ -384,7 +383,7 @@ func (s *ResponseCacheService) Flush(
 	s.l1.clear()
 	s.invalidations.Add(1)
 	metrics.RecordResponseCacheInvalidation(string(s.Capabilities().Backend), "flush", false)
-	return InvalidationResult{}, nil
+	return InvalidationResult{CountUnknown: true}, nil
 }
 
 func (s *ResponseCacheService) CurrentEpoch() string {

@@ -261,6 +261,11 @@ Header 预览中的值需要 `secret_view`。
 | `POST` | `/api/v1/storage/response-cache/invalidate` | 试运行或使范围内分区失效 |
 | `POST` | `/api/v1/storage/response-cache/flush` | 推进范围内或全局缓存 epoch |
 
+`invalidate` 推进 `selector.partition` 所指分区的 epoch，使该分区的条目变为未命中；没有分区的选择器会以 `400` 拒绝。
+`flush` 推进某个分区的 epoch，未指定分区时推进全局 epoch，需要 `cache.manage` 和
+`"confirm": "flush response cache"`。两者都不删除也不统计所涉及的条目，因此都把
+`matched_estimate` 和 `deleted` 报告为 `0`，并带有 `count_unknown: true`。
+
 破坏性缓存变更前，优先使用范围失效和试运行。Bearer 角色区分读取、失效以及更广的缓存管理权限。
 
 ## 检查管理审计 {#inspect-management-audit}
