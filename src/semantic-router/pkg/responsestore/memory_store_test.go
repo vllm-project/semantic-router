@@ -2,6 +2,8 @@ package responsestore
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,7 +35,7 @@ func mustStoreResponse(t *testing.T, store *MemoryStore, response *responseapi.S
 
 // getConversationChainWithTimeout fails the test instead of hanging it if the
 // traversal never terminates.
-func getConversationChainWithTimeout(t *testing.T, store *MemoryStore, responseID string) []*responseapi.StoredResponse {
+func getConversationChainWithTimeout(t *testing.T, store *MemoryStore, responseID string) ([]*responseapi.StoredResponse, error) {
 	t.Helper()
 
 	type result struct {
@@ -48,13 +50,10 @@ func getConversationChainWithTimeout(t *testing.T, store *MemoryStore, responseI
 
 	select {
 	case res := <-done:
-		if res.err != nil {
-			t.Fatalf("GetConversationChain(%s) error = %v", responseID, res.err)
-		}
-		return res.chain
+		return res.chain, res.err
 	case <-time.After(5 * time.Second):
 		t.Fatalf("GetConversationChain(%s) hung - circular reference protection failed", responseID)
-		return nil
+		return nil, nil
 	}
 }
 
@@ -65,7 +64,10 @@ func TestMemoryStoreGetConversationChain(t *testing.T) {
 	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_2", PreviousResponseID: "resp_1"})
 	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_3", PreviousResponseID: "resp_2"})
 
-	chain := getConversationChainWithTimeout(t, store, "resp_3")
+	chain, err := getConversationChainWithTimeout(t, store, "resp_3")
+	if err != nil {
+		t.Fatalf("GetConversationChain(resp_3) error = %v", err)
+	}
 	if len(chain) != 3 {
 		t.Fatalf("chain length = %d, want 3", len(chain))
 	}
@@ -82,9 +84,9 @@ func TestMemoryStoreGetConversationChainCircularReference(t *testing.T) {
 	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_circular_1", PreviousResponseID: "resp_circular_2"})
 	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_circular_2", PreviousResponseID: "resp_circular_1"})
 
-	chain := getConversationChainWithTimeout(t, store, "resp_circular_1")
-	if len(chain) != 2 {
-		t.Fatalf("chain length = %d, want 2 (bounded partial chain)", len(chain))
+	chain, err := getConversationChainWithTimeout(t, store, "resp_circular_1")
+	if err == nil {
+		t.Fatalf("GetConversationChain(resp_circular_1) = %d entries, err = nil; want an error", len(chain))
 	}
 
 	// The store must stay writable after walking a circular chain.
@@ -96,11 +98,50 @@ func TestMemoryStoreGetConversationChainSelfReference(t *testing.T) {
 
 	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_self", PreviousResponseID: "resp_self"})
 
-	chain := getConversationChainWithTimeout(t, store, "resp_self")
-	if len(chain) != 1 {
-		t.Fatalf("chain length = %d, want 1", len(chain))
+	chain, err := getConversationChainWithTimeout(t, store, "resp_self")
+	if err == nil {
+		t.Fatalf("GetConversationChain(resp_self) = %d entries, err = nil; want an error", len(chain))
 	}
-	if chain[0].ID != "resp_self" {
-		t.Errorf("chain[0].ID = %q, want %q", chain[0].ID, "resp_self")
+}
+
+// An ancestor that expired before its descendants leaves the chain incomplete:
+// continuing with the remainder answers a shorter conversation as if it were
+// the whole one.
+func TestMemoryStoreGetConversationChainExpiredAncestor(t *testing.T) {
+	store := newChainTestStore(t)
+
+	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_root_expired", TTL: time.Now().Add(-time.Minute)})
+	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_mid", PreviousResponseID: "resp_root_expired"})
+	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_leaf", PreviousResponseID: "resp_mid"})
+
+	chain, err := store.GetConversationChain(context.Background(), "resp_leaf")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetConversationChain(resp_leaf) = %d entries, err = %v; want ErrNotFound", len(chain), err)
+	}
+}
+
+// The cap is a loop guard, not a truncation policy: a walk that stops with
+// history still ahead of it cannot answer as if it had reached the start.
+func TestMemoryStoreGetConversationChainRejectsAChainPastTheCap(t *testing.T) {
+	store := newChainTestStore(t)
+	storeChain := func(length int) string {
+		previous := ""
+		leaf := ""
+		for index := 0; index < length; index++ {
+			id := fmt.Sprintf("resp_cap_%d_%d", length, index)
+			mustStoreResponse(t, store, &responseapi.StoredResponse{ID: id, PreviousResponseID: previous})
+			previous, leaf = id, id
+		}
+		return leaf
+	}
+
+	chain, err := store.GetConversationChain(context.Background(), storeChain(1000))
+	if err != nil || len(chain) != 1000 {
+		t.Fatalf("a chain of exactly the cap = %d entries, err = %v; want 1000 and no error", len(chain), err)
+	}
+
+	chain, err = store.GetConversationChain(context.Background(), storeChain(1001))
+	if err == nil {
+		t.Fatalf("a chain past the cap = %d entries, err = nil; want an error", len(chain))
 	}
 }

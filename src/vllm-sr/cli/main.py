@@ -7,6 +7,7 @@ import click
 from cli import __version__
 from cli.commands.benchmark import benchmark
 from cli.commands.completion import completion
+from cli.commands.connect import connect
 from cli.commands.general import config
 from cli.commands.instance import instance
 from cli.commands.optimize import optimize
@@ -32,6 +33,7 @@ REGISTERED_COMMANDS = (
     config,
     route,
     request,
+    connect,
     benchmark,
     optimize,
     status,

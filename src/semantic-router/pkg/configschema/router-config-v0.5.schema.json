@@ -709,6 +709,9 @@
         },
         "signal_timeout_ms": {
           "type": "integer"
+        },
+        "on_signal_overload": {
+          "$ref": "#/$defs/SignalOverloadPolicy"
         }
       },
       "additionalProperties": false,
@@ -1108,6 +1111,7 @@
               "tool_result.is_error",
               "messages[].role",
               "content.file",
+              "tools.defer_loading",
               "reasoning.signature",
               "store"
             ]
@@ -6375,6 +6379,29 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "SignalOverloadPolicy": {
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "refuse",
+            "retry"
+          ]
+        },
+        "wait_ms": {
+          "type": "integer",
+          "maximum": 60000,
+          "minimum": 0
+        },
+        "retry_after_seconds": {
+          "type": "integer",
+          "maximum": 60,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "SkipProcessingConfig": {
       "properties": {
         "enabled": {
@@ -7949,6 +7976,15 @@
         "path": [
           "model_catalog",
           "signal_timeout_ms"
+        ]
+      },
+      {
+        "key": "on_signal_overload",
+        "layer": "model_catalog",
+        "display_name": "On Signal Overload",
+        "path": [
+          "model_catalog",
+          "on_signal_overload"
         ]
       },
       {

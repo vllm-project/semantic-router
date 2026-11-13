@@ -31,7 +31,7 @@ Every response of the routing pipeline carries the headers that apply to it: ans
 | `x-vsr-response-path` | v0.4 | How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`. |
 | `x-vsr-config-version` | v0.5 | Version of the configuration snapshot that served the request. |
 | `x-vsr-config-hash` | v0.4 | SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`. |
-| `x-vsr-warnings` | v0.5 | Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. |
+| `x-vsr-warnings` | v0.5 | Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, `guard_overloaded` on the retryable error answered instead of a refusal or a forward that rules unread on an overloaded decision runtime decide, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. |
 | `x-vsr-selected-recipe` | v0.4 | Recipe the effective entrypoint selected; omitted for concrete backend models. |
 | `x-vsr-selected-decision` | v0.1 | Decision the decision engine selected; omitted when no decision matched. |
 | `x-vsr-selected-model` | v0.1 | Model alias the Router selected. |

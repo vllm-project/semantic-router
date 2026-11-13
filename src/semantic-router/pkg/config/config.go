@@ -312,6 +312,7 @@ func (s SkipProcessingConfig) IsEnabled() bool {
 type InlineModels struct {
 	ModelAdmission       map[string]AdmissionConfig `yaml:"model_admission,omitempty"`
 	ModelSignalTimeoutMs int                        `yaml:"model_signal_timeout_ms,omitempty"`
+	ModelSignalOverload  *SignalOverloadPolicy      `yaml:"model_signal_overload,omitempty"`
 	GlobalModelBindings  map[string]ModelBinding    `yaml:"global_model_bindings,omitempty"`
 	ModelDeployments     map[string]ModelDeployment `yaml:"model_deployments,omitempty"`
 	// DecisionModel is global.model_catalog.system.decision_model, resolved

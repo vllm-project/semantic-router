@@ -30,6 +30,11 @@ const LossyFieldSystemMessageRole = "messages[].role"
 // short note, which ProjectUnreadableFiles writes.
 const LossyFieldUnreadableFile = "content.file"
 
+// LossyFieldToolDeferLoading names a tool's request to be loaded on demand
+// through the provider's tool search. Accepting the loss sends the tool with its
+// full definition, as a backend without tool search would see it.
+const LossyFieldToolDeferLoading = "tools.defer_loading"
+
 // LossyFieldReasoningSignature names the signature an Anthropic backend puts
 // on its thinking, which Chat Completions and Responses clients cannot carry.
 const LossyFieldReasoningSignature = "reasoning.signature"
@@ -43,7 +48,7 @@ const LossyFieldStore = "store"
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldReasoningSignature, LossyFieldStore}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldToolDeferLoading, LossyFieldReasoningSignature, LossyFieldStore}
 }
 
 // OptInHint is what a refusal of field adds when an operator may accept that

@@ -110,7 +110,7 @@ var vela2ParityQuestions = map[string]interface{}{
 		{"location", "a city, country or address"}, {"organization", "a company or institution"},
 	}},
 	"systemone:urgent": map[string]interface{}{"type": "noul", "instructions": "Does the request need an urgent answer?"},
-	"preset:pii":       map[string]interface{}{"preset": "pii"},
+	"preset:pii":       map[string]interface{}{"type": "span", "preset": "pii"},
 }
 
 var vela2ParityTexts = []string{
@@ -182,9 +182,13 @@ func servedModel(t *testing.T, endpoint string) string {
 	return models.Data[0].ID
 }
 
-func askSystemOne(t *testing.T, endpoint string, state interface{}, questions map[string]interface{}) systemOneAnswer {
+func askSystemOne(t *testing.T, endpoint string, state interface{}, roles map[string]string, questions map[string]interface{}) systemOneAnswer {
 	t.Helper()
-	body, err := json.Marshal(map[string]interface{}{"state": state, "questions": questions})
+	request := map[string]interface{}{"state": state, "questions": questions}
+	if roles != nil {
+		request["roles"] = roles
+	}
+	body, err := json.Marshal(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +265,7 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 		if len(results.SignalErrors) > 0 {
 			t.Fatalf("%q: signal errors %v", text, results.SignalErrors)
 		}
-		want := askSystemOne(t, endpoint, text, vela2ParityQuestions)
+		want := askSystemOne(t, endpoint, text, nil, vela2ParityQuestions)
 		row := map[string]interface{}{"text": text}
 		var selected []string
 		for label, probability := range want.Sets["systemone:topics"].Probabilities {
@@ -340,7 +344,8 @@ func checkVela2Hallucination(t *testing.T, endpoint string, classifier *Classifi
 			t.Fatal(err)
 		}
 		want := askSystemOne(t, endpoint, map[string]string{"request": item.Question, "context": item.Context, "answer": item.Answer},
-			map[string]interface{}{"preset:hallucination": map[string]interface{}{"preset": "halu"}})
+			map[string]string{"request": "user", "context": "context", "answer": "answer"},
+			map[string]interface{}{"preset:hallucination": map[string]interface{}{"type": "span", "preset": "halu"}})
 		spans := want.Spans["preset:hallucination"]
 		if len(got.Spans) != len(spans) {
 			t.Fatalf("%q: %d unsupported spans, /v1/systemone %d", item.Answer, len(got.Spans), len(spans))
