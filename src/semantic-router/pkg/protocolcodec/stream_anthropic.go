@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -377,7 +378,7 @@ func decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, er
 	case "text":
 		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentText}
 	default:
-		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic stream content block is unsupported", nil)
+		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic stream content block "+strconv.Quote(wire.ContentBlock.Type)+" is unsupported", nil)
 	}
 	return event, nil
 }
@@ -406,7 +407,7 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 			Reasoning: llmprotocol.ReasoningScopeText,
 		}
 	default:
-		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unknown_stream_delta", "Anthropic stream delta is unsupported", nil)
+		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unknown_stream_delta", "Anthropic stream delta "+strconv.Quote(wire.Delta.Type)+" is unsupported", nil)
 	}
 	return event, nil
 }

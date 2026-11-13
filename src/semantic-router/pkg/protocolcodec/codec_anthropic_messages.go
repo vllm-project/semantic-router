@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"slices"
+	"strconv"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -376,7 +377,7 @@ func decodeAnthropicTools(raw json.RawMessage, request *llmprotocol.Request, pol
 			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Anthropic tool is invalid", err)
 		}
 		if discriminator.Type != "" && discriminator.Type != "custom" {
-			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only custom tools enter the model protocol", nil)
+			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "Anthropic tool type "+strconv.Quote(discriminator.Type)+" is unsupported; only custom tools enter the model protocol", nil)
 		}
 		var toolWire anthropicToolWire
 		if err := decodeWireValue(toolBody, &toolWire, policy); err != nil {

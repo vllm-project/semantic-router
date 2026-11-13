@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -404,7 +405,7 @@ func decodeResponsesTool(body json.RawMessage, request *llmprotocol.Request, pol
 		return decodeResponsesCustomTool(body, request, policy)
 	}
 	if toolType != "function" {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function tools enter the model protocol", nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "Responses tool type "+strconv.Quote(toolType)+" is unsupported; only function, custom and image_generation tools enter the model protocol", nil)
 	}
 	return decodeResponsesFunctionTool(body, request, policy)
 }
