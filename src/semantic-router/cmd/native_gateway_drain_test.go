@@ -177,12 +177,12 @@ func TestStandaloneDrainEndsAtTheConfiguredTimeout(t *testing.T) {
 // it: 30 s by default, as before the drain could be set, and a longer drain
 // keeps its whole time.
 func TestProcessShutdownBudgetCoversTheDrain(t *testing.T) {
-	if got := processShutdownTimeout(nil); got != 30*time.Second {
+	if got := processShutdownTimeout(config.GatewayStandalone, nil); got != 30*time.Second {
 		t.Fatalf("the default shutdown budget is %v, want 30s", got)
 	}
 	cfg := &config.RouterConfig{}
 	cfg.DrainTimeoutSeconds = 180
-	budget := processShutdownTimeout(cfg)
+	budget := processShutdownTimeout(config.GatewayStandalone, cfg)
 	if budget != 185*time.Second {
 		t.Fatalf("a 180 s drain gets a %v shutdown budget, want 185s", budget)
 	}
@@ -193,5 +193,18 @@ func TestProcessShutdownBudgetCoversTheDrain(t *testing.T) {
 	deadline, _ := servingCtx.Deadline()
 	if serving := time.Until(deadline); serving < cfg.DrainTimeout()-time.Second {
 		t.Fatalf("a %v budget leaves the serving shutdown %v, less than the %v drain", budget, serving, cfg.DrainTimeout())
+	}
+}
+
+// Behind Envoy, which drains the client connections, the budget stays 30 s,
+// also for a routing-disabled config: it skips the gateway capability checks,
+// so its drain_timeout_seconds loads with --gateway extproc.
+func TestExtProcShutdownBudgetStays30Seconds(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte("version: v0.5\nglobal:\n  router:\n    enabled: false\n    drain_timeout_seconds: 180\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := processShutdownTimeout(config.GatewayExtProc, cfg); got != 30*time.Second {
+		t.Fatalf("behind Envoy, a config with a 180 s drain gets a %v shutdown budget, want 30s", got)
 	}
 }

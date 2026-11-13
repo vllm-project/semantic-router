@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -139,7 +140,7 @@ func TestRunRouterProcessLoadedShutdownIsBoundedAndReleasesListener(t *testing.T
 		}
 	// Well under processShutdownTimeout, so a shutdown that waits it out
 	// fails, with room for a loaded runner.
-	case <-time.After(processShutdownTimeout(nil) / 3):
+	case <-time.After(processShutdownTimeout(config.GatewayExtProc, nil) / 3):
 		t.Fatal("loaded Router shutdown exceeded its bound")
 	}
 
