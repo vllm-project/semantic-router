@@ -1,0 +1,58 @@
+# A binding for one safety or complexity rule becomes the rule's deployment,
+# which wins as the binding did: in its recipe, and for a global one in each
+# recipe whose own bindings name neither the rule nor its type. A rule that
+# names a deployment keeps it.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+entrypoints:
+  - {model_names: [vllm-sr/auto], recipe: default, default: true}
+  - {model_names: [vllm-sr/support], recipe: support}
+recipes:
+  - name: default
+    signals:
+      safety:
+        - {name: harmful, predicate: {gte: 0.5}, deployment: kai}
+        - {name: pinned, deployment: d3-remote, predicate: {gte: 0.5}}
+      complexity:
+        - {name: hard_math, labels: [hard], deployment: kai}
+    decisions:
+      - name: route
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - {type: safety, name: harmful}
+            - {type: safety, name: pinned}
+            - {type: complexity, name: hard_math}
+        modelRefs: [{model: general}]
+  - name: support
+    model_bindings:
+      complexity: d3-remote
+    signals:
+      complexity:
+        - {name: hard_math, labels: [hard]}
+    decisions:
+      - name: route
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - {type: complexity, name: hard_math}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: cpu
+      d3-remote:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth: {api_key_env: SYSTEMONE_KEY}
+        schema: vllm-sr/5.0

@@ -46,22 +46,15 @@ spec:
         operator: "OR"
         keywords: ["confidential", "sensitive", "private", "restricted"]
         caseSensitive: false
-
-    embeddings:
       - name: "business_analysis"
-        threshold: 0.76
-        candidates:
-          - "I need to analyze business metrics and performance"
-          - "Can you help me with strategic business planning?"
-          - "We need insights on market trends and competition"
-        aggregationMethod: "max"
+        operator: "OR"
+        keywords: ["I need to analyze business metrics and performance", "Can you help me with strategic business planning?", "We need insights on market trends and competition"]
+        caseSensitive: false
       - name: "legal_review"
-        threshold: 0.80
-        candidates:
-          - "This document needs legal review and compliance check"
-          - "We need to ensure regulatory compliance"
-          - "Can you review this for legal implications?"
-        aggregationMethod: "mean"
+        operator: "OR"
+        keywords: ["This document needs legal review and compliance check", "We need to ensure regulatory compliance", "Can you review this for legal implications?"]
+        caseSensitive: false
+
 
     domains:
       - name: "business"
@@ -80,7 +73,7 @@ spec:
         conditions:
           - type: "keyword"
             name: "compliance"
-          - type: "embedding"
+          - type: "keyword"
             name: "legal_review"
           - type: "domain"
             name: "law"
@@ -92,10 +85,10 @@ spec:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a legal compliance assistant. Provide accurate information about regulations and compliance requirements. Always remind users to consult legal professionals for specific advice."
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.93
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.93}}}
         - type: "header_mutation"
           configuration:
             add:
@@ -112,7 +105,7 @@ spec:
         conditions:
           - type: "keyword"
             name: "confidential"
-          - type: "embedding"
+          - type: "keyword"
             name: "business_analysis"
           - type: "domain"
             name: "business"
@@ -121,10 +114,10 @@ spec:
           use_reasoning: true
           reasoning_effort: "medium"
       plugins:
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.90
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.90}}}
         - type: "header_mutation"
           configuration:
             add:
@@ -137,7 +130,7 @@ spec:
       signals:
         operator: "OR"
         conditions:
-          - type: "embedding"
+          - type: "keyword"
             name: "business_analysis"
           - type: "domain"
             name: "economics"
@@ -145,8 +138,8 @@ spec:
         - model: "qwen-2.5-72b"
           use_reasoning: false
       plugins:
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.85
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.85}}}
 

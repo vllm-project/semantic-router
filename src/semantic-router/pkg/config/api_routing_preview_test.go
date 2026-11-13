@@ -14,7 +14,7 @@ func TestCanonicalRoutingPreviewBudget(t *testing.T) {
 		concurrency  int
 		invalid      bool
 	}{
-		{name: "defaults", timeout: 120 * time.Second, concurrency: 16},
+		{name: "defaults", fields: "{}", timeout: 120 * time.Second, concurrency: 16},
 		{name: "long request", fields: "request_timeout_seconds: 1800\n        max_concurrency: 8", timeout: 1800 * time.Second, concurrency: 8},
 		{name: "maximum timeout", fields: "request_timeout_seconds: 3600", timeout: 3600 * time.Second, concurrency: 16},
 		{name: "zero timeout", fields: "request_timeout_seconds: 0", invalid: true},
@@ -23,7 +23,7 @@ func TestCanonicalRoutingPreviewBudget(t *testing.T) {
 		{name: "negative capacity", fields: "max_concurrency: -1", invalid: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			yaml := fmt.Sprintf("version: v0.3\nglobal:\n  services:\n    api:\n      routing_preview:\n        %s\n", test.fields)
+			yaml := fmt.Sprintf("version: v0.5\nglobal:\n  services:\n    api:\n      routing_preview:\n        %s\n", test.fields)
 			cfg, err := ParseYAMLBytes([]byte(yaml))
 			if test.invalid {
 				if err == nil || !strings.Contains(err.Error(), "routing_preview") {

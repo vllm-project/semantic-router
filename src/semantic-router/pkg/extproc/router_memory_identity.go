@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
@@ -36,7 +35,8 @@ func warnUnboundRemoteMemoryEmbedding(cfg *config.RouterConfig, prepared *embedd
 	if prepared == nil {
 		return
 	}
-	provider, err := prepared.Get(detectMemoryEmbeddingModel(cfg), 0, 0)
+	deployment, _ := cfg.MemoryEmbedding()
+	provider, err := prepared.Get(deployment, 0, 0)
 	if err != nil || provider.Backend() != config.EmbeddingBackendOpenAICompatible {
 		return
 	}
@@ -48,13 +48,12 @@ func warnUnboundRemoteMemoryEmbedding(cfg *config.RouterConfig, prepared *embedd
 }
 
 func memoryConfigForIdentity(cfg *config.RouterConfig, resolve func(embedding.ConsumerSettings) (embedding.ContentIdentity, error)) (*config.RouterConfig, error) {
-	model := strings.ToLower(strings.TrimSpace(detectMemoryEmbeddingModel(cfg)))
-	if model != "mmbert" && model != "multimodal" {
+	deployment, width := cfg.MemoryEmbedding()
+	if deployment == "" {
 		return cfg, nil
 	}
 	bound := *cfg
 	bound.Memory = cfg.Memory
-	bound.Memory.EmbeddingModel = model
 	backend := bound.Memory.Backend
 	if backend == "" {
 		backend = "milvus"
@@ -96,16 +95,13 @@ func memoryConfigForIdentity(cfg *config.RouterConfig, resolve func(embedding.Co
 	default:
 		return nil, fmt.Errorf("unsupported memory backend: %q", backend)
 	}
-	if *dimension == 0 && model == "mmbert" {
-		*dimension = 256
+	if *dimension == 0 {
+		*dimension = width
 	}
-	fingerprint, deterministic := memory.DeterministicEmbeddingFingerprint(memory.EmbeddingConfig{Model: memory.EmbeddingModelType(model), Dimension: *dimension})
-	if deterministic && *dimension == 0 && model == "multimodal" {
-		return nil, fmt.Errorf("simulated multimodal memory requires an explicit storage dimension")
-	}
+	fingerprint, deterministic := memory.DeterministicEmbeddingFingerprint(memory.EmbeddingConfig{Deployment: deployment, Dimension: *dimension})
 	if !deterministic {
 		identity, err := resolve(embedding.ConsumerSettings{
-			ModelType: model, Dimension: *dimension, Layer: 0, InputPolicy: "memory-content-v1",
+			ModelType: deployment, Dimension: *dimension, Layer: 0, InputPolicy: "memory-content-v1",
 		})
 		// A provider without a content identity (a remote endpoint) keeps the
 		// configured namespace; memory warns that it cannot verify the model.

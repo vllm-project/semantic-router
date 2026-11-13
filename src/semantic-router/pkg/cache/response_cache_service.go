@@ -34,6 +34,9 @@ func DefaultResponseCacheServiceOptions() ResponseCacheServiceOptions {
 type inflightExact struct {
 	done      chan struct{}
 	expiresAt time.Time
+	// expiry ends the lease of a leader that never stores, such as one whose
+	// request failed or was canceled.
+	expiry *time.Timer
 }
 
 type SingleflightLease struct {
@@ -237,38 +240,56 @@ func (s *ResponseCacheService) StoreExact(ctx context.Context, write CacheWrite)
 	return nil
 }
 
+// LookupSemantic recalls the fresh cached entries most similar to the
+// lookup's query, within its bounds, most similar first. A caller serves at
+// most one of them and counts the lookup with RecordSemantic.
 func (s *ResponseCacheService) LookupSemantic(
 	ctx context.Context,
 	lookup SemanticLookup,
-) (result CacheResult, err error) {
-	start := time.Now()
-	defer func() {
-		s.recordOperation("lookup_semantic", lookup.Identity, result, err, start)
-	}()
+) (SemanticRecall, error) {
 	if s == nil || s.store == nil {
-		return CacheResult{HitKind: HitKindMiss}, nil
+		return SemanticRecall{}, nil
 	}
 	lookup.Identity = s.ResolveIdentity(lookup.Identity)
-	result, err = s.store.LookupSemantic(ctx, lookup)
+	recall, err := s.store.LookupSemantic(ctx, lookup)
 	if err != nil {
 		s.failOpen.Add(1)
-		return CacheResult{}, err
+		return SemanticRecall{}, err
 	}
-	if result.Found && lookup.MaxAge != nil &&
-		(!result.AgeKnown || result.Age > *lookup.MaxAge) {
+	fresh := recall.Candidates[:0]
+	for _, candidate := range recall.Candidates {
+		if lookup.MaxAge != nil && (!candidate.AgeKnown || candidate.Age > *lookup.MaxAge) {
+			continue
+		}
+		candidate.HitKind, candidate.Source = HitKindSemantic, CacheSourceL2
+		fresh = append(fresh, candidate)
+	}
+	if len(fresh) == 0 && len(recall.Candidates) > 0 {
 		s.staleMisses.Add(1)
-		result = CacheResult{HitKind: HitKindMiss}
 	}
-	if result.Found {
-		result.HitKind = HitKindSemantic
-		result.Source = CacheSourceL2
+	recall.Candidates = fresh
+	return recall, nil
+}
+
+// RecordSemantic counts one semantic lookup that began at start by what it
+// served: hit, or a miss when hit is not found.
+func (s *ResponseCacheService) RecordSemantic(identity CacheIdentity, hit CacheResult, err error, start time.Time) {
+	if s == nil {
+		return
+	}
+	switch {
+	case err != nil:
+	case hit.Found:
 		s.semanticHits.Add(1)
 		s.l2Hits.Add(1)
-	} else {
-		result.HitKind = HitKindMiss
+		if adapter, ok := s.store.(*LegacyBackendAdapter); ok {
+			adapter.servedSemantic(hit)
+		}
+	default:
+		hit.HitKind = HitKindMiss
 		s.misses.Add(1)
 	}
-	return result, nil
+	s.recordOperation("lookup_semantic", identity, hit, err, start)
 }
 
 func (s *ResponseCacheService) StoreSemantic(ctx context.Context, write CacheWrite) error {
@@ -325,26 +346,25 @@ func (s *ResponseCacheService) Stats(ctx context.Context) (CacheStats, error) {
 	return stats, nil
 }
 
+// Invalidate advances the epoch of one partition, which turns its entries
+// into misses. Advancing the global epoch is Flush's: a selector without a
+// partition is refused. No backend counts a partition's entries, so the
+// result says the count is unknown.
 func (s *ResponseCacheService) Invalidate(
 	_ context.Context,
 	selector CacheSelector,
 	dryRun bool,
 ) (InvalidationResult, error) {
-	if selector.Partition == nil && selector.Epoch == "" {
-		return InvalidationResult{}, fmt.Errorf("invalidation requires a partition or epoch selector")
+	if selector.Partition == nil {
+		return InvalidationResult{}, fmt.Errorf("invalidation requires selector.partition; flush advances the global epoch")
 	}
-	result := InvalidationResult{DryRun: dryRun}
+	result := InvalidationResult{DryRun: dryRun, CountUnknown: true}
 	if dryRun {
 		metrics.RecordResponseCacheInvalidation(string(s.Capabilities().Backend), "invalidate", true)
 		return result, nil
 	}
 	s.mu.Lock()
-	if selector.Partition != nil {
-		key := selector.Partition.Key()
-		s.partitionEpochs[key]++
-	} else {
-		s.globalEpoch++
-	}
+	s.partitionEpochs[selector.Partition.Key()]++
 	s.mu.Unlock()
 	s.l1.clear()
 	s.invalidations.Add(1)
@@ -366,7 +386,7 @@ func (s *ResponseCacheService) Flush(
 	s.l1.clear()
 	s.invalidations.Add(1)
 	metrics.RecordResponseCacheInvalidation(string(s.Capabilities().Backend), "flush", false)
-	return InvalidationResult{}, nil
+	return InvalidationResult{CountUnknown: true}, nil
 }
 
 func (s *ResponseCacheService) CurrentEpoch() string {
@@ -426,13 +446,19 @@ func (s *ResponseCacheService) acquireSingleflight(key string) (bool, <-chan str
 		if now.Before(active.expiresAt) {
 			return false, active.done
 		}
-		close(active.done)
-		delete(s.inflight, key)
+		s.endSingleflightLocked(key, active)
 	}
 	active := &inflightExact{
 		done:      make(chan struct{}),
 		expiresAt: now.Add(s.options.SingleflightLease),
 	}
+	active.expiry = time.AfterFunc(s.options.SingleflightLease, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.inflight[key] == active {
+			s.endSingleflightLocked(key, active)
+		}
+	})
 	s.inflight[key] = active
 	return true, active.done
 }
@@ -440,10 +466,15 @@ func (s *ResponseCacheService) acquireSingleflight(key string) (bool, <-chan str
 func (s *ResponseCacheService) completeSingleflight(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	active, ok := s.inflight[key]
-	if !ok {
-		return
+	if active, ok := s.inflight[key]; ok {
+		s.endSingleflightLocked(key, active)
 	}
+}
+
+// endSingleflightLocked wakes key's waiters and removes its entry. Callers
+// hold s.mu.
+func (s *ResponseCacheService) endSingleflightLocked(key string, active *inflightExact) {
+	active.expiry.Stop()
 	close(active.done)
 	delete(s.inflight, key)
 }

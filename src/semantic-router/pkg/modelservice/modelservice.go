@@ -35,10 +35,15 @@ func ReadyTimeout() time.Duration {
 // only (one forward on a CPU) instead of whole.
 // RequireFullInput rejects a judgment unless the runtime proves every supplied
 // input part was read completely; it is independent of scan-budget support.
+// DecisionAdapter asks a vela3_d3 package with an opt-in decision adapter to
+// answer with it; only that family takes the field.
 type Question struct {
-	// TaskID and Stage describe the internal consumer; they are not wire fields.
+	// TaskID and Stage describe the internal consumer, and Reads the
+	// options its askers read (nil: every option), which a family's trained
+	// form must cover to answer it; they are not wire fields.
 	TaskID           string
 	Stage            string
+	Reads            []string
 	ID               string
 	Type             string
 	Instructions     string
@@ -50,6 +55,7 @@ type Question struct {
 	Preset           string
 	Truncate         bool
 	RequireFullInput bool
+	DecisionAdapter  bool
 }
 
 // Choice is one Choice option, a Noul description or a Set / Span label.
@@ -62,17 +68,33 @@ type Choice struct {
 // the served model on the runtime (empty while it serves one model). State
 // is the text the questions are about; Parts, when set, replace it with
 // named parts (request, context, answer) for models that read typed parts.
+// Images and Videos are base64 data URLs every question of the state sees,
+// for a model whose card lists the image or video modality.
 // MaxTokens, when positive, is the scan budget of a model that reads a long
 // part in windows (Vela 2.0), zero keeping the model's own: a part with more
 // tokens fails the questions that read it whole with scan_budget_exceeded. A
 // model without a scan budget ignores it and every question's Truncate.
+// Window, when positive, makes the state a window of a guard's scan and is
+// its rank in reading order. In a stage's bundle a window travels in a call
+// of its own, with the other calls about the same window, so its answers
+// come back as soon as it is read; at most Parallel of the stage's windows
+// to one deployment are in flight (DefaultWindowParallel when 0), the lowest
+// rank first. Neither is a wire field, and the answers stay as they are.
 type Request struct {
 	Model     string
 	State     string
 	Parts     map[string]string
+	Images    []string
+	Videos    []string
 	Questions []Question
 	MaxTokens int
+	Window    int
+	Parallel  int
 }
+
+// DefaultWindowParallel is how many windows of a stage's guard scans one
+// deployment reads at a time unless the request says otherwise.
+const DefaultWindowParallel = 4
 
 // Answer is one runtime answer. Error is set instead of the values when the
 // runtime could not answer this question. A Set answer holds each label's
@@ -118,7 +140,27 @@ var (
 	ErrRejected = errors.New("model runtime rejected the request")
 	// ErrFailed covers transport failures and unexpected responses.
 	ErrFailed = errors.New("model runtime call failed")
+	// ErrSignalsAbandoned is the cause a caller cancels a request's signals
+	// with once it has answered the request without them, as when the
+	// request is refused for its length. The calls it cuts short are not
+	// failures of their deployments, and are neither counted nor logged.
+	ErrSignalsAbandoned = errors.New("the request no longer needs its signals")
 )
+
+// SignalsAbandoned reports a context its caller cancelled with
+// ErrSignalsAbandoned, or one in a bundle whose base was: the exchanges a
+// bundle carries end with its base, before the contexts of their calls say
+// why.
+func SignalsAbandoned(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	if errors.Is(context.Cause(ctx), ErrSignalsAbandoned) {
+		return true
+	}
+	bundle := bundleFrom(ctx)
+	return bundle != nil && errors.Is(context.Cause(bundle.base), ErrSignalsAbandoned)
+}
 
 // ErrorReason is a stable, low-cardinality label for an error.
 func ErrorReason(err error) string {

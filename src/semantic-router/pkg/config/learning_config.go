@@ -32,8 +32,7 @@ const (
 )
 
 const (
-	routerLearningDefaultSessionHeader      = "x-session-id"
-	routerLearningDefaultConversationHeader = "x-conversation-id"
+	routerLearningDefaultConversationHeader = headers.XConversationID
 
 	defaultProtectionReleaseMinUserTurnsBetween = 2
 )
@@ -100,6 +99,9 @@ type RouterLearningIdentityConfig struct {
 // runtime; future identity needs should add typed fields instead of accepting
 // arbitrary header keys.
 type RouterLearningIdentityHeadersConfig struct {
+	// Session names the header protection reads the session id from. Unset,
+	// protection keys on the session id the request pins: x-vsr-session-id,
+	// or a header global.router.headers.session_id_headers accepts.
 	Session      *string `yaml:"session,omitempty"`
 	Conversation *string `yaml:"conversation,omitempty"`
 	// Agent names an optional header that identifies one agent inside a
@@ -266,7 +268,7 @@ func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 				return value
 			}
 		}
-		return routerLearningDefaultSessionHeader
+		return ""
 	case "conversation":
 		if cfg.Identity.Headers.Conversation != nil {
 			if value := strings.TrimSpace(*cfg.Identity.Headers.Conversation); value != "" {

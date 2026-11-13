@@ -1,0 +1,31 @@
+# The trusted gateway credential as main documents it, in config v0.3: the
+# authz contract that supplies the credential and a backend_refs entry marked
+# trusted_gateway, which connects with base_url.
+version: v0.3
+providers:
+  defaults:
+    model: gpt-4o
+  models:
+    - name: gpt-4o
+      provider_model_id: gpt-4o
+      api_format: openai
+      backend_refs:
+        - name: litellm
+          base_url: https://litellm.internal/v1
+          provider: openai-compatible
+          trusted_gateway: true
+routing:
+  decisions:
+    - name: default-route
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: gpt-4o
+global:
+  services:
+    authz:
+      gateway_credential:
+        enabled: true
+        header: x-vsr-gateway-credential

@@ -186,9 +186,19 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 		arguments = []byte(event.ToolCall.Arguments)
 	}
 	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
+		if !isTruncatedJSONObject(arguments, state.policy.Limits.JSONDepth) {
+			return nil, nonObjectToolArgumentsError()
+		}
+		// The output limit can cut a call mid-arguments, and Anthropic and OpenAI
+		// then send the partial call with a max_tokens or length stop. Its stop
+		// reason arrives after the item ends, so the terminal event decides.
+		state.cutToolArguments = true
 	}
 	return arguments, nil
+}
+
+func nonObjectToolArgumentsError() error {
+	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
 }
 
 func (state *streamState) markItemComplete(itemIndex int) {
@@ -254,6 +264,9 @@ func (state *streamState) applyTerminalEvent(event llmprotocol.Event) (llmprotoc
 func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmprotocol.Event, error) {
 	if err := state.validateCompletedLifecycle(event); err != nil {
 		return llmprotocol.Event{}, err
+	}
+	if state.cutToolArguments && state.stop != llmprotocol.StopMaxTokens {
+		return llmprotocol.Event{}, nonObjectToolArgumentsError()
 	}
 	event, err := validateCompletedStopReason(event)
 	if err != nil {

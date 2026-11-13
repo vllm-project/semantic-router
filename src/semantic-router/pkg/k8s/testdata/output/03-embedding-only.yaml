@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: deepseek-v3
@@ -10,64 +10,18 @@ providers:
       pricing:
         prompt_per_1m: 0.27
         completion_per_1m: 1.1
+      loras:
+        - name: customer-support
+          description: Customer support specialist
     - name: deepseek-r1
       reasoning:
         family: deepseek
       pricing:
         prompt_per_1m: 0.55
         completion_per_1m: 2.2
-routing:
-  modelCards:
-    - name: deepseek-v3
-      loras:
-        - name: customer-support
-          description: Customer support specialist
-    - name: deepseek-r1
       loras:
         - name: technical-expert
           description: Technical problem solving expert
-  signals:
-    embeddings:
-      - name: customer_support
-        threshold: 0.75
-        candidates:
-          - I need help with my account
-          - Can you assist me with a problem?
-          - I have a question about my order
-        aggregation_method: max
-      - name: technical_issue
-        threshold: 0.8
-        candidates:
-          - The system is not working properly
-          - I'm experiencing technical difficulties
-          - There's a bug in the application
-        aggregation_method: mean
-  decisions:
-    - name: tech_troubleshoot
-      description: Technical troubleshooting - use reasoning model
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: embedding
-            name: technical_issue
-      modelRefs:
-        - model: deepseek-r1
-          lora_name: technical-expert
-          use_reasoning: true
-          reasoning_effort: high
-    - name: support_ticket
-      description: Customer support requests - use fast model
-      priority: 80
-      rules:
-        operator: AND
-        conditions:
-          - type: embedding
-            name: customer_support
-      modelRefs:
-        - model: deepseek-v3
-          lora_name: customer-support
-          use_reasoning: false
 global:
   router:
     config_source: kubernetes
@@ -82,8 +36,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           sample_rate: 1
           duration_buckets:
@@ -113,6 +65,8 @@ global:
           detailed_goroutine_tracking: true
     response_api:
       enabled: false
+      ttl_seconds: 0
+      max_responses: 0
     observability:
       tracing:
         enabled: false
@@ -137,80 +91,73 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
-      enabled: false
-      ttl_seconds: 0
-    memory: {}
+      backend_type: memory
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+    memory:
+      default_retrieval_limit: 0
   integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: config/tools_db.json
-      fallback_to_empty: true
     looper: {}
   model_catalog:
-    embeddings:
-      semantic:
-        qwen3_model_path: ""
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-          preload_embeddings: true
-          target_dimension: 768
-          target_layer: 22
-          enable_soft_matching: true
-          top_k: 1
-          min_score_threshold: 0.5
-    system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      domain_classifier: models/mmbert32k-intent-classifier-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
-    modules:
-      safety:
-        safety:
-          use_cpu: false
-        hazard:
-          use_cpu: false
-      prompt_compression:
-        enabled: false
-        max_tokens: 0
-      prompt_guard:
+    embeddings: {}
+    system: {}
+  plugins:
+    - type: response_cache
+      configuration:
         enabled: true
-        threshold: 0.7
-        use_cpu: true
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        model_ref: prompt_guard
-      classifier:
-        domain:
-          threshold: 0.5
-          use_cpu: true
-          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
-          model_ref: domain_classifier
-        mcp:
-          enabled: false
-          transport_type: ""
-        pii:
-          threshold: 0.9
-          use_cpu: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
-          model_ref: pii_classifier
-        preference: {}
-      complexity: {}
-      hallucination_mitigation:
-        fact_check:
-          use_cpu: false
-        detector:
-          use_cpu: false
-      feedback_detector:
-        enabled: false
-        use_cpu: false
-        feedback_mapping_path: ""
-      modality_detector:
-        enabled: false
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: customer_support
+          operator: OR
+          keywords:
+            - I need help with my account
+            - Can you assist me with a problem?
+            - I have a question about my order
+          case_sensitive: false
+        - name: technical_issue
+          operator: OR
+          keywords:
+            - The system is not working properly
+            - I'm experiencing technical difficulties
+            - There's a bug in the application
+          case_sensitive: false
+    decisions:
+      - name: tech_troubleshoot
+        description: Technical troubleshooting - use reasoning model
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: technical_issue
+        modelRefs:
+          - model: deepseek-r1
+            lora_name: technical-expert
+            use_reasoning: true
+            reasoning_effort: high
+      - name: support_ticket
+        description: Customer support requests - use fast model
+        priority: 80
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: customer_support
+        modelRefs:
+          - model: deepseek-v3
+            lora_name: customer-support
+            use_reasoning: false

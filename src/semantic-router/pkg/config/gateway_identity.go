@@ -74,51 +74,19 @@ func UntrustedIdentityWarning(cfg *RouterConfig) string {
 	if memoryRecordsUsers(cfg) {
 		features = append(features, "memory")
 	}
-	if cfg.RouterReplay.Enabled {
+	if cfg.UsesRouterReplay() {
 		features = append(features, "router replay")
-	}
-	if algorithm, ok := perUserSelectionAlgorithm(cfg); ok {
-		features = append(features, "per-user model selection ("+algorithm+")")
 	}
 	if len(features) == 0 {
 		return ""
 	}
 	return fmt.Sprintf("%s record the user of each request, but no listener trusts an identity source, "+
 		"so every request is anonymous; behind an authenticating proxy, set listeners[].identity.trust_headers: true",
-		joinFeatures(features))
-}
-
-// perUserSelectionAlgorithm reports a decision algorithm that learns a
-// preference per user; without one, it learns a single anonymous user.
-func perUserSelectionAlgorithm(cfg *RouterConfig) (string, bool) {
-	for _, at := range cfg.RoutingDecisionsAt() {
-		if algorithm := at.Decision.Algorithm; algorithm != nil {
-			switch algorithm.Type {
-			case "gmtrouter", "rl_driven":
-				return algorithm.Type, true
-			}
-		}
-	}
-	return "", false
-}
-
-func joinFeatures(features []string) string {
-	if len(features) < 3 {
-		return strings.Join(features, " and ")
-	}
-	return strings.Join(features[:len(features)-1], ", ") + " and " + features[len(features)-1]
+		strings.Join(features, " and "))
 }
 
 func memoryRecordsUsers(cfg *RouterConfig) bool {
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, at := range cfg.RoutingDecisionsAt() {
-		if cfg.IsMemoryEnabledForDecision(at.Decision.Name) {
-			return true
-		}
-	}
-	return false
+	return cfg.UsesMemory()
 }
 
 func firstSignalOfType(node *RuleNode, signalType string) (string, bool) {

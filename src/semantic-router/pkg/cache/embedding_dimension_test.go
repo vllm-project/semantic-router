@@ -13,7 +13,7 @@ import (
 func TestOmniCachePreservesFullPreparedDimension(t *testing.T) {
 	for _, size := range []int{384, 768} {
 		provider := storagetest.Vectors{Size: size}
-		cache := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingModel: "multimodal", EmbeddingProvider: provider})
+		cache := NewInMemoryCache(InMemoryCacheOptions{Enabled: true, EmbeddingDeployment: "omni", EmbeddingProvider: provider})
 		t.Cleanup(func() { _ = cache.Close() })
 		vector, err := cache.computeEmbedding(context.Background(), "full vector")
 		if err != nil || len(vector) != size {
@@ -47,12 +47,12 @@ func TestOmniCacheIdentityResolvesDimensionAndIsolatesEqualWidthArtifacts(t *tes
 		for _, size := range []int{384, 768} {
 			t.Run(fmt.Sprintf("%s-%d", backend, size), func(t *testing.T) {
 				original := namespaceFixture(backend, 0)
-				original.EmbeddingModel = "multimodal"
+				original.EmbeddingDeployment = "omni"
 				original.EmbeddingProvider = storagetest.Vectors{Size: size}
 				before := physicalNamespace(original)
 				resolve := func(name string) func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 					return func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-						if settings.Dimension != size || settings.Layer != 0 || settings.ModelType != "multimodal" {
+						if settings.Dimension != size || settings.Layer != 0 || settings.ModelType != "omni" {
 							t.Fatalf("unexpected settings: %+v", settings)
 						}
 						return embedding.ContentIdentity{Fingerprint: name, Descriptor: embedding.RuntimeDescriptor{Dimension: size}}, nil
@@ -90,7 +90,7 @@ func TestOmniCacheIdentityResolvesDimensionAndIsolatesEqualWidthArtifacts(t *tes
 		}
 	}
 	bad := namespaceFixture(RedisCacheType, 384)
-	bad.EmbeddingModel = "multimodal"
+	bad.EmbeddingDeployment = "omni"
 	bad.EmbeddingProvider = storagetest.Vectors{Size: 768}
 	if _, _, err := PrepareEmbeddingNamespace(bad, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 		return embedding.ContentIdentity{Fingerprint: "mini", Descriptor: embedding.RuntimeDescriptor{Dimension: 768}}, nil

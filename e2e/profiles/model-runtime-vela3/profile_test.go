@@ -10,20 +10,20 @@ import (
 
 type values struct {
 	Config struct {
-		Routing struct {
+		Recipes []struct {
 			Signals struct {
-				Decision []struct {
+				SystemOne []struct {
 					Name       string `yaml:"name"`
 					Deployment string `yaml:"deployment"`
 					Question   struct {
 						Type string `yaml:"type"`
 					} `yaml:"question"`
-				} `yaml:"decision"`
+				} `yaml:"systemone"`
 			} `yaml:"signals"`
 			Decisions []struct {
 				Name string `yaml:"name"`
 			} `yaml:"decisions"`
-		} `yaml:"routing"`
+		} `yaml:"recipes"`
 		Global struct {
 			ModelCatalog struct {
 				Deployments map[string]struct {
@@ -75,7 +75,7 @@ func TestProfileServesPinnedVela3FastAsTheDecisionModel(t *testing.T) {
 		t.Fatal("one vela3-fast deployment must answer every signal")
 	}
 	kinds := map[string]string{}
-	for _, rule := range profile.Config.Routing.Signals.Decision {
+	for _, rule := range profile.Config.Recipes[0].Signals.SystemOne {
 		if rule.Deployment != "primary" {
 			t.Fatalf("decision signal %s must ask primary", rule.Name)
 		}
@@ -85,7 +85,7 @@ func TestProfileServesPinnedVela3FastAsTheDecisionModel(t *testing.T) {
 		t.Fatalf("the cases expect a Noul and a Span decision signal: %v", kinds)
 	}
 	decisions := map[string]bool{}
-	for _, decision := range profile.Config.Routing.Decisions {
+	for _, decision := range profile.Config.Recipes[0].Decisions {
 		decisions[decision.Name] = true
 	}
 	for _, name := range []string{"jailbreak_route", "pii_route", "order_route", "account_route", "default-route"} {

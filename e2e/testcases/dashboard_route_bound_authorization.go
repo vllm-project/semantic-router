@@ -19,6 +19,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("dashboard-route-bound-authorization", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify invitation, read-only route policy, WebSearch stats, unknown API denial, and immediate session revocation",
 		Tags:        []string{"dashboard", "auth", "security"},
 		Fn:          testDashboardRouteBoundAuthorization,

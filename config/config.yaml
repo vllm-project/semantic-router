@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 
 # Optional operator-owned benchmark definitions, versioned index DAGs, and
 # model-linked measurements live together under evaluation.
@@ -20,15 +20,26 @@ listeners:
     tls:
       cert_file: certs/tls.crt
       key_file: certs/tls.key
-    # Standalone mode: accept only these request models (exact `model` values);
-    # others get 403 model_not_allowed. Absent or empty accepts every model.
-    models: [vllm-sr/exhaustive-default]
-    # Native System One inference has its own explicit public-model scope.
-    systemone:
-      models: [decision-public]
-      # The longest the listener waits for a model it calls directly, however
-      # long a request's options.deadline_ms asks for (10 minutes by default).
-      max_deadline_ms: 600000
+    # The APIs the listener serves, by API name; other paths answer 404.
+    # Without apis a listener serves chat_completions, responses, messages and
+    # images, and not systemone. openai and anthropic are accepted as aliases
+    # of chat_completions and messages.
+    apis:
+      # Standalone mode: accept only these request models (exact `model`
+      # values); others get 403 model_not_allowed. Omitted, every LLM model.
+      chat_completions:
+        models: [vllm-sr/exhaustive-default]
+      responses:
+        models: [vllm-sr/exhaustive-default]
+      # System One decisions, in the schema the listener speaks to its clients:
+      # vllm-sr/5.0 by default, or vllm-sr/4.0 for clients of the earlier API.
+      systemone:
+        schema: vllm-sr/5.0
+        models: [decision-public]
+        # The longest the listener waits for a model it calls directly,
+        # however long a request's options.deadline_ms asks for (10 minutes by
+        # default).
+        max_deadline_ms: 600000
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:
@@ -39,12 +50,17 @@ providers:
   defaults:
     model: qwen3-8b
     reasoning_effort: medium
+    # The CA bundle of every https backend whose own tls names no ca_file. It
+    # replaces the system roots for those backends, in Envoy and in the
+    # Router's own calls, so it must hold every CA they chain to.
+    tls:
+      ca_file: /etc/vllm-sr/certs/example-corp-ca.pem
   models:
     - name: qwen3-8b
       reasoning:
         family: qwen3
       provider_model_id: qwen3-8b-instruct
-      api_format: openai
+      api_format: chat_completions
       reliability:
         lb_policy: least_request
         retry_count: 2
@@ -64,6 +80,14 @@ providers:
       external_model_ids:
         openai: qwen3-8b
         analytics: qwen3-routing
+      # The tokenizer a long prompt is counted with for the context window
+      # check: a Hugging Face repo id (optional @revision), whose
+      # tokenizer.json the Router downloads beside its models, a built-in
+      # encoding (o200k_base, cl100k_base) or a local tokenizer.json.
+      # Omitted, it is the repo of the card's open-weights source, as here,
+      # or the id a self-hosted engine serves the model under; a model with
+      # neither counts with global.router.context_window.proxy_tokenizer.
+      tokenizer: Qwen/Qwen3-8B
       # A backend connects with the shape a deployment uses: endpoint
       # (host:port with protocol, or a full URL), auth and headers. The key
       # comes from auth.api_key_env; it is never written here.
@@ -82,11 +106,35 @@ providers:
           auth:
             api_key_env: VLLM_SR_PRIMARY_API_KEY
           weight: 20
+      display_name: Qwen3 8B reference model
+      publisher: Alibaba Cloud
+      presentation:
+        logo: package:qwen
+        monogram: Q
+        monochrome: false
+      distribution:
+        type: open_weights
+        source: https://huggingface.co/Qwen/Qwen3-8B
+        license: Apache-2.0
+      family: qwen3
+      revision: reference-v1
+      released_at: 2025-04-29
+      knowledge_cutoff: 2024-12
+      lifecycle: active
+      param_size: 8B
+      context_window_size: 131072
+      max_output_tokens: 32768
+      description: General-purpose text model for the default routing tier.
+      capabilities: [chat, reasoning, tools]
+      modalities:
+        input: [text]
+        output: [text]
+      tags: [default, fast]
     # Keep remote-provider access fields visible without mixing incompatible
     # request semantics into the weighted qwen3-8b replica pool above.
     - name: remote-openai-reference
       provider_model_id: remote-openai-reference
-      api_format: openai
+      api_format: chat_completions
       backend_refs:
         - name: remote-primary
           endpoint: https://api.example.com/v1
@@ -103,6 +151,28 @@ providers:
           api_version: "2025-03-01"
           chat_path: /chat/completions
           weight: 100
+    - name: gateway-routed-reference
+      provider_model_id: gateway-routed-reference
+      api_format: chat_completions
+      backend_refs:
+        # A delegated upstream gateway: it receives the requesting user's
+        # delegated credential as its Bearer token instead of a static key,
+        # and requests without one are rejected before dispatch.
+        - name: delegated-gateway
+          endpoint: https://gateway.example.com/v1
+          provider: openai-compatible
+          auth:
+            credential: delegated
+          # A backend behind a private CA: ca_file replaces the system roots
+          # for it, so it holds the issuing intermediate and the root;
+          # server_name is the name its certificate carries; cert_file and
+          # key_file present a client certificate. Absolute paths.
+          tls:
+            ca_file: /etc/vllm-sr/certs/example-corp-ca.pem
+            server_name: gateway.example.com
+            cert_file: /etc/vllm-sr/certs/router.crt
+            key_file: /etc/vllm-sr/certs/router.key
+          weight: 100
     - name: qwen3-32b
       reasoning:
         type: reasoning_effort
@@ -117,7 +187,7 @@ providers:
         modes: [enabled, disabled]
         default_mode: enabled
       provider_model_id: qwen3-32b-instruct
-      api_format: anthropic
+      api_format: messages
       pricing:
         currency: USD
         prompt_per_1m: 1.2
@@ -131,9 +201,19 @@ providers:
           endpoint: 127.0.0.1:8001
           protocol: http
           weight: 100
+      param_size: 32B
+      context_window_size: 131072
+      description: Higher-quality text model for complex and verified requests.
+      capabilities: [chat, reasoning, long-context]
+      loras:
+        - name: computer-science-expert
+          description: Adapter specialized for advanced computer science and software design prompts.
+        - name: business-adapter
+          description: Adapter specialized for business strategy and operations prompts.
+      tags: [premium, analysis]
     - name: llava-omni
       provider_model_id: llava-omni-preview
-      api_format: openai
+      api_format: chat_completions
       pricing:
         currency: USD
         prompt_per_1m: 2.5
@@ -141,15 +221,25 @@ providers:
         completion_per_1m: 4.0
       external_model_ids:
         openai: llava-omni-preview
+      # Request capabilities the backends reject, as vLLM rejects min_p and
+      # logit_bias under speculative decoding: the Router sends this model
+      # requests without those fields and reports each in x-vsr-warnings.
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
       backend_refs:
         - name: omni-primary
           provider: vllm
           endpoint: 127.0.0.1:8002
           protocol: http
           weight: 100
+      param_size: 13B
+      context_window_size: 65536
+      description: Omni model that can satisfy both text and multimodal orchestration paths.
+      capabilities: [chat, vision, multimodal]
+      modalities: {input: [text, image], output: [text]}
+      tags: [multimodal, omni]
     - name: sdxl-image
       provider_model_id: sdxl-image
-      api_format: openai
+      api_format: images
       pricing:
         currency: USD
         prompt_per_1m: 4.0
@@ -162,6 +252,25 @@ providers:
           endpoint: 127.0.0.1:8003
           protocol: http
           weight: 100
+      param_size: 3B
+      context_window_size: 8192
+      description: Diffusion-style image generation backend used by image routes.
+      capabilities: [image_generation]
+      modalities: {input: [text], output: [image]}
+      tags: [image, diffusion]
+    - name: omni-image
+      provider_model_id: omni-image-preview
+      api_format: responses
+      backend_refs:
+        - name: omni-image-primary
+          provider: vllm
+          endpoint: 127.0.0.1:8004
+          protocol: http
+          weight: 100
+      description: Omni model that answers in text and generates images in one response.
+      capabilities: [chat, vision, image_generation]
+      modalities: {input: [text, image], output: [text, image]}
+      tags: [multimodal, image]
     # Catalog-backed models do not need a handwritten routing.modelCards entry.
     - name: built-in-catalog-example
       catalog: vllm-sr/mom-v1-lite
@@ -175,8 +284,11 @@ providers:
     - name: native-d3
       api_format: systemone
       deployment: decision-remote
+    # schema is the version of the API the backends speak: vllm-sr/5.0 for
+    # vllm-sr serve; omitted, systemone/0.2, the published standard.
     - name: native-vega
       api_format: systemone
+      schema: vllm-sr/5.0
       provider_model_id: vllm-sr/Decision-2.0-Vega-27B
       backend_refs:
         - provider: systemone-compatible
@@ -208,1777 +320,11 @@ evaluation:
       benchmark: vllm-sr/operator-rating@1.0.0
       metrics:
         score: 0.79
-routing:
-  strategy: priority
-  modelCards:
-    - name: qwen3-8b
-      display_name: Qwen3 8B reference model
-      publisher: Alibaba Cloud
-      presentation:
-        logo: package:qwen
-        monogram: Q
-        monochrome: false
-      distribution:
-        type: open_weights
-        source: https://huggingface.co/Qwen/Qwen3-8B
-        license: Apache-2.0
-      family: qwen3
-      revision: reference-v1
-      released_at: 2025-04-29
-      knowledge_cutoff: 2024-12
-      lifecycle: active
-      param_size: 8B
-      context_window_size: 131072
-      max_output_tokens: 32768
-      description: General-purpose text model for the default routing tier.
-      capabilities: [chat, reasoning, tools]
-      modalities:
-        input: [text]
-        output: [text]
-      modality: ar
-      tags: [default, fast]
-    - name: qwen3-32b
-      param_size: 32B
-      context_window_size: 131072
-      description: Higher-quality text model for complex and verified requests.
-      capabilities: [chat, reasoning, long-context]
-      loras:
-        - name: computer-science-expert
-          description: Adapter specialized for advanced computer science and software design prompts.
-        - name: business-adapter
-          description: Adapter specialized for business strategy and operations prompts.
-      modality: ar
-      tags: [premium, analysis]
-    - name: llava-omni
-      param_size: 13B
-      context_window_size: 65536
-      description: Omni model that can satisfy both text and multimodal orchestration paths.
-      capabilities: [chat, vision, multimodal]
-      modality: omni
-      tags: [multimodal, omni]
-    - name: sdxl-image
-      param_size: 3B
-      context_window_size: 8192
-      description: Diffusion-style image generation backend used by image routes.
-      capabilities: [image_generation]
-      modality: diffusion
-      tags: [image, diffusion]
-
-  signals:
-    keywords:
-      - name: code_keywords
-        operator: OR
-        method: bm25
-        keywords: ["code", "function", "debug", "algorithm", "refactor"]
-        case_sensitive: false
-        bm25_threshold: 0.1
-      - name: machine_learning
-        operator: OR
-        method: bm25
-        keywords: ["machine learning", "model training", "gradient", "neural network", "classifier"]
-        case_sensitive: false
-        bm25_threshold: 0.1
-      - name: urgent_keywords
-        operator: OR
-        method: ngram
-        keywords: ["urgent", "immediate", "asap", "emergency"]
-        case_sensitive: false
-        ngram_threshold: 0.4
-        ngram_arity: 3
-      - name: fuzzy_sensitive_keywords
-        operator: OR
-        method: fuzzy
-        keywords: ["social security", "credit card", "password", "api key"]
-        case_sensitive: false
-        fuzzy_match: true
-        fuzzy_threshold: 82
-      # include_history also matches earlier user messages in the conversation,
-      # so a constraint such as "local model only" stated in an earlier turn
-      # still applies. Omitted (false) evaluates only the current user message.
-      - name: local_only_markers
-        operator: OR
-        keywords: ["local model only", "do not upload to cloud"]
-        case_sensitive: false
-        include_history: true
-
-    embeddings:
-      - name: technical_support
-        threshold: 0.75
-        aggregation_method: max
-        # A complete rule override; omission inherits the family configuration.
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 8
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-        candidates:
-          - how to configure the system
-          - installation guide
-          - troubleshooting steps
-          - error message explanation
-      - name: account_management
-        threshold: 0.72
-        aggregation_method: any
-        candidates:
-          - password reset
-          - account settings
-          - billing information
-          - subscription management
-      # query_modality declares which modality of incoming request payload the
-      # embedding rule's query is computed from. Defaults to "text" when
-      # omitted. Setting it to "image" or "audio" requires
-      # global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal
-      # so the query and candidate embeddings land in the same shared space;
-      # see website/docs/tutorials/signal/learned/embedding.md for the worked
-      # multimodal example.
-      - name: clinical_query_intent
-        query_modality: text
-        # Positive image references can complement or replace text candidates.
-        # Negative candidates subtract their aggregated cosine score.
-        image_candidates: []
-        negative_candidates: []
-        negative_image_candidates: []
-        threshold: 0.72
-        aggregation_method: max
-        candidates:
-          - patient symptoms or clinical question
-          - medication interaction or dosage question
-          - test result interpretation request
-
-    domains:
-      - name: business
-        description: Business and management related queries.
-        mmlu_categories: [business]
-        model_scores:
-          - model: qwen3-32b
-            score: 0.96
-            use_reasoning: true
-      - name: law
-        description: Legal questions and policy topics.
-        mmlu_categories: [law]
-      - name: psychology
-        description: Psychology and mental-health oriented prompts.
-        mmlu_categories: [psychology]
-      - name: health
-        description: Health and medical information requests.
-        mmlu_categories: [health]
-      - name: "computer science"
-        description: Computer science and engineering prompts.
-        mmlu_categories: ["computer science"]
-      - name: other
-        description: General fallback traffic.
-        mmlu_categories: [other]
-
-    # A safety rule asks its own question: deployment names the deployment
-    # that answers it, else the decision model does. A hazard part scores the
-    # hazard categories with its own deployment, else with the pre-declared
-    # hazard deployment (Vela 1.0 Hazard).
-    safety:
-      - name: unsafe-content
-        description: Content risk, independent of prompt attacks.
-        labels: [safe, unsafe]
-        unsafe_labels: [unsafe]
-        threshold: 0.52
-      - name: unsafe-privacy
-        description: Unsafe content whose hazard is privacy.
-        deployment: vela-safety
-        labels: [safe, unsafe]
-        unsafe_labels: [unsafe]
-        threshold: 0.52
-        hazard:
-          deployment: content-risk
-          labels: [violence, criminal_activity, sexual_content, child_exploitation,
-                   hate, harassment_abuse, regulated_substances, weapons,
-                   self_harm, privacy, specialized_advice, misinformation]
-          categories: [privacy]
-          threshold: 0.6
-
-    fact_check:
-      - name: needs_fact_check
-        description: Prompts with factual claims that should be verified.
-      - name: no_fact_check_needed
-        description: Creative prompts that do not need factual verification.
-
-    user_feedbacks:
-      - name: wrong_answer
-        description: The user indicates the previous answer was incorrect.
-      - name: need_clarification
-        description: The user asks for a clearer or more detailed answer.
-
-    reasks:
-      - name: likely_dissatisfied
-        description: The current user turn closely repeats the immediately previous user turn.
-        threshold: 0.8
-        lookback_turns: 1
-      - name: persistently_dissatisfied
-        description: The current user turn repeats the last two user turns in a row.
-        threshold: 0.8
-        lookback_turns: 2
-
-    preferences:
-      - name: terse_answers
-        description: Users who prefer short, direct responses.
-        examples:
-          - keep it concise
-          - bullet points only
-          - answer in one paragraph
-        threshold: 0.7
-
-    language:
-      - name: zh
-        description: Chinese-language requests.
-        # threshold: minimum lingua-go confidence required (0 = built-in default 0.3)
-        threshold: 0.0
-      - name: es
-        description: Spanish-language requests.
-
-    context:
-      - name: long_context
-        min_tokens: 32K
-        max_tokens: 256K
-        description: Requests that need larger effective context windows.
-
-    structure:
-      - name: many_questions
-        description: Prompts that contain many explicit questions.
-        feature:
-          type: count
-          source:
-            type: regex
-            pattern: '[?？]'
-        predicate:
-          gte: 4
-      - name: at_most_one_question
-        description: Prompts with one or fewer explicit questions.
-        feature:
-          type: count
-          source:
-            type: regex
-            pattern: '[?？]'
-        predicate:
-          lte: 1
-      - name: numbered_steps
-        description: Prompts that contain numbered list items such as "1. ..."
-        feature:
-          type: exists
-          source:
-            type: regex
-            pattern: '(?m)^\s*\d+\.\s+'
-      - name: first_then_flow
-        description: Prompts that express an ordered workflow.
-        feature:
-          type: sequence
-          source:
-            type: sequence
-            case_sensitive: false
-            sequences:
-              - ["first", "then"]
-              - ["first", "next", "finally"]
-              - ["首先", "然后"]
-              - ["先", "再"]
-      - name: constraint_dense
-        description: Prompts with dense explicit constraints relative to multilingual text units.
-        feature:
-          type: density
-          source:
-            type: keyword_set
-            case_sensitive: false
-            keywords:
-              - under
-              - at most
-              - at least
-              - within
-              - no more than
-              - 不超过
-              - 至少
-              - 最多
-        predicate:
-          gt: 0.08
-      - name: format_directive_dense
-        description: Prompts with dense output-format directives relative to multilingual text units.
-        feature:
-          type: density
-          source:
-            type: keyword_set
-            keywords: ["table", "bullet", "json", "markdown", "表格", "列表", "JSON"]
-        predicate:
-          gt: 0.08
-      - name: low_question_density
-        description: Prompts with very low question density relative to multilingual text units.
-        feature:
-          type: density
-          source:
-            type: regex
-            pattern: '[?？]'
-        predicate:
-          lt: 0.05
-      - name: long_current_turn_bytes
-        description: Current user turn is at least four thousand UTF-8 bytes.
-        feature:
-          type: count
-          source:
-            type: text_bytes
-        predicate:
-          gte: 4000
-
-    complexity:
-      - name: needs_reasoning
-        threshold: 0.10
-        description: Escalate multi-step reasoning or synthesis-heavy prompts.
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 6
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-        hard:
-          candidates:
-            - solve this step by step
-            - compare multiple tradeoffs
-            - analyze the root cause
-          image_candidates:
-            - generate a detailed architecture diagram
-        easy:
-          candidates:
-            - answer briefly
-            - quick summary
-            - simple rewrite
-          image_candidates:
-            - make a simple icon
-        composer:
-          operator: OR
-          conditions:
-            - type: context
-              name: long_context
-            - type: domain
-              name: "computer science"
-      - name: deep_synthesis
-        # The explicit boundary pair, the asymmetric form of `threshold`: the
-        # two verdicts do not have to sit the same distance from the middle.
-        # hard_above with easy_below reads in the direction the local margin
-        # runs, where a higher score is harder.
-        hard_above: 0.25
-        easy_below: -0.05
-        description: Escalate synthesis-heavy prompts, with a wider medium band than needs_reasoning.
-        hard:
-          candidates:
-            - synthesise these sources into one argument
-            - reconcile the conflicting requirements
-        easy:
-          candidates:
-            - list the headings
-            - restate this sentence
-
-    modality:
-      - name: AR
-        description: Text-only autoregressive requests.
-      - name: DIFFUSION
-        description: Image-generation requests.
-      - name: BOTH
-        description: Requests that need both text and image generation.
-
-    role_bindings:
-      - name: admin
-        description: Requests from platform administrators.
-        role: admin
-        subjects:
-          - kind: Group
-            name: platform-admins
-      - name: premium_user
-        description: Requests from paid end users.
-        role: premium_user
-        subjects:
-          - kind: Group
-            name: premium-tier
-
-    jailbreak:
-      - name: prompt_injection
-        method: contrastive
-        threshold: 0.8
-        include_history: true
-        description: Detect common prompt-injection or jailbreak attempts.
-        jailbreak_patterns:
-          - ignore previous instructions
-          - reveal the hidden prompt
-          - jailbreak mode
-        benign_patterns:
-          - explain the policy
-          - summarize the safety rules
-      # direction: response scores the model's output instead of the prompt, so
-      # this rule only exists once the model has answered; the selected
-      # decision's response_jailbreak plugin enforces on it.
-      - name: unsafe_completion
-        direction: response
-        threshold: 0.90
-        description: Detect jailbreak content in the model's own output.
-
-    # Hallucination rules check the model's answer against the grounding
-    # context the request carried (tool results or retrieved context), so they
-    # only exist once the model has answered; the selected decision's
-    # hallucination plugin enforces on them.
-    hallucination:
-      - name: ungrounded_claims
-        description: Detect claims the grounding context does not support.
-
-    pii:
-      - name: restricted_pii
-        source: ""
-        threshold: 0.18
-        include_history: true
-        pii_types_allowed:
-          - EMAIL_ADDRESS
-        description: Sensitive prompts where only low-risk identifiers may pass through.
-
-    kb:
-      - name: privacy_policy
-        kb: privacy_kb
-        target:
-          kind: group
-          value: privacy_policy
-        match: best
-      - name: security_containment
-        kb: privacy_kb
-        target:
-          kind: group
-          value: security_containment
-        match: best
-      - name: frontier_reasoning
-        kb: privacy_kb
-        target:
-          kind: group
-          value: frontier_reasoning
-        match: best
-      - name: local_standard
-        kb: privacy_kb
-        target:
-          kind: group
-          value: local_standard
-        match: best
-
-    conversation:
-      - name: multi_turn_user
-        description: At least two user messages.
-        feature:
-          type: count
-          source:
-            type: message
-            role: user
-        predicate:
-          gte: 2
-      - name: has_tools
-        description: Request defines at least one tool.
-        feature:
-          type: count
-          source:
-            type: tool_definition
-        predicate:
-          gte: 1
-      - name: requires_tool_execution
-        description: Request protocol requires at least one tool call.
-        feature:
-          type: exists
-          source:
-            type: tool_choice_required
-      - name: forbids_tool_execution
-        description: Request protocol explicitly forbids tool calls.
-        feature:
-          type: exists
-          source:
-            type: tool_choice_none
-      - name: active_tool_use
-        description: Tool-result continuation inside an agent loop.
-        feature:
-          type: exists
-          source:
-            type: active_tool_loop
-      - name: resumable_flow_state
-        description: Request ends with a Router Flow tool result carrying continuation state.
-        feature:
-          type: exists
-          source:
-            type: flow_tool_state
-      - name: has_developer_msg
-        description: Request contains a developer message.
-        feature:
-          type: exists
-          source:
-            type: message
-            role: developer
-      - name: heavy_non_user
-        description: Non-user messages exceed threshold.
-        feature:
-          type: count
-          source:
-            type: message
-            role: non_user
-        predicate:
-          gt: 5
-          lte: 99
-      - name: has_images
-        description: Request contains at least one image content part.
-        feature:
-          type: exists
-          source:
-            type: image_content
-
-    events:
-      - name: critical_payment_event
-        description: Critical payment or transaction events that need incident-grade routing.
-        event_types:
-          - payment_failed
-          - transaction_declined
-        severities:
-          - critical
-          - high
-        action_codes:
-          - TXN_DECLINE
-        temporal: true
-
-    metadata:
-      - name: consent_denied
-        description: Caller explicitly denied remote processing consent.
-        key: consent
-        predicate:
-          equals: denied
-
-    input_modality:
-      - name: image_input
-        description: Request contains at least one image content part.
-        modality: image
-      - name: audio_input
-        description: Request contains at least one audio content part.
-        modality: audio
-
-    actions:
-      - name: explain
-        description: Describe code or answer a question without editing anything.
-      - name: fix
-        description: Repair a bug or a failing behavior.
-
-    # Context-policy evidence: whether the live turn still depends on
-    # retained history. Not decision-referenceable; every declared rule runs
-    # before the context transformation stage and context policies read the
-    # typed result. Every field except name is optional (defaults shown).
-    topic_continuity:
-      - name: topic_boundary
-        description: Whether the live turn still depends on retained history.
-        include_assistant: true
-        thresholds:
-          continuation: 0.35
-          change: 0.08
-        limits:
-          max_prior_turns: 8
-          max_turn_bytes: 16384
-          max_input_bytes: 147456
-
-    # Typed questions. deployment names the deployment that answers each one:
-    # the built-in model runtime (provider model_runtime) or a remote System
-    # One API (provider systemone). A question without one asks the decision
-    # model.
-    decision:
-      - name: needs_reasoning
-        description: The decision model judges that the request needs multi-step reasoning.
-        deployment: decision-kai
-        question:
-          type: noul
-          instructions: Does answering this request need multi-step reasoning?
-        predicate:
-          gte: 0.7
-        timeout_ms: 1000
-      - name: request_kind
-        description: What kind of work the request asks for.
-        deployment: decision-kai
-        question:
-          type: choice
-          instructions: What kind of request is this?
-          choices:
-            - key: code
-              description: Writing, reviewing or debugging code
-            - key: math
-              description: Mathematics or quantitative reasoning
-            - key: chat
-              description: Anything else
-        timeout_ms: 1000
-      - name: difficulty
-        description: Expected difficulty on a three-level scale.
-        deployment: decision-kai
-        question:
-          type: score
-          instructions: How difficult is this request?
-          levels:
-            - Trivial
-            - Moderate
-            - Hard
-        predicate:
-          gte: 1.5
-      - name: support_team
-        description: Which team should handle the request, asked of a remote System One API.
-        deployment: decision-remote
-        question:
-          type: choice
-          instructions: Which team should handle this request?
-          choices:
-            - key: billing
-              description: Payments and refunds
-            - key: engineering
-              description: Outages and bugs
-
-    # A classifier rule asks its own question: deployment names the deployment
-    # that answers it, and the deployment's provider decides how it is asked.
-    # A rule without one is asked of the decision model.
-    classifiers:
-      - name: content-risk
-        description: Independent content hazards with model-specific operating points.
-        # content-risk pins the Hazard head's packaged operating point, so each
-        # label is scored independently against its own threshold.
-        deployment: content-risk
-        labels: [violence, criminal_activity, sexual_content, child_exploitation,
-                 hate, harassment_abuse, regulated_substances, weapons,
-                 self_harm, privacy, specialized_advice, misinformation]
-      - name: generic-safety-score
-        description: Generic binary safety classification head.
-        deployment: vela-safety
-        labels: [safe, unsafe]
-      - name: tool-risk
-        description: Prompted tool execution risk labeler.
-        deployment: openai-classifier
-        labels: [SAFE, RISKY]
-        instructions: >-
-          Choose RISKY only for destructive, privileged, or irreversible tool
-          operations.
-        # false (default) asks the chat model for a short rationale with the
-        # label scores; true asks for the scores only.
-        disable_rationale: false
-      - name: remote-safety-score
-        description: Remote binary safety classification head.
-        deployment: sequence-classifier
-        labels: [SAFE, RISKY]
-      - name: support-intent
-        description: Whether a support request is about billing or a technical problem.
-        labels: [billing, technical]
-
-  projections:
-    partitions:
-      - name: support_intents
-        semantics: exclusive
-        temperature: 0.3
-        members:
-          - technical_support
-          - account_management
-        default: technical_support
-    scores:
-      - name: request_difficulty
-        method: weighted_sum
-        inputs:
-          - type: embedding
-            name: technical_support
-            weight: 0.18
-            value_source: confidence
-            match: 1.0
-            miss: 0.0
-          - type: embedding
-            name: account_management
-            weight: -0.08
-            value_source: confidence
-          - type: complexity
-            name: needs_reasoning:medium
-            weight: 0.18
-          - type: complexity
-            name: needs_reasoning:hard
-            weight: 0.36
-          - type: context
-            name: long_context
-            weight: 0.18
-          - type: structure
-            name: first_then_flow
-            weight: 0.12
-      - name: privacy_kb_bias
-        method: weighted_sum
-        inputs:
-          - type: kb_metric
-            kb: privacy_kb
-            metric: private_vs_public
-            weight: 1.0
-            value_source: score
-    mappings:
-      - name: request_band
-        source: request_difficulty
-        method: threshold_bands
-        calibration:
-          method: sigmoid_distance
-          slope: 10.0
-        outputs:
-          - name: support_fast
-            lte: 0.20
-          - name: support_balanced
-            gt: 0.20
-            lt: 0.45
-          - name: support_escalated
-            gte: 0.45
-
-  decisions:
-    - name: static_business_route
-      description: Static fallback for standard business traffic.
-      priority: 200
-      tier: 2
-      output_contract: Preserve any explicit user-requested output format exactly.
-      annotations:
-        policy_class: business
-        owner: routing-platform
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-          reasoning_description: Prefer fast, direct business answers.
-        # The DSL compiles explicit candidateIterations models into modelRefs, so list them here as well.
-        - model: qwen3-32b
-          lora_name: business-adapter
-          use_reasoning: true
-          reasoning_mode: enabled
-          reasoning_effort: low
-      candidateIterations:
-        - variable: candidate
-          source: models
-          models:
-            - model: qwen3-32b
-              lora_name: business-adapter
-              weight: 1.0
-              use_reasoning: true
-              reasoning_mode: enabled
-              reasoning_description: Candidate iteration reference model for DSL authoring coverage.
-              reasoning_effort: low
-          outputs:
-            - type: model
-              value: candidate
-      algorithm:
-        type: static
-      plugins:
-        # Shadow a candidate model on a small sample of this route's traffic.
-        # The primary response never waits on or changes because of the shadow.
-        - type: shadow_dispatch
-          configuration:
-            enabled: true
-            model: qwen3-32b
-            sample_rate: 0.05
-            max_concurrency: 2
-            max_queue_depth: 8
-            timeout_seconds: 30
-            max_response_bytes: 1048576
-            max_retries: 0
-            capture_response_body: false
-            max_capture_bytes: 4096
-            tls_skip_verify: false
-            # Decision header mutations reach the shadow only when listed here.
-            forward_headers: []
-        - type: system_prompt
-          configuration:
-            enabled: true
-            mode: insert
-            system_prompt: You are a senior business consultant. Give practical recommendations and clear tradeoffs.
-        - type: response_cache
-          configuration:
-            enabled: true
-            mode: exact
-            scope: user
-            # Reference-only setting for operators who explicitly opt into semantic mode.
-            semantic:
-              similarity_threshold: 0.82
-            ttl_seconds: 7200
-            request_controls:
-              enabled: true
-              header: x-vsr-cache-control
-              allowed:
-                - no-cache
-                - no-store
-                - bypass
-                - max-age
-                - ttl
-              max_ttl_seconds: 7200
-            personalized:
-              mode: disabled
-            revision:
-              cache_epoch: "2026-08"
-              model_revision: "model-catalog-v1"
-              prompt_revision: "prompts-v1"
-              policy_revision: "policy-v1"
-        - type: context_compression
-          configuration:
-            enabled: true
-            mode: auto
-            budget:
-              trigger_tokens: auto
-              target_tokens: auto
-              reserve_output_tokens: auto
-            targets:
-              current_user:
-                mode: preserve
-              tool_outputs:
-                mode: extractive
-                min_tokens: 2000
-                target_tokens: 1000
-              history:
-                mode: preserve
-              rag:
-                mode: preserve
-              memory:
-                mode: preserve
-            scoring:
-              method: bm25
-              embedding_model_ref: ""
-            recovery:
-              enabled: false
-              store: response_cache
-              ttl_seconds: 900
-              max_bytes_per_request: 10485760
-              max_total_bytes: 268435456
-              max_retrievals: 8
-            request_controls:
-              enabled: false
-              header: x-vsr-compression-control
-              allowed:
-                - bypass
-                - target
-              max_target_tokens: 16000
-            failure_mode: fail_open
-        - type: tools
-          configuration:
-            enabled: true
-            mode: filtered
-            semantic_selection: true
-            allow_tools:
-              - search_web
-            block_tools:
-              - exec_cmd
-        # Disabled sample: add mode only (filter fields belong under mode: filter; see legal_confidence_route).
-        - type: tool_selection
-          configuration:
-            enabled: false
-            mode: add
-            tools_db_path: config/tools_db.json
-            top_k: 5
-            similarity_threshold: 0.30
-            strategy: default
-            fallback_to_empty: false
-            advanced_filtering:
-              enabled: true
-              candidate_pool_size: 30
-              min_combined_score: 0.4
-            # Session-scoped sticky selection (issue #3347): opt-in, disabled
-            # by default. See website/docs/tutorials/plugin/tool-selection.md.
-            sticky:
-              enabled: false
-              max_tools: 16
-              max_new_tools_per_turn: 2
-              pin_called_tools: true
-        - type: masking
-          configuration:
-            enabled: true
-            threshold: 0.85
-            entity_types:
-              - EMAIL_ADDRESS
-              - PHONE_NUMBER
-            placeholders:
-              EMAIL_ADDRESS: "[EMAIL_{index}]"
-              PHONE_NUMBER: "[PHONE_{index}]"
-      emits:
-        - kind: retention
-          retention:
-            drop: false
-            ttl_turns: 4
-            keep_current_model: true
-            prefer_prefix_retention: true
-
-    - name: legal_confidence_route
-      description: Confidence-routed legal and factual traffic.
-      priority: 190
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: law
-          - type: fact_check
-            name: needs_fact_check
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_mode: enabled
-          weight: 0.4
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_description: Escalate when confidence is weak.
-          reasoning_effort: high
-          weight: 0.6
-      algorithm:
-        type: confidence
-        minimum_candidates: 2
-        on_error: fallback
-        confidence:
-          confidence_method: hybrid
-          threshold: 0.72
-          hybrid_weights:
-            logprob_weight: 0.65
-            margin_weight: 0.35
-          on_error: skip
-          escalation_order: small_to_large
-          cost_quality_tradeoff: 0.45
-          token_filter: tool_call_args
-          verifier_server_url: ""
-          verifier_timeout_seconds: 0
-          max_response_bytes: 0
-      plugins:
-        - type: hallucination
-          configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: true
-        # Disabled sample: filter mode only (reference config union coverage for ToolSelectionPluginConfig filter fields).
-        - type: tool_selection
-          configuration:
-            enabled: false
-            mode: filter
-            relevance_threshold: 0.25
-            preserve_count: 2
-        # Disabled sample: field coverage only (reference config union coverage
-        # for PromptCachePluginConfig). qwen3-32b speaks the Anthropic Messages
-        # wire format this plugin targets; see tutorials/plugin/prompt-cache.
-        - type: prompt_cache
-          configuration:
-            enabled: false
-            ttl: 1h
-            targets: [instructions, tools]
-            on_unsupported: skip
-
-    - name: health_ratings_route
-      description: Ratings-based route for health requests that need fact verification.
-      priority: 180
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: health
-          - type: fact_check
-            name: needs_fact_check
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_mode: enabled
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_effort: high
-      algorithm:
-        type: ratings
-        ratings:
-          max_concurrent: 3
-          on_error: skip
-      adaptations:
-        mode: bypass
-      plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            capture_request_body: true
-            capture_response_body: true
-            capture_personal_data: false
-            # Tool results stay redacted. true stores each client tool
-            # result, bounded by max_tool_trace_bytes, and requires
-            # capture_personal_data: true; use it for development or audit.
-            capture_tool_results: false
-            max_body_bytes: 4096
-            # 0 = no truncation (the documented default). Set to a positive
-            # byte cap to independently limit structured tool-trace fields
-            # (prompt, tool_definitions, and each tool-call's arguments/output)
-            # without having to shrink max_body_bytes.
-            max_tool_trace_bytes: 0
-            # Cap the number of tool-trace steps retained per record. Long
-            # agent sessions (many sequential tool calls) can otherwise grow
-            # the trace unbounded and OOM the router (#1835). 0 = no cap.
-            max_tool_trace_steps: 100
-
-    - name: computer-science-remom-route
-      description: ReMoM route for complex computer science prompts.
-      priority: 170
-      output_contract_spec:
-        type: reference_selection
-        reference:
-          source: candidate_responses
-          id_format: index
-        extract:
-          mode: exact
-          sources: [content]
-        postprocess:
-          - type: dereference_selected_reference
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: "computer science"
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_description: Use the strongest text model for synthesis.
-          reasoning_effort: high
-          lora_name: computer-science-expert
-          weight: 0.5
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_mode: enabled
-          weight: 0.2
-        - model: llava-omni
-          use_reasoning: true
-          reasoning_effort: high
-          weight: 0.3
-      algorithm:
-        type: remom
-        remom:
-          breadth_schedule: [3, 2]
-          model_distribution: round_robin
-          temperature: 0.7
-          include_reasoning: true
-          compaction_strategy: last_n_tokens
-          compaction_tokens: 512
-          synthesis_template: Fuse the strongest technical findings into a final answer.
-          synthesis_model: qwen3-32b
-          max_concurrent: 3
-          max_completion_tokens: 1024
-          round_timeout_seconds: 120
-          min_successful_responses: 2
-          on_error: skip
-          shuffle_seed: 7
-          include_intermediate_responses: true
-          max_responses_per_round: 2
-      plugins:
-        - type: memory
-          configuration:
-            enabled: true
-            retrieval_limit: 6
-            similarity_threshold: 0.40
-            auto_store: true
-            hybrid_search: true
-            hybrid_mode: weighted
-            reflection:
-              enabled: true
-              algorithm: heuristic
-              max_inject_tokens: 384
-              recency_decay_days: 14
-              dedup_threshold: 0.9
-              block_patterns:
-                - api key
-                - password
-
-    - name: deliberation-fusion-route
-      description: Fusion route for prompts that benefit from panel deliberation.
-      priority: 165
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_mode: enabled
-          weight: 0.5
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_effort: high
-          weight: 0.5
-      algorithm:
-        type: fusion
-        fusion:
-          model: qwen3-32b
-          analysis_models:
-            - qwen3-8b
-            - qwen3-32b
-          analysis_mode: separate
-          analysis_overrides:
-            - model: qwen3-8b
-              temperature: 0.2
-              max_completion_tokens: 384
-            - model: qwen3-32b
-              temperature: 0.15
-              max_completion_tokens: 512
-          max_concurrent: 2
-          max_completion_tokens: 512
-          round_timeout_seconds: 90
-          min_successful_responses: 1
-          temperature: 0.2
-          include_analysis: true
-          include_intermediate_responses: true
-          on_error: skip
-          # Panel-level policy when usable responses fall below
-          # min_successful_responses: fail (typed error) or fallback (route to
-          # quorum_fallback_target). Independent of on_error, which governs one
-          # failed panel attempt. Recipe-owned; requests cannot override it.
-          # quorum_fallback_target is required by, and only valid with, fallback.
-          quorum_failure_policy: fail
-          quorum_fallback_target: ""
-          analysis_template: ""
-          synthesis_template: ""
-          judge_prompt_version: fusion-v1
-          # Grounding-aware synthesis: score panel responses for faithfulness
-          # with the hallucination detector (against the request's context, else
-          # against each peer response) and use the scores to guide the judge.
-          # Disabled by default.
-          grounding:
-            enabled: false
-            reference: hybrid          # hybrid | context | panel
-            policy: weight             # weight | annotate | filter (see below)
-            min_score: 0.0             # filter policy only: drop below this (0-1)
-            min_keep: 1                # filter policy only: keep at least this many
-            contradiction_penalty: 1.0 # panel reference: weight of a peer's contradiction
-            on_error: skip             # skip (fall back to plain fusion) | fail
-            # policy controls how the scores are used:
-            #   weight   (default) keep every response; tell the judge to weight
-            #            each answer by its score (a correct lone dissenter is kept).
-            #   annotate keep every response; pass the scores to the judge as notes.
-            #   filter   hard-drop responses below min_score (keep min_keep).
-            # filter regresses quality on contested factual questions because it
-            # deletes the correct dissenter; see bench/grounded_fusion/FINDINGS.md.
-
-    - name: router-flow-workflow-route
-      description: Router Flow route for bounded static or dynamic micro-agent workflows.
-      priority: 164
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_mode: enabled
-          weight: 0.5
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_effort: high
-          weight: 0.5
-      algorithm:
-        type: workflows
-        workflows:
-          mode: dynamic
-          template: micro_agent
-          planner:
-            model: qwen3-32b
-          max_steps: 6
-          max_parallel: 2
-          max_completion_tokens: 1024
-          round_timeout_seconds: 90
-          min_successful_responses: 1
-          temperature: 0.2
-          include_intermediate_responses: true
-          on_error: fail
-
-    - name: terse_feedback_route
-      description: Terse-answer route that allows Router Learning adaptation to adjust feedback-driven routing.
-      priority: 160
-      rules:
-        operator: AND
-        conditions:
-          - type: preference
-            name: terse_answers
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: false
-      adaptations:
-        adaptation:
-          mode: apply
-      plugins:
-        - type: fast_response
-          configuration:
-            message: The primary model is saturated, so a lightweight response was returned immediately.
-        - type: request_params
-          configuration:
-            blocked_params:
-              - logprobs
-              - top_logprobs
-            default_max_tokens: 4096
-            max_tokens_limit: 8192
-            max_n: 4
-            strip_unknown: false
-
-    - name: support_router_dc_route
-      description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query.
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: embedding
-            name: technical_support
-          - type: projection
-            name: support_escalated
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: router_dc
-        router_dc:
-          temperature: 0.2
-          dimension_size: 384
-          min_similarity: 0.7
-          use_query_contrastive: true
-          use_model_contrastive: true
-          require_descriptions: true
-          use_capabilities: true
-      # Overrides the recipe's cross-model fallback policy (routing.fallback,
-      # then global.router.fallback) field by field for this route. The
-      # candidates stay this decision's ranked models; circuit_breaker is per
-      # backend and stays on the recipe's or the global policy.
-      fallback:
-        enabled: true
-        max_attempts: 2
-        total_timeout: 20s
-        per_attempt_timeout: 8s
-        retryable_status_codes: [429, 502, 503, 504]
-      plugins:
-        - type: header_mutation
-          configuration:
-            add:
-              - name: X-Tenant-Tier
-                value: premium
-            update:
-              - name: X-Route-Source
-                value: semantic-router
-            delete:
-              - X-Debug-Trace
-
-    - name: urgent_automix_route
-      description: Cost-aware urgent handling with AutoMix.
-      priority: 145
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent_keywords
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: automix
-        automix:
-          verification_threshold: 0.78
-          max_escalations: 2
-          cost_aware_routing: true
-          cost_quality_tradeoff: 0.35
-          discount_factor: 0.9
-          use_logprob_verification: true
-      plugins:
-        - type: response_jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.85
-            action: header
-
-    - name: safe_hybrid_route
-      description: Composite route combining AND, OR, and NOT with Hybrid selection.
-      priority: 140
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-              - type: complexity
-                name: needs_reasoning:hard
-          - operator: NOT
-            conditions:
-              - type: jailbreak
-                name: prompt_injection
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: hybrid
-        hybrid:
-          experience_weight: 0.4
-          router_dc_weight: 0.3
-          automix_weight: 0.2
-          cost_weight: 0.1
-          quality_gap_threshold: 0.08
-          normalize_scores: true
-      plugins:
-        - type: tools
-          configuration:
-            enabled: true
-            mode: none
-            strip_tool_history: true
-    - name: spanish_adaptive_route
-      description: Spanish-language route that observes Router Learning adaptation with Milvus RAG.
-      priority: 135
-      rules:
-        operator: AND
-        conditions:
-          - type: language
-            name: es
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      adaptations:
-        adaptation:
-          mode: observe
-        protection:
-          stability_weight: 1.2
-          switch_margin: 0.04
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: milvus
-            similarity_threshold: 0.78
-            top_k: 5
-            max_context_length: 12000
-            injection_mode: tool_role
-            on_failure: warn
-            cache_results: true
-            cache_ttl_seconds: 600
-            min_confidence_threshold: 0.55
-            backend_config:
-              collection: docs
-              reuse_cache_connection: true
-              content_field: content
-              filter_expression: locale == "es"
-
-    - name: admin_adaptive_route
-      description: Admin route with Router Learning adaptation and external API RAG.
-      priority: 130
-      rules:
-        operator: AND
-        conditions:
-          - type: authz
-            name: admin
-      modelRefs:
-        - model: qwen3-32b
-          use_reasoning: true
-      adaptations:
-        adaptation:
-          mode: apply
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: external_api
-            similarity_threshold: 0.7
-            top_k: 6
-            max_context_length: 8000
-            injection_mode: system_prompt
-            on_failure: block
-            cache_results: false
-            min_confidence_threshold: 0.5
-            backend_config:
-              endpoint: https://search.example.com/query
-              api_key: search-api-key
-              auth_header: X-API-Key
-              request_format: custom
-              request_template: "{\"query\":\"{{.Query}}\",\"top_k\":{{.TopK}},\"threshold\":{{.Threshold}}}"
-              timeout_seconds: 15
-              max_response_bytes: 4194304
-              headers:
-                X-Environment: admin
-
-    - name: long_context_latency_route
-      description: Long-context route with latency-aware policy. MCP RAG stays disabled until an invoker exists.
-      priority: 125
-      rules:
-        operator: AND
-        conditions:
-          - type: context
-            name: long_context
-      modelRefs:
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: latency_aware
-        latency_aware:
-          tpot_percentile: 90
-          ttft_percentile: 95
-          description: Balance throughput and first-token latency for long prompts.
-      # Overrides the provider model's timeouts and retries for this route.
-      # Envoy applies these fields per request; idle_timeout,
-      # first_byte_timeout, back-off and retry_after_max need --gateway standalone.
-      reliability:
-        total_timeout: 600s
-        per_try_timeout: 300s
-        retry_count: 1
-        retry_on: reset,connect-failure,retriable-status-codes
-        retriable_status_codes: [503]
-      plugins:
-        - type: rag
-          configuration:
-            # Keep this example. TestReferenceConfigRAGBackends requires an mcp
-            # backend_config, and enabled must stay false until an invoker exists.
-            enabled: false
-            backend: mcp
-            similarity_threshold: 0.74
-            top_k: 4
-            max_context_length: 10000
-            injection_mode: tool_role
-            on_failure: skip
-            cache_results: false
-            min_confidence_threshold: 0.5
-            backend_config:
-              server_name: docs-server
-              tool_name: retrieve_docs
-              tool_arguments:
-                query: ${user_content}
-                top_k: ${top_k}
-              timeout_seconds: 20
-
-    # multi_factor example: composes quality/latency/cost/load into one
-    # weighted score with optional SLO ceilings. Issue #37.
-    - name: prompt_selected_route
-      description: Prompt-driven selection among bounded decision candidates.
-      priority: 126
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: prompt
-        on_error: fallback
-        prompt:
-          model: qwen3-8b
-          instructions: >-
-            Choose qwen3-8b for ordinary requests and qwen3-32b for hard
-            reasoning, coding, or multi-step analysis.
-          timeout_seconds: 5
-
-    - name: decision_model_route
-      description: Let a decision model pick the model for hard code requests.
-      priority: 126
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: decision
-            name: request_kind
-            label: code
-          - type: decision
-            name: needs_reasoning
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: decision
-        decision:
-          deployment: decision-kai
-          instructions: Which model should answer this request?
-          candidates:
-            qwen3-8b: Fast general model for routine code
-            qwen3-32b: Strong reasoning model for hard code
-          timeout_ms: 1000
-
-    - name: content_privacy_route
-      description: Route requests that cross the Hazard privacy operating point.
-      priority: 126
-      rules:
-        operator: AND
-        on_unknown: fail_request
-        conditions:
-          - type: classifier
-            name: content-risk
-            label: privacy
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-
-    - name: classifier_band_route
-      description: Route a bounded generic classifier score to a local model.
-      priority: 125
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: classifier
-            name: generic-safety-score
-            label: unsafe
-            predicate:
-              gte: 0.5
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-
-    - name: multi_factor_route
-      description: Compose quality, latency, cost, and load signals into a single weighted score.
-      priority: 124
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3-8b
-        - model: qwen3-32b
-      algorithm:
-        type: multi_factor
-        multi_factor:
-          expected_output_tokens: 4096
-          objective:
-            strategy: weighted
-          quality:
-            index: vllm-sr/coding@1.0.0
-            on_missing: exclude
-            min_coverage: 1.0
-            min_score: 0.0
-          weights:
-            quality: 0.4
-            latency: 0.2
-            cost: 0.2
-            load: 0.2
-          slo:
-            max_tpot_ms: 200
-            max_ttft_ms: 800
-            max_cost_per_1m: 5.0
-            max_inflight: 50
-          latency_percentile: 95
-          latency_metric: ttft
-          on_no_candidates: cheapest
-
-    - name: random_route
-      description: Uniform random baseline for routing experiments and evaluations.
-      priority: 122
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3-8b
-        - model: qwen3-32b
-      algorithm:
-        type: random
-        minimum_candidates: 2
-
-    - name: fallback_knn_route
-      description: KNN fallback route for general traffic with OpenAI vector-store RAG.
-      priority: 120
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-      algorithm:
-        type: knn
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: openai
-            similarity_threshold: 0.73
-            top_k: 8
-            max_context_length: 9000
-            injection_mode: tool_role
-            on_failure: warn
-            cache_results: true
-            cache_ttl_seconds: 300
-            min_confidence_threshold: 0.35
-            backend_config:
-              vector_store_id: vs_docs_prod
-              base_url: https://api.openai.com
-              api_key: openai-file-search-key
-              max_num_results: 12
-              max_response_bytes: 4194304
-              file_ids: [file_a, file_b]
-              filter:
-                doc_type: manual
-              timeout_seconds: 20
-              workflow_mode: tool_based
-
-    - name: clarification_kmeans_route
-      description: KMeans route for clarification requests with local vector-store RAG.
-      priority: 115
-      rules:
-        operator: AND
-        conditions:
-          - type: user_feedback
-            name: need_clarification
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: kmeans
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            similarity_threshold: 0.69
-            top_k: 5
-            # The reranker is named where it is used: document-ranker scores
-            # each query-passage pair at the pair scorer's layer-22, 768-wide
-            # exit and keeps the best 3 of the 5 candidates.
-            rerank:
-              deployment: document-ranker
-              top_k: 3
-              layer: 22
-              dimension: 768
-            max_context_length: 7000
-            injection_mode: tool_role
-            on_failure: skip
-            cache_results: true
-            cache_ttl_seconds: 900
-            min_confidence_threshold: 0.25
-            backend_config:
-              vector_store_id: local-vs
-              file_ids: [kb-001, kb-002]
-
-    - name: repeat_question_escalation
-      description: Escalate when the user repeats the same question after an unsatisfying answer.
-      priority: 114
-      rules:
-        operator: AND
-        conditions:
-          - type: reask
-            name: likely_dissatisfied
-      modelRefs:
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: static
-      plugins:
-        - type: header_mutation
-          configuration:
-            add:
-              - name: x-escalation-reason
-                value: repeated-question
-
-    # A route action sends every request matching this decision to
-    # action.destination, overriding a caller-pinned model, so a detected
-    # prompt attack cannot bypass the guard by naming a model. The action
-    # requires an explicit jailbreak condition in rules, and destination must
-    # be defined in model_config. If the destination cannot satisfy the
-    # request context window, the decision falls back to its normal candidate
-    # policy (modelRefs/default selection).
-    - name: prompt_attack_guard_route
-      description: Route detected prompt attacks to a safe fallback model.
-      priority: 120
-      rules:
-        type: jailbreak
-        name: prompt_injection
-      action:
-        type: route
-        destination: qwen3-8b
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-    - name: safe_only_svm_route
-      description: SVM route that only matches when prompt-injection signals are absent.
-      priority: 110
-      rules:
-        operator: NOT
-        conditions:
-          - type: jailbreak
-            name: prompt_injection
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-      algorithm:
-        type: svm
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: hybrid
-            similarity_threshold: 0.76
-            top_k: 6
-            max_context_length: 9000
-            injection_mode: tool_role
-            on_failure: warn
-            cache_results: false
-            min_confidence_threshold: 0.45
-            backend_config:
-              primary: milvus
-              fallback: external_api
-              strategy: parallel
-              primary_config:
-                collection: docs
-                reuse_cache_connection: true
-              fallback_config:
-                endpoint: https://search.example.com/query
-                request_format: pinecone
-
-    - name: mlp_experimental_route
-      description: Experimental MLP-based model selection route.
-      priority: 103
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: machine_learning
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-      algorithm:
-        type: mlp
-
-    - name: image_generation_route
-      description: Dedicated image-generation route using the OpenAI image backend.
-      priority: 105
-      rules:
-        operator: AND
-        conditions:
-          - type: modality
-            name: DIFFUSION
-      modelRefs:
-        - model: sdxl-image
-          use_reasoning: false
-
-    - name: multimodal_route
-      description: BOTH-modality route requiring text and image-capable execution.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: modality
-            name: BOTH
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-        - model: sdxl-image
-          use_reasoning: false
 
 entrypoints:
   - model_names: ["vllm-sr/exhaustive-default"]
     recipe: default
+    default: true
   - model_names: ["vllm-sr/exhaustive-privacy"]
     recipe: privacy-first
   - api: systemone
@@ -1986,103 +332,1833 @@ entrypoints:
     recipe: native-handwritten
 
 recipes:
+  - name: default
+    strategy: priority
+
+    signals:
+      keywords:
+        - name: code_keywords
+          operator: OR
+          method: bm25
+          keywords: ["code", "function", "debug", "algorithm", "refactor"]
+          case_sensitive: false
+          bm25_threshold: 0.1
+        - name: machine_learning
+          operator: OR
+          method: bm25
+          keywords: ["machine learning", "model training", "gradient", "neural network", "classifier"]
+          case_sensitive: false
+          bm25_threshold: 0.1
+        - name: urgent_keywords
+          operator: OR
+          method: ngram
+          keywords: ["urgent", "immediate", "asap", "emergency"]
+          case_sensitive: false
+          ngram_threshold: 0.4
+          ngram_arity: 3
+        - name: fuzzy_sensitive_keywords
+          operator: OR
+          method: fuzzy
+          keywords: ["social security", "credit card", "password", "api key"]
+          case_sensitive: false
+          fuzzy_match: true
+          fuzzy_threshold: 82
+        # include_history also matches earlier user messages in the conversation,
+        # so a constraint such as "local model only" stated in an earlier turn
+        # still applies. Omitted (false) evaluates only the current user message.
+        - name: local_only_markers
+          operator: OR
+          keywords: ["local model only", "do not upload to cloud"]
+          case_sensitive: false
+          include_history: true
+        # count and density make an OR rule match on how often its keywords
+        # occur: count on the number of occurrences, density on occurrences per
+        # 1,000 characters. Either is published as keyword:<rule>.
+        - name: many_questions
+          description: Prompts that contain many explicit questions.
+          operator: OR
+          method: regex
+          keywords: ['[?？]']
+          case_sensitive: false
+          count:
+            gte: 4
+        - name: at_most_one_question
+          description: Prompts with one or fewer explicit questions.
+          operator: OR
+          method: regex
+          keywords: ['[?？]']
+          case_sensitive: false
+          count:
+            lte: 1
+        - name: numbered_steps
+          description: Prompts that contain numbered list items such as "1. ..."
+          operator: OR
+          method: regex
+          keywords: ['(?m)^\s*\d+\.\s+']
+          case_sensitive: false
+        - name: first_then_flow
+          description: Prompts that express an ordered workflow.
+          operator: OR
+          method: regex
+          keywords: ['(?s)first.*then', '(?s)first.*next.*finally', '(?s)首先.*然后', '(?s)先.*再']
+          case_sensitive: false
+        - name: constraint_dense
+          description: Prompts with dense explicit constraints.
+          operator: OR
+          keywords: ["under", "at most", "at least", "within", "no more than", "不超过", "至少", "最多"]
+          case_sensitive: false
+          density:
+            gt: 16
+        - name: low_question_density
+          description: Prompts with very few questions for their length.
+          operator: OR
+          method: regex
+          keywords: ['[?？]']
+          case_sensitive: false
+          density:
+            lt: 10
+        - name: critical_payment_event
+          description: Critical payment or transaction events that need incident-grade routing.
+          operator: OR
+          keywords: ["payment_failed", "transaction_declined", "critical", "high", "TXN_DECLINE", "urgent", "immediate", "asap"]
+          case_sensitive: false
+
+      domains:
+        - name: business
+          description: Business and management related queries.
+          labels: [business]
+          model_scores:
+            - model: qwen3-32b
+              score: 0.96
+              use_reasoning: true
+        - name: law
+          description: Legal questions and policy topics.
+          labels: [law]
+        - name: psychology
+          description: Psychology and mental-health oriented prompts.
+          labels: [psychology]
+        - name: health
+          description: Health and medical information requests.
+          labels: [health]
+          predicate:
+            gte: 0.6
+          deployment: primary
+          timeout_ms: 300
+        - name: "computer science"
+          description: Computer science and engineering prompts.
+          labels: ["computer science"]
+        - name: other
+          description: General fallback traffic.
+          labels: [other]
+      # A safety rule asks the harm preset: without labels it matches unsafe
+      # content; with labels it matches content harmful in one of those harm
+      # categories. stage: response asks about the model's answer instead.
+      safety:
+        - name: unsafe-content
+          description: Content risk, independent of prompt attacks.
+          predicate:
+            gte: 0.52
+          # A long input read only in part decides on the windows read once
+          # they are a quarter of them; below that the rule is unknown.
+          min_coverage: 0.25
+        - name: unsafe-privacy
+          description: Requests that seek or expose private information.
+          labels: ["PII/Privacy"]
+          deployment: primary
+          timeout_ms: 300
+        - name: unsafe-answer
+          description: Harmful content in the model's answer.
+          stage: response
+
+      fact_check:
+        - name: needs_fact_check
+          description: Prompts with factual claims that should be verified.
+          deployment: primary
+          timeout_ms: 300
+        - name: no_fact_check_needed
+          description: Creative prompts that do not need factual verification.
+          labels: [NO_FACT_CHECK_NEEDED]
+          predicate:
+            gt: 0.3
+      user_feedbacks:
+        - name: wrong_answer
+          description: The user indicates the previous answer was incorrect.
+          labels: [WRONG_ANSWER]
+        - name: need_clarification
+          description: The user asks for a clearer or more detailed answer.
+          labels: [NEED_CLARIFICATION]
+          predicate:
+            gte: 0.55
+          deployment: primary
+          timeout_ms: 300
+      language:
+        - name: zh
+          description: Chinese-language requests.
+          # threshold: minimum lingua-go confidence required (0 = built-in default 0.3)
+          threshold: 0.0
+        - name: es
+          description: Spanish-language requests.
+
+      context:
+        - name: long_context
+          min_tokens: 32K
+          max_tokens: 256K
+          description: Requests that need larger effective context windows.
+
+      complexity:
+        - name: needs_reasoning
+          description: Escalate multi-step reasoning or synthesis-heavy prompts.
+        - name: deep_synthesis
+          description: Escalate prompts of medium or hard difficulty.
+          labels: [medium, hard]
+          deployment: primary
+          timeout_ms: 300
+      modality:
+        - name: AR
+          description: Text-only autoregressive requests.
+          labels: [text]
+        - name: DIFFUSION
+          description: Image-generation requests.
+          labels: [image]
+          predicate:
+            gte: 0.63
+          deployment: primary
+          timeout_ms: 300
+        - name: BOTH
+          description: Requests that need both text and image generation.
+          labels: [text_image]
+      role_bindings:
+        - name: admin
+          description: Requests from platform administrators.
+          role: admin
+          subjects:
+            - kind: Group
+              name: platform-admins
+        - name: premium_user
+          description: Requests from paid end users.
+          role: premium_user
+          subjects:
+            - kind: Group
+              name: premium-tier
+
+      jailbreak:
+        - name: prompt_injection
+          description: Detect common prompt-injection or jailbreak attempts.
+          predicate:
+            gte: 0.8
+          input:
+            history: true
+          deployment: primary
+          timeout_ms: 300
+          # A long input is read in windows. When the time runs out before
+          # every window is read, best_effort (the default) decides on the
+          # windows read; match matches the request (strict), and unknown
+          # leaves the rule to on_unknown.
+          on_unscanned: best_effort
+          # best_effort decides only once it has read half the windows;
+          # below that the rule is unknown, which on_unknown decides.
+          min_coverage: 0.5
+          # A request none of whose windows the deployment answers matches
+          # (fail closed, the default); no_match passes it.
+          on_unknown: match
+        # stage: response asks about the model's output instead of the prompt, so
+        # this rule only exists once the model has answered; the selected
+        # decision's response_guard acts on it.
+        - name: unsafe_completion
+          description: Detect jailbreak content in the model's own output.
+          predicate:
+            gte: 0.90
+          stage: response
+      # Hallucination rules check the model's answer against the grounding
+      # context the request carried (tool results or retrieved context), so they
+      # only exist once the model has answered; the selected decision's
+      # response_guard acts on them.
+      hallucination:
+        - name: ungrounded_claims
+          description: Detect claims the grounding context does not support.
+          predicate:
+            gte: 0.5
+          deployment: primary
+          timeout_ms: 500
+      # A refusal rule asks whether the model's answer declines the request, so
+      # it only exists once the model has answered.
+      refusal:
+        - name: declined
+          description: The answer declines the request or refuses to help.
+          predicate:
+            gte: 0.5
+          deployment: primary
+          timeout_ms: 500
+
+      pii:
+        - name: restricted_pii
+          description: Sensitive prompts where only low-risk identifiers may pass through.
+          predicate:
+            gte: 0.18
+          ignore_labels: [EMAIL_ADDRESS]
+          input:
+            history: true
+            tool_results: true
+          deployment: primary
+          timeout_ms: 300
+          on_unscanned: match
+          on_unknown: match
+        # An agent's user turn carries its harness's own instructions, such
+        # as a commit trailer with an email address, so this rule reads only
+        # what the agent's tools brought back, and is not asked before them.
+        - name: tool_output_pii
+          description: Personal data in the output of an agent's tools.
+          predicate:
+            gte: 0.8
+          input:
+            tool_results: true
+            request: false
+          deployment: primary
+          min_coverage: 0.5
+        # The masking plugin of static_business_route masks what this rule
+        # detects in the request as it is sent.
+        - name: business_contact_pii
+          description: Contact details masked before business requests leave the Router.
+          predicate:
+            gte: 0.85
+
+      conversation:
+        - name: multi_turn_user
+          description: At least two user messages.
+          feature:
+            type: count
+            source:
+              type: message
+              role: user
+          predicate:
+            gte: 2
+        - name: has_tools
+          description: Request defines at least one tool.
+          feature:
+            type: count
+            source:
+              type: tool_definition
+          predicate:
+            gte: 1
+        - name: requires_tool_execution
+          description: Request protocol requires at least one tool call.
+          feature:
+            type: exists
+            source:
+              type: tool_choice_required
+        - name: forbids_tool_execution
+          description: Request protocol explicitly forbids tool calls.
+          feature:
+            type: exists
+            source:
+              type: tool_choice_none
+        - name: active_tool_use
+          description: Tool-result continuation inside an agent loop.
+          feature:
+            type: exists
+            source:
+              type: active_tool_loop
+        - name: resumable_flow_state
+          description: Request ends with a Router Flow tool result carrying continuation state.
+          feature:
+            type: exists
+            source:
+              type: flow_tool_state
+        - name: has_developer_msg
+          description: Request contains a developer message.
+          feature:
+            type: exists
+            source:
+              type: message
+              role: developer
+        - name: heavy_non_user
+          description: Non-user messages exceed threshold.
+          feature:
+            type: count
+            source:
+              type: message
+              role: non_user
+          predicate:
+            gt: 5
+            lte: 99
+
+      metadata:
+        - name: consent_denied
+          description: Caller explicitly denied remote processing consent.
+          key: consent
+          predicate:
+            equals: denied
+
+      input_modality:
+        - name: image_input
+          description: Request contains at least one image content part.
+          modality: image
+        - name: audio_input
+          description: Request contains at least one audio content part.
+          modality: audio
+
+      # Typed questions. deployment names the deployment that answers each one:
+      # the built-in model runtime (provider model_runtime) or a remote System
+      # One API (provider systemone). A question without one asks the decision
+      # model.
+      systemone:
+        - name: needs_reasoning
+          description: The decision model judges that the request needs multi-step reasoning.
+          deployment: decision-kai
+          question:
+            type: noul
+            instructions: Does answering this request need multi-step reasoning?
+          predicate:
+            gte: 0.7
+          timeout_ms: 1000
+        # labels are the options the rule matches; a condition can still name
+        # any option with its own label.
+        - name: request_kind
+          description: What kind of work the request asks for.
+          deployment: decision-kai
+          question:
+            type: choice
+            instructions: What kind of request is this?
+            choices:
+              - key: code
+                description: Writing, reviewing or debugging code
+              - key: math
+                description: Mathematics or quantitative reasoning
+              - key: chat
+                description: Anything else
+          labels: [code, math]
+          timeout_ms: 1000
+        - name: difficulty
+          description: Expected difficulty on a three-level scale.
+          deployment: decision-kai
+          question:
+            type: score
+            instructions: How difficult is this request?
+            levels:
+              - Trivial
+              - Moderate
+              - Hard
+          predicate:
+            gte: 1.5
+        - name: support_team
+          description: Which team should handle the request, asked of a remote System One API.
+          deployment: decision-delegated
+          question:
+            type: choice
+            instructions: Which team should handle this request?
+            choices:
+              - key: billing
+                description: Payments and refunds
+              - key: engineering
+                description: Outages and bugs
+        # input adds what the rule reads besides the current user turn, as
+        # named parts of the state. coverage: full reads all of it, in windows
+        # past one model input; on_unscanned says what an answer that could
+        # not read it all means. ignore_labels never count toward the rule.
+        - name: support_topics
+          description: The support topics of the conversation, read whole with its earlier turns and tool results.
+          deployment: decision-kai
+          question:
+            type: set
+            instructions: Which topics does the conversation ask about?
+            labels:
+              - key: billing
+                description: payments, invoices or refunds
+              - key: shipping
+                description: deliveries, tracking or returns
+              - key: other
+                description: anything else
+          ignore_labels: [other]
+          input:
+            history: true
+            previous_turns: 4
+            tool_results: true
+          coverage: full
+          on_unscanned: unknown
+        # A question about what an agent's tools brought back leaves the user
+        # turn out, and is not asked before the first tool result.
+        - name: tool_output_failure
+          description: Whether the output of the agent's tools shows a failed command or a failing test.
+          deployment: decision-kai
+          question:
+            type: noul
+            instructions: Does this tool output show a failed command or a failing test?
+          input:
+            tool_results: true
+            request: false
+        # Image and video parts of the current turn go to a deployment that
+        # declares the input modality (input.audio is refused until one can).
+        - name: chart_request
+          description: Whether the request's image or video shows a chart to read.
+          deployment: decision-gateway
+          question:
+            type: noul
+            instructions: Does the attached image or video show a chart or a table to read?
+          input:
+            image: true
+            video: true
+        # A response-stage rule reads the model's answer and its grounding
+        # context; a response plugin reads it, never a decision's rules.
+        - name: unsupported_claims
+          description: Whether the answer makes claims its grounding context does not support.
+          deployment: decision-kai
+          stage: response
+          question:
+            type: noul
+            instructions: Does the answer make a claim the grounding context does not support?
+          input:
+            answer: true
+            context: true
+        - name: content-risk
+          description: Which content hazard a request carries.
+          question:
+            type: choice
+            instructions: Which of these labels applies to the request?
+            choices:
+              - key: violence
+              - key: criminal_activity
+              - key: sexual_content
+              - key: child_exploitation
+              - key: hate
+              - key: harassment_abuse
+              - key: regulated_substances
+              - key: weapons
+              - key: self_harm
+              - key: privacy
+              - key: specialized_advice
+              - key: misinformation
+        - name: generic-safety-score
+          description: Whether a request is safe.
+          question:
+            type: choice
+            instructions: Which of these labels applies to the request?
+            choices:
+              - key: safe
+              - key: unsafe
+        - name: tool-risk
+          description: Whether a tool call is destructive, privileged or irreversible.
+          question:
+            type: choice
+            instructions: Choose RISKY only for destructive, privileged, or irreversible tool operations.
+            choices:
+              - key: SAFE
+              - key: RISKY
+        - name: support-intent
+          description: Whether a support request is about billing or a technical problem.
+          question:
+            type: choice
+            instructions: Which of these labels applies to the request?
+            choices:
+              - key: billing
+              - key: technical
+        - name: preference
+          question:
+            type: choice
+            instructions: Which response preference does the request express?
+            choices:
+              - key: terse_answers
+                description: 'Users who prefer short, direct responses. Examples: keep it concise; bullet points only; answer in one paragraph'
+              - key: none
+                description: The request expresses none of these preferences.
+        - name: technical_support
+          question:
+            type: noul
+            instructions: 'Is the request about any of these: how to configure the system; installation guide; troubleshooting steps; error message explanation?'
+        - name: account_management
+          question:
+            type: noul
+            instructions: 'Is the request about any of these: password reset; account settings; billing information; subscription management?'
+        - name: clinical_query_intent
+          question:
+            type: noul
+            instructions: 'Is the request about any of these: patient symptoms or clinical question; medication interaction or dosage question; test result interpretation request?'
+      turn_relation:
+        - name: likely_dissatisfied
+          description: The current user turn closely repeats the immediately previous user turn.
+          labels: [reask]
+          input:
+            previous_turns: 2
+        - name: persistently_dissatisfied
+          description: The current user turn repeats the last two user turns in a row.
+          labels: [reask]
+          input:
+            previous_turns: 4
+        - name: topic_boundary
+          description: Whether the live turn still depends on retained history.
+          labels: [continue, shift]
+          input:
+            previous_turns: 8
+          deployment: primary
+          timeout_ms: 300
+    projections:
+      # A partition keeps the highest-scoring member of a group of domain rules.
+      partitions:
+        - name: practice_areas
+          semantics: exclusive
+          temperature: 0.3
+          members:
+            - business
+            - law
+            - health
+          default: business
+      scores:
+        - name: request_difficulty
+          method: weighted_sum
+          inputs:
+            - type: systemone
+              name: technical_support
+              weight: 0.18
+              value_source: confidence
+              match: 1.0
+              miss: 0.0
+            - type: systemone
+              name: account_management
+              weight: -0.08
+              value_source: confidence
+            - type: complexity
+              name: needs_reasoning:medium
+              weight: 0.18
+            - type: complexity
+              name: needs_reasoning:hard
+              weight: 0.36
+            - type: context
+              name: long_context
+              weight: 0.18
+            - type: keyword
+              name: first_then_flow
+              weight: 0.12
+      mappings:
+        - name: request_band
+          source: request_difficulty
+          method: threshold_bands
+          calibration:
+            method: sigmoid_distance
+            slope: 10.0
+          outputs:
+            - name: support_fast
+              lte: 0.20
+            - name: support_balanced
+              gt: 0.20
+              lt: 0.45
+            - name: support_escalated
+              gte: 0.45
+
+    decisions:
+      - name: static_business_route
+        description: Static fallback for standard business traffic.
+        priority: 200
+        tier: 2
+        output_contract: Preserve any explicit user-requested output format exactly.
+        annotations:
+          policy_class: business
+          owner: routing-platform
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+            reasoning_description: Prefer fast, direct business answers.
+          # The DSL compiles explicit candidateIterations models into modelRefs, so list them here as well.
+          - model: qwen3-32b
+            lora_name: business-adapter
+            use_reasoning: true
+            reasoning_mode: enabled
+            reasoning_effort: low
+        candidateIterations:
+          - variable: candidate
+            source: models
+            models:
+              - model: qwen3-32b
+                lora_name: business-adapter
+                weight: 1.0
+                use_reasoning: true
+                reasoning_mode: enabled
+                reasoning_description: Candidate iteration reference model for DSL authoring coverage.
+                reasoning_effort: low
+            outputs:
+              - type: model
+                value: candidate
+        algorithm:
+          type: static
+        plugins:
+          # Record this route and shadow a candidate model on a small sample of
+          # its traffic; the replay record keeps the shadow's outcome. The
+          # primary response never waits on or changes because of the shadow.
+          - type: router_replay
+            configuration:
+              enabled: true
+              shadow:
+                model: qwen3-32b
+                sample_rate: 0.05
+                max_concurrency: 2
+                max_queue_depth: 8
+                timeout_seconds: 30
+                max_response_bytes: 1048576
+                max_retries: 0
+                capture_response_body: false
+                max_capture_bytes: 4096
+                tls_skip_verify: false
+                # Decision header mutations reach the shadow only when listed here.
+                forward_headers: []
+          - type: system_prompt
+            configuration:
+              enabled: true
+              mode: insert
+              system_prompt: You are a senior business consultant. Give practical recommendations and clear tradeoffs.
+          - type: response_cache
+            configuration:
+              enabled: true
+              mode: exact
+              scope: user
+              ttl_seconds: 7200
+              # Reference-only setting for operators who explicitly opt into
+              # semantic mode: recall the most similar cached requests, then let
+              # the decision model confirm each asks the same thing.
+              semantic:
+                match:
+                  recall: {method: embedding, top_k: 3, min_similarity: 0.82}
+                  judge: {preset: same_request, min_score: 0.9}
+              request_controls:
+                enabled: true
+                header: x-vsr-cache-control
+                allowed:
+                  - no-cache
+                  - no-store
+                  - bypass
+                  - max-age
+                  - ttl
+                max_ttl_seconds: 7200
+              personalized:
+                mode: disabled
+              revision:
+                cache_epoch: "2026-08"
+                model_revision: "model-catalog-v1"
+                prompt_revision: "prompts-v1"
+                policy_revision: "policy-v1"
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+              compress:
+                mode: auto
+                targets:
+                  current_user:
+                    mode: preserve
+                  tool_outputs:
+                    mode: extractive
+                    min_tokens: 2000
+                    target_tokens: 1000
+                  history:
+                    mode: preserve
+                  rag:
+                    mode: preserve
+                  memory:
+                    mode: preserve
+                match:
+                  recall:
+                    method: bm25
+                recovery:
+                  enabled: false
+                  store: response_cache
+                  ttl_seconds: 900
+                  max_bytes_per_request: 10485760
+                  max_total_bytes: 268435456
+                  max_retrievals: 8
+                request_controls:
+                  enabled: false
+                  header: x-vsr-compression-control
+                  allowed:
+                    - bypass
+                    - target
+                  max_target_tokens: 16000
+                failure_mode: fail_open
+              budget:
+                max_tokens: auto
+                reserve_output_tokens: auto
+          - type: tools
+            configuration:
+              enabled: true
+              policy:
+                mode: filtered
+                allow_tools:
+                  - search_web
+                block_tools:
+                  - exec_cmd
+              # The decision model adds the catalog tools the request needs,
+              # within the tools the policy allows.
+              select:
+                mode: add
+                tools_db_path: config/runtime/tools/tools_db.json
+                match:
+                  judge:
+                    preset: tool_rank
+                    top_k: 5
+                    min_ratio: 0.1
+                need_threshold: 0.5
+                on_error: skip
+                input:
+                  history: false
+                timeout_ms: 1000
+                # Session-scoped sticky selection (issue #3347) is not run in
+                # this release: sticky.enabled is refused at load.
+                sticky:
+                  enabled: false
+                  max_tools: 16
+                  max_new_tools_per_turn: 2
+                  pin_called_tools: true
+          - type: masking
+            configuration:
+              enabled: true
+              signal: business_contact_pii
+              entity_types:
+                - EMAIL_ADDRESS
+                - PHONE_NUMBER
+              placeholders:
+                EMAIL_ADDRESS: "[EMAIL_{index}]"
+                PHONE_NUMBER: "[PHONE_{index}]"
+        retention:
+          drop: false
+          ttl_turns: 4
+          keep_current_model: true
+          prefer_prefix_retention: true
+
+      - name: legal_escalate_route
+        description: Legal and factual traffic tries the small model first and escalates when its answer's confidence is weak.
+        priority: 190
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: law
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: true
+            reasoning_mode: enabled
+            weight: 0.4
+          - model: qwen3-32b
+            use_reasoning: true
+            reasoning_description: Escalate when confidence is weak.
+            reasoning_effort: high
+            weight: 0.6
+        algorithm:
+          type: escalate
+          minimum_candidates: 2
+          # budget and on_error are every executor's settings: the calls it may
+          # make within the deadline, and, for escalate, what it returns when no
+          # answer is accepted (last_attempt: the last judged answer; fail: an
+          # error).
+          budget:
+            deadline: 60s
+            max_calls: 2
+          on_error: last_attempt
+          escalate:
+            order: size
+            accept:
+              confidence:
+                method: hybrid
+                gte: 0.72
+                hybrid_weights:
+                  logprob_weight: 0.65
+                  margin_weight: 0.35
+                token_filter: tool_call_args
+        plugins:
+          # Answers to prompts that need fact checking are checked against
+          # their grounding context; an unsupported one is delivered with
+          # x-vsr-warnings and a note naming the unsupported spans.
+          - type: response_guard
+            configuration:
+              rules:
+                - when:
+                    operator: AND
+                    conditions:
+                      - type: fact_check
+                        name: needs_fact_check
+                      - type: hallucination
+                        name: ungrounded_claims
+                  action: annotate
+                  details: true
+              on_unknown: annotate
+          # Disabled sample: field coverage only (reference config union coverage
+          # for PromptCachePluginConfig). qwen3-32b speaks the Anthropic Messages
+          # wire format this plugin targets; see tutorials/plugin/prompt-cache.
+          - type: prompt_cache
+            configuration:
+              enabled: false
+              ttl: 1h
+              targets: [instructions, tools]
+              on_unsupported: skip
+
+      - name: health_ratings_route
+        description: Ratings-based route for health requests that need fact verification.
+        priority: 180
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: health
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: true
+            reasoning_mode: enabled
+          - model: qwen3-32b
+            use_reasoning: true
+            reasoning_effort: high
+        algorithm:
+          type: ratings
+          on_error: skip
+          ratings:
+            max_concurrent: 3
+        adaptations:
+          mode: bypass
+        plugins:
+          - type: router_replay
+            configuration:
+              enabled: true
+              max_records: 10000
+              capture_request_body: true
+              capture_response_body: true
+              capture_personal_data: false
+              # Tool results stay redacted. true stores each client tool
+              # result, bounded by max_tool_trace_bytes, and requires
+              # capture_personal_data: true; use it for development or audit.
+              capture_tool_results: false
+              max_body_bytes: 4096
+              # 0 = no truncation (the documented default). Set to a positive
+              # byte cap to independently limit structured tool-trace fields
+              # (prompt, tool_definitions, and each tool-call's arguments/output)
+              # without having to shrink max_body_bytes.
+              max_tool_trace_bytes: 0
+              # Cap the number of tool-trace steps retained per record. Long
+              # agent sessions (many sequential tool calls) can otherwise grow
+              # the trace unbounded and OOM the router (#1835). 0 = no cap.
+              max_tool_trace_steps: 100
+
+      - name: computer-science-remom-route
+        description: ReMoM route for complex computer science prompts.
+        priority: 170
+        output_contract_spec:
+          type: reference_selection
+          reference:
+            source: candidate_responses
+            id_format: index
+          extract:
+            mode: exact
+            sources: [content]
+          postprocess:
+            - type: dereference_selected_reference
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: "computer science"
+            - type: complexity
+              name: needs_reasoning
+              label: hard
+        modelRefs:
+          - model: qwen3-32b
+            use_reasoning: true
+            reasoning_description: Use the strongest text model for synthesis.
+            reasoning_effort: high
+            lora_name: computer-science-expert
+            weight: 0.5
+          - model: qwen3-8b
+            use_reasoning: true
+            reasoning_mode: enabled
+            weight: 0.2
+          - model: llava-omni
+            use_reasoning: true
+            reasoning_effort: high
+            weight: 0.3
+        algorithm:
+          type: remom
+          on_error: skip
+          remom:
+            breadth_schedule: [3, 2]
+            model_distribution: round_robin
+            temperature: 0.7
+            include_reasoning: true
+            compaction_strategy: last_n_tokens
+            compaction_tokens: 512
+            synthesis_template: Fuse the strongest technical findings into a final answer.
+            synthesis_model: qwen3-32b
+            max_concurrent: 3
+            max_completion_tokens: 1024
+            round_timeout_seconds: 120
+            min_successful_responses: 2
+            shuffle_seed: 7
+            include_intermediate_responses: true
+            max_responses_per_round: 2
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 6
+                      min_similarity: 0.40
+                  store:
+                    auto: true
+                  hybrid_search: true
+                  hybrid_mode: weighted
+                  reflection:
+                    enabled: true
+                    algorithm: heuristic
+                    max_inject_tokens: 384
+                    recency_decay_days: 14
+                    dedup_threshold: 0.9
+                    block_patterns:
+                      - api key
+                      - password
+
+      - name: deliberation-fusion-route
+        description: Fusion route for prompts that benefit from panel deliberation.
+        priority: 165
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+            - type: complexity
+              name: needs_reasoning
+              label: hard
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: true
+            reasoning_mode: enabled
+            weight: 0.5
+          - model: qwen3-32b
+            use_reasoning: true
+            reasoning_effort: high
+            weight: 0.5
+        algorithm:
+          type: fusion
+          on_error: skip
+          fusion:
+            model: qwen3-32b
+            analysis_models:
+              - qwen3-8b
+              - qwen3-32b
+            analysis_mode: separate
+            analysis_overrides:
+              - model: qwen3-8b
+                temperature: 0.2
+                max_completion_tokens: 384
+              - model: qwen3-32b
+                temperature: 0.15
+                max_completion_tokens: 512
+            max_concurrent: 2
+            max_completion_tokens: 512
+            round_timeout_seconds: 90
+            min_successful_responses: 1
+            temperature: 0.2
+            include_analysis: true
+            include_intermediate_responses: true
+            # Panel-level policy when usable responses fall below
+            # min_successful_responses: fail (typed error) or fallback (route to
+            # quorum_fallback_target). Independent of algorithm.on_error, which
+            # governs one failed panel attempt. Recipe-owned; requests cannot
+            # override it.
+            # quorum_fallback_target is required by, and only valid with, fallback.
+            quorum_failure_policy: fail
+            quorum_fallback_target: ""
+            analysis_template: ""
+            synthesis_template: ""
+            judge_prompt_version: fusion-v1
+            # Grounding-aware synthesis: score panel responses for faithfulness
+            # with the hallucination detector (against the request's context, else
+            # against each peer response) and use the scores to guide the judge.
+            # Disabled by default.
+            grounding:
+              enabled: false
+              reference: hybrid # hybrid | context | panel
+              policy: weight # weight | annotate | filter (see below)
+              min_score: 0.0 # filter policy only: drop below this (0-1)
+              min_keep: 1 # filter policy only: keep at least this many
+              contradiction_penalty: 1.0 # panel reference: weight of a peer's contradiction
+              on_error: skip # skip (fall back to plain fusion) | fail
+              # policy controls how the scores are used:
+              #   weight   (default) keep every response; tell the judge to weight
+              #            each answer by its score (a correct lone dissenter is kept).
+              #   annotate keep every response; pass the scores to the judge as notes.
+              #   filter   hard-drop responses below min_score (keep min_keep).
+              # filter regresses quality on contested factual questions because it
+              # deletes the correct dissenter; see bench/grounded_fusion/FINDINGS.md.
+
+      - name: router-flow-workflow-route
+        description: Router Flow route for bounded static or dynamic micro-agent workflows.
+        priority: 164
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+            - type: complexity
+              name: needs_reasoning
+              label: hard
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: true
+            reasoning_mode: enabled
+            weight: 0.5
+          - model: qwen3-32b
+            use_reasoning: true
+            reasoning_effort: high
+            weight: 0.5
+        algorithm:
+          type: workflows
+          on_error: fail
+          workflows:
+            mode: dynamic
+            template: micro_agent
+            planner:
+              model: qwen3-32b
+            max_steps: 6
+            max_parallel: 2
+            max_completion_tokens: 1024
+            round_timeout_seconds: 90
+            min_successful_responses: 1
+            temperature: 0.2
+            include_intermediate_responses: true
+
+      - name: terse_feedback_route
+        description: Terse-answer route that allows Router Learning adaptation to adjust feedback-driven routing.
+        priority: 160
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: preference
+              label: terse_answers
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: false
+        adaptations:
+          adaptation:
+            mode: apply
+        plugins:
+          - type: fast_response
+            configuration:
+              enabled: true
+              message: The primary model is saturated, so a lightweight response was returned immediately.
+          - type: request_params
+            configuration:
+              blocked_params:
+                - logprobs
+                - top_logprobs
+              default_max_tokens: 4096
+              max_tokens_limit: 8192
+              max_n: 4
+
+      - name: support_selection_route
+        description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query; the decision model picks the model by its description.
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: technical_support
+            - type: projection
+              name: support_escalated
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: systemone
+          systemone:
+            instructions: Which model should answer this support request?
+        # Overrides the recipe's cross-model fallback policy (routing.fallback,
+        # then global.router.fallback) field by field for this route. The
+        # candidates stay this decision's ranked models; circuit_breaker is per
+        # backend and stays on the recipe's or the global policy.
+        fallback:
+          enabled: true
+          max_attempts: 2
+          total_timeout: 20s
+          per_attempt_timeout: 8s
+          retryable_status_codes: [429, 502, 503, 504]
+        plugins:
+          - type: header_mutation
+            configuration:
+              add:
+                - name: X-Tenant-Tier
+                  value: premium
+              update:
+                - name: X-Route-Source
+                  value: semantic-router
+              delete:
+                - X-Debug-Trace
+
+      - name: urgent_cost_route
+        description: Cost-aware urgent handling that weighs each candidate's quality against its cost.
+        priority: 145
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: multi_factor
+          multi_factor:
+            weights:
+              quality: 0.65
+              cost: 0.35
+        plugins:
+          - type: response_guard
+            configuration:
+              enabled: true
+              rules:
+                - when:
+                    type: jailbreak
+                    name: unsafe_completion
+                  action: block
+              on_unknown: block
+
+      - name: safe_composite_route
+        description: Composite route combining AND, OR, and NOT.
+        priority: 140
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+            - operator: OR
+              conditions:
+                - type: keyword
+                  name: urgent_keywords
+                - type: complexity
+                  name: needs_reasoning
+                  label: hard
+            - operator: NOT
+              conditions:
+                - type: jailbreak
+                  name: prompt_injection
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: true
+          - model: qwen3-32b
+            use_reasoning: true
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              policy:
+                mode: none
+                strip_tool_history: true
+      - name: spanish_adaptive_route
+        description: Spanish-language route that observes Router Learning adaptation with Milvus RAG.
+        priority: 135
+        rules:
+          operator: AND
+          conditions:
+            - type: language
+              name: es
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        adaptations:
+          adaptation:
+            mode: observe
+          protection:
+            stability_weight: 1.2
+            switch_margin: 0.04
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: milvus
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 5
+                      min_similarity: 0.78
+                    judge:
+                      preset: relevance
+                      deployment: primary
+                      top_k: 6
+                      min_score: 0.5
+                      min_ratio: 0.2
+                      # The judge reads at most this many recalled
+                      # documents, the most similar; 64 by default.
+                      max_candidates: 32
+                      on_error: skip
+                      timeout_ms: 1500
+                  max_context_length: 12000
+                  on_failure: warn
+                  cache_results: true
+                  cache_ttl_seconds: 600
+                  backend_config:
+                    collection: docs
+                    reuse_cache_connection: true
+                    content_field: content
+                    filter_expression: locale == "es"
+                    # The deployment that indexed the collection, and the width
+                    # of its vectors; without it, queries embed with
+                    # embeddings.default.
+                    embedding:
+                      deployment: vela-embedding
+                      dimension: 768
+                - type: memory
+
+      - name: admin_adaptive_route
+        description: Admin route with Router Learning adaptation and external API RAG.
+        priority: 130
+        rules:
+          operator: AND
+          conditions:
+            - type: authz
+              name: admin
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: qwen3-32b
+            use_reasoning: true
+        adaptations:
+          adaptation:
+            mode: apply
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: external_api
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 6
+                      min_similarity: 0.7
+                    judge:
+                      preset: relevance
+                      top_k: 6
+                      min_score: 0.5
+                  max_context_length: 8000
+                  on_failure: block
+                  cache_results: false
+                  backend_config:
+                    endpoint: https://search.example.com/query
+                    api_key: search-api-key
+                    auth_header: X-API-Key
+                    request_format: custom
+                    request_template: "{\"query\":\"{{.Query}}\",\"top_k\":{{.TopK}},\"threshold\":{{.Threshold}}}"
+                    timeout_seconds: 15
+                    max_response_bytes: 4194304
+                    headers:
+                      X-Environment: admin
+                - type: memory
+              injection:
+                mode: system_prompt
+
+      - name: long_context_route
+        description: Long-context route. MCP RAG stays disabled until an invoker exists.
+        priority: 125
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: qwen3-32b
+            use_reasoning: true
+        # Overrides the provider model's timeouts and retries for this route.
+        # Envoy applies these fields per request; idle_timeout,
+        # first_byte_timeout, back-off and retry_after_max need --gateway standalone.
+        reliability:
+          total_timeout: 600s
+          per_try_timeout: 300s
+          retry_count: 1
+          retry_on: reset,connect-failure,retriable-status-codes
+          retriable_status_codes: [503]
+        plugins:
+          - type: context
+            configuration:
+              # Keep this example: the reference coverage test needs an mcp
+              # backend_config, and enabled stays false until an invoker exists.
+              enabled: false
+              sources:
+                - type: rag
+                  backend: mcp
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 4
+                      min_similarity: 0.74
+                  max_context_length: 10000
+                  on_failure: skip
+                  cache_results: false
+                  backend_config:
+                    server_name: docs-server
+                    tool_name: retrieve_docs
+                    tool_arguments:
+                      query: ${user_content}
+                      top_k: ${top_k}
+                    timeout_seconds: 20
+
+      # multi_factor example: composes quality/latency/cost/load into one
+      # weighted score with optional SLO ceilings. Issue #37.
+      - name: instructed_selection_route
+        description: The decision model follows the operator's instructions to choose among the decision's candidates.
+        priority: 126
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: systemone
+          systemone:
+            instructions: >-
+              Choose qwen3-8b for ordinary requests and qwen3-32b for hard reasoning, coding, or multi-step analysis.
+            timeout_ms: 5000
+
+      - name: decision_model_route
+        description: Let a decision model pick the model for hard code requests.
+        priority: 126
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: request_kind
+              label: code
+            - type: systemone
+              name: needs_reasoning
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: systemone
+          systemone:
+            deployment: decision-kai
+            instructions: Which model should answer this request?
+            candidates:
+              qwen3-8b: Fast general model for routine code
+              qwen3-32b: Strong reasoning model for hard code
+            timeout_ms: 1000
+
+      - name: content_privacy_route
+        description: Route requests the content-risk question marks as a privacy risk.
+        priority: 126
+        rules:
+          operator: AND
+          on_unknown: fail_request
+          conditions:
+            - type: systemone
+              name: content-risk
+              label: privacy
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+
+      - name: classifier_band_route
+        description: Route a bounded generic classifier score to a local model.
+        priority: 125
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: generic-safety-score
+              label: unsafe
+              predicate:
+                gte: 0.5
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+
+      - name: multi_factor_route
+        description: Compose quality, latency, cost, and load signals into a single weighted score.
+        priority: 124
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: qwen3-8b
+          - model: qwen3-32b
+        algorithm:
+          type: multi_factor
+          multi_factor:
+            expected_output_tokens: 4096
+            objective:
+              strategy: weighted
+            quality:
+              index: vllm-sr/coding@1.0.0
+              on_missing: exclude
+              min_coverage: 1.0
+              min_score: 0.0
+            weights:
+              quality: 0.4
+              latency: 0.2
+              cost: 0.2
+              load: 0.2
+            slo:
+              max_tpot_ms: 200
+              max_ttft_ms: 800
+              max_cost_per_1m: 5.0
+              max_inflight: 50
+            latency_percentile: 95
+            latency_metric: ttft
+            on_no_candidates: cheapest
+
+      - name: random_route
+        description: Uniform random baseline for routing experiments and evaluations.
+        priority: 122
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: qwen3-8b
+          - model: qwen3-32b
+        algorithm:
+          type: random
+          minimum_candidates: 2
+
+      - name: fallback_general_route
+        description: Fallback route for general traffic with OpenAI vector-store RAG.
+        priority: 120
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 8
+                      min_similarity: 0.73
+                    judge:
+                      preset: relevance
+                      top_k: 6
+                      min_score: 0.5
+                  max_context_length: 9000
+                  on_failure: warn
+                  cache_results: true
+                  cache_ttl_seconds: 300
+                  backend_config:
+                    vector_store_id: vs_docs_prod
+                    base_url: https://api.openai.com
+                    api_key: openai-file-search-key
+                    max_num_results: 12
+                    max_response_bytes: 4194304
+                    file_ids: [file_a, file_b]
+                    filter:
+                      doc_type: manual
+                    timeout_seconds: 20
+                    workflow_mode: tool_based
+                - type: memory
+
+      - name: clarification_route
+        description: Clarification requests with local vector-store RAG, answered by the first candidate.
+        priority: 115
+        rules:
+          operator: AND
+          conditions:
+            - type: user_feedback
+              name: need_clarification
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: static
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: vectorstore
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 5
+                      min_similarity: 0.69
+                    judge:
+                      preset: relevance
+                      top_k: 3
+                      min_score: 0.5
+                  max_context_length: 7000
+                  on_failure: skip
+                  cache_results: true
+                  cache_ttl_seconds: 900
+                  backend_config:
+                    vector_store_id: local-vs
+                    file_ids: [kb-001, kb-002]
+                - type: memory
+
+      - name: repeat_question_escalation
+        description: Escalate when the user repeats the same question after an unsatisfying answer.
+        priority: 114
+        rules:
+          operator: AND
+          conditions:
+            - type: turn_relation
+              name: likely_dissatisfied
+        modelRefs:
+          - model: qwen3-32b
+            use_reasoning: true
+        algorithm:
+          type: static
+        plugins:
+          - type: header_mutation
+            configuration:
+              add:
+                - name: x-escalation-reason
+                  value: repeated-question
+
+      # A route action sends every request matching this decision to
+      # action.destination, overriding a caller-pinned model, so a detected
+      # prompt attack cannot bypass the guard by naming a model. The action
+      # requires an explicit jailbreak condition in rules, and destination must
+      # be defined in model_config. If the destination cannot satisfy the
+      # request context window, the decision falls back to its normal candidate
+      # policy (modelRefs/default selection).
+      - name: prompt_attack_guard_route
+        description: Route detected prompt attacks to a safe fallback model.
+        priority: 120
+        rules:
+          type: jailbreak
+          name: prompt_injection
+        action:
+          type: route
+          destination: qwen3-8b
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+      - name: safe_only_route
+        description: Route that only matches when prompt-injection signals are absent.
+        priority: 110
+        rules:
+          operator: AND
+          conditions:
+            - operator: NOT
+              conditions:
+                - type: jailbreak
+                  name: prompt_injection
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: hybrid
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 6
+                      min_similarity: 0.76
+                    judge:
+                      preset: relevance
+                      top_k: 6
+                      min_score: 0.5
+                  max_context_length: 9000
+                  on_failure: warn
+                  cache_results: false
+                  backend_config:
+                    primary: milvus
+                    fallback: external_api
+                    strategy: parallel
+                    primary_config:
+                      collection: docs
+                      reuse_cache_connection: true
+                    fallback_config:
+                      endpoint: https://search.example.com/query
+                      request_format: pinecone
+                - type: memory
+
+      - name: machine_learning_route
+        description: Machine-learning questions go to the local model.
+        priority: 103
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: machine_learning
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+
+      - name: image_generation_route
+        description: Dedicated image-generation route on the images API backend.
+        priority: 105
+        rules:
+          operator: AND
+          conditions:
+            - type: modality
+              name: DIFFUSION
+        output:
+          kind: image
+          action: generate
+        modelRefs:
+          - model: sdxl-image
+            use_reasoning: false
+
+      - name: multimodal_route
+        description: Text with a generated image, written by one omni model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: modality
+              name: BOTH
+        output:
+          kind: [text, image]
+          action: generate
+        modelRefs:
+          - model: omni-image
+            use_reasoning: false
   - name: privacy-first
     description: Keeps privacy-sensitive traffic on the local default-tier model.
-    routing:
-      strategy: confidence
-      # Strict model facts; input accounting still uses an estimate.
-      candidate_requirements:
-        capabilities: declared
-        context: known_limits
-      # A recipe binding applies only to this recipe and wins over the global
-      # binding for the same signal type.
-      model_bindings:
-        pii: primary
-      signals:
-        keywords:
-          - name: privacy_recipe_keywords
-            operator: OR
-            method: bm25
-            keywords: ["ssn", "passport number", "credit card number"]
-            case_sensitive: false
-            bm25_threshold: 0.1
-        # A complexity rule with a deployment asks it, with the hard and easy
-        # candidates as examples, instead of scoring them by embedding
-        # similarity.
-        complexity:
-          - name: private_escalation
-            description: Hard requests among the privacy-sensitive ones, judged by the local Decision model.
-            deployment: decision-kai
-            threshold: 0.1
-            hard:
-              candidates:
-                - review this contract for exposure of personal data
-            easy:
-              candidates:
-                - mask this phone number
-      decisions:
-        - name: privacy_recipe_route
-          plugins:
-            - type: router_replay
-              configuration:
-                enabled: false
-          description: Route privacy-sensitive prompts to the local model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: privacy_recipe_keywords
-          modelRefs:
-            - model: qwen3-8b
-              use_reasoning: false
-          algorithm:
-            type: static
-      fallback:
-        version: 1
-        enabled: false
-        max_attempts: 3
-        total_timeout: 30s
-        per_attempt_timeout: 10s
-        retryable_status_codes:
-          - 502
-          - 503
-          - 504
-        circuit_breaker:
-          consecutive_failures: 3
-          cooldown_period: 30s
-          half_open_probes: 1
+    strategy: confidence
+    # Strict model facts; input accounting still uses an estimate.
+    candidate_requirements:
+      capabilities: declared
+      context: known_limits
+    # A recipe binding applies only to this recipe and wins over the global
+    # binding for the same signal type.
+    model_bindings:
+      pii: primary
+    # Overrides global.plugins for this recipe, field by field: its requests
+    # keep the shared capture defaults but leave request and response bodies out.
+    plugins:
+      - type: router_replay
+        configuration:
+          capture_request_body: false
+          capture_response_body: false
+    signals:
+      keywords:
+        - name: privacy_recipe_keywords
+          operator: OR
+          method: bm25
+          keywords: ["ssn", "passport number", "credit card number"]
+          case_sensitive: false
+          bm25_threshold: 0.1
+      # A complexity rule with a deployment asks it, with the hard and easy
+      # candidates as examples, instead of scoring them by embedding
+      # similarity.
+      complexity:
+        - name: private_escalation
+          description: Hard requests among the privacy-sensitive ones, judged by the local Decision model.
+          deployment: decision-kai
+    decisions:
+      - name: privacy_recipe_route
+        plugins:
+          - type: router_replay
+            configuration:
+              enabled: false
+        description: Route privacy-sensitive prompts to the local model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: privacy_recipe_keywords
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+        algorithm:
+          type: static
+    fallback:
+      version: 1
+      enabled: false
+      max_attempts: 3
+      total_timeout: 30s
+      per_attempt_timeout: 10s
+      retryable_status_codes:
+        - 502
+        - 503
+        - 504
+      circuit_breaker:
+        consecutive_failures: 3
+        cooldown_period: 30s
+        half_open_probes: 1
+      # Replaces global.router.fallback's list for this recipe.
+      forward_request_headers: [x-user-id]
 
   - name: native-handwritten
     description: Complete typed requests use explicit native stages and an algorithm execution budget.
-    routing:
-      decisions:
-        - name: typed-cascade
-          rules: {}
-          modelRefs: [{model: native-kai}, {model: native-vega}, {model: remote-openai-reference}]
-          algorithm:
-            type: cascade
-            budget: {deadline: 3s, max_calls: 4}
+    decisions:
+      - name: typed-escalate
+        rules: {}
+        modelRefs: [{model: native-kai}, {model: native-vega}, {model: remote-openai-reference}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 3s, max_calls: 4}
+          escalate:
             quality:
               type: uncalibrated
-              acceptance:
-                rules:
-                  - {question_type: choice, field: top_probability, predicate: {gte: 0}}
-                  - {question_type: score, field: top_probability, predicate: {gte: 0}}
-                  - {question_type: noul, field: top_probability, predicate: {gte: 0}}
+              accept:
+                native:
+                  - {question_type: choice, field: top_probability, gte: 0}
+                  - {question_type: score, field: top_probability, gte: 0}
+                  - {question_type: noul, field: top_probability, gte: 0}
             stages:
               # Measured pilot gate for the pinned Kai/Vega pair; re-evaluate
               # when the model identity or question distribution changes.
               - name: fast
-                kind: native
                 model: native-kai
                 accept:
-                  rules:
-                    - {question_type: choice, field: top_probability, predicate: {gte: 0.6059704079536342}}
-                    - {question_type: score, field: top_probability, predicate: {gte: 0.6059704079536342}}
-                    - {question_type: noul, field: top_probability, predicate: {gte: 0.6059704079536342}}
+                  native:
+                    - {question_type: choice, field: top_probability, gte: 0.6059704079536342}
+                    - {question_type: score, field: top_probability, gte: 0.6059704079536342}
+                    - {question_type: noul, field: top_probability, gte: 0.6059704079536342}
               - name: strong
-                kind: native
                 model: native-vega
                 timeout: 1s
               - name: review
@@ -2115,22 +2191,30 @@ global:
         consecutive_failures: 3
         cooldown_period: 30s
         half_open_probes: 1
+      # Client request headers a fallback attempt the Router sends itself
+      # copies, when the client sent them, over a backend's static header of
+      # the same name. Credential, framing and identity headers and the
+      # Router's own cannot be listed.
+      forward_request_headers: [x-user-id, x-request-id]
     streamed_body:
       enabled: true
       max_bytes: 1048576
       timeout_sec: 15
     skip_processing:
       enabled: false
-    # Who may turn on the debug response headers with x-vsr-debug: true. They
-    # name the signal and guard rules a request matched, so keep them from
-    # untrusted clients: none (the default), any client, or authenticated: only
-    # the users and groups below, as the identity headers assert them.
+    # Who may turn on x-vsr-trace with x-vsr-debug: true. It names the signal
+    # and guard rules a request matched, so keep it from untrusted clients:
+    # none (the default), any client, or authenticated: only the users and
+    # groups below, as the identity headers assert them.
     headers:
       debug: authenticated
       debug_principals:
         users: [oncall-bot]
         groups: [platform-sre]
-    # Protocol losses to translate with an x-vsr-protocol-warnings entry instead
+      # Client headers a request pins its session with when it carries no
+      # x-vsr-session-id, in order. These are the defaults.
+      session_id_headers: [x-session-id, x-claude-code-session-id]
+    # Protocol losses to translate with an x-vsr-warnings protocol entry instead
     # of rejecting them. tool_result.is_error omits the Anthropic failed tool
     # call flag that OpenAI Chat and Responses backends cannot carry, and
     # messages[].role sends Anthropic system messages inside the conversation to
@@ -2138,7 +2222,9 @@ global:
     # message only first. content.file sends each file in the conversation as
     # a short note to a model whose capabilities leave out file_input.
     # reasoning.signature drops the signature an Anthropic backend puts on its
-    # thinking, which Chat and Responses clients cannot carry. Empty keeps every
+    # thinking, which Chat and Responses clients cannot carry. store sends a
+    # request's store: true without it to a backend that keeps no completions,
+    # such as a Messages backend; store: false needs no entry. Empty keeps every
     # lossy translation failing closed.
     allow_lossy_translation: []
     # The user text that routing reads. A user message whose text matches a
@@ -2152,49 +2238,19 @@ global:
       strip_blocks:
         - start: '<relevant-memories>'
           end: '</relevant-memories>'
+    # The check of a prompt against the context windows of the models that
+    # can serve it, counted beside the signals. A count with a model's own
+    # tokenizer within margin of a window (3%) is left to the backend; beyond
+    # it the prompt is refused with 400 context_length_exceeded at once.
+    # Models without a loaded tokenizer count with the proxy tokenizer, whose
+    # count can be a quarter off theirs, and refuse only beyond proxy_margin
+    # (30%). These are the defaults.
+    context_window:
+      margin: 0.03
+      proxy_margin: 0.30
+      proxy_tokenizer: o200k_base
     model_selection:
-      method: hybrid
       enabled: true
-      router_dc:
-        temperature: 0.2
-        dimension_size: 384
-        min_similarity: 0.7
-        use_query_contrastive: true
-        use_model_contrastive: true
-        require_descriptions: true
-        use_capabilities: true
-      automix:
-        verification_threshold: 0.8
-        max_escalations: 2
-        cost_aware_routing: true
-        cost_quality_tradeoff: 0.4
-        discount_factor: 0.9
-        use_logprob_verification: true
-      hybrid:
-        experience_weight: 0.4
-        router_dc_weight: 0.25
-        automix_weight: 0.25
-        cost_weight: 0.1
-        quality_gap_threshold: 0.08
-        normalize_scores: true
-      ml:
-        models_path: models/model-selection
-        model_type: mmbert
-        embedding_dim: 384
-        knn:
-          k: 5
-          pretrained_path: models/model-selection/knn.bin
-        kmeans:
-          num_clusters: 8
-          efficiency_weight: 0.35
-          pretrained_path: models/model-selection/kmeans.bin
-        svm:
-          kernel: rbf
-          gamma: 0.12
-          pretrained_path: models/model-selection/svm.bin
-        mlp:
-          device: cpu
-          pretrained_path: models/model-selection/mlp.pt
     learning:
       enabled: true
       adaptation:
@@ -2206,6 +2262,7 @@ global:
         scope: conversation
         identity:
           headers:
+            # Unset, protection keys on the session id the request pins.
             session: x-session-id
             conversation: x-conversation-id
             # Optional: holds each named agent (a delegated subagent) on its own
@@ -2251,11 +2308,8 @@ global:
       routing_preview:
         request_timeout_seconds: 120
         max_concurrency: 16
-      embeddings:
-        enabled: false
       batch_classification:
         max_batch_size: 100
-        max_concurrency: 8
         metrics:
           sample_rate: 1.0
           batch_size_ranges:
@@ -2281,7 +2335,7 @@ global:
         db: 1
         key_prefix: "vsr:responses:"
         cluster_mode: false
-        cluster_addresses: [redis-a:6379, redis-b:6379]
+        cluster_addresses: ['redis-a:6379', 'redis-b:6379']
         pool_size: 10
         min_idle_conns: 2
         max_retries: 3
@@ -2322,13 +2376,19 @@ global:
     authz:
       fail_open: false
       identity:
-        user_id_header: x-user-id
-        user_groups_header: x-user-groups
+        user_id_header: x-auth-request-user
+        user_groups_header: x-auth-request-groups
       providers:
         - type: header-injection
           headers:
             X-Plan: premium
             X-Role: admin
+      # The deployment authenticator attaches the requesting user's
+      # credential under this header; only upstreams whose auth is
+      # credential: delegated receive it.
+      delegated_credential:
+        enabled: true
+        header: x-vsr-delegated-credential
     ratelimit:
       fail_open: false
       providers:
@@ -2395,17 +2455,6 @@ global:
     startup_status:
       store_backend: file
     router_replay:
-      enabled: true
-      capture_request_body: true
-      capture_response_body: true
-      # Keep detected or uncertain personal data out of captured content.
-      capture_personal_data: false
-      # Client tool results stay redacted; true requires capture_personal_data.
-      capture_tool_results: false
-      max_records: 10000
-      max_body_bytes: 4096
-      max_tool_trace_bytes: 0
-      max_tool_trace_steps: 100
       store_backend: postgres
       ttl_seconds: 2592000
       async_writes: true
@@ -2446,12 +2495,13 @@ global:
   stores:
     response_cache:
       backend_type: milvus
-      enabled: true
-      similarity_threshold: 0.86
+      # Semantic reuse embeds with this deployment (default:
+      # embeddings.default) at the width of the vector field below.
+      embedding:
+        deployment: vela-embedding
       max_entries: 50000
       ttl_seconds: 7200
       eviction_policy: lru
-      embedding_model: mmbert
       milvus:
         connection:
           host: milvus
@@ -2490,9 +2540,12 @@ global:
           drop_collection_on_startup: false
           auto_create_collection: true
     memory:
-      enabled: true
       backend: milvus
       auto_store: true
+      # Memories are embedded with this deployment (default:
+      # embeddings.default) at the backend's dimension.
+      embedding:
+        deployment: vela-embedding
       # The chat deployment that rewrites a query with its conversation
       # before memory search.
       query_rewrite:
@@ -2534,7 +2587,6 @@ global:
         db: 0
         key_prefix: "memory_cache:"
         password: ""
-      embedding_model: mmbert
       default_retrieval_limit: 10
       # Weighted hybrid scoring. The value predates Vela Embedding; check it on your own data.
       default_similarity_threshold: 0.40
@@ -2560,8 +2612,11 @@ global:
       backend_type: llama_stack
       file_storage_dir: /var/lib/vsr/data
       max_file_size_mb: 100
-      embedding_model: multimodal
-      embedding_dimension: 384
+      # The deployment documents and queries are embedded with, and the width
+      # of their vectors (default: embeddings.default at its full output).
+      embedding:
+        deployment: omni-nano
+        dimension: 384
       ingestion_workers: 4
       ingestion_drain_timeout_seconds: 25
       supported_formats: [.txt, .md, .json, .csv, .html]
@@ -2641,8 +2696,8 @@ global:
         table_name: vector_store_registry
 
     # Session-scoped sticky tool-set selection's shared store (issue #3347).
-    # Constructed only when at least one decision's tool_selection.sticky is
-    # enabled; see website/docs/tutorials/plugin/tool-selection.md. backend:
+    # Constructed only when at least one decision's tools.select.sticky is
+    # enabled; see website/docs/tutorials/plugin/tools.md. backend:
     # redis is a self-consistent, Validate()-passing sample (matching
     # response_api's store_backend: redis above) rather than
     # vector_store's exhaustive-multiple-backends-at-once shape: local has
@@ -2667,36 +2722,6 @@ global:
   integrations:
     kv_transfer:
       enabled: false
-    tools:
-      enabled: true
-      top_k: 5
-      similarity_threshold: 0.35
-      tools_db_path: config/runtime/tools/tools_db.json
-      fallback_to_empty: true
-      advanced_filtering:
-        enabled: true
-        retrieval_strategy: weighted
-        candidate_pool_size: 50
-        min_lexical_overlap: 1
-        min_combined_score: 0.42
-        weights:
-          embed: 0.5
-          lexical: 0.2
-          tag: 0.1
-          name: 0.1
-          category: 0.1
-        use_category_filter: true
-        category_confidence_threshold: 0.7
-        allow_tools: [docs.search, tickets.lookup]
-        block_tools: [admin.delete]
-        hybrid_history:
-          history_horizon: 8
-          min_history_steps: 1
-          history_confidence_threshold: 0
-          weight_semantic: 1
-          weight_history_transition: 1
-          weight_decision_prior: 1
-          repetition_penalty_strength: 0
     looper:
       grpc_max_msg_size_mb: 16
       max_response_bytes_mb: 32
@@ -2722,15 +2747,23 @@ global:
   model_catalog:
     # Every model the Router asks is a deployment, declared once by name;
     # provider names the API the Router speaks to it. Declaring a deployment
-    # does not start it: only deployments a signal, selector, embedding or
-    # reranker resolves to load. primary, hazard, vela-embedding and omni-nano
-    # are always declared; a deployment of the same name replaces one.
+    # does not start it: only deployments a signal, selector or embedding
+    # consumer resolves to load. primary and vela-embedding are always
+    # declared; a deployment of the same name replaces one.
     deployments:
       primary:
         provider: model_runtime
         public_name: decision-public
         artifact: vllm-sr/vela3-fast
         device: cpu
+      # Vela 1.0 Omni-Nano, the embedding model of the vector store below:
+      # its text vectors have 384 dimensions.
+      omni-nano:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Omni-Nano
+        revision: 2ff2d66385dbdd661a560ec3e8bcb45a0527d92e
+        device: cpu
+        input: {overflow: truncate}
       # Decision 2.0 served by the built-in model runtime. The Router starts and
       # supervises it on a private Unix socket (managed: no endpoint).
       decision-kai:
@@ -2738,29 +2771,6 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         device: auto
-      # operating_point pins the operating point the Hazard head's package
-      # serves: a classifier rule this deployment answers reads independent
-      # label scores at its thresholds.
-      content-risk:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
-        revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
-        device: cpu
-        input:
-          max_tokens: 32768
-          overflow: reject
-        operating_point:
-          path: operating_point.json
-          sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
-      # Vela 1.0 Safety for the generic-safety-score classifier; inputs over
-      # the model's limit are truncated rather than refused.
-      vela-safety:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Safety
-        revision: 6e70e725a5f4d86da10f5be5e4dfd1da0358bb85
-        device: cpu
-        input:
-          overflow: truncate
       document-ranker:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
@@ -2770,6 +2780,14 @@ global:
           max_tokens: 4096
           overflow: reject
       # Unbound examples below: nothing resolves to them, so they do not load.
+      scores-head:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
+        revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: reject
       # Replicas of one logical deployment: a local worker, and a worker
       # started elsewhere, named by endpoint and its served model.
       decision-replicas:
@@ -2781,9 +2799,19 @@ global:
           - device: cpu
           - endpoint: http://decision-worker:8100
             model: decision-kai
+        # A replica whose exchanges run out of their deadline 3 times in a
+        # row, while another replica answers, leaves dispatch for 30 s (twice
+        # as long each further time in a row, up to 5 min); at most half the
+        # replicas are out at once. These are the defaults;
+        # consecutive_timeouts: 0 turns ejection off.
+        outlier_detection:
+          consecutive_timeouts: 3
+          base_ejection_ms: 30000
+          max_ejection_ms: 300000
+          max_ejection_percent: 50
       # Engine arguments tune batching, precision, shared context and a
       # Decision model's input limit; each one left out keeps the runtime's
-      # default (website/docs/model-runtime/engine-args.md).
+      # default (website/docs/model-runtime/deploy/engine-args.md).
       decision-kai-tuned:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
@@ -2822,65 +2850,118 @@ global:
       # a model_runtime deployment; requests are never routed to it. The key
       # comes from auth.api_key_env or auth.api_key_file, sent as
       # "Authorization: Bearer <key>" unless auth sets another header or prefix.
-      # timeout_ms bounds one attempt (at most 60000 for systemone).
+      # timeout_ms bounds one attempt (at most 60000 for systemone). schema
+      # names the API the endpoint speaks: vllm-sr/5.0 is vllm-sr serve's,
+      # which carries a stage's states in one batch, presets, set and span
+      # questions and its model card.
       decision-remote:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           api_key_env: SYSTEMONE_DECISION_KEY
         timeout_ms: 3000
+      # The same API asked with the requesting user's credential, which the
+      # authenticator in front issues (global.services.authz
+      # .delegated_credential), instead of a key of the Router's own. Only a
+      # call made for a client request reaches it, and a request without the
+      # credential is answered 401 before the call.
+      decision-delegated:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
+        auth:
+          credential: delegated
+        timeout_ms: 3000
       # The same API behind a gateway with its own header and path prefix;
-      # prefix "" sends the bare key. capabilities declares the question types
-      # and presets the model answers, used only when GET <endpoint>/models
-      # lists none for it.
+      # prefix "" sends the bare key. capabilities declares the question types,
+      # presets and input modalities the model answers and reads, used only
+      # when GET <endpoint>/models lists none for it. forward_request_headers
+      # copies the client's x-user-id, which the gateway attributes usage by,
+      # onto each call made for a request; calls the Router makes on its own
+      # behalf carry none, and no answer is kept for another request.
       decision-gateway:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           header: Ocp-Apim-Subscription-Key
           prefix: ""
           api_key_file: /run/secrets/systemone-gateway-key
+        forward_request_headers: [x-user-id]
         capabilities:
           question_types: [choice, noul, score]
           presets: [pii, halu]
-      # A chat model used as the tool-risk classifier: POST
-      # <endpoint>/chat/completions. generation sets max_tokens and
-      # temperature of its completions.
-      openai-classifier:
-        provider: openai_chat
-        endpoint: https://openai-proxy:443/v1
-        model: gpt-4.1-mini
+          modalities: [text, image, video]
+      # A hosted API that speaks the published System One standard,
+      # systemone/0.2 (the default schema): one request per call, so a stage's
+      # states go in calls of their own, at most max_concurrency (default 8)
+      # in flight within the caller's deadline. deviations declares how the
+      # endpoint departs from its schema: state_text sends an object state as
+      # its canonical JSON text, for an API that takes only text states. The
+      # standard carries no presets, set or span questions, video or proof of
+      # full input coverage, so rules that need them fail to load against it.
+      decision-standard:
+        provider: systemone
+        endpoint: https://api.example.com/v1/systemone
+        model: d3
+        schema: systemone/0.2
+        deviations: [state_text]
+        max_concurrency: 8
         auth:
-          api_key_env: OPENAI_CLASSIFIER_API_KEY
-        timeout_ms: 15000
-        generation:
-          max_tokens: 128
-          temperature: 0
-      # A chat model asked with reasoning off: generation.reasoning names a
+          api_key_env: SYSTEMONE_STANDARD_KEY
+        timeout_ms: 6000
+        # A routing question (a rule that does not read its whole input)
+        # reads at most max_tokens of a long input: its head (head_share of
+        # it) and its tail around a marker. A guard rule (jailbreak, safety,
+        # pii) reads all of it, in windows of scan_window.tokens that overlap
+        # by scan_window.overlap, each a call of its own, max_parallel (4) at
+        # a time. Both are sized in bytes, four a token, so
+        # dense text such as JSON or base64 holds up to about three times as
+        # many tokens: size them so that a call on it fits timeout_ms. A
+        # systemone deployment defaults to 4096 for both and a model_runtime
+        # one to 8192; neither ever exceeds the model's validated length.
+        # Between its head and its tail, a long input that needs more than
+        # 256 windows, or whose scan falls behind the signals' deadline while
+        # larger windows would be read in time at the deployment's measured
+        # pace, reads larger ones, up to scan_window.max_tokens (by default
+        # the model's validated length). A larger window whose answer leaves a
+        # rule short of its threshold by at most reread_margin in log-odds
+        # (3: from about 0.91 for a rule at 0.995, 0.05 for one at 0.5) is read
+        # again in windows of scan_window.tokens.
+        routing_view:
+          max_tokens: 4096
+          head_share: 0.25
+        scan_window:
+          tokens: 4096
+          overlap: 256
+          max_parallel: 4
+          max_tokens: 8192
+          reread_margin: 3
+        capabilities:
+          question_types: [choice, noul, score]
+          modalities: [text, image]
+      # A chat model: POST <endpoint>/chat/completions. limits bounds the
+      # request and response bodies; generation sets the max_tokens and
+      # temperature of its completions, and generation.reasoning names a
       # built-in reasoning family.
       memory-rewriter:
         provider: openai_chat
         endpoint: http://memory-rewriter:8000/v1
         model: qwen3
         timeout_ms: 5000
-        generation:
-          max_tokens: 256
-          reasoning:
-            family: qwen3
-            use_reasoning: false
-      # A classifier service speaking the Router's classification API: POST
-      # <endpoint>/classify. limits bounds the request and response bodies.
-      sequence-classifier:
-        provider: classify
-        endpoint: http://sequence-classifier:8080
-        auth:
-          api_key_env: SEQUENCE_CLASSIFIER_API_KEY
-        timeout_ms: 5000
         limits:
           max_request_bytes: 262144
           max_response_bytes: 1048576
+        generation:
+          max_tokens: 256
+          temperature: 0
+          reasoning:
+            family: qwen3
+            use_reasoning: false
       # A remote embedding model: POST <endpoint>/embeddings. Name it in
       # embeddings.default to embed with it; max_retries retries transport
       # failures within the caller's deadline.
@@ -2894,61 +2975,31 @@ global:
         max_retries: 2
         limits:
           max_response_bytes: 16777216
+        # The model's facts: the width of its vectors and what it embeds.
         capabilities:
           dimensions: 1024
-      # A remote reranker: POST <endpoint>/rerank. Name it in a rag plugin's
-      # rerank.deployment to rerank with it.
-      remote-reranker:
-        provider: rerank
-        endpoint: https://rerank.example.com
-        model: bge-reranker-v2-m3
-    # The deployments that embed text and images: embedding signals, the
-    # response cache, memory and the vector store. vela-embedding and
-    # omni-nano are the defaults.
+          modalities: [text]
+    # The deployment recall embeds with, for every store and collection that
+    # names none of its own, the way system.decision_model names the decision
+    # model's: Vela Embedding, pre-declared as vela-embedding. It starts only
+    # when the response cache, memory or a vector store recalls with it.
     embeddings:
-      default: vela-embedding
-      multimodal: omni-nano
-      semantic:
-        qwen3_model_path: models/mom-embedding-pro
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        multimodal_model_path: models/vela-1.0-omni-nano
-        use_cpu: true
-        embedding_config:
-          full_context: false
-          # model_runtime embeds with the built-in model runtime. A remote
-          # model is an openai_embeddings deployment named in
-          # embeddings.default, such as remote-embedding above.
-          backend: model_runtime
-          model_type: mmbert
-          preload_embeddings: true
-          target_dimension: 0
-          target_layer: 22
-          enable_soft_matching: false
-          top_k: 0
-          min_score_threshold: 0.45
-          prototype_scoring:
-            enabled: true
-            cluster_similarity_threshold: 0.9
-            max_prototypes: 8
-            best_weight: 0.75
-            top_m: 2
-            margin_threshold: 0.0
+      default: {deployment: vela-embedding}
     # The decision model answers every question-style signal and selector that
     # no rule deployment or binding names. The Router checks at load that the
     # deployment answers each one. Omission selects primary (vela3-fast).
     system:
       decision_model:
         deployment: primary
-    # Bindings choose the deployment of a signal type whose rules share one
-    # answer (domain, jailbreak, pii, fact_check, user_feedback, modality,
-    # hallucination, preference, reask), in every recipe. A recipe's
-    # routing.model_bindings wins over them for that recipe.
+    # Bindings choose the deployment that answers the rules of an application
+    # signal type (domain, fact_check, user_feedback, jailbreak, safety, pii,
+    # hallucination, refusal, turn_relation, complexity, modality) that name
+    # none, in every recipe. A recipe's routing.model_bindings wins over them
+    # for that recipe.
     bindings:
       pii: primary
-    # admission bounds concurrent calls. A key is a deployment name, for a gate
-    # the deployment's users share, or a signal type (jailbreak, domain, pii,
-    # fact_check, hallucination, user_feedback, safety, hazard), for that
-    # signal's own gate.
+    # admission bounds concurrent calls. A key is a deployment name; the
+    # deployment's users share its gate.
     # max_concurrency: inference slots running at once (>= 1).
     # max_queue: bounded wait queue beyond the slots (0 = no queue).
     # queue_timeout_ms: longest a request may wait for a slot; on expiry the
@@ -2956,255 +3007,60 @@ global:
     # on_overflow selects what happens when every slot is busy and the queue
     # is full: shed (default) rejects the request, wait blocks for a queue
     # slot and requires max_queue >= 1, fail_open admits without a slot.
-    # A shed inference surfaces as a classify error and follows the same
-    # on_error / on_unknown policy as any other inference failure.
+    # A shed inference fails as any other inference failure does: the rules
+    # that asked it are unknown.
     # Omitting admission means no gate and preserves current behavior.
     admission:
-      jailbreak:
+      primary:
         max_concurrency: 4
         max_queue: 64
         queue_timeout_ms: 250
         on_overflow: shed
     # Deadline of a request's model-runtime signals. 0 (default) derives it
     # from the request's deadline, less a tenth of the time left (at least a
-    # second), or 45 s for a served request. A signal still running resolves
-    # through its policy: a routing signal through on_error, a safety signal
-    # (prompt guard, PII) as unscanned.
+    # second), or 45 s for a served request. A rule still waiting for its
+    # answer is unknown.
     signal_timeout_ms: 0
-    kbs:
-      - name: privacy_kb
-        source:
-          path: knowledge_bases/privacy/
-          manifest: labels.json
-        threshold: 0.55
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 8
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-        label_thresholds:
-          prompt_injection: 0.7
-        groups:
-          security_containment:
-            - prompt_injection
-            - credential_exfiltration
-            - jailbreak_role
-            - system_prompt_extraction
-          privacy_policy:
-            - proprietary_code
-            - internal_document
-            - pii
-            - business_strategy
-            - trade_secret_ip
-            - operational_infrastructure
-            - locality_directive
-            - customer_data
-          frontier_reasoning:
-            - architecture_analysis
-            - root_cause_analysis
-            - multi_step_tradeoffs
-          local_standard:
-            - generic_coding
-            - simple_task
-            - general_knowledge
-          private:
-            - prompt_injection
-            - credential_exfiltration
-            - jailbreak_role
-            - system_prompt_extraction
-            - proprietary_code
-            - internal_document
-            - pii
-            - business_strategy
-            - trade_secret_ip
-            - operational_infrastructure
-            - locality_directive
-            - customer_data
-          public:
-            - architecture_analysis
-            - root_cause_analysis
-            - multi_step_tradeoffs
-            - generic_coding
-            - simple_task
-            - general_knowledge
-        metrics:
-          - name: private_vs_public
-            type: group_margin
-            positive_group: private
-            negative_group: public
-      - name: mmlu_kb
-        source:
-          path: knowledge_bases/mmlu/
-          manifest: labels.json
-        threshold: 0.25
-        groups:
-          escalate:
-            - biology
-            - business
-            - computer science
-            - economics
-            - history
-            - math
-            - other
-            - philosophy
-            - psychology
-          keep:
-            - chemistry
-            - engineering
-            - health
-            - law
-            - physics
-        metrics:
-          - name: escalate_vs_keep
-            type: group_margin
-            positive_group: escalate
-            negative_group: keep
-    # Modules tune each built-in signal; the deployment that answers a signal
-    # is chosen by a rule's deployment, a binding or the decision model, not
-    # here.
-    modules:
-      safety:
-        safety:
-          use_cpu: true
-          max_sequence_length: 0
-      prompt_compression:
+  plugins:
+    - type: context
+      configuration:
         enabled: true
-        # Built-in profile for scoring/preserve defaults: default, coding, medical,
-        # security, or multi_turn. The multi-turn alias is normalized to multi_turn.
-        # Unknown profiles fail config validation. Explicit weights override the profile.
-        profile: default
-        max_tokens: 4096
-        min_length: 512
-        skip_signals: [jailbreak, pii]
-        textrank_weight: 0.4
-        position_weight: 0.2
-        tfidf_weight: 0.3
-        novelty_weight: 0.1
-        position_depth: 0.1
-        preserve_first_n: 3
-        preserve_last_n: 2
-      prompt_guard:
-        enabled: true
-        # The jailbreak signal asks the deployment bindings.jailbreak names,
-        # else the decision model. Without a threshold here the guard uses the
-        # calibrated threshold of the model that answers.
-        use_cpu: true
-        # vela3-fast reads the whole text up to its scan budget (four inputs on a
-        # CPU, or the deployment's input {overflow: window, max_tokens}) and
-        # names its own labels, so it sets no window. A sequence classifier such
-        # as Vela 1.0 Guard takes a document budget, token windows
-        # (window: {size: 512, overlap: 255}) and a label mapping
-        # (jailbreak_type_mapping.json in its directory).
-        max_sequence_length: 0
-        jailbreak_mapping_path: ""
-        positive_labels: [jailbreak]
-        # allow (default) tolerates a classifier-backend failure and treats the
-        # affected content as not matching; block treats it as a match instead,
-        # since an inference failure means the content could not be verified safe.
-        on_error: allow
-        # block (default) matches content the guard did not read in full (over
-        # its input or cap, truncated, or not scanned by the signal deadline) as
-        # unscanned, so padding cannot carry an attack past it; allow leaves
-        # such content to on_error.
-        on_unscanned: block
-      classifier:
-        domain:
-          # Omit to run the classifier whenever a deployment answers the
-          # signal; false disables the classifier outright.
-          enabled: true
-          max_sequence_length: 0
-          use_cpu: true
-          # vela3-fast names its 14 domains itself; a classifier head takes its
-          # category_mapping.json.
-          category_mapping_path: ""
-          fallback_category: other
-        mcp:
-          enabled: true
-          transport_type: stdio
-          command: python
-          args: [-m, mcp_classifier]
-          env:
-            MCP_MODE: local
-          url: http://localhost:9010
-          tool_name: classify
-          threshold: 0.6
-          timeout_seconds: 15
-          max_response_bytes: 16777216
-        pii:
-          # Omit to run the classifier whenever a deployment answers the
-          # signal; false disables the classifier outright.
-          enabled: true
-          # vela3-fast finds spans with its span-set adapter and reads the
-          # whole text up to its scan budget, so it sets no window; a token
-          # classifier such as Vela 1.0 PII takes a document budget (32768),
-          # token windows (window: {size: 512, overlap: 255}) and its
-          # pii_mapping.json.
-          max_sequence_length: 0
-          use_cpu: true
-          pii_mapping_path: ""
-          # allow (default) keeps a classify error as a non-match for that
-          # content; block treats it as a match on classification_error, so
-          # unverified text cannot pass as clean.
-          on_error: allow
-          # block (default) matches content the model did not read in full
-          # (over its input or cap, a provider-declared truncation, or not
-          # scanned by the signal deadline) as unscanned, so a long request
-          # routes as private; allow leaves such content to on_error.
-          on_unscanned: block
-        preference:
-          use_contrastive: true
-          embedding_model: models/preference-encoder
-          prototype_scoring:
+        sources:
+          - type: memory
+        compress:
+          # signals compresses the text the routing signals read, before a
+          # decision is chosen, so global.plugins and a recipe's plugins set
+          # it, never a decision's. A block with only signals leaves the
+          # request whole; a decision's own compress fields compress it.
+          signals:
             enabled: true
-            cluster_similarity_threshold: 0.9
-            max_prototypes: 8
-            best_weight: 0.75
-            top_m: 2
-            margin_threshold: 0.0
-      complexity:
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 6
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-      hallucination_mitigation:
+            # Built-in profile for scoring/preserve defaults: default, coding, medical,
+            # security, or multi_turn. The multi-turn alias is normalized to multi_turn.
+            # Unknown profiles fail config validation. Explicit weights override the profile.
+            profile: default
+            # Text over max_tokens is compressed down to it; text of min_length
+            # characters or fewer is never compressed.
+            max_tokens: 4096
+            min_length: 512
+            # The signal types that read the original text.
+            skip_signals: [jailbreak, pii]
+            textrank_weight: 0.4
+            position_weight: 0.2
+            tfidf_weight: 0.3
+            novelty_weight: 0.1
+            position_depth: 0.1
+            preserve_first_n: 3
+            preserve_last_n: 2
+    - type: router_replay
+      configuration:
         enabled: true
-        fact_check:
-          # enabled: false runs no fact-check classifier.
-          enabled: true
-          max_sequence_length: 0
-          use_cpu: true
-        detector:
-          backend: model_runtime
-          include_explanation: false
-          threshold: 0.5
-          use_cpu: true
-          min_span_length: 1
-          min_span_confidence: 0.0
-          context_window_size: 50
-      feedback_detector:
-        enabled: true
-        max_sequence_length: 0
-        use_cpu: true
-        feedback_mapping_path: ''
-      modality_detector:
-        enabled: true
-        method: hybrid
-        # The modality signal asks the deployment bindings.modality names, else
-        # the decision model.
-        classifier:
-          max_sequence_length: 0
-          use_cpu: true
-        keywords:
-          - image
-          - picture
-          - illustration
-        both_keywords:
-          - explain and illustrate
-          - describe with an image
-        confidence_threshold: 0.63
-        lower_threshold_ratio: 0.7
+        capture_request_body: true
+        capture_response_body: true
+        # Keep detected or uncertain personal data out of captured content.
+        capture_personal_data: false
+        # Client tool results stay redacted; true requires capture_personal_data.
+        capture_tool_results: false
+        max_records: 10000
+        max_body_bytes: 4096
+        max_tool_trace_bytes: 0
+        max_tool_trace_steps: 100

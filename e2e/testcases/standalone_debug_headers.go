@@ -43,10 +43,8 @@ func testStandaloneDebugHeadersDefaultOff(ctx context.Context, client *kubernete
 	if decision := response.Headers.Get("x-vsr-selected-decision"); decision != standaloneFailoverRoute {
 		return fmt.Errorf("decision %q, want %q on the default surface", decision, standaloneFailoverRoute)
 	}
-	for _, name := range []string{"x-vsr-matched-keywords", "x-vsr-selected-reasoning", "x-vsr-context-token-count", "x-vsr-client-protocol"} {
-		if value := response.Headers.Get(name); value != "" {
-			return fmt.Errorf("%s = %q: a client turned on the debug headers without global.router.headers.debug", name, value)
-		}
+	if value := response.Headers.Get(traceHeader); value != "" {
+		return fmt.Errorf("%s = %q: a client turned on the trace without global.router.headers.debug", traceHeader, value)
 	}
 	return nil
 }

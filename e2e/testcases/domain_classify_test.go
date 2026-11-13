@@ -23,8 +23,6 @@ func TestDomainClassificationUsesIsolatedUpstreamPrediction(t *testing.T) {
 		{"envoy-ai-gateway", "e2e-domain", "e2e-domain", "cache", false},
 		{"envoy-ai-gateway", "e2e-domain", "mom", "upstream", false},
 		{"envoy-ai-gateway", "e2e-domain", "e2e-domain", "fast_response", false},
-		{"ml-model-selection", "vllm-sr/auto", "", "upstream", true},
-		{"production-stack", "vllm-sr/auto", "", "upstream", true},
 	} {
 		t.Run(surface.profile+"/"+surface.recipe+"/"+surface.path, func(t *testing.T) {
 			fixture, fixtureErr := domainFixtureForProfile(surface.profile)
@@ -44,7 +42,7 @@ func TestDomainClassificationUsesIsolatedUpstreamPrediction(t *testing.T) {
 				}
 				w.Header().Set("x-vsr-selected-recipe", surface.recipe)
 				w.Header().Set("x-vsr-response-path", surface.path)
-				w.Header().Set("x-vsr-selected-category", "biology")
+				w.Header().Set("x-vsr-trace", `category="biology"`)
 				fmt.Fprint(w, `{}`)
 			}))
 			defer server.Close()
@@ -62,9 +60,30 @@ func TestDomainClassificationUsesIsolatedUpstreamPrediction(t *testing.T) {
 
 func TestDomainClassificationRejectsUndeclaredProfilesBeforeConnecting(t *testing.T) {
 	for _, profile := range []string{"", "unregistered-profile"} {
-		if err := testDomainClassify(context.Background(), nil, pkgtestcases.TestCaseOptions{Profile: profile}); err == nil ||
+		if err := runDomainClassify(context.Background(), nil, pkgtestcases.TestCaseOptions{Profile: profile}, domainRoutingProbes); err == nil ||
 			!strings.Contains(err.Error(), "no fixture contract") {
 			t.Fatalf("profile %q must fail before service setup: %v", profile, err)
+		}
+	}
+}
+
+func TestDomainRoutingProbesMarkOneQuestionPerMarkableDomain(t *testing.T) {
+	probes := domainRoutingProbes([]DomainClassifyCase{
+		{Category: "math", Question: "What is 2 + 2?"},
+		{Category: "math", Question: "Integrate x."},
+		{Category: "computer science", Question: "What is a heap?"},
+		{Category: "law", Question: "What is a tort?"},
+	})
+	want := []DomainClassifyCase{
+		{Category: "math", Question: "__SYSTEMONE_CHOICE__ math What is 2 + 2?"},
+		{Category: "law", Question: "__SYSTEMONE_CHOICE__ law What is a tort?"},
+	}
+	if len(probes) != len(want) {
+		t.Fatalf("probes = %#v, want %#v", probes, want)
+	}
+	for i := range want {
+		if probes[i] != want[i] {
+			t.Fatalf("probe %d = %#v, want %#v", i, probes[i], want[i])
 		}
 	}
 }

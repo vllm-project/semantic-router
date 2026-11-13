@@ -34,6 +34,9 @@ func (s *Server) StartContextWithoutExtProc(ctx context.Context, onServing func(
 	}
 	s.servingMu.Unlock()
 	watch := s.prepareConfigWatch()
+	if !s.usesKubernetesConfigSource() {
+		s.markServingReady()
+	}
 	if onServing != nil {
 		onServing()
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -97,7 +98,7 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		return nil, fmt.Errorf("embedding endpoint model is required for backend %q", config.EmbeddingBackendOpenAICompatible)
 	}
 	if cfg.ExpectedDimension > 0 && cfg.Dimensions > 0 && cfg.ExpectedDimension != cfg.Dimensions {
-		return nil, fmt.Errorf("embedding endpoint dimensions (%d) must match target_dimension (%d)", cfg.Dimensions, cfg.ExpectedDimension)
+		return nil, fmt.Errorf("embedding endpoint dimensions (%d) must match the expected dimension (%d)", cfg.Dimensions, cfg.ExpectedDimension)
 	}
 	if cfg.TimeoutSeconds < 0 {
 		return nil, fmt.Errorf("embedding endpoint timeout_seconds must be non-negative")
@@ -311,11 +312,24 @@ func decodeEmbeddingResponse(body io.Reader, maxResponseBytes int64) (embeddings
 		return embeddingsResponse{}, fmt.Errorf("read embedding response: %w", err)
 	}
 
+	decoder := json.NewDecoder(bytes.NewReader(responseBody))
 	var decoded embeddingsResponse
-	if err := json.NewDecoder(bytes.NewReader(responseBody)).Decode(&decoded); err != nil {
+	if err = decoder.Decode(&decoded); err != nil {
 		return embeddingsResponse{}, fmt.Errorf("decode embedding response: %w", err)
 	}
-	return decoded, nil
+	// Decode consumes only the first JSON value, so a response body that
+	// continues after the embeddings object would otherwise be accepted as
+	// long as that first value parsed. Require the stream to end here.
+	var trailing json.RawMessage
+	err = decoder.Decode(&trailing)
+	switch {
+	case err == nil:
+		return embeddingsResponse{}, fmt.Errorf("decode embedding response: unexpected second JSON value after embeddings object")
+	case errors.Is(err, io.EOF):
+		return decoded, nil
+	default:
+		return embeddingsResponse{}, fmt.Errorf("decode embedding response: unexpected trailing data after embeddings object: %w", err)
+	}
 }
 
 func (p *OpenAICompatibleProvider) parseEmbeddings(data []embeddingDatum, expectedCount int) ([][]float32, error) {
@@ -376,7 +390,14 @@ func (p *OpenAICompatibleProvider) convertEmbedding(values []float64) ([]float32
 	}
 	embedding := make([]float32, len(values))
 	for i, value := range values {
-		embedding[i] = float32(value)
+		converted := float32(value)
+		// A float64 that is finite in its own range can still overflow to
+		// infinity when rounded to float32, so validate the converted value
+		// instead of the decoded one.
+		if math.IsInf(float64(converted), 0) {
+			return nil, fmt.Errorf("component %d value %v overflows float32", i, value)
+		}
+		embedding[i] = converted
 	}
 	return embedding, nil
 }

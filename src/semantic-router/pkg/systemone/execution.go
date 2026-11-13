@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -65,11 +67,11 @@ type Executor struct {
 }
 
 func NewExecutor(algorithm *config.AlgorithmConfig, quality QualityEvaluator) (*Executor, error) {
-	if algorithm == nil || !algorithm.IsNative() || algorithm.Quality == nil || len(algorithm.Stages) == 0 {
+	if !algorithm.IsNative() {
 		return nil, errors.New("invalid native execution plan")
 	}
 	e := &Executor{algorithm: algorithm, quality: quality}
-	if algorithm.Quality.Type == "calibrated" && quality == nil {
+	if algorithm.NativeQuality().EffectiveType() == config.EscalateQualityCalibrated && quality == nil {
 		return nil, errors.New("calibrated native execution requires applicable evaluation evidence")
 	}
 	return e, nil
@@ -82,9 +84,12 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 	started := time.Now()
 	defer func() {
 		outcome := "resolved"
+		var incapable *IncapableError
 		if resultErr != nil {
 			outcome = "unresolved"
-			if errors.Is(resultErr, budget.ErrExhausted) || errors.Is(resultErr, context.DeadlineExceeded) {
+			if errors.As(resultErr, &incapable) {
+				outcome = "incapable"
+			} else if errors.Is(resultErr, budget.ErrExhausted) || errors.Is(resultErr, context.DeadlineExceeded) {
 				outcome = "budget_exhausted"
 			} else if ctx.Err() != nil {
 				outcome = "canceled"
@@ -92,14 +97,22 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		}
 		metrics.RecordSystemOneRequest(e.algorithm.Type, outcome, time.Since(started).Seconds())
 	}()
+	skipped, refusal := e.incapableStages(ctx, request, membersFrom(ctx))
+	if refusal != nil {
+		return Candidate{}, refusal
+	}
 	ledger, hasLedger := budget.Current(ctx)
 	var candidates []Candidate
 	var history []StageEvidence
-	for _, stage := range e.algorithm.Stages {
+	for index, stage := range e.algorithm.NativeStages() {
 		if err := ctx.Err(); err != nil {
 			return Candidate{}, err
 		}
 		if !stage.IsEnabled() {
+			continue
+		}
+		if skipped[index] {
+			metrics.RecordSystemOneStageSkipped(e.algorithm.Type, stage.StageName(), stage.Model, "incapable")
 			continue
 		}
 		stageStarted := time.Now()
@@ -108,12 +121,13 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 			callsBefore = ledger.Used()
 		}
 		candidate, err := e.invokeStage(ctx, request, stage, candidates, invoke)
+		name := stage.StageName()
 		recordStageCalls := func() {
 			if hasLedger {
-				metrics.RecordSystemOneStageCalls(e.algorithm.Type, stage.Name, stage.Model, ledger.Used()-callsBefore)
+				metrics.RecordSystemOneStageCalls(e.algorithm.Type, name, stage.Model, ledger.Used()-callsBefore)
 			}
 		}
-		evidence := StageEvidence{Stage: stage.Name, Model: stage.Model, Response: candidate.Invocation, Outcome: "response"}
+		evidence := StageEvidence{Stage: name, Model: stage.Model, Response: candidate.Invocation, Outcome: "response"}
 		if err != nil {
 			evidence.Outcome = "error"
 		}
@@ -121,16 +135,16 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		candidate.History = append([]StageEvidence(nil), history...)
 		if err != nil {
 			if ctx.Err() != nil {
-				metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "canceled", time.Since(stageStarted).Seconds())
+				metrics.RecordSystemOneStage(e.algorithm.Type, name, stage.Model, "canceled", time.Since(stageStarted).Seconds())
 				recordStageCalls()
 				return Candidate{}, ctx.Err()
 			}
 			if errors.Is(err, budget.ErrExhausted) {
-				metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "budget_exhausted", time.Since(stageStarted).Seconds())
+				metrics.RecordSystemOneStage(e.algorithm.Type, name, stage.Model, "budget_exhausted", time.Since(stageStarted).Seconds())
 				recordStageCalls()
 				return Candidate{}, err
 			}
-			metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "error", time.Since(stageStarted).Seconds())
+			metrics.RecordSystemOneStage(e.algorithm.Type, name, stage.Model, "error", time.Since(stageStarted).Seconds())
 			recordStageCalls()
 			continue
 		}
@@ -140,7 +154,7 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		}
 		passes, qualityErr := e.accept(request, stage, candidate)
 		if contextErr := ctx.Err(); contextErr != nil {
-			metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, "canceled", time.Since(stageStarted).Seconds())
+			metrics.RecordSystemOneStage(e.algorithm.Type, name, stage.Model, "canceled", time.Since(stageStarted).Seconds())
 			recordStageCalls()
 			return Candidate{}, contextErr
 		}
@@ -152,7 +166,7 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		} else if !complete(candidate.Observations) {
 			outcome = "invalid"
 		}
-		metrics.RecordSystemOneStage(e.algorithm.Type, stage.Name, stage.Model, outcome, time.Since(stageStarted).Seconds())
+		metrics.RecordSystemOneStage(e.algorithm.Type, name, stage.Model, outcome, time.Since(stageStarted).Seconds())
 		recordStageCalls()
 		if qualityErr != nil {
 			return Candidate{}, qualityErr
@@ -164,20 +178,91 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 	return Candidate{}, ErrUnresolved
 }
 
-func (e *Executor) accept(request *NativeRequest, stage config.CascadeStage, candidate Candidate) (bool, error) {
+// incapableStages are the enabled native stages, by index, whose model
+// provably cannot answer the request: its card, listing or declared
+// capabilities lack a question type, a modality or full input the request
+// needs. A model nothing describes is asked as before, and so is every model
+// for a request every System One model answers. When every native stage is
+// incapable, the request goes to none of them.
+func (e *Executor) incapableStages(ctx context.Context, request *NativeRequest, members MemberCapabilities) (map[int]bool, *IncapableError) {
+	if members == nil || !request.Requirements.beyondStandard() {
+		return nil, nil
+	}
+	stages := e.algorithm.NativeStages()
+	type found struct {
+		capabilities Capabilities
+		known, asked bool
+	}
+	verdicts := make([]found, len(stages))
+	var wg sync.WaitGroup
+	for index, stage := range stages {
+		if !stage.IsEnabled() || stage.StageKind() != config.EscalateStageNative {
+			continue
+		}
+		verdicts[index].asked = true
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			verdicts[index].capabilities, verdicts[index].known = members(ctx, stage.Model)
+		}()
+	}
+	wg.Wait()
+	skipped := map[int]bool{}
+	refusal := &IncapableError{}
+	native := 0
+	for index, stage := range stages {
+		if !verdicts[index].asked {
+			continue
+		}
+		native++
+		capabilities, known := verdicts[index].capabilities, verdicts[index].known
+		if !known {
+			continue
+		}
+		missing := capabilities.Missing(request.Requirements)
+		if len(missing) == 0 {
+			continue
+		}
+		skipped[index] = true
+		for _, need := range missing {
+			if !slices.Contains(refusal.Missing, need) {
+				refusal.Missing = append(refusal.Missing, need)
+			}
+		}
+		if !slices.ContainsFunc(refusal.Members, func(member IncapableMember) bool { return member.Model == stage.Model }) {
+			refusal.Members = append(refusal.Members, IncapableMember{Model: stage.Model, Source: capabilities.Source, Missing: missing})
+		}
+	}
+	if native > 0 && len(skipped) == native {
+		return nil, refusal
+	}
+	return skipped, nil
+}
+
+// accept applies the stage's own rules, then the quality policy: the
+// calibration evidence, or the whole-bundle rules of an uncalibrated policy,
+// which a complete answer passes when there are none. Without either, the
+// stage's rules judge the whole bundle; beside one, they only add conditions.
+func (e *Executor) accept(request *NativeRequest, stage config.EscalateStage, candidate Candidate) (bool, error) {
 	if !complete(candidate.Observations) {
 		return false, nil
 	}
-	if stage.Accept != nil && !acceptNative(candidate.Observations, stage.Accept, false) {
+	quality := e.algorithm.NativeQuality()
+	calibrated := quality.EffectiveType() == config.EscalateQualityCalibrated
+	whole := !calibrated && (quality == nil || quality.Accept == nil)
+	if stage.Accept != nil && !acceptNative(candidate.Observations, stage.Accept, whole) {
 		return false, nil
 	}
-	if e.algorithm.Quality.Type == "calibrated" {
+	if calibrated {
 		return e.quality(request, candidate)
 	}
-	return acceptNative(candidate.Observations, e.algorithm.Quality.Acceptance, true), nil
+	if quality == nil || quality.Accept == nil {
+		return true, nil
+	}
+	return acceptNative(candidate.Observations, quality.Accept, true), nil
 }
 
-func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stage config.CascadeStage, candidates []Candidate, invoke Invoke) (candidate Candidate, invokeErr error) {
+func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stage config.EscalateStage, candidates []Candidate, invoke Invoke) (candidate Candidate, invokeErr error) {
 	if stage.Model == "" {
 		return Candidate{}, errors.New("native stage has no candidate")
 	}
@@ -199,14 +284,15 @@ func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stag
 		}
 	}()
 	model := stage.Model
-	if stage.Kind == "judge" {
+	switch stage.StageKind() {
+	case config.EscalateStageJudge:
 		return invokeJudge(ctx, request, stage, candidates, invoke)
-	}
-	if stage.Kind != "native" {
+	case config.EscalateStageNative:
+	default:
 		return Candidate{}, errors.New("unsupported native stage role")
 	}
 	input := request.Body
-	if e.algorithm.Quality.Type == "calibrated" {
+	if e.algorithm.NativeQuality().EffectiveType() == config.EscalateQualityCalibrated {
 		input = request.InferenceBody
 	}
 	status, body, err := invoke(ctx, model, input)
@@ -216,7 +302,7 @@ func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stag
 	if status < http.StatusOK || status >= http.StatusMultipleChoices || !json.Valid(body) || len(body) > 4<<20 {
 		return Candidate{}, fmt.Errorf("native candidate returned invalid response (status %d)", status)
 	}
-	return Candidate{Stage: stage.Name, Model: model, Body: body, Invocation: body}, nil
+	return Candidate{Stage: stage.StageName(), Model: model, Body: body, Invocation: body}, nil
 }
 
 func complete(observations []Observation) bool {
