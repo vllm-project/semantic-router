@@ -1217,6 +1217,35 @@ SHADOW_CREDENTIAL_HEADERS = frozenset(
 )
 
 
+class ShadowDispatchBudgetConfig(BaseModel):
+    """Aggregate shadow resource bounds for one request (issue #3376).
+
+    Mirrors the Router's ShadowDispatchBudgetConfig. A zero field is
+    unlimited; without reserve_tokens_per_arm, token/cost caps can only be
+    enforced on completion (all arms start together).
+
+    Scoped to one shadow decision: this is not the cross-stage budget ledger
+    owned by #2861.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_calls_per_request: int = Field(default=0, ge=0)
+    max_tokens_per_request: int = Field(default=0, ge=0)
+    max_cost_per_request: float = Field(default=0.0, ge=0.0)
+    price_per_million_tokens: float = Field(default=0.0, ge=0.0)
+    reserve_tokens_per_arm: int = Field(default=0, ge=0)
+    max_concurrency_per_request: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "arms of one request in flight; the plugin-level max_concurrency "
+            "bounds the decision across requests instead"
+        ),
+    )
+    max_response_bytes_per_request: int = Field(default=0, ge=0)
+
+
 class RouterReplayShadowConfig(BaseModel):
     """router_replay's shadow block.
 
@@ -1228,7 +1257,20 @@ class RouterReplayShadowConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    model: str = Field(description="Configured logical model receiving the shadow copy")
+    model: Optional[str] = Field(
+        default=None, description="Configured logical model receiving the shadow copy"
+    )
+    arms: Optional[list[str]] = Field(
+        default=None,
+        description=(
+            "Additional shadow candidate models beyond `model`. Every arm "
+            "receives the same approved request under one aggregate budget"
+        ),
+    )
+    budget: Optional[ShadowDispatchBudgetConfig] = Field(
+        default=None,
+        description="Aggregate shadow resource bounds for one request",
+    )
     sample_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     max_concurrency: int = Field(default=2, ge=0)
     max_queue_depth: int = Field(default=8, ge=0)
@@ -1266,12 +1308,37 @@ class RouterReplayShadowConfig(BaseModel):
                 )
         return names
 
-    @field_validator("model")
-    @classmethod
-    def require_model(cls, model: str) -> str:
-        if not model.strip():
-            raise ValueError("shadow model is required")
-        return model
+    @model_validator(mode="after")
+    def require_model_or_arms(self):
+        # Mirrors the Router's RouterReplayShadowConfig.Validate: `model` or
+        # at least one arm is required, and no arm may be blank.
+        has_model = (self.model or "").strip() != "" or bool(
+            [arm for arm in (self.arms or []) if arm.strip()]
+        )
+        if not has_model:
+            raise ValueError("shadow model or arms are required")
+        for arm in self.arms or []:
+            if not arm.strip():
+                raise ValueError("shadow arms cannot contain empty model names")
+        # Mirrors the Router's cap combinations too: a token cap needs an
+        # admission reservation to bind before dispatch, and a cost cap needs a
+        # price to convert accounted tokens.
+        budget = self.budget
+        if budget is not None:
+            if budget.max_tokens_per_request > 0 and budget.reserve_tokens_per_arm == 0:
+                raise ValueError(
+                    "shadow max_tokens_per_request requires "
+                    "reserve_tokens_per_arm to bind before dispatch"
+                )
+            if budget.max_cost_per_request > 0 and (
+                budget.price_per_million_tokens == 0
+                or budget.reserve_tokens_per_arm == 0
+            ):
+                raise ValueError(
+                    "shadow max_cost_per_request requires "
+                    "reserve_tokens_per_arm and price_per_million_tokens"
+                )
+        return self
 
 
 RouterReplayPluginConfig.model_rebuild()

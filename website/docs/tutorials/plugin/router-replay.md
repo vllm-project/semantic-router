@@ -267,6 +267,17 @@ plugins:
       enabled: true
       shadow:
         model: candidate-model
+        # Optional extra candidates: every arm gets the same request under one
+        # aggregate per-request budget (issue #3376).
+        arms: [candidate-arm]
+        budget:
+          max_calls_per_request: 0
+          max_tokens_per_request: 0
+          max_cost_per_request: 0
+          price_per_million_tokens: 0
+          reserve_tokens_per_arm: 0
+          max_concurrency_per_request: 0
+          max_response_bytes_per_request: 0
         sample_rate: 0.05
         max_concurrency: 2
         max_queue_depth: 8
@@ -281,7 +292,15 @@ plugins:
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `model` | required | Configured logical model that receives the shadow copy. Must have a backend in `providers.models`. |
+| `model` | one of `model`/`arms` required | Configured logical model that receives the shadow copy. Must have a backend in `providers.models`. |
+| `arms` | `[]` | Extra shadow candidate models beyond `model`; deduplicated, and every arm must resolve to a backend. All arms of one decision share one per-request `budget`. |
+| `budget.max_calls_per_request` | `0` | Arm admissions allowed per request across all arms. `0` = unlimited; this is the only dimension that binds without further settings. |
+| `budget.max_tokens_per_request` | `0` | Aggregate token cap. It binds before dispatch only when `reserve_tokens_per_arm` is set; otherwise it is accounted on completion. `0` = unlimited. |
+| `budget.max_cost_per_request` | `0` | Aggregate cost cap; requires `price_per_million_tokens`. `0` = unlimited. |
+| `budget.price_per_million_tokens` | `0` | Token-to-cost conversion used by the cost cap. |
+| `budget.reserve_tokens_per_arm` | `0` | Tokens reserved per arm at admission so concurrently admitted arms cannot overshoot `max_tokens_per_request`/`max_cost_per_request`. |
+| `budget.max_concurrency_per_request` | `0` | Arms of one request allowed in flight at once; excess arms are dropped with reason `budget_concurrency_limit`. `0` = unlimited. |
+| `budget.max_response_bytes_per_request` | `0` | Aggregate response bytes across the arms of one request. Each admission reserves the per-arm `max_response_bytes`, so the cap binds before dispatch and is swapped for the observed size on completion. `0` = unlimited. |
 | `sample_rate` | `1.0` | Fraction of eligible requests to shadow, in `[0, 1]`. `0` keeps the shadow declared but never dispatches. |
 | `max_concurrency` | `2` | In-flight shadow calls for this decision. |
 | `max_queue_depth` | `8` | Calls waiting for a slot. Anything beyond is dropped with reason `queue_full`. |
@@ -299,6 +318,30 @@ decision whose algorithm is an executor (`escalate`, `fusion`, `remom`,
 `ratings` or `workflows`) rejects a shadow at config load, because the shadow
 runs only on single-model provider dispatch.
 
+### Compare several candidates at once {#multi-arm}
+
+`model` plus `arms` turn one shadow into a multi-arm comparison: every
+deduplicated model receives the same approved request, and the replay record
+keeps one bounded outcome per arm, each with its own `target_ref` and shadow
+request identity. The primary response is still built once and never waits for
+any arm.
+
+One `budget` governs the whole arm set for a request, so a fan-out cannot
+multiply resource use behind the operator's back. `max_calls_per_request`
+admits at most that many arms (the rest are dropped with
+`budget_call_limit`); `max_tokens_per_request` and `max_cost_per_request` are
+accounted on completion unless `reserve_tokens_per_arm` reserves per arm at
+admission, which is the only way they bind before dispatch;
+`max_concurrency_per_request` bounds arms in flight and
+`max_response_bytes_per_request` bounds their aggregate response bytes. A zero
+field is unlimited. `max_concurrency` still bounds the decision across
+requests, and `max_response_bytes` still bounds one arm's body.
+
+An arm that resolves to the primary model is skipped with `same_as_primary`,
+like a single-model shadow. Give the decision's `router_replay` capture and the
+export/judge endpoints in the rest of this page the same treatment as a
+single-model shadow: each arm is one more arm in the manifest.
+
 ### Fail-open behavior
 
 The request path does one non-blocking slot check and returns; everything
@@ -311,7 +354,7 @@ result:
 | --- | --- |
 | `completed` | `completed` |
 | `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
-| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable` |
+| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable`, `budget_call_limit`, `budget_token_limit`, `budget_cost_limit`, `budget_concurrency_limit`, `budget_response_bytes_limit` |
 | `sampled_out` | `sampled_out` |
 
 - **Metrics.** Results and reasons are exported as

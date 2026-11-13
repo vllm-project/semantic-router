@@ -194,6 +194,17 @@ plugins:
       enabled: true
       shadow:
         model: candidate-model
+        # 可选的额外候选模型：每个 arm 都在同一份按请求聚合的预算下收到同一份请求
+        # （issue #3376）。
+        arms: [candidate-arm]
+        budget:
+          max_calls_per_request: 0
+          max_tokens_per_request: 0
+          max_cost_per_request: 0
+          price_per_million_tokens: 0
+          reserve_tokens_per_arm: 0
+          max_concurrency_per_request: 0
+          max_response_bytes_per_request: 0
         sample_rate: 0.05
         max_concurrency: 2
         max_queue_depth: 8
@@ -208,7 +219,15 @@ plugins:
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
-| `model` | 必填 | 接收影子副本的已配置逻辑模型。必须在 `providers.models` 中有后端。 |
+| `model` | `model`/`arms` 二选一必填 | 接收影子副本的已配置逻辑模型。必须在 `providers.models` 中有后端。 |
+| `arms` | `[]` | `model` 之外的额外影子候选模型；会去重，且每个 arm 都必须能解析到后端。同一决策的所有 arm 共用一份按请求的 `budget`。 |
+| `budget.max_calls_per_request` | `0` | 一次请求跨所有 arm 允许准入的 arm 数。`0` = 不限制；这是唯一无需其他设置即可生效的维度。 |
+| `budget.max_tokens_per_request` | `0` | 聚合 token 上限。只有设置了 `reserve_tokens_per_arm` 时才能在派发前生效，否则在完成时结算。`0` = 不限制。 |
+| `budget.max_cost_per_request` | `0` | 聚合成本上限；需要 `price_per_million_tokens`。`0` = 不限制。 |
+| `budget.price_per_million_tokens` | `0` | 成本上限使用的 token 到成本换算价格。 |
+| `budget.reserve_tokens_per_arm` | `0` | 准入时为每个 arm 预留的 token，使并发准入的 arm 不会共同超出 `max_tokens_per_request`/`max_cost_per_request`。 |
+| `budget.max_concurrency_per_request` | `0` | 一次请求同时进行的 arm 数；超出的 arm 以原因 `budget_concurrency_limit` 丢弃。`0` = 不限制。 |
+| `budget.max_response_bytes_per_request` | `0` | 一次请求所有 arm 的聚合响应字节数。每次准入都会预留单 arm 的 `max_response_bytes`，因此该上限在派发前生效，并在完成时替换为实际大小。`0` = 不限制。 |
 | `sample_rate` | `1.0` | 发送影子副本的合格请求比例，取值 `[0, 1]`。`0` 保留影子声明，但从不派发。 |
 | `max_concurrency` | `2` | 该决策同时进行的影子调用数。 |
 | `max_queue_depth` | `8` | 等待空位的调用数。超出部分以原因 `queue_full` 丢弃。 |
@@ -222,6 +241,14 @@ plugins:
 
 当请求未被抽中，或主请求派发已经选中了影子模型时，影子请求会被跳过：只记录指标，不产生结果。算法为执行器（`escalate`、`fusion`、`remom`、`ratings` 或 `workflows`）的决策会在加载配置时拒绝影子请求，因为影子请求只在单模型的提供方派发上运行。
 
+### 同时比较多个候选模型 {#multi-arm}
+
+`model` 加上 `arms` 会把一个影子请求变成多 arm 比较：每个去重后的模型都会收到同一份已批准请求，回放记录为每个 arm 保留一条有上限的结果，各自带有 `target_ref` 和影子请求身份。主响应仍然只构建一次，不会等待任何 arm。
+
+一份 `budget` 管理一次请求的全部 arm，因此扇出不会在操作者不知情的情况下放大资源消耗。`max_calls_per_request` 最多准入这么多个 arm（其余以 `budget_call_limit` 丢弃）；`max_tokens_per_request` 和 `max_cost_per_request` 在完成时结算，除非用 `reserve_tokens_per_arm` 在准入时按 arm 预留，这是它们能在派发前生效的唯一方式；`max_concurrency_per_request` 限制同时进行的 arm 数，`max_response_bytes_per_request` 限制它们的聚合响应字节数。字段为 0 表示不限制。`max_concurrency` 仍然限制该决策跨请求的并发，`max_response_bytes` 仍然限制单个 arm 的响应体。
+
+解析为主模型的 arm 会像单模型影子一样以 `same_as_primary` 跳过。决策的 `router_replay` 采集以及本页后面的导出/评判端点对多 arm 的处理与单模型影子一致：每个 arm 都是清单中的一个 arm。
+
 ### 失败时放行 {#fail-open-behavior}
 
 请求路径只做一次非阻塞的空位检查就返回；其余工作都在主请求派发的响应构建完成后，由有上限的工作线程运行。缓慢、不可用、格式错误或过载的影子端点都无法改变主响应或其延迟。每个影子请求恰好以一个结果结束：
@@ -230,7 +257,7 @@ plugins:
 | --- | --- |
 | `completed` | `completed` |
 | `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
-| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable` |
+| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable`, `budget_call_limit`, `budget_token_limit`, `budget_cost_limit`, `budget_concurrency_limit`, `budget_response_bytes_limit` |
 | `sampled_out` | `sampled_out` |
 
 - **指标。**结果和原因导出为 `sr_shadow_dispatch_total{decision,result,reason}`，另有 `sr_shadow_dispatch_latency_seconds`、`sr_shadow_dispatch_inflight` 和 `sr_shadow_dispatch_queued`。
