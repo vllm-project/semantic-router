@@ -60,11 +60,18 @@ func testModelRuntimeVela31DescribedNoul(ctx context.Context, client *kubernetes
 		return err
 	}
 	prompt := freshPrompt("[vela31-described-noul] Please refund my duplicate charge.")
-	answers, err := runtime.Decide(ctx, modelruntime.DecisionsRequest{
-		Model: mrVela31Deployment, State: prompt, Questions: vela31Questions,
-	})
-	if err != nil {
-		return fmt.Errorf("described Noul on the deployed Vela 3.1 fixture: %w", err)
+	// The Router asks one Noul per forward. Read each equivalent question
+	// separately too: changing a CPU GEMM's batch shape changes FP32 rounding.
+	answers := modelruntime.DecisionsResponse{Answers: map[string]modelruntime.Answer{}}
+	for _, id := range []string{vela31Signal, "equivalent"} {
+		response, referenceErr := runtime.Decide(ctx, modelruntime.DecisionsRequest{
+			Model: mrVela31Deployment, State: prompt,
+			Questions: map[string]modelruntime.Question{id: vela31Questions[id]},
+		})
+		if referenceErr != nil {
+			return fmt.Errorf("single-question reference on the deployed Vela 3.1 fixture: %w", referenceErr)
+		}
+		answers.Answers[id] = response.Answers[id]
 	}
 	probability, err := checkVela31Answers(answers)
 	if err != nil {

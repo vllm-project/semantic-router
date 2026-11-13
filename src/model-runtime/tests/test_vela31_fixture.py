@@ -68,10 +68,25 @@ def test_encoder31_deployment_question_matches_equivalent_choice(encoder31):
         }
         with TestClient(create_app(runtime)) as client:
             response = client.post("/v1/decisions", json=body)
-        assert response.status_code == 200
-        answers = response.json()["answers"]
-        probability = answers["vela31_described"]["noul"]
-        assert probability == answers["equivalent"]["probabilities"]["yes"]
+            assert response.status_code == 200
+            answers = response.json()["answers"]
+            probability = answers["vela31_described"]["noul"]
+            assert probability == answers["equivalent"]["probabilities"]["yes"]
+            # Match the Router's single-question forward, not the two-row call above.
+            for index in range(12):
+                state = body["state"] + f" (request {1794586500123456000 + index})"
+                single = {}
+                for question_id, question in body["questions"].items():
+                    response = client.post(
+                        "/v1/decisions",
+                        json={"state": state, "questions": {question_id: question}},
+                    )
+                    assert response.status_code == 200
+                    single[question_id] = response.json()["answers"][question_id]
+                assert (
+                    single["vela31_described"]["noul"]
+                    == single["equivalent"]["probabilities"]["yes"]
+                )
         assert 0.0001 <= probability <= 1
         model = runtime.lookup(None).model
         # The pre-fix Reader rejects this same deployed question.
