@@ -95,6 +95,9 @@ spec:
       serviceAccountName: {{ include "semantic-router.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ . }}
+      {{- end }}
       # Models are now automatically downloaded by the router at startup
       # No initContainer is needed - the router uses its built-in Go-based
       # modeldownload package to download models from HuggingFace based on
@@ -118,6 +121,10 @@ spec:
           {{- end }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
+        {{- with .Values.lifecycle }}
+        lifecycle:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         ports:
         {{- if $standalone }}
         {{- range $listeners }}

@@ -1126,6 +1126,11 @@
         },
         "context_window": {
           "$ref": "#/$defs/ContextWindowConfig"
+        },
+        "drain_timeout_seconds": {
+          "type": "integer",
+          "maximum": 86400,
+          "minimum": 0
         }
       },
       "additionalProperties": false,

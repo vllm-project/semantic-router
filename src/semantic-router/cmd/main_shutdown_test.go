@@ -139,7 +139,7 @@ func TestRunRouterProcessLoadedShutdownIsBoundedAndReleasesListener(t *testing.T
 		}
 	// Well under processShutdownTimeout, so a shutdown that waits it out
 	// fails, with room for a loaded runner.
-	case <-time.After(processShutdownTimeout / 3):
+	case <-time.After(processShutdownTimeout(nil) / 3):
 		t.Fatal("loaded Router shutdown exceeded its bound")
 	}
 

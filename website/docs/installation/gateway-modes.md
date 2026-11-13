@@ -95,6 +95,10 @@ See the [release note](../release-notes/standalone-mode).
   address, port, timeout or `tls` paths, or a new or removed listener, is
   rejected as `restart_required` until the Router restarts; API keys, `apis`
   with their model allow-lists, and identity trust reload in place.
+- **Shutdown:** on SIGTERM, `GET /ready` answers 503, the listeners stop
+  accepting connections, and every HTTP/2 connection, h2c included, gets a
+  GOAWAY. The requests in flight have `global.router.drain_timeout_seconds`
+  (25 by default) to finish; see [Draining on shutdown](#draining-on-shutdown).
 
 ### Model allow-list
 
@@ -176,6 +180,57 @@ listeners:
 Memory and router replay record the user of each request. Without a trusting
 listener they still load and treat every request as anonymous, and the Router
 logs one warning at startup that names them.
+
+### Draining on shutdown
+
+When Kubernetes deletes a pod, it runs the container's `preStop` hook, if any,
+then sends the Router SIGTERM, and kills it `terminationGracePeriodSeconds`
+after the deletion began. The Router uses that time in three parts:
+
+1. **`preStop`:** the Router still serves while load balancers and the
+   Service's endpoints take the pod out of rotation.
+2. **The drain:** `GET /ready` answers 503, the listeners close, and the
+   requests in flight on every protocol (HTTP/1.1, HTTP/2 over TLS and h2c)
+   have `global.router.drain_timeout_seconds` to finish. The drain ends as
+   soon as the last of them does.
+3. **5 s** for the Router's own resources to retire.
+
+Give the pod a grace period of at least preStop + drain + 5 s, with some
+margin: when it runs out, Kubernetes kills the Router whatever it is doing.
+The defaults, no preStop, a 25 s drain and Kubernetes' 30 s, fit with no
+margin. For requests that run longer, such as long generations or agent
+sessions, raise the drain and the grace period together. With requests of up
+to about 100 s, for example:
+
+```yaml
+global:
+  router:
+    drain_timeout_seconds: 120
+```
+
+and, in the Helm chart's values:
+
+```yaml
+# 10 s preStop + 120 s drain + 5 s, and 15 s of margin
+terminationGracePeriodSeconds: 150
+lifecycle:
+  preStop:
+    exec:
+      command: ["sleep", "10"]
+```
+
+- A drain that ends with requests still in flight logs
+  `standalone_drain_incomplete` with how many (`in_flight`); they are cut when
+  the Router exits. A drain whose requests all finished logs
+  `standalone_drain_completed` with its duration.
+- Only standalone mode honors `drain_timeout_seconds`: behind Envoy, Envoy
+  drains the client connections, and a config that sets it fails to load with
+  `--gateway extproc`.
+- The operator sets neither a grace period nor a `preStop` hook, so its pods
+  get Kubernetes' 30 s, which fits the default drain; it does not expose
+  `drain_timeout_seconds` yet.
+- `vllm-sr serve` stops its Router container with `docker stop --time 40`,
+  which fits a drain of up to 35 s.
 
 ### What needs `extproc`
 

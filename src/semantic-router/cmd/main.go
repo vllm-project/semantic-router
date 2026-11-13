@@ -26,10 +26,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-const (
-	processShutdownTimeout      = 30 * time.Second
-	processResourceDrainReserve = 5 * time.Second
-)
+// processResourceDrainReserve is the part of the shutdown left after the
+// serving drain, for the runtime resources to retire.
+const processResourceDrainReserve = 5 * time.Second
+
+// processShutdownTimeout bounds the whole shutdown: the standalone gateway's
+// drain (cfg.DrainTimeout), then the reserve after it. It is 30 s unless
+// global.router.drain_timeout_seconds is set.
+func processShutdownTimeout(cfg *config.RouterConfig) time.Duration {
+	return cfg.DrainTimeout() + processResourceDrainReserve
+}
 
 func main() {
 	opts := parseRuntimeOptions()
@@ -98,7 +104,12 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	)
 	// Return errors below so deferred shutdown can release started resources.
 	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), processShutdownTimeout)
+		// The configuration the standalone gateway drains by.
+		shutdownCfg := cfg
+		if routerServer != nil {
+			shutdownCfg = routerServer.CurrentConfig()
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), processShutdownTimeout(shutdownCfg))
 		defer cancel()
 		runErr = errors.Join(runErr, shutdownRouterProcess(
 			shutdownCtx,

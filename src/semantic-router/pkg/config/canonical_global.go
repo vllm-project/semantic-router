@@ -49,6 +49,10 @@ type CanonicalRouterGlobal struct {
 	// ContextWindow governs the check of a prompt against the context
 	// windows of the models that can serve it.
 	ContextWindow ContextWindowConfig `yaml:"context_window,omitempty"`
+	// DrainTimeoutSeconds bounds how long the standalone gateway lets the
+	// requests in flight finish once the Router begins to shut down. Zero
+	// keeps DefaultDrainTimeout.
+	DrainTimeoutSeconds int `yaml:"drain_timeout_seconds,omitempty" json:"drain_timeout_seconds,omitempty" jsonschema:"minimum=0,maximum=86400"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -237,6 +241,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.RoutingInput = router.RoutingInput
 	cfg.Headers = router.Headers
 	cfg.ContextWindow = router.ContextWindow
+	cfg.DrainTimeoutSeconds = router.DrainTimeoutSeconds
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
