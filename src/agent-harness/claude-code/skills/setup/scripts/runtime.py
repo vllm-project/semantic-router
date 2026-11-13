@@ -125,6 +125,7 @@ def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
     out["models"] = as_data_listing(out["models"])
     if not (isinstance(out["models"], dict) and out["models"].get("data")):
         get("models", "/v1/models")
+        out["models"] = as_data_listing(out["models"])
     status = out["health"].get("status") if isinstance(out["health"], dict) else None
     models = out["models"].get("data") if isinstance(out["models"], dict) else None
     # A Router listener's /health says only that it serves, and a hosted System One

@@ -187,6 +187,22 @@ class HostedRuntimeTest(unittest.TestCase):
         self.assertEqual(out["model"], "vllm-sr/vela3-flash")
         self.assertEqual(out["modelIds"], ["vllm-sr/vela3-flash"])
 
+    def test_a_hosted_api_listing_its_models_in_the_50_schema_is_ready(self):
+        # a hosted System One API with no /health, listing by name at /v1/models
+        listing = {"models": [{"name": "vllm-sr/vela3-flash", "features": ["score"]}]}
+
+        def urlopen(request, timeout):
+            if not request.full_url.endswith("/v1/models"):
+                raise urllib.error.HTTPError(
+                    request.full_url, 404, "Not Found", {}, None
+                )
+            return contextlib.nullcontext(io.BytesIO(json.dumps(listing).encode()))
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            out = runtime.health("https://sr.example/v1/decisions")
+        self.assertTrue(out["ready"])
+        self.assertEqual(out["model"], "vllm-sr/vela3-flash")
+
     def test_a_404_health_without_models_is_not_ready(self):
         def urlopen(request, timeout):
             raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)

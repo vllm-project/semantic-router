@@ -175,12 +175,12 @@ export async function modelOf($: EngineInterface, runtime: Runtime): Promise<{ i
   }
   return undefined
 }
-// A `/v1/models` answer that lists at least one model, as the setup script's health check requires.
+// A `/v1/models` answer that lists at least one model, in either listing form, as the setup script's health check
+// requires.
 const listsModels = (response: { ok: boolean; text: string }) => {
   if (!response.ok) return false
   try {
-    const data = (JSON.parse(response.text) as { data?: unknown }).data
-    return Array.isArray(data) && data.length > 0
+    return listedModels(JSON.parse(response.text)).length > 0
   } catch {
     return false
   }

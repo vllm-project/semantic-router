@@ -439,8 +439,8 @@ const NO_SCORE_50 = {
 const NO_SCORE_50_BARE = { models: [{ name: 'vela3-fast', version: '5.0', features: ['choice', 'noul', 'span'] }] }
 
 for (const [form, listing] of [['vllm-sr/4.0', NO_SCORE], ['vllm-sr/5.0', NO_SCORE_50], ['vllm-sr/5.0 without a card', NO_SCORE_50_BARE]] as const) {
-    test(
-      `a runtime model that answers no score question keeps every subagent on its default model, and says so once (${form} listing)`,
+  test(
+    `a runtime model that answers no score question keeps every subagent on its default model, and says so once (${form} listing)`,
     { options: { runtime: 'remote', runtimeUrl: 'http://sr.example/v1/decisions', runtimeModel: 'vela3-fast' } },
     async ($, on) => {
       const reply: Reply = { toasts: [] }
