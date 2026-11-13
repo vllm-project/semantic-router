@@ -71,6 +71,15 @@ what was read; it does not establish prediction accuracy.
 revisions. Every package is verified against its manifest or the pinned file
 digests before load, and code shipped inside packages is never executed.
 
+Vela 3.1-fast's released `render31.py` fingerprint selects described yes/no
+questions: `criteria: {"false": "can wait", "true": "needs immediate action"}`
+renders descriptions on the `no` and `yes` options. Legacy Vela 3.0 packages
+keep bare yes/no questions and reject descriptions. The renderer is hashed,
+not imported; an unknown fingerprint is rejected rather than silently using
+legacy semantics. Router-option schema expansion remains unchanged, matching
+the published package's outer router path. This does not change the default
+model or thresholds, or establish full-checkpoint parity.
+
 ## Plugins
 
 Families, engines and accelerators are entry-point plugins; batching is the

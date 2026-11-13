@@ -139,6 +139,8 @@ func checkInventory(ctx context.Context, session *modelRuntimeSession) (map[stri
 		wantFamily := "task_heads"
 		if name == mrDecisionDeployment {
 			wantFamily = "decision2"
+		} else if name == mrVela31Deployment {
+			wantFamily = "vela3"
 		}
 		if !deployment.Managed || !deployment.Ready || deployment.Process == "" || deployment.Family != wantFamily {
 			return nil, fmt.Errorf("%s is %+v, want a ready independent managed %s worker", name, deployment, wantFamily)
@@ -249,6 +251,10 @@ func checkFixtureCard(card modelruntime.ModelCard) error {
 	case mrDecisionDeployment:
 		if card.Family != "decision2" || !card.HasSurface("decisions") {
 			return fmt.Errorf("model %s is %s serving %v, want decision2 decisions", card.ID, card.Family, card.Surfaces)
+		}
+	case mrVela31Deployment:
+		if card.Family != "vela3" || !card.HasSurface("decisions") {
+			return fmt.Errorf("model %s is %s serving %v, want vela3 decisions", card.ID, card.Family, card.Surfaces)
 		}
 	case mrEmbeddingDeployment:
 		if card.Family != "task_heads" || !card.HasSurface("embeddings") {

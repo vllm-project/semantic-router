@@ -20,6 +20,7 @@ import (
 const (
 	mrSocketDir           = "/tmp/vsr-runtime"
 	mrDecisionDeployment  = "decision-fixture"
+	mrVela31Deployment    = "vela31-fixture"
 	mrEmbeddingDeployment = "vela-embedding"
 	mrAttachedDecisions   = "attached-decisions"
 	mrAttachedVela2       = "attached-vela2"
@@ -31,7 +32,7 @@ const (
 
 var (
 	// Sorted, as the lifecycle case compares it with each process's models.
-	mrDeviceGroup         = []string{mrEmbeddingDeployment}
+	mrDeviceGroup         = []string{mrEmbeddingDeployment, mrVela31Deployment}
 	mrManagedDeployments  = append([]string{mrDecisionDeployment}, mrDeviceGroup...)
 	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedVela2}
 )
