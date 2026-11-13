@@ -20,6 +20,11 @@ copied into `questions.ts`; sibling plugin imports remain forbidden.
 precedence, `shell.ts` retains the baseline shell scanner and its adversarial
 fixtures, and `guard-hooks.ts` tightens native permissions and observes terminal
 outcomes. Pending guards reject saturation instead of dropping active checks.
+`masking.ts` owns fixed secret patterns, validated Unicode spans and interval
+masking. `output-policy.ts` owns Redact/Shield scanning, coverage and attachment
+policy. `output-hooks.ts` adapts tool results/outgoing context and prevents
+placeholder writes. A context hook added later for Check must run after this
+adapter so evidence reflects content actually delivered to the model.
 
 `test:integration` requires the installed OpenCode 2.2.0 CLI and installs no
 models. It packs/extracts the package and starts an isolated private server.
@@ -35,6 +40,14 @@ checks filesystem markers before/after permission replies, including concurrent
 sessions, failed shell execution, offline fixed rules, bounded/strict failures
 and interruption of a stalled decision HTTP request. No product code responds
 automatically to permission requests.
+Output fixtures capture actual generation requests for native read/shell/web,
+failed/large outputs, background notifications and images. They assert fixed
+secrets do not reach decision requests either, validate actual write/edit
+refusals and session isolation, and interrupt a stalled strict check before
+resuming the session. Fixture model replies validate host integration; they do
+not measure PII/injection model accuracy. Pure tests retain baseline secret/IP
+fixtures and add invalid/overlapping/Unicode spans, chunk boundaries, scan
+ceilings, partial coverage, attachments and cross-file/hunk patch protection.
 
 Tests use Node's built-in test runner, synthetic inputs and loopback HTTP
 servers. Real runtime tests require an explicit separately started model. Do

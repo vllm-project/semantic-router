@@ -1,9 +1,9 @@
 # vSR for OpenCode
 
-This package is under development for OpenCode 2.2.0. Router, Escalate and Guard are
-implemented with configurable model tiers, session-scoped decision metadata and
-versioned RPC diagnostics. Redact, Shield, Check and the terminal UI are
-later implementation stages.
+This package is under development for OpenCode 2.2.0. Router, Escalate, Guard,
+Redact and Shield are implemented, with session-scoped decision metadata and
+versioned RPC diagnostics. Check, the terminal UI, setup and durable calibration
+remain later implementation stages.
 
 From this directory, install dependencies and check the package:
 
@@ -124,6 +124,57 @@ bounded pending-check capacity rejects new shell attempts until calls finish.
 Manual shell sessions and commands executed through other custom tools are
 outside this adapter's coverage. Classifier framing and pure shell rules are
 ported locally from the Claude plugin, with source revisions in the code.
+
+Redact covers text returned by native `read` and `shell`, including nonzero shell
+exits and background shell notifications. Fixed rules mask known credential
+formats, private keys, authorization headers, password-bearing URLs and config
+assignments before text reaches either the decision runtime or generation model.
+Numbered `read` lines retain their prefixes while their credential values are
+masked. Other PII uses the runtime's `pii` preset and `redact.piiThreshold`
+(default 0.7). Dates and domain names stay visible, and IP-like version numbers
+are preserved. Runtime codepoint spans are validated against the exact input,
+converted to UTF-16 offsets, expanded to complete ASCII words where needed and
+merged over overlaps. Invalid spans make coverage unavailable.
+
+Shield covers text returned by `read` and `webfetch`. It frames classifier input
+as file/page contents and uses `shield.injectionThreshold` (default 0.9). Flagged
+content is delivered as a quoted JSON string with untrusted-data guidance.
+Shell output is not shielded, and web output is not redacted, matching the
+baseline tool coverage. Other custom tools and ordinary human prompts are
+outside these output adapters. Checks rewrite model-visible content; they do
+not erase original files or the host's output artifacts.
+
+Both apps inspect after tool completion and at the outgoing context boundary.
+The second boundary also covers native error results and synthetic background
+notifications. Classification runs in overlapping windows (initially 2000 UTF-16
+units, at most 8000, with a 256-unit overlap), without splitting surrogate pairs.
+Each app gets its own total wait budget, including HTTP queue time. Defaults are
+3000 ms for Redact and 2000 ms for Shield; `"done"` has a 60-second maximum per
+app. The model scan stops at 128,000 units. Fixed secret rules still scan the
+entire text up to the separate 1,000,000-unit ceiling.
+
+| Condition                                        | Bounded wait                                                                                  | `"done"`                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Timeout, offline, unsupported or malformed reply | Keep fixed masking and completed checks; deliver remaining text with an incomplete-check note | Withhold the content                          |
+| Model scan reaches 128,000 units                 | Mark partial and retain fixed masking over the full text                                      | Withhold the content                          |
+| Text exceeds 1,000,000 units                     | Withhold the content                                                                          | Withhold the content                          |
+| Non-text attachments                             | Retain attachments with an unchecked note                                                     | Withhold attachments and text                 |
+| Cancellation                                     | Abort local HTTP and withhold pending content                                                 | Abort local HTTP and withhold pending content |
+
+Decision metadata includes masking counts and checked/total UTF-16 coverage of
+the classifier input, with explicit partial/withheld outcomes. No raw findings
+are included. Already-inspected output is cached in bounded memory (128 entries,
+8 MiB text budget); changes to controls select a new cache key. This is transient processing
+memory, not a persistent log. Coverage stays incomplete when the host appends an
+image-omission explanation or separates attachments from their tool text.
+
+After Redact emits a `[vsr:…]` tag, native `write` and `edit` calls cannot add it
+as real data. Recognized `apply_patch`/`patch` additions are checked per file/hunk
+as well. Edits may preserve existing tags without adding copies. Full-file
+writes containing an active tag are rejected; use focused edits to preserve
+masked values. This protection is session-scoped, with active tags inherited by
+children. It covers these file-writing tools, not arbitrary writes through shell
+programs or custom tools. Disabling Redact disables this write-back protection.
 
 The HTTP client serializes requests and includes queue time in deadlines. A
 network failure opens a 60-second breaker; HTTP errors, malformed replies and

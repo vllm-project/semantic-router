@@ -100,3 +100,27 @@ test("child observations are session-scoped and keep planned and actual model fa
   store.observe("one", decision.id, { failed: true });
   assert.equal(store.snapshot("one").decisions[0]?.reason, "spawn-failed");
 });
+
+test("coverage and masking counts are validated metadata and snapshots are independent", () => {
+  const store = new DecisionStore(1, 5);
+  const input = {
+    sessionID: "one",
+    app: "redact" as const,
+    outcome: "partial" as const,
+    counts: { secret: 2 },
+    coverage: { checked: 100, total: 200 },
+  };
+  store.record(input);
+  input.counts.secret = 9;
+  input.coverage.checked = 200;
+  assert.deepEqual(store.snapshot("one").decisions[0]?.counts, { secret: 2 });
+  assert.deepEqual(store.snapshot("one").decisions[0]?.coverage, {
+    checked: 100,
+    total: 200,
+  });
+  assert.throws(() =>
+    store.record({ ...input, coverage: { checked: 3, total: 2 } }),
+  );
+  assert.throws(() => store.record({ ...input, counts: { secret: NaN } }));
+  assert.throws(() => store.record({ ...input, counts: { secret: -1 } }));
+});

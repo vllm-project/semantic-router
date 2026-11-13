@@ -152,10 +152,10 @@ If Gate 0 fails, keep the full acceptance scope pending and record dependencies.
 
 ### Stage 4: redact and shield
 
-- [ ] Implement secret rules, span masking, source framing, bounded scanning,
+- [x] Implement secret rules, span masking, source framing, bounded scanning,
   injection guidance and withholding, plus placeholder write-back prevention.
-- [ ] Cover read/shell/web adapters and error/large-output paths explicitly.
-- [ ] Assert synthetic secrets never reach captured model requests on checked
+- [x] Cover read/shell/web adapters and error/large-output paths explicitly.
+- [x] Assert synthetic secrets never reach captured model requests on checked
   paths. Test partial/unchecked visibility, Unicode offsets and benign versions.
 
 ### Stage 5: check and complete native decision UI
@@ -222,10 +222,10 @@ This prerequisite failure was resolved by the temporary verified toolchain in
 the Stage 1 checkpoint below. The approved delivery is staged implementation on
 one feature branch followed by one complete integration Draft PR.
 
-1. Stages 1–3 product code and native fixture tests are implemented;
+1. Stages 1–4 product code and native fixture tests are implemented;
    consult their checkpoints below for the qualification boundaries.
-2. Continue Stage 4: Redact/Shield and outgoing-content assertions. Then implement
-   Stages 5–7 in order.
+2. Continue Stage 5: turn evidence/Check and native terminal controls. Then
+   implement Stages 6–7 in order.
 3. Keep the remaining checkboxes pending until their evidence exists. Recheck
    overlapping upstream work before final publication.
 
@@ -572,3 +572,61 @@ separately. The shell scanner's equivalent `time` option-letter order is `of`
 to avoid a spelling false alarm; a fixture covers both options together. No
 spelling exception or dependency change was introduced. Continue Stage 4; the
 single complete integration Draft PR stays pending.
+
+### Stage 4 implementation checkpoint (2026-11-14)
+
+Redact and Shield now inspect native tool completions and outgoing model context.
+Coverage matches the baseline: read/shell text for Redact and read/webfetch text
+for Shield. The context boundary also covers native errors and synthetic shell
+background notifications. Check must register after this boundary in Stage 5 so
+its evidence is the content actually delivered. The original host artifacts are
+not erased; this adapter rewrites the model-visible representation.
+
+Fixed secret rules and classifier/source-framing policy are copied locally from
+Claude revision `4021f944f`, with no sibling imports or new dependencies. Read
+line-number prefixes are accounted for. Fixed secrets are masked before the
+decision endpoint as well as the generation endpoint. PII spans require finite
+probabilities, valid integer codepoint ranges and an exact match against the
+classified text; invalid spans make coverage unavailable. UTF-16 conversion is
+explicit, IP-like versions stay readable, and intersecting intervals are unioned
+so an overlapping span cannot expose a suffix.
+
+Each enabled app uses its own total budget. Adaptive windows overlap by 256
+UTF-16 units and avoid splitting surrogate pairs. The model scan stops at
+128,000 units, while fixed rules scan text up to a separate 1,000,000-unit ceiling.
+Bounded failures deliver fixed-masked/completed work with an incomplete-check
+note; strict `"done"` uses a 60-second maximum and withholds incomplete content.
+Oversized text is withheld in either mode. Non-text attachments are explicitly
+unchecked in bounded mode and withheld in strict mode. Coverage stays partial
+after the host separates image parts or appends an omission explanation.
+Cancellation aborts local HTTP and pending content is withheld.
+
+Snapshots now include validated tag counts and checked/total text coverage, never
+raw span values. Transient output caching is bounded by 128 entries and an 8 MiB
+text budget; controls participate in cache keys. Placeholders actually delivered
+to the model activate per-session write/edit protection and are inherited by
+children. Recognized patch formats are checked per file/hunk. Full-file writes
+containing an active marker are rejected; edits may preserve existing markers.
+Withheld-only findings and other sessions' tags cannot activate this protection.
+Arbitrary shell/custom-tool writes remain outside this explicit tool coverage.
+
+Validation: strict TypeScript/format checks, 67 unit tests and all ten packed
+native OpenCode 2.2.0 integration tests pass. New native assertions capture actual
+model requests for read, shell, web, nonzero exit, long output, background shell,
+valid image attachments, strict/bounded HTTP failures and resumed execution after
+interrupting a stalled strict check. They verify real write/edit refusal, session
+isolation/concurrency, unchanged benign version strings, no duplicate inspection
+of ordinary checked results, and no secret at the decision endpoint. Unit tests
+retain nine baseline secret/IP fixture groups and add Unicode/invalid/overlapping
+spans, chunk-boundary PII, scan ceilings, counts, attachments and cross-file/hunk
+patch protection. All native endpoints are synthetic fixtures; this adds no live
+Vela model-quality or latency claim.
+
+Stage 4 final validation: `make check` passed for every changed path, including
+spelling, formatting, source/security/structure/dependency gates, `harness-check`
+(797 CI tests, 74 agent tests and tiny-model checks), clean dependency install,
+strict TypeScript and all 67 unit tests. All ten packed native tests passed
+separately; the extended withheld-marker case also passed after verifying that
+undelivered tags cannot activate write protection. No global settings, model
+downloads, dependency changes or GitHub writes were required. Continue Stage 5;
+the complete integration Draft PR remains pending.

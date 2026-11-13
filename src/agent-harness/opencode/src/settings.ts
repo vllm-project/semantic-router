@@ -12,6 +12,8 @@ export type App = (typeof APPS)[number];
 export type Wait = 1000 | 2000 | 3000 | "done";
 export interface Settings {
   guard: { reviewThreshold: number };
+  redact: { piiThreshold: number };
+  shield: { injectionThreshold: number };
   routing: RoutingSettings;
   runtimeUrl: string;
   runtimeModel: string;
@@ -65,6 +67,8 @@ export function parseSettings(input: unknown): Settings {
     "maxSessions",
     "routing",
     "guard",
+    "redact",
+    "shield",
   ]);
   for (const key of Object.keys(options))
     if (!known.has(key)) throw new Error(`Unknown option: ${key}`);
@@ -131,8 +135,26 @@ export function parseSettings(input: unknown): Settings {
     reviewThreshold > 1
   )
     throw new Error("Invalid guard reviewThreshold");
+  const threshold = (app: string, key: string, fallback: number): number => {
+    const input = options[app] === undefined ? {} : options[app];
+    if (!isRecord(input) || Object.keys(input).some((name) => name !== key))
+      throw new Error(`Invalid ${app} options`);
+    const value = input[key] === undefined ? fallback : input[key];
+    if (
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      value < 0 ||
+      value > 1
+    )
+      throw new Error(`Invalid ${app} threshold`);
+    return value;
+  };
   return {
     guard: { reviewThreshold },
+    redact: { piiThreshold: threshold("redact", "piiThreshold", 0.7) },
+    shield: {
+      injectionThreshold: threshold("shield", "injectionThreshold", 0.9),
+    },
     routing: parseRouting(options.routing),
     runtimeUrl: url.href,
     runtimeModel: string(options.runtimeModel, "", "runtimeModel"),

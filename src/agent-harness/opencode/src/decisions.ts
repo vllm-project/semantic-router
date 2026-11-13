@@ -1,3 +1,5 @@
+import { TAGS } from "./masking.ts";
+import type { Tag } from "./masking.ts";
 import { APPS } from "./settings.ts";
 import type { App } from "./settings.ts";
 
@@ -40,6 +42,7 @@ export const REASONS = [
   "model-risk",
   "coverage-limit",
   "native-permission",
+  "placeholder-write",
 ] as const;
 export type Reason = (typeof REASONS)[number];
 export interface Usage {
@@ -50,6 +53,8 @@ export interface Usage {
   cost: number;
 }
 export interface Decision {
+  counts?: Partial<Record<Tag, number>>;
+  coverage?: { checked: number; total: number };
   reason?: Reason;
   observedModel?: string;
   childSessionID?: string;
@@ -135,8 +140,35 @@ export class DecisionStore {
       )
         throw new Error("Invalid decision measurement");
     }
+    if (
+      input.coverage &&
+      (!Number.isInteger(input.coverage.checked) ||
+        !Number.isInteger(input.coverage.total) ||
+        input.coverage.checked < 0 ||
+        input.coverage.total < input.coverage.checked)
+    )
+      throw new Error("Invalid decision coverage");
+    if (
+      input.counts &&
+      Object.entries(input.counts).some(
+        ([key, value]) =>
+          !TAGS.some((tag) => tag === key) ||
+          !Number.isInteger(value) ||
+          value! < 0,
+      )
+    )
+      throw new Error("Invalid masking counts");
     // Explicit projection also discards unexpected properties supplied by JS callers.
     const decision: Decision = {
+      ...(input.coverage
+        ? {
+            coverage: {
+              checked: input.coverage.checked,
+              total: input.coverage.total,
+            },
+          }
+        : {}),
+      ...(input.counts ? { counts: { ...input.counts } } : {}),
       id: crypto.randomUUID(),
       sessionID: input.sessionID,
       app: input.app,

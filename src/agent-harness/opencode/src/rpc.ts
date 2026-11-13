@@ -1,4 +1,5 @@
 import { Rpc } from "@opencode/plugin/rpc";
+import { TAGS } from "./masking.ts";
 import { APPS } from "./settings.ts";
 import { FEEDBACK, OUTCOMES, REASONS } from "./decisions.ts";
 const id = { type: "string", minLength: 1, maxLength: 256 } as const;
@@ -23,6 +24,22 @@ const models = {
 const decision = {
   type: "object",
   properties: {
+    counts: {
+      type: "object",
+      propertyNames: {
+        enum: [...TAGS],
+      },
+      additionalProperties: { type: "integer", minimum: 0 },
+    },
+    coverage: {
+      type: "object",
+      properties: {
+        checked: { type: "integer", minimum: 0 },
+        total: { type: "integer", minimum: 0 },
+      },
+      required: ["checked", "total"],
+      additionalProperties: false,
+    },
     reason: { type: "string", enum: [...REASONS] },
     observedModel: { type: "string" },
     childSessionID: id,
