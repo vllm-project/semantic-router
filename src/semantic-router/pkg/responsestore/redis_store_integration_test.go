@@ -402,9 +402,10 @@ func TestRedisStoreIntegration_CircularReferenceProtection(t *testing.T) {
 		done := make(chan bool)
 		go func() {
 			chain, err := store.GetConversationChain(ctx, "resp_circular_1")
-			assert.NoError(t, err)
-			// Should break out of loop and return partial chain
-			assert.NotEmpty(t, chain)
+			// A cycle cannot be reconstructed, so it fails instead of serving
+			// a prefix of the conversation.
+			assert.Error(t, err)
+			assert.Empty(t, chain)
 			done <- true
 		}()
 
