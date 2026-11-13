@@ -206,6 +206,18 @@ class DockerCrossCompilationTests(unittest.TestCase):
         self.assertIn("image_artifacts.py promote", publisher)
         self.assertNotIn("docker/build-push-action", publisher)
 
+    def test_image_dockerfiles_keep_the_platform_buildkit_sets(self) -> None:
+        # A default on TARGETARCH replaces the value BuildKit sets per platform:
+        # the operator's ARG TARGETARCH=amd64 put an x86-64 manager binary in
+        # its arm64 image.
+        platform_default = re.compile(
+            r"(?m)^\s*ARG\s+(?:TARGET|BUILD)(?:PLATFORM|OS|ARCH|VARIANT)\s*="
+        )
+        for dockerfile in sorted({entry[1] for entry in DEFINITIONS.values()}):
+            with self.subTest(dockerfile=dockerfile):
+                text = (REPO_ROOT / dockerfile).read_text()
+                self.assertIsNone(platform_default.search(text))
+
 
 if __name__ == "__main__":
     unittest.main()
