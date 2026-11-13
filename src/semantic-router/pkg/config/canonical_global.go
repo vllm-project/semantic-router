@@ -50,9 +50,9 @@ type CanonicalRouterGlobal struct {
 	// windows of the models that can serve it.
 	ContextWindow ContextWindowConfig `yaml:"context_window,omitempty"`
 	// DrainTimeoutSeconds bounds how long the standalone gateway lets the
-	// requests in flight finish once the Router begins to shut down. Zero
-	// keeps DefaultDrainTimeout.
-	DrainTimeoutSeconds int `yaml:"drain_timeout_seconds,omitempty" json:"drain_timeout_seconds,omitempty" jsonschema:"minimum=0,maximum=86400"`
+	// requests in flight finish once the Router begins to shut down. Nil
+	// keeps DefaultDrainTimeout, and 0 is no drain.
+	DrainTimeoutSeconds *int `yaml:"drain_timeout_seconds,omitempty" json:"drain_timeout_seconds,omitempty" jsonschema:"minimum=0,maximum=86400"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
