@@ -124,11 +124,11 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
   log-odds by about the same amount at any threshold, so the default of 3
   re-reads from about 0.91 for a rule at 0.995, 0.27 at 0.88 and 0.05 at 0.5,
   and never once the window matched. A window within half the margin, where a
-  diluted match lands, is read again at once and can still end the scan
-  early; one further below waits until the windows still unread are read,
-  closest to its threshold first, so a scan that fell behind reads its runs
-  before such re-reads. A part that the input's windows already read and
-  answered is not read again.
+  diluted match lands, is read again at once, ahead of every window not yet
+  sent, and can still end the scan early; one further below waits until the
+  windows still unread are read, closest to its threshold first, so a scan
+  that fell behind reads its runs before such re-reads. A part that the
+  input's windows already read and answered is not read again.
 - An input whose windows are all read by the signals' deadline is read at the
   configured size, as fast as its windows are read. A scan that falls behind,
   whose windows left would not all be read in time at the pace it read the
