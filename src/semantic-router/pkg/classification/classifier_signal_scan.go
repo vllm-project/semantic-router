@@ -760,7 +760,7 @@ func (c *Classifier) applyScan(results *SignalResults, mu *sync.Mutex, scan *gua
 		c.recordSignalExtraction(asked.signalType, rule.Name, scan.latency)
 		read, covered, reason := scan.answers(asked)
 		partial := covered < scan.cut
-		decided := (partial || asked.toolResultsUnread) && decidedBy(asked, read)
+		decided := (partial || asked.unread != "") && decidedBy(asked, read)
 		c.recordScanCoverage(results, asked, covered, scan.cut)
 		switch {
 		case len(read) == 0:
@@ -789,7 +789,7 @@ func (c *Classifier) applyScan(results *SignalResults, mu *sync.Mutex, scan *gua
 				continue
 			}
 		}
-		if !decided && asked.toolResultsUnread && c.resolveUnread(results, asked, scan.deployment, unreadToolResult) {
+		if !decided && asked.unread != "" && c.resolveUnread(results, asked, scan.deployment, asked.unread) {
 			continue
 		}
 		c.applyRuleAnswer(results, asked, scanAnswer(rule, read, scan))
@@ -799,13 +799,13 @@ func (c *Classifier) applyScan(results *SignalResults, mu *sync.Mutex, scan *gua
 // recordScanCoverage counts how much of its input a guard rule read and, for
 // one read in windows, the share of its windows read, which it records for
 // the trace and the replay record. A rule that missed part of its tool
-// results read its input in part.
+// results or images read its input in part.
 func (c *Classifier) recordScanCoverage(results *SignalResults, asked askedRule, read, windows int) {
 	result := scanCoverageFull
 	switch {
 	case read == 0:
 		result = scanCoverageNone
-	case read < windows || asked.toolResultsUnread:
+	case read < windows || asked.unread != "":
 		result = scanCoveragePartial
 	}
 	key := signalConfidenceKey(asked.signalType, asked.rule.Name)

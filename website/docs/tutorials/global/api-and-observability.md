@@ -195,6 +195,10 @@ Common Prometheus metric families:
 
 Router Memory counters use bounded labels only. See the [Router Memory Prometheus label release note](../../release-notes/router-memory-prometheus-labels).
 
+A request that names a model the configuration does not serve counts in
+`llm_request_errors_total` as `model="unknown"`, `reason="model_not_found"`;
+the `specified_model_not_found` log event keeps the name it sent.
+
 `llm_request_graph_node_duration_seconds` times each step of a request graph,
 such as a Looper template's algorithm and respond steps; a step that holds
 others counts their time too. `template` names the graph (`looper.fusion`, for
