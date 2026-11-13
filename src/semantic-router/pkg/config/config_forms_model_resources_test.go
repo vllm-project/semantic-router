@@ -37,6 +37,55 @@ func TestClassifierReferenceMigrationNotes(t *testing.T) {
 	}
 }
 
+// embeddings.semantic naming the embedding model of an earlier release
+// migrates to its Vela 1.0 replacement, with a note to re-embed what was
+// indexed with it: on the CPU the pre-declared vela-embedding serves it, off
+// the CPU a model_runtime deployment that embeddings.default names.
+func TestEarlierSemanticEmbeddingModelMigratesToVela(t *testing.T) {
+	for _, tc := range []struct {
+		useCPU, want string
+	}{
+		{"true", ""},
+		{"false", "deployment: Vela-1.0-Encoder-307M-Embedding-auto"},
+	} {
+		document := []byte(migrateModels + `recipes:
+  - name: default
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+        use_cpu: ` + tc.useCPU + `
+        embedding_config: {model_type: mmbert}
+`)
+		migrated, notes, err := MigrateConfig(document)
+		if err != nil {
+			t.Fatalf("use_cpu %s: migrate: %v", tc.useCPU, err)
+		}
+		if bytes.Contains(migrated, []byte("mmbert")) {
+			t.Errorf("use_cpu %s: the earlier model is still named:\n%s", tc.useCPU, migrated)
+		}
+		if tc.want == "" && bytes.Contains(migrated, []byte("embeddings")) {
+			t.Errorf("use_cpu %s: want the pre-declared vela-embedding, got\n%s", tc.useCPU, migrated)
+		}
+		if tc.want != "" && (!bytes.Contains(migrated, []byte(tc.want)) || !bytes.Contains(migrated, []byte("artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding"))) {
+			t.Errorf("use_cpu %s: want embeddings.default %q on Vela Embedding, got\n%s", tc.useCPU, tc.want, migrated)
+		}
+		if !slices.ContainsFunc(notesAt(notes)["global.model_catalog.embeddings.semantic"], func(message string) bool {
+			return strings.Contains(message, "models/Vela-1.0-Encoder-307M-Embedding") && strings.Contains(message, "re-embedded")
+		}) {
+			t.Errorf("use_cpu %s: no note names the replacement and the re-embedding: %+v", tc.useCPU, notes)
+		}
+		if _, loadErr := ParseYAMLBytesWithoutEnvExpansion(migrated); loadErr != nil {
+			t.Errorf("use_cpu %s: the migrated file does not load: %v", tc.useCPU, loadErr)
+		}
+		again, more, err := MigrateConfig(migrated)
+		if err != nil || len(more) > 0 || !bytes.Equal(again, migrated) {
+			t.Errorf("use_cpu %s: migrating the rewritten file again: %v %+v\n%s", tc.useCPU, err, more, again)
+		}
+	}
+}
+
 // An empty global.model_catalog.external written as a mapping is a removed
 // section like the empty list the golden removed-section-external-models-empty
 // covers: the load names it with the migrate hint, and migrate deletes it.

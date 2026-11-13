@@ -39,6 +39,7 @@ global:
     deployments:
       remote-d3:
         provider: systemone
+        schema: vllm-sr/4.0
 ` + deployment))
 	if err != nil {
 		t.Fatal(err)

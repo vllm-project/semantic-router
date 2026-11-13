@@ -450,6 +450,9 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "tls": {
+          "$ref": "#/$defs/DeploymentTLS"
         }
       },
       "additionalProperties": false,
@@ -742,6 +745,9 @@
         },
         "reasoning_effort": {
           "type": "string"
+        },
+        "tls": {
+          "$ref": "#/$defs/ProviderDefaultsTLS"
         }
       },
       "additionalProperties": false,
@@ -777,13 +783,45 @@
           "$ref": "#/$defs/ProviderReliability"
         },
         "api_format": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "chat_completions",
+            "responses",
+            "messages",
+            "images",
+            "systemone",
+            "openai",
+            "anthropic"
+          ]
+        },
+        "schema": {
+          "type": "string",
+          "enum": [
+            "openai/v1",
+            "anthropic/2023-06-01",
+            "vllm-sr/5.0",
+            "vllm-sr/4.0",
+            "systemone/0.2"
+          ]
         },
         "external_model_ids": {
           "additionalProperties": {
             "type": "string"
           },
           "type": "object"
+        },
+        "unsupported_capabilities": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "sampling_min_p",
+              "sampling_logit_bias"
+            ]
+          },
+          "type": "array"
+        },
+        "tokenizer": {
+          "type": "string"
         },
         "display_name": {
           "type": "string"
@@ -1070,7 +1108,8 @@
               "tool_result.is_error",
               "messages[].role",
               "content.file",
-              "reasoning.signature"
+              "reasoning.signature",
+              "store"
             ]
           },
           "type": "array"
@@ -1080,6 +1119,9 @@
         },
         "headers": {
           "$ref": "#/$defs/RouterHeadersConfig"
+        },
+        "context_window": {
+          "$ref": "#/$defs/ContextWindowConfig"
         }
       },
       "additionalProperties": false,
@@ -1642,6 +1684,25 @@
       "required": [
         "type"
       ]
+    },
+    "ContextWindowConfig": {
+      "properties": {
+        "margin": {
+          "type": "number",
+          "maximum": 0.5,
+          "minimum": 0
+        },
+        "proxy_margin": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
+        "proxy_tokenizer": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "ConversationFeature": {
       "properties": {
@@ -2315,6 +2376,52 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "DeploymentRoutingView": {
+      "properties": {
+        "max_tokens": {
+          "type": "integer",
+          "maximum": 1048576,
+          "minimum": 256
+        },
+        "head_share": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DeploymentScanWindow": {
+      "properties": {
+        "tokens": {
+          "type": "integer",
+          "maximum": 1048576,
+          "minimum": 256
+        },
+        "overlap": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_parallel": {
+          "type": "integer",
+          "maximum": 64,
+          "minimum": 1
+        },
+        "max_tokens": {
+          "type": "integer",
+          "maximum": 1048576,
+          "minimum": 256
+        },
+        "reread_margin": {
+          "type": "number",
+          "maximum": 20,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "DeploymentTLS": {
       "properties": {
         "ca_file": {
@@ -2622,6 +2729,12 @@
         },
         "circuit_breaker": {
           "$ref": "#/$defs/CircuitBreakerConfig"
+        },
+        "forward_request_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -2975,6 +3088,20 @@
         "timeout_ms": {
           "type": "integer"
         },
+        "on_unscanned": {
+          "type": "string",
+          "enum": [
+            "best_effort",
+            "match",
+            "no_match",
+            "unknown"
+          ]
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
         "on_unknown": {
           "type": "string",
           "enum": [
@@ -3180,14 +3307,19 @@
           },
           "type": "array"
         },
-        "models": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "systemone": {
-          "$ref": "#/$defs/ListenerSystemOne"
+        "apis": {
+          "$ref": "#/$defs/ListenerAPIs",
+          "propertyNames": {
+            "enum": [
+              "chat_completions",
+              "responses",
+              "messages",
+              "images",
+              "systemone",
+              "openai",
+              "anthropic"
+            ]
+          }
         },
         "tls": {
           "$ref": "#/$defs/ListenerTLS"
@@ -3197,6 +3329,35 @@
         }
       },
       "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerAPI": {
+      "properties": {
+        "schema": {
+          "type": "string",
+          "enum": [
+            "vllm-sr/5.0",
+            "vllm-sr/4.0"
+          ]
+        },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_deadline_ms": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerAPIs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ListenerAPI"
+      },
       "type": "object"
     },
     "ListenerIdentity": {
@@ -3209,21 +3370,6 @@
             "type": "string"
           },
           "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ListenerSystemOne": {
-      "properties": {
-        "models": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "max_deadline_ms": {
-          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -3993,6 +4139,12 @@
           },
           "type": "object"
         },
+        "forward_request_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "timeout_ms": {
           "type": "integer"
         },
@@ -4008,6 +4160,24 @@
         "capabilities": {
           "$ref": "#/$defs/DeploymentCapabilities"
         },
+        "schema": {
+          "type": "string",
+          "enum": [
+            "systemone/0.2",
+            "vllm-sr/5.0",
+            "vllm-sr/4.0"
+          ]
+        },
+        "deviations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_concurrency": {
+          "type": "integer",
+          "minimum": 1
+        },
         "generation": {
           "$ref": "#/$defs/DeploymentGeneration"
         },
@@ -4019,6 +4189,12 @@
         },
         "outlier_detection": {
           "$ref": "#/$defs/DeploymentOutlierDetection"
+        },
+        "routing_view": {
+          "$ref": "#/$defs/DeploymentRoutingView"
+        },
+        "scan_window": {
+          "$ref": "#/$defs/DeploymentScanWindow"
         },
         "public_name": {
           "type": "string"
@@ -4511,6 +4687,20 @@
         "timeout_ms": {
           "type": "integer"
         },
+        "on_unscanned": {
+          "type": "string",
+          "enum": [
+            "best_effort",
+            "match",
+            "no_match",
+            "unknown"
+          ]
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
         "on_unknown": {
           "type": "string",
           "enum": [
@@ -4528,6 +4718,9 @@
           "type": "boolean"
         },
         "tool_results": {
+          "type": "boolean"
+        },
+        "request": {
           "type": "boolean"
         }
       },
@@ -4802,6 +4995,15 @@
         },
         "preserve_last_n": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProviderDefaultsTLS": {
+      "properties": {
+        "ca_file": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -6163,6 +6365,11 @@
         },
         "timeout_ms": {
           "type": "integer"
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -6249,6 +6456,9 @@
           "type": "boolean"
         },
         "tool_results": {
+          "type": "boolean"
+        },
+        "request": {
           "type": "boolean"
         },
         "image": {
@@ -6361,6 +6571,7 @@
         "on_unscanned": {
           "type": "string",
           "enum": [
+            "best_effort",
             "match",
             "no_match",
             "unknown"

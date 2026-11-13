@@ -1,7 +1,7 @@
 import type { EngineInterface, Hook, ToolCallResult } from 'claude-code'
 
 import type { Decision, Outcome, Risk } from '../types'
-import { type Classified, classify, failureOf, isRecord, numberAt, type Reply } from './lib/classify'
+import { ANSWER_MS, type Classified, classify, failureOf, isRecord, numberAt, type Reply } from './lib/classify'
 import { budgetOf, type Settings } from './lib/settings'
 import { stamp } from './lib/env'
 import { alwaysHeld, firstOf, partsOf } from './lib/shell'
@@ -48,6 +48,20 @@ function parseGuard({ answers }: Reply) {
 }
 
 type Guarded = NonNullable<ReturnType<typeof parseGuard>>
+
+// A command guard must hold, which vela3-lite, the model guard is measured on, scores 0.98 for review.
+const CANARY = 'git push --force origin main'
+
+// Asks the runtime about the canary once, at session start: a model that scores it under the line would let such
+// commands run, and the person is told once rather than finding out from one that ran.
+export async function checkGuardModel($: EngineInterface, settings: Settings) {
+  const line = settings.thresholds.guard.review
+  const asked = await classify($, settings.runtime, `Tool: Bash\nCommand: ${CANARY}`, GUARD_QUESTIONS, ANSWER_MS, parseGuard)
+  if (!asked.ok || asked.value.review >= line) return
+  $.ui.toast(
+    `vSR guard: this model scores "${CANARY}" ${fixed(asked.value.review)} < ${fixed(line)}, so guard would let it run · fixed rules still hold · /vsr:setup`,
+  )
+}
 type Judged = { part: string } & Guarded
 
 // A refusal reaches the hook as `deny` or, at the dialog and from rules, as an errored result. A shell command that ran and failed reads `Exit code N`.

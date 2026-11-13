@@ -111,3 +111,25 @@ func TestCalibratedThresholdsArePresetsOfTheCatalog(t *testing.T) {
 		t.Fatal("vela3-lite has no calibrated thresholds")
 	}
 }
+
+// The vela3_d3 sizes answer the jailbreak preset and the request-stage harm
+// preset with their base; vela3-fast keeps its trained forms of them, and the
+// vela3_d3 sizes keep their other trained forms.
+func TestTheVela3D3SizesAnswerTheGuardsWithTheirBase(t *testing.T) {
+	for _, guard := range []struct{ preset, stage string }{{Jailbreak, StageRequest}, {Jailbreak, StageResponse}, {Harm, StageRequest}} {
+		if _, trained := Trained(FamilyVela3D3, guard.preset, guard.stage); trained || !BaseOnly(FamilyVela3D3, guard.preset, guard.stage) {
+			t.Fatalf("vela3_d3 %s/%s: trained %v, base only %v", guard.preset, guard.stage, trained, BaseOnly(FamilyVela3D3, guard.preset, guard.stage))
+		}
+		if binding, trained := Trained(FamilyVela3, guard.preset, guard.stage); !trained || binding.ID == "" || BaseOnly(FamilyVela3, guard.preset, guard.stage) {
+			t.Fatalf("vela3 %s/%s: %+v %v", guard.preset, guard.stage, binding, trained)
+		}
+	}
+	for preset, id := range map[string]string{Domain: "domain", FactCheck: "factcheck", Feedback: "feedback"} {
+		if binding, trained := Trained(FamilyVela3D3, preset, StageRequest); !trained || binding.ID != id {
+			t.Fatalf("vela3_d3 %s: %+v %v", preset, binding, trained)
+		}
+	}
+	if binding, trained := Trained(FamilyVela3D3, Harm, StageResponse); !trained || binding.ID != "r_harm" {
+		t.Fatalf("vela3_d3 answer harm: %+v %v", binding, trained)
+	}
+}

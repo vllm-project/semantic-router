@@ -1,0 +1,111 @@
+{
+  "generator": "tools/codegen/systemone/generate_schemas.py",
+  "python": "json.dumps(json.loads(input), ensure_ascii=False)",
+  "cases": [
+    {
+      "name": "text",
+      "input": "\"Our export button fails with a 500 since this morning.\"",
+      "canonical": "\"Our export button fails with a 500 since this morning.\""
+    },
+    {
+      "name": "chinese",
+      "input": "\"导出按钮从今天早上开始一直报 500 错误。\"",
+      "canonical": "\"导出按钮从今天早上开始一直报 500 错误。\""
+    },
+    {
+      "name": "emoji",
+      "input": "\"Thanks 🙂👍🏽 — great!\"",
+      "canonical": "\"Thanks 🙂👍🏽 — great!\""
+    },
+    {
+      "name": "escaped_emoji",
+      "input": "\"\\ud83d\\ude00 and \\u00e9\"",
+      "canonical": "\"😀 and é\""
+    },
+    {
+      "name": "newlines_tabs",
+      "input": "\"line one\\nline two\\r\\n\\tindented\"",
+      "canonical": "\"line one\\nline two\\r\\n\\tindented\""
+    },
+    {
+      "name": "quotes_backslashes",
+      "input": "\"she said \\\"hi\\\" and C:\\\\path\\\\file\"",
+      "canonical": "\"she said \\\"hi\\\" and C:\\\\path\\\\file\""
+    },
+    {
+      "name": "html",
+      "input": "\"<script>alert(1)</script> & co\"",
+      "canonical": "\"<script>alert(1)</script> & co\""
+    },
+    {
+      "name": "line_separators",
+      "input": "\"a\\u2028b\\u2029c\"",
+      "canonical": "\"a b c\""
+    },
+    {
+      "name": "control_characters",
+      "input": "\"\\u0000\\u0001\\u0007\\b\\f\\u000b\\u001f\\u007f\"",
+      "canonical": "\"\\u0000\\u0001\\u0007\\b\\f\\u000b\\u001f\""
+    },
+    {
+      "name": "router_parts",
+      "input": "{\"history\": \"How do I export my invoices?\", \"request\": \"Our export fails with a 500 again.\"}",
+      "canonical": "{\"history\": \"How do I export my invoices?\", \"request\": \"Our export fails with a 500 again.\"}"
+    },
+    {
+      "name": "previous_turns",
+      "input": "{\"previous_turns\": \"user: Hi\\nassistant: Hello!\", \"request\": \"Same question again\"}",
+      "canonical": "{\"previous_turns\": \"user: Hi\\nassistant: Hello!\", \"request\": \"Same question again\"}"
+    },
+    {
+      "name": "key_order",
+      "input": "{\"zeta\": 1, \"alpha\": 2, \"Mid\": 3, \"beta\": [3, 2, 1]}",
+      "canonical": "{\"zeta\": 1, \"alpha\": 2, \"Mid\": 3, \"beta\": [3, 2, 1]}"
+    },
+    {
+      "name": "duplicate_keys",
+      "input": "{\"a\": 1, \"b\": 2, \"a\": 3}",
+      "canonical": "{\"a\": 3, \"b\": 2}"
+    },
+    {
+      "name": "nested",
+      "input": "{\"ticket\": {\"subject\": \"Duplicate charge\", \"messages\": [{\"from\": \"customer\", \"text\": \"Charged twice\"}, {\"from\": \"support\", \"text\": \"Checking\"}]}, \"tags\": [\"billing\", [\"nested\", {\"deep\": null}]], \"open\": true, \"escalated\": false}",
+      "canonical": "{\"ticket\": {\"subject\": \"Duplicate charge\", \"messages\": [{\"from\": \"customer\", \"text\": \"Charged twice\"}, {\"from\": \"support\", \"text\": \"Checking\"}]}, \"tags\": [\"billing\", [\"nested\", {\"deep\": null}]], \"open\": true, \"escalated\": false}"
+    },
+    {
+      "name": "empty",
+      "input": "{\"object\": {}, \"array\": [], \"text\": \"\"}",
+      "canonical": "{\"object\": {}, \"array\": [], \"text\": \"\"}"
+    },
+    {
+      "name": "integers",
+      "input": "[0, -0, 1, -1, 42, 12345678901234567890123456789]",
+      "canonical": "[0, 0, 1, -1, 42, 12345678901234567890123456789]"
+    },
+    {
+      "name": "floats",
+      "input": "[0.0, -0.0, 1.0, 1.5, 0.1, 100.25, 2.5e-5, 1e2, 1E2, 1e15, 1e16, 1.5e16]",
+      "canonical": "[0.0, -0.0, 1.0, 1.5, 0.1, 100.25, 2.5e-05, 100.0, 100.0, 1000000000000000.0, 1e+16, 1.5e+16]"
+    },
+    {
+      "name": "small_floats",
+      "input": "[0.001, 0.0001, 0.00001, 1e-7, 5e-324]",
+      "canonical": "[0.001, 0.0001, 1e-05, 1e-07, 5e-324]"
+    },
+    {
+      "name": "large_floats",
+      "input": "[1.7976931348623157e308, 123456789012345678.0, 9007199254740993.0]",
+      "canonical": "[1.7976931348623157e+308, 1.2345678901234568e+17, 9007199254740992.0]"
+    },
+    {
+      "name": "out_of_range",
+      "input": "[1e400, -1e400, 1e-400, -1e-400]",
+      "canonical": "[Infinity, -Infinity, 0.0, -0.0]"
+    },
+    {
+      "name": "array_state",
+      "input": "[\"Hi\", \"My customer number is TS1337.\", \"My card was charged twice.\"]",
+      "canonical": "[\"Hi\", \"My customer number is TS1337.\", \"My card was charged twice.\"]"
+    }
+  ]
+}

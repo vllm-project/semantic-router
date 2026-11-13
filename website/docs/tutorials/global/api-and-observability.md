@@ -182,17 +182,22 @@ Common Prometheus metric families:
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | Router Memory | `llm_memory_retrieval_total` (`backend`, `status`), `llm_memory_retrieval_latency_seconds`, `llm_memory_retrieval_results`, `llm_memory_store_operations_total`, `llm_memory_cache_hits_total`, `llm_memory_cache_misses_total`, `llm_memory_extraction_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
-| Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total` |
+| Translation and request-parameter policy | `llm_translation_lossy_total` (by `reason`, with any count in it written as `N`), `sr_request_params_blocked_total` |
 | Signals | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
 | Configuration lifecycle | `llm_config_updates_total` (`source`, `result`, `stage`), `llm_config_update_duration_seconds`, `llm_config_active_version`, `llm_config_active_info` (`version`, `hash`), `llm_config_last_rejection_timestamp_seconds` |
 | Remote model calls | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
 | Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` (stages `signals`, `decision`, `algorithm`, `prompt_compression`), `llm_prompt_compression_total` (by `recipe` and `outcome`: `compressed`, `skipped_disabled`, `skipped_min_length`, `skipped_max_tokens`) |
+| Context window | `llm_context_window_checks_total` (by `count`: `exact` or `proxy`, and `verdict`: `fits`, `in_band` or `exceeds`), `llm_context_window_refusals_total` (by `count`), `llm_context_window_margin` (by `count`), `llm_context_window_wait_seconds`, `llm_context_window_tokenizer_loaded` (by `tokenizer`), from the [context window check](../../installation/model-configuration#check-prompts-against-the-context-window) |
 | Routing input | `llm_routing_input_removed_total` (by `kind`: `skipped_message`, `stripped_block`), from [`global.router.routing_input`](../signal/overview#choose-the-user-text-signals-read) |
 | Streamed request body | `llm_streamed_body_arrival_seconds`, `llm_streamed_body_bytes`, `llm_streamed_body_chunks` (by `recipe`; STREAMED and FULL_DUPLEX_STREAMED modes only) |
 | Projections | `llm_projection_score` (by configured recipe and projection name) |
 | Trace export | `llm_trace_export_spans_total` (by exporter batch result) |
 
 Router Memory counters use bounded labels only. See the [Router Memory Prometheus label release note](../../release-notes/router-memory-prometheus-labels).
+
+A request that names a model the configuration does not serve counts in
+`llm_request_errors_total` as `model="unknown"`, `reason="model_not_found"`;
+the `specified_model_not_found` log event keeps the name it sent.
 
 `llm_request_graph_node_duration_seconds` times each step of a request graph,
 such as a Looper template's algorithm and respond steps; a step that holds
@@ -214,7 +219,7 @@ The model latency names describe what they observe:
 
 | Metric | Measures |
 | --- | --- |
-| `llm_model_first_response_observation_seconds` | The first stream chunk, or a non-streaming response's headers |
+| `llm_model_first_response_observation_seconds` | The first stream chunk, or a non-streaming response's headers, of successful responses only |
 | `llm_model_response_duration_per_output_token_seconds` | Complete response time divided by reported output tokens |
 
 Neither is first-token latency or decode-only inter-token latency. The

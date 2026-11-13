@@ -658,15 +658,13 @@ def _routing_disabled(config: dict | None) -> bool:
 
 
 def _published_native_model(listeners):
-    """The first listener publishing a native model, and that model's public name."""
-    return next(
-        (
-            (listener, listener["systemone"]["models"][0])
-            for listener in listeners
-            if (listener.get("systemone") or {}).get("models")
-        ),
-        None,
-    )
+    """The first listener serving the systemone API, and the first model it names (None for every model)."""
+    for listener in listeners:
+        entry = (listener.get("apis") or {}).get("systemone")
+        if isinstance(entry, dict):
+            models = entry.get("models") or [None]
+            return listener, models[0]
+    return None
 
 
 def _log_engine_ready(
@@ -679,7 +677,7 @@ def _log_engine_ready(
     published = _published_native_model(listeners)
     if published is None:
         success(
-            "Ready, but no listener publishes a native model (listeners[].systemone.models)"
+            "Ready, but no listener serves the systemone API (listeners[].apis.systemone)"
         )
     else:
         listener, model = published
@@ -690,7 +688,8 @@ def _log_engine_ready(
             if listener.get("api_keys")
             else ""
         )
-        success(f"Ready: {scheme}://localhost:{port}/v1/systemone (model {model}{key})")
+        named = f"model {model}" if model else "every published model"
+        success(f"Ready: {scheme}://localhost:{port}/v1/systemone ({named}{key})")
     extras = []
     if not dashboard_disabled:
         extras.append(("Dashboard", stack_layout.dashboard_url))
@@ -734,7 +733,7 @@ def _print_native_curl_example(listeners, stack_layout: RuntimeStackLayout) -> N
     heading("Try System One")
     if published is None:
         echo("  No native model is published on a configured listener.")
-        echo("  Configure listeners[].systemone.models before calling /v1/systemone.")
+        echo("  Configure listeners[].apis.systemone before calling /v1/systemone.")
         return
     listener, model = published
     port = listener.get("port", DEFAULT_LISTENER_PORT) + stack_layout.port_offset
@@ -743,7 +742,7 @@ def _print_native_curl_example(listeners, stack_layout: RuntimeStackLayout) -> N
         echo("  Set VLLM_SR_API_KEY to a key permitted by this listener.")
     payload = json.dumps(
         {
-            "model": model,
+            "model": model or "<a published model>",
             "state": "Explain why a Python function returns None.",
             "questions": {
                 "needs_reasoning": {

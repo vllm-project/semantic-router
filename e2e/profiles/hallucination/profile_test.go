@@ -36,16 +36,18 @@ func TestProfileAsksFactCheckOfTheDecisionModelAndHallucinationOfTheFixture(t *t
 	if deployment, named := factCheck["deployment"]; named {
 		t.Fatalf("fact-check must follow the decision model instead of naming deployment %v", deployment)
 	}
-	// 0.9997 on vela3-fast keeps Vela 1.0 FactCheck's operating point at 0.65.
-	if predicate, _ := factCheck["predicate"].(map[string]any); predicate["gte"] != 0.9997 {
+	// provider-mocker answers its chosen option with probability 0.97.
+	if predicate, _ := factCheck["predicate"].(map[string]any); predicate["gte"] != 0.9 {
 		t.Fatalf("fact-check operating point changed: %#v", factCheck)
 	}
 	catalog := profileSection(t, values, "config", "global", "model_catalog")
-	deploymentName, _ := profileSection(t, catalog, "bindings")["hallucination"].(string)
-	deployment := profileSection(t, catalog, "deployments", deploymentName)
-	if deployment["provider"] != "systemone" || deployment["model"] != "e2e/fake-systemone" ||
-		deployment["endpoint"] != "http://provider-mocker.default.svc.cluster.local:8000/v1/systemone" {
-		t.Fatalf("the hallucination binding must name provider-mocker's System One fixture: %#v", deployment)
+	for _, signal := range []string{"hallucination", "fact_check"} {
+		deploymentName, _ := profileSection(t, catalog, "bindings")[signal].(string)
+		deployment := profileSection(t, catalog, "deployments", deploymentName)
+		if deployment["provider"] != "systemone" || deployment["model"] != "e2e/fake-systemone" ||
+			deployment["endpoint"] != "http://provider-mocker.default.svc.cluster.local:8000/v1/systemone" {
+			t.Fatalf("the %s binding must name provider-mocker's System One fixture: %#v", signal, deployment)
+		}
 	}
 }
 

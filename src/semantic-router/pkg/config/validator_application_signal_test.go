@@ -7,7 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
-func TestApplicationRuleOnUnknownIsMatchOrNoMatchAtTheRequestStage(t *testing.T) {
+func TestApplicationRuleOnUnknownAndOnUnscannedTakeTheirValues(t *testing.T) {
 	for name, tc := range map[string]struct {
 		spec applicationRuleSpec
 		want string
@@ -16,6 +16,16 @@ func TestApplicationRuleOnUnknownIsMatchOrNoMatchAtTheRequestStage(t *testing.T)
 		"no_match":       {applicationRuleSpec{signalType: SignalTypePII, preset: presets.PII, onUnknown: "no_match"}, ""},
 		"another value":  {applicationRuleSpec{signalType: SignalTypeJailbreak, preset: presets.Jailbreak, onUnknown: "fail_request"}, "on_unknown must be match or no_match"},
 		"response stage": {applicationRuleSpec{signalType: SignalTypeJailbreak, preset: presets.Jailbreak, stage: presets.StageResponse, onUnknown: "match"}, "response_guard plugin's on_unknown"},
+		"best effort":    {applicationRuleSpec{signalType: SignalTypePII, preset: presets.PII, onUnscanned: "best_effort"}, ""},
+		"v0.4 allow":     {applicationRuleSpec{signalType: SignalTypeJailbreak, preset: presets.Jailbreak, onUnscanned: "allow"}, "on_unscanned must be best_effort, match, no_match or unknown"},
+		"min_coverage":   {applicationRuleSpec{signalType: SignalTypeSafety, preset: presets.Harm, onUnscanned: "best_effort", minCoverage: 0.5}, ""},
+		"min_coverage 1": {applicationRuleSpec{signalType: SignalTypeJailbreak, preset: presets.Jailbreak, onUnscanned: "best_effort", minCoverage: 1}, ""},
+		"min_coverage over one": {
+			applicationRuleSpec{signalType: SignalTypePII, preset: presets.PII, onUnscanned: "best_effort", minCoverage: 1.5}, "min_coverage must be between 0 and 1",
+		},
+		"min_coverage without best_effort": {
+			applicationRuleSpec{signalType: SignalTypeJailbreak, preset: presets.Jailbreak, onUnscanned: "match", minCoverage: 0.5}, "min_coverage applies to on_unscanned: best_effort",
+		},
 	} {
 		err := validateApplicationRuleSpec(tc.spec)
 		if tc.want == "" && err != nil {
@@ -27,13 +37,15 @@ func TestApplicationRuleOnUnknownIsMatchOrNoMatchAtTheRequestStage(t *testing.T)
 	}
 }
 
-func TestRequestStageGuardRulesFailClosedWithOnUnknownMatch(t *testing.T) {
+func TestRequestStageGuardRulesFailClosedUnlessOnUnknownIsNoMatch(t *testing.T) {
 	for name, tc := range map[string]struct {
 		spec applicationRuleSpec
 		want bool
 	}{
-		"jailbreak":          {applicationRuleSpec{signalType: SignalTypeJailbreak, stage: presets.StageRequest}, false},
+		"jailbreak":          {applicationRuleSpec{signalType: SignalTypeJailbreak, stage: presets.StageRequest}, true},
 		"jailbreak match":    {applicationRuleSpec{signalType: SignalTypeJailbreak, stage: presets.StageRequest, onUnknown: "match"}, true},
+		"jailbreak no_match": {applicationRuleSpec{signalType: SignalTypeJailbreak, stage: presets.StageRequest, onUnknown: "no_match"}, false},
+		"pii":                {applicationRuleSpec{signalType: SignalTypePII}, true},
 		"response jailbreak": {applicationRuleSpec{signalType: SignalTypeJailbreak, stage: presets.StageResponse, onUnknown: "match"}, false},
 		"pii match":          {applicationRuleSpec{signalType: SignalTypePII, onUnknown: "match"}, true},
 		"domain":             {applicationRuleSpec{signalType: SignalTypeDomain, onUnknown: "match"}, false},

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -82,9 +84,12 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 	started := time.Now()
 	defer func() {
 		outcome := "resolved"
+		var incapable *IncapableError
 		if resultErr != nil {
 			outcome = "unresolved"
-			if errors.Is(resultErr, budget.ErrExhausted) || errors.Is(resultErr, context.DeadlineExceeded) {
+			if errors.As(resultErr, &incapable) {
+				outcome = "incapable"
+			} else if errors.Is(resultErr, budget.ErrExhausted) || errors.Is(resultErr, context.DeadlineExceeded) {
 				outcome = "budget_exhausted"
 			} else if ctx.Err() != nil {
 				outcome = "canceled"
@@ -92,14 +97,22 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		}
 		metrics.RecordSystemOneRequest(e.algorithm.Type, outcome, time.Since(started).Seconds())
 	}()
+	skipped, refusal := e.incapableStages(ctx, request, membersFrom(ctx))
+	if refusal != nil {
+		return Candidate{}, refusal
+	}
 	ledger, hasLedger := budget.Current(ctx)
 	var candidates []Candidate
 	var history []StageEvidence
-	for _, stage := range e.algorithm.NativeStages() {
+	for index, stage := range e.algorithm.NativeStages() {
 		if err := ctx.Err(); err != nil {
 			return Candidate{}, err
 		}
 		if !stage.IsEnabled() {
+			continue
+		}
+		if skipped[index] {
+			metrics.RecordSystemOneStageSkipped(e.algorithm.Type, stage.StageName(), stage.Model, "incapable")
 			continue
 		}
 		stageStarted := time.Now()
@@ -163,6 +176,67 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 		}
 	}
 	return Candidate{}, ErrUnresolved
+}
+
+// incapableStages are the enabled native stages, by index, whose model
+// provably cannot answer the request: its card, listing or declared
+// capabilities lack a question type, a modality or full input the request
+// needs. A model nothing describes is asked as before, and so is every model
+// for a request every System One model answers. When every native stage is
+// incapable, the request goes to none of them.
+func (e *Executor) incapableStages(ctx context.Context, request *NativeRequest, members MemberCapabilities) (map[int]bool, *IncapableError) {
+	if members == nil || !request.Requirements.beyondStandard() {
+		return nil, nil
+	}
+	stages := e.algorithm.NativeStages()
+	type found struct {
+		capabilities Capabilities
+		known, asked bool
+	}
+	verdicts := make([]found, len(stages))
+	var wg sync.WaitGroup
+	for index, stage := range stages {
+		if !stage.IsEnabled() || stage.StageKind() != config.EscalateStageNative {
+			continue
+		}
+		verdicts[index].asked = true
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			verdicts[index].capabilities, verdicts[index].known = members(ctx, stage.Model)
+		}()
+	}
+	wg.Wait()
+	skipped := map[int]bool{}
+	refusal := &IncapableError{}
+	native := 0
+	for index, stage := range stages {
+		if !verdicts[index].asked {
+			continue
+		}
+		native++
+		capabilities, known := verdicts[index].capabilities, verdicts[index].known
+		if !known {
+			continue
+		}
+		missing := capabilities.Missing(request.Requirements)
+		if len(missing) == 0 {
+			continue
+		}
+		skipped[index] = true
+		for _, need := range missing {
+			if !slices.Contains(refusal.Missing, need) {
+				refusal.Missing = append(refusal.Missing, need)
+			}
+		}
+		if !slices.ContainsFunc(refusal.Members, func(member IncapableMember) bool { return member.Model == stage.Model }) {
+			refusal.Members = append(refusal.Members, IncapableMember{Model: stage.Model, Source: capabilities.Source, Missing: missing})
+		}
+	}
+	if native > 0 && len(skipped) == native {
+		return nil, refusal
+	}
+	return skipped, nil
 }
 
 // accept applies the stage's own rules, then the quality policy: the

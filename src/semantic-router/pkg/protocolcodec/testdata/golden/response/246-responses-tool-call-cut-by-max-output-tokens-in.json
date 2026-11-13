@@ -1,0 +1,34 @@
+{
+  "id": "response_cut_2",
+  "object": "response",
+  "created_at": 100,
+  "model": "provider-model",
+  "status": "incomplete",
+  "error": null,
+  "incomplete_details": {"reason": "max_output_tokens"},
+  "output": [
+    {
+      "type": "function_call",
+      "id": "item_weather_2",
+      "call_id": "call_weather_2",
+      "name": "lookup_weather",
+      "arguments": "{\"city\":\"Paris\",\"days\":[1,2",
+      "status": "incomplete"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "tool_choice": "auto",
+  "tools": [],
+  "usage": {
+    "input_tokens": 12,
+    "input_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0
+    },
+    "output_tokens": 16,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 28
+  }
+}

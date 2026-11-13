@@ -71,7 +71,7 @@ func (r *OpenAIRouter) SelectModelForEval(
 		}
 		excluded = len(decision.ModelRefs) - len(eligibleModelRefs)
 	} else {
-		if r.contextIneligibleAlgorithmModelCount(decision, max(0, input.ContextTokenCount-input.ContextReserveTokens)) > 0 {
+		if len(r.contextIneligibleAlgorithmModels(nil, decision, max(0, input.ContextTokenCount-input.ContextReserveTokens))) > 0 {
 			return evalSelectionUnavailable("an explicitly configured algorithm model cannot satisfy the request context")
 		}
 		eligibleModelRefs, excluded = r.evalContextEligibleModelRefs(&input, decision)
@@ -121,7 +121,7 @@ func (r *OpenAIRouter) evalStrictEligibleModelRefs(input *services.EvalModelSele
 // evalContextEligibleModelRefs applies the routing window filter, its reserve
 // fallback included, to an eval request.
 func (r *OpenAIRouter) evalContextEligibleModelRefs(input *services.EvalModelSelectionInput, decision *config.Decision) ([]config.ModelRef, int) {
-	eligible, excluded := r.contextEligibleModelRefs(decision.ModelRefs, input.ContextTokenCount)
+	eligible, excluded := r.contextEligibleModelRefs(nil, decision.ModelRefs, input.ContextTokenCount)
 	if excluded == 0 || input.ContextReserveTokens <= 0 {
 		return eligible, excluded
 	}

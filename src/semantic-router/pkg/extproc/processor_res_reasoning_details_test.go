@@ -32,7 +32,7 @@ func TestOpenRouterReasoningDetailsSurviveRouterResponseAndDispatch(t *testing.T
 				require.False(t, ctx.StreamingAborted)
 			} else {
 				body := []byte(`{"id":"r","model":"m","provider":"OpenRouter","choices":[{"index":0,"message":{"role":"assistant","reasoning":"thought","reasoning_details":` + details + `,"tool_calls":[` + toolCall + `]},"finish_reason":"tool_calls"}]}`)
-				result := router.handleNonStreamingResponseBody(body, ctx, 0)
+				result := router.handleNonStreamingResponseBody(body, ctx, 0, false)
 				require.Nil(t, result.GetImmediateResponse())
 				reply := string(result.GetResponseBody().GetResponse().GetBodyMutation().GetBody())
 				require.Contains(t, reply, `"reasoning_details"`)
@@ -76,7 +76,7 @@ func TestOpenRouterReasoningDetailsDegradeForMessagesClient(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{SourceFormat: llmprotocol.AnthropicMessagesV1, TargetFormat: llmprotocol.OpenAIChatV1, RequestModel: "public", TraceContext: t.Context()}
 	body := []byte(`{"id":"r","model":"m","provider":"OpenRouter","choices":[{"index":0,"message":{"role":"assistant","content":"answer","reasoning":"thought","reasoning_details":[{"type":"reasoning.text","text":"thought","signature":"sig","format":"anthropic-claude-v1","index":0},{"type":"reasoning.encrypted","data":"opaque","format":"anthropic-claude-v1","index":1}]},"finish_reason":"stop"}]}`)
-	result := router.handleNonStreamingResponseBody(body, ctx, 0)
+	result := router.handleNonStreamingResponseBody(body, ctx, 0, false)
 	require.Nil(t, result.GetImmediateResponse())
 	reply := string(result.GetResponseBody().GetResponse().GetBodyMutation().GetBody())
 	require.Contains(t, reply, `"thinking":"thought"`)
