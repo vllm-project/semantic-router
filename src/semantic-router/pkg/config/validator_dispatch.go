@@ -26,6 +26,7 @@ var (
 		validateGlobalRouterLearningConfig,
 		validateLossyTranslationContracts,
 		validateRoutingInputContracts,
+		validateContextWindowContracts,
 		validateRouterHeadersContracts,
 		validateFlowContracts,
 		validateModelAdmissionContracts,

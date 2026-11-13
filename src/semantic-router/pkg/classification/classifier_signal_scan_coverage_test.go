@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
@@ -271,12 +272,13 @@ func TestEveryPrefixOfTheReadingOrderIsSpread(t *testing.T) {
 
 // A message that needs more than 256 windows of its deployment's size is
 // cut into fewer, larger ones, as large as the model takes, that cover all
-// of it; only past 256 of the largest do windows stay unread.
+// of it; only past 256 of the largest do windows stay unread. The head and
+// the tail keep the configured size.
 func TestTheWindowsOfALongMessageGrowSoTheBoundCoversIt(t *testing.T) {
 	const size, most, overlap = 8192, 31_744, 1024
 	for tokens, fits := range map[int]bool{100_000: true, 1_000_000: true, 1_800_000: false} {
 		text := scanProse(tokens)
-		windows := fittedScanWindows(text, size, most, overlap)
+		windows, grownSize := cutScanWindows(text, size, most, overlap)
 		if fits != (len(windows) <= maxScanWindows) {
 			t.Fatalf("%d tokens: %d windows", tokens, len(windows))
 		}
@@ -284,16 +286,26 @@ func TestTheWindowsOfALongMessageGrowSoTheBoundCoversIt(t *testing.T) {
 			t.Fatalf("%d tokens: the windows do not reach both ends", tokens)
 		}
 		grown := len(scanWindowsOf(text, size, overlap)) > maxScanWindows
+		if grown != (grownSize > size) {
+			t.Fatalf("%d tokens: windows of %d bytes between the head and the tail", tokens, grownSize)
+		}
+		if tail := windows[len(windows)-1]; grown && tail.end-tail.start < size-routingViewSnap-utf8.UTFMax {
+			t.Fatalf("%d tokens: the tail has %d bytes, not the last %d", tokens, tail.end-tail.start, size)
+		}
 		for index, window := range windows {
-			if bytes := window.end - window.start; bytes > most || !grown && bytes > size {
+			ends := index == 0 || index == len(windows)-1
+			if bytes := window.end - window.start; bytes > most || (!grown || ends) && bytes > size {
 				t.Fatalf("%d tokens: window %d has %d bytes", tokens, index, bytes)
 			}
 			if index > 0 && window.start > windows[index-1].end {
 				t.Fatalf("%d tokens: a gap before window %d", tokens, index)
 			}
+			if window.first != index || window.last != index || window.runeStart != utf8.RuneCountInString(text[:window.start]) {
+				t.Fatalf("%d tokens: window %d reads windows %d-%d from code point %d", tokens, index, window.first, window.last, window.runeStart)
+			}
 		}
 	}
-	if windows := fittedScanWindows(scanProse(1_000_000), size, size, overlap); len(windows) <= maxScanWindows {
+	if windows, _ := cutScanWindows(scanProse(1_000_000), size, size, overlap); len(windows) <= maxScanWindows {
 		t.Fatalf("without a larger window the model takes, the windows keep their size: %d", len(windows))
 	}
 }

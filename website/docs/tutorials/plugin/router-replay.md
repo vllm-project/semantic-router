@@ -140,7 +140,11 @@ Set `capture_personal_data: false` globally or on a decision's
   read the prompt with a PII signal, the record is first written without it.
   The recipe's configured PII rules then read the latest user message alone,
   and the prompt is added to the record once that read finds no personal
-  data.
+  data. At most two such reads run at once, each for up to 30 seconds. A read
+  that could not finish in that time does not start, and the prompt stays
+  out, as it would when the read ran out of time. That covers a message
+  longer than the decision model reads in 30 seconds at its measured pace,
+  or one whose guard scan ran out of time during routing.
 
 When PII evidence is unavailable, the `pii` rule's model gives no answer, or
 the recipe has no `pii` rule, capture omits content conservatively. A PII signal is

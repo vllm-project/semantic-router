@@ -288,6 +288,7 @@ type RouterOptions struct {
 	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
 	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
 	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
+	ContextWindow          ContextWindowConfig  `yaml:"context_window,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend

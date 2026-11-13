@@ -65,7 +65,7 @@ func (r *OpenAIRouter) handleRequestBody(
 		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 	ctx.UserContent = snapshot.UserContent
-	observeRoutingInput(snapshot.RoutingInput)
+	observeRoutingInput(ctx, snapshot.RoutingInput)
 	ctx.RequestImageURL = snapshot.FirstImageURL
 	ctx.RequestAudio = snapshot.FirstAudio
 

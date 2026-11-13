@@ -110,10 +110,33 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
   read yet are not sent, and the request is refused at once instead of at the
   deadline.
 - One input reads at most 256 windows. An input that needs more of them is
-  read in larger windows instead, up to the largest the model takes (31,744
+  read in larger windows between its head and its tail, up to
+  `scan_window.max_tokens` (by default the largest the model takes: 31,744
   bytes for a 32,768-token validated length), so 256 cover it whole. Only an
   input longer than 256 of the largest windows, about 7.5 MB, leaves windows
   unread, and they count as unread.
+- A larger window dilutes what it holds: the same injection scores lower in a
+  window of 8,000 tokens than in one of 2,000. The head and the tail, the first
+  and the last `scan_window.tokens` of the input, are always read at that
+  size. A larger window whose answer leaves a rule short of its threshold, by
+  at most `scan_window.reread_margin` in log-odds, is read again in windows of
+  `scan_window.tokens` before the rule decides. Dilution lowers a score's
+  log-odds by about the same amount at any threshold, so the default of 3
+  re-reads from about 0.91 for a rule at 0.995, 0.27 at 0.88 and 0.05 at 0.5,
+  and never once the window matched. A window within half the margin, where a
+  diluted match lands, is read again at once and can still end the scan
+  early; one further below waits until the windows still unread are read,
+  closest to its threshold first, so a scan that fell behind reads its runs
+  before such re-reads. A part that the input's windows already read and
+  answered is not read again.
+- An input whose windows are all read by the signals' deadline is read at the
+  configured size, as fast as its windows are read. A scan that falls behind,
+  whose windows left would not all be read in time at the pace it read the
+  others, reads them in runs of windows read as one when the deployment's
+  measured pace says those would be read in time, the shortest runs that are;
+  otherwise it keeps its windows and reads what it can. A decision model reads
+  each token at about the same cost in a window of any size, so larger windows
+  save little time and seldom fit.
 
 ```yaml
 global:
@@ -140,6 +163,8 @@ global:
 | `scan_window.tokens` | 8,192; 4,096 for `provider: systemone` | 256 to 1,048,576 |
 | `scan_window.overlap` | 512; 256 for `provider: systemone` | 0 to less than half a window |
 | `scan_window.max_parallel` | 4 | 1 to 64 |
+| `scan_window.max_tokens` | the model's validated length less 1,024 | `scan_window.tokens` to 1,048,576 |
+| `scan_window.reread_margin` | 3 (log-odds below the rule's threshold) | 0 to 20 (0 reads no window again) |
 
 **Views and windows are sized in bytes.** A token of `max_tokens` or
 `scan_window.tokens` counts as four bytes, about what a token of prose takes,
@@ -163,7 +188,11 @@ JSON or base64. A scan's windows share the deadline: the deployment reads
 `scan_window.max_parallel` of them at a time, the tail and the head first, so
 the windows read when the deadline comes are the ones a partial scan decides
 on. A window not read in time counts as unread, and with `best_effort` the rule
-decides on the windows read. Lower `scan_window.tokens` for a slow API, and
+decides on the windows read. A scan that falls behind reads the rest in larger
+windows only when the deployment's measured pace says they would be read in
+time; the cost a call adds besides its text is all they save, so on one
+decision model an input of about a million tokens may be read only in part,
+and `scan_partial` says so. Lower `scan_window.tokens` for a slow API, and
 raise the deadline for inputs you expect to scan in full; more windows in
 flight help only while the model has room to batch them.
 

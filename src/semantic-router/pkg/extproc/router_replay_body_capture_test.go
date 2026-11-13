@@ -179,7 +179,12 @@ func TestReplayFallbackExecutionKeepsProviderRepliesOnlyWhenCaptured(t *testing.
 		router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
 			return []byte(`{"error":"cannot answer ` + echo + `"}`), http.StatusServiceUnavailable, nil
 		}
-		require.Nil(t, router.handleUpstreamTransportError([]byte("overloaded: "+echo), ctx).GetImmediateResponse())
+		// The chain answers with its last attempt, a reply the Router cannot
+		// read as an error and so does not repeat to the client.
+		answer := router.handleUpstreamTransportError([]byte("overloaded: "+echo), ctx).GetImmediateResponse()
+		require.NotNil(t, answer)
+		require.EqualValues(t, http.StatusServiceUnavailable, answer.GetStatus().GetCode())
+		require.NotContains(t, string(answer.GetBody()), echo)
 
 		record, ok := recorder.GetRecord(recordID)
 		require.True(t, ok)

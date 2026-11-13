@@ -1,7 +1,9 @@
 package classification
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -57,5 +59,52 @@ func TestReplayPromptEvidenceCoversOnlyACompleteCleanReadOfThePrompt(t *testing.
 				t.Fatalf("a recipe without pii rules asked the model: %+v", decider.asked)
 			}
 		})
+	}
+}
+
+// Replay's check after routing reads a prompt only when it can read it whole
+// in its time. A prompt one window holds always can. A longer one cannot when
+// the request's own guard scan of it ran out of time, nor when its windows
+// would take longer than scanReadShare of that time at the deployment's
+// measured pace. Before a pace is measured, it may be read.
+func TestReplayReadsAPromptOnlyWhenItCanReadItWholeInTime(t *testing.T) {
+	const within = 30 * time.Second
+	short := "Summarize the meeting agenda."
+	long := strings.Repeat("The committee reviewed the quarterly report on regional water supplies and agreed to meet again. ", 10_000)
+	classifierAt := func(perWindow time.Duration) *Classifier {
+		cfg := &config.RouterConfig{}
+		cfg.PIIRules = []config.PIIRule{{Name: "privacy", Deployment: "guard-model"}}
+		classifier, err := newClassifierWithOptions(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		budget := classifier.scanWindowBudget("guard-model")
+		if len(long) <= budget.size {
+			t.Fatalf("the long prompt fits one window of %d bytes", budget.size)
+		}
+		for range 5 {
+			if perWindow > 0 {
+				classifier.windowPaces.observe("guard-model", budget.size, perWindow)
+			}
+		}
+		return classifier
+	}
+	unmeasured := classifierAt(0)
+	if !unmeasured.ReplayPromptReadable(short, within, true) {
+		t.Fatal("a prompt one window holds is one call, always readable")
+	}
+	if !unmeasured.ReplayPromptReadable(long, within, false) {
+		t.Fatal("before a pace is measured, a long prompt may be read")
+	}
+	if unmeasured.ReplayPromptReadable(long, within, true) {
+		t.Fatal("a long prompt the request's own guard scan ran out of time on was found readable")
+	}
+	budget := unmeasured.scanWindowBudget("guard-model")
+	windows, _ := cutScanWindows(long, budget.size, budget.most, budget.overlap)
+	if slow := classifierAt(within / time.Duration(len(windows))); slow.ReplayPromptReadable(long, within, false) {
+		t.Fatalf("%d windows at %v each were found readable in %v", len(windows), within/time.Duration(len(windows)), within)
+	}
+	if fast := classifierAt(within / time.Duration(10*len(windows))); !fast.ReplayPromptReadable(long, within, false) {
+		t.Fatalf("%d windows at %v each were found unreadable in %v", len(windows), within/time.Duration(10*len(windows)), within)
 	}
 }

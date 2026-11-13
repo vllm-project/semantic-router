@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -260,6 +261,10 @@ type systemOneCall struct {
 	// that window's index.
 	scan   *guardScan
 	window int
+	// reread is whether the window reads part of the input again: the larger
+	// window it reads again answered its questions, so its failure leaves
+	// none of them unknown.
+	reread bool
 }
 
 // systemOneCalls groups rules by the deployment that answers them and the
@@ -411,6 +416,11 @@ func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResul
 	work = append(work, readers...)
 	modelservice.Fan(ctx, len(work), func(i int) { work[i]() })
 	release()
+	// Signals the request abandoned decide nothing, and the calls they cut
+	// short are no guard's failure.
+	if modelservice.SignalsAbandoned(ctx) {
+		return
+	}
 	for _, scan := range scans {
 		c.applyScan(results, mu, scan)
 	}
@@ -456,6 +466,9 @@ func (c *Classifier) askCall(
 	if observe != nil {
 		observe(response, err)
 	}
+	if modelservice.SignalsAbandoned(ctx) {
+		return
+	}
 	c.applyCall(results, call, response, err, latency)
 }
 
@@ -484,10 +497,19 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 	} else {
 		response, err = c.decider().Decide(callCtx, deployment, request)
 	}
-	if err != nil {
+	if err != nil && !answersGivenUp(ctx) && !call.reread {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
 	}
 	return response, time.Since(started).Seconds(), err
+}
+
+// answersGivenUp reports a call cancelled because its answers are no longer
+// needed, rather than one its deployment left unanswered: the request
+// abandoned its signals, a window decided the stage's scans, or a scan's
+// re-plan reads the window in a larger one.
+func answersGivenUp(ctx context.Context) bool {
+	cause := context.Cause(ctx)
+	return modelservice.SignalsAbandoned(ctx) || errors.Is(cause, errScanDecided) || errors.Is(cause, errWindowReplaced)
 }
 
 // applyCall applies each rule's answer in one call's response to results.
