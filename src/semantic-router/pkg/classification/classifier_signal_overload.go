@@ -28,7 +28,9 @@ import (
 //     questions one call carried travel in one call again.
 //   - A stage has at most overloadRounds rounds for a deployment, spread over
 //     its wait: at a quarter of it, at half, and at its end; sooner once the
-//     deployment answers again.
+//     deployment answers again. It takes them one at a time, a step apart at
+//     least: its calls that reach a round just after it took one ride that
+//     one.
 //   - While a deployment refuses calls as overloaded, one stage's round at a
 //     time asks it, a jittered step apart, from 100 ms doubling to 1 s,
 //     whatever the number of requests waiting; the first answer to any call
@@ -171,8 +173,7 @@ type deploymentRounds struct {
 }
 
 // overloadRound is when a stage's waiting calls to one deployment ask
-// again, and, once the first of them reached it, whether the deployment's
-// gate let them.
+// again, and, once the first of them reached it, whether they do.
 type overloadRound struct {
 	at      time.Time
 	decided bool
@@ -191,8 +192,9 @@ func withOverloadWait(ctx context.Context, wait time.Duration) context.Context {
 // once the stage's wait has run out or its rounds are spent. The wait lasts
 // wait_ms from the stage's first overloaded answer, or less when the call's
 // deadline comes first, and the rounds come at a quarter of it, at half and
-// at its end, each a little before; later when the gate holds them back, and
-// at once when the deployment answers again.
+// at its end, each a little before; later when the gate holds them back or
+// the stage's last round was less than a step before, and within 50 ms when
+// the deployment answers again.
 func (w *overloadWait) round(ctx context.Context, deployment string, gate *overloadGate, now time.Time) (*overloadRound, <-chan struct{}, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -260,9 +262,11 @@ func (w *overloadWait) join(deployment string, n int) {
 
 // asks reports whether the stage's round lets a call ask its deployment
 // again: together with the round's other calls, or alone, as its probe. The
-// first call to reach the round decides it for all of them: it claims the
-// deployment's gate, and probes when the deployment is busy and more than
-// overloadProbeAbove calls wait; otherwise a round the gate lets counts.
+// first call to reach the round decides it for all of them. Within
+// overloadJoin of the round the stage took last, it rides that round, and
+// sooner than half a step after it, it waits for a later one. Otherwise it
+// claims the deployment's gate, and probes when the deployment is busy and
+// more than overloadProbeAbove calls wait; a round the gate lets counts.
 func (w *overloadWait) asks(deployment string, round *overloadRound, gate *overloadGate, now time.Time) (together, alone bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -273,7 +277,8 @@ func (w *overloadWait) asks(deployment string, round *overloadRound, gate *overl
 	rounds := w.roundsOfLocked(deployment)
 	// A stage takes one round for a deployment at a time: a call that
 	// reaches another round of its stage just after one was taken rides it,
-	// and one that comes sooner than a step after it waits for a later one.
+	// and one that comes sooner than half a step after it waits for a later
+	// one.
 	if !rounds.last.IsZero() {
 		since := now.Sub(rounds.last)
 		if since < overloadJoin {

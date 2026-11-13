@@ -196,9 +196,8 @@ func (c *Classifier) replan(scan *guardScan) []*systemOneCall {
 // when it keeps them: before it read scanPaceRounds rounds of its windows
 // in flight, when it is not behind, when no k fits, once it judged or
 // another scan of its input re-planned it, and once its stage's scans ended.
-// A scan whose window waited for capacity judges its pace from when such a
-// window was last answered, over the windows read since, and not while one
-// still waits.
+// A scan whose window waited for capacity judges its pace only once the
+// first such window was answered: from then, over the windows read since.
 func (c *Classifier) replanRuns(scan *guardScan) int {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
