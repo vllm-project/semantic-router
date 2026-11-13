@@ -118,7 +118,7 @@ func TestNamespacedToolCallsReachResponsesClientBuffered(t *testing.T) {
 		t.Run(string(backend), func(t *testing.T) {
 			ctx := namespacedToolContext(t, backend)
 			router := &OpenAIRouter{}
-			response := router.handleNonStreamingResponseBody(namespacedBackendResponse(backend), ctx, 0)
+			response := router.handleNonStreamingResponseBody(namespacedBackendResponse(backend), ctx, 0, false)
 			body := response.GetResponseBody().GetResponse().GetBodyMutation().GetBody()
 			require.NotEmpty(t, body, "the backend body names a flat tool and must not be forwarded")
 			require.Contains(t, string(body), `"namespace":"mcp__echo"`)
