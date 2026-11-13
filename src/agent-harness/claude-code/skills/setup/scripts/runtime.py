@@ -78,6 +78,29 @@ def base_of(url: str) -> str:
     )
 
 
+def as_data_listing(listing):
+    """A model listing in the `data` form. The vllm-sr/5.0 schema, a Router
+    listener's default, lists models under `models`, each with its name, its
+    question types as `features` and the vllm-sr/4.0 entry as its `card`."""
+    if (
+        not isinstance(listing, dict)
+        or "data" in listing
+        or not isinstance(listing.get("models"), list)
+    ):
+        return listing
+    return {
+        "data": [
+            (
+                m["card"]
+                if isinstance(m.get("card"), dict)
+                else {"id": m.get("name"), "question_types": m.get("features")}
+            )
+            for m in listing["models"]
+            if isinstance(m, dict)
+        ]
+    }
+
+
 def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
     """GET /health and the model list; never raises."""
     base = base_of(url)
@@ -99,6 +122,7 @@ def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
     # A System One API, a Router listener's or a hosted one, lists its models at
     # /v1/systemone/models; vllm-srun lists its one model at /v1/models.
     get("models", "/v1/systemone/models")
+    out["models"] = as_data_listing(out["models"])
     if not (isinstance(out["models"], dict) and out["models"].get("data")):
         get("models", "/v1/models")
     status = out["health"].get("status") if isinstance(out["health"], dict) else None
