@@ -36,6 +36,7 @@ func TestSystemOneDeploymentConnectsWithTLSAndAKeyFile(t *testing.T) {
 	})
 	deployment := gateway.Deployment(config.SystemOneProvider, "vllm-sr/d3-ultra")
 	deployment.Endpoint += "/systemone"
+	deployment.Schema = "vllm-sr/4.0"
 	deployment.Capabilities = &config.DeploymentCapabilities{QuestionTypes: []string{"choice"}}
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"remote-d3": deployment}

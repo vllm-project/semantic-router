@@ -53,6 +53,8 @@ var requestReasons = map[string]string{
 	"asset_reference":      "asset references are 1 to 1,024 bytes, at most 65,536 bytes together",
 	"asset_uses":           "the request's image uses exceed the request size; put a shared image in the state",
 	"request_tokens":       "the request has more tokens than the model reads",
+	// The Router's own, for roles a vllm-sr/4.0 upstream cannot take.
+	"roles_unsupported": "the model speaks vllm-sr/4.0, which reads an object state's parts by their keys and takes no roles; send the state with roles its keys imply, or none on a vllm-sr/4.0 listener",
 }
 
 // questionFailure is a failed question that answers a whole System One
@@ -122,6 +124,20 @@ func refusedQuestion(status int, body []byte, systemOne bool) (questionFailure, 
 	}
 	failure.code = "invalid_question"
 	return failure, systemOne && status == http.StatusBadRequest
+}
+
+// writeNoValidQuestion answers /v1/decisions as the model runtime does when
+// none of a request's questions is valid: 400 invalid_request, naming the
+// first question and its state.
+func writeNoValidQuestion(w http.ResponseWriter, failure questionFailure, fields map[string]any) {
+	if _, worded := questionReasons[failure.reason]; !worded {
+		fields["reason"], fields["message"] = "", "no question is valid"
+	}
+	fields["question"] = failure.id
+	if failure.state != "" {
+		fields["state"] = failure.state
+	}
+	writeErrorBody(w, http.StatusBadRequest, fields)
 }
 
 func writeQuestionFailure(w http.ResponseWriter, failure questionFailure) {

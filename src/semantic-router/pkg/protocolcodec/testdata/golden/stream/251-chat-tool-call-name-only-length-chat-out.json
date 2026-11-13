@@ -1,0 +1,66 @@
+{
+  "frames": [
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_tool_cut",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "tool_calls": [
+                {
+                  "function": {
+                    "name": "lookup"
+                  },
+                  "id": "call_1",
+                  "index": 0,
+                  "type": "function"
+                }
+              ]
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_tool_cut",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {},
+            "finish_reason": "length",
+            "index": 0
+          }
+        ],
+        "id": "response_tool_cut",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": "[DONE]"
+    }
+  ]
+}

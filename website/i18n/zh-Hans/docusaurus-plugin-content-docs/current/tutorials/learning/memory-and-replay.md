@@ -109,6 +109,8 @@ POST /api/v1/observability/outcomes
 
 `target: model` 结果会更新在线模型经验。`target: route`、`target: policy`、`target: stability`、`target: provider` 和 `target: router` 结果会保留给回放和离线配方学习，除非存在类型化的在线消费者。
 
+模型结果记在实际作答的模型上。fallback 候选模型的回答送达客户端时，该模型是响应头 `x-vsr-selected-model` 中给出的候选模型，而不是请求最初路由到的模型。回答被响应策略拦截的候选模型不算作答。`target_ref` 指向其他模型时返回 `409`。
+
 ## 配方学习命令 {#recipe-learning-command}
 
 从回放运行离线循环：

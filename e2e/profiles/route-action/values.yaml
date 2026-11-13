@@ -22,6 +22,12 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
+  entrypoints:
+    - model_names: [vllm-sr/auto]
+      recipe: default
+      default: true
+    - model_names: [vllm-sr/response-guard]
+      recipe: response-guard
   recipes:
     - name: default
       decisions:
@@ -57,6 +63,89 @@ config:
             description: Prompt injection or jailbreak, answered by the System One fixture
             predicate:
               gte: 0.5
+    # From the former response-jailbreak profile, behind its own entrypoint
+    # so its keyword decisions never compete with the route-action ones.
+    - name: response-guard
+      # Both response_guard decisions are selected by a deterministic
+      # keyword signal, so the E2E exercises the same harness path a real
+      # request takes (auto model -> signal -> decision -> plugin) rather than
+      # a passthrough to a concrete backend model, which skips plugins
+      # entirely (see performDecisionEvaluation).
+      #
+      # There is deliberately no request-stage jailbreak rule here: nothing on
+      # the request path asks about the probe prompt, so it reaches the backend
+      # and comes back as LLM output - which is the surface under test. The one
+      # jailbreak rule below has stage: response, so it is asked about that
+      # output only.
+      decisions:
+        - name: response_jailbreak_block
+          description: Blocks the response when the guardrail flags LLM output
+          priority: 200
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: response_block_probe
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+          plugins:
+            - type: response_guard
+              configuration:
+                rules:
+                  - when:
+                      type: jailbreak
+                      name: unsafe_completion
+                    action: block
+                on_unknown: block
+        - name: response_jailbreak_warn
+          description: Warns via x-vsr-warnings when the guardrail flags LLM output
+          priority: 200
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: response_warn_probe
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+          plugins:
+            - type: response_guard
+              configuration:
+                rules:
+                  - when:
+                      type: jailbreak
+                      name: unsafe_completion
+                    action: annotate
+                on_unknown: annotate
+        - name: default_decision
+          description: Catch-all decision with response jailbreak detection disabled
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+      signals:
+        keywords:
+          - name: response_block_probe
+            operator: OR
+            keywords:
+              - __response_block_probe__
+          - name: response_warn_probe
+            operator: OR
+            keywords:
+              - __response_warn_probe__
+        # Scored from the model's output, not the request. The block and warn
+        # decisions above act on this observation through their
+        # response_guard rules; the threshold that decides lives here.
+        jailbreak:
+          - name: unsafe_completion
+            description: Detect jailbreak content in the model's own output.
+            predicate:
+              gte: 0.5
+            stage: response
   global:
     router:
       strategy: priority
@@ -80,6 +169,7 @@ config:
           provider: systemone
           endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
           model: e2e/fake-systemone
+          schema: vllm-sr/4.0
           timeout_ms: 5000
           capabilities:
             question_types: [choice, noul, span]

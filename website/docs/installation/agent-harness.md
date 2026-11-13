@@ -355,8 +355,8 @@ carries the matching result. For streaming, check complete tool arguments, the
 terminal event, and final answer. Protocol compatibility alone does not verify
 the model and harness together.
 
-When Router Learning protection is configured, it needs explicit identities.
-The default `scope: conversation` requires both headers on related calls:
+When Router Learning protection is configured, it needs an explicit session
+identity. Send both headers on related calls:
 
 ```http
 x-session-id: harness-demo-session
@@ -367,9 +367,11 @@ These are example values:
 
 - **Use real identities.** Send distinct, stable identifiers for your sessions
   and conversations, from the harness or a trusted gateway.
-- **`scope: session`** requires only the configured session header.
-- **A missing identity** leaves the request routable, but no model is kept
-  through protection.
+- **With only the session header**, `scope: session` holds the whole session,
+  and the default `scope: conversation` holds each conversation, named by how
+  it starts.
+- **Without the session header** the request stays routable, but no model is
+  kept through protection.
 - **Responses history**, including `previous_response_id`, does not replace
   these headers.
 

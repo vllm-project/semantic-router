@@ -38,7 +38,12 @@ type asker struct {
 
 // runStage runs the askers as declared participants of one bundle.
 func runStage(window time.Duration, askers ...asker) (*Bundle, []error) {
-	stage, bundle := WithBundle(context.Background(), window)
+	return runStageIn(context.Background(), window, askers...)
+}
+
+// runStageIn is runStage in a stage of ctx, whose deadline its askers keep.
+func runStageIn(ctx context.Context, window time.Duration, askers ...asker) (*Bundle, []error) {
+	stage, bundle := WithBundle(ctx, window)
 	errs := make([]error, len(askers))
 	var wg sync.WaitGroup
 	type joined struct {

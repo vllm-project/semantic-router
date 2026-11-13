@@ -106,6 +106,6 @@ recipes:
             reasoning_effort: high
 ```
 
-effort 必须由家族列出，并且被该 Model 的每个 Provider 绑定允许。`reasoning_mode` 必须与 `use_reasoning` 一致。省略 effort 以使用家族默认值，或在需要一个有效的部署级默认值优先时设置 `providers.defaults.reasoning_effort`。
+effort 必须由家族列出，并且被该 Model 的每个 Provider 绑定允许。`reasoning_mode` 必须与 `use_reasoning` 一致。省略 effort 以使用家族默认值，或在需要一个有效的部署级默认值优先时设置 `providers.defaults.reasoning_effort`。该默认值适用于家族列出它的每个 Model，因此这些 Model 的 Provider 绑定也必须允许它；家族未列出它的 Model 继续使用家族默认值。
 
 在控制面板决策编辑器中，先选择 Model。UI 从其有效家族派生 mode 和 effort 选项，并禁用 Model 或 Provider 不支持的控件。没有家族的自定义 Model 保持为透传模型，并且没有控制面板推理控件。

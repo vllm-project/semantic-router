@@ -57,6 +57,10 @@ type ProviderProfile struct {
 	// backend's credential; static keys and per-user provider keys are not
 	// consulted for it.
 	AuthCredential string `yaml:"auth_credential,omitempty"`
+	// TLS is how an https backend is verified, its tls block with the default
+	// CA applied; nil keeps the system roots and the endpoint's host. Envoy's
+	// cluster and the Router's own calls use the same settings.
+	TLS *DeploymentTLS `yaml:"tls,omitempty"`
 }
 
 // Delegated reports whether the backend takes the requesting user's
@@ -75,7 +79,10 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
-	Deployment         string              `yaml:"deployment,omitempty"`
+	Deployment string `yaml:"deployment,omitempty"`
+	// Schema is the version of its API the model's backends speak, as the
+	// model names it; UpstreamSchema gives the API's default without one.
+	Schema             string              `yaml:"schema,omitempty"`
 	PreferredEndpoints []string            `yaml:"preferred_endpoints,omitempty"`
 	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
 	Reliability        ProviderReliability `yaml:"reliability,omitempty"`
@@ -100,6 +107,27 @@ type ModelParams struct {
 	QualityIndex         string                                         `yaml:"-" json:"-"`
 	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
 	Modalities           modelcatalog.Modalities                        `yaml:"modalities,omitempty"`
+	// UnsupportedCapabilities are the request capabilities the model's
+	// backends reject; the Router leaves their fields out for this model.
+	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
+	// Tokenizer counts the model's prompts for the context window check;
+	// empty counts them with the tokenizer of HubRepo, else with the proxy
+	// tokenizer.
+	Tokenizer string `yaml:"tokenizer,omitempty"`
+	// HubRepo is the Hugging Face repo the model comes from: the
+	// open-weights source of its catalog card, else the id a self-hosted
+	// engine serves it under. Empty when it has neither.
+	HubRepo string `yaml:"-" json:"-"`
+}
+
+// EffectiveTokenizer is the tokenizer that counts the model's prompts for
+// the context window check: Tokenizer, else HubRepo; empty leaves them to
+// the proxy tokenizer.
+func (params ModelParams) EffectiveTokenizer() string {
+	if params.Tokenizer != "" {
+		return params.Tokenizer
+	}
+	return params.HubRepo
 }
 
 // EvidenceScore resolves a versioned static model index. Missing, failed, and

@@ -41,8 +41,8 @@ vllm-sr serve --target kubernetes --config config.yaml
 
 ## standalone 模式下 Router 做什么
 
-- **listener：** `listeners` 中的每一项都以 HTTP/1.1 和 HTTP/2（明文下为 h2c）提供服务，`timeout` 作为空闲超时，
-  请求体上限 500 MiB，最多 50,000 个连接，与 Envoy 模板的限制一致。
+- **listener：** `listeners` 中的每一项都以 HTTP/1.1 和 HTTP/2（明文下为 h2c）提供服务。`timeout` 限制读取请求的时间（客户端停止发送请求体时返回 408）和空闲连接保持的时间，
+  不限制后端仍在流式返回的响应。请求体上限 500 MiB，每个 listener 最多 50,000 个连接，与 Envoy 模板的限制一致。
 - **API key：** 设置 `api_keys` 后，客户端需以 `Authorization: Bearer <key>` 或 `api-key: <key>` 发送其中之一；
   其他请求得到 OpenAI 风格的 401。key 在请求到达 provider 之前被移除。
 - **模型白名单：** 设置 `models` 后，该 listener 只接受这些请求模型（见[模型白名单](#model-allow-list)）。
@@ -68,11 +68,11 @@ vllm-sr serve --target kubernetes --config config.yaml
 - **探针：** 进程运行时 `GET /health` 就会应答；路由核心可以接收流量后 `GET /ready` 才应答。Prometheus 指标仍在
   Router 的指标端口（9190）。
 - **重新加载：** Router 原地重新加载配置。修改 listener 的地址、端口、超时或 `tls` 路径，或者新增、删除 listener，
-  都会以 `restart_required` 被拒绝，直到 Router 重启；API key 和模型白名单可原地重新加载。
+  都会以 `restart_required` 被拒绝，直到 Router 重启；API key、`apis` 及其模型白名单和身份信任可原地重新加载。
 
 ### 模型白名单 {#model-allow-list}
 
-listener 的 `models` 列出它接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
+listener `apis` 中某个 API 的 `models` 列出该 API 接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
 listener 仍可使用所有模型：
 
 ```yaml
@@ -84,7 +84,9 @@ listeners:
     address: 0.0.0.0
     port: 8899
     api_keys: ["${WORKSHOP_KEY}"]
-    models: [vllm-sr/auto]
+    apis:
+      chat_completions: {models: [vllm-sr/auto]}
+      responses: {models: [vllm-sr/auto]}
 ```
 
 - 名称精确匹配（区分大小写，请求值去除首尾空白后比较），不展开别名：请列出客户端可能发送的每个名称。为空或不设置时，
@@ -177,7 +179,7 @@ GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/
 `vllm-sr serve [MODEL]` 每次默认启动 Router；`--engine`（`-e`）启动 Engine。
 两者使用同一前端和模型池，保留已保存的路由配置。Dashboard 只展示启动模式，
 不提供运行时切换入口。MODEL 只覆盖默认判断 deployment 的 artifact；未填写的
-引擎参数和副本位置保留原值，全新配置默认 Vela 2.0 0.3B。
+引擎参数和副本位置保留原值，全新配置默认 Vela 3.0 vela3-fast。
 
 | 范围 | 选项 |
 | --- | --- |

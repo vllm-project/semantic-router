@@ -37,8 +37,8 @@ A 27B Decision 3.0 model that reads a text request's list of questions in front 
 | `span` | No: bind span questions, such as PII and hallucination, to a span-capable model |
 | `box`, `track` | On the [System One API](system-one/use/api.md) only; routing rules do not ask them |
 
-Rules that read the turn's images (`input.image`) or videos (`input.video`) can
-resolve to it.
+Rules that read the request's images (`input.image`) or the current turn's
+videos (`input.video`) can resolve to it.
 
 ## Built-in questions
 

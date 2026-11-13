@@ -24,7 +24,7 @@ Frontend (port 9190), available in both modes:
 | `vsr_model_runtime_replica_ejections_total` | `deployment`, `replica` | Replicas taken out of dispatch after consecutive exchanges ran out of their deadline. |
 | `vsr_model_runtime_replica_readmissions_total` | `deployment`, `replica`, `reason` | Ejected replicas returned to dispatch: `cooldown` when the cool-down ended, `answered` when an exchange succeeded. |
 | `vsr_model_runtime_ready` | `deployment` | 1 while the deployment answers. |
-| `vsr_model_runtime_requests_total` | `deployment`, `outcome` | Calls by outcome: `ok`, `timeout`, `unavailable`, `overloaded`, `rejected`, `failed`. |
+| `vsr_model_runtime_requests_total` | `deployment`, `outcome` | Calls by outcome: `ok`, `timeout`, `cancelled`, `unknown_deployment`, `unavailable`, `overloaded`, `rejected`, `failed`. `unknown_deployment` records under `deployment="unknown"` for a deployment the configuration does not declare. |
 | `vsr_model_runtime_request_duration_seconds` | `deployment`, `surface` | Latency of calls that reached the runtime. |
 | `vsr_model_runtime_transport_seconds` | `deployment`, `surface` | The part of each call's exchange outside the runtime: the router's time for the HTTP exchange minus the runtime's `Server-Timing` total. |
 | `vsr_model_runtime_server_seconds` | `deployment`, `surface`, `phase` | The runtime's own time for each call's exchange, by `phase`: `parse`, `tokenize`, `queue`, `forward`, `post`, `serialize`, and `other` for the rest of its total. |

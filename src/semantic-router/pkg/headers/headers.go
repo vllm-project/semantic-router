@@ -84,15 +84,14 @@ const (
 	VSRResponsePath = "x-vsr-response-path"
 
 	// ResponsePath* are the valid values for VSRResponsePath.
-	ResponsePathUpstream        = "upstream"         // forwarded to and answered by the upstream model
-	ResponsePathCache           = "cache"            // served from semantic cache, no upstream call
-	ResponsePathFastResponse    = "fast_response"    // short-circuited by the fast_response plugin
-	ResponsePathLooper          = "looper"           // produced by the agent looper
-	ResponsePathImageGeneration = "image_generation" // produced by the image-generation path
-	ResponsePathBlocked         = "blocked"          // an answer the response_guard plugin refused
-	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
-	ResponsePathError           = "error"            // router-side error response
-	ResponsePathFallback        = "fallback"         // produced by upstream error fallback
+	ResponsePathUpstream     = "upstream"      // forwarded to and answered by the upstream model
+	ResponsePathCache        = "cache"         // served from semantic cache, no upstream call
+	ResponsePathFastResponse = "fast_response" // short-circuited by the fast_response plugin
+	ResponsePathLooper       = "looper"        // produced by the agent looper
+	ResponsePathBlocked      = "blocked"       // an answer the response_guard plugin refused
+	ResponsePathRateLimited  = "rate_limited"  // rejected by rate limiting
+	ResponsePathError        = "error"         // router-side error response
+	ResponsePathFallback     = "fallback"      // produced by upstream error fallback
 
 	// VSRSelectedRecipe identifies the isolated routing profile selected by the
 	// inbound virtual model. Concrete backend model requests omit this header.
@@ -110,9 +109,10 @@ const (
 	RouterReplayID = "x-vsr-replay-id"
 
 	// VSRWarnings lists, as an RFC 8941 list, the warnings about the response:
-	// the codes of the response_guard rules that annotated the answer, in rule
-	// order, then the protocol translation losses. Detail stays in the replay
-	// record.
+	// scan_partial when a request-stage guard rule read only part of a long
+	// input, the codes of the response_guard rules that annotated the answer,
+	// in rule order, then the protocol translation losses. Detail stays in the
+	// replay record.
 	VSRWarnings = "x-vsr-warnings"
 
 	// VSRCost is the response's usage priced with the served model's configured
@@ -123,12 +123,14 @@ const (
 	VSRCostCurrency = "x-vsr-cost-currency"
 )
 
-// Warning codes in VSRWarnings: a response_guard rule over a hallucination
-// signal (unverified_factual when the answer could not be checked), over a
+// Warning codes in VSRWarnings: a request-stage guard rule that read only
+// part of a long input; a response_guard rule over a hallucination signal
+// (unverified_factual when the answer could not be checked), over a
 // response-stage jailbreak signal, or over any other signal; a protocol
 // translation loss, with its action, reason and field; and the marker of
 // warnings left out to keep the header bounded, with their count.
 const (
+	WarningScanPartial       = "scan_partial"
 	WarningHallucination     = "hallucination"
 	WarningUnverifiedFactual = "unverified_factual"
 	WarningJailbreak         = "response_jailbreak"
@@ -144,11 +146,13 @@ type WarningCode struct {
 	Doc string `json:"doc"`
 }
 
-// WarningCodes lists the codes of x-vsr-warnings: the response_guard codes,
-// then the protocol and truncation members.
+// WarningCodes lists the codes of x-vsr-warnings: the request's scan
+// warning, the response_guard codes, then the protocol and truncation
+// members.
 func WarningCodes() []WarningCode { return slices.Clone(warningCodes) }
 
 var warningCodes = []WarningCode{
+	{WarningScanPartial, "A request-stage guard rule (`jailbreak`, `safety` or `pii`) read only some of a long input's windows, or none, and the request was routed on what it read."},
 	{WarningHallucination, "A `response_guard` rule over a `hallucination` signal flagged the answer."},
 	{WarningUnverifiedFactual, "The answer was factual, but a `hallucination` rule had no context to check it against."},
 	{WarningJailbreak, "A `response_guard` rule over a response-stage `jailbreak` signal flagged the answer."},
