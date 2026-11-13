@@ -269,6 +269,16 @@ domains:
       - python3 -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
     verifications: []
 
+  codex-plugin:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - .agents/plugins/**
+      - src/agent-harness/codex/**
+    checks:
+      - python3 -m unittest discover -s src/agent-harness/codex/hooks
+    verifications: []
+
   vela-omni-artifacts:
     owner: model-runtime
     paths:
