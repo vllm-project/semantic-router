@@ -232,13 +232,22 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
             recipe = default
     if recipe is None:
         return None
+    # a decision's modelRefs, and the models its candidateIterations walk
     picked = [
         ref.get("model")
         for r in recipes
         if r.get("name") == recipe
         for decision in r.get("decisions") or []
         if isinstance(decision, dict)
-        for ref in decision.get("modelRefs") or []
+        for ref in [
+            *(decision.get("modelRefs") or []),
+            *(
+                one
+                for it in decision.get("candidateIterations") or []
+                if isinstance(it, dict)
+                for one in it.get("models") or []
+            ),
+        ]
         if isinstance(ref, dict) and ref.get("model")
     ]
     fallback = _get(doc, "providers", "defaults", "model")

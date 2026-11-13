@@ -70,6 +70,12 @@ def _options(command):
                 " Code then neither assumes its own window nor warns that it does not know"
                 " the entrypoint, and Codex budgets with it.",
             ),
+            click.option(
+                "--vsr",
+                is_flag=True,
+                help="Also set up vSR (System One) beside the agent: its plugin,"
+                " asking this listener's System One model.",
+            ),
             click.option("--yes", is_flag=True, help="Write without asking."),
             click.option(
                 "--launch",
@@ -112,6 +118,7 @@ def claude_code(
     undo,
     context_window,
     yes,
+    vsr,
     launch,
     harness_args,
     scope,
@@ -120,7 +127,7 @@ def claude_code(
     """Route Claude Code's model calls through the gateway."""
     env = dict(os.environ)
     path = hc.claude_settings_path(scope, Path.cwd(), env)
-    _check_launch(launch, harness_args, undo, status_line)
+    _check_launch(launch, harness_args, undo, status_line, vsr)
     if undo:
         _undo(path.parent)
         return
@@ -157,26 +164,42 @@ def claude_code(
         changes.append(script)
     changes.append(hc.Change(path, "json-env", values))
     label = f"<${api_key_env}>" if from_env else token
-    if not _run("claude-code", changes, path.parent, label, doc, dry_run, yes, notes):
+    options = _vsr_options(gateway, doc) if vsr else None
+    if options and not dry_run and shutil.which("claude") is None:
+        raise click.ClickException(
+            "--vsr runs claude plugin, and claude is not on PATH."
+        )
+    plugin_id = _vsr_plugin_id(env) if options else None
+    plan = _vsr_claude_plan(options, plugin_id, api_key_env if from_env else None)
+    if not _run(
+        "claude-code", changes, path.parent, label, doc, dry_run, yes, notes, plan
+    ):
         return
+    if options:
+        _setup_vsr_claude(
+            env, plugin_id, options, token if from_env else "", path.parent
+        )
     if scope == "project":
         for kept in hc.keep_out_of_git([path, path.parent / hc.MANIFEST], Path.cwd()):
             echo(f"Added {kept} to this repository's .git/info/exclude.")
     if from_env:
         warning(f"{path} now holds the API key from ${api_key_env}.")
-    if env.get(hc.API_KEY):
+    overrides = list(hc.claude_overrides(Path.cwd(), values)) if scope == "user" else []
+    # a project file that sets the key itself sends it again, and is warned about below
+    if env.get(hc.API_KEY) and all(hc.API_KEY not in keys for _, keys in overrides):
         echo(
             "The ANTHROPIC_API_KEY your shell exports no longer goes to the gateway:"
             " the settings set it empty, and Claude Code takes the settings."
         )
-    if scope == "user":
-        for found, keys in hc.claude_overrides(Path.cwd(), values):
+    if overrides:
+        for found, keys in overrides:
             warning(
                 f"{found} sets {', '.join(keys)}: Claude Code started in this directory"
                 f" takes those over {path}. Remove them there, connect here with --scope"
                 " project, or start with --launch."
             )
-    _check_vsr(env, gateway, doc, api_key_env if from_env else None)
+    if not vsr:
+        _check_vsr(env, gateway, doc, api_key_env if from_env else None)
     if not context_window:
         echo(
             f"Claude Code does not know {model}, so it assumes a window of its own"
@@ -204,6 +227,7 @@ def codex(
     undo,
     context_window,
     yes,
+    vsr,
     launch,
     harness_args,
     profile,
@@ -211,7 +235,7 @@ def codex(
     """Route Codex CLI through the gateway with a profile of its own."""
     env = dict(os.environ)
     home = hc.codex_home(env)
-    _check_launch(launch, harness_args, undo)
+    _check_launch(launch, harness_args, undo, vsr=vsr)
     if undo:
         _undo(home)
         return
@@ -233,14 +257,21 @@ def codex(
             dry_run,
         )
     change = hc.codex_change(home, profile, gateway, model, key_env, context_window)
-    if not _run("codex", [change], home, "", doc, dry_run, yes, notes):
+    changes = [change]
+    options = _vsr_options(gateway, doc) if vsr else None
+    plan = []
+    if options:
+        # the vSR plugin's own settings: what is there stays, the runtime is the listener's
+        held = home / "vsr.json"
+        kept = json.loads(held.read_text(encoding="utf-8")) if held.exists() else {}
+        text = json.dumps({**kept, **options}, indent=2) + "\n"
+        changes.append(hc.Change(held, "file", {"file": text}))
+        plan = [shlex.join(argv) for argv in VSR_CODEX_INSTALL]
+    if not _run("codex", changes, home, "", doc, dry_run, yes, notes, plan):
         return
     if from_env:
         echo(f"Codex reads the key from ${api_key_env}; keep it set when you start it.")
-    echo(
-        "Codex gets the gateway's routing and plugins (System Two); vSR's checks are"
-        " not available for Codex yet."
-    )
+
     for found in hc.codex_model_overrides(Path.cwd()):
         warning(
             f"{found} sets model, which Codex asks for instead of {model} once it trusts"
@@ -255,7 +286,9 @@ def codex(
     echo(f"Start Codex with: codex --profile {profile}")
 
 
-def _run(harness, changes, manifest_dir, key_label, doc, dry_run, yes, notes=()):
+def _run(
+    harness, changes, manifest_dir, key_label, doc, dry_run, yes, notes=(), plan=()
+):
     """Show the changes, check the Router configuration, and write; False on a dry run."""
     heading(f"vllm-sr connect {harness}")
     try:
@@ -273,6 +306,10 @@ def _run(harness, changes, manifest_dir, key_label, doc, dry_run, yes, notes=())
     _check_router(harness, doc)
     for note in notes:
         echo(note)
+    if plan:
+        echo("vSR (System One) beside it, then:")
+        for line in plan:
+            echo(f"  {line}")
     if dry_run:
         echo("Dry run: nothing was written.")
         return False
@@ -283,13 +320,13 @@ def _run(harness, changes, manifest_dir, key_label, doc, dry_run, yes, notes=())
     return True
 
 
-def _check_launch(launch, harness_args, undo, status_line=False) -> None:
+def _check_launch(launch, harness_args, undo, status_line=False, vsr=False) -> None:
     if harness_args and not launch:
         raise click.UsageError(
             "arguments after -- go to the harness only with --launch"
         )
-    if launch and (undo or status_line):
-        flag = "--undo" if undo else "--status-line"
+    if launch and (undo or status_line or vsr):
+        flag = "--undo" if undo else "--status-line" if status_line else "--vsr"
         raise click.UsageError(f"--launch writes nothing, so it does not take {flag}")
 
 
@@ -330,15 +367,16 @@ def _launch(harness, argv, doc, gateway, model, token, notes, dry_run, settings=
     if found is None:
         raise click.ClickException(f"{argv[0]} is not on PATH.")
     with tempfile.TemporaryDirectory(prefix="vllm-sr-launch-") as private:
+        path = Path(private) / "settings.json"
         if settings is not None:
             # --settings wins over the user's and the project's settings (2.1.323)
-            path = Path(private) / "settings.json"
-            hc.write_private(path, json.dumps(settings, indent=2))
             argv = [argv[0], "--settings", str(path), *argv[1:]]
         echo(f"Starts: {shlex.join(argv)}")
         if dry_run:
             echo("Dry run: nothing was started.")
             raise click.exceptions.Exit(0)
+        if settings is not None:
+            hc.write_private(path, json.dumps(settings, indent=2))
         _probe(gateway, harness, model, token, written=False)
         # Ctrl-C belongs to the harness while it runs
         previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -383,6 +421,79 @@ def _check_router(harness: str, doc: dict | None) -> None:
         echo("  " + finding.snippet.replace("\n", "\n  "))
 
 
+# vSR beside the agent (System One): the plugin, from this repository's marketplace.
+VSR_PLUGIN = "vsr@vllm-sr"
+VSR_CLAUDE_INSTALL = (
+    ["claude", "plugin", "marketplace", "add", "vllm-project/semantic-router"],
+    ["claude", "plugin", "install", VSR_PLUGIN],
+)
+# The Codex plugin installs from a checkout until it is on main (#6413).
+VSR_CODEX_INSTALL = (
+    ["codex", "plugin", "marketplace", "add", "<semantic-router checkout>"],
+    ["codex", "plugin", "add", VSR_PLUGIN],
+)
+
+
+def _vsr_options(gateway: str, doc: dict | None) -> dict[str, str] | None:
+    """The runtime the vSR plugin asks: this listener's System One, or None when it
+    publishes no model."""
+    models = rc.system_one_models(doc)
+    if not models:
+        echo(
+            "System One: this listener publishes no model (listeners[].systemone), so"
+            " vSR is not set up."
+        )
+        return None
+    return {
+        "runtimeUrl": f"{gateway.rstrip('/')}/v1/decisions",
+        "runtimeModel": models[0],
+    }
+
+
+def _vsr_claude_plan(options, plugin_id, key_env) -> list[str]:
+    """What --vsr runs for Claude Code, as shown before it runs (the key named, never
+    shown)."""
+    if not options:
+        return []
+    shown = {
+        **_claude_vsr_values(options),
+        **({"runtimeToken": f"<${key_env}>"} if key_env else {}),
+    }
+    install = [] if plugin_id else [shlex.join(argv) for argv in VSR_CLAUDE_INSTALL]
+    configure = f"claude plugin configure {plugin_id or VSR_PLUGIN} --values-stdin"
+    return [*install, f"{configure} <<< '{json.dumps(shown)}'"]
+
+
+def _claude_vsr_values(options: dict[str, str]) -> dict[str, str]:
+    # a remote runtime, and the router app off: the gateway picks each call's model
+    return {"runtime": "remote", **options, "router": "false"}
+
+
+def _setup_vsr_claude(env, plugin_id, options, token, manifest_dir) -> None:
+    """Install the plugin when it is missing and set its runtime through Claude Code's
+    own command, which keeps the token in its credential store. --undo puts back the
+    options it changed; the token stays."""
+    for argv in () if plugin_id else VSR_CLAUDE_INSTALL:
+        _must(argv, env)
+    plugin_id = plugin_id or VSR_PLUGIN
+    configure = ["claude", "plugin", "configure", plugin_id]
+    before = _plugin_inputs(env, plugin_id)
+    values = _claude_vsr_values(options)
+    secret = {"runtimeToken": token} if token else {}
+    _must([*configure, "--values-stdin"], env, json.dumps({**values, **secret}))
+    hc.record_plugin(manifest_dir, plugin_id, before, values)
+    success(
+        f"vSR: {plugin_id} asks {options['runtimeModel']} at {options['runtimeUrl']}."
+    )
+
+
+def _must(argv: list[str], env: dict[str, str], stdin: str | None = None) -> None:
+    try:
+        subprocess.run(argv, env=env, input=stdin, text=True, check=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise click.ClickException(f"{shlex.join(argv)} failed: {exc}") from exc
+
+
 def _check_vsr(
     env: dict[str, str], gateway: str, doc: dict | None, key_env: str | None = None
 ) -> None:
@@ -420,12 +531,11 @@ def _check_vsr(
         )
 
 
-def _vsr_plugin(env: dict[str, str]) -> dict | None:
+def _vsr_plugin_id(env: dict[str, str]) -> str | None:
+    """The enabled vSR plugin's id (vsr@<marketplace>), or None."""
     claude = shutil.which("claude")
-    if claude is None:
-        return None
-    listed = _json_of([claude, "plugin", "list", "--json"], env)
-    plugin_id = next(
+    listed = _json_of([claude, "plugin", "list", "--json"], env) if claude else None
+    return next(
         (
             p.get("id")
             for p in listed or []
@@ -433,9 +543,28 @@ def _vsr_plugin(env: dict[str, str]) -> dict | None:
         ),
         None,
     )
+
+
+def _vsr_plugin(env: dict[str, str]) -> dict | None:
+    plugin_id = _vsr_plugin_id(env)
     if plugin_id is None:
         return None
-    return _json_of([claude, "plugin", "configure", plugin_id, "--json"], env) or {}
+    return _json_of(["claude", "plugin", "configure", plugin_id, "--json"], env) or {}
+
+
+def _plugin_inputs(env: dict[str, str], plugin_id: str) -> dict[str, str]:
+    """A plugin's option values as strings; an option never set reads as its
+    default, since `inputs` gives an unset string option as empty."""
+    found = _json_of(["claude", "plugin", "configure", plugin_id, "--json"], env) or {}
+    inputs, configured = found.get("inputs") or {}, set(found.get("configured") or ())
+    schema = found.get("schema") or {}
+    values = {
+        key: value if key in configured else schema.get(key, {}).get("default", value)
+        for key, value in inputs.items()
+    }
+    return {
+        k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in values.items()
+    }
 
 
 def _json_of(argv: list[str], env: dict[str, str]):
@@ -479,6 +608,17 @@ def _probe(
 
 
 def _undo(manifest_dir: Path) -> None:
+    env = dict(os.environ)
+    for plugin_id, back in hc.plugin_undo(
+        manifest_dir, lambda one: _plugin_inputs(env, one)
+    ):
+        if back:
+            _must(
+                ["claude", "plugin", "configure", plugin_id, "--values-stdin"],
+                env,
+                json.dumps(back),
+            )
+            echo(f"restored {plugin_id}: {', '.join(sorted(back))}")
     try:
         for line in hc.undo_changes(manifest_dir):
             echo(line)

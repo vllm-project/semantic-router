@@ -68,7 +68,7 @@ class Change:
     def shown(self, text: str, key_label: str) -> str:
         """The part of text the command owns, for display, with no key in it."""
         if self.kind == "file":
-            return text
+            return hide_secrets(text)
         held = {k: v for k, v in self.raw(text).items() if v is not None}
         if held.get(TOKEN_KEY):
             written = held[TOKEN_KEY] == self.values[TOKEN_KEY]
@@ -79,6 +79,28 @@ class Change:
         if held:
             shown["env"] = held
         return json.dumps(shown, indent=2) + "\n" if shown else ""
+
+
+# A setting whose name says it holds a credential, and an `env_key`, which only names
+# the variable that does.
+SECRET_NAME = re.compile(
+    r"token|secret|password|passwd|api[_-]?key|authorization|credential", re.I
+)
+SETTING_LINE = re.compile(r'(\s*"?([\w.-]+)"?\s*[=:]\s*)(.*?)(,?\s*)$')
+
+
+def hide_secrets(text: str) -> str:
+    """A whole file as shown: a line that sets a credential, or a bearer header,
+    keeps its name and loses its value."""
+    lines = []
+    for line in text.splitlines(keepends=True):
+        found = SETTING_LINE.match(line)
+        if found and not found.group(2).lower().endswith("env_key"):
+            name, value = found.group(2), found.group(3)
+            if SECRET_NAME.search(name) or "bearer " in value.lower():
+                line = f'{found.group(1)}"<hidden>"{found.group(4)}'
+        lines.append(line)
+    return "".join(lines)
 
 
 # --- Claude Code -----------------------------------------------------------------
@@ -374,6 +396,42 @@ def apply_changes(changes: list[Change], manifest_dir: Path) -> Path:
         write_private(change.path, new, always=change.kind == "json-env")
     write_private(manifest_path, json.dumps(record, indent=2) + "\n", always=True)
     return manifest_path
+
+
+def record_plugin(
+    manifest_dir: Path, plugin_id: str, before: dict, written: dict
+) -> None:
+    """Record a plugin's options as set through its harness's command: a second run
+    keeps each option's first "before", as files do."""
+    manifest_path = manifest_dir / MANIFEST
+    record = (
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest_path.exists()
+        else {"files": []}
+    )
+    keys = record.setdefault("plugins", {}).setdefault(plugin_id, {})
+    for key, value in written.items():
+        keys.setdefault(key, {"before": before.get(key)})["written"] = value
+    manifest_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+
+
+def plugin_undo(manifest_dir: Path, inputs) -> list[tuple[str, dict]]:
+    """For each recorded plugin, the options to set back: those still as written,
+    each to its value before. `inputs(plugin_id)` reads what a plugin holds now."""
+    manifest_path = manifest_dir / MANIFEST
+    if not manifest_path.exists():
+        return []
+    plugins = json.loads(manifest_path.read_text(encoding="utf-8")).get("plugins", {})
+    undo = []
+    for plugin_id, keys in plugins.items():
+        now = inputs(plugin_id)
+        back = {
+            key: entry["before"]
+            for key, entry in keys.items()
+            if now.get(key) == entry["written"] and entry["before"] is not None
+        }
+        undo.append((plugin_id, back))
+    return undo
 
 
 def undo_changes(manifest_dir: Path) -> list[str]:

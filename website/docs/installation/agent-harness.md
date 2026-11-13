@@ -89,8 +89,8 @@ adds guard, shield, redact and check to it without a gateway. Route Claude Code
 or Codex CLI through the Router when your own models or provider keys should
 answer: the Router then chooses the model for every call, the main
 conversation included, while vSR keeps judging tool output and shell commands
-inside Claude Code. Codex reaches the Router the same way; vSR's checks are not
-available for Codex yet.
+inside Claude Code. Codex reaches the Router the same way; its vSR plugin requires a checkout
+with Codex plugin support (PR #6413).
 
 The two harnesses need different Router-wide settings: the losses the Router
 accepts, the headers that identify a session and a subagent, and defaults for
@@ -291,14 +291,33 @@ and score risky commands far below the line guard holds at, so publish
 vela3-lite for vSR.
 
 ```bash
-echo '{"runtime": "remote", "runtimeModel": "vela3-lite",
-  "runtimeUrl": "http://localhost:8899/v1/decisions"}' \
-  | claude plugin configure vsr@vllm-sr --values-stdin
+vllm-sr connect claude-code --config router.yaml --vsr
+vllm-sr connect codex --config router.yaml --vsr
 ```
 
-System One checks the listener's API keys too. On a listener with keys, add
-`"runtimeToken"` with the key, which `vllm-sr connect` fills in from
-`$VLLM_SR_API_KEY` in the command it prints.
+One command configures the gateway (System Two) and vSR (System One). For
+Claude Code it installs `vsr@vllm-sr` when it is missing, then sets the plugin's
+options through `claude plugin configure`: a remote runtime, the gateway's
+`/v1/decisions`, the first published System One model, and `router: false` so
+the gateway chooses the models. When the API key variable is set it also passes
+`runtimeToken`, which Claude Code keeps in its credential store, not in
+`settings.json`; the preview names the variable and never shows the key.
+
+Codex writes `$CODEX_HOME/vsr.json` (default `~/.codex/vsr.json`) with
+`runtimeUrl` and `runtimeModel`, and prints these installation steps:
+
+```bash
+codex plugin marketplace add <path to a semantic-router checkout>
+codex plugin add vsr@vllm-sr
+```
+
+Use a checkout containing the Codex plugin from PR #6413. `vsr.json` keeps the
+settings it already had. Both harnesses preview everything with `--dry-run`,
+including the plugin commands, which run only when writing. `--undo` sets back
+the plugin options the command changed (an option that was never set returns to
+its default) but leaves the plugin installed and the token in place. If the
+listener publishes no System One model, the command says so and skips System
+One. `--vsr` does not combine with `--launch`, which writes nothing.
 
 A Router rule about what the agent reads, such as a prompt injection in a file
 or a web page, should read the tool results and leave the user turn out

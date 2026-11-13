@@ -999,6 +999,7 @@ Route Claude Code's model calls through the gateway.
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
 | `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--vsr` | Also set up vSR (System One) beside the agent: its plugin, asking this listener's System One model. Default: false. |
 | `--yes` | Write without asking. Default: false. |
 | `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
@@ -1023,6 +1024,7 @@ Route Codex CLI through the gateway with a profile of its own.
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
 | `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--vsr` | Also set up vSR (System One) beside the agent: its plugin, asking this listener's System One model. Default: false. |
 | `--yes` | Write without asking. Default: false. |
 | `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
