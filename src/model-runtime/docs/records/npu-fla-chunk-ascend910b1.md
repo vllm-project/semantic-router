@@ -95,8 +95,11 @@ the reference output; 60 requests × 24 GDN layers = 1,440 interleaved calls):
 - The opt-in (`FLA_NPU_APPROXIMATE`) stays default-off everywhere.
 - The vela3_d3 family consents for its own packages: a vela3_d3 package is
   validated as its own model (its own registry pin, tests and surfaces), so
-  its spec carries `approximate_kernels=True` where the decision3 base's
-  dtype consented only quantized packages. The activation chain is measured
+  its spec carries `approximate_kernels=True` scoped to the npu
+  (`DtypePolicy.approximate_accelerators`) where the decision3 base's dtype
+  consented only quantized packages -- the CUDA and ROCm approximate kernels
+  (`cuda-fused-approximate.md`) keep the base's consent, which is off; no GPU
+  record covers this family. The activation chain is measured
   SoC + package consent + the explicit opt-in; without the opt-in, and for
   the released decision3/d3 BF16 packages (whose 950DT verdict stands), the
   serving path is unchanged.
