@@ -56,15 +56,17 @@ config:
               use_reasoning: false
       signals:
         fact_check:
+          # provider-mocker answers the chosen option with probability 0.97,
+          # so 0.9 separates its choice from the other option.
           - name: needs_fact_check
             description: Query contains factual claims that should be verified against context
             predicate:
-              gte: 0.9997
+              gte: 0.9
           - name: no_fact_check_needed
             description: Query is creative, code, or opinion based - no fact verification needed
             labels: [NO_FACT_CHECK_NEEDED]
             predicate:
-              gt: 0.0003
+              gte: 0.9
         # Checked from the model's answer against the tool context the request
         # carried. The response_guard above annotates the answer on it.
         hallucination:
@@ -101,16 +103,9 @@ config:
             question_types: [choice, noul, span]
       bindings:
         hallucination: fake-systemone
-# The detector is remote, but the router still loads two local models before it
-# serves: the startup embedding download, gated only on
-# !EmbeddingModels.UsesRemoteEmbeddingBackend() and the model_catalog.embeddings
-# *_model_path values (pkg/modeldownload/feature_gates.go), and the fact-check
-# model (vela3-fast by default, about 7 GB once loaded) that gates when
-# detection runs. 2Gi held while this profile was selection: manual and never
-# ran in CI; on the PR lane the pod is OOMKilled during fact-check
-# initialization before the startup probe passes. 8Gi leaves vela3-fast little
-# room beside the embedding process (the Router restarted once while loading in
-# CI), so this profile gets the 12Gi limit the default model needs.
+        fact_check: fake-systemone
+# provider-mocker answers the fact-check and hallucination rules, so the
+# Router loads no local model.
 resources:
   limits:
     cpu: '2'

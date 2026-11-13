@@ -278,6 +278,12 @@ prompt. Reuse a salt for requests that may share cached prefixes. The Router
 also preserves `chat_template_kwargs`, such as `enable_thinking`. These
 extensions are rejected when the target protocol cannot represent them.
 
+`logit_bias`, which maps token IDs to a bias from -100 to 100, reaches Chat
+backends the same way and is rejected for Responses and Messages backends. A
+vLLM backend that runs speculative decoding rejects `min_p` and `logit_bias`;
+[list them in the model's `unsupported_capabilities`](../installation/protocol-compatibility#sampling-controls-a-backend-rejects)
+to send that model requests without them.
+
 ### Responses API
 
 ```bash
@@ -420,8 +426,8 @@ its retrieval calls.
 When the Router cannot route a request, it answers the request itself and calls
 no backend. The error uses the client's protocol. In OpenAI Chat Completions and
 Responses errors, `error.code` is a stable reason code and `error.message` a
-short message. Apart from the budget errors, the message names no model,
-decision, or request content:
+short message. Apart from the budget and context-length errors, the message
+names no model, decision, or request content:
 
 ```json
 {"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
@@ -431,7 +437,7 @@ decision, or request content:
 | --- | --- | --- | --- |
 | `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
 | `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
-| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it, even without the estimate's reserves for structured data and media: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
+| `context_length_exceeded` | 400 | `invalid_request_error` | The Router's count puts the request beyond the band around the `context_window_size` of every model that could serve it (3% with a model's own tokenizer, 30% with the proxy tokenizer): beside the signals, for every model the request can reach, which cancels the signals still running, or after the decision, for its candidates. `param` is `messages`, and the message names the widest window and the request's estimated count, as OpenAI's does: `This model's maximum context length is 1048576 tokens. However, your request has an estimated 1100000 input tokens. Please reduce the length of the input.` Anthropic Messages clients get `prompt is too long: 1100000 tokens > 1048576 maximum`. See [the context window check](../installation/model-configuration#check-prompts-against-the-context-window). The [request budget check](#request-budget-errors) answers the same code. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
 | `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. The `on_unknown` member of `x-vsr-trace` names the decision. |
 | `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
@@ -479,7 +485,11 @@ truncate requests by themselves; opt into
 These counts are estimates. A backend can still reject a request; its valid
 HTTP status and meaningful message are retained. vLLM integer codes are exposed
 as strings in OpenAI-compatible errors: `BadRequestError` with `code: 400`
-becomes `invalid_request_error` with `code: "400"`.
+becomes `invalid_request_error` with `code: "400"`. A backend's refusal of a
+prompt longer than its window (vLLM's `param: input_tokens`, or a message about
+the context length, window or size, or Anthropic's `prompt is too long`) gets
+the code `context_length_exceeded` instead, and keeps the backend's message,
+which names its window and the prompt's count.
 
 A streaming request rejected before generation receives the same non-2xx JSON
 error, not a successful SSE stream. When Replay is enabled, it records the
@@ -559,6 +569,22 @@ the result text in `output` with `content_redacted: false`, cut to
 tool message carries it as `content` with `content_truncated`. Otherwise the
 step keeps only its call ID and `status`. Without `replay.detail`, outputs,
 request bodies and trajectory content are returned redacted either way.
+
+`capture_request_body: false` leaves request text out of the whole record: the
+body, `prompt`, `tool_definitions`, and the text, arguments and results of each
+request step in `tool_trace`. `capture_response_body: false` does the same for
+the response body, the response steps, `hallucination_spans`, and the provider
+replies in a fallback outcome's `execution_record`, where each failed attempt
+keeps its status code and a fixed reason. Those steps keep their type, tool
+name, call ID and status. The left-out text is absent, not marked
+`content_redacted`, which keeps marking content hidden from the reader's role
+and tool results that `capture_tool_results` keeps out. `max_tool_trace_bytes`
+cuts step text too, and a trajectory's user and assistant messages then carry
+`content_truncated`.
+
+Every Replay read route applies the same redaction. Without `replay.detail`,
+trajectory `routes` return `selection_reasoning` and `session_reason` empty,
+as the record's `route_diagnostics` do.
 
 ### Configured-rate cost estimates
 

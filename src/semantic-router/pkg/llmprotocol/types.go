@@ -233,6 +233,7 @@ type Sampling struct {
 	TopP              *float64
 	TopK              *int64 // -1 disables the limit for supporting providers.
 	MinP              *float64
+	LogitBias         map[string]float64 // Token ID to a bias from -100 to 100.
 	RepetitionPenalty *float64
 	MaxOutputTokens   *int64
 	Seed              *int64

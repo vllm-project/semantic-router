@@ -289,17 +289,26 @@ func decodeResponsesOutput(
 	return output, nil
 }
 
-func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) (llmprotocol.OutputItem, error) {
-	if err := validateResponsesOutputItemStatus(item); err != nil {
-		return llmprotocol.OutputItem{}, err
-	}
-	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
+const responsesItemMetadataReason = "response item metadata has no protocol-neutral representation"
+
+// responsesItemMetadataFields names the output item metadata that the neutral
+// contract cannot carry. Buffered and streamed replies drop the same set.
+func responsesItemMetadataFields(item responsesItemWire) map[string]bool {
+	return map[string]bool{
 		"output.async":             len(item.Async) > 0,
 		"output.caller":            len(item.Caller) > 0,
 		"output.encrypted_content": len(item.EncryptedContent) > 0,
 		"output.phase":             len(item.Phase) > 0,
 		"output.status":            item.Status != "" && item.Type != "image_generation_call",
-	}, "response item metadata has no protocol-neutral representation")
+	}
+}
+
+func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) (llmprotocol.OutputItem, error) {
+	if err := validateResponsesOutputItemStatus(item); err != nil {
+		return llmprotocol.OutputItem{}, err
+	}
+	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1,
+		responsesItemMetadataFields(item), responsesItemMetadataReason)
 	id := item.ID
 	if id == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
 		id = llmprotocol.StableID("response-output", fmt.Sprint(index), item.Type, item.CallID)

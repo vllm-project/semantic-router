@@ -130,7 +130,8 @@ func TestNativeFallbackEndsWithThePrimaryContext(t *testing.T) {
 	step, err = chain.Next(context.Background(), failedWith(http.StatusBadGateway, "bad gateway"))
 	require.NoError(t, err)
 	require.Nil(t, step.Call, "every eligible candidate was tried")
-	require.Nil(t, step.Immediate)
+	require.NotNil(t, step.Immediate, "the client gets the last candidate's outcome")
+	require.Equal(t, http.StatusBadGateway, step.Immediate.Status)
 
 	require.Equal(t, "model-primary", ctx.VSRSelectedModel)
 	require.Same(t, primaryRequest, ctx.SemanticRequest)

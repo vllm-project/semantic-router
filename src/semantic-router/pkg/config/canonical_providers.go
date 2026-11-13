@@ -42,7 +42,20 @@ type CanonicalProviderModel struct {
 	// schema IDs; omitted, the API's default (systemone/0.2 for systemone).
 	Schema           string            `yaml:"schema,omitempty"`
 	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
-	ModelFacts       `yaml:",inline"`
+	// UnsupportedCapabilities lists the request capabilities the model's
+	// backends reject: sampling_min_p or sampling_logit_bias, both of which a
+	// vLLM backend that runs speculative decoding rejects. The Router sends
+	// this model requests without those fields and reports each in
+	// x-vsr-warnings; other models still receive them.
+	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
+	// Tokenizer counts the model's prompts for the context window check: a
+	// Hugging Face repo id ([org/]name[@revision]), whose tokenizer.json the
+	// Router downloads beside its models, a built-in encoding (o200k_base,
+	// cl100k_base), or a path to a tokenizer.json. Omitted, it is the repo
+	// the model comes from, if any; else
+	// global.router.context_window.proxy_tokenizer counts.
+	Tokenizer  string `yaml:"tokenizer,omitempty"`
+	ModelFacts `yaml:",inline"`
 }
 
 // ModelFactFields are the keys of the facts a providers.models[] entry states.

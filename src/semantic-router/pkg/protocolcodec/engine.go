@@ -596,7 +596,7 @@ func positiveProtocolLimits(limits llmprotocol.Limits) bool {
 		limits.ToolDescriptionBytes, limits.IdentifierBytes, limits.SchemaBytes,
 		limits.MetadataBytes, limits.MetadataEntries, limits.MetadataKeyBytes,
 		limits.MetadataValueBytes, limits.ToolArgumentsBytes, limits.ReasoningEffortBytes,
-		limits.StopSequences, limits.StopBytes, limits.TextBytes,
+		limits.StopSequences, limits.StopBytes, limits.LogitBiasEntries, limits.TextBytes,
 		limits.MediaReferenceBytes, limits.MediaDataBytes, limits.SSEFrameBytes,
 		limits.UnfinishedArguments, limits.Events, limits.Diagnostics,
 	}

@@ -79,6 +79,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 
 func TestRecorderUpdateToolTraceClonesStoredValues(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
 	recordID, err := recorder.AddRecord(RoutingRecord{
 		ID:        "replay-tool-trace-1",
 		Decision:  "decision-a",
@@ -126,6 +127,7 @@ func TestRecorderUpdateToolTraceClonesStoredValues(t *testing.T) {
 
 func TestRecorderUpdateHallucinationStatusClonesStoredValues(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
 	recordID, err := recorder.AddRecord(RoutingRecord{
 		ID:        "replay-hallucination-1",
 		Decision:  "decision-a",
@@ -275,7 +277,7 @@ func assertFieldValue(
 
 func TestRecorderMaxToolTraceBytesPromptTruncation(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
-	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetCapturePolicy(true, true, 4096)
 	recorder.SetMaxToolTraceBytes(15)
 
 	id, err := recorder.AddRecord(RoutingRecord{
@@ -307,7 +309,7 @@ func TestRecorderMaxToolTraceBytesPromptTruncation(t *testing.T) {
 
 func TestRecorderMaxToolTraceBytesStepTruncation(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
-	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetCapturePolicy(true, true, 4096)
 	recorder.SetMaxToolTraceBytes(8)
 
 	trace := &ToolTrace{
@@ -345,7 +347,7 @@ func TestRecorderMaxToolTraceBytesStepTruncation(t *testing.T) {
 
 func TestRecorderMaxToolTraceBytesPreservesRawFields(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
-	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetCapturePolicy(true, true, 4096)
 	recorder.SetMaxToolTraceBytes(5)
 
 	fullArgs := `{"city":"San Francisco"}`
@@ -393,7 +395,7 @@ func TestRecorderMaxToolTraceBytesPreservesRawFields(t *testing.T) {
 
 func TestRecorderMaxToolTraceBytesFlagsToolDefinitionsTruncation(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
-	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetCapturePolicy(true, true, 4096)
 	recorder.SetMaxToolTraceBytes(10)
 
 	longToolDefs := `[{"type":"function","function":{"name":"really_long_tool_name","description":"truncate me"}}]`
@@ -420,7 +422,7 @@ func TestRecorderMaxToolTraceBytesFlagsToolDefinitionsTruncation(t *testing.T) {
 
 func TestRecorderUpdateToolTraceAppliesMaxToolTraceBytes(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
-	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetCapturePolicy(true, true, 4096)
 	recorder.SetMaxToolTraceBytes(6)
 
 	id, err := recorder.AddRecord(RoutingRecord{
@@ -575,7 +577,7 @@ func TestRecorderUpdateToolTraceAppliesMaxToolTraceSteps(t *testing.T) {
 
 func TestRecorderSetMaxToolTraceBytesZeroNoTruncation(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
-	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetCapturePolicy(true, true, 4096)
 	recorder.SetMaxToolTraceBytes(0) // no limit
 
 	longPrompt := "This is a very long prompt that would be truncated if the limit were active."

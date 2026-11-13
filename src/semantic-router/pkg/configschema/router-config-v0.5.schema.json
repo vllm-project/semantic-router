@@ -810,6 +810,19 @@
           },
           "type": "object"
         },
+        "unsupported_capabilities": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "sampling_min_p",
+              "sampling_logit_bias"
+            ]
+          },
+          "type": "array"
+        },
+        "tokenizer": {
+          "type": "string"
+        },
         "display_name": {
           "type": "string"
         },
@@ -1106,6 +1119,9 @@
         },
         "headers": {
           "$ref": "#/$defs/RouterHeadersConfig"
+        },
+        "context_window": {
+          "$ref": "#/$defs/ContextWindowConfig"
         }
       },
       "additionalProperties": false,
@@ -1668,6 +1684,25 @@
       "required": [
         "type"
       ]
+    },
+    "ContextWindowConfig": {
+      "properties": {
+        "margin": {
+          "type": "number",
+          "maximum": 0.5,
+          "minimum": 0
+        },
+        "proxy_margin": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
+        "proxy_tokenizer": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "ConversationFeature": {
       "properties": {
@@ -2372,6 +2407,16 @@
           "type": "integer",
           "maximum": 64,
           "minimum": 1
+        },
+        "max_tokens": {
+          "type": "integer",
+          "maximum": 1048576,
+          "minimum": 256
+        },
+        "reread_margin": {
+          "type": "number",
+          "maximum": 20,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -3051,6 +3096,11 @@
             "no_match",
             "unknown"
           ]
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         },
         "on_unknown": {
           "type": "string",
@@ -4645,6 +4695,11 @@
             "no_match",
             "unknown"
           ]
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         },
         "on_unknown": {
           "type": "string",
@@ -6310,6 +6365,11 @@
         },
         "timeout_ms": {
           "type": "integer"
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         }
       },
       "additionalProperties": false,

@@ -83,13 +83,13 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			name: "OpenAI Chat Completions",
 			wire: chatRequestWire{},
 			semantic: fields(
-				"frequency_penalty", "max_completion_tokens", "max_tokens", "messages", "metadata", "model",
+				"frequency_penalty", "logit_bias", "max_completion_tokens", "max_tokens", "messages", "metadata", "model",
 				"n", "parallel_tool_calls", "presence_penalty", "prompt_cache_key", "reasoning_effort",
 				"response_format", "seed", "stop", "store", "stream", "temperature", "tool_choice", "tools",
 				"top_p", "user",
 			),
 			unsupported: fields(
-				"audio", "function_call", "functions", "logit_bias", "logprobs", "modalities", "moderation",
+				"audio", "function_call", "functions", "logprobs", "modalities", "moderation",
 				"prediction", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
 			),
@@ -204,9 +204,11 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 				"completion_tokens", "completion_tokens_details", "compute_units", "prompt_tokens",
 				"prompt_tokens_details", "total_tokens",
 			),
-			// xAI, Groq and OpenRouter accounting fields on their Chat endpoints.
+			// xAI, Groq and OpenRouter accounting fields on their Chat endpoints,
+			// plus DeepSeek prompt cache token extensions.
 			extensions: fields(
 				"completion_time", "cost", "cost_details", "cost_in_usd_ticks", "is_byok", "num_sources_used",
+				"prompt_cache_hit_tokens", "prompt_cache_miss_tokens",
 				"prompt_time", "queue_time", "server_tool_use", "service_tier", "total_time",
 			),
 		},

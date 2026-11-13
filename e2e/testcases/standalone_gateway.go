@@ -267,13 +267,7 @@ func testStandaloneConfigRollout(ctx context.Context, client *kubernetes.Clients
 	if _, err = deployments.Patch(ctx, standaloneRouter, types.StrategicMergePatchType, []byte(restart), metav1.PatchOptions{}); err != nil {
 		return fmt.Errorf("roll out the Router: %w", err)
 	}
-	if err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 15*time.Minute, true, func(ctx context.Context) (bool, error) {
-		deployment, getErr := deployments.Get(ctx, standaloneRouter, metav1.GetOptions{})
-		if getErr != nil {
-			return false, nil
-		}
-		return rolloutComplete(deployment), nil
-	}); err != nil {
+	if err = waitForRollout(ctx, client, standaloneNamespace, standaloneRouter, 15*time.Minute); err != nil {
 		return fmt.Errorf("wait for the Router rollout: %w", err)
 	}
 
@@ -304,6 +298,18 @@ func setDecisionModel(document map[string]any, decision, model string) error {
 		return nil
 	}
 	return fmt.Errorf("the Router config has no decision %q", decision)
+}
+
+// waitForRollout waits until the Deployment's controller has seen its latest
+// spec and every replica is updated and available.
+func waitForRollout(ctx context.Context, client *kubernetes.Clientset, namespace, name string, timeout time.Duration) error {
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+		deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return rolloutComplete(deployment), nil
+	})
 }
 
 func rolloutComplete(deployment *appsv1.Deployment) bool {

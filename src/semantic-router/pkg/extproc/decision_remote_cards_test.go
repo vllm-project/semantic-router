@@ -1,8 +1,10 @@
 package extproc
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -220,6 +222,129 @@ func TestARemoteDeploymentReadsOnlyTheModalitiesItsCardLists(t *testing.T) {
 				t.Fatalf("the generation failed with %v, want it prepared", err)
 			case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
 				t.Fatalf("error %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// imageReadingAPI answers like a model that sees the image: 0.95 when the
+// call carries one, 0.05 when it does not. It keeps each call's body.
+type imageReadingAPI struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (a *imageReadingAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+	raw, _ := io.ReadAll(r.Body)
+	a.mu.Lock()
+	a.calls = append(a.calls, string(raw))
+	a.mu.Unlock()
+	var body struct {
+		Model     string                     `json:"model"`
+		Questions map[string]json.RawMessage `json:"questions"`
+	}
+	_ = json.Unmarshal(raw, &body)
+	noul := 0.05
+	if strings.Contains(string(raw), `"images":[`) {
+		noul = 0.95
+	}
+	answers := map[string]any{}
+	for id := range body.Questions {
+		answers[id] = map[string]any{"type": "noul", "noul": noul, "input_coverage": "complete"}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"model": body.Model, "answers": answers, "usage": map[string]int{"input_tokens": 3}})
+}
+
+// An image rule reads every image the backend will get, earlier turns and
+// tool results included. An image no decision model decodes, a remote URL or
+// a GIF, is left out: a coverage: full rule resolves it as its on_unscanned
+// says, and a truncating rule reads the images it can, as it does with tool
+// results it cannot read. The backend still gets the request as sent.
+func TestAnImageRuleResolvesAnImageItCannotReadAsOnUnscannedSays(t *testing.T) {
+	recipe := `    signals: {systemone: [{name: unsafe_image, input: {image: true}RULE, question: {type: noul, instructions: "Does the image show prohibited content?"}}]}
+    decisions:
+      - {name: block-unsafe-image, priority: 200, rules: {operator: AND, conditions: [{type: systemone, name: unsafe_image ON_ERROR}]}, modelRefs: [{model: deep}]}
+      - {name: everything-else, priority: 10, rules: {operator: AND, conditions: []}, modelRefs: [{model: fast}]}`
+	pngData := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+	png := "data:image/png;base64," + pngData
+	remote := "https://images.example.test/photo.png"
+	current := func(url string) string {
+		return `{"model":"vllm-sr/auto","messages":[{"role":"user","content":[{"type":"text","text":"describe this"},{"type":"image_url","image_url":{"url":"` + url + `"}}]}]}`
+	}
+	earlier := func(url string) string {
+		return `{"model":"vllm-sr/auto","messages":[{"role":"user","content":[{"type":"text","text":"describe this"},{"type":"image_url","image_url":{"url":"` + url + `"}}]},` +
+			`{"role":"assistant","content":"A landscape."},{"role":"user","content":"Tell me more."}]}`
+	}
+	toolResult := `{"model":"vllm-sr/auto","max_tokens":16,"messages":[{"role":"user","content":"Fetch the picture."},` +
+		`{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"fetch","input":{}}]},` +
+		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + pngData + `"}}]},{"type":"text","text":"Tell me more."}]}]}`
+	gif := "data:image/gif;base64,R0lGODlhAQABAAAAACw="
+	full, fullMatch := ", coverage: full", ", coverage: full, on_unscanned: match"
+	for name, tc := range map[string]struct {
+		path, body, rule, onError, sent, route string
+		anthropic, responses                   bool
+	}{
+		"inline png":                       {body: current(png), sent: png, route: "deep"},
+		"earlier turn png":                 {body: earlier(png), sent: png, route: "deep"},
+		"tool result png":                  {path: "/v1/messages", body: toolResult, sent: pngData, route: "deep", anthropic: true},
+		"generated image":                  {path: "/v1/responses", body: `{"model":"vllm-sr/auto","store":false,"input":[{"type":"image_generation_call","id":"ig_1","status":"completed","result":"` + pngData + `"},{"role":"user","content":"Tell me more."}]}`, sent: pngData, route: "deep", responses: true},
+		"remote url, truncating rule":      {body: current(remote), sent: remote, route: "fast"},
+		"remote url, on_unscanned match":   {body: current(remote), rule: fullMatch, sent: remote, route: "deep"},
+		"gif, on_unscanned match":          {body: current(gif), rule: fullMatch, route: "deep"},
+		"earlier remote url, match":        {body: earlier(remote), rule: fullMatch, sent: remote, route: "deep"},
+		"remote url, unknown and on_error": {body: current(remote), rule: full, onError: ", on_error: match", sent: remote, route: "deep"},
+		"remote url, unknown, no policy":   {body: current(remote), rule: full, sent: remote, route: "fast"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := &imageReadingAPI{}
+			raw := remoteCardYAML(strings.NewReplacer("RULE", tc.rule, " ON_ERROR", tc.onError).Replace(recipe), "{question_types: [noul], modalities: [text, image]}")
+			// A chat backend takes neither image tool results nor generated
+			// images; a Messages or Responses one reads them.
+			if tc.anthropic {
+				raw = strings.ReplaceAll(raw, "      backend_refs:", "      api_format: anthropic\n      backend_refs:")
+			}
+			if tc.responses {
+				raw = strings.ReplaceAll(raw, "      backend_refs:", "      api_format: responses\n      backend_refs:")
+				raw = strings.Replace(raw, "global:\n", "global:\n  services: {response_api: {enabled: true, store_backend: memory}}\n", 1)
+			}
+			router := newLooperRouter(t, moduleSystemOneRouterConfig(t, raw, api))
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			path := cmp.Or(tc.path, "/v1/chat/completions")
+			header := routing.Header{
+				{Name: ":method", Value: "POST"},
+				{Name: ":path", Value: path},
+				{Name: ":authority", Value: "router"},
+				{Name: ":scheme", Value: "http"},
+				{Name: "content-type", Value: "application/json"},
+				{Name: "anthropic-version", Value: "2023-06-01"},
+				{Name: "x-request-id", Value: "unread-image"},
+			}
+			plan, err := routing.NewEngine(router, routing.DefaultOptions).Plan(ctx, &routing.Request{Header: header, Body: []byte(tc.body)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer plan.Finish(nil)
+			if plan.Call == nil {
+				t.Fatalf("the request was not dispatched: %s", plan.Immediate.Body)
+			}
+			if plan.Call.Route != tc.route {
+				t.Fatalf("routed to %q, want %q", plan.Call.Route, tc.route)
+			}
+			if !strings.Contains(string(plan.Call.Request.Body), tc.sent) {
+				t.Fatalf("the backend request lost the client's image: %s", plan.Call.Request.Body)
+			}
+			api.mu.Lock()
+			defer api.mu.Unlock()
+			if len(api.calls) != 1 {
+				t.Fatalf("the decision model was asked %d times, want once: %v", len(api.calls), api.calls)
+			}
+			if strings.Contains(api.calls[0], remote) || strings.Contains(api.calls[0], gif) {
+				t.Fatalf("the decision model was sent an image it cannot decode: %s", api.calls[0])
 			}
 		})
 	}

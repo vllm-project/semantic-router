@@ -34,7 +34,7 @@ func TestWarningCodes(t *testing.T) {
 }
 
 func TestWarningCodesDocumentEachCode(t *testing.T) {
-	want := []string{WarningHallucination, WarningUnverifiedFactual, WarningJailbreak, WarningGuard, WarningProtocol, WarningTruncated}
+	want := []string{WarningScanPartial, WarningHallucination, WarningUnverifiedFactual, WarningJailbreak, WarningGuard, WarningProtocol, WarningTruncated}
 	var got []string
 	for _, code := range WarningCodes() {
 		got = append(got, code.Code)

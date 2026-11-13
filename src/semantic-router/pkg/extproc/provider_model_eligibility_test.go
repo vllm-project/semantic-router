@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -104,7 +105,7 @@ func TestCapabilitySelectionPreservesContextEligibility(t *testing.T) {
 			router.Config.ModelConfig["large-generator"] = params
 			decision.ModelRefs = append(decision.ModelRefs, config.ModelRef{Model: "large-generator"})
 		}
-		request := testNeutralRequest(primary, "draw a cat")
+		request := testNeutralRequest(primary, "draw a cat"+strings.Repeat(" with stripes", 2_000))
 		request.ImageGeneration = &llmprotocol.ImageGenerationOptions{}
 		ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 		ctx.VSRSelectedDecision = decision

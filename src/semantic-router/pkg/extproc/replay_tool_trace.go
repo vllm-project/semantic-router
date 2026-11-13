@@ -15,9 +15,9 @@ const (
 	replayToolStepAssistantFinalResponse = "assistant_final_response"
 	replayToolStepAssistantReasoningDone = "assistant_reasoning_complete"
 
-	replayToolSourceRequest  = "request"
-	replayToolSourceResponse = "response"
-	replayToolSourceStream   = "stream"
+	replayToolSourceRequest  = routerreplay.ToolTraceSourceRequest
+	replayToolSourceResponse = routerreplay.ToolTraceSourceResponse
+	replayToolSourceStream   = routerreplay.ToolTraceSourceStream
 )
 
 // extractSemanticPromptAndTools captures replay metadata from the semantic

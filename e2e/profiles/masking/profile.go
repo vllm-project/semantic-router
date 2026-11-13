@@ -19,7 +19,7 @@ const valuesFile = "e2e/profiles/masking/values.yaml"
 // resourceManifests reuses the plain provider-mocker manifest unchanged: it
 // is both the chat backend and the systemone deployment that answers the pii
 // rule. It is a generic fixture, not specific to the profile that first
-// added it -- response-jailbreak reuses the same manifest.
+// added it -- route-action reuses the same manifest.
 var resourceManifests = []string{
 	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/masking/gwapi-resources.yaml",
@@ -49,7 +49,7 @@ func NewProfile() *Profile {
 func (p *Profile) Name() string { return "masking" }
 
 func (p *Profile) Description() string {
-	return "Tests the masking decision plugin across Chat, Responses and Anthropic, and its fail-closed behavior when the PII deployment errors"
+	return "Tests the masking decision plugin across Chat, Responses and Anthropic, over coding-agent tool loops, and its fail-closed behavior when the PII deployment errors, plus session protection for agent sessions and subagents"
 }
 
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
@@ -64,7 +64,9 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"masking-cross-protocol",
 		"masking-keeps-echoed-placeholder",
-		"masking-classifier-unavailable-fails-closed",
+		"masking-agent-tool-loop",
+		"masking-scan-error-fails-closed",
+		"agent-session-holds-model",
 	}
 }
 

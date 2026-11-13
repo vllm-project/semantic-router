@@ -75,7 +75,8 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
-	startupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
+	startupWriter, closeStartupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
+	defer func() { runErr = errors.Join(runErr, closeStartupWriter()) }()
 	resolvedOpts, err := resolveRuntimeManagementOptions(opts, cfg)
 	if err != nil {
 		return recordStartupError(startupWriter, "resolve management API", err)
@@ -121,6 +122,9 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return recordStartupError(startupWriter, "ensure models are downloaded", err)
 	}
 	if opts.downloadOnly {
+		// A serving Router fetches tokenizers in the background; a
+		// download-only run, which fills the model volume, waits for them.
+		_ = modeldownload.EnsureTokenizers(ctx, cfg.ContextWindowTokenizers())
 		logging.ComponentEvent("router", "download_only_complete", map[string]interface{}{
 			"mode": "download_only",
 		})
@@ -133,7 +137,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	metricsServer = startMetricsServerIfEnabled(cfg, opts.metricsPort)
 	startProfilingServerIfEnabled(cfg, opts, &shutdownHooks)
 
-	_, err = initializeRuntimeDependencies(ctx, cfg, startupWriter, &shutdownHooks, runtimeRegistry)
+	err = initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
 	if err != nil {
 		return recordStartupError(startupWriter, "initialize runtime dependencies", err)
 	}
