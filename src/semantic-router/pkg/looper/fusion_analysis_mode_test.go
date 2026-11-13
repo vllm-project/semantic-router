@@ -107,6 +107,42 @@ func TestFusionAnalysisModeCachedPanelExecution(t *testing.T) {
 	}
 }
 
+func TestFusionRejectsEmptyFinalJudgeOutput(t *testing.T) {
+	tests := []struct {
+		name    string
+		mode    string
+		content string
+	}{
+		{name: "separate", mode: config.FusionAnalysisModeSeparate},
+		{name: "one_call", mode: config.FusionAnalysisModeOneCall},
+		{name: "none", mode: config.FusionAnalysisModeNone, content: " \n\t "},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			server := newFusionStubServer(t, func(model, prompt string) (string, int) {
+				require.Equal(t, "judge", model)
+				if strings.Contains(prompt, "return only valid JSON") {
+					return `{"consensus":["agree"],"contradictions":[],"partial_coverage":[],"unique_insights":[],"blind_spots":[]}`, http.StatusOK
+				}
+				return tc.content, http.StatusOK
+			})
+			defer server.Close()
+
+			req := newFusionTestRequest()
+			req.CachedPanel = cachedTestPanel()
+			req.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmFusion, Fusion: &config.FusionAlgorithmConfig{
+				Model:          "judge",
+				AnalysisModels: []string{"panel-a", "panel-b"},
+				AnalysisMode:   tc.mode,
+			}}
+
+			_, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+			require.ErrorContains(t, err, "empty final answer")
+		})
+	}
+}
+
 func TestFusionAnalysisModeStaysInternalAcrossPublicResponsePaths(t *testing.T) {
 	tests := []struct {
 		name      string

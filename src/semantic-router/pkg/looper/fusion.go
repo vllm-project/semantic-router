@@ -358,7 +358,23 @@ func (l *FusionLooper) runFusionFinal(
 	applyJSONActionOutputContract(req.OutputContractSpec, resp, panelResponses)
 	applyReferenceSelectionOutputContract(req.OutputContractSpec, resp, panelResponses)
 	applyFinalOutputContract(req.OutputContractSpec, resp)
+	if err := validateFusionFinalResponse(resp); err != nil {
+		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
+	}
 	return resp, nil
+}
+
+func validateFusionFinalResponse(resp *ModelResponse) error {
+	if resp == nil {
+		return fmt.Errorf("empty final answer")
+	}
+	if resp.HasToolCalls {
+		return nil
+	}
+	if strings.TrimSpace(resp.Content) == "" {
+		return fmt.Errorf("empty final answer")
+	}
+	return nil
 }
 
 func buildFusionAnalysisPrompt(cfg fusionExecutionConfig, original string, responses []*ModelResponse) string {
