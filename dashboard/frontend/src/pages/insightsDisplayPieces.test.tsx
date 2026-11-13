@@ -153,6 +153,25 @@ describe('Insights display pieces', () => {
     expect(formatSeconds(Number.POSITIVE_INFINITY)).toBe('Not recorded')
   })
 
+  it('folds the signals measured at zero, and keeps one with no confidence recorded in view', () => {
+    const record = {
+      signal_values: {
+        'pii:personal_data': 0,
+        'pii:personal_data:EMAIL_ADDRESS': 0,
+        'domain:code': 0.8,
+        'keyword:urgent': 2,
+      },
+      signal_confidences: { 'pii:personal_data': 0, 'pii:personal_data:EMAIL_ADDRESS': 0 },
+    } as unknown as InsightsRecord
+    const [field] = buildRoutingMetadataFields(record)
+    const html = renderToStaticMarkup(<>{field.value}</>)
+    const open = html.slice(0, html.indexOf('<details'))
+    expect(open).toContain('domain:code')
+    expect(open).toContain('keyword:urgent')
+    expect(open).not.toContain('pii:personal_data')
+    expect(html.slice(html.indexOf('<details'))).toContain('At zero (2)')
+  })
+
   it('folds only the raw System One values and keeps other signals and error matches in view', () => {
     const record = {
       signal_values: { ...VALUES, 'pii:personal_data': 0.4 },
@@ -175,7 +194,7 @@ describe('Insights display pieces', () => {
         decision: ['injection:jailbreak', 'difficulty:d0', 'needs_debugging'],
         keyword: ['urgent'],
       },
-      signal_values: { ...VALUES, 'systemone:injection:jailbreak': 0.99 },
+      signal_confidences: { ...VALUES, 'systemone:injection:jailbreak': 0.99 },
     } as unknown as InsightsRecord
     const html = renderToStaticMarkup(<InsightsSignalsCell record={record} />)
     expect(html).toContain('aria-label="99%"')
@@ -188,9 +207,10 @@ describe('Insights display pieces', () => {
   })
 
   it('draws a match without a recorded probability as text alone', () => {
+    // a keyword's value is a count and a System One score's a level: neither is a probability
     const record = {
-      signals: { keyword: ['urgent'] },
-      signal_values: {},
+      signals: { keyword: ['urgent', 'many_questions'], decision: ['effort'] },
+      signal_values: { 'keyword:many_questions': 4, 'systemone:effort': 0.8 },
     } as unknown as InsightsRecord
     const html = renderToStaticMarkup(<InsightsSignalsCell record={record} />)
     expect(html).toContain('Urgent')

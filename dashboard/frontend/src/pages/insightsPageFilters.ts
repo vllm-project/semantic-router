@@ -31,12 +31,7 @@ export function filterInsightsRecords(records: InsightsRecord[], filters: Insigh
     ) {
       return false
     }
-    if (
-      searchTerm &&
-      ![record.request_id, record.recipe, record.session_id].some((value) =>
-        value?.toLowerCase().includes(searchTerm),
-      )
-    ) {
+    if (searchTerm && !record.request_id?.toLowerCase().includes(searchTerm)) {
       return false
     }
 

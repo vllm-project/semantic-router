@@ -4,18 +4,15 @@ import styles from './InsightsPage.module.css'
 
 const SHOWN = 2
 
-// The probability recorded for a match, such as `injection:jailbreak` under
-// `systemone:injection:jailbreak`; undefined for a match with none (a keyword).
+// The confidence recorded for a match, such as `injection:jailbreak` under
+// `systemone:injection:jailbreak`; undefined for a match with none. Only a confidence
+// is a probability: a signal's value can be a count (a keyword's), a feature (a
+// conversation's) or a level (a System One score).
 function probabilityOf(record: InsightsRecord, type: string, value: string) {
-  const values = record.signal_values ?? {}
-  const exact = values[`${type}:${value}`] ?? values[`systemone:${value}`]
-  const found =
-    exact ??
-    Object.entries(values).find(
-      ([key]) => key.endsWith(`:${value}`) && key.split(':').length === value.split(':').length + 1,
-    )?.[1]
-  return typeof found === 'number' && Number.isFinite(found)
-    ? Math.min(1, Math.max(0, found))
+  const confidences = record.signal_confidences ?? {}
+  const found = confidences[`${type}:${value}`] ?? confidences[`systemone:${value}`]
+  return typeof found === 'number' && Number.isFinite(found) && found >= 0 && found <= 1
+    ? found
     : undefined
 }
 

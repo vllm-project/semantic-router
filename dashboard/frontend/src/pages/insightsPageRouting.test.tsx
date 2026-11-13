@@ -229,13 +229,66 @@ describe('recorded routing explanation', () => {
         <InsightsSessionRoutes trajectory={trajectory} />
       </MemoryRouter>,
     )
-    expect(html).toContain('Kept the model · protected')
+    expect(html).toContain('>kept<')
+    expect(html).toContain('aria-label="protected"')
     expect(html).toContain('Kept this session&#x27;s model')
     expect(html).toContain('Kept this agent&#x27;s model')
-    expect(html).toContain('Switched model')
+    expect(html).toContain('>switched<')
     expect(html).toContain('The previous model is not a candidate here')
     expect(html).toContain('title="session_scope_protect"')
     expect(html).toContain('title="previous_model_not_in_candidates"')
+  })
+
+  it('sums the session up and marks the request on the page, a switch and a hidden agent', () => {
+    const route = {
+      timestamp: '2026-09-14T00:00:00Z',
+      turn_index: 0,
+      decision: 'think_fast',
+      lifecycle_state: 'completed',
+      response_status: 200,
+      duration_ms: 2_000,
+      session_policy_applied: true,
+    }
+    const trajectory: InsightsTrajectory = {
+      object: 'router_replay.trajectory',
+      session_id: 'session-one',
+      recipe: 'default',
+      record_count: 3,
+      turn_count: 2,
+      messages: [],
+      routes: [
+        { ...route, record_id: 'a', selected_model: 'big', session_action: 'establish_baseline' },
+        // a viewer without raw access gets the agent and the reason emptied, not left out
+        { ...route, record_id: 'b', selected_model: 'big', agent: '', session_reason: '' },
+        {
+          ...route,
+          record_id: 'c',
+          timestamp: '2026-09-14T00:01:00Z',
+          turn_index: 1,
+          previous_model: 'big',
+          selected_model: 'small',
+          session_action: 'switch',
+          response_status: 503,
+          lifecycle_state: 'failed',
+        },
+      ],
+    }
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <InsightsSessionRoutes trajectory={trajectory} current="c" />
+      </MemoryRouter>,
+    )
+    expect(html).toContain('big<b>×2</b>')
+    expect(html).toContain('small<b>×1</b>')
+    expect(html).toContain('1 failed')
+    // from the first start to the last end, not the three durations added up
+    expect(html).toContain('>1m 2s<')
+    expect(html).toContain('>hidden<')
+    expect(html).toContain('Hidden from this viewer')
+    expect(html).not.toContain('>subagent 1<')
+    expect(html).toMatch(
+      /data-record-id="c" data-current="true" data-switch="true" aria-current="true"/,
+    )
   })
 
   it.each(['first', ''])('requests the exact record recipe scope %j', async (recipe) => {

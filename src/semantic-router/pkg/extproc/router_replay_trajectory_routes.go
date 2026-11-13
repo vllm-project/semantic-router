@@ -42,10 +42,20 @@ func buildTrajectoryRoutes(records []routerreplay.RoutingRecord) []trajectoryRou
 }
 
 // agentOf is the short hash of the agent identity the protection policy
-// recorded for a call, "" when the harness sent none.
+// recorded for a call, "" when the harness sent none or named the session
+// itself: Codex sends its root thread's id as both, and that thread is the
+// main conversation.
 func agentOf(record routerreplay.RoutingRecord) string {
 	identity, _ := record.SessionPolicy["identity"].(map[string]interface{})
-	agent, _ := identity["agent"].(map[string]interface{})
-	hash, _ := agent["hash"].(string)
+	agent := identityHash(identity["agent"])
+	if agent == identityHash(identity["session"]) {
+		return ""
+	}
+	return agent
+}
+
+func identityHash(part interface{}) string {
+	fields, _ := part.(map[string]interface{})
+	hash, _ := fields["hash"].(string)
 	return hash
 }
