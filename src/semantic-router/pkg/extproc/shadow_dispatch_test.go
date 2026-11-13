@@ -317,7 +317,9 @@ func TestShadowDispatchCapturesBoundedExcerpt(t *testing.T) {
 	cfg.CaptureResponseBody = true
 	cfg.MaxCaptureBytes = 6
 
-	run := runShadowRequest(t, router, primaryModel, cfg, nil)
+	run := runShadowRequest(t, router, primaryModel, cfg, func(ctx *RequestContext) {
+		ctx.RouterReplayPluginConfig.PromptCapture = config.PromptCaptureRaw
+	})
 	waitForShadow(t, router)
 
 	outcome := singleShadowOutcome(t, run)
@@ -326,6 +328,27 @@ func TestShadowDispatchCapturesBoundedExcerpt(t *testing.T) {
 	}
 	if outcome.Metadata["response_excerpt_truncated"] != "true" {
 		t.Fatal("expected excerpt truncation marker")
+	}
+}
+
+// Under prompt_capture: none a record keeps no text, so the shadow's own
+// capture_response_body stores no excerpt; the outcome keeps its sizes and
+// hash.
+func TestShadowDispatchKeepsNoExcerptUnderPromptCaptureNone(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	cfg := shadowTestPluginConfig()
+	cfg.CaptureResponseBody = true
+
+	run := runShadowRequest(t, router, primaryModel, cfg, nil)
+	waitForShadow(t, router)
+
+	outcome := singleShadowOutcome(t, run)
+	if _, ok := outcome.Metadata["response_excerpt"]; ok {
+		t.Fatalf("an excerpt of the shadow's answer was stored under prompt_capture: none: %v", outcome.Metadata)
+	}
+	if outcome.Metadata["response_sha256"] == "" || outcome.Metadata["response_bytes"] == "" {
+		t.Fatalf("the outcome lost its sizes or hash: %v", outcome.Metadata)
 	}
 }
 

@@ -225,7 +225,8 @@ type RouterReplayShadowConfig struct {
 	// upstream statuses. All attempts share the same deadline.
 	MaxRetries int `json:"max_retries,omitempty" yaml:"max_retries,omitempty"`
 	// CaptureResponseBody stores a bounded excerpt of the shadow output text
-	// in the replay outcome. Off by default: only hashes and sizes are kept.
+	// in the replay outcome, unless the request's prompt_capture is none. Off
+	// by default: only hashes and sizes are kept.
 	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
 	// MaxCaptureBytes bounds the stored excerpt when CaptureResponseBody is on.
 	MaxCaptureBytes int `json:"max_capture_bytes,omitempty" yaml:"max_capture_bytes,omitempty"`

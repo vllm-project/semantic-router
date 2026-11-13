@@ -71,7 +71,7 @@ global:
 | `raw` | 采集开关允许的请求和响应文本，原样保存 | 否 |
 | `verified` | 只保留提示词，且要等配方的 `pii` 规则完整读过并确认不含个人数据 | 是，在决策模型上读取 |
 
-- **`none`** 不保留任何请求或响应文本，无论 `capture_request_body`、`capture_response_body` 和 `capture_tool_results` 如何设置；它也不读取任何内容检查个人数据，因此回放不会给决策模型增加工作。
+- **`none`** 不保留任何请求或响应文本，无论 `capture_request_body`、`capture_response_body`、`capture_tool_results` 和影子的 `capture_response_body` 如何设置；它也不读取任何内容检查个人数据，因此回放不会给决策模型增加工作。
 - **`raw`** 不经检查就保留采集开关允许的内容，因此记录可能包含密钥和个人数据。请用 `replay.read` 和 `replay.detail` 限制谁能读取，并选择保留期限。提示词受 `max_tool_trace_bytes` 而不是 `max_body_bytes` 限制，要限制长提示词，请设置前者。
 - **`verified`** 见[不把个人数据写入回放](#keep-personal-data-out-of-replay)。
 
@@ -239,7 +239,7 @@ plugins:
 | `timeout_seconds` | `30` | 排队等待加执行的截止时间，所有重试共用。 |
 | `max_response_bytes` | `1048576` | 读取的最大影子响应体。更大的响应体以 `response_too_large` 失败。 |
 | `max_retries` | `0` | 遇到传输错误或可重试状态码时的额外尝试次数，上限为 `3`。 |
-| `capture_response_body` | `false` | 在结果中保存影子文本的有上限摘录。默认关闭，只保留大小、token 数和 SHA-256。 |
+| `capture_response_body` | `false` | 在结果中保存影子文本的有上限摘录，`prompt_capture: none` 时除外。默认关闭，只保留大小、token 数和 SHA-256。 |
 | `max_capture_bytes` | `4096` | 开启采集时摘录的上限。 |
 | `tls_skip_verify` | `false` | 对证书由内部 CA 签发的 https 影子后端跳过证书校验。该设置只作用于影子 HTTP 客户端，不配置主后端的传输。 |
 | `forward_headers` | `[]` | 影子副本可以携带的决策 `header_mutation` 名称，不区分大小写匹配。决策为主后端设置的其他内容都不会转发，因此像 `X-Internal-Token` 这样的自定义凭据只留在主请求路径上。已知的凭据载体（`Authorization`、`Proxy-Authorization`、`Cookie`、`x-api-key`、`api-key`、`x-goog-api-key`、`x-user-*-key` 请求头）即使被列出，也会在加载配置时被拒绝，并在运行时被丢弃。 |
@@ -283,7 +283,7 @@ plugins:
 | 结果 | `source: shadow_dispatch`、`target: model`、`target_ref: <shadow model>`、判定和原因 |
 | 元数据 | 主请求和影子请求的身份；主模型和影子模型及其后端；决策和配方；抽样率；入队、开始和结束时间戳；排队等待和延迟；尝试次数；状态码；响应大小；停止原因；token 数；影子文本的 SHA-256 |
 
-回放脱敏对影子结果的作用与对记录其他部分相同：没有内容权限的查看者能看到路由和耗时字段，但看不到 `target_ref`、`reason` 或 `metadata`。影子请求的 `capture_response_body` 独立于 `prompt_capture`，无论后者如何设置都决定是否保留摘录。除非回放存储及其读者已获准接触提示词级的内容，否则请保持它关闭。参见片段：
+回放脱敏对影子结果的作用与对记录其他部分相同：没有内容权限的查看者能看到路由和耗时字段，但看不到 `target_ref`、`reason` 或 `metadata`。影子请求的 `capture_response_body` 是它自己的设置：在 `raw` 和 `verified` 下，无论 `prompt_capture` 还允许保留什么，它都决定是否保留摘录；在 `none` 下，记录不保留任何摘录。除非回放存储及其读者已获准接触提示词级的内容，否则请保持它关闭。参见片段：
 [`config/fragments/plugin/router-replay/shadow.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/shadow.yaml)。
 
 ### 导出比较数据集 {#export-a-comparison-dataset}

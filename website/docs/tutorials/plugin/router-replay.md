@@ -79,9 +79,9 @@ decision, model, signals, scores, timing, token usage and ids.
 | `verified` | The prompt alone, once the recipe's `pii` rules read it whole and find no personal data | Yes, on the decision model |
 
 - **`none`** keeps no request or response text, whatever
-  `capture_request_body`, `capture_response_body` and `capture_tool_results`
-  say, and reads nothing for personal data, so Replay adds no work for the
-  decision model.
+  `capture_request_body`, `capture_response_body`, `capture_tool_results` and
+  the shadow's `capture_response_body` say, and reads nothing for personal
+  data, so Replay adds no work for the decision model.
 - **`raw`** keeps what the capture switches allow without checking it, so
   records can hold secrets and personal data. Restrict who reads them with
   `replay.read` and `replay.detail`, and choose a retention. The prompt is
@@ -329,7 +329,7 @@ plugins:
 | `timeout_seconds` | `30` | Deadline for queue wait plus execution, shared by all retries. |
 | `max_response_bytes` | `1048576` | Largest shadow response body that is read. Larger bodies fail with `response_too_large`. |
 | `max_retries` | `0` | Extra attempts on transport errors or retryable statuses. Capped at `3`. |
-| `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome. Off by default; only sizes, tokens, and a SHA-256 are kept. |
+| `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome, except under `prompt_capture: none`. Off by default; only sizes, tokens, and a SHA-256 are kept. |
 | `max_capture_bytes` | `4096` | Excerpt bound when capture is on. |
 | `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. This setting applies only to the shadow HTTP client; it does not configure primary backend transport. |
 | `forward_headers` | `[]` | Decision `header_mutation` names the shadow copy may carry, matched case-insensitively. Nothing else a decision sets for the primary backend is forwarded, so a custom credential such as `X-Internal-Token` stays on the primary path. Known credential carriers (`Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the `x-user-*-key` headers) are rejected at config load and dropped at run time even if listed. |
@@ -390,7 +390,8 @@ replay record. Outcomes are append-only:
 Replay redaction applies to shadow outcomes as it does to the rest of the
 record: viewers without content rights see the routing and timing fields, but
 not `target_ref`, `reason` or `metadata`. The shadow's `capture_response_body`
-is its own and keeps its excerpt whatever `prompt_capture` says. Keep it off
+is its own: under `raw` and `verified` it keeps its excerpt whatever else
+`prompt_capture` allows, and under `none` no record keeps one. Keep it off
 unless the replay store and its readers are cleared for prompt-level content.
 See the fragment:
 [`config/fragments/plugin/router-replay/shadow.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/shadow.yaml).

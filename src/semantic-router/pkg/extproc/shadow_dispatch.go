@@ -113,6 +113,9 @@ type shadowJob struct {
 	recorder        *routerreplay.Recorder
 	enqueuedAt      time.Time
 	deadline        time.Time
+	// keepsText is whether the request's prompt_capture keeps any text:
+	// under none, an outcome stores no excerpt of the shadow's answer.
+	keepsText bool
 }
 
 type shadowResult struct {
@@ -407,6 +410,7 @@ func (d *shadowDispatcher) submit(
 	now := d.now()
 	job := &shadowJob{
 		cfg:             cfg,
+		keepsText:       ctx.RouterReplayPluginConfig.PromptCaptureMode() != config.PromptCaptureNone,
 		routerConfig:    deps.routerConfig,
 		engine:          deps.engine,
 		encode:          deps.encode,
@@ -614,7 +618,7 @@ func shadowOutcomeMetadata(job *shadowJob, result shadowResult, latency time.Dur
 	metadata["response_chars"] = strconv.Itoa(utf8.RuneCountInString(result.text))
 	sum := sha256.Sum256([]byte(result.text))
 	metadata["response_sha256"] = hex.EncodeToString(sum[:])
-	if job.cfg.CaptureResponseBody {
+	if job.cfg.CaptureResponseBody && job.keepsText {
 		if len(result.text) > job.cfg.MaxCaptureBytes {
 			metadata["response_excerpt_truncated"] = "true"
 		}
