@@ -985,7 +985,7 @@ Point an agent harness at a Router gateway (System Two).
 ### `vllm-sr connect claude-code` {#vllm-sr-connect-claude-code}
 
 ```text
-Usage: vllm-sr connect claude-code [OPTIONS]
+Usage: vllm-sr connect claude-code [OPTIONS] [HARNESS_ARGS]...
 ```
 
 Route Claude Code's model calls through the gateway.
@@ -998,8 +998,10 @@ Route Claude Code's model calls through the gateway.
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
-| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick. Claude Code then neither assumes 200,000 nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
 | `--yes` | Write without asking. Default: false. |
+| `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
+| `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--scope CHOICE` | user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.  [default: user] Choices: user, project. |
 | `--status-line` | Also show in Claude Code's status line which models answered, the last first. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
@@ -1007,7 +1009,7 @@ Route Claude Code's model calls through the gateway.
 ### `vllm-sr connect codex` {#vllm-sr-connect-codex}
 
 ```text
-Usage: vllm-sr connect codex [OPTIONS]
+Usage: vllm-sr connect codex [OPTIONS] [HARNESS_ARGS]...
 ```
 
 Route Codex CLI through the gateway with a profile of its own.
@@ -1020,8 +1022,10 @@ Route Codex CLI through the gateway with a profile of its own.
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
-| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick. Claude Code then neither assumes 200,000 nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
 | `--yes` | Write without asking. Default: false. |
+| `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
+| `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--profile TEXT` | The Codex profile to write.  [default: vllm-sr] |
 | `--help` | Show this message and exit. Default: false. |
 

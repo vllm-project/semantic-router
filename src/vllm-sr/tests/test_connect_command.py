@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+import yaml
 from click.testing import CliRunner
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -650,12 +651,12 @@ def test_cli_context_window_reaches_both_harnesses(tmp_path, gateway, monkeypatc
     monkeypatch.setattr("shutil.which", lambda _: None)
     args = ["--base-url", url, "--yes"]
     result = CliRunner().invoke(main, ["connect", "claude-code", *args])
-    assert "assumes 200,000 tokens" in result.output
+    assert "assumes a window of its own" in result.output
     result = CliRunner().invoke(
         main, ["connect", "claude-code", *args, "--context-window", "131072"]
     )
     assert result.exit_code == 0, result.output
-    assert "assumes 200,000 tokens" not in result.output
+    assert "assumes a window of its own" not in result.output
     env = json.loads((tmp_path / "settings.json").read_text())["env"]
     # Claude Code neither warns about vllm-sr/auto nor assumes its own window
     assert env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "131072"
@@ -795,3 +796,209 @@ def test_cli_status_line_is_written_and_taken_back(tmp_path, gateway, monkeypatc
     assert result.exit_code == 0, result.output
     assert json.loads((tmp_path / "settings.json").read_text()) == {"statusLine": own}
     assert not script.exists()
+
+
+ROUTER = """\
+version: v0.5
+listeners:
+  - {name: http, address: 127.0.0.1, port: 8899}
+providers:
+  defaults: {model: small}
+  models:
+    - {name: small, api_format: chat_completions, context_window_size: 32768}
+    - {name: big, api_format: messages, context_window_size: 131072}
+    - {name: card, catalog: qwen/qwen3.8-27b, api_format: messages}
+    - {name: painter, api_format: images, context_window_size: 77}
+recipes:
+  - name: default
+    decisions:
+      - {name: hard, modelRefs: [{model: big}, {model: card}]}
+      - {name: draw, modelRefs: [{model: painter}]}
+"""
+
+
+def test_the_entrypoint_reaches_its_recipes_models_and_the_default():
+    doc = yaml.safe_load(ROUTER)
+    # vllm-sr/auto is the Router's own name for the default recipe; an image model
+    # never answers a harness's turn
+    assert rc.entrypoint_models(doc, "vllm-sr/auto") == ["big", "card", "small"]
+    assert rc.entrypoint_models(doc, "big") == ["big"]
+    assert rc.entrypoint_models(doc, "elsewhere") is None
+    windows = rc.context_windows(doc, ["big", "card", "small"])
+    # a catalog-backed model without a window of its own takes its card's
+    assert windows["big"] == 131072 and windows["card"] > 0
+    # a chat entrypoint that maps the default recipe takes the name away
+    doc["entrypoints"] = [{"model_names": ["team/auto"], "recipe": "default"}]
+    assert rc.entrypoint_models(doc, "vllm-sr/auto") is None
+    assert rc.entrypoint_models(doc, "team/auto") == ["big", "card", "small"]
+
+
+def test_cli_reads_the_context_window_from_the_configuration(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    (tmp_path / "config.yaml").write_text(ROUTER)
+    result = CliRunner().invoke(main, ["connect", "codex", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "model_context_window = 32768" in result.output
+    assert (
+        "Context window: 32,768 tokens, the smallest of the 3 models" in result.output
+    )
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--dry-run"])
+    assert '"CLAUDE_CODE_MAX_CONTEXT_TOKENS": "32768"' in result.output
+    # the flag wins
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--dry-run", "--context-window", "8000"]
+    )
+    assert "model_context_window = 8000" in result.output
+    assert "Context window:" not in result.output
+    # a model without a window is named, and nothing is guessed
+    (tmp_path / "config.yaml").write_text(
+        ROUTER.replace(", context_window_size: 32768", "")
+    )
+    result = CliRunner().invoke(main, ["connect", "codex", "--dry-run"])
+    assert "model_context_window" not in result.output
+    assert "not set: small, which vllm-sr/auto can reach, states no" in result.output
+
+
+def test_a_shell_api_key_stays_off_the_gateway_and_is_never_shown(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-shell")
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    (tmp_path / "settings.json").write_text(
+        '{"env": {"ANTHROPIC_API_KEY": "sk-ant-saved"}}'
+    )
+    result = CliRunner().invoke(
+        main, ["connect", "claude-code", "--base-url", url, "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "sk-ant-" not in result.output
+    assert '"ANTHROPIC_API_KEY": "<hidden>"' in result.output
+    assert "ANTHROPIC_API_KEY your shell exports no longer goes to the gateway" in (
+        result.output
+    )
+    env = json.loads((tmp_path / "settings.json").read_text())["env"]
+    assert env["ANTHROPIC_API_KEY"] == ""
+    CliRunner().invoke(main, ["connect", "claude-code", "--undo"])
+    env = json.loads((tmp_path / "settings.json").read_text())["env"]
+    assert env == {"ANTHROPIC_API_KEY": "sk-ant-saved"}
+
+
+def test_settings_that_win_over_what_connect_wrote_are_named(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    project = tmp_path / "project"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "settings.json").write_text(
+        '{"env": {"ANTHROPIC_BASE_URL": "https://elsewhere", "OTHER": "1"}}'
+    )
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    result = CliRunner().invoke(
+        main, ["connect", "claude-code", "--base-url", url, "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "settings.json sets ANTHROPIC_BASE_URL: Claude Code started in" in (
+        " ".join(result.output.split())
+    )
+
+    # Codex reads a trusted project's configuration from the repository's top down
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    (project / "sub").mkdir()
+    (project / ".codex").mkdir()
+    (project / ".codex" / "config.toml").write_text('model = "gpt-x"\n')
+    monkeypatch.chdir(project / "sub")
+    result = CliRunner().invoke(main, ["connect", "codex", "--base-url", url, "--yes"])
+    assert result.exit_code == 0, result.output
+    assert f"{project / '.codex' / 'config.toml'} sets model" in " ".join(
+        result.output.split()
+    )
+    # a key of the same name inside a table is not the model
+    (project / ".codex" / "config.toml").write_text('[tui]\nmodel = "x"\n')
+    assert hc.codex_model_overrides(project / "sub") == []
+
+
+@pytest.fixture
+def harness_bin(tmp_path, monkeypatch):
+    """A claude and a codex on PATH that record their arguments, the settings file
+    they were given, and the key in their environment, then exit 3."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "ran.json"
+    for name in ("claude", "codex"):
+        script = bin_dir / name
+        script.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, sys\n"
+            "args = sys.argv[1:]\n"
+            "given = args[args.index('--settings') + 1] if '--settings' in args else None\n"
+            f"json.dump({{'args': args, 'settings': open(given).read() if given else None,"
+            f" 'key': os.environ.get('VLLM_SR_API_KEY')}}, open({str(record)!r}, 'w'))\n"
+            "sys.exit(3)\n"
+        )
+        script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+    return record
+
+
+def test_launch_starts_the_harness_through_the_gateway_and_writes_nothing(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    launch = ["--base-url", url, "--context-window", "65536", "--launch", "--"]
+    result = CliRunner().invoke(
+        main, ["connect", "claude-code", *launch, "--resume", "x"]
+    )
+    assert result.exit_code == 3, result.output
+    assert "Streamed tool loop: ok" in result.output
+    ran = json.loads(harness_bin.read_text())
+    assert ran["args"][-2:] == ["--resume", "x"]
+    settings = json.loads(ran["settings"])["env"]
+    assert settings["ANTHROPIC_BASE_URL"] == url
+    assert settings["ANTHROPIC_AUTH_TOKEN"] == "sk-secret"
+    assert settings["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "65536"
+    # the key never reaches the command line, and its file is gone afterwards
+    assert "sk-secret" not in " ".join(ran["args"]) + result.output
+    assert not Path(ran["args"][ran["args"].index("--settings") + 1]).exists()
+
+    result = CliRunner().invoke(main, ["connect", "codex", *launch, "exec", "hi"])
+    assert result.exit_code == 3, result.output
+    ran = json.loads(harness_bin.read_text())
+    assert ran["args"][-2:] == ["exec", "hi"]
+    overrides = dict(arg.split("=", 1) for arg in ran["args"][1:-2:2] if "=" in arg)
+    assert overrides["model_providers.vllm-sr.base_url"] == json.dumps(url + "/v1")
+    assert overrides["model_providers.vllm-sr.env_key"] == '"VLLM_SR_API_KEY"'
+    assert overrides["model_context_window"] == "65536"
+    assert ran["key"] == "sk-secret" and "sk-secret" not in " ".join(ran["args"])
+    assert not home.exists()
+
+
+def test_launch_starts_nothing_when_the_gateway_fails(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home"))
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--base-url", url + "/nope", "--launch"]
+    )
+    assert result.exit_code == 1
+    assert "codex was not started" in result.output
+    assert not harness_bin.exists()
+    result = CliRunner().invoke(main, ["connect", "codex", "--launch", "--undo"])
+    assert result.exit_code == 2 and "does not take --undo" in result.output
+    result = CliRunner().invoke(main, ["connect", "codex", "--", "exec"])
+    assert result.exit_code == 2 and "only with --launch" in result.output

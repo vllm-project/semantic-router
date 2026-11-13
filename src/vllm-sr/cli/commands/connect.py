@@ -5,8 +5,11 @@ from __future__ import annotations
 import difflib
 import json
 import os
+import shlex
 import shutil
+import signal
 import subprocess
+import tempfile
 import textwrap
 from pathlib import Path
 
@@ -63,10 +66,18 @@ def _options(command):
                 type=click.IntRange(min=1),
                 default=None,
                 help="The smallest context window, in tokens, of the models the gateway"
-                " can pick. Claude Code then neither assumes 200,000 nor warns that it does"
-                " not know the entrypoint, and Codex budgets with it.",
+                " can pick; by default read from the configuration's model cards. Claude"
+                " Code then neither assumes its own window nor warns that it does not know"
+                " the entrypoint, and Codex budgets with it.",
             ),
             click.option("--yes", is_flag=True, help="Write without asking."),
+            click.option(
+                "--launch",
+                is_flag=True,
+                help="Start the harness through the gateway for this session only, writing"
+                " no file; arguments after -- go to the harness.",
+            ),
+            click.argument("harness_args", nargs=-1, type=click.UNPROCESSED),
         ]
     ):
         command = option(command)
@@ -101,17 +112,37 @@ def claude_code(
     undo,
     context_window,
     yes,
+    launch,
+    harness_args,
     scope,
     status_line,
 ):
     """Route Claude Code's model calls through the gateway."""
     env = dict(os.environ)
     path = hc.claude_settings_path(scope, Path.cwd(), env)
+    _check_launch(launch, harness_args, undo, status_line)
     if undo:
         _undo(path.parent)
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
+    context_window, notes = _context_window(doc, model, context_window)
+    values = hc.claude_env(gateway, model, token)
+    if context_window:
+        values["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = str(context_window)
+    if launch:
+        # the key goes in a private file, not on the command line
+        _launch(
+            "claude-code",
+            ["claude", *harness_args],
+            doc,
+            gateway,
+            model,
+            token,
+            notes,
+            dry_run,
+            {"env": values},
+        )
     # the undo manifest beside the settings records the key too
     keyed = (path, path.parent / hc.MANIFEST) if scope == "project" and from_env else ()
     tracked = [p for p in keyed if hc.tracked_by_git(p, Path.cwd())]
@@ -120,27 +151,37 @@ def claude_code(
             f"git tracks {tracked[0]}, so the API key would reach its history. Untrack"
             f" it (git rm --cached {tracked[0]}) or connect with --scope user."
         )
-    values = hc.claude_env(gateway, model, token)
-    if context_window:
-        values["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = str(context_window)
     changes = []
     if status_line:
         script, values["statusLine"] = hc.status_line(path)
         changes.append(script)
     changes.append(hc.Change(path, "json-env", values))
     label = f"<${api_key_env}>" if from_env else token
-    if not _run("claude-code", changes, path.parent, label, doc, dry_run, yes):
+    if not _run("claude-code", changes, path.parent, label, doc, dry_run, yes, notes):
         return
     if scope == "project":
         for kept in hc.keep_out_of_git([path, path.parent / hc.MANIFEST], Path.cwd()):
             echo(f"Added {kept} to this repository's .git/info/exclude.")
     if from_env:
         warning(f"{path} now holds the API key from ${api_key_env}.")
+    if env.get(hc.API_KEY):
+        echo(
+            "The ANTHROPIC_API_KEY your shell exports no longer goes to the gateway:"
+            " the settings set it empty, and Claude Code takes the settings."
+        )
+    if scope == "user":
+        for found, keys in hc.claude_overrides(Path.cwd(), values):
+            warning(
+                f"{found} sets {', '.join(keys)}: Claude Code started in this directory"
+                f" takes those over {path}. Remove them there, connect here with --scope"
+                " project, or start with --launch."
+            )
     _check_vsr(env, gateway, doc, api_key_env if from_env else None)
     if not context_window:
         echo(
-            f"Claude Code does not know {model}, so it assumes 200,000 tokens and says"
-            " so at start; --context-window sets the real window."
+            f"Claude Code does not know {model}, so it assumes a window of its own"
+            " (1,000,000 tokens in 2.1.323) and says so at start; --context-window sets"
+            " the real window."
         )
     _probe(gateway, "claude-code", model, token)
     echo("Start a new Claude Code session to use it.")
@@ -163,19 +204,36 @@ def codex(
     undo,
     context_window,
     yes,
+    launch,
+    harness_args,
     profile,
 ):
     """Route Codex CLI through the gateway with a profile of its own."""
     env = dict(os.environ)
     home = hc.codex_home(env)
+    _check_launch(launch, harness_args, undo)
     if undo:
         _undo(home)
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
     key_env = api_key_env if from_env else None
+    context_window, notes = _context_window(doc, model, context_window)
+    if launch:
+        # Codex reads the key from key_env, so it stays off the command line
+        overrides = hc.codex_launch_args(gateway, model, key_env, context_window)
+        _launch(
+            "codex",
+            ["codex", *overrides, *harness_args],
+            doc,
+            gateway,
+            model,
+            token,
+            notes,
+            dry_run,
+        )
     change = hc.codex_change(home, profile, gateway, model, key_env, context_window)
-    if not _run("codex", [change], home, "", doc, dry_run, yes):
+    if not _run("codex", [change], home, "", doc, dry_run, yes, notes):
         return
     if from_env:
         echo(f"Codex reads the key from ${api_key_env}; keep it set when you start it.")
@@ -183,11 +241,21 @@ def codex(
         "Codex gets the gateway's routing and plugins (System Two); vSR's checks are"
         " not available for Codex yet."
     )
+    for found in hc.codex_model_overrides(Path.cwd()):
+        warning(
+            f"{found} sets model, which Codex asks for instead of {model} once it trusts"
+            " this project. Remove it there, or start with --launch."
+        )
+    if not context_window:
+        echo(
+            f"Codex does not know {model}, so it warns that it falls back to default"
+            " model metadata; --context-window gives it the window to budget with."
+        )
     _probe(gateway, "codex", model, token)
     echo(f"Start Codex with: codex --profile {profile}")
 
 
-def _run(harness, changes, manifest_dir, key_label, doc, dry_run, yes):
+def _run(harness, changes, manifest_dir, key_label, doc, dry_run, yes, notes=()):
     """Show the changes, check the Router configuration, and write; False on a dry run."""
     heading(f"vllm-sr connect {harness}")
     try:
@@ -203,6 +271,8 @@ def _run(harness, changes, manifest_dir, key_label, doc, dry_run, yes):
     except ValueError as exc:
         raise click.ClickException(f"{change.path}: {exc}") from exc
     _check_router(harness, doc)
+    for note in notes:
+        echo(note)
     if dry_run:
         echo("Dry run: nothing was written.")
         return False
@@ -211,6 +281,72 @@ def _run(harness, changes, manifest_dir, key_label, doc, dry_run, yes):
     manifest = hc.apply_changes(changes, manifest_dir)
     success(f"Written; undo with --undo (record: {manifest}).")
     return True
+
+
+def _check_launch(launch, harness_args, undo, status_line=False) -> None:
+    if harness_args and not launch:
+        raise click.UsageError(
+            "arguments after -- go to the harness only with --launch"
+        )
+    if launch and (undo or status_line):
+        flag = "--undo" if undo else "--status-line"
+        raise click.UsageError(f"--launch writes nothing, so it does not take {flag}")
+
+
+def _context_window(doc, model, given) -> tuple[int | None, list[str]]:
+    """The flag, else the smallest window of the models the configuration lets
+    model reach, with a line on where it came from or why there is none."""
+    if given or doc is None:
+        return given, []
+    names = rc.entrypoint_models(doc, model)
+    if not names:
+        return None, [
+            f"Context window: the configuration maps {model} to no recipe or model,"
+            " so none was read from it."
+        ]
+    windows = rc.context_windows(doc, names)
+    missing = [name for name, window in windows.items() if window is None]
+    if missing:
+        one = len(missing) == 1
+        return None, [
+            f"Context window: not set: {', '.join(missing)}, which {model} can reach,"
+            f" {'states' if one else 'state'} no context_window_size. Set it"
+            f" {'there' if one else 'on each'}, or pass --context-window."
+        ]
+    window = min(windows.values())
+    return window, [
+        f"Context window: {window:,} tokens, the smallest of the {len(windows)}"
+        f" models {model} can reach in this configuration."
+    ]
+
+
+def _launch(harness, argv, doc, gateway, model, token, notes, dry_run, settings=None):
+    """Probe the gateway, then run the harness through it and exit with its status."""
+    heading(f"vllm-sr connect {harness} --launch")
+    _check_router(harness, doc)
+    for note in notes:
+        echo(note)
+    found = shutil.which(argv[0])
+    if found is None:
+        raise click.ClickException(f"{argv[0]} is not on PATH.")
+    with tempfile.TemporaryDirectory(prefix="vllm-sr-launch-") as private:
+        if settings is not None:
+            # --settings wins over the user's and the project's settings (2.1.323)
+            path = Path(private) / "settings.json"
+            hc.write_private(path, json.dumps(settings, indent=2))
+            argv = [argv[0], "--settings", str(path), *argv[1:]]
+        echo(f"Starts: {shlex.join(argv)}")
+        if dry_run:
+            echo("Dry run: nothing was started.")
+            raise click.exceptions.Exit(0)
+        _probe(gateway, harness, model, token, written=False)
+        # Ctrl-C belongs to the harness while it runs
+        previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        try:
+            code = subprocess.call([found, *argv[1:]])
+        finally:
+            signal.signal(signal.SIGINT, previous)
+    raise click.exceptions.Exit(code)
 
 
 def _gateway(router_config: Path, base_url: str | None) -> tuple[str, dict | None]:
@@ -312,14 +448,21 @@ def _json_of(argv: list[str], env: dict[str, str]):
         return None
 
 
-def _probe(gateway: str, harness: str, model: str, token: str) -> None:
+def _probe(
+    gateway: str, harness: str, model: str, token: str, written: bool = True
+) -> None:
     """A basic reply, then a streamed tool loop, each on its own line."""
     for result in rc.probe_gateway(gateway, harness, model, token):
         if not result.ok:
             raise click.ClickException(
                 f"{result.name}: failed. {result.detail}\n"
-                "The changes above stay written: fix the gateway and run this command"
-                " again, or take them back with --undo."
+                + (
+                    "The changes above stay written: fix the gateway and run this"
+                    " command again, or take them back with --undo."
+                    if written
+                    else f"{harness} was not started: fix the gateway and run this"
+                    " command again."
+                )
             )
         success(
             f"{result.name}: ok (model {result.model or 'not reported'}; {result.detail})"

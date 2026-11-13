@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import subprocess
 import tempfile
@@ -21,6 +22,9 @@ PROVIDER = "vllm-sr"
 MANIFEST = ".vllm-sr-connect.json"
 MAX_OUTPUT_TOKENS = "32000"
 TOKEN_KEY = "ANTHROPIC_AUTH_TOKEN"
+# Claude Code sends a shell's ANTHROPIC_API_KEY as x-api-key beside the gateway's
+# token unless the settings set it empty, which they win over (2.1.323)
+API_KEY = "ANTHROPIC_API_KEY"
 NO_KEY = "vllm-sr-no-key"
 # Claude Code settings the command may own outside "env"
 TOP_LEVEL_KEYS = ("statusLine",)
@@ -69,6 +73,8 @@ class Change:
         if held.get(TOKEN_KEY):
             written = held[TOKEN_KEY] == self.values[TOKEN_KEY]
             held[TOKEN_KEY] = key_label if written else "<hidden>"
+        if held.get(API_KEY):
+            held[API_KEY] = "<hidden>"
         shown = {k: held.pop(k) for k in TOP_LEVEL_KEYS if k in held}
         if held:
             shown["env"] = held
@@ -90,12 +96,28 @@ def claude_env(gateway: str, model: str, token: str) -> dict[str, str]:
     return {
         "ANTHROPIC_BASE_URL": gateway.rstrip("/"),
         TOKEN_KEY: token,
+        API_KEY: "",
         "ANTHROPIC_MODEL": model,
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
         "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
         "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": MAX_OUTPUT_TOKENS,
     }
+
+
+def claude_overrides(cwd: Path, keys) -> list[tuple[Path, list[str]]]:
+    """The project settings in cwd that set any of keys in their env: Claude Code
+    reads them only where it starts, and they win over the user's settings."""
+    found = []
+    for name in ("settings.json", "settings.local.json"):
+        path = cwd / ".claude" / name
+        try:
+            env = _settings(path.read_text(encoding="utf-8")).get("env") or {}
+        except (OSError, ValueError):
+            continue
+        if held := [key for key in keys if key in env]:
+            found.append((path, held))
+    return found
 
 
 def _settings(text: str) -> dict:
@@ -219,6 +241,31 @@ def codex_home(env: dict[str, str]) -> Path:
     return Path(env.get("CODEX_HOME") or str(Path.home() / ".codex"))
 
 
+def codex_settings(
+    gateway: str, model: str, key_env: str | None, context_window: int | None
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The top-level settings, then the provider's. key_env is left out for a
+    listener without keys: Codex refuses to start while the variable a provider
+    names is unset."""
+    top = {
+        "model": model,
+        "model_context_window": context_window,
+        "model_provider": PROVIDER,
+        # the Router does not serve hosted web search
+        "web_search": "disabled",
+    }
+    provider = {
+        "name": "vLLM Semantic Router",
+        "base_url": gateway.rstrip("/") + "/v1",
+        "wire_api": "responses",
+        "env_key": key_env,
+    }
+    return (
+        {k: v for k, v in top.items() if v},
+        {k: v for k, v in provider.items() if v},
+    )
+
+
 def codex_change(
     home: Path,
     profile: str,
@@ -228,23 +275,47 @@ def codex_change(
     context_window: int | None = None,
 ) -> Change:
     """The profile file. Codex layers it over config.toml with --profile, and it
-    holds the provider too, so config.toml is not touched. key_env is left out
-    for a listener without keys: Codex refuses to start while the variable a
-    provider names is unset."""
-    text = (
-        f"model = {json.dumps(model)}\n"
-        + (f"model_context_window = {context_window}\n" if context_window else "")
-        + f'model_provider = "{PROVIDER}"\n'
-        # the Router does not serve hosted web search
-        'web_search = "disabled"\n'
-        "\n"
-        f"[model_providers.{PROVIDER}]\n"
-        'name = "vLLM Semantic Router"\n'
-        f"base_url = {json.dumps(gateway.rstrip('/') + '/v1')}\n"
-        'wire_api = "responses"\n'
-        + (f"env_key = {json.dumps(key_env)}\n" if key_env else "")
-    )
+    holds the provider too, so config.toml is not touched."""
+    top, provider = codex_settings(gateway, model, key_env, context_window)
+    lines = [f"{k} = {json.dumps(v)}" for k, v in top.items()]
+    lines += ["", f"[model_providers.{PROVIDER}]"]
+    lines += [f"{k} = {json.dumps(v)}" for k, v in provider.items()]
+    text = "\n".join(lines) + "\n"
     return Change(home / f"{profile}.config.toml", "file", {"file": text})
+
+
+def codex_launch_args(
+    gateway: str, model: str, key_env: str | None, context_window: int | None
+) -> list[str]:
+    """The same settings as command-line overrides, which win over every
+    configuration file, a trusted project's included (0.166)."""
+    top, provider = codex_settings(gateway, model, key_env, context_window)
+    pairs = [*top.items()]
+    pairs += [(f"model_providers.{PROVIDER}.{k}", v) for k, v in provider.items()]
+    return [arg for k, v in pairs for arg in ("-c", f"{k}={json.dumps(v)}")]
+
+
+def codex_model_overrides(cwd: Path) -> list[Path]:
+    """The project configurations from the repository's top down to cwd that set
+    model: once Codex trusts the project, it asks for that model instead of the
+    profile's (0.166). Outside a repository Codex reads only cwd's."""
+    top = _git(cwd, "rev-parse", "--show-toplevel").stdout.strip()
+    here = cwd.resolve()
+    dirs = [here, *here.parents] if top else [here]
+    stop = Path(top).resolve() if top else here
+    found = []
+    for directory in dirs:
+        path = directory / ".codex" / "config.toml"
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        # a top-level key comes before the first table header
+        if re.search(r"^\s*model\s*=", ("\n" + text).split("\n[", 1)[0], re.M):
+            found.append(path)
+        if directory == stop:
+            break
+    return found
 
 
 # --- writing and undo --------------------------------------------------------------

@@ -13,6 +13,9 @@ from typing import Any
 
 import requests
 
+from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
+from cli.model_catalog_types import ModelCatalogError
+
 CLAUDE_HEADERS = {
     "session": "x-claude-code-session-id",
     "agent": "x-claude-code-agent-id",
@@ -30,6 +33,7 @@ OPENAI_LOSSY = ("tool_result.is_error", "messages[].role", "content.file")
 # the canonical name of each api_format alias, as the Router reads it
 API_FORMAT_ALIASES = {"openai": "chat_completions", "anthropic": "messages"}
 OPENAI_FORMATS = {"chat_completions", "responses"}
+NOT_CHAT = {"images", "systemone"}
 PROBE_TOOL = {
     "name": "get_time",
     "description": "Return the current time.",
@@ -197,6 +201,82 @@ def system_one_models(doc: dict | None) -> list[str]:
     listeners = (doc or {}).get("listeners") or []
     first = listeners[0] if listeners else None
     return [str(m) for m in _get(first, "apis", "systemone", "models") or []]
+
+
+def entrypoint_models(doc: dict, model: str) -> list[str] | None:
+    """The provider models a request for model can reach, as the Router maps it: a
+    model's own name, or an entrypoint's recipe, whose decisions name models and
+    whose requests no decision takes go to providers.defaults.model. None when the
+    configuration maps model nowhere."""
+    formats = _model_formats(doc)
+    if model in formats:
+        return [model]
+    recipes = [r for r in doc.get("recipes") or [] if isinstance(r, dict)]
+    chat = [
+        e
+        for e in doc.get("entrypoints") or []
+        if isinstance(e, dict) and e.get("api") in (None, "", "chat")
+    ]
+    recipe = next(
+        (e.get("recipe") for e in chat if model in (e.get("model_names") or [])), None
+    )
+    if recipe is None and model == "vllm-sr/auto":
+        # the Router serves vllm-sr/auto itself when no chat entrypoint maps the default recipe
+        marked = [e.get("recipe") for e in chat if e.get("default")]
+        default = (
+            marked[0]
+            if marked
+            else recipes[0].get("name") if len(recipes) == 1 else "default"
+        )
+        if all(e.get("recipe") != default for e in chat):
+            recipe = default
+    if recipe is None:
+        return None
+    picked = [
+        ref.get("model")
+        for r in recipes
+        if r.get("name") == recipe
+        for decision in r.get("decisions") or []
+        if isinstance(decision, dict)
+        for ref in decision.get("modelRefs") or []
+        if isinstance(ref, dict) and ref.get("model")
+    ]
+    fallback = _get(doc, "providers", "defaults", "model")
+    # an image or System One model never answers a harness's turn
+    return [
+        name
+        for name in dict.fromkeys([*picked, *([fallback] if fallback else [])])
+        if formats.get(name, "") not in NOT_CHAT
+    ]
+
+
+def context_windows(doc: dict, names: list[str]) -> dict[str, int | None]:
+    """Each model's context window, as the Router reads it: the model's own
+    context_window_size, else its built-in catalog card's limit."""
+    cards = _catalog_windows()
+    models = {
+        m.get("name"): m
+        for m in _get(doc, "providers", "models") or []
+        if isinstance(m, dict)
+    }
+    found = {}
+    for name in names:
+        model = models.get(name) or {}
+        window = model.get("context_window_size") or cards.get(model.get("catalog"))
+        found[name] = window if isinstance(window, int) and window > 0 else None
+    return found
+
+
+def _catalog_windows() -> dict[str, int]:
+    try:
+        _, document = _load_catalog_document(DEFAULT_CHANNEL)
+    except ModelCatalogError:
+        return {}
+    return {
+        card["id"]: (card.get("limits") or {}).get("context_window_size")
+        for card in document.get("models") or []
+        if isinstance(card, dict) and card.get("id")
+    }
 
 
 def check_router_config(doc: dict, harness: str) -> list[RouterFinding]:

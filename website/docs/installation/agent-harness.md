@@ -121,15 +121,23 @@ The command shows the changes and asks before writing them:
   file holds the key when one is set, so only you can read it afterwards. In a
   git repository, `--scope project` adds the file and the command's undo record
   to `.git/info/exclude` when git would otherwise track them, and refuses to
-  write a key into either one once git already tracks it.
+  write a key into either one once git already tracks it. `ANTHROPIC_API_KEY`
+  is set empty: otherwise Claude Code also sends a key your shell exports, as
+  `x-api-key` beside the gateway's token.
 - Codex: the `~/.codex/vllm-sr.config.toml` profile, which holds a `vllm-sr`
   provider, selects it and turns off hosted web search, which the Router does
   not serve. `~/.codex/config.toml` is not touched.
 
-Claude Code does not know `vllm-sr/auto` either: it assumes a 200,000-token
-window and says so at start. `--context-window` with the smallest window of the
-models the gateway can pick sets `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, which gives
-Claude Code the real window and silences that notice.
+Neither harness knows `vllm-sr/auto`, so the command gives them its context
+window: the smallest `context_window_size` of the models the entrypoint can
+reach in the configuration, which are the models its recipe's decisions name
+and `providers.defaults.model` (a catalog-backed model without one takes its
+card's limit). Image and System One models are left out. It says where the
+number came from and writes it as `CLAUDE_CODE_MAX_CONTEXT_TOKENS` for Claude
+Code and `model_context_window` for Codex. When a model states no window, the
+command names it and sets none: Claude Code then assumes a window of its own
+(1,000,000 tokens in 2.1.323) and says so at start, and Codex falls back to
+default model metadata. `--context-window` sets the window either way.
 
 It then reports three checks, each on its own line:
 
@@ -147,6 +155,17 @@ while the plugin's router app is on, and when the listener also serves System
 One it prints the setting that points vSR at it. `--dry-run` prints the plan
 and writes nothing.
 
+After writing, the command names any settings that win over what it wrote,
+and how to stop them. For Claude Code that is a `.claude/settings.json` or
+`.claude/settings.local.json` in the current directory that sets one of its
+`env` keys: Claude Code reads project settings only in the directory it starts
+in, and they win over the user's. Variables your shell exports do not win over
+the settings' `env`. For Codex it is a `.codex/config.toml` from the
+repository's top down to the current directory that sets `model`: once Codex
+trusts the project, it asks for that model instead of the profile's.
+`OPENAI_BASE_URL` does not change the `vllm-sr` provider. These were measured
+with Claude Code 2.1.323 and Codex CLI 0.166.0.
+
 `--status-line` also sets Claude Code's status line to show which models
 answered this session, the last first, such as `vllm-sr ⇢ qwen36 (4) ·
 qwen38-27b (2)`. Claude Code asks for `vllm-sr/auto`, so its own model display
@@ -157,6 +176,23 @@ sits beside the settings as `vllm-sr-status-line.py`, and `--undo` puts back
 the status line you had before.
 `--undo` puts back what each key, or the Codex profile, held before the first
 run, leaves alone what changed since, and keeps everything else in the files.
+
+### Try it without writing anything
+
+```bash
+vllm-sr connect claude-code --config claude-code.yaml --launch
+vllm-sr connect codex --config codex.yaml --launch -- exec "fix the failing test"
+```
+
+`--launch` runs the same checks and the same probe, then starts the harness
+through the gateway for that one session and exits with its status. Nothing is
+written: Claude Code gets the settings with `--settings` from a temporary file
+only you can read, which holds the key and is removed when Claude Code exits,
+and Codex gets them as `-c` overrides and reads the key from `VLLM_SR_API_KEY`,
+so it never appears on the command line. Both win over the user's and the
+project's settings, so the overrides above do not apply. Arguments after `--`
+go to the harness, and a gateway that fails the probe means the harness is not
+started.
 
 ### Router settings for Claude Code
 
@@ -289,6 +325,7 @@ The command writes these. Claude Code reads them from its settings:
   "env": {
     "ANTHROPIC_BASE_URL": "http://localhost:8899",
     "ANTHROPIC_AUTH_TOKEN": "<the listener's API key, or any value without one>",
+    "ANTHROPIC_API_KEY": "",
     "ANTHROPIC_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "vllm-sr/auto",
@@ -319,8 +356,9 @@ the variable it names is unset, and `vllm-sr connect` writes it only when
 `VLLM_SR_API_KEY` is set.
 
 Codex does not know `vllm-sr/auto`, so it warns that it uses fallback model
-metadata. `--context-window` sets `model_context_window` in the profile, so its
-budget follows your backends, though the warning stays.
+metadata. `vllm-sr connect` sets `model_context_window` in the profile from the
+configuration, or from `--context-window`, so its budget follows your
+backends, though the warning stays.
 
 The Codex TUI sends a `namespace` tool on every turn. A Router that refuses
 namespace tools answers its first turn with `unsupported_tool`; on such a
