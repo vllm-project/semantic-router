@@ -187,6 +187,22 @@ class HostedRuntimeTest(unittest.TestCase):
         self.assertEqual(out["model"], "vllm-sr/vela3-flash")
         self.assertEqual(out["modelIds"], ["vllm-sr/vela3-flash"])
 
+    def test_a_hosted_api_listing_its_models_in_the_50_schema_is_ready(self):
+        # a hosted System One API with no /health, listing by name at /v1/models
+        listing = {"models": [{"name": "vllm-sr/vela3-flash", "features": ["score"]}]}
+
+        def urlopen(request, timeout):
+            if not request.full_url.endswith("/v1/models"):
+                raise urllib.error.HTTPError(
+                    request.full_url, 404, "Not Found", {}, None
+                )
+            return contextlib.nullcontext(io.BytesIO(json.dumps(listing).encode()))
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            out = runtime.health("https://sr.example/v1/decisions")
+        self.assertTrue(out["ready"])
+        self.assertEqual(out["model"], "vllm-sr/vela3-flash")
+
     def test_a_404_health_without_models_is_not_ready(self):
         def urlopen(request, timeout):
             raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
@@ -221,6 +237,40 @@ class HostedRuntimeTest(unittest.TestCase):
         self.assertEqual(out["modelIds"], ["vela3-fast"])
         # vela3-fast answers no score questions, which the router app asks
         self.assertEqual(out["noScore"], ["vela3-fast"])
+
+    def test_a_router_listener_on_the_50_schema_lists_its_models_by_name(self):
+        # vllm-sr/5.0, a listener's default schema, lists `models` by name, with
+        # the question types as features; its /v1/models lists vllm-sr/auto.
+        card = {"id": "vela3-fast", "question_types": ["choice", "noul", "span"]}
+        for listing in (
+            {
+                "models": [
+                    {
+                        "name": "vela3-fast",
+                        "features": card["question_types"],
+                        "card": card,
+                    }
+                ]
+            },
+            {"models": [{"name": "vela3-fast", "features": card["question_types"]}]},
+        ):
+            replies = {
+                "/health": {"status": "ok"},
+                "/v1/systemone/models": listing,
+                "/v1/models": {"data": [{"id": "vllm-sr/auto"}]},
+            }
+
+            def urlopen(request, timeout, replies=replies):
+                path = request.full_url.split("8899", 1)[1]
+                return contextlib.nullcontext(
+                    io.BytesIO(json.dumps(replies[path]).encode())
+                )
+
+            with mock.patch.object(runtime.OPENER, "open", urlopen):
+                out = runtime.health("http://127.0.0.1:8899/v1/decisions")
+            self.assertEqual(out["model"], "vela3-fast")
+            self.assertEqual(out["modelIds"], ["vela3-fast"])
+            self.assertEqual(out["noScore"], ["vela3-fast"])
 
     def test_a_question_names_the_model_only_when_one_is_set(self):
         sent = []
