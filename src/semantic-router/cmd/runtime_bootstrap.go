@@ -44,6 +44,7 @@ type runtimeOptions struct {
 	enableAPI              bool
 	secure                 bool
 	downloadOnly           bool
+	finalizeResponseIndex  bool
 	validateConfig         bool
 	migrateConfig          bool
 	gateway                config.GatewayMode
@@ -66,6 +67,7 @@ func parseRuntimeOptions() runtimeOptions {
 		kubeconfig             = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
 		namespace              = flag.String("namespace", kubernetesNamespaceDefault(), "Kubernetes namespace to watch for CRDs")
 		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
+		finalizeResponseIndex  = flag.Bool("finalize-response-index", false, "Run the one-shot Response API conversation-index finalization sweep against the configured Redis store, print stats, and exit. Administrative and irreversible: only run once every index-unaware writer has been drained")
 		validateConfig         = flag.Bool("validate-config", false, "Validate the -config file as the Router loads it, print a JSON report on stdout and exit: 0 when it would load, 1 when it would not")
 		migrateConfig          = flag.Bool("migrate-config", false, "With -validate-config, also write the file with its deprecated model fields in the forms that replace them in the report's migrated field")
 		gatewayMode            = flag.String("gateway", string(config.GatewayExtProc), "What serves client traffic: extproc (the ext_proc gRPC server behind an Envoy-based gateway) or standalone (the OpenAI-compatible API on the configured listeners)")
@@ -88,6 +90,7 @@ func parseRuntimeOptions() runtimeOptions {
 		enableAPI:              *enableAPI,
 		secure:                 *secure,
 		downloadOnly:           *downloadOnly,
+		finalizeResponseIndex:  *finalizeResponseIndex,
 		validateConfig:         *validateConfig,
 		migrateConfig:          *migrateConfig,
 		gateway:                config.GatewayMode(*gatewayMode),
