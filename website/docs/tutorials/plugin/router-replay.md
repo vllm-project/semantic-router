@@ -42,9 +42,9 @@ global:
     - type: router_replay
       configuration:
         enabled: true
+        prompt_capture: none
         capture_request_body: true
         capture_response_body: true
-        capture_personal_data: false
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
@@ -59,27 +59,62 @@ field. Storage, retention and asynchronous writes are global service settings.
 
 | Capture setting | Default |
 | --- | --- |
-| Request and response bodies | captured |
-| Personal data | captured |
+| `prompt_capture` | `none`: routing data only |
+| Request and response bodies | captured, under `raw` |
 | Tool results | redacted |
 | `max_records` | 10,000 |
 | `max_body_bytes` | 4,096 bytes per body |
 | `max_tool_trace_bytes` | no per-field limit |
 | `max_tool_trace_steps` | 100 |
 
+### Choose what a record keeps
+
+`prompt_capture` decides what a record keeps besides routing data: the
+decision, model, signals, scores, timing, token usage and ids.
+
+| Mode | A record keeps | Reads the prompt for personal data |
+| --- | --- | --- |
+| `none` (the default) | Routing data only | No |
+| `raw` | The request and response text the capture switches allow, as it came | No |
+| `verified` | The prompt alone, once the recipe's `pii` rules read it whole and find no personal data | Yes, on the decision model |
+
+- **`none`** keeps no request or response text, whatever
+  `capture_request_body`, `capture_response_body`, `capture_tool_results` and
+  the shadow's `capture_response_body` say, and reads nothing for personal
+  data, so Replay adds no work for the decision model.
+- **`raw`** keeps what the capture switches allow without checking it, so
+  records can hold secrets and personal data. Restrict who reads them with
+  `replay.read` and `replay.detail`, and choose a retention. The prompt is
+  bounded by `max_tool_trace_bytes`, not `max_body_bytes`, so set it to cap a
+  long prompt.
+- **`verified`** is described in
+  [Keep personal data out of Replay](#keep-personal-data-out-of-replay).
+
+`capture_personal_data` is the deprecated form of this setting. The Router
+loads it as `prompt_capture`, with a `renamed_field` warning, and
+`vllm-sr config migrate` rewrites it:
+
+| Written before | Loads as |
+| --- | --- |
+| `capture_personal_data: false` | `prompt_capture: verified` |
+| `capture_personal_data: true` | `prompt_capture: raw` |
+| Neither field | `prompt_capture: none`: records keep routing data only. Set `prompt_capture: raw` to keep the text such a configuration kept before. |
+
 ### Limit capture on a decision
 
-Add this fragment to the decision's `plugins` to record bounded excerpts:
+Add this fragment to the decision's `plugins` to record bounded request
+excerpts and no response text:
 
 ```yaml
 plugins:
   - type: router_replay
     configuration:
       enabled: true
+      prompt_capture: raw
       capture_request_body: true
       capture_response_body: false
-      capture_personal_data: false
       max_body_bytes: 4096
+      max_tool_trace_bytes: 4096
       max_tool_trace_steps: 100
 ```
 
@@ -94,7 +129,8 @@ How the limits count:
   the prompt, tool definitions, and each trace step's text, arguments and
   output. A cut step has `truncated: true`.
 
-What the body switches cover:
+What the body switches cover, under `raw` and `verified` (under `none` a
+record keeps no text at all):
 
 - **`capture_request_body: false`** keeps all request text out of the record:
   the body, the prompt, tool definitions, and each request step of the tool
@@ -130,12 +166,13 @@ so omit a field to inherit it.
 
 ### Keep personal data out of Replay
 
-Set `capture_personal_data: false` globally or on a decision's
-`router_replay` plugin:
+Set `prompt_capture: verified` globally or on a decision's `router_replay`
+plugin to keep each request's prompt only when it has no personal data:
 
-- **Kept:** routing evidence, the model, signals and the detected PII types.
-- **Omitted for requests with personal data:** request and response bodies,
-  prompts, tool definitions and tool traces.
+- **Kept:** routing evidence, the model, signals and the detected PII types,
+  and the prompt once it is found clean.
+- **Omitted:** request and response bodies, tool definitions and tool traces,
+  and the prompt of a request with personal data.
 - **Requests never wait for the check.** Unless a routing decision already
   read the prompt with a PII signal, the record is first written without it.
   The recipe's configured PII rules then read the latest user message alone,
@@ -148,9 +185,11 @@ Set `capture_personal_data: false` globally or on a decision's
   during routing.
 
 When PII evidence is unavailable, the `pii` rule's model gives no answer, or
-the recipe has no `pii` rule, capture omits content conservatively. A PII signal is
-optional; configuring one allows content capture for requests it identifies as
-free of personal data. For example:
+the recipe has no `pii` rule, capture omits the prompt conservatively. A PII
+signal is optional; configuring one allows the prompt of requests it identifies
+as free of personal data. These reads run on the decision model beside the
+guard, so `verified` costs decision-model time that `none` and `raw` don't.
+For example:
 
 ```yaml
 recipes:
@@ -165,14 +204,15 @@ recipes:
 By default a record keeps each client tool result's call ID and whether it
 succeeded or failed, but not its output, and a captured request body has its
 tool results removed. This applies whether or not a PII signal reads tool
-results. To debug an agent's tool loop, set `capture_tool_results: true`
-globally or on a decision's `router_replay` plugin:
+results. To debug an agent's tool loop, set `capture_tool_results: true` with
+`prompt_capture: raw` globally or on a decision's `router_replay` plugin:
 
 ```yaml
 plugins:
   - type: router_replay
     configuration:
       enabled: true
+      prompt_capture: raw
       capture_request_body: true
       capture_tool_results: true
       max_tool_trace_bytes: 16384
@@ -195,10 +235,11 @@ the record larger, and a store can reject a record above its size limit.
 
 Tool results are raw client data, so:
 
-- **`capture_tool_results: true` requires `capture_personal_data: true`.**
-  The Router refuses to load a configuration where the global defaults, or any
-  decision's effective `router_replay` settings, combine
-  `capture_tool_results: true` with `capture_personal_data: false`.
+- **`capture_tool_results: true` stores results only under
+  `prompt_capture: raw`.** The Router refuses to load a configuration where
+  the global defaults, or any decision's effective `router_replay` settings,
+  combine `capture_tool_results: true` with `prompt_capture: verified`; under
+  `none` it stores nothing.
 - **A masking route** never records its request trace or body.
 - **Principals without `replay.detail`** still receive tool results redacted.
 
@@ -288,7 +329,7 @@ plugins:
 | `timeout_seconds` | `30` | Deadline for queue wait plus execution, shared by all retries. |
 | `max_response_bytes` | `1048576` | Largest shadow response body that is read. Larger bodies fail with `response_too_large`. |
 | `max_retries` | `0` | Extra attempts on transport errors or retryable statuses. Capped at `3`. |
-| `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome. Off by default; only sizes, tokens, and a SHA-256 are kept. |
+| `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome, except under `prompt_capture: none`. Off by default; only sizes, tokens, and a SHA-256 are kept. |
 | `max_capture_bytes` | `4096` | Excerpt bound when capture is on. |
 | `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. This setting applies only to the shadow HTTP client; it does not configure primary backend transport. |
 | `forward_headers` | `[]` | Decision `header_mutation` names the shadow copy may carry, matched case-insensitively. Nothing else a decision sets for the primary backend is forwarded, so a custom credential such as `X-Internal-Token` stays on the primary path. Known credential carriers (`Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the `x-user-*-key` headers) are rejected at config load and dropped at run time even if listed. |
@@ -348,7 +389,9 @@ replay record. Outcomes are append-only:
 
 Replay redaction applies to shadow outcomes as it does to the rest of the
 record: viewers without content rights see the routing and timing fields, but
-not `target_ref`, `reason` or `metadata`. Keep `capture_response_body` off
+not `target_ref`, `reason` or `metadata`. The shadow's `capture_response_body`
+is its own: under `raw` and `verified` it keeps its excerpt whatever else
+`prompt_capture` allows, and under `none` no record keeps one. Keep it off
 unless the replay store and its readers are cleared for prompt-level content.
 See the fragment:
 [`config/fragments/plugin/router-replay/shadow.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/shadow.yaml).
@@ -399,8 +442,9 @@ about that decision. To balance it:
   exclusion.
 
 The export needs `replay.read`, and reads the same records the list API does.
-Body capture must be on for the decisions being compared, because an
-observation with no captured request is excluded as `request_body_missing`.
+The decisions being compared need `prompt_capture: raw` with request body
+capture on, because an observation with no captured request is excluded as
+`request_body_missing`.
 
 ### Hand the comparison to a judge
 

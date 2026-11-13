@@ -69,11 +69,13 @@ becomes:
 | `removed_section` | A whole section the Router no longer reads |
 | `invalid_value` | A value that no longer means what it did, such as `version: v0.3` |
 
-Two forms still load, with a warning, because they are renames:
+Three forms still load, with a warning, because they are renames:
 `signals.decision` and `type: decision` conditions load as `systemone`
-(`renamed_signal_type`), and `algorithm.type: decision` loads as the
-`systemone` selector (`renamed_algorithm_type`). Migrate rewrites both, and
-the Dashboard reads both the same way and saves them as `systemone`.
+(`renamed_signal_type`), `algorithm.type: decision` loads as the `systemone`
+selector (`renamed_algorithm_type`), and a `router_replay` plugin's
+`capture_personal_data` loads as its `prompt_capture`, `false` as `verified`
+and `true` as `raw` (`renamed_field`). Migrate rewrites each of them. The
+Dashboard reads the first two the same way and saves them as `systemone`.
 
 ## 3. Review what changed
 
@@ -282,7 +284,7 @@ recipes:
 | `semantic-cache`, `semantic_cache`, `response-cache`; flat cache fields | [`response_cache`](../tutorials/plugin/response-cache) with `semantic.match` |
 | `global.stores.semantic_cache` | `global.stores.response_cache` |
 | `shadow_dispatch` | The `shadow` block of [`router_replay`](../tutorials/plugin/router-replay) |
-| A recipe's `data_policy` | The recipe's `router_replay` plugin: `enabled: false` for `replay: false`, `capture_personal_data: false` for `replay_personal_data: false`, on its decisions too |
+| A recipe's `data_policy` | The recipe's `router_replay` plugin: `enabled: false` for `replay: false`, `prompt_capture: verified` for `replay_personal_data: false`, on its decisions too |
 | `emits[].retention` | The decision's [`retention`](../tutorials/decision/retention) attribute |
 | `masking` `threshold` | `masking.signal`, naming a `pii` rule whose `predicate` applies |
 | `system_prompt` `mode: append` | `mode: replace`, which drops every system and developer instruction the caller sent, where `append` replaced only the first system message |

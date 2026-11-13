@@ -1,0 +1,30 @@
+# A router_replay plugin's capture_personal_data is deprecated: it loads as
+# prompt_capture, with a warning. false kept a prompt only once the pii rules
+# found it clean, which is prompt_capture: verified; true kept it as it came,
+# which is prompt_capture: raw. Beside a prompt_capture that says the same,
+# capture_personal_data goes.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+global:
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
+        prompt_capture: verified
+recipes:
+  - name: default
+    plugins:
+      - type: router_replay
+        configuration: {capture_request_body: false, prompt_capture: verified}
+    decisions:
+      - name: support
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: router_replay
+            configuration: {prompt_capture: raw, capture_tool_results: true}

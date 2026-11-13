@@ -4133,11 +4133,12 @@ func TestResponsePolicyPersistenceIsDeferredUntilCommit(t *testing.T) {
 
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
-		RequestID:            "request-deferred-policy-commit",
-		RouterReplayID:       recordID,
-		RouterReplayRecorder: recorder,
-		SourceFormat:         llmprotocol.OpenAIChatV1,
-		UpstreamStatusCode:   http.StatusOK,
+		RequestID:                "request-deferred-policy-commit",
+		RouterReplayID:           recordID,
+		RouterReplayRecorder:     recorder,
+		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureResponseBody: true},
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		UpstreamStatusCode:       http.StatusOK,
 	}
 	response := &llmprotocol.Response{
 		ID:    "chatcmpl-deferred",

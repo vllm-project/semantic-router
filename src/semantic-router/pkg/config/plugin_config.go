@@ -163,16 +163,18 @@ type HeaderPair struct {
 
 // RouterReplayPluginConfig represents configuration for router_replay plugin.
 type RouterReplayPluginConfig struct {
-	// nil permits personal data, matching the built-in capture default.
-	CapturePersonalData *bool `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
-	Enabled             bool  `json:"enabled" yaml:"enabled"`
-	MaxRecords          int   `json:"max_records,omitempty" yaml:"max_records,omitempty"`
-	CaptureRequestBody  bool  `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
-	CaptureResponseBody bool  `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// PromptCapture is what a record keeps of the request and its answer
+	// besides routing data: none, raw or verified (PromptCaptureMode). Unset
+	// is none.
+	PromptCapture       string `json:"prompt_capture,omitempty" yaml:"prompt_capture,omitempty" jsonschema:"enum=none,enum=raw,enum=verified"`
+	MaxRecords          int    `json:"max_records,omitempty" yaml:"max_records,omitempty"`
+	CaptureRequestBody  bool   `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
+	CaptureResponseBody bool   `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
 	// CaptureToolResults keeps client tool-result text in the captured request
 	// body and in each client_tool_result step's Output, bounded by
-	// MaxToolTraceBytes. It requires CapturePersonalData, stores nothing while
-	// CaptureRequestBody is off, and principals without replay.detail still
+	// MaxToolTraceBytes. It stores nothing unless PromptCapture is raw and
+	// CaptureRequestBody is on, and principals without replay.detail still
 	// read the results redacted.
 	CaptureToolResults bool `json:"capture_tool_results,omitempty" yaml:"capture_tool_results,omitempty"`
 	MaxBodyBytes       int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
@@ -192,6 +194,11 @@ type RouterReplayPluginConfig struct {
 	// model, whose outcome the replay record keeps. It runs while the
 	// decision records replays.
 	Shadow *RouterReplayShadowConfig `json:"shadow,omitempty" yaml:"shadow,omitempty"`
+	// CapturePersonalData is the deprecated form of PromptCapture: false
+	// meant verified and true raw. Loading a configuration rewrites it as
+	// prompt_capture in its own layer, with a warning; in a policy assembled
+	// otherwise it decides only where PromptCapture is unset.
+	CapturePersonalData *bool `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
 }
 
 // RouterReplayShadowConfig is router_replay's shadow: a bounded, sampled copy
@@ -218,7 +225,8 @@ type RouterReplayShadowConfig struct {
 	// upstream statuses. All attempts share the same deadline.
 	MaxRetries int `json:"max_retries,omitempty" yaml:"max_retries,omitempty"`
 	// CaptureResponseBody stores a bounded excerpt of the shadow output text
-	// in the replay outcome. Off by default: only hashes and sizes are kept.
+	// in the replay outcome, unless the request's prompt_capture is none. Off
+	// by default: only hashes and sizes are kept.
 	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
 	// MaxCaptureBytes bounds the stored excerpt when CaptureResponseBody is on.
 	MaxCaptureBytes int `json:"max_capture_bytes,omitempty" yaml:"max_capture_bytes,omitempty"`

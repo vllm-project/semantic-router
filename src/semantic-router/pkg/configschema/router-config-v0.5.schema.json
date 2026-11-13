@@ -6062,11 +6062,17 @@
     },
     "RouterReplayPluginConfig": {
       "properties": {
-        "capture_personal_data": {
-          "type": "boolean"
-        },
         "enabled": {
           "type": "boolean"
+        },
+        "prompt_capture": {
+          "type": "string",
+          "enum": [
+            "none",
+            "raw",
+            "verified"
+          ],
+          "description": "What a record keeps besides routing data: none (the default) keeps no request or response text; raw keeps the text the capture switches allow, unverified; verified keeps the prompt alone, once the pii rules read it whole and find it clean."
         },
         "max_records": {
           "type": "integer"
@@ -6091,6 +6097,11 @@
         },
         "shadow": {
           "$ref": "#/$defs/RouterReplayShadowConfig"
+        },
+        "capture_personal_data": {
+          "type": "boolean",
+          "description": "Deprecated: write prompt_capture. false loads as prompt_capture: verified and true as prompt_capture: raw.",
+          "deprecated": true
         }
       },
       "additionalProperties": false,
