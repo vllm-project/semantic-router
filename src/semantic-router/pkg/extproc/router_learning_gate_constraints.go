@@ -20,7 +20,7 @@ func (r *OpenAIRouter) progressCandidateReason(ctx *RequestContext, selCtx *sele
 	if ctx == nil {
 		return "request_context_missing"
 	}
-	if r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount) {
+	if r.modelRefExceedsContextWindow(ctx, ref, ctx.VSRContextTokenCount) {
 		return "context_limit"
 	}
 	if ctx.SemanticRequest != nil {

@@ -185,5 +185,11 @@
         "event": "response.completed"
       }
     ]
-  }
+  },
+  "diagnostics": [
+    {
+      "field": "output.status",
+      "action": "dropped"
+    }
+  ]
 }

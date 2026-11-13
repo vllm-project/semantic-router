@@ -1771,8 +1771,9 @@ class FallbackCircuitBreaker(BaseModel):
 
 
 # Names forward_request_headers may not list, beside the credential carriers
-# above and a backend's own auth header, which the Router checks. Keep in
-# step with validateForwardRequestHeaders in the Router's pkg/config.
+# above, a backend's own auth header and the identity names
+# global.services.authz.identity sets, which the Router checks. Keep in step
+# with validateForwardRequestHeaders in the Router's pkg/config.
 FORWARD_CREDENTIAL_HEADERS = SHADOW_CREDENTIAL_HEADERS | {
     "ocp-apim-subscription-key",
     "api-subscription-key",
@@ -2034,6 +2035,42 @@ class ProviderReliability(BaseModel):
         if parse_duration(self.retry_back_off_max) < base:
             raise ValueError("retry_back_off_max must not be below retry_back_off_base")
         return self
+
+
+TOKENIZER_BUILTINS = ("o200k_base", "cl100k_base")
+_TOKENIZER_HUB_REPO = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)?$"
+)
+# Each part of a revision starts with a letter or digit, so none climbs out of
+# the Hugging Face cache, which keeps a revision under its own name.
+_TOKENIZER_HUB_REVISION = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._+-]*(/[A-Za-z0-9][A-Za-z0-9._+-]*)*$"
+)
+
+
+def validate_tokenizer_spec(value: Optional[str]) -> Optional[str]:
+    """A tokenizer the Router counts prompts with: a built-in encoding, a
+    tokenizer.json path or a Hugging Face repo id, as the Router reads it."""
+    if value is None:
+        return value
+    spec = value.strip()
+    if not spec:
+        raise ValueError("a tokenizer cannot be empty")
+    if (
+        spec in TOKENIZER_BUILTINS
+        or spec.startswith(("/", "./", "../"))
+        or spec.endswith(".json")
+    ):
+        return value
+    repo, _, revision = spec.partition("@")
+    if not _TOKENIZER_HUB_REPO.match(repo) or (
+        revision and not _TOKENIZER_HUB_REVISION.match(revision)
+    ):
+        raise ValueError(
+            "a tokenizer is a built-in encoding (o200k_base, cl100k_base), "
+            "a tokenizer.json path or a Hugging Face repo id"
+        )
+    return value
 
 
 class Reasoning(BaseModel):
@@ -2457,11 +2494,25 @@ class Model(ModelFacts):
         "sampling_min_p or sampling_logit_bias; the Router sends this model "
         "requests without those fields.",
     )
+    tokenizer: Optional[str] = Field(
+        default=None,
+        description="Counts the model's prompts for the context window check: "
+        "a Hugging Face repo id ([org/]name[@revision]), whose tokenizer.json "
+        "the Router downloads beside its models, a built-in encoding "
+        "(o200k_base, cl100k_base), or a path to a tokenizer.json. Omitted, it "
+        "is the repo the model comes from, if any; else "
+        "global.router.context_window.proxy_tokenizer counts.",
+    )
 
     @field_validator("api_format")
     @classmethod
     def canonical_api_format(cls, value):
         return None if value is None else canonical_api(value)
+
+    @field_validator("tokenizer")
+    @classmethod
+    def _tokenizer_spec(cls, value):
+        return validate_tokenizer_spec(value)
 
     @model_validator(mode="after")
     def validate_schema(self):

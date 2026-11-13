@@ -115,6 +115,10 @@ type RequestContext struct {
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
+	// UpstreamBodyStreamed reports the provider body's own mode. A client that
+	// asked for a stream gets IsStreamingResponse even when the provider
+	// answered with one JSON object, and that body has to be read whole.
+	UpstreamBodyStreamed bool
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
@@ -275,6 +279,30 @@ type RequestContext struct {
 	// fallbackExecutedByCaller is set when the native gateway runs the
 	// request's fallback chain; the response phases then never fall back.
 	fallbackExecutedByCaller bool
+	// fallbackLastFailure is the last fallback candidate's failed upstream
+	// answer; a chain that ends without a success answers the client with it.
+	fallbackLastFailure *failedAttempt
+
+	// contextCounts holds the Router's counts of the request's prompt and
+	// contextBounds its byte bounds (context_window_count.go);
+	// contextWindowKept names the models the window filter kept although
+	// only the estimate said they do not fit, and contextInBand those whose
+	// windows the count falls within the margin of.
+	contextCounts     map[contextCountKey]contextCount
+	contextBounds     map[contextCountKey]int
+	contextWindowKept map[string]struct{}
+	contextInBand     map[string]struct{}
+	// contextTokenizers fixes the tokenizer of each model the request is
+	// counted for; contextVerdicts names the model and prompt shape pairs
+	// whose window check is logged and counted.
+	contextTokenizers map[string]modelTokenizer
+	contextVerdicts   map[string]struct{}
+	// contextAdmission counts a request whose bytes could exceed a window it
+	// can reach, beside its signals (context_window_parallel.go).
+	contextAdmission *contextAdmission
+	// fallbackMinWindow is the widest window whose backend refused the
+	// request for its length; fallback goes on only to wider windows.
+	fallbackMinWindow int
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
@@ -319,6 +347,13 @@ type RequestContext struct {
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
 	VSRSignalErrorMatches     map[string]bool
+	// VSRGuardOverload are the rules ("type:name") unread on an overloaded
+	// decision runtime that decide the request: alone they refuse it, or one
+	// would refuse it. It then gets a retryable error instead
+	// (global.model_catalog.on_signal_overload).
+	VSRGuardOverload []string
+	// guardOverloadAnswered is whether the request got that retryable error.
+	guardOverloadAnswered bool
 	// VSRScanCoverage is how much of their input the guard rules that read
 	// it in windows read, by "type:name".
 	VSRScanCoverage map[string]string

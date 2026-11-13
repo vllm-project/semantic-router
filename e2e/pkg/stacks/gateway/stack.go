@@ -151,19 +151,31 @@ func (s *Stack) ApplyPrerequisites(ctx context.Context, opts *framework.SetupOpt
 }
 
 // DeployCore installs semantic-router, Envoy Gateway, and Envoy AI Gateway.
+// The Router and the two gateways do not depend on each other until the
+// profile's resources are applied, so the Router installs beside them.
 func (s *Stack) DeployCore(ctx context.Context, opts *framework.SetupOptions) error {
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
+	router := make(chan error, 1)
+	go func() {
+		s.log(opts.Verbose, "Installing semantic-router")
+		if err := deployer.Install(ctx, s.semanticRouterInstallOptions(opts)); err != nil {
+			router <- fmt.Errorf("install semantic-router: %w", err)
+			return
+		}
+		if err := deployer.WaitForDeployment(ctx, helm.SemanticRouterRelease.Namespace, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
+			router <- fmt.Errorf("wait for semantic-router: %w", err)
+			return
+		}
+		router <- nil
+	}()
+	gateways := s.deployGateways(ctx, deployer, opts)
+	return errors.Join(<-router, gateways)
+}
+
+func (s *Stack) deployGateways(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
 	envoyGatewayRelease := helm.EnvoyGatewayRelease.Clone()
 	aiGatewayCRDRelease := helm.AIGatewayCRDRelease.Clone()
 	aiGatewayRelease := helm.AIGatewayRelease.Clone()
-
-	s.log(opts.Verbose, "Installing semantic-router")
-	if err := deployer.Install(ctx, s.semanticRouterInstallOptions(opts)); err != nil {
-		return fmt.Errorf("install semantic-router: %w", err)
-	}
-	if err := deployer.WaitForDeployment(ctx, helm.SemanticRouterRelease.Namespace, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
-		return fmt.Errorf("wait for semantic-router: %w", err)
-	}
 
 	s.log(opts.Verbose, "Installing Envoy Gateway")
 	if err := deployer.Install(ctx, envoyGatewayRelease); err != nil {
@@ -183,7 +195,6 @@ func (s *Stack) DeployCore(ctx context.Context, opts *framework.SetupOptions) er
 	if err := deployer.WaitForDeployment(ctx, helm.AIGatewayRelease.Namespace, deploymentAIGateway, timeoutDeploymentWait); err != nil {
 		return fmt.Errorf("wait for Envoy AI Gateway: %w", err)
 	}
-
 	return nil
 }
 

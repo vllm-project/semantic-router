@@ -557,10 +557,10 @@ func TestOfficialResponsesItemVariantsRejectCrossVariantFields(t *testing.T) {
 func TestOfficialUnsupportedResponsesToolDiscriminatorsAreTyped(t *testing.T) {
 	unsupported := fields(
 		"apply_patch", "code_interpreter", "computer", "computer_use_preview",
-		"file_search", "local_shell", "mcp", "namespace",
+		"file_search", "local_shell", "mcp",
 		"programmatic_tool_calling", "shell", "tool_search", "web_search", "web_search_preview",
 	)
-	assertClosedDiscriminatorInventory(t, "OpenAI Responses tool", 16, fields("function", "custom", "image_generation"), unsupported)
+	assertClosedDiscriminatorInventory(t, "OpenAI Responses tool", 16, fields("function", "custom", "image_generation", "namespace"), unsupported)
 	engine := NewBuiltinEngine()
 	for _, toolType := range unsupported {
 		t.Run(toolType, func(t *testing.T) {

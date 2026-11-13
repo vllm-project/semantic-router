@@ -58,7 +58,7 @@ translation:
 | `candidate` | 评审打分的对象：文档、片段或缓存请求 | `relevance` 和 `same_request` 评审 |
 | `answer` | 模型的回答 | 响应阶段的规则；`answer_check` |
 | `context` | 回答的依据上下文：检索到的文档和工具结果 | 设置了 `input.context` 的响应阶段规则；`hallucination` |
-| `images`、`videos` | 当前轮次的图像和视频部分 | 设置了 `input.image` 或 `input.video` 的规则 |
+| `images`、`videos` | 请求携带的全部图像，以及当前轮次的视频部分 | 设置了 `input.image` 或 `input.video` 的规则 |
 
 内容为空的部分会被省略，因此一条读取历史的规则在第一轮时只针对请求本身提问。
 
@@ -120,7 +120,7 @@ recipes[default].signals.pii[personal_data]: span_required: resolves to deployme
 
 ## 媒体输入 {#media-inputs}
 
-规则用 `input.image` 读取当前轮次的图像，用 `input.video` 读取视频。回答的部署必须声明自己能读取该媒体，否则配置加载以 `input_modality_unsupported` 失败。
+规则用 `input.image` 读取请求携带的全部图像，用 `input.video` 读取当前轮次的视频。回答的部署必须声明自己能读取该媒体，否则配置加载以 `input_modality_unsupported` 失败。
 
 - d3 家族和 Vela 3.0 d3 规格能读取图像。
 - `input.audio` 和 `input.video` 是 schema 的一部分，声明支持它们的模型无需修改 schema 即可回答这类规则。

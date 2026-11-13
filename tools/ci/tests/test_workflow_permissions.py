@@ -197,6 +197,10 @@ class CommunityValidationTests(unittest.TestCase):
         self.assertIn(
             "github.event.issue.number", jobs["title-format"]["concurrency"]["group"]
         )
+        # Only events that can change an issue title run the title check.
+        condition = jobs["title-format"]["if"]
+        self.assertIn("github.event.changes.title != null", condition)
+        self.assertNotIn("labeled", condition)
 
     def test_accept_comments_reconcile_one_issue_not_the_repository(self) -> None:
         job = self.data["jobs"]["issue-acceptance"]

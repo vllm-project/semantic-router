@@ -48,7 +48,14 @@ type CanonicalProviderModel struct {
 	// this model requests without those fields and reports each in
 	// x-vsr-warnings; other models still receive them.
 	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
-	ModelFacts              `yaml:",inline"`
+	// Tokenizer counts the model's prompts for the context window check: a
+	// Hugging Face repo id ([org/]name[@revision]), whose tokenizer.json the
+	// Router downloads beside its models, a built-in encoding (o200k_base,
+	// cl100k_base), or a path to a tokenizer.json. Omitted, it is the repo
+	// the model comes from, if any; else
+	// global.router.context_window.proxy_tokenizer counts.
+	Tokenizer  string `yaml:"tokenizer,omitempty"`
+	ModelFacts `yaml:",inline"`
 }
 
 // ModelFactFields are the keys of the facts a providers.models[] entry states.

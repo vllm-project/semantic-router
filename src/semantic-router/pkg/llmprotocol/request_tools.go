@@ -1,15 +1,17 @@
 package llmprotocol
 
-// StripTools removes tool controls and optionally linked calls/results.
+// StripTools removes tool controls, the hosted image_generation tool among
+// them, and optionally linked calls/results.
 //
 //nolint:cyclop // Tool history removal walks every closed neutral content variant.
 func StripTools(request *Request, stripHistory bool) (bool, int) {
 	if request == nil {
 		return false, 0
 	}
-	changed := len(request.Tools) > 0 || request.ToolChoice.Mode != "" ||
+	changed := len(request.Tools) > 0 || request.ImageGeneration != nil || request.ToolChoice.Mode != "" ||
 		request.ToolChoice.Name != "" || request.ParallelToolCalls != nil
 	request.Tools = nil
+	request.ImageGeneration = nil
 	request.ToolChoice = ToolChoice{}
 	request.ParallelToolCalls = nil
 	if !stripHistory {
