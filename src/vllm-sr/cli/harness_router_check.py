@@ -195,7 +195,7 @@ def system_one_models(doc: dict | None) -> list[str]:
     """The System One models the first listener publishes, which vSR can ask there."""
     listeners = (doc or {}).get("listeners") or []
     first = listeners[0] if listeners else None
-    return [str(m) for m in _get(first, "systemone", "models") or []]
+    return [str(m) for m in _get(first, "apis", "systemone", "models") or []]
 
 
 def check_router_config(doc: dict, harness: str) -> list[RouterFinding]:

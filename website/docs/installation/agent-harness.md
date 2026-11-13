@@ -225,15 +225,21 @@ for the other fields Codex sends.
 One listener can serve both systems: the routed model calls for Claude Code
 and, at `/v1/decisions`, the System One questions vSR asks. Publish the decision
 model on the listener and point vSR at it, so the plugin and the gateway share
-one address, one API key and one decision model:
+one address, one API key and one decision model. A listener that names its
+`apis` serves only those, so list the model APIs the harnesses use next to
+`systemone`:
 
 ```yaml
 listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
-    systemone:
-      models: [vela3-lite]       # the public names vSR may ask for
+    apis:
+      messages: {}               # Claude Code
+      responses: {}              # Codex CLI
+      chat_completions: {}
+      systemone:
+        models: [vela3-lite]     # the public names vSR may ask for
 global:
   model_catalog:
     deployments:

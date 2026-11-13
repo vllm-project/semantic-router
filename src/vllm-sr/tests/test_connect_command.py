@@ -640,7 +640,7 @@ def test_cli_takes_the_gateway_from_the_configurations_listener(tmp_path, monkey
 
 def test_vsr_is_pointed_at_the_listeners_system_one(monkeypatch, capsys):
     connect_command = importlib.import_module("cli.commands.connect")
-    doc = {"listeners": [{"port": 8899, "systemone": {"models": ["vela3-fast"]}}]}
+    doc = {"listeners": [{"port": 8899, "apis": {"systemone": {"models": ["vela3-fast"]}}}]}
     inputs = {"router": "false", "runtimeUrl": "http://127.0.0.1:8790/v1/decisions"}
     monkeypatch.setattr(connect_command, "_vsr_plugin", lambda env: {"inputs": inputs})
     connect_command._check_vsr({}, "http://localhost:8899", doc)
