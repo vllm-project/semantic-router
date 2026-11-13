@@ -36,7 +36,8 @@ class Change:
     """One file and what the command sets in it.
 
     kind is json-env (keys of the "env" object of a JSON settings file, and
-    TOP_LEVEL_KEYS at its top level) or file (the whole file, held as the one
+    TOP_LEVEL_KEYS at its top level), json (top-level keys of a JSON file whose
+    other keys are not the command's) or file (the whole file, held as the one
     value under "file").
     """
 
@@ -52,6 +53,14 @@ class Change:
         values = self.values if values is None else values
         if self.kind == "json-env":
             return set_json_env(self.old_text(), values)
+        if self.kind == "json":
+            held = _settings(self.old_text())
+            for key, value in values.items():
+                if value is None:
+                    held.pop(key, None)
+                else:
+                    held[key] = value
+            return json.dumps(held, indent=2) + "\n" if held else ""
         return values.get("file", self.old_text()) or ""
 
     def raw(self, text: str) -> dict[str, Any]:
@@ -63,12 +72,18 @@ class Change:
                 key: (settings if key in TOP_LEVEL_KEYS else env).get(key)
                 for key in self.values
             }
+        if self.kind == "json":
+            held = _settings(text)
+            return {key: held.get(key) for key in self.values}
         return {"file": text or None}
 
     def shown(self, text: str, key_label: str) -> str:
         """The part of text the command owns, for display, with no key in it."""
         if self.kind == "file":
             return hide_secrets(text)
+        if self.kind == "json":
+            held = {k: v for k, v in self.raw(text).items() if v is not None}
+            return json.dumps(held, indent=2) + "\n" if held else ""
         held = {k: v for k, v in self.raw(text).items() if v is not None}
         if held.get(TOKEN_KEY):
             written = held[TOKEN_KEY] == self.values[TOKEN_KEY]
@@ -95,11 +110,12 @@ def hide_secrets(text: str) -> str:
     lines = []
     for line in text.splitlines(keepends=True):
         found = SETTING_LINE.match(line)
+        shown = line
         if found and not found.group(2).lower().endswith("env_key"):
             name, value = found.group(2), found.group(3)
             if SECRET_NAME.search(name) or "bearer " in value.lower():
-                line = f'{found.group(1)}"<hidden>"{found.group(4)}'
-        lines.append(line)
+                shown = f'{found.group(1)}"<hidden>"{found.group(4)}'
+        lines.append(shown)
     return "".join(lines)
 
 
@@ -412,7 +428,7 @@ def record_plugin(
     keys = record.setdefault("plugins", {}).setdefault(plugin_id, {})
     for key, value in written.items():
         keys.setdefault(key, {"before": before.get(key)})["written"] = value
-    manifest_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    write_private(manifest_path, json.dumps(record, indent=2) + "\n", always=True)
 
 
 def plugin_undo(manifest_dir: Path, inputs) -> list[tuple[str, dict]]:

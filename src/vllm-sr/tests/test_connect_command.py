@@ -1033,6 +1033,7 @@ class FakeClaudePlugins:
         }
         self.token = None
         self.ran = []
+        self.unreadable = False
 
     def __call__(self, argv, **kw):
         self.ran.append(argv)
@@ -1043,6 +1044,8 @@ class FakeClaudePlugins:
             )
         elif argv[1:3] == ["plugin", "install"]:
             self.installed = True
+        elif argv[-1] == "--json" and self.unreadable:
+            return subprocess.CompletedProcess(argv, 1, "", "error")
         elif argv[-1] == "--json":
             inputs = {**self.inputs, "runtimeToken": ""}
             configured = sorted(self.configured)
@@ -1052,7 +1055,7 @@ class FakeClaudePlugins:
             given = json.loads(kw["input"])
             self.token = given.pop("runtimeToken", self.token)
             self.inputs.update(given)
-            self.configured |= set(given)
+            self.configured |= set(given) | ({"runtimeToken"} if self.token else set())
         return subprocess.CompletedProcess(argv, 0, out, "")
 
 
@@ -1238,3 +1241,86 @@ def test_a_dry_run_launch_writes_no_settings_file(tmp_path, monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert "--settings" in result.output and written == []
+
+
+def _vsr_claude_env(tmp_path, monkeypatch, claude):
+    command = importlib.import_module("cli.commands.connect")
+    monkeypatch.setattr(command, "_probe", lambda *args: None)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(command.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(command.subprocess, "run", claude)
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n"
+        "        models: [vela3-lite]\n"
+    )
+    return ["connect", "claude-code", "--vsr", "--base-url", "http://localhost:8899"]
+
+
+def test_a_stored_token_is_not_sent_to_another_listener(tmp_path, monkeypatch):
+    claude = FakeClaudePlugins(installed=True)
+    claude.token, claude.configured = "sk-old", {"runtimeToken"}
+    monkeypatch.delenv("VLLM_SR_API_KEY", raising=False)
+    args = _vsr_claude_env(tmp_path, monkeypatch, claude)
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 1
+    assert "holds a runtime token from before" in result.output
+    assert not (tmp_path / "settings.json").exists()
+    assert claude.inputs["runtimeUrl"] == ""
+
+
+def test_a_plugin_whose_options_cannot_be_read_is_left_alone(tmp_path, monkeypatch):
+    claude = FakeClaudePlugins(installed=True)
+    claude.unreadable = True
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    args = _vsr_claude_env(tmp_path, monkeypatch, claude)
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 1 and "gave no options" in result.output
+    assert not (tmp_path / "settings.json").exists()
+    assert not any(argv[-1] == "--values-stdin" for argv in claude.ran)
+
+
+def test_undo_that_cannot_read_the_plugin_undoes_nothing(tmp_path, monkeypatch):
+    claude = FakeClaudePlugins(installed=True)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    args = _vsr_claude_env(tmp_path, monkeypatch, claude)
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    written = (tmp_path / "settings.json").read_text()
+    claude.unreadable = True
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--undo"])
+    assert result.exit_code == 1
+    assert (tmp_path / "settings.json").read_text() == written
+    assert (tmp_path / ".vllm-sr-connect.json").exists()
+
+
+def test_undo_restores_the_runtime_keys_of_vsr_json_and_keeps_later_edits(
+    tmp_path, monkeypatch
+):
+    command = importlib.import_module("cli.commands.connect")
+    monkeypatch.setattr(command, "_probe", lambda *args: None)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n"
+        "        models: [vela3-lite]\n"
+    )
+    held = tmp_path / "vsr.json"
+    held.write_text(json.dumps({"guardReview": 0.8}))
+    args = ["connect", "codex", "--vsr", "--base-url", "http://localhost:8899"]
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    held.write_text(json.dumps({**json.loads(held.read_text()), "guardReview": 0.95}))
+    result = CliRunner().invoke(main, ["connect", "codex", "--undo"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(held.read_text()) == {"guardReview": 0.95}
+
+
+def test_vsr_asks_the_listener_the_gateway_url_names():
+    doc = {
+        "listeners": [
+            {"port": 8899, "apis": {"systemone": {"models": ["first"]}}},
+            {"port": 9900, "apis": {"systemone": {"models": ["second"]}}},
+        ]
+    }
+    assert rc.system_one_models(doc) == ["first"]
+    assert rc.system_one_models(doc, 9900) == ["second"]
+    assert rc.system_one_models(doc, 7000) == []

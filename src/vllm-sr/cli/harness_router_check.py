@@ -196,9 +196,14 @@ def _codex_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
     return findings
 
 
-def system_one_models(doc: dict | None) -> list[str]:
-    """The System One models the first listener publishes, which vSR can ask there."""
-    listeners = (doc or {}).get("listeners") or []
+def system_one_models(doc: dict | None, port: int | None = None) -> list[str]:
+    """The System One models a listener publishes, which vSR can ask there: the
+    listener on port, or the first."""
+    listeners = [
+        one for one in (doc or {}).get("listeners") or [] if isinstance(one, dict)
+    ]
+    if port is not None:
+        listeners = [one for one in listeners if str(one.get("port")) == str(port)]
     first = listeners[0] if listeners else None
     return [str(m) for m in _get(first, "apis", "systemone", "models") or []]
 

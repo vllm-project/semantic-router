@@ -11,6 +11,7 @@ import signal
 import subprocess
 import tempfile
 import textwrap
+import urllib.parse
 from pathlib import Path
 
 import click
@@ -170,14 +171,24 @@ def claude_code(
             "--vsr runs claude plugin, and claude is not on PATH."
         )
     plugin_id = _vsr_plugin_id(env) if options else None
+    # read before anything is written: a plugin whose options cannot be read is left alone
+    state = _plugin_state(env, plugin_id) if options and plugin_id else None
+    if state and not from_env and "runtimeToken" in state[1]:
+        # Claude Code cannot clear a stored token, and the plugin sends it to any URL
+        raise click.ClickException(
+            f"{plugin_id} holds a runtime token from before, which it would send to"
+            f" {options['runtimeUrl']}. Set ${api_key_env} to this listener's key, or"
+            f" remove the token with /plugin configure {plugin_id} in Claude Code."
+        )
     plan = _vsr_claude_plan(options, plugin_id, api_key_env if from_env else None)
     if not _run(
         "claude-code", changes, path.parent, label, doc, dry_run, yes, notes, plan
     ):
         return
     if options:
+        before = state[0] if state else None
         _setup_vsr_claude(
-            env, plugin_id, options, token if from_env else "", path.parent
+            env, plugin_id, options, token if from_env else "", path.parent, before
         )
     if scope == "project":
         for kept in hc.keep_out_of_git([path, path.parent / hc.MANIFEST], Path.cwd()):
@@ -261,11 +272,8 @@ def codex(
     options = _vsr_options(gateway, doc) if vsr else None
     plan = []
     if options:
-        # the vSR plugin's own settings: what is there stays, the runtime is the listener's
-        held = home / "vsr.json"
-        kept = json.loads(held.read_text(encoding="utf-8")) if held.exists() else {}
-        text = json.dumps({**kept, **options}, indent=2) + "\n"
-        changes.append(hc.Change(held, "file", {"file": text}))
+        # the vSR plugin's own settings: connect owns the runtime keys, the rest stays
+        changes.append(hc.Change(home / "vsr.json", "json", options))
         plan = [shlex.join(argv) for argv in VSR_CODEX_INSTALL]
     if not _run("codex", changes, home, "", doc, dry_run, yes, notes, plan):
         return
@@ -437,7 +445,8 @@ VSR_CODEX_INSTALL = (
 def _vsr_options(gateway: str, doc: dict | None) -> dict[str, str] | None:
     """The runtime the vSR plugin asks: this listener's System One, or None when it
     publishes no model."""
-    models = rc.system_one_models(doc)
+    # the listener the gateway URL names, which --base-url may set to any of them
+    models = rc.system_one_models(doc, urllib.parse.urlsplit(gateway).port)
     if not models:
         echo(
             "System One: this listener publishes no model (listeners[].systemone), so"
@@ -469,7 +478,7 @@ def _claude_vsr_values(options: dict[str, str]) -> dict[str, str]:
     return {"runtime": "remote", **options, "router": "false"}
 
 
-def _setup_vsr_claude(env, plugin_id, options, token, manifest_dir) -> None:
+def _setup_vsr_claude(env, plugin_id, options, token, manifest_dir, before) -> None:
     """Install the plugin when it is missing and set its runtime through Claude Code's
     own command, which keeps the token in its credential store. --undo puts back the
     options it changed; the token stays."""
@@ -477,7 +486,8 @@ def _setup_vsr_claude(env, plugin_id, options, token, manifest_dir) -> None:
         _must(argv, env)
     plugin_id = plugin_id or VSR_PLUGIN
     configure = ["claude", "plugin", "configure", plugin_id]
-    before = _plugin_inputs(env, plugin_id)
+    if before is None:
+        before = _plugin_state(env, plugin_id)[0]
     values = _claude_vsr_values(options)
     secret = {"runtimeToken": token} if token else {}
     _must([*configure, "--values-stdin"], env, json.dumps({**values, **secret}))
@@ -552,19 +562,28 @@ def _vsr_plugin(env: dict[str, str]) -> dict | None:
     return _json_of(["claude", "plugin", "configure", plugin_id, "--json"], env) or {}
 
 
-def _plugin_inputs(env: dict[str, str], plugin_id: str) -> dict[str, str]:
-    """A plugin's option values as strings; an option never set reads as its
-    default, since `inputs` gives an unset string option as empty."""
-    found = _json_of(["claude", "plugin", "configure", plugin_id, "--json"], env) or {}
-    inputs, configured = found.get("inputs") or {}, set(found.get("configured") or ())
+def _plugin_state(
+    env: dict[str, str], plugin_id: str
+) -> tuple[dict[str, str], set[str]]:
+    """A plugin's option values as strings, and the options set at all; an option
+    never set reads as its default, since `inputs` gives an unset string as empty.
+    Fails rather than guess, since --vsr and --undo record and restore these."""
+    found = _json_of(["claude", "plugin", "configure", plugin_id, "--json"], env)
+    if not isinstance(found, dict) or not isinstance(found.get("inputs"), dict):
+        raise click.ClickException(
+            f"claude plugin configure {plugin_id} --json gave no options, so the"
+            " plugin's settings were left as they were."
+        )
+    inputs, configured = found["inputs"], set(found.get("configured") or ())
     schema = found.get("schema") or {}
     values = {
         key: value if key in configured else schema.get(key, {}).get("default", value)
         for key, value in inputs.items()
     }
-    return {
+    strings = {
         k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in values.items()
     }
+    return strings, configured
 
 
 def _json_of(argv: list[str], env: dict[str, str]):
@@ -609,8 +628,9 @@ def _probe(
 
 def _undo(manifest_dir: Path) -> None:
     env = dict(os.environ)
+    # every plugin is read before anything is undone, so a failed read keeps the record
     for plugin_id, back in hc.plugin_undo(
-        manifest_dir, lambda one: _plugin_inputs(env, one)
+        manifest_dir, lambda one: _plugin_state(env, one)[0]
     ):
         if back:
             _must(
