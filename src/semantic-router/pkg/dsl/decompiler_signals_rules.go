@@ -38,6 +38,12 @@ func (d *decompiler) decompileKeywordSignals() {
 		if kw.IncludeHistory {
 			d.write("  include_history: true\n")
 		}
+		if input := keywordInputValue(kw.Input); len(input) > 0 {
+			d.write("  input: %s\n", formatPluginConfigValue(fieldsToMap(input)))
+		}
+		if kw.OnUnscanned != "" {
+			d.write("  on_unscanned: %q\n", kw.OnUnscanned)
+		}
 		if kw.Count != nil {
 			d.write("  count: %s\n", formatPluginConfigValue(numericPredicateToMap(kw.Count)))
 		}

@@ -28,10 +28,18 @@ type KeywordClassifier struct {
 type keywordRule struct {
 	name           string
 	method         string
+	operator       string
 	regex          *preppedKeywordRule
 	scored         scoredKeywordMatcher
 	includeHistory bool
 	measure        *keywordMeasure
+	// readsRequest is whether the rule reads the current user turn (and the
+	// earlier ones with includeHistory); toolResults whether it reads each
+	// of the request's textual tool results on its own, which onUnscanned
+	// resolves when the Router could not read one of them as text.
+	readsRequest bool
+	toolResults  bool
+	onUnscanned  string
 }
 
 // keywordMeasure is what a counting rule matches on: the number of its
@@ -86,7 +94,10 @@ func newKeywordRule(rule config.KeywordRule) (keywordRule, error) {
 	if method == "" {
 		method = "regex"
 	}
-	compiled := keywordRule{name: rule.Name, method: method, includeHistory: rule.IncludeHistory}
+	compiled := keywordRule{
+		name: rule.Name, method: method, operator: rule.Operator, includeHistory: rule.IncludeHistory,
+		readsRequest: rule.Input.ReadsRequest(), toolResults: rule.Input.ToolResults, onUnscanned: rule.OnUnscanned,
+	}
 	switch {
 	case rule.Count != nil:
 		compiled.measure = &keywordMeasure{predicate: rule.Count}

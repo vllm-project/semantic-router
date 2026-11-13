@@ -48,12 +48,35 @@ type KeywordRule struct {
 	// so a marker stated earlier in the conversation still matches.
 	// Assistant and system messages are never included.
 	IncludeHistory bool `yaml:"include_history,omitempty"`
+	// Input adds the request's tool results to what the rule reads, or leaves
+	// the current user turn out, as a pii rule's input does.
+	Input KeywordRuleInput `yaml:"input,omitempty"`
+	// OnUnscanned is what a rule that reads the tool results reports when the
+	// Router could not read one of them as text and found no keyword in the
+	// text it read: best_effort (the default) decides on the text read,
+	// match matches, and no_match does not. A keyword found counts regardless.
+	OnUnscanned string `yaml:"on_unscanned,omitempty" jsonschema:"enum=best_effort,enum=match,enum=no_match"`
 	// Count or Density, at most one, makes an OR rule match on how often its
 	// keywords occur in the text it reads: Count on the number of
 	// occurrences, Density on occurrences per 1,000 characters. Either is
 	// published as the rule's value, whether or not its predicate holds.
 	Count   *NumericPredicate `yaml:"count,omitempty"`
 	Density *NumericPredicate `yaml:"density,omitempty"`
+}
+
+// KeywordRuleInput is what a keyword rule reads besides the current user
+// turn. ToolResults adds the request's textual tool results, each matched on
+// its own; Request false leaves the current user turn out, as
+// SystemOneInput.Request does. The earlier user turns stay on IncludeHistory.
+type KeywordRuleInput struct {
+	ToolResults bool  `yaml:"tool_results,omitempty"`
+	Request     *bool `yaml:"request,omitempty"`
+}
+
+// ReadsRequest reports whether the rule reads the current user turn, which it
+// does unless Request is false.
+func (i KeywordRuleInput) ReadsRequest() bool {
+	return i.Request == nil || *i.Request
 }
 
 type LanguageRule struct {
