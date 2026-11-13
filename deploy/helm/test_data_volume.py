@@ -30,7 +30,6 @@ VECTOR_STORE = {
                 "vector_store": {
                     "enabled": True,
                     "backend_type": "memory",
-                    "embedding_model": "mmbert",
                 }
             }
         }

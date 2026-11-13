@@ -44,14 +44,18 @@ on the selected backend.
 
 ## Configuration
 
-Enable Router Replay with the existing service config:
+Enable Router Replay with a `router_replay` plugin in `global.plugins`; the
+service config holds its store:
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
 This example uses Postgres for persistence. The default `memory` backend loses
@@ -115,6 +119,12 @@ POST /api/v1/observability/outcomes
 `target: policy`, `target: stability`, `target: provider`, and
 `target: router` outcomes are kept for replay and offline recipe learning unless
 a typed online consumer exists.
+
+A model outcome is credited to the model that answered the request. When a
+fallback candidate's answer reached the client, that is the candidate the
+response named in `x-vsr-selected-model`, not the model the request was first
+routed to. A candidate whose answer a response policy blocked did not answer. A
+`target_ref` naming any other model is rejected with `409`.
 
 ## Recipe Learning Command
 

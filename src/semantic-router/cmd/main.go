@@ -75,7 +75,8 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
-	startupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
+	startupWriter, closeStartupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
+	defer func() { runErr = errors.Join(runErr, closeStartupWriter()) }()
 	resolvedOpts, err := resolveRuntimeManagementOptions(opts, cfg)
 	if err != nil {
 		return recordStartupError(startupWriter, "resolve management API", err)
@@ -121,6 +122,9 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return recordStartupError(startupWriter, "ensure models are downloaded", err)
 	}
 	if opts.downloadOnly {
+		// A serving Router fetches tokenizers in the background; a
+		// download-only run, which fills the model volume, waits for them.
+		_ = modeldownload.EnsureTokenizers(ctx, cfg.ContextWindowTokenizers())
 		logging.ComponentEvent("router", "download_only_complete", map[string]interface{}{
 			"mode": "download_only",
 		})
@@ -150,9 +154,6 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 
 	embeddingRuntime := routerServer.EmbeddingRuntimeState()
-	if err = warmupRouterRuntime(ctx, routerServer); err != nil {
-		return recordStartupError(startupWriter, "warm up router runtime", err)
-	}
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	servingLifecycle, err = runRouterServing(ctx, cfg, opts, routerServer, startupWriter)
 	if err != nil {
@@ -516,7 +517,7 @@ func logStartupSummary(cfg *config.RouterConfig, opts runtimeOptions, embeddingM
 		"config_source":       cfg.ConfigSource,
 		"decisions":           strings.Join(decisionNames, ","),
 		"embedding_ready":     embeddingModelsReady,
-		"sem_cache_enabled":   cfg.Enabled,
+		"sem_cache_enabled":   cfg.SemanticCache.InUse,
 		"model_selection":     cfg.ModelSelection.Enabled,
 		"authz_providers":     len(cfg.Authz.Providers),
 		"ratelimit_providers": len(cfg.RateLimit.Providers),

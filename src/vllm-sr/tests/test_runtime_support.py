@@ -201,23 +201,28 @@ def test_discovered_credential_overrides_static_unmasked_passthrough_rule(
 
 
 def test_config_env_references_reads_api_key_env_and_interpolations(tmp_path):
+    """Passthrough forwards exactly the names the Router reads."""
     config = tmp_path / "config.yaml"
     config.write_text(
         yaml.safe_dump(
             {
                 "providers": {"models": [{"api_key_env": "MISTRAL_API_KEY"}]},
-                "embedding_models": {"endpoint": {"api_key_env": "EMBEDDING_API_KEY"}},
+                "deployments": {
+                    "remote-embedding": {"auth": {"api_key_env": "my_lower_key"}}
+                },
                 "note": "uses ${REDIS_AUTH_TOKEN} at runtime",
                 "bare": "postgres://$DATABASE_PASSWORD@db",
                 "fallback": "${OPTIONAL_TOKEN:-development}",
+                "escaped": "$${ESCAPED_NAME}",
             }
         )
     )
 
     assert config_env_references(config) == {
         "MISTRAL_API_KEY",
-        "EMBEDDING_API_KEY",
+        "my_lower_key",
         "REDIS_AUTH_TOKEN",
+        "DATABASE_PASSWORD",
         "OPTIONAL_TOKEN",
     }
     assert config_env_references(None) == set()
@@ -248,8 +253,26 @@ def test_required_config_env_references_includes_every_router_consulted_name(
         "CACHE_PASSWORD",
         "OPTIONAL_TOKEN",
         "UNSET_ONLY_TOKEN",
-        "lowercase_token",
     }
+
+
+def test_dollar_text_that_names_no_variable_needs_no_binding(tmp_path: Path):
+    """The Router reads only uppercase names, so a Recipe whose templates,
+    prices or request placeholders carry other $ text needs no binding."""
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "template": "{{range $i, $resp := .ReferenceResponses}}{{$resp.Content}}{{end}}",
+                "prompt": "Quote $100 or $5.99.",
+                "request": '{"query":"${user_content}","top_k":${top_k}}',
+                "other": "${lowercase-token} ${:-fallback} ${}",
+            }
+        )
+    )
+
+    assert required_config_env_references(config) == set()
+    validate_config_recipe_env_bindings(config, [])
 
 
 def test_required_package_env_references_fail_closed_on_denied_host_names(
@@ -273,8 +296,6 @@ def test_required_package_env_references_fail_closed_on_denied_host_names(
 @pytest.mark.parametrize(
     "reference",
     [
-        "${lowercase_token}",
-        "${lowercase-token}",
         "${PATH:-/usr/bin}",
         "${VLLM_SR_RECIPE_STORE_DIR}",
         "${VLLM_SR_MANAGED_STORAGE_BACKENDS-default}",

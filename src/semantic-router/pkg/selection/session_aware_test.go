@@ -26,7 +26,7 @@ func TestSessionAwareSelectorPreservesLatencyScoreDirection(t *testing.T) {
 	selector := NewSessionAwareSelector(nil)
 	selector.SetBaseSelector(stubSessionBase{result: &SelectionResult{
 		SelectedModel: "fast", Score: 1, ScoreDirection: LowerIsBetter,
-		Method: MethodLatencyAware, AllScores: map[string]float64{"fast": 1, "slow": 2},
+		Method: MethodMultiFactor, AllScores: map[string]float64{"fast": 1, "slow": 2},
 	}})
 	result, err := selector.Select(context.Background(), &SelectionContext{
 		CandidateModels: []config.ModelRef{{Model: "fast"}, {Model: "slow"}, {Model: "unmeasured"}},
@@ -42,7 +42,6 @@ func TestSessionAwareSelectorPreservesLatencyScoreDirection(t *testing.T) {
 
 func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:                 MethodStatic,
 		ToolLoopHardLock:           true,
 		ContextPortabilityHardLock: true,
 		ToolLoopStayBias:           0.35,
@@ -54,7 +53,7 @@ func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.95,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.40,
 				"frontier": 0.95,
@@ -88,7 +87,6 @@ func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 
 func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:                 MethodStatic,
 		ContextPortabilityHardLock: true,
 		ToolLoopStayBias:           0.35,
 		StayBias:                   0.10,
@@ -99,7 +97,7 @@ func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.95,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.40,
 				"frontier": 0.95,
@@ -147,7 +145,6 @@ func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
 
 func TestSessionAwareSelectorIdleSessionAllowsBaseSwitch(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:             MethodStatic,
 		IdleTimeoutSeconds:     60,
 		SwitchMargin:           0,
 		StayBias:               0,
@@ -162,7 +159,7 @@ func TestSessionAwareSelectorIdleSessionAllowsBaseSwitch(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.90,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.20,
 				"frontier": 0.90,
@@ -196,7 +193,6 @@ func TestSessionAwareSelectorIdleSessionAllowsBaseSwitch(t *testing.T) {
 
 func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:             MethodStatic,
 		IdleTimeoutSeconds:     60,
 		SwitchMargin:           0.05,
 		StayBias:               0.10,
@@ -253,7 +249,6 @@ func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 
 func TestSessionAwareSelectorDecisionDriftClearsContinuityPenalty(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:             MethodStatic,
 		DecisionDriftReset:     true,
 		IdleTimeoutSeconds:     300,
 		SwitchMargin:           0.05,
@@ -314,7 +309,6 @@ func TestSessionAwareSelectorDecisionDriftClearsContinuityPenalty(t *testing.T) 
 func TestSessionAwareSelectorDriftReleasesToolLoopExactOwnerExclusion(t *testing.T) {
 	runSelect := func(session *AgenticSessionContext) (*SelectionResult, error) {
 		selector := NewSessionAwareSelector(&SessionAwareConfig{
-			BaseMethod:             MethodStatic,
 			DecisionDriftReset:     true,
 			IdleTimeoutSeconds:     300,
 			SwitchMargin:           0.05,
@@ -379,7 +373,6 @@ func TestSessionAwareSelectorDriftReleasesToolLoopExactOwnerExclusion(t *testing
 
 func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:             MethodStatic,
 		MinTurnsBeforeSwitch:   1,
 		SwitchMargin:           0,
 		StayBias:               0,
@@ -394,7 +387,7 @@ func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testi
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.90,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.20,
 				"frontier": 0.90,
@@ -424,7 +417,6 @@ func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testi
 
 func TestSessionAwareNetSwitchAdvantageUsesAdjustedCurrentScore(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:             MethodStatic,
 		SwitchMargin:           0,
 		StayBias:               0.10,
 		PrefixCacheWeight:      0,
@@ -437,7 +429,7 @@ func TestSessionAwareNetSwitchAdvantageUsesAdjustedCurrentScore(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.62,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.50,
 				"frontier": 0.62,
@@ -588,7 +580,6 @@ func TestSessionAwareConfigPreservesNeutralCacheMultiplier(t *testing.T) {
 
 func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:                   MethodStatic,
 		MinTurnsBeforeSwitch:         0,
 		SwitchMargin:                 0,
 		StayBias:                     0,
@@ -605,7 +596,7 @@ func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.50,
 				"frontier": 0.55,
@@ -665,7 +656,6 @@ func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 
 func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:                   MethodStatic,
 		MinTurnsBeforeSwitch:         0,
 		SwitchMargin:                 0,
 		StayBias:                     0,
@@ -682,7 +672,7 @@ func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T)
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.50,
 				"frontier": 0.55,
@@ -728,7 +718,6 @@ func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T)
 
 func TestSessionAwareRemainingTurnPriorTrustsConfigOverrideWithoutSamples(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:                   MethodStatic,
 		MinTurnsBeforeSwitch:         0,
 		SwitchMargin:                 0,
 		StayBias:                     0,
@@ -745,7 +734,7 @@ func TestSessionAwareRemainingTurnPriorTrustsConfigOverrideWithoutSamples(t *tes
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
-			Method:        MethodHybrid,
+			Method:        MethodMultiFactor,
 			AllScores: map[string]float64{
 				"current":  0.50,
 				"frontier": 0.55,
@@ -805,9 +794,7 @@ func (s stubSessionBase) Select(context.Context, *SelectionContext) (*SelectionR
 	return &copy, nil
 }
 
-func (s stubSessionBase) Method() SelectionMethod { return MethodHybrid }
-
-func (s stubSessionBase) UpdateFeedback(context.Context, *Feedback) error { return nil }
+func (s stubSessionBase) Method() SelectionMethod { return MethodMultiFactor }
 
 func (s stubSessionBase) Tier() AlgorithmTier { return TierSupported }
 

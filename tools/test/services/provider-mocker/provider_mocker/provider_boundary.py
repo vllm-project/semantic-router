@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from .provider_contract import ContractViolationError, validate_provider_request
 
 SESSION_HEADER = "x-vsr-test-session-id"
-_OBSERVED_HEADER_PREFIX = "x-vsr-e2e-"
+_OBSERVED_HEADER_PREFIX = "x-e2e-"
 _MAX_REQUEST_STORE_SESSIONS = 32
 
 router = APIRouter()

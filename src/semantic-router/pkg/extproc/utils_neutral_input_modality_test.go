@@ -148,7 +148,7 @@ func TestExtractSemanticRequestSignalsCountsNeutralVideoContent(t *testing.T) {
 }
 
 // Input-modality facts are scoped to user turns: media carried by other roles
-// contributes to the request-wide image count but not to the family's facts.
+// is not input the request asks the model to consume.
 func TestExtractSemanticRequestSignalsScopesInputModalitiesToUserMessages(t *testing.T) {
 	request := &llmprotocol.Request{Messages: []llmprotocol.Message{
 		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
@@ -159,9 +159,6 @@ func TestExtractSemanticRequestSignalsScopesInputModalitiesToUserMessages(t *tes
 	}}
 	snapshot := extractSemanticRequestSignals(request)
 	assertInputModalityFacts(t, snapshot.InputModality, classification.InputModalityFacts{TextContentCount: 1})
-	if snapshot.ImageContentCount != 1 {
-		t.Fatalf("ImageContentCount = %d, want 1", snapshot.ImageContentCount)
-	}
 }
 
 // Whitespace-only text is not text input; the classify walk applies the same

@@ -54,7 +54,7 @@ func TestFallbackResponseRequiresTrueNoMatchAndProviderDispatch(t *testing.T) {
 				model = "general-expert"
 			}
 			header := http.Header{}
-			for key, value := range map[string]string{"x-vsr-schema-version": "2", "x-vsr-response-path": "upstream", "x-vsr-selected-recipe": "e2e-fallback", "x-vsr-selected-decision": tc.ExpectedDecision, "x-vsr-selected-model": model} {
+			for key, value := range map[string]string{"x-vsr-schema-version": routerSchemaVersion, "x-vsr-response-path": "upstream", "x-vsr-selected-recipe": "e2e-fallback", "x-vsr-selected-decision": tc.ExpectedDecision, "x-vsr-selected-model": model} {
 				header.Set(key, value)
 			}
 			body := []byte(fmt.Sprintf(`{"object":"chat.completion","model":%q,"choices":[{"message":{"role":"assistant","content":"Provider response"}}]}`, model))

@@ -17,6 +17,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("public-listener-empty-body-rejected", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "An empty POST to any inference path gets the Router's own 400 and never reaches the backend (issue #4292)",
 		Tags:        []string{"security", "listener-contract", "protocol"},
 		Fn:          testPublicListenerEmptyBodyRejected,

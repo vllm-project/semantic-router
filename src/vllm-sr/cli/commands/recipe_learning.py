@@ -45,8 +45,6 @@ log = get_logger(__name__)
 
 _DEFAULT_REPLAY_LIMIT = 100
 _MAX_REPLAY_LIMIT = 100_000
-# The management API returns at most this many records per list request.
-_REPLAY_PAGE_SIZE = 100
 
 
 def load_replay_records(
@@ -62,35 +60,28 @@ def load_replay_records(
 
 
 def fetch_replay_payload(endpoint: str, limit: int, timeout: int) -> Any:
-    """Fetch up to limit records, paging by offset past the API's page cap.
+    """Fetch up to limit records, following next_offset past the Router's page cap.
 
-    Run-level analysis needs every record of a run, so a single capped page
-    would cut runs short. The list is newest first, so a record stored between
-    two requests shifts the next page and repeats a record; records are kept
-    once by id."""
+    The list is newest first, so a record stored between two pages shifts the
+    next one and repeats a record; records are kept once by id."""
     client = RouterManagementClient(endpoint or None, timeout=timeout)
     limit = max(1, min(limit, _MAX_REPLAY_LIMIT))
-    if limit <= _REPLAY_PAGE_SIZE:
-        return client.request(
-            "GET", OBSERVABILITY_REPLAYS_PATH, params={"limit": str(limit)}
-        ).payload
-    records: dict[str, dict[str, Any]] = {}
+    records: dict[Any, dict[str, Any]] = {}
+    params = {"limit": str(limit)}
     offset = 0
-    while len(records) < limit:
-        page_size = min(_REPLAY_PAGE_SIZE, limit - len(records))
-        page = normalize_replay_payload(
-            client.request(
-                "GET",
-                OBSERVABILITY_REPLAYS_PATH,
-                params={"limit": str(page_size), "offset": str(offset)},
-            ).payload
-        )
-        for index, record in enumerate(page, start=offset):
-            records.setdefault(str(record.get("id") or f"offset:{index}"), record)
-        offset += len(page)
-        if len(page) < page_size:
+    while True:
+        payload = client.request(
+            "GET", OBSERVABILITY_REPLAYS_PATH, params=params
+        ).payload
+        for record in normalize_replay_payload(payload):
+            records.setdefault(record.get("id") or len(records), record)
+        next_offset = payload.get("next_offset") if isinstance(payload, dict) else None
+        stalled = not isinstance(next_offset, int) or next_offset <= offset
+        if stalled or len(records) >= limit:
             break
-    return {"object": "router_replay.list", "data": list(records.values())}
+        offset = next_offset
+        params = {"limit": str(limit - len(records)), "offset": str(offset)}
+    return {"object": "router_replay.list", "data": list(records.values())[:limit]}
 
 
 def normalize_replay_payload(payload: Any) -> list[dict[str, Any]]:

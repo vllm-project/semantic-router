@@ -2,31 +2,13 @@ package config
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 	"time"
 )
 
-var admissionDeploymentKeys = map[string]bool{
-	"safety":                 true,
-	"hazard":                 true,
-	"prompt_guard":           true,
-	"domain_classifier":      true,
-	"pii_classifier":         true,
-	"fact_check_classifier":  true,
-	"hallucination_detector": true,
-	"feedback_detector":      true,
-}
-
 func validateModelAdmissionContracts(cfg *RouterConfig) error {
 	for key, admission := range cfg.ModelAdmission {
-		_, declared := cfg.ModelDeployments[key]
-		if !admissionDeploymentKeys[key] && !declared {
-			return fmt.Errorf(
-				"global.model_catalog.admission: unknown deployment %q; supported deployments: %s",
-				key,
-				strings.Join(sortedAdmissionDeploymentKeys(), ", "),
-			)
+		if _, declared := cfg.ModelDeployments[key]; !declared {
+			return fmt.Errorf("global.model_catalog.admission: unknown deployment %q; %s", key, declaredDeployments(cfg.ModelDeployments))
 		}
 		if err := validateAdmissionConfig(key, admission); err != nil {
 			return err
@@ -60,15 +42,6 @@ func validateAdmissionConfig(key string, admission AdmissionConfig) error {
 		)
 	}
 	return nil
-}
-
-func sortedAdmissionDeploymentKeys() []string {
-	keys := make([]string, 0, len(admissionDeploymentKeys))
-	for key := range admissionDeploymentKeys {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }
 
 // maxSignalTimeoutMs is the longest model-signal deadline a recipe may set.

@@ -252,38 +252,8 @@ def test_recipe_learning_fetch_uses_authenticated_management_endpoint(
     assert authorizations == ["Bearer management-token"]
 
 
-def test_recipe_learning_fetch_pages_past_the_api_cap(monkeypatch) -> None:
-    pages: list[dict[str, Any]] = []
-
-    class _Response:
-        def __init__(self, payload: dict[str, Any]) -> None:
-            self.status_code = 200
-            self.ok = True
-            self.headers: dict[str, str] = {}
-            self._payload = payload
-            self.text = json.dumps(payload)
-
-        def json(self) -> dict[str, Any]:
-            return self._payload
-
-    def _fake_request(method: str, url: str, **kwargs: Any) -> _Response:
-        params = kwargs["params"]
-        pages.append(params)
-        offset, limit = int(params["offset"]), int(params["limit"])
-        available = max(0, min(limit, 230 - offset))
-        data = [{"id": f"r{offset + i}"} for i in range(available)]
-        return _Response({"object": "router_replay.list", "data": data})
-
-    monkeypatch.setattr("cli.router_management_client.requests.request", _fake_request)
-
-    payload = fetch_replay_payload("http://router.example:8080", 1000, 1)
-
-    assert [p["offset"] for p in pages] == ["0", "100", "200"]
-    assert len(payload["data"]) == 230
-
-
 class _ReplayAPI:
-    """Newest-first replay list that stores one new record after the first page."""
+    """Newest-first replay list of 100-record pages that stores one new record after the first page."""
 
     class _Response:
         def __init__(self, payload: dict[str, Any]) -> None:
@@ -303,11 +273,14 @@ class _ReplayAPI:
     def __call__(self, method: str, url: str, **kwargs: Any) -> _Response:
         params = kwargs["params"]
         offset = int(params.get("offset", 0))
-        page = self.records[offset : offset + int(params["limit"])]
+        page = self.records[offset : offset + min(int(params["limit"]), 100)]
+        payload: dict[str, Any] = {"object": "router_replay.list", "data": page}
+        if offset + len(page) < len(self.records):
+            payload["next_offset"] = offset + len(page)
         self.calls += 1
         if self.calls == 1:
             self.records.insert(0, {"id": "arrived-between-pages"})
-        return self._Response({"object": "router_replay.list", "data": page})
+        return self._Response(payload)
 
 
 def test_recipe_learning_fetch_keeps_a_shifted_record_once(monkeypatch) -> None:
@@ -392,6 +365,78 @@ def test_recipe_learning_accepts_api_root_without_duplicating_it(
     assert calls == ["http://router.example:8080/api/v1/observability/replays"]
 
 
+def test_recipe_learning_follows_next_offset_past_the_router_page_cap(
+    monkeypatch,
+) -> None:
+    # The Router serves at most 100 records a page, newest first.
+    stored = [{"id": f"r{index:03d}"} for index in range(300)]
+    requested: list[dict[str, str]] = []
+
+    class _Response:
+        status_code = 200
+        ok = True
+        headers: ClassVar[dict[str, str]] = {}
+
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self._payload = payload
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    def _fake_request(_method: str, _url: str, **kwargs: Any) -> _Response:
+        params = kwargs["params"]
+        requested.append(params)
+        offset = int(params.get("offset", "0"))
+        page = stored[offset : offset + min(int(params["limit"]), 100)]
+        payload: dict[str, Any] = {"object": "router_replay.list", "data": page}
+        if offset + len(page) < len(stored):
+            payload["next_offset"] = offset + len(page)
+        if len(requested) == 1:
+            # A record stored between two pages shifts the next one by one.
+            stored.insert(0, {"id": "newer"})
+        return _Response(payload)
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", _fake_request)
+
+    payload = fetch_replay_payload("http://router.example:8080", 250, 1)
+
+    assert [record["id"] for record in payload["data"]] == [
+        f"r{index:03d}" for index in range(250)
+    ]
+    assert requested == [
+        {"limit": "250"},
+        {"limit": "150", "offset": "100"},
+        {"limit": "51", "offset": "200"},
+    ]
+
+
+def test_recipe_learning_stops_when_next_offset_does_not_advance(
+    monkeypatch,
+) -> None:
+    requested: list[dict[str, str]] = []
+
+    class _Response:
+        status_code = 200
+        ok = True
+        headers: ClassVar[dict[str, str]] = {}
+
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {"data": [{"id": "r1"}], "next_offset": 0}
+
+    def _fake_request(_method: str, _url: str, **kwargs: Any) -> _Response:
+        requested.append(kwargs["params"])
+        assert len(requested) <= 3, "the fetch keeps requesting the same page"
+        return _Response()
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", _fake_request)
+
+    payload = fetch_replay_payload("http://router.example:8080", 500, 1)
+
+    assert payload["data"] == [{"id": "r1"}]
+    assert requested == [{"limit": "500"}]
+
+
 def test_recipe_learning_rejects_endpoint_credentials() -> None:
     with pytest.raises(ValueError, match="token-env"):
         fetch_replay_payload("https://user:secret@router.example", 25, 1)
@@ -452,15 +497,18 @@ def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pac
     None
 ):
     recipe = {
-        "version": "v0.3",
-        "routing": {
-            "decisions": [
-                {
-                    "name": "simple_general",
-                    "adaptations": {"protection": {"stability_weight": 1.0}},
-                }
-            ]
-        },
+        "version": "v0.5",
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [
+                    {
+                        "name": "simple_general",
+                        "adaptations": {"protection": {"stability_weight": 1.0}},
+                    }
+                ],
+            }
+        ],
     }
     artifact = build_recipe_learning_artifact([_sample_learning_record()], {}, recipe)
 
@@ -476,7 +524,7 @@ def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pac
     assert artifact["recipe_patch"]["suggestions"][0]["finding_id"].startswith("rlf_")
     assert artifact["candidate_recipes"]
     assert artifact["candidate_recipes"][0]["recipe"] is not None
-    candidate_decision = artifact["candidate_recipes"][0]["recipe"]["routing"][
+    candidate_decision = artifact["candidate_recipes"][0]["recipe"]["recipes"][0][
         "decisions"
     ][0]
     assert candidate_decision["adaptations"]["adaptation"]["candidate_set"] == "tier"
@@ -535,13 +583,16 @@ def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
         )
     }
     recipe = {
-        "version": "v0.3",
-        "routing": {
-            "decisions": [
-                {"name": "simple_general", "priority": 50},
-                {"name": "domain_math", "priority": 40},
-            ]
-        },
+        "version": "v0.5",
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [
+                    {"name": "simple_general", "priority": 50},
+                    {"name": "domain_math", "priority": 40},
+                ],
+            }
+        ],
     }
 
     artifact = build_recipe_learning_artifact([record], cases, recipe)
@@ -566,11 +617,11 @@ def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
         if candidate.get("recipe") is not None
     ]
     assert any(
-        recipe["routing"]["decisions"][0].get("priority") == 40
+        recipe["recipes"][0]["decisions"][0].get("priority") == 40
         for recipe in materialized
     )
     assert any(
-        recipe["routing"]["decisions"][0]
+        recipe["recipes"][0]["decisions"][0]
         .get("adaptations", {})
         .get("protection", {})
         .get("mode")
@@ -598,13 +649,14 @@ def test_recipe_learning_command_reads_file_and_writes_artifacts(
     )
     recipe_path.write_text(
         """
-version: v0.3
-routing:
-  decisions:
-    - name: simple_general
-      adaptations:
-        protection:
-          stability_weight: 1.0
+version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: simple_general
+        adaptations:
+          protection:
+            stability_weight: 1.0
 """.strip(),
         encoding="utf-8",
     )
@@ -818,8 +870,8 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
     response.headers = {
         "x-vsr-selected-recipe": "balanced",
         "x-vsr-selected-decision": "coding",
-        "x-vsr-selected-algorithm": "multi_factor",
         "x-vsr-selected-model": "qwen",
+        "x-vsr-trace": "confidence=0.91, algorithm=multi_factor",
     }
     response.json.return_value = {
         "model": "Qwen/Qwen3.8-Flash-Next",
@@ -859,6 +911,10 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
     receipt = json.loads(result.output)
     assert receipt["passed"] is True
     assert receipt["response"]["routing"]["x-vsr-selected-model"] == "qwen"
+    assert receipt["response"]["routing"]["trace"] == {
+        "confidence": "0.91",
+        "algorithm": "multi_factor",
+    }
     assert "probe-secret" not in result.output
     assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer probe-secret"
     assert post.call_args.kwargs["json"]["max_completion_tokens"] == 8192

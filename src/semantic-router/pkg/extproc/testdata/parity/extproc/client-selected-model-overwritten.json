@@ -4,13 +4,49 @@
       "response": {
         "headerMutation": {
           "removeHeaders": [
-            "x-vsr-fusion-depth",
+            "x-authz-team-id",
+            "x-authz-tenant-id",
+            "x-authz-user-groups",
+            "x-authz-user-id",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-bench-expected-config-hash",
+            "x-vsr-bench-max-inference-calls",
+            "x-vsr-cache-control",
+            "x-vsr-compression-control",
+            "x-vsr-config-hash",
+            "x-vsr-config-version",
+            "x-vsr-cost",
+            "x-vsr-cost-currency",
+            "x-vsr-debug",
+            "x-vsr-delegated-credential",
             "x-vsr-internal-auth",
-            "x-vsr-looper-decision",
-            "x-vsr-looper-iteration",
-            "x-vsr-looper-request",
+            "x-vsr-kv-cache-id",
+            "x-vsr-kv-mapper-id",
+            "x-vsr-kv-source-pod",
+            "x-vsr-memory",
+            "x-vsr-outcome-principal",
+            "x-vsr-outcome-source",
             "x-vsr-protection-release",
-            "x-vsr-selected-recipe"
+            "x-vsr-replay-id",
+            "x-vsr-response-path",
+            "x-vsr-route-model",
+            "x-vsr-schema-version",
+            "x-vsr-selected-decision",
+            "x-vsr-selected-model",
+            "x-vsr-selected-recipe",
+            "x-vsr-session-id",
+            "x-vsr-skip-processing",
+            "x-vsr-systemone-backend",
+            "x-vsr-trace",
+            "x-vsr-upstream-host",
+            "x-vsr-warnings"
           ],
           "setHeaders": [
             {
@@ -33,7 +69,13 @@
         "clearRouteCache": true,
         "headerMutation": {
           "removeHeaders": [
+            "api-key",
+            "api-subscription-key",
+            "authorization",
             "content-length",
+            "ocp-apim-subscription-key",
+            "x-api-key",
+            "x-goog-api-key",
             "x-user-anthropic-key",
             "x-user-azure-openai-key",
             "x-user-bedrock-key",
@@ -41,12 +83,13 @@
             "x-user-gemini-key",
             "x-user-minimax-key",
             "x-user-openai-key",
-            "x-user-vertex-ai-key"
+            "x-user-vertex-ai-key",
+            "x-vsr-delegated-credential"
           ],
           "setHeaders": [
             {
               "header": {
-                "key": "x-selected-model",
+                "key": "x-vsr-route-model",
                 "rawValueText": "general-small"
               }
             },
@@ -72,16 +115,13 @@
       "response": {
         "headerMutation": {
           "removeHeaders": [
-            "content-length",
-            "x-vsr-effective-input-tokens",
-            "x-vsr-effective-max-output-tokens",
-            "x-vsr-upstream-host"
+            "content-length"
           ],
           "setHeaders": [
             {
               "header": {
                 "key": "x-vsr-schema-version",
-                "rawValueText": "2"
+                "rawValueText": "3"
               }
             },
             {
@@ -110,20 +150,8 @@
             },
             {
               "header": {
-                "key": "x-vsr-selected-algorithm",
-                "rawValueText": "static"
-              }
-            },
-            {
-              "header": {
                 "key": "x-vsr-selected-model",
                 "rawValueText": "general-small"
-              }
-            },
-            {
-              "header": {
-                "key": "x-vsr-routing-latency-ms",
-                "rawValueText": "<volatile>"
               }
             }
           ]

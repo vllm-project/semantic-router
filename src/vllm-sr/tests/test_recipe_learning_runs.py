@@ -187,11 +187,9 @@ def test_too_few_labeled_runs_gives_no_recommendation():
 def test_confident_recommendation_becomes_default_model_patch():
     records = _runs("cheap", 200, 120, 0.05 / 3) + _runs("strong", 200, 150, 0.25)
     recipe = {
-        "routing": {
-            "decisions": [
-                {"name": "code", "modelRefs": [{"model": "strong"}, {"model": "cheap"}]}
-            ]
-        }
+        "decisions": [
+            {"name": "code", "modelRefs": [{"model": "strong"}, {"model": "cheap"}]}
+        ]
     }
     artifact = build_recipe_learning_artifact(
         records, {}, recipe, values_per_success=[1.0]
@@ -204,25 +202,23 @@ def test_confident_recommendation_becomes_default_model_patch():
         for s in artifact["recipe_patch"]["suggestions"]
         if s["finding_type"] == "default_model"
     )
-    assert suggestion["path"] == "/routing/decisions/code/modelRefs"
+    assert suggestion["path"] == "/decisions/code/modelRefs"
     assert suggestion["action"] == "reorder"
     candidate = next(
         c
         for c in artifact["candidate_recipes"]
         if c["patch"]["suggestions"][0] == suggestion
     )
-    refs = candidate["recipe"]["routing"]["decisions"][0]["modelRefs"]
+    refs = candidate["recipe"]["decisions"][0]["modelRefs"]
     assert [r["model"] for r in refs] == ["cheap", "strong"]
 
 
 def test_no_finding_when_recommendation_is_already_the_default():
     records = _runs("cheap", 200, 120, 0.05 / 3) + _runs("strong", 200, 150, 0.25)
     recipe = {
-        "routing": {
-            "decisions": [
-                {"name": "code", "modelRefs": [{"model": "cheap"}, {"model": "strong"}]}
-            ]
-        }
+        "decisions": [
+            {"name": "code", "modelRefs": [{"model": "cheap"}, {"model": "strong"}]}
+        ]
     }
     artifact = build_recipe_learning_artifact(
         records, {}, recipe, values_per_success=[1.0]
@@ -235,9 +231,9 @@ def test_no_values_means_no_recommendations():
     assert payload["per_decision"]["code"]["recommendations"] == []
 
 
-def _typed_cascade_runs():
-    records = _runs("native-kai", 200, 150, 0.05, decision="typed-cascade")
-    records += _runs("native-vega", 200, 120, 0.25, decision="typed-cascade")
+def _typed_escalate_runs():
+    records = _runs("native-kai", 200, 150, 0.05, decision="typed-escalate")
+    records += _runs("native-vega", 200, 120, 0.25, decision="typed-escalate")
     for record in records:
         record["recipe"] = "native-handwritten"
     return records
@@ -247,35 +243,35 @@ def test_recipe_owned_decision_reads_its_recipe_default():
     config = yaml.safe_load(
         (Path(__file__).parents[3] / "config" / "config.yaml").read_text()
     )
-    runs = build_run_model_choice(_typed_cascade_runs(), [1.0])
-    (rec,) = runs["per_decision"]["native-handwritten/typed-cascade"]["recommendations"]
+    runs = build_run_model_choice(_typed_escalate_runs(), [1.0])
+    (rec,) = runs["per_decision"]["native-handwritten/typed-escalate"][
+        "recommendations"
+    ]
     assert rec["model"] == "native-kai" and rec["confident"]
     assert build_run_findings(runs, config) == []
 
 
 def test_recipe_owned_decision_patch_lands_in_its_recipe():
-    top_level = {"name": "typed-cascade", "modelRefs": [{"model": "native-vega"}]}
+    default = {"name": "typed-escalate", "modelRefs": [{"model": "native-vega"}]}
     recipe = {
-        "routing": {"decisions": [top_level]},
         "recipes": [
+            {"name": "default", "decisions": [default]},
             {
                 "name": "native-handwritten",
-                "routing": {
-                    "decisions": [
-                        {
-                            "name": "typed-cascade",
-                            "modelRefs": [
-                                {"model": "native-vega"},
-                                {"model": "native-kai"},
-                            ],
-                        }
-                    ]
-                },
-            }
+                "decisions": [
+                    {
+                        "name": "typed-escalate",
+                        "modelRefs": [
+                            {"model": "native-vega"},
+                            {"model": "native-kai"},
+                        ],
+                    }
+                ],
+            },
         ],
     }
     artifact = build_recipe_learning_artifact(
-        _typed_cascade_runs(), {}, recipe, values_per_success=[1.0]
+        _typed_escalate_runs(), {}, recipe, values_per_success=[1.0]
     )
     (candidate,) = [
         c
@@ -283,6 +279,6 @@ def test_recipe_owned_decision_patch_lands_in_its_recipe():
         if c["patch"]["suggestions"][0]["finding_type"] == "default_model"
     ]
     assert candidate["patch"]["suggestions"][0]["recipe"] == "native-handwritten"
-    owned = candidate["recipe"]["recipes"][0]["routing"]["decisions"][0]
+    owned = candidate["recipe"]["recipes"][1]["decisions"][0]
     assert [r["model"] for r in owned["modelRefs"]] == ["native-kai", "native-vega"]
-    assert candidate["recipe"]["routing"]["decisions"][0] == top_level
+    assert candidate["recipe"]["recipes"][0]["decisions"][0] == default

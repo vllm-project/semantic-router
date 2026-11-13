@@ -1,0 +1,24 @@
+# Memory's retrieval_limit and similarity_threshold become the source's
+# match.recall; an unset threshold is the memory store's default.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: assistant
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: memory
+            configuration:
+              enabled: true
+              retrieval_limit: 8
+global:
+  stores:
+    memory:
+      default_similarity_threshold: 0.45

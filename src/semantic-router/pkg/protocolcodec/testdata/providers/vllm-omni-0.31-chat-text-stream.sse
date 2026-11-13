@@ -1,0 +1,20 @@
+data: {"id":"chatcmpl-bc4ffdd39ef0ef89","object":"chat.completion.chunk","created":1794416062,"model":"omni-talker","choices":[{"index":0,"delta":{"role":"assistant","content":""},"logprobs":null,"finish_reason":null}],"prompt_token_ids":null,"prompt_text":null,"modality":"text"}
+
+data: {"id":"chatcmpl-bc4ffdd39ef0ef89","object":"chat.completion.chunk","created":1794416062,"model":"omni-talker","choices":[{"index":0,"delta":{"content":"One"},"logprobs":null,"finish_reason":null,"token_ids":null}],"metrics":{},"modality":"text"}
+
+data: {"id":"chatcmpl-bc4ffdd39ef0ef89","object":"chat.completion.chunk","created":1794416062,"model":"omni-talker","choices":[{"index":0,"delta":{"content":","},"logprobs":null,"finish_reason":null,"token_ids":null}],"metrics":{},"modality":"text"}
+
+data: {"id":"chatcmpl-bc4ffdd39ef0ef89","object":"chat.completion.chunk","created":1794416062,"model":"omni-talker","choices":[{"index":0,"delta":{"content":" two"},"logprobs":null,"finish_reason":null,"token_ids":null}],"metrics":{},"modality":"text"}
+
+data: {"id":"chatcmpl-bc4ffdd39ef0ef89","object":"chat.completion.chunk","created":1794416062,"model":"omni-talker","choices":[{"index":0,"delta":{"content":","},"logprobs":null,"finish_reason":null,"token_ids":null}],"metrics":{},"modality":"text"}
+
+data: {"id":"chatcmpl-bc4ffdd39ef0ef89","object":"chat.completion.chunk","created":1794416062,"model":"omni-talker","choices":[{"index":0,"delta":{"content":" three"},"logprobs":null,"finish_reason":null,"token_ids":null}],"metrics":{},"modality":"text"}
+
+data: {"id":"chatcmpl-bc4ffdd39ef0ef89","object":"chat.completion.chunk","created":1794416062,"model":"omni-talker","choices":[{"index":0,"delta":{"content":"."},"logprobs":null,"finish_reason":null,"token_ids":null}],"metrics":{},"modality":"text"}
+
+data: {"id":"chatcmpl-bc4ffdd39ef0ef89","object":"chat.completion.chunk","created":1794416062,"model":"omni-talker","choices":[{"index":0,"delta":{"content":""},"logprobs":null,"finish_reason":"stop","stop_reason":null,"token_ids":null}],"metrics":null,"modality":"text"}
+
+data: {"id":"chatcmpl-bc4ffdd39ef0ef89","object":"chat.completion.chunk","created":1794416062,"model":"omni-talker","choices":[],"usage":{"prompt_tokens":12,"total_tokens":19,"completion_tokens":7}}
+
+data: [DONE]
+

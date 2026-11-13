@@ -6,18 +6,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
@@ -37,7 +41,7 @@ var routingFailures = []routingFailure{
 // request exercises no_route; the small backend context window separately
 // lets a default recipe request outgrow all available candidates.
 const workflowEntrypointConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -51,49 +55,49 @@ providers:
           endpoint: 127.0.0.1:18000
           protocol: http
           provider: vllm
-routing:
-  modelCards:
-    - name: gpt-oss
       context_window_size: 64
-  signals:
-    keywords:
-      - name: plan_keywords
-        operator: OR
-        keywords: ["plan"]
-  decisions:
-    - name: default_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: gpt-oss
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: plan_keywords
+          operator: OR
+          keywords: ["plan"]
+    decisions:
+      - name: default_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: gpt-oss
   - name: workflow
-    routing:
-      signals:
-        keywords:
-          - name: plan_keywords
-            operator: OR
-            keywords: ["plan"]
-      decisions:
-        - name: workflow_route
-          priority: 20
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: plan_keywords
-          modelRefs:
-            - model: gpt-oss
-          algorithm:
-            type: workflows
-            workflows:
-              mode: static
-              roles:
-                - name: worker
-                  models: [gpt-oss]
+    signals:
+      keywords:
+        - name: plan_keywords
+          operator: OR
+          keywords: ["plan"]
+    decisions:
+      - name: workflow_route
+        priority: 20
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: plan_keywords
+        modelRefs:
+          - model: gpt-oss
+        algorithm:
+          type: workflows
+          workflows:
+            mode: static
+            roles:
+              - name: worker
+                models: [gpt-oss]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [team/workflow]
     recipe: workflow
 global:
@@ -137,12 +141,16 @@ func routingFailureCases() []routingFailureCase {
 			event:   "specified_model_not_found",
 		},
 		{
+			// The Router counts the 1,640 bytes far beyond gpt-oss's 64-token
+			// window.
 			name: "request-outgrows-every-context-window",
 			path: "/v1/chat/completions",
 			body: `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"` +
 				strings.Repeat("Summarize these meeting notes carefully. ", 40) + `"}]}`,
-			failure: routingFailureContextLength,
-			event:   "decision_context_ineligible",
+			failure: contextLengthFailure(&contextLengthError{
+				window: 64, tokens: routerCountOf(strings.Repeat("Summarize these meeting notes carefully. ", 40)),
+			}, llmprotocol.OpenAIChatV1),
+			event: "context_window_exceeded",
 		},
 	}
 }
@@ -292,6 +300,47 @@ func TestRoutingRejectionsReturnTheirReasonCode(t *testing.T) {
 				t.Fatalf("Replay does not keep what the client received: %+v", record)
 			}
 		})
+	}
+}
+
+// A model the configuration does not serve is client text, so it never
+// becomes a metric label: every such request, whether the body or an Azure
+// deployment path names it, counts in the one unknown series, and only the
+// log line keeps the name.
+func TestUnknownModelNamesShareOneErrorSeries(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(workflowEntrypointConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	viaSession := parity.NewRecorder(newParityRouter(t, cfg), routing.DefaultOptions)
+	unknown := metrics.RequestErrorsTotal.WithLabelValues(consts.UnknownLabel, "model_not_found")
+	counted, series := testutil.ToFloat64(unknown), testutil.CollectAndCount(metrics.RequestErrorsTotal)
+	core, logs := observer.New(zapcore.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+
+	messages := `"messages":[{"role":"user","content":"Hello there."}]`
+	cases := []routingFailureCase{
+		{name: "named-a", path: "/v1/chat/completions", body: `{"model":"no-such-model-a",` + messages + `}`},
+		{name: "named-b", path: "/v1/chat/completions", body: `{"model":"no-such-model-b",` + messages + `}`},
+		{name: "azure", path: "/openai/deployments/no-such-deployment/chat/completions?api-version=2024-10-21", body: `{` + messages + `}`},
+	}
+	for _, c := range cases {
+		if got := viaSession.Run(context.Background(), c.parityCase()); got.Response == nil || got.Response.Status != routingFailureModelNotFound.status {
+			t.Fatalf("%s: response = %+v, want %d", c.name, got.Response, routingFailureModelNotFound.status)
+		}
+	}
+	if got := testutil.CollectAndCount(metrics.RequestErrorsTotal); got != series {
+		t.Fatalf("llm_request_errors_total has %d series after unknown models, want %d", got, series)
+	}
+	if got := testutil.ToFloat64(unknown); got != counted+float64(len(cases)) {
+		t.Fatalf("unknown model_not_found counted %v, want %v", got-counted, len(cases))
+	}
+	var named []string
+	for _, entry := range logs.FilterField(zap.String("event", "specified_model_not_found")).All() {
+		named = append(named, fmt.Sprint(entry.ContextMap()["model"]))
+	}
+	if want := []string{"no-such-model-a", "no-such-model-b", "no-such-deployment"}; !slices.Equal(named, want) {
+		t.Fatalf("the log names %v, want %v", named, want)
 	}
 }
 

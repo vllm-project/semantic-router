@@ -133,6 +133,7 @@ func (registry *Registry) compileProvider(
 		return EffectiveProvider{}, err
 	}
 	input.Headers = cloneMap(input.Headers)
+	input.TLS = cloneProviderTLS(input.TLS)
 	input.Endpoints = endpoints
 	return EffectiveProvider{Instance: input, Definition: cloneProvider(definition)}, nil
 }
@@ -633,10 +634,6 @@ func applyCardMetadataOverlay(effective *EffectiveModelCard, overlay ModelCardOv
 	if overlay.LoRAs != nil {
 		effective.LoRAs = append([]LoRAAdapter(nil), (*overlay.LoRAs)...)
 		effective.Provenance["loras"] = SourceOperator
-	}
-	if overlay.RuntimeModality != nil {
-		effective.RuntimeModality = *overlay.RuntimeModality
-		effective.Provenance["runtime_modality"] = SourceOperator
 	}
 	if overlay.Verification != nil {
 		effective.Card.Verification = *overlay.Verification

@@ -49,7 +49,7 @@ var _ = Describe("Signal Skip Optimization", func() {
 				"test_decision_2",
 				"OR",
 				signalSkipCondition(config.SignalTypeUserFeedback, "wrong_answer"),
-				signalSkipCondition(config.SignalTypePreference, "code_generation"),
+				signalSkipCondition(config.SignalTypeTurnRelation, "asked_again"),
 			),
 		)
 
@@ -63,11 +63,10 @@ var _ = Describe("Signal Skip Optimization", func() {
 		results := classifier.EvaluateAllSignals("test query")
 		Expect(results).NotTo(BeNil())
 		Expect(len(results.MatchedKeywordRules)).To(Equal(0))
-		Expect(len(results.MatchedEmbeddingRules)).To(Equal(0))
 		Expect(len(results.MatchedDomainRules)).To(Equal(0))
 		Expect(len(results.MatchedFactCheckRules)).To(Equal(0))
 		Expect(len(results.MatchedUserFeedbackRules)).To(Equal(0))
-		Expect(len(results.MatchedPreferenceRules)).To(Equal(0))
+		Expect(len(results.MatchedTurnRelationRules)).To(Equal(0))
 	})
 
 	It("should handle decisions with all signal types", func() {
@@ -76,12 +75,10 @@ var _ = Describe("Signal Skip Optimization", func() {
 				"comprehensive_decision",
 				"OR",
 				signalSkipCondition(config.SignalTypeKeyword, "test_keyword"),
-				signalSkipCondition(config.SignalTypeEmbedding, "test_embedding"),
 				signalSkipCondition(config.SignalTypeDomain, "test_domain"),
 				signalSkipCondition(config.SignalTypeFactCheck, "needs_fact_check"),
 				signalSkipCondition(config.SignalTypeUserFeedback, "satisfied"),
-				signalSkipCondition(config.SignalTypeReask, "likely_dissatisfied"),
-				signalSkipCondition(config.SignalTypePreference, "test_preference"),
+				signalSkipCondition(config.SignalTypeTurnRelation, "likely_dissatisfied"),
 			),
 		)
 

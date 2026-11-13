@@ -93,6 +93,5 @@ flowchart LR
 - [信号、决策与模型选择](../overview/signal-driven-decisions)
 - [信号概览](../tutorials/signal/overview)
 - [关键词信号](../tutorials/signal/heuristic/keyword)
-- [嵌入信号](../tutorials/signal/learned/embedding)
-- [分类器信号](../tutorials/signal/learned/classifier)
+- [System One 信号](../tutorials/signal/systemone)
 - [相关议题 #313](https://github.com/vllm-project/semantic-router/issues/313)

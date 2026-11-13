@@ -142,6 +142,21 @@ func TestDetectPythonCLIRootRequiresRuntimeSyncModule(t *testing.T) {
 	}
 }
 
+func TestPlatformBrandingAloneDoesNotSyncRuntimeConfig(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "config.yaml")
+	t.Setenv(runtimeConfigPathEnv, "")
+	t.Setenv(runtimeAlgorithmEnv, "")
+	t.Setenv("VLLM_SR_PLATFORM", "rocm")
+	t.Setenv("DASHBOARD_PLATFORM", "rocm")
+	// A sync would fail here: this CLI root has no runtime sync module.
+	t.Setenv("VLLM_SR_CLI_PATH", t.TempDir())
+
+	got, err := syncRuntimeConfigForCurrentRuntime(sourcePath)
+	if err != nil || got != sourcePath {
+		t.Fatalf("syncRuntimeConfigForCurrentRuntime() = %q, %v", got, err)
+	}
+}
+
 func TestHandleConfigPutWritesSourceConfigAndSyncsRuntimeOverride(t *testing.T) {
 	tempDir, sourcePath, runtimePath := setupRuntimeOverrideConfigFiles(t, "old_route", "old_route")
 	deployYAML := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("new_route"))

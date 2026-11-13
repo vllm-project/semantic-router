@@ -1,7 +1,7 @@
 # The base each model catalog documentation example is merged onto: the
 # request models a configuration needs, and the deployments the examples
 # refer to without declaring. The examples' own fields win.
-version: v0.3
+version: v0.5
 providers:
   defaults: {model: general}
   models:
@@ -21,7 +21,5 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}
-      content-risk:
-        provider: classify
-        endpoint: https://risk.example.com

@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from cli.commands.recipe_learning_metrics import numeric
+from cli.models import DEFAULT_RECIPE_NAME
 
-_RECIPE_DECISION_PATH_MIN_PARTS = 3
+_RECIPE_DECISION_PATH_MIN_PARTS = 2
 _PRIORITY_STEP = 10
 _STABILITY_WEIGHT_INCREASE = 1.25
 _STABILITY_WEIGHT_DECREASE = 0.75
@@ -38,7 +39,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         if finding_type == "wrong_decision":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/priority",
+                    f"/decisions/{decision}/priority",
                     "decrease",
                     "Wrong-route eval evidence suggests this decision may outrank a better match.",
                     finding=item,
@@ -47,7 +48,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "wrong_model_selection":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/adaptation/candidate_set",
+                    f"/decisions/{decision}/adaptations/adaptation/candidate_set",
                     "set",
                     "Model-fit eval evidence suggests this decision should let adaptation compare tier candidates.",
                     value="tier",
@@ -57,7 +58,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "excessive_switching":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/protection/stability_weight",
+                    f"/decisions/{decision}/adaptations/protection/stability_weight",
                     "increase",
                     "Frequent switches suggest stronger protection for this decision.",
                     finding=item,
@@ -66,7 +67,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "excessive_holds":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/protection/stability_weight",
+                    f"/decisions/{decision}/adaptations/protection/stability_weight",
                     "decrease",
                     "Protection is holding while model-fit evidence suggests the current model is weak.",
                     finding=item,
@@ -75,7 +76,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "missing_protection":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/protection/mode",
+                    f"/decisions/{decision}/adaptations/protection/mode",
                     "set",
                     "Protection diagnostics are missing for records where adaptation is active.",
                     value="apply",
@@ -85,7 +86,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "overly_broad_candidate_set":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/adaptation/candidate_set",
+                    f"/decisions/{decision}/adaptations/adaptation/candidate_set",
                     "set",
                     "Broad candidate sets should be narrowed when they correlate with switching or overuse.",
                     value="decision",
@@ -95,7 +96,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type in {"latency_violation", "cost_violation"}:
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/adaptation/candidate_set",
+                    f"/decisions/{decision}/adaptations/adaptation/candidate_set",
                     "set",
                     "Budget violations suggest using the narrowest candidate set until modelRefs are reviewed.",
                     value="decision",
@@ -104,7 +105,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
             )
         elif finding_type == "default_model":
             suggestion = patch_suggestion(
-                f"/routing/decisions/{decision}/modelRefs",
+                f"/decisions/{decision}/modelRefs",
                 "reorder",
                 item.get("recommendation", ""),
                 value=item.get("evidence", {}).get("recommended_model"),
@@ -115,7 +116,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type in {"underpowered_model", "model_overuse"}:
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/adaptation/candidate_set",
+                    f"/decisions/{decision}/adaptations/adaptation/candidate_set",
                     "set",
                     item.get("recommendation", ""),
                     value="tier",
@@ -190,12 +191,9 @@ class DecisionPatchPath:
 
 def parse_decision_patch_path(path: str) -> DecisionPatchPath | None:
     parts = tuple(part for part in path.split("/") if part)
-    if len(parts) < _RECIPE_DECISION_PATH_MIN_PARTS or parts[:2] != (
-        "routing",
-        "decisions",
-    ):
+    if len(parts) < _RECIPE_DECISION_PATH_MIN_PARTS or parts[0] != "decisions":
         return None
-    return DecisionPatchPath(decision=parts[2], parts=parts)
+    return DecisionPatchPath(decision=parts[1], parts=parts)
 
 
 def apply_decision_patch(
@@ -284,8 +282,8 @@ def apply_protection_mode_patch(
 def find_recipe_decision(
     recipe: dict[str, Any], decision_name: str, recipe_name: str = ""
 ) -> dict[str, Any] | None:
-    """A decision from recipes[recipe_name].routing when that recipe exists,
-    else from top-level routing, which the router serves as the default recipe."""
+    """A decision from the recipe named recipe_name when the document holds it,
+    else from the recipe a patch applies to (``_patched_recipe``)."""
     scope = next(
         (
             item
@@ -294,12 +292,9 @@ def find_recipe_decision(
             and recipe_name
             and item.get("name") == recipe_name
         ),
-        recipe,
+        None,
     )
-    routing = scope.get("routing")
-    if not isinstance(routing, dict):
-        return None
-    decisions = routing.get("decisions")
+    decisions = (scope or _patched_recipe(recipe)).get("decisions")
     if not isinstance(decisions, list):
         return None
     for decision in decisions:
@@ -308,6 +303,23 @@ def find_recipe_decision(
         if str(decision.get("name") or decision.get("id") or "") == decision_name:
             return decision
     return None
+
+
+def _patched_recipe(document: dict[str, Any]) -> dict[str, Any]:
+    """The recipe a patch applies to: the document itself when it is one
+    recipe, else the default recipe of the configuration it is."""
+    recipes = document.get("recipes")
+    if not isinstance(recipes, list):
+        return document
+    named = {
+        recipe.get("name"): recipe for recipe in recipes if isinstance(recipe, dict)
+    }
+    if len(named) == 1:
+        return next(iter(named.values()))
+    for entrypoint in document.get("entrypoints") or []:
+        if isinstance(entrypoint, dict) and entrypoint.get("default"):
+            return named.get(entrypoint.get("recipe"), {})
+    return named.get(DEFAULT_RECIPE_NAME, {})
 
 
 def build_recipe_learning_experiments(

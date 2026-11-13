@@ -32,9 +32,9 @@ answer; use `fusion` or `remom` for that.
 ```yaml
 algorithm:
   type: ratings
+  on_error: skip
   ratings:
     max_concurrent: 3
-    on_error: skip
 ```
 
 See a complete example:

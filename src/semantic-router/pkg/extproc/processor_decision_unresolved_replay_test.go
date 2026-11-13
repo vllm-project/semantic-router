@@ -47,6 +47,7 @@ func TestRespondDecisionUnresolvedFinalizesReplayAsFailed(t *testing.T) {
 		decision.ErrDecisionUnresolved,
 	)
 	resp := router.respondDecisionUnresolved(ctx, "entrypoint-model", decisionErr)
+	appendRoutedResponseHeaders(resp, ctx)
 
 	if ctx.RouterReplayID == "" {
 		t.Fatal("expected the 503 path to create a replay record")

@@ -211,3 +211,23 @@ func TestEstimateAnthropicRequestContextCountsToolLoopAndUsesSameImageBudget(t *
 		t.Fatalf("Anthropic context estimate omitted prompt components: %+v", small)
 	}
 }
+
+// Reserves follow llmprotocol.InputEstimate: structured bytes beyond the text
+// rate, image reserves and media payloads; prose has none.
+func TestRequestContextReservesFollowTheInputEstimate(t *testing.T) {
+	if estimate := EstimateAnthropicRequestContext([]byte(`{"max_tokens":16,"messages":[{"role":"user","content":"hello"}]}`)); estimate.ReserveTokens != 0 {
+		t.Fatalf("prose reserve = %d, want 0", estimate.ReserveTokens)
+	}
+	input := `{"command":"` + strings.Repeat("x", 395) + `"}`
+	document := `{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"` + strings.Repeat("A", 1000) + `"}}`
+	estimate := EstimateAnthropicRequestContext([]byte(`{"max_tokens":16,"messages":[
+		{"role":"user","content":"hello"},
+		{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"bash","input":` + input + `}]},
+		{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAAA"}},` + document + `]}]}`))
+	// The tool input keeps a quarter at the text rate; the image and the
+	// document are wholly reserve.
+	want := len(input) - (len(input)+3)/4 + RequestContextImageTokenBudget + len(document)
+	if estimate.ReserveTokens != want {
+		t.Fatalf("reserve = %d, want %d (estimate %+v)", estimate.ReserveTokens, want, estimate)
+	}
+}

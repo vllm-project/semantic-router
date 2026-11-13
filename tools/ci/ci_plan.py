@@ -19,6 +19,7 @@ from classify_pr_changes import (
     PRODUCTION_RELEASE_IMAGES,
     classify,
     git_changed_files,
+    select_profiles,
 )
 from domain_registry import domain_records, load_domain_registry, matching_domains
 from execution_batches import (
@@ -28,6 +29,7 @@ from execution_batches import (
     expected_dispatch_jobs,
     image_producers,
     platform_batches,
+    scheduled_verifications,
 )
 from execution_batches import (
     component_batches as build_component_batches,
@@ -50,6 +52,8 @@ from verification_catalog import (
 )
 
 PROFILES = ("pr", "main", "nightly", "release")
+# The development CLI that a main publication uploads is the one this builds.
+PUBLISHED_PACKAGE = "cli-package"
 GIT_SHA_LENGTH = 40
 EXECUTORS = (
     "quality",
@@ -87,7 +91,7 @@ def resolve_image_sources(plan: dict) -> None:
         if plan["profile"] not in {"pr", "main", "nightly"}:
             # Explicit release qualification requires a published fixture.
             raise
-        # Main publication is explicit. PRs and nightly qualification can test
+        # Only main publishes fixtures. PRs and nightly qualification can test
         # exact fixture inputs before that publication, without promoting them.
         published["source"] = "candidate"
         plan["build_images"] = sorted({*plan["build_images"], MOCKER_IMAGE})
@@ -98,6 +102,26 @@ def resolve_image_sources(plan: dict) -> None:
     plan["plan_sha256"] = digest(
         {key: value for key, value in plan.items() if key != "plan_sha256"}
     )
+
+
+def e2e_scope(name: str, reasons: list[str], paths: list[str], full: bool) -> str:
+    """The case scope an E2E profile runs: full on a full run, p0 when only a
+    domain marked e2e_scope p0 selected it, and standard otherwise, including
+    when the profile's own paths changed."""
+    if full:
+        return "full"
+    p0_reasons = {
+        f"domain:{name}"
+        for name, domain in domain_records().items()
+        if domain.get("e2e_scope") == "p0"
+    }
+    changed = tuple(sorted(set(paths)))
+    direct = name.removeprefix("e2e.") in select_profiles(
+        changed, full=False, suppress_expensive=False
+    )
+    if reasons and not direct and set(reasons) <= p0_reasons:
+        return "p0"
+    return "standard"
 
 
 def make_plan(
@@ -126,7 +150,9 @@ def make_plan(
     authorization = authorization or {}
     if publish and profile != "main":
         raise ValueError("development publication requires the main profile")
-    full = full or profile in {"nightly", "release"} or publish
+    # Publishing doesn't imply full qualification; a publication dispatch
+    # requests both.
+    full = full or profile in {"nightly", "release"}
     if (
         require_approval
         and authorization.get("authorized")
@@ -146,10 +172,12 @@ def make_plan(
         ids = list(requested)
     required_ids = list(ids)
     deferred = []
-    if profile == "main" and not publish:
+    if profile == "main" and not full:
         # Main continuously checks source. Reviewed PRs own affected product
-        # qualification; explicit publication and nightly/release own full runs.
+        # qualification; a full Main dispatch and nightly/release own full runs.
         ids = [name for name in ids if records[name]["execution"] == "automatic"]
+        if publish:
+            ids = [name for name in records if name in {*ids, PUBLISHED_PACKAGE}]
         required_ids = list(ids)
     elif require_approval and profile == "pr" and not requested:
         ids, deferred = partition(ids, records, authorization)
@@ -171,7 +199,7 @@ def make_plan(
             else reasons or ["always" if record.get("always") else "explicit-consumer"]
         )
         if record["executor"] == "e2e":
-            record["baseline_suite"] = "full" if full else "standard"
+            record["baseline_suite"] = e2e_scope(name, reasons, paths, full)
         if waiver := planned_waiver(profile, name):
             record["known_issue_waiver"] = waiver
         record["dispatch_job"] = dispatch_job(record)
@@ -180,14 +208,14 @@ def make_plan(
     publish_python = profile == "release" or (profile == "main" and publish)
     publish_images = []
     if profile == "main" and publish:
-        # Publish a complete commit-addressed CLI/image set only on request.
+        # Every main publication is a complete commit-addressed CLI/image set.
         publish_images = list(PRODUCTION_RELEASE_IMAGES)
     elif profile == "nightly":
         publish_images = list(NIGHTLY_IMAGES)
     elif profile == "release":
         publish_images = list(PRODUCTION_RELEASE_IMAGES)
     path_images = list(selection.pr_images if required_ids else ())
-    if profile == "main" and not publish:
+    if profile == "main" and not full:
         path_images = []
     deferred_images = []
     if require_approval and profile == "pr" and not requested:
@@ -241,8 +269,10 @@ def make_plan(
         "build_images": build_images,
         "image_sources": image_sources,
         "publish_images": publish_images,
+        # The development chart only changes with its source, so a push
+        # publishes it when the chart changed; a full dispatch always does.
         "publish_helm": profile in {"nightly", "release"}
-        or (profile == "main" and publish),
+        or (profile == "main" and publish and (full or selection.signals["helm"])),
         "publish_python": publish_python,
         "multiarch": bool(publish_images),
         "not_applicable": load_catalog()["full_cpu"]["excluded"],
@@ -264,7 +294,7 @@ def component_batches(verifications: list[dict]) -> list[dict]:
 def dispatch_records(plan: dict) -> dict[str, list[dict]]:
     """Map stable physical caller IDs to contracts or bounded workers."""
     result = {job: [] for job in EXECUTOR_JOBS}
-    for record in plan["verifications"]:
+    for record in scheduled_verifications(plan):
         if record["executor"] not in {"tools", "platform", "e2e"}:
             result[record["dispatch_job"]].append(record)
     result["tools"] = plan["component_batches"]
@@ -368,7 +398,7 @@ def render_plan_summary(plan: dict) -> str:
     ):
         lines.append(
             f"| {paths[record['category']]} | {record['display_name']} | "
-            f"{workers[record['id']]} | {record['runtime']} / {record['device']} / {record['platform']} |"
+            f"{workers.get(record['id'], 'Reused successful receipt')} | {record['runtime']} / {record['device']} / {record['platform']} |"
         )
     deferred = plan.get("deferred_verifications", [])
     deferred_images = plan.get("deferred_images", [])
@@ -411,10 +441,11 @@ PERFORMANCE_BASES = {
     # current harness cannot compile there. #3852 introduced the paired Vela
     # CPU benchmarks.
     "0.4.0": "12597be5ffae2319d856f230d61ca26248eb9b3b",
-    # v0.4.0 predates the model runtime, so compare-model-baseline.sh could
-    # only record a reset. #4707 pinned the classify benchmarks to the Vela 1.0
-    # specialists, and its own Production Benchmarks job passed with them.
-    "0.5.0": "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+    # v0.4.0 predates the model runtime, and every earlier main commit predates
+    # the decision model's preset questions, so compare-model-baseline.sh could
+    # only record a reset. #5886 answers the classify benchmarks' signals with
+    # the decision model, and its own Production Benchmarks job passed with it.
+    "0.5.0": "4952ca055d0f99adf746b67aa61cfb7223d0739b",
 }
 # The first release that serves the model benchmarks through the model
 # runtime. An older previous release can't be measured, only reset.
@@ -507,6 +538,18 @@ def main() -> int:
         publish=args.publish,
     )
     resolve_image_sources(plan)
+    if (
+        args.require_approval
+        and args.authorization
+        and json.loads(args.authorization.read_text()).get("authorized")
+        and os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
+        and int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")) > 1
+    ):
+        from ci_reuse import (  # noqa: PLC0415 - ci_reuse imports this module
+            reuse_automatic_results,
+        )
+
+        reuse_automatic_results(plan, args.output.parent / "reused")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2) + "\n")
     if args.github_output:

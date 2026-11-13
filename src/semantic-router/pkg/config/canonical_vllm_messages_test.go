@@ -12,7 +12,7 @@ func TestCanonicalVLLMBackendServesAnthropicMessages(t *testing.T) {
 			providerLine = "\n          provider: " + provider
 		}
 		cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: agent
@@ -22,7 +22,8 @@ providers:
         - endpoint: 127.0.0.1:18102
           protocol: http` + providerLine + `
           api_key: static-secret
-routing: {}
+recipes:
+  - name: default
 `))
 		if err != nil {
 			t.Fatalf("provider %q: %v", provider, err)

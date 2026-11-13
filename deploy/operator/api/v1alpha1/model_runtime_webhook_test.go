@@ -12,8 +12,7 @@ func TestModelRuntimeFieldsSurviveAdmissionAndDeepCopy(t *testing.T) {
 		ModelDeployments: &apiextensionsv1.JSON{Raw: []byte(`{"local":{"provider":"candle","artifact":"models/checkpoint","input":{"max_tokens":512,"overflow":"reject"}}}`)},
 		ModelAdmission:   &apiextensionsv1.JSON{Raw: []byte(`{"local":{"max_concurrency":2}}`)},
 		ModelBindings:    &apiextensionsv1.JSON{Raw: []byte(`{"pii":"local"}`)},
-		Routing:          &apiextensionsv1.JSON{Raw: []byte(`{"model_bindings":{"pii_classifier":{"deployment":"local","contract":"token_spans.v1","adapter":"mmbert"}}}`)},
-		PromptGuard:      &PromptGuardConfig{Backend: &RemoteClassifierBackendConfig{Protocol: "http_classify", Contract: "label_distribution.v1", Model: "guardrail-service"}},
+		Recipes:          &apiextensionsv1.JSON{Raw: []byte(`[{"name": "default", "model_bindings":{"pii":{"deployment":"local"}}}]`)},
 	}}}
 	if _, err := sr.ValidateCreate(context.Background(), sr); err != nil {
 		t.Fatal(err)
@@ -25,9 +24,9 @@ func TestModelRuntimeFieldsSurviveAdmissionAndDeepCopy(t *testing.T) {
 	clone.Spec.Config.ModelDeployments.Raw[0] = '!'
 	clone.Spec.Config.ModelAdmission.Raw[0] = '!'
 	clone.Spec.Config.ModelBindings.Raw[0] = '!'
-	clone.Spec.Config.PromptGuard.Backend.Model = "changed"
+	clone.Spec.Config.Recipes.Raw[0] = '!'
 	if sr.Spec.Config.ModelDeployments.Raw[0] != '{' || sr.Spec.Config.ModelAdmission.Raw[0] != '{' || sr.Spec.Config.ModelBindings.Raw[0] != '{' ||
-		sr.Spec.Config.PromptGuard.Backend.Model != "guardrail-service" {
+		sr.Spec.Config.Recipes.Raw[0] != '[' {
 		t.Fatal("copied model runtime config aliases the original")
 	}
 }
