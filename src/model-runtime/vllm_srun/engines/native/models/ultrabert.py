@@ -13,10 +13,10 @@ The padded layout passes the additive float masks the modeling code builds
 padded CPU path selects the same SDPA backend and is bit-identical to it. On
 the CPU those masks never take ``width x width`` memory: global layers read a
 key mask and local layers attend ``LOCAL_QUERIES`` queries at a time over
-every key, which leaves each query's SDPA reduction unchanged. On GPUs, rows of
-``BLOCKS_FROM`` tokens or more skip those masks too: global layers read a key
-mask and local layers attend in query blocks (``blocked_attention``), within
-the GPU parity bar. The packed layout runs the ModernBERT layout
+every key, which leaves each query's SDPA reduction unchanged. On CUDA and ROCm
+GPUs, rows of ``BLOCKS_FROM`` tokens or more skip those masks too: global layers
+read a key mask and local layers attend in query blocks (``blocked_attention``),
+within the GPU parity bar. The packed layout runs the ModernBERT layout
 (``modernbert.packed_layout``):
 boolean masks per grid, local layers in query blocks on long rows; it is the
 approximate path.
@@ -481,7 +481,7 @@ class UltraBertBackbone(nn.Module):
         On the CPU every layer gets the ``[rows, 1, 1, width]`` key mask
         instead: local layers then attend in query chunks (``local_attention``)
         and global layers broadcast it, both bit-identical to the dense masks.
-        On GPUs, rows of ``BLOCKS_FROM`` tokens or more (by device type) skip
+        On CUDA and ROCm GPUs, rows of ``BLOCKS_FROM`` tokens or more (by device type) skip
         the dense ``[rows, 1, width, width]`` masks: global layers read a key
         mask, or none without padding, and local layers attend in query blocks.
         """

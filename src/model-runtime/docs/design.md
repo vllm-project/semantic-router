@@ -1055,7 +1055,7 @@ per SDPA call over every key with their rows of the dense mask. A tail under
 768 queries joins the call before it, because the CPU kernel blocks shorter
 calls differently, so each query's reduction, and every answer, stays
 unchanged.
-On a GPU, rows of 4,096 tokens or more skip those `[rows, 1, width, width]`
+On CUDA and ROCm GPUs, rows of 4,096 tokens or more skip those `[rows, 1, width, width]`
 masks: global layers read a key mask (none without padding) and local layers
 attend in 128-query blocks over their ±128 keys, so memory grows with the
 width rather than its square.

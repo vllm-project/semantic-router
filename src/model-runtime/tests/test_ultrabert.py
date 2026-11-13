@@ -154,8 +154,11 @@ def test_long_padded_rows_attend_without_dense_masks(package, monkeypatch) -> No
     # Three query blocks; the short row leaves queries whose local keys are all padding.
     ids = torch.randint(1, 300, (3, 300))
     mask = (torch.arange(300)[None] < torch.tensor([[300], [170], [5]])).long()
+    dense_masks = additive_masks(mask.bool(), 3, 300, module.window, torch.float32)
     with torch.no_grad():
-        dense = module(ids, mask)
+        dense = module.encode(ids, Layout((Group(3, 300, dict(dense_masks)),)))[
+            module.num_layers
+        ]
         monkeypatch.setitem(ultrabert.BLOCKS_FROM, "cpu", 256)
         layout = module.padded(mask, 3, 300, "cpu")
         assert set(layout.groups[0].masks) == {FULL}

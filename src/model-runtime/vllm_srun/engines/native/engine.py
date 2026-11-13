@@ -1079,7 +1079,8 @@ class NativeEngineModel(EngineModel):
             input_ids = batch.input_ids.to(self.device)
             rows, width = input_ids.shape
             # Only NPUs replay padded batches: on CUDA and ROCm the eager padded
-            # layout keeps answers byte-identical to the released runtime.
+            # layout keeps answers byte-identical to the released runtime, except
+            # that ROCm rows past ultrabert.BLOCKS_FROM move by up to 5e-6.
             if (
                 graphs is not None
                 and batch.attention_mask is not None
