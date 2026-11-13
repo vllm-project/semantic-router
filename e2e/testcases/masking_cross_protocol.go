@@ -49,14 +49,15 @@ type maskingEcho struct {
 
 func init() {
 	pkgtestcases.Register("masking-cross-protocol", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "An equivalent PII-bearing request through Chat, Responses and Anthropic all reach the mock backend with a placeholder and no raw value",
 		Tags:        []string{"masking", "pii", "cross-protocol", "functional"},
 		Fn:          testMaskingCrossProtocol,
 	})
-	pkgtestcases.Register("masking-classifier-unavailable-fails-closed", pkgtestcases.TestCase{
-		Description: "A PII deployment error on a masking-enabled decision returns 503 and dispatches nothing",
-		Tags:        []string{"masking", "pii", "fail-closed"},
-		Fn:          testMaskingClassifierUnavailableFailsClosed,
+	pkgtestcases.Register("masking-keeps-echoed-placeholder", pkgtestcases.TestCase{
+		Description: "A placeholder or a vSR mark the client sends back reaches the backend as it is, even when the classifier reads part of it as personal data",
+		Tags:        []string{"masking", "pii", "functional"},
+		Fn:          testMaskingKeepsEchoedPlaceholder,
 	})
 }
 
@@ -154,11 +155,15 @@ func testMaskingCrossProtocol(
 	return nil
 }
 
-// testMaskingClassifierUnavailableFailsClosed drives the remote PII
-// deployment into its unavailable path (the System One fixture answers the
-// call with 503) on a masking-enabled decision, and asserts the request is
-// refused rather than dispatched unmasked (D4).
-func testMaskingClassifierUnavailableFailsClosed(
+// testMaskingKeepsEchoedPlaceholder sends back a placeholder from an earlier
+// turn, the way an agent repeats one in a file it writes, and a [vsr:name]
+// mark the vSR Claude Code plugin leaves in a tool's output. The stub reports
+// a PERSON span over the inside of each, "PERSON_0" or "vsr:name", as a
+// detector that reads it as a name would. Each must reach the backend as
+// sent, not as "[[PERSON_0]]". The router also masks the other copies of a
+// detected value (coverRepeatedValues), so the marker's bare argument may come
+// back masked, and only the text before it is asserted.
+func testMaskingKeepsEchoedPlaceholder(
 	ctx context.Context,
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
@@ -169,22 +174,28 @@ func testMaskingClassifierUnavailableFailsClosed(
 	}
 	defer session.Close()
 
-	prompt := fmt.Sprintf("%s contact %s please", maskingErrorMarker, maskingRawEmail)
-	resp, err := runMaskingRawRequest(ctx, session, "/v1/chat/completions", map[string]interface{}{
-		"model":    maskingEntrypoint,
-		"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
-	})
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusServiceUnavailable {
-		return fmt.Errorf("status = %d, want 503: %s", resp.StatusCode, truncateString(string(resp.Body), 300))
-	}
-	if strings.Contains(string(resp.Body), maskingRawEmail) {
-		return fmt.Errorf("the refusal response echoes request content: %s", string(resp.Body))
+	received := map[string]string{}
+	for _, placeholder := range []string{"PERSON_0", "vsr:name"} {
+		reply := "Send the reply that starts with Hi [" + placeholder + "], "
+		prompt := reply + maskingSpanMarker + " PERSON " + placeholder
+		echoed, err := runMaskingWireCase(ctx, session, maskingWireCase{
+			name: "chat completions " + placeholder,
+			path: "/v1/chat/completions",
+			body: map[string]interface{}{
+				"model":    maskingEntrypoint,
+				"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(echoed, reply) || strings.Contains(echoed, "[[") {
+			return fmt.Errorf("the backend did not receive [%s] as sent: %q", placeholder, echoed)
+		}
+		received[placeholder] = echoed
 	}
 	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"status": resp.StatusCode})
+		opts.SetDetails(map[string]interface{}{"received": received})
 	}
 	return nil
 }
@@ -200,6 +211,7 @@ func runMaskingRawRequest(
 	session *fixtures.ServiceSession,
 	path string,
 	payload map[string]interface{},
+	headers ...http.Header,
 ) (*maskingRawResponse, error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -216,6 +228,11 @@ func runMaskingRawRequest(
 	// Opt in to x-vsr-trace, so a failing assertion shows how the request was
 	// routed beside the selected decision.
 	request.Header.Set("x-vsr-debug", "true")
+	for _, extra := range headers {
+		for name, values := range extra {
+			request.Header[http.CanonicalHeaderKey(name)] = values
+		}
+	}
 	response, err := session.HTTPClient(45 * time.Second).Do(request)
 	if err != nil {
 		return nil, err

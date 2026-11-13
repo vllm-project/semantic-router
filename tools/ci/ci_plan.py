@@ -19,6 +19,7 @@ from classify_pr_changes import (
     PRODUCTION_RELEASE_IMAGES,
     classify,
     git_changed_files,
+    select_profiles,
 )
 from domain_registry import domain_records, load_domain_registry, matching_domains
 from execution_batches import (
@@ -28,6 +29,7 @@ from execution_batches import (
     expected_dispatch_jobs,
     image_producers,
     platform_batches,
+    scheduled_verifications,
 )
 from execution_batches import (
     component_batches as build_component_batches,
@@ -100,6 +102,26 @@ def resolve_image_sources(plan: dict) -> None:
     plan["plan_sha256"] = digest(
         {key: value for key, value in plan.items() if key != "plan_sha256"}
     )
+
+
+def e2e_scope(name: str, reasons: list[str], paths: list[str], full: bool) -> str:
+    """The case scope an E2E profile runs: full on a full run, p0 when only a
+    domain marked e2e_scope p0 selected it, and standard otherwise, including
+    when the profile's own paths changed."""
+    if full:
+        return "full"
+    p0_reasons = {
+        f"domain:{name}"
+        for name, domain in domain_records().items()
+        if domain.get("e2e_scope") == "p0"
+    }
+    changed = tuple(sorted(set(paths)))
+    direct = name.removeprefix("e2e.") in select_profiles(
+        changed, full=False, suppress_expensive=False
+    )
+    if reasons and not direct and set(reasons) <= p0_reasons:
+        return "p0"
+    return "standard"
 
 
 def make_plan(
@@ -177,7 +199,7 @@ def make_plan(
             else reasons or ["always" if record.get("always") else "explicit-consumer"]
         )
         if record["executor"] == "e2e":
-            record["baseline_suite"] = "full" if full else "standard"
+            record["baseline_suite"] = e2e_scope(name, reasons, paths, full)
         if waiver := planned_waiver(profile, name):
             record["known_issue_waiver"] = waiver
         record["dispatch_job"] = dispatch_job(record)
@@ -272,7 +294,7 @@ def component_batches(verifications: list[dict]) -> list[dict]:
 def dispatch_records(plan: dict) -> dict[str, list[dict]]:
     """Map stable physical caller IDs to contracts or bounded workers."""
     result = {job: [] for job in EXECUTOR_JOBS}
-    for record in plan["verifications"]:
+    for record in scheduled_verifications(plan):
         if record["executor"] not in {"tools", "platform", "e2e"}:
             result[record["dispatch_job"]].append(record)
     result["tools"] = plan["component_batches"]
@@ -376,7 +398,7 @@ def render_plan_summary(plan: dict) -> str:
     ):
         lines.append(
             f"| {paths[record['category']]} | {record['display_name']} | "
-            f"{workers[record['id']]} | {record['runtime']} / {record['device']} / {record['platform']} |"
+            f"{workers.get(record['id'], 'Reused successful receipt')} | {record['runtime']} / {record['device']} / {record['platform']} |"
         )
     deferred = plan.get("deferred_verifications", [])
     deferred_images = plan.get("deferred_images", [])
@@ -516,6 +538,18 @@ def main() -> int:
         publish=args.publish,
     )
     resolve_image_sources(plan)
+    if (
+        args.require_approval
+        and args.authorization
+        and json.loads(args.authorization.read_text()).get("authorized")
+        and os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
+        and int(os.environ.get("GITHUB_RUN_ATTEMPT", "1")) > 1
+    ):
+        from ci_reuse import (  # noqa: PLC0415 - ci_reuse imports this module
+            reuse_automatic_results,
+        )
+
+        reuse_automatic_results(plan, args.output.parent / "reused")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2) + "\n")
     if args.github_output:

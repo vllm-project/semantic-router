@@ -9,6 +9,7 @@ func rejectChatOnlyControls(request llmprotocol.Request) error {
 		present bool
 	}{
 		{"min_p", request.Sampling.MinP != nil},
+		{"logit_bias", len(request.Sampling.LogitBias) > 0},
 		{"repetition_penalty", request.Sampling.RepetitionPenalty != nil},
 		{"cache_salt", request.CacheSalt != nil},
 	} {

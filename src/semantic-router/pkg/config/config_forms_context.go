@@ -454,9 +454,9 @@ func compressionBudget(m *Migration, path string, old *yaml.Node) *yaml.Node {
 	trigger, target := scalarAt(old, "trigger_tokens"), scalarAt(old, "target_tokens")
 	switch {
 	case trigger != "" && !strings.EqualFold(trigger, "auto"):
-		m.Changed(path+".trigger_tokens", "compression started above "+trigger+" tokens; it now starts when the request exceeds budget.max_tokens, or, for auto, nears the model's window or has a segment over its target's min_tokens")
+		m.Changed(path+".trigger_tokens", "compression started above "+trigger+" tokens; it now compresses the segments over their target's min_tokens, and with a numeric budget.max_tokens only when the request exceeds it")
 	case target != "" && !strings.EqualFold(target, "auto"):
-		m.Changed(path+".target_tokens", "budget.max_tokens "+target+" also starts compression: a request over it is compressed down to it")
+		m.Changed(path+".target_tokens", "budget.max_tokens "+target+" also starts compression: the segments over their target's min_tokens are compressed only when the request exceeds it")
 	}
 	if len(budget.Content) == 0 {
 		return nil

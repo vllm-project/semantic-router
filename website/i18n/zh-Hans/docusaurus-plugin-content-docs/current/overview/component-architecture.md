@@ -102,7 +102,7 @@ vllm-sr serve vllm-sr/d3-edge -e
 | 接口 | 端点 | 访问方式与用途 |
 | --- | --- | --- |
 | 公共 Chat API | `/v1/chat/completions`、`/v1/responses`、`/v1/messages`；通过 `/v1/models` 发现模型 | Router 模式。受 listener 访问控制和该 API 自身要求约束。 |
-| 公共 System One API | `/v1/systemone`，别名 `/v1/decisions`；通过 `/v1/systemone/models` 发现模型 | 两种模式均可用。需要在 `listeners[].systemone.models` 中显式发布；listener 设置了 API key 时还需相应凭据。 |
+| 公共 System One API | `/v1/systemone`，别名 `/v1/decisions`；通过 `/v1/systemone/models` 发现模型 | 两种模式均可用。需要在 `listeners[].apis.systemone.models` 中显式发布；listener 设置了 API key 时还需相应凭据。 |
 | Worker API | 已加载模型支持的 classify、embeddings、rerank、decisions 和 bundle API | 独立运行的 `vllm-srun` 端点或受管 worker 的私有 socket。前端从不发布这些接口。 |
 
 - Dashboard 会话不能替代 listener 凭据。

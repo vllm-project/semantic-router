@@ -72,6 +72,7 @@ RUN set -eux; \
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
 COPY src/semantic-router/pkg/admission/ /app/src/semantic-router/pkg/admission/
+COPY src/semantic-router/pkg/apiregistry/ /app/src/semantic-router/pkg/apiregistry/
 COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
@@ -95,6 +96,9 @@ COPY src/semantic-router/pkg/routing/ /app/src/semantic-router/pkg/routing/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
 COPY src/semantic-router/pkg/trainingcontract/ /app/src/semantic-router/pkg/trainingcontract/
 COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
+COPY src/semantic-router/pkg/systemonecodec/ /app/src/semantic-router/pkg/systemonecodec/
+COPY src/semantic-router/pkg/systemoneprotocol/ /app/src/semantic-router/pkg/systemoneprotocol/
+COPY src/semantic-router/pkg/tokencount/tokenizerspec/ /app/src/semantic-router/pkg/tokencount/tokenizerspec/
 COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
 COPY src/semantic-router/pkg/utils/contentcoding/ /app/src/semantic-router/pkg/utils/contentcoding/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/

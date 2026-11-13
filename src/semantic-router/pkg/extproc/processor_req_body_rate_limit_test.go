@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
@@ -144,5 +147,43 @@ func TestApplyRateLimitIsolatesPostAuthUsersAndTiers(t *testing.T) {
 		if payload["error"]["code"] != float64(429) || payload["error"]["type"] != "rate_limit_error" || ctx.RateLimitCtx != nil {
 			t.Fatalf("invalid denial contract: body=%s, settlement=%v", immediate.GetBody(), ctx.RateLimitCtx)
 		}
+	}
+}
+
+// Header names are case-insensitive: identity.user_id_header may name
+// X-User-ID while the gateway hands the Router lowercase keys, as Envoy and
+// the standalone listener both do.
+func TestApplyRateLimitReadsIdentityHeadersInAnyCase(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.Authz.Identity = config.IdentityConfig{UserIDHeader: "X-User-ID", UserGroupsHeader: "X-User-Groups"}
+	cfg.RateLimit.Providers = []config.RateLimitProviderConfig{{
+		Type: "local-limiter",
+		Rules: []config.RateLimitRule{
+			{Name: "alice", Match: config.RateLimitMatch{User: "alice"}, RequestsPerUnit: 1, Unit: "minute"},
+			{Name: "free", Match: config.RateLimitMatch{Group: "free"}, RequestsPerUnit: 1, Unit: "minute"},
+		},
+	}}
+	router := &OpenAIRouter{Config: cfg, RateLimiter: buildRateLimitResolver(cfg)}
+	send := func(user, group string) *ext_proc.ProcessingResponse {
+		ctx := &RequestContext{Headers: map[string]string{}}
+		captureRequestHeaders(&ext_proc.ProcessingRequest_RequestHeaders{RequestHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+				{Key: "x-user-id", RawValue: []byte(user)},
+				{Key: "x-user-groups", RawValue: []byte(group)},
+			}},
+		}}, ctx, false)
+		return router.applyRateLimit(ctx, "model")
+	}
+	if response := send("alice", "staff"); response != nil {
+		t.Fatalf("alice's first request was rejected: %v", response)
+	}
+	if response := send("alice", "staff"); response.GetImmediateResponse().GetStatus().GetCode() != 429 {
+		t.Fatalf("alice's second request = %v, want 429 from the user rule", response)
+	}
+	if response := send("bob", "free"); response != nil {
+		t.Fatalf("bob's first request was rejected: %v", response)
+	}
+	if response := send("bob", "free"); response.GetImmediateResponse().GetStatus().GetCode() != 429 {
+		t.Fatalf("bob's second request = %v, want 429 from the group rule", response)
 	}
 }

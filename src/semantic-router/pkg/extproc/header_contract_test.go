@@ -306,6 +306,38 @@ func TestClientSentRouterHeadersAreDropped(t *testing.T) {
 	}
 }
 
+// The headers a configuration reads the caller's identity from are identity
+// headers too: no provider receives them, on either continue path, as the
+// standalone gateway's upstream layer removes them.
+func TestProviderBoundRequestsCarryNoConfiguredIdentityHeader(t *testing.T) {
+	for _, skip := range []bool{false, true} {
+		router, _ := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+		router.Config.SkipProcessing.Enabled = skip
+		router.Config.Authz.Identity = config.IdentityConfig{UserIDHeader: "X-JWT-Sub", UserGroupsHeader: "x-jwt-groups"}
+		sent := map[string]string{"x-jwt-sub": "alice", "x-jwt-groups": "admins"}
+		if skip {
+			sent[headers.VSRSkipProcessing] = "true"
+		}
+		ctx := &RequestContext{Headers: map[string]string{}}
+		response, err := router.handleRequestHeaders(headerContractRequest(sent), ctx)
+		if err != nil {
+			t.Fatalf("handleRequestHeaders() error = %v", err)
+		}
+		if ctx.SkipProcessing != skip {
+			t.Fatalf("SkipProcessing = %t, want %t", ctx.SkipProcessing, skip)
+		}
+		removed := response.GetRequestHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
+		for _, name := range []string{"x-jwt-sub", "x-jwt-groups"} {
+			if !slices.Contains(removed, name) {
+				t.Errorf("skip=%t: %s reaches the provider (removed %v)", skip, name, removed)
+			}
+		}
+		if headerValueCI(ctx, "x-jwt-sub") != "alice" {
+			t.Errorf("skip=%t: the Router no longer reads the identity it was given", skip)
+		}
+	}
+}
+
 // A client request can carry any header the registry keeps from providers:
 // the Router's control headers (x-vsr-debug among them), internal context,
 // identity, per-user provider keys and forged internal secrets. None reaches a

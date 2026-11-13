@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // NativeRequest retains the wire document. Routing and acceptance inspect typed
@@ -20,6 +23,9 @@ type NativeRequest struct {
 	// InferenceBody requests internal provenance when an algorithm needs it.
 	// Only metadata visibility differs from Body; the native task stays raw.
 	InferenceBody json.RawMessage
+	// Requirements are what a candidate model must answer and read to answer
+	// the whole task.
+	Requirements Requirements
 }
 
 // Question identifies a question within one named state: a batch entry's
@@ -80,6 +86,7 @@ func ParseNativeRequest(body json.RawMessage) (*NativeRequest, error) {
 			return nil, err
 		}
 	}
+	request.Requirements = requirementsOf(request.Questions, body)
 	// Signals see the complete native task, including all states and questions.
 	// The model selector and transport options are not task evidence.
 	options := map[string]json.RawMessage{}
@@ -182,13 +189,60 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 			if q.Levels < 2 || q.Levels > 10 {
 				return errors.New("score requires two to ten levels")
 			}
-		case "noul":
+		case "noul", "box":
 		default:
 			return fmt.Errorf("auto does not support question type %q", question.Type)
 		}
 		r.Questions = append(r.Questions, q)
 	}
 	return nil
+}
+
+// requirementsOf are what a task's questions and media need of its model:
+// each question type, image or video for the media of the task and its
+// states, and full input when a question requires it.
+func requirementsOf(questions []Question, body json.RawMessage) Requirements {
+	var needs Requirements
+	for _, q := range questions {
+		if !slices.Contains(needs.QuestionTypes, q.Type) {
+			needs.QuestionTypes = append(needs.QuestionTypes, q.Type)
+		}
+		needs.FullInput = needs.FullInput || q.FullInput
+	}
+	sort.Strings(needs.QuestionTypes)
+	type media struct {
+		Images []json.RawMessage `json:"images"`
+		Videos []json.RawMessage `json:"videos"`
+	}
+	var task struct {
+		media
+		Assets map[string]json.RawMessage `json:"assets"`
+		States map[string]media           `json:"states"`
+	}
+	_ = json.Unmarshal(body, &task)
+	image, video := len(task.Images) > 0, len(task.Videos) > 0
+	for _, state := range task.States {
+		image = image || len(state.Images) > 0
+		video = video || len(state.Videos) > 0
+	}
+	for _, raw := range task.Assets {
+		var asset struct {
+			Type string `json:"type"`
+		}
+		_ = json.Unmarshal(raw, &asset)
+		if asset.Type == "video" {
+			video = true
+		} else {
+			image = true
+		}
+	}
+	if image {
+		needs.Modalities = append(needs.Modalities, config.SystemOneModalityImage)
+	}
+	if video {
+		needs.Modalities = append(needs.Modalities, config.SystemOneModalityVideo)
+	}
+	return needs
 }
 
 // Observe preserves absent, failed and incomplete answers as invalid rather
@@ -229,6 +283,12 @@ func observeAnswer(q Question, raw json.RawMessage) Observation {
 		Confidence    *float64           `json:"confidence"`
 		Coverage      string             `json:"input_coverage"`
 		Probabilities map[string]float64 `json:"probabilities"`
+		Box           *struct {
+			Top    *float64 `json:"top"`
+			Bottom *float64 `json:"bottom"`
+			Left   *float64 `json:"left"`
+			Right  *float64 `json:"right"`
+		} `json:"box"`
 	}
 	if json.Unmarshal(raw, &answer) != nil || answer.Type != q.Type || answer.Error != "" || (q.FullInput && answer.Coverage != "complete") {
 		return out
@@ -244,6 +304,10 @@ func observeAnswer(q Question, raw json.RawMessage) Observation {
 			out.Probability = answer.Noul
 			out.Distribution = []float64{*answer.Noul, 1 - *answer.Noul}
 		}
+	case "box":
+		box := answer.Box
+		out.Valid = box != nil && probability(box.Top) && probability(box.Bottom) && probability(box.Left) && probability(box.Right) &&
+			*box.Top <= *box.Bottom && *box.Left <= *box.Right
 	}
 	if !out.Valid {
 		return out
@@ -251,7 +315,7 @@ func observeAnswer(q Question, raw json.RawMessage) Observation {
 	if probability(answer.Confidence) {
 		out.Confidence = answer.Confidence
 	}
-	if q.Type != "noul" {
+	if q.Type == "choice" || q.Type == "score" {
 		expected := q.Levels
 		if q.Type == "choice" {
 			expected = len(q.ChoiceKeys)

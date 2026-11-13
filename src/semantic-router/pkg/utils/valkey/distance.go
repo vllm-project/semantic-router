@@ -37,15 +37,15 @@ import "strings"
 //	IP:     d = 1 - u*v
 //	L2:     d = ||u - v||          unbounded
 //
+// COSINE therefore returns the cosine itself, in [-1, 1], the score Milvus,
+// Qdrant and the in-memory stores report and a min_similarity is written in.
 // L2 is unbounded, so it is squashed rather than subtracted. An unknown metric
 // falls back to 1-d; unlike the per-metric branches this is only a guess, but
 // the index builders reject or warn about unknown metrics before any search
 // runs, so it should be unreachable.
 func DistanceToSimilarity(metricType string, distance float64) float64 {
 	switch strings.ToUpper(metricType) {
-	case "COSINE":
-		return 1.0 - distance/2.0
-	case "IP":
+	case "COSINE", "IP":
 		return 1.0 - distance
 	case "L2":
 		return 1.0 / (1.0 + distance)

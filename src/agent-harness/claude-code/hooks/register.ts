@@ -3,13 +3,13 @@ import type { EngineInterface, Register, ToolCallInput, ToolCallResult } from 'c
 
 import { checkTurn, noteRead, startTurnReads } from './check'
 import { escalatePrompt, holdEscalation, releaseEscalation } from './escalate'
-import { guardCheck, isRefusal, settleHeld } from './guard'
+import { checkGuardModel, guardCheck, isRefusal, settleHeld } from './guard'
 import { checkRuntime } from './lib/classify'
 import { loadCalibration } from './lib/log'
 import { APP_NAMES } from './lib/apps'
 import { parseSettings, type Settings } from './lib/settings'
 import { inspectOutput, writeBackOf } from './output'
-import { countSpend, routeSpawn, routeStep } from './router'
+import { checkRouterModel, countSpend, routeSpawn, routeStep } from './router'
 import { loadLook, registerCommand, registerView } from './view'
 
 // A tool's result as Claude gets it: redacted and shielded, then kept for check.
@@ -27,7 +27,13 @@ export const register: Register = (on, options) => {
     await registerCommand($)
     await loadLook($, settings)
     await loadCalibration($, settings.log)
-    if (APP_NAMES.some(app => settings.apps[app])) void checkRuntime($, settings.runtime)
+    // The guard's check of its model asks only a runtime that answered, and a session that ends first drops it.
+    if (APP_NAMES.some(app => settings.apps[app])) {
+      void checkRuntime($, settings.runtime)
+        .then(isUp => (isUp && settings.apps.guard ? checkGuardModel($, settings) : undefined))
+        .catch(() => undefined)
+    }
+    if (settings.apps.router) void checkRouterModel($, settings.runtime)
     return next(e)
   })
 

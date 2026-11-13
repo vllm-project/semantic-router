@@ -84,7 +84,7 @@ recipes:
 | `tool_choice_none` | — | 请求协议显式禁止工具调用时返回 1。 |
 | `assistant_tool_call` | — | 统计所有 assistant 消息中的 `tool_calls`。 |
 | `assistant_tool_cycle` | — | 统计 `tool` 角色消息（已完成的工具结果）。 |
-| `active_tool_loop` | — | 请求尾部仍在继续工具循环时返回 1：最后一条 assistant 消息请求工具、最后一条消息是工具结果，或最近用户轮次紧跟工具结果。更早未匹配或已完成的调用不会让后续轮次保持在工具循环中。 |
+| `active_tool_loop` | — | 请求尾部仍在继续工具循环时返回 1：最后一条 assistant 消息请求工具、最后一条消息是工具结果，或最近用户轮次紧跟工具结果。会话中的系统消息（Claude Code 会把它插在工具结果或用户消息之后）会被跳过。更早未匹配或已完成的调用不会让后续轮次保持在工具循环中。 |
 | `flow_tool_state` | — | 仅当请求以携带可恢复工作流状态的 Router Flow 工具结果结尾时返回 1。历史 Flow 工具结果不匹配。 |
 
 要按请求中的图像路由，请使用 `modality: image` 的 [`input_modality`](./input-modality) 规则。

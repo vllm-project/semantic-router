@@ -421,6 +421,23 @@ func isJSONObject(body []byte, maximumDepth int) bool {
 	return llmprotocol.ValidateJSONObject(body, maximumDepth) == nil
 }
 
+// isTruncatedJSONObject reports arguments that stop before or inside a JSON
+// object, the only shapes an output limit leaves behind: vLLM can end a call
+// right after its name with no arguments. The prefix must pass the same
+// duplicate-key and depth rules as a complete object. A complete non-object,
+// trailing data or a syntax error mid-body is malformed, never cut.
+func isTruncatedJSONObject(body []byte, maximumDepth int) bool {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return true
+	}
+	if trimmed[0] != '{' {
+		return false
+	}
+	err := llmprotocol.ValidateJSONObject(trimmed, maximumDepth)
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
+}
+
 var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
 
 // exactJSONShape returns the struct, slice or array type whose member names
@@ -566,7 +583,7 @@ func responseEnvelope(format llmprotocol.WireFormat, body []byte, generation uin
 
 func appendLossy(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source, target llmprotocol.WireFormat, field, reason string) error {
 	if policy.LossyFeatures == llmprotocol.LossyReject && !slices.Contains(policy.AllowedLossyFields, field) {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "lossy_translation", "translation would lose "+field, nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "lossy_translation", "translation would lose "+field+llmprotocol.OptInHint(field), nil)
 	}
 	if len(*diagnostics) < policy.Limits.Diagnostics {
 		*diagnostics = append(*diagnostics, llmprotocol.Diagnostic{
@@ -585,7 +602,7 @@ func rejectUnsupportedRequestField(field string, value json.RawMessage) error {
 	return llmprotocol.NewError(
 		llmprotocol.ErrorUnsupportedFeature,
 		"unsupported_"+strings.ReplaceAll(field, ".", "_"),
-		field+" is not supported by the protocol-neutral request contract",
+		field+" is not supported by the protocol-neutral request contract"+llmprotocol.OptInHint(field),
 		nil,
 	)
 }

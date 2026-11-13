@@ -48,6 +48,7 @@ recipes:
         - name: tool_result_pii
           input:
             tool_results: true
+            request: false
     decisions:
       - name: keep-private
         priority: 200
@@ -67,7 +68,10 @@ recipes:
 | `ignore_labels` | Labels the rule never counts |
 | `input.history` | Also read the earlier user turns |
 | `input.tool_results` | Also read the request's tool results |
-| `on_unknown` | What the rule reports when its model gives no answer: `no_match` (the default) or `match` |
+| `input.request` | `false` leaves the current user turn out, so the rule reads only the earlier user turns or tool results it names |
+| `on_unscanned` | What the rule reports when only some windows of a long input were read: `best_effort` (the default), `match`, `no_match` or `unknown` |
+| `min_coverage` | With `best_effort`, the share of the windows, 0 to 1, that must have been read to decide on them; below it the rule is unknown. Off by default |
+| `on_unknown` | What the rule reports when its model gives no answer: `match` (the default) or `no_match` |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
 
 A rule's `predicate` is policy: calibrate the value for the model you use,
@@ -83,11 +87,29 @@ tool calls and non-text content are not read. It also reads what
 `global.router.routing_input` removes from the routing text, so personal data
 cannot hide in a fake memory block.
 
-It reads its whole input, in windows when the input is longer than one
-forward. Text the model did not read (over its input or scan budget, or
-truncated) counts as personal data, so text that could not be checked cannot
-pass as clean. A scan that misses the signals' deadline gives no answer, which
-matches only with `on_unknown: match`.
+A coding agent's user turn carries its harness's own instructions: Claude Code
+2.1.317, for example, puts a commit trailer with an email address into a
+reminder in the first user message. A rule meant for what the agent's tools
+bring back sets `input.request: false` with `input.tool_results: true`, as
+`tool_result_pii` above does, so it reads the tool results alone, and leaves
+out the current turn with what `routing_input` removed from it. Such a rule is
+not asked, and does not match, before the request has a tool result.
+
+It reads its whole input. An input longer than one of the deployment's
+`scan_window`s is read in overlapping windows, the tail first, then the head,
+then the middle by halves, and every window's spans count, at their places in
+the input, so masking replaces each one. See
+[Long inputs](../../../system-one/deploy/performance.md#long-inputs). When the
+deadline ends before every window is read and no window read found personal
+data, `on_unscanned` decides: `best_effort` (the default) decides on the
+windows read, once they are the rule's `min_coverage` share of them if it sets
+one (below it the rule is unknown), `match` counts the request as personal data
+(strict), `no_match` does not, and `unknown` leaves the rule to `on_unknown`.
+Personal data found in a window read counts whatever `on_unscanned` says. The
+masking plugin always needs every window: a text
+it could not read whole is not sent. A tool result the Router cannot read as
+text, such as an image or an unsupported block, counts as unread input too,
+which `on_unscanned` decides the same way, even when no tool result holds text.
 
 A model may find a value once and miss its later copies. Every other exact,
 whole-word copy of a found value of two or more characters is reported too,
@@ -95,10 +117,10 @@ as the same label, so masking replaces every copy.
 
 ### When the model gives no answer
 
-A rule whose model gives no answer (it fails, is overloaded or misses its
-deadline) does not match. To fail closed instead, write `on_unknown: match`:
-the rule then matches such a request, with the match type `unavailable`, and
-a decision's `rules.on_unknown` still decides:
+A rule none of whose windows gets an answer (the model fails, is overloaded or
+misses its deadline) matches, with the match type `unavailable`: it fails
+closed, and a decision's `rules.on_unknown` still decides. To let such a
+request through instead, write `on_unknown: no_match`:
 
 ```yaml
 recipes:
@@ -106,7 +128,7 @@ recipes:
     signals:
       pii:
         - name: personal_data
-          on_unknown: match
+          on_unknown: no_match
     decisions:
       - name: keep-private
         priority: 200
@@ -137,6 +159,7 @@ global:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: SYSTEMONE_API_KEY}
     system:
       decision_model: {deployment: d3-remote}

@@ -100,7 +100,7 @@ func TestLaterPhaseOutputsAreNotExecutable(t *testing.T) {
 // A model whose API cannot carry the contract's output never serves it.
 func TestOutputContractNeedsAnAPIThatCarriesIt(t *testing.T) {
 	for _, tc := range []struct{ output, model, want string }{
-		{"output: {kind: image}", "chat-painter", `model "chat-painter" answers on the openai API, which cannot carry a generated image; reach it with api_format: images or responses`},
+		{"output: {kind: image}", "chat-painter", `model "chat-painter" answers on the chat_completions API, which cannot carry a generated image; reach it with api_format: images or responses`},
 	} {
 		err := loadOutputContract(t, tc.output, tc.model)
 		if err == nil || !strings.Contains(err.Error(), "output_not_executable: "+tc.want) {

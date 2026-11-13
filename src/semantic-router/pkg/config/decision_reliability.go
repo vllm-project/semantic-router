@@ -98,6 +98,9 @@ func validateDecisionReliability(decision Decision) error {
 	if r.RetryCount != nil && (*r.RetryCount < 0 || *r.RetryCount > 5) {
 		return fmt.Errorf("%s must be between 0 and 5", path("retry_count"))
 	}
+	if err := validateRetryOn(path("retry_on"), r.RetryOn); err != nil {
+		return err
+	}
 	for _, code := range r.RetriableStatusCodes {
 		if code < 100 || code > 599 {
 			return fmt.Errorf("%s has %d; expected 100..599", path("retriable_status_codes"), code)

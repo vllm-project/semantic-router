@@ -1,5 +1,7 @@
 package llmprotocol
 
+import "slices"
+
 type UnknownFieldPolicy string
 
 const (
@@ -47,6 +49,15 @@ const LossyFieldStore = "store"
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
 	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldToolDeferLoading, LossyFieldReasoningSignature, LossyFieldStore}
+}
+
+// OptInHint is what a refusal of field adds when an operator may accept that
+// loss: the setting that lists it. It is empty for every other field.
+func OptInHint(field string) string {
+	if !slices.Contains(OptInLossyFields(), field) {
+		return ""
+	}
+	return "; an operator can accept this loss by listing " + field + " in global.router.allow_lossy_translation"
 }
 
 type MissingIDPolicy string
@@ -141,6 +152,7 @@ type Limits struct {
 	ReasoningEffortBytes int
 	StopSequences        int
 	StopBytes            int
+	LogitBiasEntries     int
 	TextBytes            int
 	MediaReferenceBytes  int
 	MediaDataBytes       int
@@ -165,7 +177,7 @@ func DefaultPolicy() Policy {
 			IdentifierBytes: 1024, SchemaBytes: 4 << 20, MetadataBytes: 64 << 10,
 			MetadataEntries: 256, MetadataKeyBytes: 256, MetadataValueBytes: 8 << 10,
 			ToolArgumentsBytes: 4 << 20, ReasoningEffortBytes: 32,
-			StopSequences: 16, StopBytes: 64 << 10, TextBytes: 16 << 20,
+			StopSequences: 16, StopBytes: 64 << 10, LogitBiasEntries: 16_384, TextBytes: 16 << 20,
 			MediaReferenceBytes: 16 << 10, MediaDataBytes: 48 << 20,
 			SSEFrameBytes: 1 << 20, UnfinishedArguments: 4 << 20,
 			Events: 1_000_000, Diagnostics: 64,

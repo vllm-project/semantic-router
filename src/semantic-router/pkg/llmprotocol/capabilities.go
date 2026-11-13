@@ -59,6 +59,7 @@ const (
 	CapabilityCustomTools
 	CapabilityTextVerbosity
 	CapabilityReasoningContinuity
+	CapabilitySamplingLogitBias
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -130,6 +131,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningBudget, "reasoning_budget"},
 		{CapabilitySamplingTopK, "sampling_top_k"},
 		{CapabilitySamplingMinP, "sampling_min_p"},
+		{CapabilitySamplingLogitBias, "sampling_logit_bias"},
 		{CapabilityRepetitionPenalty, "repetition_penalty"},
 		{CapabilityCacheIsolation, "cache_isolation"},
 		{CapabilitySamplingSeed, "sampling_seed"},
@@ -200,6 +202,9 @@ func requestSamplingCapabilities(request Request) Capability {
 	var required Capability
 	if request.Sampling.MinP != nil {
 		required |= CapabilitySamplingMinP
+	}
+	if len(request.Sampling.LogitBias) > 0 {
+		required |= CapabilitySamplingLogitBias
 	}
 	if request.Sampling.RepetitionPenalty != nil {
 		required |= CapabilityRepetitionPenalty
@@ -476,6 +481,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_budget":      CapabilityReasoningBudget,
 		"sampling_top_k":        CapabilitySamplingTopK,
 		"sampling_min_p":        CapabilitySamplingMinP,
+		"sampling_logit_bias":   CapabilitySamplingLogitBias,
 		"repetition_penalty":    CapabilityRepetitionPenalty,
 		"cache_isolation":       CapabilityCacheIsolation,
 		"sampling_seed":         CapabilitySamplingSeed,
