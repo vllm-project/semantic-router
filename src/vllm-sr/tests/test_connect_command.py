@@ -195,6 +195,30 @@ def test_files_holding_keys_are_private(tmp_path):
     assert _mode(created) == 0o600
 
 
+def test_a_failed_write_leaves_the_settings_as_they_were(tmp_path, monkeypatch):
+    path = tmp_path / "settings.json"
+    path.write_text('{"theme": "dark"}')
+
+    def crash(*_):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(hc.os, "replace", crash)
+    with pytest.raises(OSError):
+        hc.write_private(path, "{}", always=True)
+    assert path.read_text() == '{"theme": "dark"}'
+    assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]
+
+
+def test_writing_through_a_linked_settings_file_keeps_the_link(tmp_path):
+    target = tmp_path / "dotfiles" / "settings.json"
+    target.parent.mkdir()
+    target.write_text("{}")
+    link = tmp_path / "settings.json"
+    link.symlink_to(target)
+    hc.write_private(link, "{}\n", always=True)
+    assert link.is_symlink() and target.read_text() == "{}\n"
+
+
 def test_the_displayed_diff_shows_owned_keys_and_hides_the_key(tmp_path):
     path = tmp_path / "settings.json"
     path.write_text(
@@ -347,6 +371,23 @@ def test_router_check_for_codex():
         ],
     )
     assert rc.check_router_config(complete, "codex") == []
+
+
+def test_router_check_reads_canonical_api_formats_like_their_aliases():
+    claude = _router(["tools.defer_loading"], _learning(rc.CLAUDE_HEADERS))
+    for name in ("openai", "chat_completions", "responses"):
+        claude["providers"]["models"][0]["api_format"] = name
+        (need,) = [f.need for f in rc.check_router_config(claude, "claude-code")]
+        assert need.startswith("tool_result.is_error") and "not set" not in need
+    claude["providers"]["models"][0]["api_format"] = "messages"
+    assert rc.check_router_config(claude, "claude-code") == []
+    for name in ("anthropic", "messages"):
+        needs = [
+            f.need for f in rc.check_router_config(_router(api_format=name), "codex")
+        ]
+        assert any(
+            n.startswith("reasoning.signature") and "not set" not in n for n in needs
+        )
 
 
 def test_probe_checks_a_plain_reply_then_a_streamed_tool_loop(gateway):
@@ -535,6 +576,28 @@ def test_cli_refuses_a_key_in_a_settings_file_git_tracks(
     assert result.exit_code != 0
     assert "git tracks" in result.output
     assert settings.read_text() == "{}"
+
+
+def test_cli_refuses_a_key_in_an_undo_manifest_git_tracks(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.chdir(tmp_path)
+    manifest = tmp_path / ".claude" / hc.MANIFEST
+    manifest.parent.mkdir()
+    manifest.write_text('{"files": []}')
+    subprocess.run(["git", "add", "-f", str(manifest)], check=True)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    result = CliRunner().invoke(
+        main,
+        ["connect", "claude-code", "--scope", "project", "--base-url", url, "--yes"],
+    )
+    assert result.exit_code != 0
+    assert f"git tracks {manifest}" in result.output
+    assert manifest.read_text() == '{"files": []}'
+    assert not (tmp_path / ".claude" / "settings.local.json").exists()
 
 
 def test_cli_context_window_reaches_both_harnesses(tmp_path, gateway, monkeypatch):

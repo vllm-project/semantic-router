@@ -26,6 +26,9 @@ MAYBE_OPENAI = (
 )
 # what Claude Code sends that an openai backend cannot carry as sent
 OPENAI_LOSSY = ("tool_result.is_error", "messages[].role", "content.file")
+# the canonical name of each api_format alias, as the Router reads it
+API_FORMAT_ALIASES = {"openai": "chat_completions", "anthropic": "messages"}
+OPENAI_FORMATS = {"chat_completions", "responses"}
 PROBE_TOOL = {
     "name": "get_time",
     "description": "Return the current time.",
@@ -87,13 +90,14 @@ def _lossy_finding(router: dict, field_name: str, why: str) -> RouterFinding | N
 
 
 def _model_formats(doc: dict) -> dict[str, str]:
-    """Each provider model's api_format, or "" when the configuration leaves it to its
-    backend bindings, which only the Router resolves."""
-    return {
+    """Each provider model's canonical api_format, or "" when the configuration leaves
+    it to its backend bindings, which only the Router resolves."""
+    formats = {
         m["name"]: str(m.get("api_format") or "")
         for m in _get(doc, "providers", "models") or []
         if isinstance(m, dict) and m.get("name")
     }
+    return {name: API_FORMAT_ALIASES.get(f, f) for name, f in formats.items()}
 
 
 def _decisions(doc: dict) -> list[dict]:
@@ -129,12 +133,12 @@ def _claude_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
     formats = set(_model_formats(doc).values())
     allowed = router.get("allow_lossy_translation") or []
     missing = [f for f in OPENAI_LOSSY if f not in allowed]
-    if missing and formats & {"openai", ""}:
+    if missing and formats & (OPENAI_FORMATS | {""}):
         findings.append(
             RouterFinding(
                 f"{', '.join(missing)}, or the Router refuses Claude Code's error tool results,"
                 " system turns and files toward an openai backend"
-                + ("" if "openai" in formats else MAYBE_OPENAI),
+                + ("" if formats & OPENAI_FORMATS else MAYBE_OPENAI),
                 f"global:\n  router:\n    allow_lossy_translation: [{', '.join(missing)}]",
             )
         )
@@ -153,7 +157,7 @@ def _codex_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
             for ref in decision.get("modelRefs") or []
             if isinstance(ref, dict)
         }
-        if "anthropic" in kinds:
+        if "messages" in kinds:
             to_anthropic.append((decision, ""))
         elif "" in kinds:
             to_anthropic.append((decision, MAYBE_ANTHROPIC))

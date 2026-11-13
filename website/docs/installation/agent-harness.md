@@ -121,7 +121,7 @@ The command shows the changes and asks before writing them:
   file holds the key when one is set, so only you can read it afterwards. In a
   git repository, `--scope project` adds the file and the command's undo record
   to `.git/info/exclude` when git would otherwise track them, and refuses to
-  write a key into a settings file git already tracks.
+  write a key into either one once git already tracks it.
 - Codex: the `~/.codex/vllm-sr.config.toml` profile, which holds a `vllm-sr`
   provider, selects it and turns off hosted web search, which the Router does
   not serve. `~/.codex/config.toml` is not touched.

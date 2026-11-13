@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -249,15 +251,24 @@ def codex_change(
 
 
 def write_private(path: Path, text: str, *, always: bool = False) -> None:
-    """Write text; a file created here, and every file with always, is readable by its owner only."""
+    """Write text; a file created here, and every file with always, is readable by its owner only.
+
+    The text goes to a file beside it that then replaces it, so a crash never
+    leaves the settings half written.
+    """
+    path = path.resolve()  # a settings file linked from elsewhere stays a link
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and not always:
-        path.write_text(text, encoding="utf-8")
-        return
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(text)
-    os.chmod(path, 0o600)
+    keep = path.exists() and not always
+    mode = stat.S_IMODE(path.stat().st_mode) if keep else 0o600
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def apply_changes(changes: list[Change], manifest_dir: Path) -> Path:

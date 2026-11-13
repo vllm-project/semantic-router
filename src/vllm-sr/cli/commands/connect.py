@@ -111,10 +111,13 @@ def claude_code(
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    if scope == "project" and from_env and hc.tracked_by_git(path, Path.cwd()):
+    # the undo manifest beside the settings records the key too
+    keyed = (path, path.parent / hc.MANIFEST) if scope == "project" and from_env else ()
+    tracked = [p for p in keyed if hc.tracked_by_git(p, Path.cwd())]
+    if tracked:
         raise click.ClickException(
-            f"git tracks {path}, so the API key would reach its history. Untrack it"
-            f" (git rm --cached {path}) or connect with --scope user."
+            f"git tracks {tracked[0]}, so the API key would reach its history. Untrack"
+            f" it (git rm --cached {tracked[0]}) or connect with --scope user."
         )
     values = hc.claude_env(gateway, model, token)
     if context_window:
