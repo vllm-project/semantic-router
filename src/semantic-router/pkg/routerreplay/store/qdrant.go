@@ -281,10 +281,9 @@ func (q *QdrantStore) AttachResponse(ctx context.Context, id string, body string
 	})
 }
 
-func (q *QdrantStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+func (q *QdrantStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
 	return q.updateRecord(ctx, id, func(r *Record) {
-		r.Prompt = prompt
-		r.PromptTruncated = truncated
+		prompt.Apply(r)
 	})
 }
 

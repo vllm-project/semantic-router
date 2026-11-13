@@ -138,7 +138,7 @@ func redactRecordMap(record map[string]any) bool {
 
 func clearRecordPayloadFields(record map[string]any) bool {
 	changed := false
-	for _, field := range []string{"request_body", "response_body", "prompt", "tool_definitions"} {
+	for _, field := range []string{"request_body", "response_body", "prompt", "prompt_original_sha256", "tool_definitions"} {
 		if clearStringField(record, field) {
 			changed = true
 		}

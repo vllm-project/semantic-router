@@ -20562,6 +20562,12 @@
                           "prompt": {
                             "type": "string"
                           },
+                          "prompt_original_bytes": {
+                            "type": "integer"
+                          },
+                          "prompt_original_sha256": {
+                            "type": "string"
+                          },
                           "prompt_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -25384,6 +25390,12 @@
                       }
                     },
                     "prompt": {
+                      "type": "string"
+                    },
+                    "prompt_original_bytes": {
+                      "type": "integer"
+                    },
+                    "prompt_original_sha256": {
                       "type": "string"
                     },
                     "prompt_tokens": {

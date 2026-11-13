@@ -2,6 +2,8 @@ package routerreplay
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"sync"
 	"time"
@@ -14,7 +16,11 @@ const (
 	DefaultMaxRecords        = 200
 	DefaultMaxBodyBytes      = 4096 // 4KB
 	DefaultMaxToolTraceBytes = 0    // No limit — structured fields are typically small
-	DefaultOperationTimeout  = 5 * time.Second
+	// DefaultMaxPromptBytes caps the prompt a record keeps: 64 KiB keeps
+	// nearly every chat prompt whole and the head of a long one, so a store
+	// of long prompts cannot exhaust the router's memory. 0 means no limit.
+	DefaultMaxPromptBytes   = 64 << 10
+	DefaultOperationTimeout = 5 * time.Second
 	// DefaultMaxToolTraceSteps caps the number of ToolTraceStep entries kept
 	// per record. Long agent sessions can otherwise produce hundreds of
 	// steps and OOM the router process (see issue #1835). 0 means no limit;
@@ -68,6 +74,7 @@ type Recorder struct {
 
 	policyMu          sync.RWMutex
 	maxBodyBytes      int
+	maxPromptBytes    int // 0 = no limit
 	maxToolTraceBytes int // 0 = no limit
 	maxToolTraceSteps int // 0 = no limit
 
@@ -105,6 +112,7 @@ func NewRecorder(storage store.Storage) *Recorder {
 			lifecycleTransitions: make(map[string]*lifecycleTransition),
 		},
 		maxBodyBytes:      DefaultMaxBodyBytes,
+		maxPromptBytes:    DefaultMaxPromptBytes,
 		maxToolTraceBytes: DefaultMaxToolTraceBytes,
 		maxToolTraceSteps: DefaultMaxToolTraceSteps,
 	}
@@ -123,9 +131,19 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 	}
 }
 
-// SetMaxToolTraceBytes sets the per-field byte limit for structured text
-// (Prompt, ToolDefinitions, and each ToolTraceStep's Text, Arguments and
-// Output). A value of 0 disables truncation for those fields.
+// SetMaxPromptBytes sets the byte limit of the prompt a record keeps. A value
+// of 0 disables truncation; negative values are ignored.
+func (r *Recorder) SetMaxPromptBytes(max int) {
+	r.policyMu.Lock()
+	defer r.policyMu.Unlock()
+	if max >= 0 {
+		r.maxPromptBytes = max
+	}
+}
+
+// SetMaxToolTraceBytes sets the per-field byte limit for structured tool text
+// (ToolDefinitions, and each ToolTraceStep's Text, Arguments and Output). A
+// value of 0 disables truncation for those fields.
 func (r *Recorder) SetMaxToolTraceBytes(max int) {
 	r.policyMu.Lock()
 	defer r.policyMu.Unlock()
@@ -156,6 +174,7 @@ func (r *Recorder) ShouldCaptureResponse() bool {
 
 type recorderPolicy struct {
 	maxBodyBytes        int
+	maxPromptBytes      int
 	maxToolTraceBytes   int
 	maxToolTraceSteps   int
 	captureRequestBody  bool
@@ -167,6 +186,7 @@ func (r *Recorder) policySnapshot() recorderPolicy {
 	defer r.policyMu.RUnlock()
 	return recorderPolicy{
 		maxBodyBytes:        r.maxBodyBytes,
+		maxPromptBytes:      r.maxPromptBytes,
 		maxToolTraceBytes:   r.maxToolTraceBytes,
 		maxToolTraceSteps:   r.maxToolTraceSteps,
 		captureRequestBody:  r.captureRequestBody,
@@ -196,6 +216,7 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 		rec.ResponseBody, rec.ResponseBodyTruncated, policy.captureResponseBody, policy.maxBodyBytes)
 	omitUncapturedText(&rec, policy)
 
+	capRecordPrompt(&rec, policy.maxPromptBytes)
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
 	// callers can keep MaxBodyBytes small without losing structured data.
@@ -210,12 +231,37 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 	return r.storage.Add(ctx, rec)
 }
 
+// capPrompt is a prompt as a record keeps it under a limit of max bytes (none
+// for a non-positive max): cut on a UTF-8 boundary and, when cut, with the
+// size and SHA-256 of the whole prompt. Malformed UTF-8 is normalized first,
+// as it is before any text reaches a database.
+func capPrompt(prompt string, max int) store.StoredPrompt {
+	whole := strings.ToValidUTF8(prompt, "\uFFFD")
+	kept, cut := truncateString(whole, max)
+	if !cut {
+		return store.StoredPrompt{Text: kept}
+	}
+	sum := sha256.Sum256([]byte(whole))
+	return store.StoredPrompt{Text: kept, Truncated: true, OriginalBytes: len(whole), OriginalSHA256: hex.EncodeToString(sum[:])}
+}
+
+// capRecordPrompt cuts the record's prompt to max bytes, as capPrompt does.
+func capRecordPrompt(rec *RoutingRecord, max int) {
+	if rec.Prompt == "" {
+		return
+	}
+	stored := capPrompt(rec.Prompt, max)
+	if !stored.Truncated {
+		rec.Prompt = stored.Text
+		return
+	}
+	stored.Apply(rec)
+}
+
 // applyMaxToolTraceBytes truncates structured tool-trace text fields to max
 // bytes. A non-positive max disables truncation, but malformed UTF-8 is still
 // normalized before text reaches a database.
 func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
-	prompt, promptCut := truncateString(rec.Prompt, max)
-	rec.Prompt, rec.PromptTruncated = prompt, rec.PromptTruncated || promptCut
 	definitions, definitionsCut := truncateString(rec.ToolDefinitions, max)
 	rec.ToolDefinitions, rec.ToolDefinitionsTruncated = definitions, rec.ToolDefinitionsTruncated || definitionsCut
 	truncateToolTraceSteps(rec.ToolTrace, max)
@@ -359,10 +405,9 @@ func (r *Recorder) AttachPrompt(id string, prompt string) error {
 	if !policy.captureRequestBody {
 		return nil
 	}
-	prompt, truncated := truncateString(prompt, policy.maxToolTraceBytes)
 	ctx, cancel := r.replayOperationContext()
 	defer cancel()
-	return r.storage.AttachPrompt(ctx, id, prompt, truncated)
+	return r.storage.AttachPrompt(ctx, id, capPrompt(prompt, policy.maxPromptBytes))
 }
 
 func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
