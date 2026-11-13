@@ -1,6 +1,9 @@
 import type { ViewField } from '../components/ViewPanel'
 import type { InsightsRecord } from './insightsPageTypes'
 import { projectionMetric } from './insightsRoutingMetrics'
+import InsightsSignalTable from './InsightsSignalTable'
+import InsightsSystemOneAnswers from './InsightsSystemOneAnswers'
+import { systemOneAnswers } from './insightsSystemOneAnswers'
 import styles from './InsightsRoutingEvidence.module.css'
 
 export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] {
@@ -16,6 +19,22 @@ export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] 
     ]),
   ].sort()
   if (!outputs.length && !scores.length && !signals.length) return []
+  // with System One's answers drawn above, only their raw values fold away
+  const answered = systemOneAnswers(record.signal_values, record.signal_confidences).length > 0
+  const isAnswerValue = (name: string) => answered && name.startsWith('systemone:')
+  // a signal measured at zero (a PII type that did not occur) folds away too, so the
+  // rows that open show what fired
+  const isZero = (name: string) => {
+    const measured = [record.signal_values?.[name], record.signal_confidences?.[name]]
+    return (
+      measured.some((value) => value === 0) &&
+      measured.every((value) => value === undefined || value === 0) &&
+      !record.signal_error_matches?.[name]
+    )
+  }
+  const shown = signals.filter((name) => !isAnswerValue(name) && !isZero(name))
+  const zeros = signals.filter((name) => !isAnswerValue(name) && isZero(name))
+  const folded = signals.filter(isAnswerValue)
   return [
     {
       label: 'Recorded routing values',
@@ -52,6 +71,7 @@ export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] 
               </dl>
             </section>
           ) : null}
+          <InsightsSystemOneAnswers record={record} />
           {signals.length > 0 ? (
             <section className={styles.metadataGroup} aria-label="Signal evidence">
               <h3>
@@ -60,40 +80,19 @@ export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] 
               <p className={styles.muted}>
                 Values and confidence are distinct measurements; a missing confidence is not zero.
               </p>
-              <div className={styles.tableScroll}>
-                <table aria-label="Recorded signal values and confidence">
-                  <thead>
-                    <tr>
-                      <th>Signal</th>
-                      <th>Value</th>
-                      <th>Confidence</th>
-                      {record.signal_error_matches &&
-                      Object.keys(record.signal_error_matches).length ? (
-                        <th>Error match</th>
-                      ) : null}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {signals.map((name) => (
-                      <tr key={name}>
-                        <th scope="row">{name}</th>
-                        <td>{projectionMetric(record.signal_values?.[name])}</td>
-                        <td>{projectionMetric(record.signal_confidences?.[name])}</td>
-                        {record.signal_error_matches &&
-                        Object.keys(record.signal_error_matches).length ? (
-                          <td>
-                            {record.signal_error_matches[name] === undefined
-                              ? 'Not recorded'
-                              : record.signal_error_matches[name]
-                                ? 'Yes'
-                                : 'No'}
-                          </td>
-                        ) : null}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {shown.length > 0 ? <InsightsSignalTable record={record} names={shown} /> : null}
+              {zeros.length > 0 ? (
+                <details className={styles.allValues}>
+                  <summary>At zero ({zeros.length})</summary>
+                  <InsightsSignalTable record={record} names={zeros} />
+                </details>
+              ) : null}
+              {folded.length > 0 ? (
+                <details className={styles.allValues}>
+                  <summary>Raw System One values ({folded.length})</summary>
+                  <InsightsSignalTable record={record} names={folded} />
+                </details>
+              ) : null}
             </section>
           ) : null}
         </div>

@@ -241,6 +241,7 @@ func TestRouterReplayEveryReadRouteRedactsRecordedTextForViewer(t *testing.T) {
 	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
 		ID: "replay-1", SessionID: "session-1", Decision: "safe-decision", SelectedModel: "model-a",
 		Prompt: private, RequestBody: private, ResponseBody: private,
+		SessionPolicy: map[string]interface{}{"identity": map[string]interface{}{"agent": map[string]interface{}{"hash": private}}},
 		RouteDiagnostics: &routerreplay.RouteDiagnostics{
 			SelectedModel: "model-a", SelectionReasoning: private, SessionReason: private, DecisionReason: private,
 		},

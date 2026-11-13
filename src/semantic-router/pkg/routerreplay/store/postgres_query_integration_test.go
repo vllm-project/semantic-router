@@ -102,6 +102,11 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 	if err != nil || unscoped.Total != 3 {
 		t.Fatalf("cross-recipe session total=%d err=%v", unscoped.Total, err)
 	}
+	// The search box matches a session id as the in-memory matcher does.
+	searched, err := postgres.QueryPage(ctx, QueryFilters{Search: "OLD-SESS"}, 100, 0, false)
+	if err != nil || searched.Total != 3 {
+		t.Fatalf("session search total=%d err=%v", searched.Total, err)
+	}
 	//nolint:gosec // generated table name is validated by NewPostgresStore
 	if _, err = postgres.db.ExecContext(ctx, "UPDATE "+cfg.TableName+" SET recipe=NULL WHERE id=$1", "record-12249"); err != nil {
 		t.Fatal(err)

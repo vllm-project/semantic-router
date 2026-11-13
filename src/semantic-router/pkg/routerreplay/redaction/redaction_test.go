@@ -227,3 +227,15 @@ func TestRedactResponseBodyRemovesCapturedToolResults(t *testing.T) {
 		t.Fatalf("captured tool result step = %+v, want redacted with its status", step)
 	}
 }
+
+func TestRedactResponseBodyRemovesTrajectoryRouteReasonsAndAgent(t *testing.T) {
+	body := []byte(`{"object":"router_replay.trajectory","messages":[],"routes":[{"record_id":"replay-1","selected_model":"model-a","selection_reasoning":"private-canary","session_reason":"private-canary","agent":"private-canary"}]}`)
+
+	redacted, changed, err := RedactResponseBody(body)
+	if err != nil || !changed {
+		t.Fatalf("RedactResponseBody() changed = %v, err = %v", changed, err)
+	}
+	if bytes.Contains(redacted, []byte("private-canary")) || !bytes.Contains(redacted, []byte(`"selected_model":"model-a"`)) {
+		t.Fatalf("trajectory route kept private fields or lost routing metadata: %s", redacted)
+	}
+}
