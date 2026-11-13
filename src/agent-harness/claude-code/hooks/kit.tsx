@@ -72,6 +72,8 @@ export type Reply = {
   headers?: (Record<string, string> | undefined)[]
   // Collects the URL of every request.
   urls?: string[]
+  // The session's id while a test changes it, as /clear does.
+  sessionId?: { now: string }
   // Collects every toast's text, and every status line entry.
   toasts?: string[]
   statuses?: (string | undefined)[]
@@ -138,7 +140,7 @@ export function engine(on: On, reply: Reply) {
   const clock = mock.clock(on)
   mock.store(on, reply.store)
   mock.env(on, reply.env ?? { HOME })
-  on('session.id', () => ({ value: SESSION }))
+  on('session.id', () => ({ value: reply.sessionId?.now ?? SESSION }))
   on('fs.write', (_, e) => {
     if (reply.files) reply.files[e.path] = e.text
     return { value: undefined }

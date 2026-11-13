@@ -188,13 +188,18 @@ export type Decision =
 // A pushback in force until the turn that answers it ends.
 export type Escalation = { prompt: string; signals: Signal[]; turnId?: string }
 
-// The model your turns run on while the router keeps them off the session's (`routerTurns`): the effort the steps rule
-// picked and whether it may drop below the session's own, and the session model it was set against: a different one
-// later means you picked it with /model.
-export type TurnRoute = { model: Model; picked: Effort; effortFrom: Exclude<EffortFrom, 'floor'>; floor: boolean; anchor: string }
+// The tier and effort your turns run on while the router routes them (`routerTurns`): the effort the steps rule picked
+// and whether it may drop below the one the request would have had.
+export type TurnRoute = { model: Model; picked: Effort; effortFrom: Exclude<EffortFrom, 'floor'>; floor: boolean }
 
-// The last main request's prompt, in tokens, and the model that read it: what a move to another model re-reads.
-export type TurnContext = { tokens: number; model: string }
+// The main turn running now and what it runs on, from its start to its end: kept in the session's state, so a plugin
+// reload between its requests does not move it to another model.
+export type TurnBound = { turnId: string; route: TurnRoute | null; decisionId?: string; session: string }
+
+// The last main request's whole conversation, in tokens (its prompt and its answer), the model and effort it ran on, the
+// session it was in and when: what a move to another model re-reads. After /clear the session is another, and after the
+// prompt cache's lifetime nothing is warm, so nothing is lost.
+export type TurnContext = { tokens: number; model: string; session: string; at: number; effort?: Effort }
 
 // What the main loop's turn read so far, for check.
 export type TurnReads = { prompt: string; files: number; commands: number; context: string }
@@ -226,13 +231,17 @@ declare module 'claude-code' {
       spend: Spend
       // The session model each routed subagent was routed from, by its agent id.
       routedFrom: Record<string, string>
-      // Where your turns run while the router moves them; null while they run on the session's model.
+      // Where your turns run while the router routes them; null before its first answer and after /vsr turns on.
       turnRoute: TurnRoute | null
-      // The model you picked with /model, which your turns stay on until /vsr turns on; empty when not paused.
+      turnBound: TurnBound | null
+      // The model you picked yourself (/model, the picker), which your turns stay on until /vsr turns on; empty when not
+      // paused.
       turnPaused: string
       turnContext: TurnContext | null
       // The last main turn's usage, priced on two models to see what a move saves.
       lastTurnUsage: TurnUsage | null
+      // The prompt you sent last: a short reply is read with it.
+      turnPrompt: string
     }
   }
 }

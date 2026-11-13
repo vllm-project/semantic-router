@@ -283,10 +283,10 @@ const tokenWords = ({ url, token }: Settings['runtime']) =>
   token === '' ? '' : isCleartextRemote(url) ? ' · token set, sent unencrypted' : ' · token set'
 
 // Where your turns run: off, on the session's model, on another, or paused on the one you picked.
-function turnsWords({ settings, turns }: Overview) {
+export function turnsWords({ settings, turns }: Pick<Overview, 'settings' | 'turns'>) {
   if (!settings.apps.router) return undefined
   if (!settings.routerTurns) return 'on the model you picked · /vsr turns on lets the router pick'
-  if (turns.paused !== '') return `paused on ${modelName(turns.paused)}, which you picked with /model · /vsr turns on`
+  if (turns.paused !== '') return `paused on ${modelName(turns.paused)}, which you picked · /vsr turns on`
   return turns.route === null ? 'the router picks · on your model now' : `the router picks · on ${modelName(turns.route.model)} at ${turns.route.picked} now`
 }
 

@@ -10,7 +10,7 @@ import { APP_NAMES } from './lib/apps'
 import { parseSettings, type Settings } from './lib/settings'
 import { inspectOutput, writeBackOf } from './output'
 import { checkRouterModel, countSpend, routeSpawn, routeStep } from './router'
-import { askTurn, endTurn, showTurns, startTurn, stepTurn } from './turns'
+import { askTurn, endTurn, modelPicked, showTurns, startTurn, stepTurn } from './turns'
 import { loadLook, registerCommand, registerView } from './view'
 
 // A tool's result as Claude gets it: redacted and shielded, then kept for check.
@@ -64,6 +64,11 @@ export const register: Register = (on, options) => {
     }
     return done
   })
+
+  on('classic.PostModelSwitch', async ($, e, next) => {
+    await modelPicked($, e, settings)
+    return next(e)
+  }).catch(($, e, next) => next(e))
 
   on('agent.spawn', ($, e, next) => routeSpawn($, e, next, settings))
   on('turn.step', async function* ($, e, next) {

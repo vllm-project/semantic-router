@@ -124,23 +124,31 @@ The router can pick the model of your own turns too, on your own Claude login: `
 decision model reads each prompt you send, in milliseconds on your machine and with no Claude call of
 its own, and the turn runs on what it picked:
 
-- Hard prompts go to Opus and the rest to Sonnet, each at the effort the steps answer gives. Haiku runs
-  your turns only with `routerGoal: save`, or when your session is on Haiku already.
+- Hard prompts go to Opus and the rest to Sonnet, each at the effort the steps answer gives; a turn
+  that stays on its model still gets the effort its prompt needs. Haiku runs your turns only with
+  `routerGoal: save`, or when your session is on Haiku already, and never on a 1M-token session
+  (`opus[1m]`), whose window a move keeps.
 - A turn keeps its model through all its tool calls, and a turn you did not type (a continuation, a
   notification) runs where the last one did.
+- A short reply (12 words or fewer, such as `yes, do it`) is read together with the prompt before it,
+  keeps the last turn's effort, and never moves your turns to a smaller model.
 - A move to a smaller model than your session's needs the same confidence as a subagent's, and never
-  happens with `routerGoal: quality`. A short reply (12 words or fewer, such as `yes, do it`) never
-  moves your turns to a smaller model: it follows the turn before it.
-- A move to a smaller model re-reads the whole conversation without the prompt cache. vSR prices that
-  re-read against what three turns like the last one would save, and waits while the re-read costs
-  more: `KEPT · Sonnet would re-read 101K tokens uncached: $0.23, 3 turns save $0.06`.
-- A pushback moves the turn one step up from where the last one ran, one effort level higher.
-- Picking a model with `/model` pauses this: your turns stay on what you picked until
-  `/vsr turns on`, and a toast says so.
+  happens with `routerGoal: quality`.
+- A move to a smaller model writes the whole conversation to that model's prompt cache once. vSR
+  prices that write against what three turns like the last one would save there, and waits while it
+  costs more: `KEPT · Sonnet would re-read 103K tokens uncached: $0.24, 3 turns save $0.06`. After
+  `/clear`, or once the conversation sat idle past the cache's five minutes, nothing warm is lost and
+  the move goes ahead.
+- A pushback moves the turn one step up from where the last one ran, one effort level above what it
+  ran at.
+- A model you pick yourself (`/model`, the model picker, an SDK's `set_model`) pauses this: your turns
+  stay on it until `/vsr turns on`, and a toast says so. A fallback Claude Code makes on its own, or
+  the model of a session you resume, does not.
 
-The status line says where your turns run (`vSR ⇢ your turns on Opus · xhigh`), each move is a
-`ROUTED` line under the prompt that made it, the `/vsr` pane has a `your turns` row, and routed turns
-count in its `routing` estimate. Behind a Router gateway that already routes each call, leave this off.
+The status line says where your turns run (`vSR ⇢ your turns on Opus · xhigh`), `/vsr turns` says it
+too, each move is a `ROUTED` line under the prompt that made it, the `/vsr` pane has a `your turns`
+row, and turns routed off your session's model count in its `routing` estimate. Behind a Router
+gateway that already routes each call, leave this off.
 
 ## Guard
 

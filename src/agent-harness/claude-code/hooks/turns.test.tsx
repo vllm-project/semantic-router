@@ -91,8 +91,8 @@ test('with the save goal an easy prompt goes to Haiku', { options: { routerTurns
   expect(made[0]?.model).toBe('haiku')
 })
 
-test('a short reply keeps the model the turn before it ran on', TURNS, async ($, on) => {
-  const reply: Reply = { complexity: { score: 1.8, confidence: 0.9 }, files: {} }
+test('a short reply keeps the model the turn before it ran on, and is read with the prompt before it', TURNS, async ($, on) => {
+  const reply: Reply = { complexity: { score: 1.8, confidence: 0.9 }, files: {}, bodies: [] }
   engine(on, reply)
   session(on, { now: 'claude-sonnet-5-5' })
   const made = steps(on)
@@ -106,6 +106,8 @@ test('a short reply keeps the model the turn before it ran on', TURNS, async ($,
   expect(texts).toContain('≈  KEPT  your turn stays on Opus')
   // No threshold decided it, so calibration does not learn from it.
   expect(logLines(reply).at(-1)?.learnable).toBe(false)
+  const asked = reply.bodies?.filter(body => 'complexity' in body.questions).map(body => body.state)
+  expect(asked).toEqual([HARD, `${HARD}\n\n${YES}`])
   expect(texts).toContain("short reply: keeps the last turn's model, not Sonnet")
 })
 
@@ -123,28 +125,83 @@ test('a move to a smaller model waits while re-reading the conversation costs mo
   expect(made.map(one => one.model)).toEqual(['claude-sonnet-5-5', 'claude-sonnet-5-5'])
   const { texts } = await rowTree($, userRow(EASY))
   expect(texts).toContain('≈  KEPT  your turn stays on Opus 5.5')
-  expect(texts).toContain('Sonnet would re-read 101K tokens uncached: $0.23, 3 turns save $0.06')
+  expect(texts).toContain('Sonnet would re-read 103K tokens uncached: $0.24, 3 turns save $0.06')
 })
 
-test('picking a model with /model pauses the router until /vsr turns on', TURNS, async ($, on) => {
+// What Claude Code reports after the session's model changed, and who changed it.
+const switched = (to: string, source: string) =>
+  ({ hook_event_name: 'PostModelSwitch', from_model: 'claude-sonnet-5-5', to_model: to, requested_model: null, source, context_tokens: 0, prompt_cache_warm: true, cache_ttl: '5m', estimated_cache_write_usd: 0, pricing: 'catalog', session_id: 's', transcript_path: '/t', cwd: '/repo' }) as never
+
+test('a conversation idle past the cache lifetime moves without weighing a re-read', TURNS, async ($, on) => {
+  const reply: Reply = { complexity: { score: 1.8, confidence: 0.9 } }
+  const clock = engine(on, reply)
+  session(on, { now: 'claude-opus-5-5' })
+  const made = steps(on, { input_tokens: 500, cache_read_input_tokens: 100_000, output_tokens: 2000 })
+  const last = { input_tokens: 500, output_tokens: 2000, cache_read_input_tokens: 100_000, cache_creation_input_tokens: 0, model: 'claude-opus-5-5' }
+
+  await turn($, 't1', HARD, 1, last)
+  await clock.advance(6 * 60_000)
+  reply.complexity = { score: 0.9, confidence: 0.95 }
+  await turn($, 't2', EASY, 1)
+
+  expect(made.at(-1)?.model).toBe('sonnet')
+})
+
+test('a model you pick yourself pauses the router until /vsr turns on', TURNS, async ($, on) => {
   const reply: Reply = { complexity: { score: 1.8, confidence: 0.9 }, toasts: [], statuses: [] }
   engine(on, reply)
+  on('classic.PostModelSwitch', () => ({}))
   const model = { now: 'claude-sonnet-5-5' }
   session(on, model)
   const made = steps(on)
 
   await turn($, 't1', HARD, 1)
   model.now = 'claude-haiku-5-5'
+  await $.classic.PostModelSwitch(switched('claude-haiku-5-5', 'picker'))
   await turn($, 't2', HARD, 1)
 
   expect(made.map(one => one.model)).toEqual(['opus', 'claude-sonnet-5-5'])
-  expect(reply.toasts).toContain('vSR router: you picked Haiku 5.5 with /model, so your turns stay on it · /vsr turns on routes them again')
+  expect(reply.toasts).toContain('vSR router: you picked Haiku 5.5, so your turns stay on it · /vsr turns on routes them again')
   expect(reply.statuses?.at(-1)).toBe('vSR ⇢ paused · you picked Haiku 5.5')
-  expect(await paneText($, /your turns/)).toBe('your turns  paused on Haiku 5.5, which you picked with /model · /vsr turns on')
+  expect(await paneText($, /your turns/)).toBe('your turns  paused on Haiku 5.5, which you picked · /vsr turns on')
 
+  expect((await $.command.run({ command: 'vsr', args: 'turns' } as never)).text).toBe('vSR: your turns paused on Haiku 5.5, which you picked · /vsr turns on.')
   expect((await $.command.run({ command: 'vsr', args: 'turns on' } as never)).text).toBe('vSR: the router picks the model of your turns from now on.')
   await turn($, 't3', HARD, 1)
   expect(made.at(-1)?.model).toBe('opus')
+})
+
+test('a fallback the engine makes or a resumed model does not pause the router', TURNS, async ($, on) => {
+  engine(on, { complexity: { score: 1.8, confidence: 0.9 } })
+  on('classic.PostModelSwitch', () => ({}))
+  session(on, { now: 'claude-sonnet-5-5' })
+  const made = steps(on)
+
+  await $.classic.PostModelSwitch(switched('claude-haiku-5-5', 'auto'))
+  await $.classic.PostModelSwitch(switched('claude-haiku-5-5', 'resume'))
+  await turn($, 't1', HARD, 1)
+
+  expect(made[0]?.model).toBe('opus')
+})
+
+test('a turn that keeps its tier starts at the effort its prompt needs, a short reply at the last one', TURNS, async ($, on) => {
+  const reply: Reply = { complexity: { score: 0.9, confidence: 0.9 }, steps: { score: 0.2, confidence: 0.8 } }
+  engine(on, reply)
+  session(on, { now: 'claude-sonnet-5-5' })
+  const made = steps(on)
+
+  await turn($, 't1', EASY, 1)
+  reply.steps = { score: 1.4, confidence: 0.8 }
+  await turn($, 't2', HARD.replace('Find', 'Explain'), 1)
+  reply.steps = { score: 0.1, confidence: 0.9 }
+  await turn($, 't3', YES, 1)
+
+  // the session's own model is never named, only its effort set
+  expect(made.map(one => [one.model, one.effort])).toEqual([
+    ['claude-sonnet-5-5', 'low'],
+    ['claude-sonnet-5-5', 'high'],
+    ['claude-sonnet-5-5', 'high'],
+  ])
 })
 
 test('a runtime that answers an error leaves the turn on its model and says so under the prompt', TURNS, async ($, on) => {
@@ -195,6 +252,32 @@ test('a prompt sent twice shows the newest route under it, not both turns stacke
   expect(texts.filter(text => text.startsWith('⇢  ROUTED'))).toEqual(['⇢  ROUTED  your turn → Opus · high effort'])
 })
 
+test('a session on a 1M window keeps the window on the model its turn moves to', TURNS, async ($, on) => {
+  engine(on, { complexity: { score: 1.8, confidence: 0.9 } })
+  session(on, { now: 'claude-sonnet-5-5[1m]' })
+  const made = steps(on)
+
+  await turn($, 't1', HARD, 1)
+
+  expect(made[0]?.model).toBe('opus[1m]')
+})
+
+test('after /clear a move re-reads nothing, so the cache does not hold it', TURNS, async ($, on) => {
+  const id = { now: 'session-1' }
+  const reply: Reply = { complexity: { score: 1.8, confidence: 0.9 }, sessionId: id }
+  engine(on, reply)
+  session(on, { now: 'claude-opus-5-5' })
+  const made = steps(on, { input_tokens: 500, cache_read_input_tokens: 100_000, output_tokens: 2000 })
+  const last = { input_tokens: 500, output_tokens: 2000, cache_read_input_tokens: 100_000, cache_creation_input_tokens: 0, model: 'claude-opus-5-5' }
+
+  await turn($, 't1', HARD, 1, last)
+  id.now = 'session-2'
+  reply.complexity = { score: 0.9, confidence: 0.95 }
+  await turn($, 't2', EASY, 1)
+
+  expect(made.at(-1)?.model).toBe('sonnet')
+})
+
 test('a turn you did not type runs where the last one did', TURNS, async ($, on) => {
   engine(on, { complexity: { score: 1.8, confidence: 0.9 } })
   session(on, { now: 'claude-sonnet-5-5' })
@@ -223,7 +306,7 @@ test('/vsr turns on asks for the router first when it is off', { options: { rout
 })
 
 // The plan alone, for the lines a live session rarely crosses.
-const FACTS: TurnFacts = { level: 1, confidence: 0.9, steps: null, words: 20, session: 'claude-opus-5-5', now: undefined, isEscalated: false, context: null, last: null }
+const FACTS: TurnFacts = { level: 1, confidence: 0.9, steps: null, words: 20, session: 'claude-opus-5-5', now: undefined, isEscalated: false, context: null, last: null, lastEffort: undefined }
 const SETTINGS = parseSettings({
   runtime: 'local-cpu', runtimeUrl: '', runtimeToken: '', runtimeModel: '', router: true, routerTurns: true, escalate: true, redact: true, shield: true, guard: true, check: false,
   redactWait: '1', shieldWait: '1', guardWait: '1', routerEasyBelow: 0.5, routerHardFrom: 1.5, routerMinConfidence: 0.3, routerDowngradeConfidence: 0.6,
@@ -238,4 +321,6 @@ test('the plan keeps a smaller model away when unsure or with the quality goal, 
   expect(planTurn({ ...FACTS, level: 1.9, session: 'claude-fable-5-1', isEscalated: true }, SETTINGS)).toEqual({ kind: 'stay' })
   expect(planTurn({ ...FACTS, level: 1.9, session: 'claude-fable-5-1' }, SETTINGS)).toMatchObject({ kind: 'move', model: 'opus' })
   expect(planTurn({ ...FACTS, level: 1.9 }, SETTINGS)).toEqual({ kind: 'stay' })
+  // Haiku has no 1M window, so even the save goal keeps such a session's turns on Sonnet.
+  expect(planTurn({ ...FACTS, level: 0.1, session: 'claude-opus-5-5[1m]' }, { ...SETTINGS, routerGoal: 'save' })).toMatchObject({ kind: 'move', model: 'sonnet' })
 })

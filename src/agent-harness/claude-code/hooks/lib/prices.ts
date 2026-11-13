@@ -40,10 +40,9 @@ export function costOf(model: string, usage: TurnUsage): number | undefined {
 // for the turns after it, but a prompt cache lives minutes, not a session.
 export const PAYBACK_TURNS = 3
 
-// What moving a conversation whose prompt is `tokens` long from `from` to `to` adds to the next request: it writes the
-// whole prompt to `to`'s cache instead of reading it from `from`'s. Undefined for a model with no known price.
-export function rereadCost(from: string, to: string, tokens: number): number | undefined {
-  const [was, now] = [priceOf(from), priceOf(to)]
-  if (was === undefined || now === undefined) return undefined
-  return (tokens * (now.input * 1.25 - was.cacheRead)) / 1_000_000
+// What moving a conversation of `tokens` to `to` adds to its first request there: the whole conversation written to
+// `to`'s cache instead of read from it, as the turns after it are. Undefined for a model with no known price.
+export function rereadCost(to: string, tokens: number): number | undefined {
+  const price = priceOf(to)
+  return price === undefined ? undefined : (tokens * (price.input * 1.25 - price.cacheRead)) / 1_000_000
 }

@@ -1,9 +1,18 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Hook, PromptSubmitInput, TurnCompleteInput, TurnStartInput, TurnStepInput, TurnUsage } from 'claude-code'
+import type {
+  ClassicEventOf,
+  EngineInterface,
+  Hook,
+  PromptSubmitInput,
+  TurnCompleteInput,
+  TurnStartInput,
+  TurnStepInput,
+  TurnUsage,
+} from 'claude-code'
 
 import type { Effort, EffortFrom, Model, Reread, Steps, TurnContext, TurnRoute } from '../types'
 import { classify, failureOf, QUICK_ANSWER_MS, type Classified } from './lib/classify'
-import { effortFor, pickEffort, raised } from './lib/effort'
+import { EFFORTS, effortFor, pickEffort, raised } from './lib/effort'
 import { stamp } from './lib/env'
 import { costOf, PAYBACK_TURNS, rereadCost } from './lib/prices'
 import type { Settings } from './lib/settings'
@@ -16,28 +25,31 @@ import { addSpend, COMPLEXITY, defaultOf, MODELS, parseAnswers, RANK, readNoScor
 // effort the turn runs on, on your own Claude login. Unlike a gateway that switches on every request, a turn keeps its
 // model through its tool calls, and a move between turns is weighed against the prompt cache it gives up.
 
-// A reply this short follows the turn before it ("yes, do it"): it never moves your turns to a smaller model.
+// A reply this short follows the turn before it ("yes, do it"): the router reads it with that prompt, and it never moves
+// your turns to a smaller model.
 export const SHORT_REPLY_WORDS = 12
 
+// The prompt cache's default lifetime: a conversation idle longer than this has nothing warm to lose by a move.
+export const CACHE_WARM_MS = 5 * 60_000
 
 const turnRoute = atom({ plugin: 'vsr', key: 'turnRoute' } as const, null)
+const turnBound = atom({ plugin: 'vsr', key: 'turnBound' } as const, null)
 const turnPaused = atom({ plugin: 'vsr', key: 'turnPaused' } as const, '')
 const turnContext = atom({ plugin: 'vsr', key: 'turnContext' } as const, null)
 const lastTurnUsage = atom({ plugin: 'vsr', key: 'lastTurnUsage' } as const, null)
+const turnPrompt = atom({ plugin: 'vsr', key: 'turnPrompt' } as const, '')
 
 type Asked = Classified<{ complexity: Steps; steps: Steps | null }>
 
-// The prompt you just sent and the router's question on it, asked as it is submitted so the turn waits for it once. A
-// turn that starts on another text (a continuation, a notification) is not a prompt to route.
-let asked: { text: string; answer: Promise<Asked> } | undefined
-
-// What each of your turns runs on, by turn id, from its start to its end: the route, the decision to update with the
-// effort its first request ran at, and whether its spend counts as routed.
-const bound = new Map<string, { route: TurnRoute | null; decisionId?: string; session: string }>()
+// Your prompts and the router's question on each, asked as each is submitted so its turn waits for it once, by text: a
+// prompt queued behind a running turn keeps its own answer. A turn that starts on another text (a continuation, a
+// notification) is not a prompt to route.
+const asked = new Map<string, Promise<Asked>>()
 
 const isRouting = (settings: Settings) => settings.apps.router && settings.routerTurns
+const wordsIn = (text: string) => text.trim().split(/\s+/).length
 
-// Read while drawing: where your turns run, and the model you picked with /model when that paused the router.
+// Read while drawing: where your turns run, and the model you picked yourself when that paused the router.
 export async function readTurns($: EngineInterface) {
   return { route: await read($, turnRoute), paused: await read($, turnPaused) }
 }
@@ -61,23 +73,41 @@ export async function resumeTurns($: EngineInterface, settings: Settings) {
   showStatus($, settings, null, '')
 }
 
-export function askTurn($: EngineInterface, e: PromptSubmitInput, settings: Settings) {
-  asked = undefined
-  if (!isRouting(settings) || e.isMeta || e.command || e.text.trim() === '' || !PERSON_ORIGINS.has(e.origin.kind)) return
-  const answer = (async (): Promise<Asked> => {
-    const without = await readNoScore($)
-    if (without !== '') return { ok: false, why: `${without} answers no score questions`, latencyMs: 0 }
-    return classify($, settings.runtime, e.text, { complexity: COMPLEXITY, steps: STEPS }, QUICK_ANSWER_MS, parseAnswers)
-  })()
-  asked = { text: e.text, answer }
+// A model you pick yourself (/model, the picker, an SDK's set_model) stands until /vsr turns on; a fallback the engine
+// makes or a resumed session's model does not.
+const PICKED = new Set(['command', 'picker', 'sdk'])
+
+export async function modelPicked($: EngineInterface, e: ClassicEventOf['classic.PostModelSwitch'], settings: Settings) {
+  if (!isRouting(settings) || !PICKED.has(e.source)) return
+  await update($, turnPaused, () => e.to_model)
+  await update($, turnRoute, () => null)
+  $.ui.toast(`vSR router: you picked ${modelName(e.to_model)}, so your turns stay on it · /vsr turns on routes them again`)
+  showStatus($, settings, null, e.to_model)
 }
 
-// What the router decides for a turn: move to another model, keep the one the turns run on and say why, or stay
-// without a word (the answer names the tier they are on already).
+export function askTurn($: EngineInterface, e: PromptSubmitInput, settings: Settings) {
+  if (!isRouting(settings) || e.isMeta || e.command || e.text.trim() === '' || !PERSON_ORIGINS.has(e.origin.kind)) return
+  const answer = (async (): Promise<Asked> => {
+    const prior = await read($, turnPrompt)
+    await update($, turnPrompt, () => e.text)
+    const without = await readNoScore($)
+    if (without !== '') return { ok: false, why: `${without} answers no score questions`, latencyMs: 0 }
+    // "yes, do it" is as hard as what it agrees to.
+    const state = wordsIn(e.text) <= SHORT_REPLY_WORDS && prior !== '' ? `${prior}\n\n${e.text}` : e.text
+    return classify($, settings.runtime, state, { complexity: COMPLEXITY, steps: STEPS }, QUICK_ANSWER_MS, parseAnswers)
+  })()
+  asked.set(e.text, answer)
+}
+
+// The effort a turn starts at when it keeps its tier: none when the steps answer is unsure, so it keeps the last one.
+type Pick = { picked: Effort; effortFrom: TurnRoute['effortFrom']; floor: boolean }
+
+// What the router decides for a turn: move to another model, keep the one the turns run on and say why, or stay without
+// a word (the answer names the tier they are on already); a keep or a stay can still set the turn's effort.
 export type TurnPlan =
-  | { kind: 'move'; model: Model; picked: TurnRoute['picked']; effortFrom: TurnRoute['effortFrom']; floor: boolean; escalated: boolean }
-  | { kind: 'keep'; reason: 'unsure' | 'downgrade' | 'quality' | 'follow-up' | 'cache'; would: Model; minConfidence: number; reread?: Reread }
-  | { kind: 'stay' }
+  | ({ kind: 'move'; model: Model; escalated: boolean } & Pick)
+  | { kind: 'keep'; reason: 'unsure' | 'downgrade' | 'quality' | 'follow-up' | 'cache'; would: Model; minConfidence: number; reread?: Reread; effort?: Pick }
+  | { kind: 'stay'; effort?: Pick }
 
 export type TurnFacts = {
   level: number
@@ -88,8 +118,11 @@ export type TurnFacts = {
   session: string
   now: Model | undefined
   isEscalated: boolean
+  // The conversation the cache holds warm, and the last turn's usage; null when nothing is warm.
   context: TurnContext | null
   last: TurnUsage | null
+  // The effort the last request ran at.
+  lastEffort: Effort | undefined
 }
 
 const nameOf = (model: Model | undefined, session: string) => model ?? session
@@ -97,138 +130,161 @@ const nameOf = (model: Model | undefined, session: string) => model ?? session
 // The model at a rank, Opus for any rank above it.
 const tierAt = (rank: number): Model => MODELS[Math.max(0, Math.min(RANK.opus, rank))] ?? 'opus'
 
+const higher = (one: Effort, other: Effort | undefined) => (other !== undefined && EFFORTS.indexOf(other) > EFFORTS.indexOf(one) ? other : one)
+
+// A session on a 1M-token window (`opus[1m]`) keeps it on the model its turns move to: the plain alias has a smaller
+// window than the conversation may already fill. Haiku has no such window, so it never runs those turns.
+const isLongWindow = (session: string) => /\[1m\]$/i.test(session)
+const aliasOf = (model: Model, session: string) => (isLongWindow(session) ? `${model}[1m]` : model)
+
 export function planTurn(facts: TurnFacts, settings: Settings): TurnPlan {
   const { router } = settings.thresholds
   const tiers = { easyBelow: router.easyBelow, hardFrom: router.hardFrom }
   const lines = { low: router.stepsLow, high: router.stepsHigh, minConfidence: router.stepsMinConfidence }
   const session = defaultOf(facts.session)
   const nowRank = facts.now === undefined ? session.rank : RANK[facts.now]
+  const nowTier = facts.now ?? session.model
   const routed = routeOf(facts.level, tiers)
   // Haiku runs your turns only with the save goal, or when the session is on it already: a coding agent's own loop
   // needs more than a subagent's errand.
-  const floorRank = settings.routerGoal === 'save' ? 0 : Math.min(RANK.sonnet, session.rank)
+  const floorRank = settings.routerGoal === 'save' && !isLongWindow(facts.session) ? 0 : Math.min(RANK.sonnet, session.rank)
   const target = tierAt(Math.max(RANK[routed.model], floorRank))
   if (facts.isEscalated) {
-    // A pushback climbs one step from where the last turn ran, at one effort level more; above Opus there is no step.
+    // A pushback climbs one step from where the last turn ran, and one effort level above what it ran at; above Opus
+    // there is no step.
     const base = Math.max(nowRank, RANK[target])
     if (base > RANK.opus) return { kind: 'stay' }
     const up = tierAt(base + 1)
-    return { kind: 'move', model: up, picked: raised(pickEffort(up, facts.steps, lines).effort), effortFrom: 'escalated', floor: true, escalated: true }
+    return { kind: 'move', model: up, picked: raised(higher(pickEffort(up, facts.steps, lines).effort, facts.lastEffort)), effortFrom: 'escalated', floor: true, escalated: true }
   }
+  // A turn that keeps its tier still starts at the effort its prompt needs, unless the answer is unsure or the prompt
+  // is a short reply, which goes on as the turn before it did.
+  const steady = nowTier === undefined ? undefined : pickEffort(nowTier, facts.steps, lines)
+  const effort =
+    steady === undefined || steady.from === 'unsure' || facts.words <= SHORT_REPLY_WORDS || nowTier === undefined
+      ? undefined
+      : { picked: steady.effort, effortFrom: steady.from, floor: nowTier === 'opus' }
+  const keep = (reason: Extract<TurnPlan, { kind: 'keep' }>['reason'], minConfidence: number, reread?: Reread): TurnPlan => ({
+    kind: 'keep',
+    reason,
+    would: target,
+    minConfidence,
+    ...(reread === undefined ? {} : { reread }),
+    ...(effort === undefined ? {} : { effort }),
+  })
   const rank = RANK[target]
-  if (rank === nowRank) return { kind: 'stay' }
-  if (facts.confidence < router.minConfidence) return { kind: 'keep', reason: 'unsure', would: target, minConfidence: router.minConfidence }
+  if (rank === nowRank) return effort === undefined ? { kind: 'stay' } : { kind: 'stay', effort }
+  if (facts.confidence < router.minConfidence) return keep('unsure', router.minConfidence)
   const picked = pickEffort(target, facts.steps, lines)
-  const move = { kind: 'move' as const, model: target, picked: picked.effort, effortFrom: picked.from, floor: routed.floor, escalated: false }
+  const move: TurnPlan = { kind: 'move', model: target, picked: picked.effort, effortFrom: picked.from, floor: routed.floor, escalated: false }
   if (rank > nowRank) return move
   if (rank < session.rank) {
-    if (settings.routerGoal === 'quality') return { kind: 'keep', reason: 'quality', would: target, minConfidence: router.minConfidence }
+    if (settings.routerGoal === 'quality') return keep('quality', router.minConfidence)
     const smallerLine = settings.routerGoal === 'save' ? router.minConfidence : Math.max(router.minConfidence, router.downgradeConfidence)
-    if (facts.confidence < smallerLine) return { kind: 'keep', reason: 'downgrade', would: target, minConfidence: smallerLine }
+    if (facts.confidence < smallerLine) return keep('downgrade', smallerLine)
   }
-  if (facts.words <= SHORT_REPLY_WORDS) return { kind: 'keep', reason: 'follow-up', would: target, minConfidence: router.minConfidence }
-  // A move to a smaller model re-reads the conversation without the cache: it waits while that costs more than
-  // PAYBACK_TURNS turns like the last one would save.
+  if (facts.words <= SHORT_REPLY_WORDS) return keep('follow-up', router.minConfidence)
+  // A move to a smaller model writes the whole conversation to its cache once: it waits while that costs more than
+  // PAYBACK_TURNS turns like the last one would save there.
   if (facts.context !== null && facts.last !== null) {
-    const from = nameOf(facts.now, facts.session)
-    const cost = rereadCost(from, target, facts.context.tokens)
-    const [was, would] = [costOf(from, facts.last), costOf(target, facts.last)]
+    const cost = rereadCost(target, facts.context.tokens)
+    const [was, would] = [costOf(nameOf(facts.now, facts.session), facts.last), costOf(target, facts.last)]
     if (cost !== undefined && was !== undefined && would !== undefined && cost > (was - would) * PAYBACK_TURNS) {
-      return { kind: 'keep', reason: 'cache', would: target, minConfidence: router.minConfidence, reread: { tokens: facts.context.tokens, cost, saving: (was - would) * PAYBACK_TURNS } }
+      return keep('cache', router.minConfidence, { tokens: facts.context.tokens, cost, saving: (was - would) * PAYBACK_TURNS })
     }
   }
   return move
 }
 
+async function bind($: EngineInterface, turnId: string, route: TurnRoute | null, session: string, decisionId?: string) {
+  await update($, turnBound, () => ({ turnId, route, session, ...(decisionId === undefined ? {} : { decisionId }) }))
+}
+
 export async function startTurn($: EngineInterface, e: TurnStartInput, settings: Settings) {
   if (e.agentId !== undefined) return
-  const mine = asked !== undefined && asked.text === e.text ? asked : undefined
-  asked = undefined
-  if (!isRouting(settings)) return
+  const mine = asked.get(e.text)
+  asked.delete(e.text)
+  await update($, turnBound, () => null)
+  if (!isRouting(settings) || (await read($, turnPaused)) !== '') return
   const session = await $.session.model()
-  const paused = await read($, turnPaused)
   let current = await read($, turnRoute)
-  if (paused === '' && current !== null && current.anchor !== session) {
-    // You picked another model with /model: the turns follow it until you hand them back.
-    await update($, turnPaused, () => session)
-    await update($, turnRoute, () => null)
-    $.ui.toast(`vSR router: you picked ${modelName(session)} with /model, so your turns stay on it · /vsr turns on routes them again`)
-    showStatus($, settings, null, session)
-    return
-  }
-  if (paused !== '') return
-  if (mine === undefined) {
-    // A turn you did not type runs where the last one did.
-    bound.set(e.turnId, { route: current, session })
-    return
-  }
-  const answer = await mine.answer
+  // A turn you did not type runs where the last one did.
+  if (mine === undefined) return bind($, e.turnId, current, session)
+  const answer = await mine
   const at = await stamp($)
   const anchor = { id: at, at, scope: 'turn' as const, prompt: e.text, task: e.text }
   if (!answer.ok) {
     await record($, settings.log, { kind: 'unavailable', app: 'router', id: at, at, prompt: e.text, subject: e.text, why: answer.why, ...failureOf(answer) })
-    bound.set(e.turnId, { route: current, session })
-    return
+    return bind($, e.turnId, current, session)
   }
   const { complexity, steps } = answer.value
   const { router } = settings.thresholds
   const tiers = { easyBelow: router.easyBelow, hardFrom: router.hardFrom }
   const escalation = await readEscalation($)
+  const context = await read($, turnContext)
+  const isSameConversation = context !== null && context.session === (await $.session.id())
+  // A conversation /clear started over, or one idle past the cache's lifetime, has nothing warm to lose.
+  const isWarm = isSameConversation && (await $.clock.now()) - context.at < CACHE_WARM_MS
   const plan = planTurn(
     {
       level: complexity.score,
       confidence: complexity.confidence,
       steps,
-      words: e.text.trim().split(/\s+/).length,
+      words: wordsIn(e.text),
       session,
       now: current?.model,
       isEscalated: escalation !== null && escalation.prompt === e.text,
-      context: await read($, turnContext),
-      last: await read($, lastTurnUsage),
+      context: isWarm ? context : null,
+      last: isWarm ? await read($, lastTurnUsage) : null,
+      lastEffort: isSameConversation ? context.effort : undefined,
     },
     settings,
   )
   const facts = { level: complexity.score, confidence: complexity.confidence, tiers, latencyMs: answer.latencyMs }
-  if (plan.kind === 'keep') {
-    const model = nameOf(current?.model, session)
-    await record($, settings.log, { kind: 'keep', ...anchor, model, would: plan.would, minConfidence: plan.minConfidence, reason: plan.reason, reread: plan.reread, ...facts })
-  }
-  if (plan.kind === 'move') {
-    const from = nameOf(current?.model, session)
-    // Back on the session's tier the turn runs as the session would, its own model and effort; a pushback still
-    // raises the effort there.
-    const isSession = RANK[plan.model] === defaultOf(session).rank && !plan.escalated
-    current = isSession ? null : { model: plan.model, picked: plan.picked, effortFrom: plan.effortFrom, floor: plan.floor, anchor: session }
-    await update($, turnRoute, () => current)
-    await record($, settings.log, {
-      kind: 'route',
-      ...anchor,
-      from,
-      model: current === null ? session : current.model,
-      picked: plan.picked,
-      steps,
-      effortFrom: current === null ? 'floor' : plan.effortFrom,
-      sessionModel: session,
-      ...(plan.escalated ? { escalated: { alone: 'default' as const } } : {}),
-      ...facts,
-    })
-    bound.set(e.turnId, { route: current, decisionId: at, session })
+  const tier = current?.model ?? defaultOf(session).model
+  if (plan.kind !== 'move') {
+    if (plan.kind === 'keep') {
+      const { would, minConfidence, reason, reread } = plan
+      await record($, settings.log, { kind: 'keep', ...anchor, model: nameOf(current?.model, session), would, minConfidence, reason, ...(reread ? { reread } : {}), ...facts })
+    }
+    if (plan.effort !== undefined && tier !== undefined) {
+      current = { model: tier, ...plan.effort }
+      await update($, turnRoute, () => current)
+    }
+    await bind($, e.turnId, current, session)
     showStatus($, settings, current, '')
     return
   }
-  bound.set(e.turnId, { route: current, session })
+  const from = nameOf(current?.model, session)
+  current = { model: plan.model, picked: plan.picked, effortFrom: plan.effortFrom, floor: plan.floor }
+  await update($, turnRoute, () => current)
+  await record($, settings.log, {
+    kind: 'route',
+    ...anchor,
+    from,
+    // Back on the session's tier the turn runs on the session's own model, a pinned one included.
+    model: RANK[plan.model] === defaultOf(session).rank ? session : plan.model,
+    picked: plan.picked,
+    steps,
+    effortFrom: plan.effortFrom,
+    sessionModel: session,
+    ...(plan.escalated ? { escalated: { alone: 'default' as const } } : {}),
+    ...facts,
+  })
+  await bind($, e.turnId, current, session, at)
   showStatus($, settings, current, '')
 }
 
 export async function* stepTurn($: EngineInterface, e: TurnStepInput, next: Parameters<Hook<'turn.step'>>[2], settings: Settings) {
-  const turn = bound.get(e.turnId)
+  const bound = await read($, turnBound)
+  const turn = bound?.turnId === e.turnId ? bound : null
   const route = turn?.route ?? null
   let request = e
   let ran: { effort: Effort; from?: EffortFrom } | undefined = typeof e.effort === 'string' ? { effort: e.effort } : undefined
-  if (route !== null) {
+  if (turn !== null && route !== null) {
     // The session's own tier is not named: its alias would swap a pinned model (claude-opus-4-8, say) for the latest.
-    const isOwnTier = turn !== undefined && RANK[route.model] === defaultOf(turn.session).rank
-    request = isOwnTier ? e : { ...e, model: route.model }
+    const isOwnTier = RANK[route.model] === defaultOf(turn.session).rank
+    request = isOwnTier ? e : { ...e, model: aliasOf(route.model, turn.session) }
     if (typeof e.effort === 'string') {
       const { effort, from } = effortFor({ effort: route.picked, from: route.effortFrom }, route.floor, e.effort)
       request = { ...request, effort }
@@ -242,17 +298,23 @@ export async function* stepTurn($: EngineInterface, e: TurnStepInput, next: Para
   }
   const result = yield* next(request)
   if (result.usage !== null) {
-    const { input_tokens, cache_read_input_tokens, cache_creation_input_tokens, model } = result.usage
-    await update($, turnContext, () => ({ tokens: input_tokens + cache_read_input_tokens + cache_creation_input_tokens, model }))
+    // The next request re-sends this one's prompt and its answer.
+    const { input_tokens, cache_read_input_tokens, cache_creation_input_tokens, output_tokens, model } = result.usage
+    const tokens = input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens
+    const [session, now] = [await $.session.id(), await $.clock.now()]
+    const effort = typeof request.effort === 'string' ? request.effort : undefined
+    await update($, turnContext, () => ({ tokens, model, session, at: now, ...(effort === undefined ? {} : { effort }) }))
   }
   return result
 }
 
 export async function endTurn($: EngineInterface, e: TurnCompleteInput) {
   if (e.agentId !== undefined) return
-  const turn = bound.get(e.turnId)
-  bound.delete(e.turnId)
+  const bound = await read($, turnBound)
+  if (bound?.turnId === e.turnId) await update($, turnBound, () => null)
   if (e.usage === undefined) return
   await update($, lastTurnUsage, () => e.usage ?? null)
-  if (turn?.route !== null && turn?.route !== undefined) await addSpend($, e.usage, turn.session)
+  // A turn counts as routed when it ran on another tier than the session's.
+  const route = bound?.turnId === e.turnId ? bound.route : null
+  if (route !== null && RANK[route.model] !== defaultOf(bound?.session ?? '').rank) await addSpend($, e.usage, bound?.session ?? '')
 }

@@ -4,7 +4,7 @@ import type { Decision } from '../types'
 import { readOffline } from './lib/classify'
 import { describe, named } from './lib/describe'
 import { APP_NAMES, appOf } from './lib/apps'
-import { band, type Controls, controls, dashboard, type Elements, overview, rowView } from './lib/draw'
+import { band, type Controls, controls, dashboard, type Elements, overview, rowView, turnsWords } from './lib/draw'
 import { type Answer, giveLabel, labelsFile, readLabels } from './lib/labels'
 import { markCalibrated, readCalibration } from './lib/log'
 import { BLOCKS_LOGO, loadLogo, type Logo, NO_LOGO, wordmark } from './lib/logo'
@@ -92,7 +92,7 @@ export async function registerCommand($: EngineInterface) {
     name: 'vsr',
     description:
       'Show what the vSR decision model decided and how it is set up, in a pane; /vsr <app> on|off turns an app on or off, /vsr turns on|off routes your own turns too, /vsr <redact|shield|guard> wait 1|2|3|done sets how long it waits',
-    argumentHint: '[<app> on|off | turns on|off | <redact|shield|guard> wait 1|2|3|done]',
+    argumentHint: '[<app> on|off | turns [on|off] | <redact|shield|guard> wait 1|2|3|done]',
   })
 }
 
@@ -114,7 +114,7 @@ export async function setOption($: EngineInterface, field: string, value: Config
 
 const waitWords = (choice: WaitChoice) => (choice === 'done' ? 'waits until done' : `waits ${choice} s`)
 
-const USAGE = `vSR: /vsr opens the pane; /vsr <app> on|off (${APP_NAMES.join(', ')}); /vsr turns on|off; /vsr <${WAIT_APPS.join('|')}> wait ${WAIT_CHOICES.join('|')}.`
+const USAGE = `vSR: /vsr opens the pane; /vsr <app> on|off (${APP_NAMES.join(', ')}); /vsr turns [on|off]; /vsr <${WAIT_APPS.join('|')}> wait ${WAIT_CHOICES.join('|')}.`
 
 // `/vsr <app> on|off` and `/vsr <app> wait <choice>`: the option it changes and the words that say so, or undefined.
 function changeOf(words: readonly string[]): { field: string; value: ConfigValue; said: string } | undefined {
@@ -172,6 +172,9 @@ export function registerView(on: On, settings: Settings) {
     if (words.length === 0) {
       await $.ui.open({ id: PANE, title: PANE_TITLE })
       return { text: 'vSR pane opened.' }
+    }
+    if (words.length === 1 && words[0] === 'turns') {
+      return { text: `vSR: your turns ${turnsWords({ settings, turns: await readTurns($) }) ?? 'run on the model you picked: the router app is off · /vsr router on'}.` }
     }
     if (words.length === 2 && words[0] === 'turns' && (words[1] === 'on' || words[1] === 'off')) return { text: await turnsCommand($, settings, words[1] === 'on') }
     const change = changeOf(words)
