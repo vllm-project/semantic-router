@@ -40,12 +40,24 @@ type agentClientCapture struct {
 	Headers  map[string]string   `json:"headers"`
 	Backends map[string][]string `json:"backends"`
 	Turns    []json.RawMessage   `json:"turns"`
+	// ToolCall names the declared tool the provider is asked to call when it
+	// is not the default lookup. Responses captures use it for a tool declared
+	// in a namespace.
+	ToolCall *agentClientToolCall `json:"tool_call,omitempty"`
+}
+
+// agentClientToolCall is a namespaced tool as the client knows it and the flat
+// name a backend receives for it.
+type agentClientToolCall struct {
+	Namespace   string `json:"namespace"`
+	Name        string `json:"name"`
+	BackendName string `json:"backend_name"`
 }
 
 type agentClientProtocol struct {
 	userText       func(turn map[string]any) (string, func(string), error)
 	toolRefs       agentClientToolRefs
-	decodeToolCall func(body []byte, stream bool, anthropicBackend bool) (responsesFunctionCall, error)
+	decodeToolCall func(body []byte, stream bool, anthropicBackend bool, want responsesFunctionCall) (responsesFunctionCall, error)
 	assertText     func(body []byte, stream bool) error
 	assertUsage    func(body []byte, stream bool, turn map[string]any) error
 }
@@ -174,6 +186,10 @@ func decodeAgentClientCapture(name string, data []byte) (agentClientCapture, err
 			return capture, fmt.Errorf("%s: unknown backend format %q", name, backendFormat)
 		}
 	}
+	if call := capture.ToolCall; call != nil && (capture.Path != "/v1/responses" ||
+		call.Namespace == "" || call.Name == "" || call.BackendName == "") {
+		return capture, fmt.Errorf("%s: tool_call needs a Responses capture, a namespace, a name and a backend_name", name)
+	}
 	return capture, nil
 }
 
@@ -247,8 +263,34 @@ func (replay agentClientReplay) run(ctx context.Context) error {
 	return nil
 }
 
+// clientCall is the mock call as the client must receive it.
+func (replay agentClientReplay) clientCall() responsesFunctionCall {
+	call := mockLookupCall
+	if replay.capture.ToolCall != nil {
+		call.Name, call.Namespace = replay.capture.ToolCall.Name, replay.capture.ToolCall.Namespace
+	}
+	return call
+}
+
+// backendCall is call as a provider receives it: flat, without a namespace.
+func (replay agentClientReplay) backendCall(call responsesFunctionCall) responsesFunctionCall {
+	if replay.capture.ToolCall != nil {
+		call.Name, call.Namespace = replay.capture.ToolCall.BackendName, ""
+	}
+	return call
+}
+
+// toolMarker asks the provider-mocker for a call, to the backend name of the
+// capture's tool when it has one.
+func (replay agentClientReplay) toolMarker() string {
+	if replay.capture.ToolCall == nil {
+		return agentClientToolMarker
+	}
+	return "__mock_tool_name:" + replay.capture.ToolCall.BackendName + ":__\n" + agentClientToolMarker
+}
+
 func (replay agentClientReplay) toolCallTurn(ctx context.Context, stream bool) (responsesFunctionCall, error) {
-	turn, err := agentClientTurn(replay.protocol, replay.capture.Turns[0], replay.model, stream, agentClientToolMarker)
+	turn, err := agentClientTurn(replay.protocol, replay.capture.Turns[0], replay.model, stream, replay.toolMarker())
 	if err != nil {
 		return responsesFunctionCall{}, err
 	}
@@ -256,12 +298,15 @@ func (replay agentClientReplay) toolCallTurn(ctx context.Context, stream bool) (
 	if err != nil {
 		return responsesFunctionCall{}, err
 	}
-	call, err := replay.protocol.decodeToolCall(body, stream, replay.backendFormat == "anthropic.messages.v1")
+	call, err := replay.protocol.decodeToolCall(body, stream, replay.backendFormat == "anthropic.messages.v1", replay.clientCall())
 	if err == nil {
 		err = replay.protocol.assertUsage(body, stream, turn)
 	}
 	if err == nil {
 		err = verifyAgentClientProviderFields(ctx, replay.provider, sessionID, replay.providerFields)
+	}
+	if err == nil && replay.capture.ToolCall != nil {
+		err = verifyAgentClientProviderTool(ctx, replay.provider, sessionID, replay.backendFormat, replay.capture.ToolCall.BackendName)
 	}
 	if err != nil {
 		return responsesFunctionCall{}, fmt.Errorf("%s: %w", sessionID, err)
@@ -284,7 +329,7 @@ func (replay agentClientReplay) toolResultTurn(ctx context.Context, stream bool,
 	if err := replay.protocol.assertUsage(body, stream, turn); err != nil {
 		return fmt.Errorf("%s: %w", sessionID, err)
 	}
-	if err := verifyAgentClientToolLink(ctx, replay.provider, sessionID, replay.backendFormat, call); err != nil {
+	if err := verifyAgentClientToolLink(ctx, replay.provider, sessionID, replay.backendFormat, replay.backendCall(call)); err != nil {
 		return fmt.Errorf("%s: %w", sessionID, err)
 	}
 	return nil
@@ -425,6 +470,69 @@ func verifyAgentClientToolLink(
 	if err := requireAgentClientToolLink(agentClientBackendToolRefs[backendFormat], observation.Body, call); err != nil {
 		return fmt.Errorf("provider request: %w", err)
 	}
+	return rejectProviderNamespaces(observation.Body)
+}
+
+// verifyAgentClientProviderTool requires the provider to have received the
+// capture's namespaced tool as one flat tool.
+func verifyAgentClientProviderTool(
+	ctx context.Context,
+	provider *fixtures.ServiceSession,
+	sessionID string,
+	backendFormat string,
+	name string,
+) error {
+	raw, err := lastProviderSimulatorRequest(ctx, provider, sessionID)
+	if err != nil {
+		return err
+	}
+	var observation struct {
+		Body map[string]any `json:"body"`
+	}
+	if err := json.Unmarshal(raw, &observation); err != nil {
+		return fmt.Errorf("decode provider observation: %w", err)
+	}
+	if err := rejectProviderNamespaces(observation.Body); err != nil {
+		return err
+	}
+	for _, tool := range agentClientObjects(observation.Body["tools"]) {
+		declared := tool
+		if backendFormat == "openai.chat.v1" {
+			declared, _ = tool["function"].(map[string]any)
+		}
+		if declared != nil && declared["name"] == name {
+			return nil
+		}
+	}
+	return fmt.Errorf("provider request does not declare the flat tool %q: %s", name, truncateString(string(raw), 800))
+}
+
+// rejectProviderNamespaces fails when a Responses namespace reached a
+// provider, which receives only flat tools and calls. It reads only the objects
+// that declare a tool or carry a call in any of the three formats, because a
+// tool schema or call input may name its own "namespace" argument.
+func rejectProviderNamespaces(body map[string]any) error {
+	var objects []map[string]any
+	for _, tool := range agentClientObjects(body["tools"]) {
+		if tool["type"] == "namespace" {
+			return fmt.Errorf("provider request declares a namespace tool: %v", tool)
+		}
+		function, _ := tool["function"].(map[string]any)
+		objects = append(objects, tool, function)
+	}
+	objects = append(objects, agentClientObjects(body["input"])...)
+	for _, message := range agentClientObjects(body["messages"]) {
+		objects = append(objects, agentClientObjects(message["content"])...)
+		for _, call := range agentClientObjects(message["tool_calls"]) {
+			function, _ := call["function"].(map[string]any)
+			objects = append(objects, call, function)
+		}
+	}
+	for _, object := range objects {
+		if _, found := object["namespace"]; found {
+			return fmt.Errorf("provider request carries a namespace: %v", object)
+		}
+	}
 	return nil
 }
 
@@ -449,6 +557,9 @@ func linkAgentClientToolCall(refs agentClientToolRefs, turn map[string]any, call
 	}
 	calls[0].fields[calls[0].idKey] = call.CallID
 	calls[0].name["name"] = call.Name
+	if call.Namespace != "" {
+		calls[0].name["namespace"] = call.Namespace
+	}
 	results[0].fields[results[0].idKey] = call.CallID
 	return nil
 }
@@ -555,25 +666,25 @@ func lastUserText(items []any, partType string) (string, func(string), error) {
 	return "", nil, fmt.Errorf("turn has no user %s content", partType)
 }
 
-func decodeAgentChatToolCall(body []byte, stream bool, _ bool) (responsesFunctionCall, error) {
+func decodeAgentChatToolCall(body []byte, stream bool, _ bool, _ responsesFunctionCall) (responsesFunctionCall, error) {
 	if stream {
 		return decodeChatFunctionCallStream(body)
 	}
 	return decodeChatFunctionCall(body)
 }
 
-func decodeAgentMessagesToolCall(body []byte, stream bool, anthropicBackend bool) (responsesFunctionCall, error) {
+func decodeAgentMessagesToolCall(body []byte, stream bool, anthropicBackend bool, _ responsesFunctionCall) (responsesFunctionCall, error) {
 	if stream {
 		return decodeAnthropicToolUseStream(body, anthropicBackend)
 	}
 	return decodeAnthropicToolUse(body, anthropicBackend)
 }
 
-func decodeAgentResponsesToolCall(body []byte, stream bool, _ bool) (responsesFunctionCall, error) {
+func decodeAgentResponsesToolCall(body []byte, stream bool, _ bool, want responsesFunctionCall) (responsesFunctionCall, error) {
 	if stream {
-		return decodeResponsesFunctionCallStream(body)
+		return decodeResponsesFunctionCallStreamAs(body, want)
 	}
-	return decodeResponsesFunctionCall(body)
+	return decodeResponsesFunctionCallAs(body, want)
 }
 
 func assertAgentChatText(body []byte, stream bool) error {
