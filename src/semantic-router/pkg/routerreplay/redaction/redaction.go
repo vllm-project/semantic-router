@@ -47,7 +47,8 @@ func redactPayload(payload any) bool {
 
 // redactObjectPayload redacts a record, a list's records, and a trajectory's
 // messages and routes. A trajectory route repeats a record's route
-// diagnostics, so it is redacted the same way.
+// diagnostics and the agent hash from its session policy, so it is redacted
+// the same way.
 func redactObjectPayload(payload map[string]any) bool {
 	changed := redactRecordMap(payload)
 	for _, list := range []struct {
@@ -207,6 +208,7 @@ func redactNestedMap(record map[string]any, field string, redact func(map[string
 func redactRouteDiagnosticsMap(diagnostics map[string]any) bool {
 	changed := false
 	for _, field := range []string{
+		"agent",
 		"selection_reasoning",
 		"session_reason",
 		"hard_lock_reason",
