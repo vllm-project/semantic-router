@@ -37,6 +37,7 @@ func looperGuardRouter(t *testing.T, guard config.ResponseGuardPluginConfig, str
 	router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
 	router.ReplayRecorder = routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
 	replayConfig := config.DefaultRouterReplayPluginConfig()
+	replayConfig.PromptCapture = config.PromptCaptureRaw
 	request := testNeutralRequest("router-entrypoint", "hello")
 	request.Stream = stream
 	ctx.RequestID, ctx.RouterReplayPluginConfig = "looper-guard", &replayConfig

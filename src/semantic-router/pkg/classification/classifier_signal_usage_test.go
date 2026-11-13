@@ -6,11 +6,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestAPersonalDataReplayLimitLeavesThePIISignalsOutOfRouting(t *testing.T) {
+func TestVerifiedReplayCaptureLeavesThePIISignalsOutOfRouting(t *testing.T) {
 	cfg := &config.RouterConfig{
 		GlobalPlugins: []config.DecisionPlugin{{
 			Type:          config.DecisionPluginRouterReplay,
-			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "capture_personal_data": false}),
+			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureVerified}),
 		}},
 		IntelligentRouting: config.IntelligentRouting{
 			Signals:   config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}},
@@ -22,7 +22,7 @@ func TestAPersonalDataReplayLimitLeavesThePIISignalsOutOfRouting(t *testing.T) {
 	}
 	classifier := &Classifier{Config: cfg}
 	if !classifier.Config.ReplayNeedsPIIEvidence() {
-		t.Fatal("the replay data policy reads the PII rules")
+		t.Fatal("verified replay capture reads the PII rules")
 	}
 	if classifier.getUsedSignals()["pii:personal_data"] {
 		t.Fatal("Replay checks the prompt after routing; routing must not evaluate an unreferenced PII signal for it")

@@ -1223,17 +1223,27 @@ recipes:
             configuration:
               enabled: true
               max_records: 10000
+              # Records keep routing data only: no request or response text,
+              # and no pii read. raw keeps the text the switches below allow;
+              # verified keeps the prompt alone, once the pii rules find it
+              # clean.
+              prompt_capture: none
               capture_request_body: true
               capture_response_body: true
-              capture_personal_data: false
               # Tool results stay redacted. true stores each client tool
               # result, bounded by max_tool_trace_bytes, and requires
-              # capture_personal_data: true; use it for development or audit.
+              # prompt_capture: raw; use it for development or audit.
               capture_tool_results: false
               max_body_bytes: 4096
+              # The prompt a record keeps under raw or verified, cut on a
+              # character boundary with the whole prompt's size and SHA-256.
+              # An explicit value on any layer wins, and 0 keeps the whole
+              # prompt. Where no layer sets it, the prompt keeps
+              # max_tool_trace_bytes's bound when that is above 0, else 65536.
+              max_prompt_bytes: 65536
               # 0 = no truncation (the documented default). Set to a positive
               # byte cap to independently limit structured tool-trace fields
-              # (prompt, tool_definitions, and each tool-call's arguments/output)
+              # (tool_definitions, and each step's text, arguments and output)
               # without having to shrink max_body_bytes.
               max_tool_trace_bytes: 0
               # Cap the number of tool-trace steps retained per record. Long
@@ -2177,6 +2187,11 @@ global:
     strategy: priority
     list_backend_models: true
     clear_route_cache: true
+    # Standalone mode: how long, in seconds, the listeners let the requests in
+    # flight finish once the Router begins to shut down (25 by default, at most
+    # 86400). In Kubernetes, give the pod a terminationGracePeriodSeconds of at
+    # least its preStop delay + this + 5, with some margin.
+    drain_timeout_seconds: 25
     fallback:
       version: 1
       enabled: false
@@ -3072,13 +3087,20 @@ global:
     - type: router_replay
       configuration:
         enabled: true
+        # Records keep routing data only (the decision, model, signals, timing
+        # and ids), and no prompt is read for personal data. raw also keeps
+        # the request and response text the capture switches allow; verified
+        # keeps the prompt alone, once the pii rules read it whole and find it
+        # clean.
+        prompt_capture: none
         capture_request_body: true
         capture_response_body: true
-        # Keep detected or uncertain personal data out of captured content.
-        capture_personal_data: false
-        # Client tool results stay redacted; true requires capture_personal_data.
+        # Client tool results stay redacted; true requires prompt_capture: raw.
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
+        # max_prompt_bytes is left unset, so the prompt keeps the bound of a
+        # max_tool_trace_bytes above 0 on any layer, else 65536 bytes (64 KiB).
+        # Set it to bound the prompt on its own; 0 keeps the whole prompt.
         max_tool_trace_bytes: 0
         max_tool_trace_steps: 100

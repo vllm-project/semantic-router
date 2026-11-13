@@ -113,15 +113,16 @@ func (r *OpenAIRouter) startRouterReplay(
 
 	policy := ctx.RouterReplayPluginConfig
 	recorder = recorder.WithCapturePolicy(routerreplay.CapturePolicy{
-		CaptureRequestBody:  policy.CaptureRequestBody,
-		CaptureResponseBody: policy.CaptureResponseBody,
+		CaptureRequestBody:  policy.CapturesRequestText(),
+		CaptureResponseBody: policy.CapturesResponseText(),
 		MaxBodyBytes:        resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
+		MaxPromptBytes:      policy.PromptByteLimit(),
 		MaxToolTraceBytes:   policy.MaxToolTraceBytes,
 		MaxToolTraceSteps:   policy.MaxToolTraceSteps,
 	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
 	prompt := record.Prompt
-	ctx.RouterReplayContentOmitted = !r.personalDataReplayAllowed(ctx)
+	ctx.RouterReplayContentOmitted = !r.replayPromptAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
 	r.populateReplayIdentity(&record, ctx)
 	if !persistReplayRecord(ctx, recorder, record) {

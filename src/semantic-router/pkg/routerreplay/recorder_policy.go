@@ -6,6 +6,7 @@ type CapturePolicy struct {
 	CaptureRequestBody  bool
 	CaptureResponseBody bool
 	MaxBodyBytes        int
+	MaxPromptBytes      int
 	MaxToolTraceBytes   int
 	MaxToolTraceSteps   int
 }
@@ -21,10 +22,12 @@ func (r *Recorder) WithCapturePolicy(policy CapturePolicy) *Recorder {
 	base := r.policySnapshot()
 	view := &Recorder{
 		recorderState:     r.recorderState,
+		maxPromptBytes:    base.maxPromptBytes,
 		maxToolTraceBytes: base.maxToolTraceBytes,
 		maxToolTraceSteps: base.maxToolTraceSteps,
 	}
 	view.SetCapturePolicy(policy.CaptureRequestBody, policy.CaptureResponseBody, policy.MaxBodyBytes)
+	view.SetMaxPromptBytes(policy.MaxPromptBytes)
 	view.SetMaxToolTraceBytes(policy.MaxToolTraceBytes)
 	view.SetMaxToolTraceSteps(policy.MaxToolTraceSteps)
 	return view

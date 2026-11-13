@@ -93,7 +93,8 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	guardConfigs := collectChildMapsFromSlice(t, pluginsByType["response_guard"], "configuration", "plugins(response_guard)")
 	assertSliceUnionCoversStructFields(t, collectNestedSliceItems(t, guardConfigs, "rules", "plugins(response_guard).configuration"), reflect.TypeOf(ResponseGuardRule{}), "plugins(response_guard).configuration.rules")
 	assertPluginConfigCoverage(t, pluginsByType["masking"], reflect.TypeOf(MaskingPluginConfig{}), "masking")
-	assertPluginConfigCoverage(t, pluginsByType["router_replay"], reflect.TypeOf(RouterReplayPluginConfig{}), "router_replay")
+	// capture_personal_data is deprecated; the reference writes prompt_capture.
+	assertPluginConfigCoverage(t, pluginsByType["router_replay"], reflect.TypeOf(RouterReplayPluginConfig{}), "router_replay", "capture_personal_data")
 	assertPluginConfigCoverage(t, pluginsByType["request_params"], reflect.TypeOf(RequestParamsPluginConfig{}), "request_params")
 	assertPluginConfigCoverage(t, pluginsByType["tools"], reflect.TypeOf(ToolsPluginConfig{}), "tools")
 	assertPluginConfigCoverage(t, pluginsByType["prompt_cache"], reflect.TypeOf(PromptCachePluginConfig{}), "prompt_cache")

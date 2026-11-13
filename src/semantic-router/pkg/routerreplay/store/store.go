@@ -342,6 +342,11 @@ type Record struct {
 	// that they are complete even when the raw body is truncated by MaxBodyBytes.
 	Prompt          string `json:"prompt,omitempty"`
 	PromptTruncated bool   `json:"prompt_truncated,omitempty"`
+	// PromptOriginalBytes and PromptOriginalSHA256 are the size in bytes and
+	// the hex SHA-256 of the whole prompt, set when Prompt was cut to the
+	// record's limit (PromptTruncated).
+	PromptOriginalBytes  int    `json:"prompt_original_bytes,omitempty"`
+	PromptOriginalSHA256 string `json:"prompt_original_sha256,omitempty"`
 	// ToolDefinitions is the JSON array of tool schemas from the request
 	// (the "tools" field in Chat Completions, or ResponseAPIRequest.Tools).
 	ToolDefinitions string `json:"tool_definitions,omitempty"`
@@ -418,7 +423,7 @@ type BodyWriter interface {
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
 
 	// AttachPrompt stores the prompt of an existing record that was written without it.
-	AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error
+	AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error
 }
 
 // OutcomeWriter appends post-route feedback to replay records.
@@ -453,6 +458,22 @@ type Enricher interface {
 
 	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
 	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
+}
+
+// StoredPrompt is a record's prompt as it is kept: the text and, when the text
+// was cut to the record's limit, the size in bytes and the hex SHA-256 of the
+// whole prompt.
+type StoredPrompt struct {
+	Text           string
+	Truncated      bool
+	OriginalBytes  int
+	OriginalSHA256 string
+}
+
+// Apply writes the prompt into rec.
+func (p StoredPrompt) Apply(rec *Record) {
+	rec.Prompt, rec.PromptTruncated = p.Text, p.Truncated
+	rec.PromptOriginalBytes, rec.PromptOriginalSHA256 = p.OriginalBytes, p.OriginalSHA256
 }
 
 // Storage is the interface that all storage backends must implement.

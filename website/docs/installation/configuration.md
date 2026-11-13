@@ -470,11 +470,16 @@ every recipe.
 | A `router_replay` plugin in `global.plugins` | Whether capture is on, and the capture defaults. |
 | A recipe's or decision's `router_replay` plugin | Only the fields it sets. `enabled: false` turns capture off there; `enabled: true` opts in when the default is off. |
 
-- **Personal data.** `capture_personal_data: false` keeps routing evidence but
-  omits content when PII is detected or its status is unknown. Without a PII
-  detector, content is suppressed rather than blocking startup.
+- **Prompt text.** `prompt_capture` says what a record keeps besides routing
+  evidence. `none`, the default, keeps no request or response text and reads
+  nothing for personal data. `raw` keeps the text the capture switches allow,
+  unverified. `verified` keeps the prompt alone once the PII rules find it
+  clean, and omits it when PII is detected or its status is unknown; without a
+  PII detector the prompt is omitted rather than blocking startup.
+  `capture_personal_data` is the deprecated form: `false` loads as `verified`
+  and `true` as `raw`, with a warning.
 - **Tool results** stay redacted unless `capture_tool_results: true`, which
-  needs `capture_personal_data: true`.
+  stores them under `prompt_capture: raw` only.
 - **Rejected requests** without a selected decision use their recipe's
   capture defaults.
 

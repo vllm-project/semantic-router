@@ -148,6 +148,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	describeRouterReplayCapture(schema)
 	setResponseGuardConditionSchema(schema, append(routerconfig.SupportedSignalTypes(), routerconfig.SignalTypeProjection))
 	addPluginPayloadConditions(schema, pluginRefs)
 	addAlgorithmExtensionBlocks(reflector, schema)
@@ -460,6 +461,19 @@ func setDefinitionPropertyItemsEnum(root *jsonschema.Schema, definition, propert
 	}
 	for _, value := range values {
 		field.Items.Enum = append(field.Items.Enum, value)
+	}
+}
+
+// describeRouterReplayCapture describes router_replay's prompt_capture modes
+// and marks capture_personal_data, which loads as prompt_capture with a
+// warning, deprecated.
+func describeRouterReplayCapture(root *jsonschema.Schema) {
+	if mode := definitionProperty(root, "RouterReplayPluginConfig", "prompt_capture"); mode != nil {
+		mode.Description = "What a record keeps besides routing data: none (the default) keeps no request or response text; raw keeps the text the capture switches allow, unverified; verified keeps the prompt alone, once the pii rules read it whole and find it clean."
+	}
+	if deprecated := definitionProperty(root, "RouterReplayPluginConfig", "capture_personal_data"); deprecated != nil {
+		deprecated.Deprecated = true
+		deprecated.Description = "Deprecated: write prompt_capture. false loads as prompt_capture: verified and true as prompt_capture: raw."
 	}
 }
 

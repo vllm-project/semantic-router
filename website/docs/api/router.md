@@ -560,11 +560,15 @@ is displayed explicitly. Replay capture uses `global.services.router_replay`
 defaults and the selected decision's `router_replay` plugin overrides. Rejected
 requests without a selected decision use the global defaults layered with their
 recipe's own plugins.
-`capture_personal_data: false` retains routing evidence but suppresses content
-when personal data is detected or PII evidence is unavailable.
+`prompt_capture` decides what a record keeps besides routing evidence:
+`none`, the default, keeps no request or response text; `raw` keeps the text
+the capture switches allow; `verified` keeps the prompt alone when the recipe's
+PII rules find it clean, and leaves it out when personal data is detected or
+PII evidence is unavailable. `capture_personal_data` is its deprecated form:
+`false` loads as `verified` and `true` as `raw`.
 
-Client tool results are stored only with `capture_tool_results: true`, which
-requires `capture_personal_data: true`. A `client_tool_result` step then carries
+Client tool results are stored only with `capture_tool_results: true` under
+`prompt_capture: raw`. A `client_tool_result` step then carries
 the result text in `output` with `content_redacted: false`, cut to
 `max_tool_trace_bytes` and flagged `truncated` when cut, and a trajectory's
 tool message carries it as `content` with `content_truncated`. Otherwise the
@@ -582,6 +586,13 @@ name, call ID and status. The left-out text is absent, not marked
 and tool results that `capture_tool_results` keeps out. `max_tool_trace_bytes`
 cuts step text too, and a trajectory's user and assistant messages then carry
 `content_truncated`.
+
+`prompt` is cut on a UTF-8 character boundary to its limit: `max_prompt_bytes`,
+or `max_tool_trace_bytes` where no layer sets `max_prompt_bytes`, or 65,536
+bytes (64 KiB) when neither is set; `max_prompt_bytes: 0` keeps it whole. A cut
+record carries `prompt_truncated: true` with the whole prompt's size in
+`prompt_original_bytes` and its SHA-256 in `prompt_original_sha256`. The hash
+is redacted with the prompt for callers without `replay.detail`.
 
 Every Replay read route applies the same redaction. Without `replay.detail`,
 trajectory `routes` return `selection_reasoning` and `session_reason` empty,

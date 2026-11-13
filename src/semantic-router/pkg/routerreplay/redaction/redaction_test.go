@@ -59,6 +59,7 @@ func TestRedactResponseBodyRemovesRecordFreeTextAndPrivacySurfaces(t *testing.T)
 		"request_body":"private-canary",
 		"response_body":"private-canary",
 		"prompt":"private-canary",
+		"prompt_original_sha256":"private-canary",
 		"tool_definitions":"private-canary",
 		"pii_entities":["private-canary"],
 		"hallucination_spans":["private-canary"],
