@@ -496,6 +496,7 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 		return
 	}
 
+	responseBody = redactCallerCredential(ctx, responseBody)
 	if len(responseBody) > 0 && replayResponseContentAllowed(ctx) {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}

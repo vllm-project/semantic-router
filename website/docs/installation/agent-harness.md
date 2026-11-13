@@ -182,6 +182,29 @@ Claude Code goes on without tool search. Toward an `openai` backend, also list
 [protocol compatibility](protocol-compatibility#validation-and-failure-behavior)
 describes. An `anthropic` backend receives those as sent.
 
+### Claude Code on its own Claude login
+
+Claude Code signed in to a Claude subscription can use the gateway without an
+API key: give every backend `auth: {credential: caller}`
+([Security Hardening](security-hardening#send-the-clients-own-login-to-anthropic)),
+and point Claude Code at the listener without a gateway token, so it sends its
+own login:
+
+```bash
+env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
+  ANTHROPIC_BASE_URL=http://localhost:8899 \
+  ANTHROPIC_MODEL=vllm-sr/auto \
+  ANTHROPIC_DEFAULT_HAIKU_MODEL=vllm-sr/auto \
+  ANTHROPIC_DEFAULT_SONNET_MODEL=vllm-sr/auto \
+  ANTHROPIC_DEFAULT_OPUS_MODEL=vllm-sr/auto \
+  claude
+```
+
+The Router then routes each call among Claude models on that login, and
+Insights shows the session's calls with the model each decision picked. A
+model's `pricing` is the API's list price, not the plan's, so leave it out or
+read the cost as an API-price estimate.
+
 ### Router settings for Codex CLI
 
 ```yaml
