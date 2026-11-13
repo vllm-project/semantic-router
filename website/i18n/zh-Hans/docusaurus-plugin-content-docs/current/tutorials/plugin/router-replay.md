@@ -45,7 +45,6 @@ global:
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
-        max_tool_trace_bytes: 0
         max_tool_trace_steps: 100
 ```
 
@@ -59,7 +58,8 @@ global:
 | `max_records` | 10,000 |
 | `max_body_bytes` | 每个 body 4,096 字节 |
 | `max_prompt_bytes` | 未设置时：设置了 `max_tool_trace_bytes` 则提示词沿用它的上限，否则 65,536 字节（64 KiB），在 `raw` 和 `verified` 下 |
-| `max_tool_trace_bytes` | 不限制单个字段 |
+| `max_tool_trace_bytes` | 未设置时：每个工具文本字段 65,536 字节（64 KiB），包括原始副本，在 `raw` 下 |
+| `max_tool_trace_total_bytes` | 未设置时：每条记录的轨迹步骤共 262,144 字节（256 KiB），前提是 `max_tool_trace_bytes` 也未设置 |
 | `max_tool_trace_steps` | 100 |
 
 ### 选择记录保留的内容 {#choose-what-a-record-keeps}
@@ -73,7 +73,7 @@ global:
 | `verified` | 只保留提示词，且要等配方的 `pii` 规则完整读过并确认不含个人数据 | 是，在决策模型上读取 |
 
 - **`none`** 不保留任何请求或响应文本，无论 `capture_request_body`、`capture_response_body`、`capture_tool_results` 和影子的 `capture_response_body` 如何设置；它也不读取任何内容检查个人数据，因此回放不会给决策模型增加工作。
-- **`raw`** 不经检查就保留采集开关允许的内容，因此记录可能包含密钥和个人数据。请用 `replay.read` 和 `replay.detail` 限制谁能读取，并选择保留期限。记录保留的提示词以[它的上限](#bound-the-prompt)为限；除非设置了 `max_prompt_bytes` 或 `max_tool_trace_bytes`，上限为 64 KiB。请求的工具轨迹也会保留每个用户轮次，只受 `max_tool_trace_bytes` 限制；请求带有长输入时，也请设置它。
+- **`raw`** 不经检查就保留采集开关允许的内容，因此记录可能包含密钥和个人数据。请用 `replay.read` 和 `replay.detail` 限制谁能读取，并选择保留期限。记录保留的提示词以[它的上限](#bound-the-prompt)为限；除非设置了 `max_prompt_bytes` 或 `max_tool_trace_bytes`，上限为 64 KiB。请求的工具轨迹也会保留每个用户轮次，以[轨迹的上限](#bound-the-trace)为限：除非另行设置，每个字段 64 KiB，每条记录的步骤共 256 KiB。
 - **`verified`** 见[不把个人数据写入回放](#keep-personal-data-out-of-replay)。
 
 `capture_personal_data` 是这项设置已弃用的写法。Router 会把它当作 `prompt_capture` 加载，并给出 `renamed_field` 警告；`vllm-sr config migrate` 会改写它：
@@ -106,7 +106,7 @@ plugins:
 - **按 UTF-8 字节计算**，适用于 body 和结构化文本。摘录在完整字符处结束，因此可能比上限略短。
 - **被截断的原始 body** 可能不再是完整的 JSON；请检查它的截断标志。
 - **提示词**有自己的上限 `max_prompt_bytes`；没有任何一层设置它时，沿用 `max_tool_trace_bytes` 的上限，见[限制提示词](#bound-the-prompt)。上面的片段中，提示词按 `max_tool_trace_bytes` 保留 4,096 字节。被截断的提示词带有 `prompt_truncated: true`，并在 `prompt_original_bytes` 中记录完整提示词的字节数、在 `prompt_original_sha256` 中记录其 SHA-256，因此记录仍能标识它。
-- **工具轨迹**有自己的上限，与请求体和响应体分开。`max_tool_trace_bytes` 限制每个结构化文本字段：工具定义，以及每个轨迹步骤的文本、参数和输出。被截断的步骤带有 `truncated: true`。
+- **工具轨迹**有自己的上限，与请求体和响应体分开。`max_tool_trace_bytes` 限制每个结构化文本字段：工具定义，以及每个轨迹步骤的文本、参数和输出。`max_tool_trace_total_bytes` 限制一条记录所有步骤的总和。被截断的步骤带有 `truncated: true`。像上面的片段这样设置 `max_tool_trace_bytes` 时，步骤的原始副本保持完整，轨迹也没有总上限；见[限制轨迹](#bound-the-trace)。
 
 在 `raw` 和 `verified` 下，body 开关覆盖的范围如下（在 `none` 下，记录不保留任何文本）：
 
@@ -118,7 +118,7 @@ plugins:
 
 - **让某个决策退出采集**：设置 `configuration: {enabled: false}`。
 - **修改整个部署的默认值**：在 `global.plugins` 的 `router_replay` 插件上设置 `enabled: false`，或者不写这个插件。配方或决策仍可单独开启。
-- **省略的字段沿用**更通用一层的值。显式的 `false` 是一次覆盖；`max_prompt_bytes: 0`、`max_tool_trace_bytes: 0` 或 `max_tool_trace_steps: 0` 会取消对应的上限。没有任何一层设置 `max_prompt_bytes` 时，提示词的上限按[限制提示词](#bound-the-prompt)所述回退。
+- **省略的字段沿用**更通用一层的值。显式的 `false` 是一次覆盖；`max_prompt_bytes: 0`、`max_tool_trace_bytes: 0`、`max_tool_trace_total_bytes: 0` 或 `max_tool_trace_steps: 0` 会取消对应的上限。没有任何一层设置 `max_prompt_bytes` 时，提示词的上限按[限制提示词](#bound-the-prompt)所述回退；没有任何一层设置 `max_tool_trace_bytes` 时，轨迹按[限制轨迹](#bound-the-trace)所述使用默认上限。
 - **在选出决策之前**，被拒绝的请求使用其配方的采集默认值；选出决策后，决策的覆盖才生效。
 
 这些设置不会改变提供方的保留策略，也不会删除已有记录。
@@ -150,6 +150,27 @@ max_prompt_bytes: 65536 # 提示词；0 保留完整提示词
 - **在 `none` 下**，记录照旧不保留提示词。
 
 另外，影子请求的 `capture_response_body: true` 现在只在 `raw` 下保留影子回答的摘录；在 `verified` 下，结果只保留回答的大小和 SHA-256。见[回放与审计采集](#replay-and-audit-capture)。
+:::
+
+### 限制轨迹 {#bound-the-trace}
+
+在 `raw` 下，请求轨迹把每个用户轮次、工具调用和工具结果保留为一个步骤，最多 `max_tool_trace_steps` 个，另有回答的步骤。没有任何一层设置 `max_tool_trace_bytes` 时，有两个默认上限：
+
+- **每个文本字段 65,536 字节（64 KiB）：**工具定义，每个步骤的文本、参数和输出，以及步骤对参数和输出的原始副本（`raw_arguments`、`raw_output`）。被截断的步骤带有 `truncated: true`；原始副本也被截断时还带有 `raw_truncated: true`。
+- **每条记录的步骤共 262,144 字节（256 KiB）**，包括原始副本（`max_tool_trace_total_bytes`）。超出时先丢弃最旧的步骤，与 `max_tool_trace_steps` 的做法相同，轨迹带有 `steps_truncated: true`，丢弃的个数记在 `dropped_step_count` 中。最新的步骤总会保留。
+
+这样一条记录最多保留约 64 KiB 的提示词、64 KiB 的工具定义、320 KiB 的轨迹（单个步骤超过总上限时，即一个步骤的五个字段）以及每个 body 4 KiB：不到 0.5 MiB，因此内存存储中的 10,000 条记录不超过 5 GiB。
+
+任何一层设置的 `max_tool_trace_bytes`（包括 `0`）会让轨迹保持这些默认值出现之前的样子：每个步骤的文本、参数和输出按这个上限截断，原始副本保持完整，供逐字节重放调用的读取方使用，并且没有总上限，除非同时设置了 `max_tool_trace_total_bytes`。任何一层设置的 `max_tool_trace_total_bytes` 在两种情况下都生效，`0` 保留所有步骤。提示词只沿用某一层设置的 `max_tool_trace_bytes`，从不沿用这些默认值。
+
+:::note 升级
+这些默认值是新增的：
+
+- **设置了 `max_tool_trace_bytes` 的配置**（包括 `0`）保持原来的轨迹。
+- **两个上限都没设置的 `raw` 配置**会把每个工具文本字段（包括原始副本）限制为 64 KiB，把一条记录的步骤限制为共 256 KiB，而以前完整保留。要保留完整轨迹，请设置 `max_tool_trace_bytes: 0`。
+- **在 `verified` 和 `none` 下**，记录的轨迹照旧不含文本，因此没有变化。
+
+`vllm-sr config migrate` 不会写入任何上限：依赖完整轨迹的配置需要自己设置 `max_tool_trace_bytes: 0`。
 :::
 
 ### 不把个人数据写入回放 {#keep-personal-data-out-of-replay}
@@ -193,7 +214,7 @@ plugins:
 - **`capture_request_body: false`** 时仍不存储工具结果，因为它们属于请求文本。
 
 :::tip 设置上限
-默认值 `0` 会完整存储结果。较大的工具输出会让记录变大，存储也可能拒绝超出其大小上限的记录。
+没有任何一层设置 `max_tool_trace_bytes` 时，每条结果保留 64 KiB，一条记录的步骤共保留 256 KiB（[限制轨迹](#bound-the-trace)）。设置 `max_tool_trace_bytes: 0` 时会完整存储结果。较大的工具输出会让记录变大，存储也可能拒绝超出其大小上限的记录。
 :::
 
 工具结果是原始的客户端数据，因此：

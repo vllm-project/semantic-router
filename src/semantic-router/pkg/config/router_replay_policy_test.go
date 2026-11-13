@@ -303,7 +303,8 @@ global:
 		t.Fatal(err)
 	}
 	got := again.EffectiveRouterReplayConfig(nil)
-	if got == nil || !got.VerifiesPrompt() || got.CaptureRequestBody || got.CaptureResponseBody || got.MaxRecords != 77 || got.MaxBodyBytes != 0 || got.MaxToolTraceBytes != 0 || got.MaxToolTraceSteps != 0 {
+	if got == nil || !got.VerifiesPrompt() || got.CaptureRequestBody || got.CaptureResponseBody || got.MaxRecords != 77 || got.MaxBodyBytes != 0 ||
+		got.MaxToolTraceBytes == nil || *got.MaxToolTraceBytes != 0 || got.MaxToolTraceSteps != 0 {
 		t.Fatalf("roundtrip lost defaults: %+v", got)
 	}
 }

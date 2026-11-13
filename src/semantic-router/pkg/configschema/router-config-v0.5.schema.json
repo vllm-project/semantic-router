@@ -6096,6 +6096,10 @@
         "max_tool_trace_bytes": {
           "type": "integer"
         },
+        "max_tool_trace_total_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
         "max_tool_trace_steps": {
           "type": "integer"
         },

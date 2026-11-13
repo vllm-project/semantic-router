@@ -48,7 +48,6 @@ global:
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
-        max_tool_trace_bytes: 0
         max_tool_trace_steps: 100
 ```
 
@@ -65,7 +64,8 @@ field. Storage, retention and asynchronous writes are global service settings.
 | `max_records` | 10,000 |
 | `max_body_bytes` | 4,096 bytes per body |
 | `max_prompt_bytes` | unset: the prompt keeps `max_tool_trace_bytes`'s bound when that is set, else 65,536 bytes (64 KiB), under `raw` and `verified` |
-| `max_tool_trace_bytes` | no per-field limit |
+| `max_tool_trace_bytes` | unset: 65,536 bytes (64 KiB) per tool text field, raw copies included, under `raw` |
+| `max_tool_trace_total_bytes` | unset: 262,144 bytes (256 KiB) of trace steps per record, while `max_tool_trace_bytes` is unset too |
 | `max_tool_trace_steps` | 100 |
 
 ### Choose what a record keeps
@@ -88,8 +88,8 @@ decision, model, signals, scores, timing, token usage and ids.
   `replay.read` and `replay.detail`, and choose a retention. A record keeps
   the prompt up to [its limit](#bound-the-prompt), 64 KiB unless
   `max_prompt_bytes` or `max_tool_trace_bytes` is set. The request's tool
-  trace also keeps each user turn, bounded by `max_tool_trace_bytes` alone, so
-  set that too where requests carry long inputs.
+  trace also keeps each user turn, within [the trace's limits](#bound-the-trace):
+  64 KiB per field and 256 KiB of steps per record unless you set them.
 - **`verified`** is described in
   [Keep personal data out of Replay](#keep-personal-data-out-of-replay).
 
@@ -136,8 +136,11 @@ How the limits count:
   record still identifies it.
 - **Tool traces** have their own limits, separate from the request and
   response bodies. `max_tool_trace_bytes` bounds each structured text field:
-  tool definitions, and each trace step's text, arguments and output. A cut
-  step has `truncated: true`.
+  tool definitions, and each trace step's text, arguments and output.
+  `max_tool_trace_total_bytes` bounds all of a record's steps together. A cut
+  step has `truncated: true`. Set as in the fragment above,
+  `max_tool_trace_bytes` keeps the steps' raw copies whole and the trace
+  without a total; see [Bound the trace](#bound-the-trace).
 
 What the body switches cover, under `raw` and `verified` (under `none` a
 record keeps no text at all):
@@ -160,10 +163,12 @@ How the layers combine:
   `router_replay` plugin in `global.plugins`, or leaving that plugin out. A
   recipe or decision can still opt in.
 - **Omitted fields inherit** from the layer below. An explicit `false` is an
-  override, and `max_prompt_bytes: 0`, `max_tool_trace_bytes: 0` or
-  `max_tool_trace_steps: 0` removes that limit. Where no layer sets
-  `max_prompt_bytes`, the prompt's limit falls back as
-  [Bound the prompt](#bound-the-prompt) describes.
+  override, and `max_prompt_bytes: 0`, `max_tool_trace_bytes: 0`,
+  `max_tool_trace_total_bytes: 0` or `max_tool_trace_steps: 0` removes that
+  limit. Where no layer sets `max_prompt_bytes`, the prompt's limit falls back
+  as [Bound the prompt](#bound-the-prompt) describes, and where none sets
+  `max_tool_trace_bytes`, the trace's defaults apply as
+  [Bound the trace](#bound-the-trace) describes.
 - **Before a decision is selected,** a rejected request uses its recipe's
   capture defaults; a decision's override applies once it is selected.
 
@@ -211,6 +216,50 @@ max_prompt_bytes: 65536 # the prompt; 0 keeps it whole
 A shadow's `capture_response_body: true` now keeps its excerpt of the shadow's
 answer under `raw` only; under `verified` the outcome keeps the answer's sizes
 and SHA-256 alone. See [Replay and audit capture](#replay-and-audit-capture).
+:::
+
+### Bound the trace
+
+Under `raw` the request trace keeps each user turn, tool call and tool result
+as a step, up to `max_tool_trace_steps` of them, beside the answer's steps.
+Where no layer sets `max_tool_trace_bytes`, two defaults bound it:
+
+- **65,536 bytes (64 KiB) per text field:** the tool definitions, each step's
+  text, arguments and output, and the step's raw copies of its arguments and
+  output (`raw_arguments`, `raw_output`). A cut step has `truncated: true`, and
+  `raw_truncated: true` when its raw copies were cut too.
+- **262,144 bytes (256 KiB) of steps per record**, raw copies included
+  (`max_tool_trace_total_bytes`). Over it the oldest steps are dropped first,
+  as `max_tool_trace_steps` drops them, and the trace has
+  `steps_truncated: true` with the number dropped in `dropped_step_count`. The
+  newest step is always kept.
+
+A record then keeps at most about 64 KiB of prompt, 64 KiB of tool
+definitions, 320 KiB of trace (one step's five fields, should a single step
+outgrow the total) and 4 KiB per body: under 0.5 MiB, so 10,000 records in the
+memory store stay under 5 GiB.
+
+A `max_tool_trace_bytes` set on any layer, `0` included, keeps the trace as it
+was before these defaults: that limit on each step's text, arguments and
+output, raw copies whole for readers that replay a call byte for byte, and no
+total unless `max_tool_trace_total_bytes` is set too.
+`max_tool_trace_total_bytes` set on any layer applies either way, and `0` keeps
+every step. The prompt follows only a `max_tool_trace_bytes` a layer sets,
+never these defaults.
+
+:::note Upgrading
+These defaults are new:
+
+- **A configuration that sets `max_tool_trace_bytes`**, `0` included, keeps its
+  traces as before.
+- **A `raw` configuration that sets neither limit** keeps each tool text field
+  to 64 KiB, raw copies included, and a record's steps to 256 KiB, where it kept
+  them whole. Set `max_tool_trace_bytes: 0` to keep whole traces.
+- **Under `verified` and `none`** a record's trace keeps no text, as before, so
+  nothing changes.
+
+`vllm-sr config migrate` writes no limit: a configuration that relies on whole
+traces sets `max_tool_trace_bytes: 0` itself.
 :::
 
 ### Keep personal data out of Replay
@@ -278,7 +327,9 @@ With it on:
   are request text.
 
 :::tip Set a limit
-With the default of `0`, results are stored whole. A large tool output makes
+Where no layer sets `max_tool_trace_bytes`, each result keeps 64 KiB and a
+record's steps 256 KiB in all ([Bound the trace](#bound-the-trace)). With
+`max_tool_trace_bytes: 0`, results are stored whole. A large tool output makes
 the record larger, and a store can reject a record above its size limit.
 :::
 

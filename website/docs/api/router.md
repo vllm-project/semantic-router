@@ -585,11 +585,16 @@ name, call ID and status. The left-out text is absent, not marked
 `content_redacted`, which keeps marking content hidden from the reader's role
 and tool results that `capture_tool_results` keeps out. `max_tool_trace_bytes`
 cuts step text too, and a trajectory's user and assistant messages then carry
-`content_truncated`.
+`content_truncated`. Where no layer sets it, each field keeps 65,536 bytes
+(64 KiB), the steps' `raw_arguments` and `raw_output` included, which then
+carry `raw_truncated: true`, and `max_tool_trace_total_bytes`, 262,144 bytes
+(256 KiB) then, bounds the steps together: the oldest are dropped and
+`tool_trace` carries `steps_truncated: true` with `dropped_step_count`, as for
+`max_tool_trace_steps`.
 
 `prompt` is cut on a UTF-8 character boundary to its limit: `max_prompt_bytes`,
-or `max_tool_trace_bytes` where no layer sets `max_prompt_bytes`, or 65,536
-bytes (64 KiB) when neither is set; `max_prompt_bytes: 0` keeps it whole. A cut
+or a `max_tool_trace_bytes` a layer sets where none sets `max_prompt_bytes`, or
+65,536 bytes (64 KiB) when neither is set; `max_prompt_bytes: 0` keeps it whole. A cut
 record carries `prompt_truncated: true` with the whole prompt's size in
 `prompt_original_bytes` and its SHA-256 in `prompt_original_sha256`. The hash
 is redacted with the prompt for callers without `replay.detail`.

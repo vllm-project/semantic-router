@@ -35,6 +35,16 @@ const (
 	// keeps nearly every chat prompt whole and the head of a long one, so
 	// 10,000 records of 1M-token prompts take some 640 MiB, not 40 GB.
 	defaultRouterReplayMaxPromptBytes = 64 << 10
+	// defaultRouterReplayMaxToolTraceBytes caps each text field of a trace
+	// step, and the tool definitions, where no layer sets
+	// max_tool_trace_bytes: the prompt's 64 KiB, so that a long user turn
+	// keeps no more in the trace than in the prompt.
+	defaultRouterReplayMaxToolTraceBytes = 64 << 10
+	// defaultRouterReplayMaxToolTraceTotalBytes caps the text of all steps of
+	// a record together where neither trace limit is set: 256 KiB, so that
+	// 100 steps cannot keep 100 times a field's limit, and 10,000 records of
+	// long agent sessions take some 2.5 GiB of trace, not tens of GB.
+	defaultRouterReplayMaxToolTraceTotalBytes = 256 << 10
 )
 
 // DefaultRouterReplayPluginConfig leaves PromptCapture unset, which is none,
@@ -116,7 +126,7 @@ func personalDataPromptCapture(capture bool) string {
 }
 
 // ValidatePromptCapture refuses a prompt_capture other than none, raw or
-// verified, and a negative max_prompt_bytes.
+// verified, and a negative max_prompt_bytes or max_tool_trace_total_bytes.
 func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
 	switch p.PromptCapture {
 	case "", PromptCaptureNone, PromptCaptureRaw, PromptCaptureVerified:
@@ -126,22 +136,65 @@ func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
 	if p.MaxPromptBytes != nil && *p.MaxPromptBytes < 0 {
 		return fmt.Errorf("max_prompt_bytes cannot be negative; 0 keeps the whole prompt")
 	}
+	if p.MaxToolTraceTotalBytes != nil && *p.MaxToolTraceTotalBytes < 0 {
+		return fmt.Errorf("max_tool_trace_total_bytes cannot be negative; 0 keeps every step")
+	}
 	return nil
+}
+
+// ToolTraceByteLimit is how many bytes each tool text field a record keeps
+// may hold (the tool definitions, and a trace step's text, arguments and
+// output), 0 for no limit: max_tool_trace_bytes from the most specific layer
+// that sets it, a negative value meaning no limit as before; else 64 KiB.
+func (p *RouterReplayPluginConfig) ToolTraceByteLimit() int {
+	if p == nil || p.MaxToolTraceBytes == nil {
+		return defaultRouterReplayMaxToolTraceBytes
+	}
+	return max(*p.MaxToolTraceBytes, 0)
+}
+
+// RawToolTraceByteLimit is how many bytes a trace step's raw copies of its
+// arguments and output may hold, 0 for no limit. A configured
+// max_tool_trace_bytes keeps them whole, as before the default existed, for
+// readers that replay a call byte for byte; where no layer sets it, they keep
+// the default 64 KiB, since whole copies would leave the trace unbounded.
+func (p *RouterReplayPluginConfig) RawToolTraceByteLimit() int {
+	if p == nil || p.MaxToolTraceBytes == nil {
+		return defaultRouterReplayMaxToolTraceBytes
+	}
+	return 0
+}
+
+// ToolTraceTotalByteLimit is how many bytes the steps of a record's trace may
+// hold together, raw copies included, 0 for no limit: max_tool_trace_total_bytes
+// from the most specific layer that sets it; where none does, 256 KiB while
+// max_tool_trace_bytes is unset too, and no limit where a layer sets it, which
+// kept every step before the budget existed.
+func (p *RouterReplayPluginConfig) ToolTraceTotalByteLimit() int {
+	switch {
+	case p != nil && p.MaxToolTraceTotalBytes != nil:
+		return *p.MaxToolTraceTotalBytes
+	case p != nil && p.MaxToolTraceBytes != nil:
+		return 0
+	default:
+		return defaultRouterReplayMaxToolTraceTotalBytes
+	}
 }
 
 // PromptByteLimit is how many bytes of the prompt a record keeps under raw and
 // verified, 0 for the whole prompt: max_prompt_bytes from the most specific
-// layer that sets it; where none does, max_tool_trace_bytes when that is above
-// 0, since it bounded the prompt before max_prompt_bytes existed and no
+// layer that sets it; where none does, a max_tool_trace_bytes a layer sets
+// above 0, since it bounded the prompt before max_prompt_bytes existed and no
 // configuration may keep more of the prompt after an upgrade; else 64 KiB.
+// The trace's own default never feeds it.
 func (p *RouterReplayPluginConfig) PromptByteLimit() int {
 	switch {
 	case p == nil:
 		return defaultRouterReplayMaxPromptBytes
 	case p.MaxPromptBytes != nil:
 		return *p.MaxPromptBytes
-	case p.MaxToolTraceBytes > 0:
-		return p.MaxToolTraceBytes
+	case p.MaxToolTraceBytes != nil && *p.MaxToolTraceBytes > 0:
+		return *p.MaxToolTraceBytes
 	default:
 		return defaultRouterReplayMaxPromptBytes
 	}

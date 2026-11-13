@@ -187,7 +187,14 @@ type RouterReplayPluginConfig struct {
 	// (ToolDefinitions, ToolTraceStep.Text, Arguments and Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that
 	// structured fields remain complete even when the raw body is truncated.
-	MaxToolTraceBytes int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
+	// Nil where no layer sets it: then ToolTraceByteLimit is 64 KiB, which
+	// bounds the steps' raw copies too, and the trace has a total budget.
+	MaxToolTraceBytes *int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
+	// MaxToolTraceTotalBytes caps the text all steps of a record keep
+	// together, raw copies included: the oldest steps are dropped first, and
+	// the newest is always kept. 0 means no limit. Nil where no layer sets it:
+	// see ToolTraceTotalByteLimit.
+	MaxToolTraceTotalBytes *int `json:"max_tool_trace_total_bytes,omitempty" yaml:"max_tool_trace_total_bytes,omitempty" jsonschema:"minimum=0"`
 	// MaxToolTraceSteps caps the number of ToolTraceStep entries retained per
 	// record. Long agent sessions produce one step per tool-call turn, so an
 	// unbounded chain (e.g. a runaway hermes-style loop) can otherwise grow

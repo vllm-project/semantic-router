@@ -160,6 +160,22 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
         'Bytes of the prompt a record keeps under raw or verified capture; 0 keeps the whole prompt. Unset, it follows max_tool_trace_bytes when that is set, else 65536',
     },
     {
+      key: 'max_tool_trace_bytes',
+      label: 'Max Tool Trace Bytes',
+      type: 'number',
+      placeholder: '65536',
+      description:
+        'Bytes each tool definition and trace step field keeps; 0 keeps them whole. Unset, 65536, raw copies included',
+    },
+    {
+      key: 'max_tool_trace_total_bytes',
+      label: 'Max Tool Trace Total Bytes',
+      type: 'number',
+      placeholder: '262144',
+      description:
+        "Bytes a record's trace steps keep in all, the oldest dropped first; 0 keeps every step. Unset, 262144 while max_tool_trace_bytes is unset too",
+    },
+    {
       key: 'shadow',
       label: 'Shadow',
       type: 'object',

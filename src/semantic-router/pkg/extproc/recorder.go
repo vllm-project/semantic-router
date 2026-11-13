@@ -113,12 +113,14 @@ func (r *OpenAIRouter) startRouterReplay(
 
 	policy := ctx.RouterReplayPluginConfig
 	recorder = recorder.WithCapturePolicy(routerreplay.CapturePolicy{
-		CaptureRequestBody:  policy.CapturesRequestText(),
-		CaptureResponseBody: policy.CapturesResponseText(),
-		MaxBodyBytes:        resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
-		MaxPromptBytes:      policy.PromptByteLimit(),
-		MaxToolTraceBytes:   policy.MaxToolTraceBytes,
-		MaxToolTraceSteps:   policy.MaxToolTraceSteps,
+		CaptureRequestBody:     policy.CapturesRequestText(),
+		CaptureResponseBody:    policy.CapturesResponseText(),
+		MaxBodyBytes:           resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
+		MaxPromptBytes:         policy.PromptByteLimit(),
+		MaxToolTraceBytes:      policy.ToolTraceByteLimit(),
+		MaxRawToolTraceBytes:   policy.RawToolTraceByteLimit(),
+		MaxToolTraceTotalBytes: policy.ToolTraceTotalByteLimit(),
+		MaxToolTraceSteps:      policy.MaxToolTraceSteps,
 	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
 	prompt := record.Prompt

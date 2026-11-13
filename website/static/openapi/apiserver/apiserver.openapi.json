@@ -21587,6 +21587,9 @@
                                     "raw_output": {
                                       "type": "string"
                                     },
+                                    "raw_truncated": {
+                                      "type": "boolean"
+                                    },
                                     "role": {
                                       "type": "string"
                                     },
@@ -26416,6 +26419,9 @@
                               },
                               "raw_output": {
                                 "type": "string"
+                              },
+                              "raw_truncated": {
+                                "type": "boolean"
                               },
                               "role": {
                                 "type": "string"
