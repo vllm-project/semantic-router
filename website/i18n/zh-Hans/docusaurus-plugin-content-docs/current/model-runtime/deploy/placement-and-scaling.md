@@ -76,7 +76,7 @@ global:
 
 ### 剔除持续超时的副本 {#eject-a-replica-that-keeps-timing-out}
 
-前向计算卡住的 worker 可能仍在正常回应 `/health`，所以单靠就绪检查不会把它移出分派。池为每个副本统计连续超出调用方截止时间的请求数，达到 `consecutive_timeouts` 的副本会被剔除。每个字段都可选：
+前向计算卡住的 worker 可能仍在正常回应 `/health`，所以单靠就绪检查不会把它移出分派。池为每个副本统计连续超出截止时间（调用方的截止时间或部署的 `timeout_ms`）的请求数，达到 `consecutive_timeouts` 的副本会被剔除。每个字段都可选：
 
 ```yaml
 global:
@@ -95,7 +95,7 @@ global:
           max_ejection_percent: 50    # default 50
 ```
 
-- 取消、被拒的请求和失败既不计数也不清零；一次成功的回答让计数从头开始。
+- 取消、被拒的请求和失败既不计数也不清零；一次成功的回答让计数从头开始。超出 `timeout_ms` 的请求会计数，并且像失败一样让副本短暂退避（0.1 秒，逐次翻倍到 3.2 秒）并探测它的 `/health`，所以即使剔除关闭或被暂缓，卡住的副本也大多不在分派中。
 - 被剔除的副本离开分派 `base_ejection_ms`，Router 立即探测它的 `/health`。冷却结束后副本回到分派；它再次超时会被剔除两倍的时长，最长 `max_ejection_ms`。一次成功的回答立即让它回来并从头计。
 - 剔除从不拿走正在服务的副本。只有在该副本开始超时之后另一个就绪副本回答过，才会剔除它，所以在每个副本上都慢的模型会保留全部副本。同时被剔除的副本最多占 `max_ejection_percent`（总可以剔除一个），只有一个 worker 的部署从不剔除它。如果没有别的副本能接请求，被剔除的副本会重新服务。
 - Inventory 把被剔除的副本报告为 `ejected` 状态。Router 记录 `replica_ejected`、`replica_readmitted` 日志，以及上述规则拦下剔除时的 `replica_ejection_withheld`，并在[指标](../reference/metrics.md)中统计剔除和恢复次数。

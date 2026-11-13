@@ -258,7 +258,8 @@ func TestOnErrorFailAbortEmitsNoQuorumTelemetry(t *testing.T) {
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, requestContext)
 	require.NoError(t, err)
-	require.Equal(t, typev3.StatusCode_InternalServerError,
+	// The panel model's 502 ended the run, so the client gets it.
+	require.Equal(t, typev3.StatusCode_BadGateway,
 		response.GetImmediateResponse().GetStatus().GetCode())
 
 	assert.Zero(t, before.delta(t, quorumFailureSeries(decision.Name, "fallback", "quorum_failed")))

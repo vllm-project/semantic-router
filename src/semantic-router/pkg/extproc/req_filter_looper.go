@@ -121,9 +121,10 @@ func (r *OpenAIRouter) handleLooperExecution(
 		}
 		defer r.WorkflowStateService.Release()
 	}
-	// Looper forwards the original tool-bearing request and never reaches
-	// applyToolsPlugin. The trusted-facts gate therefore runs inside Looper,
-	// per model attempt, at each attempt's own stage (see buildLooperRequest).
+	// Looper builds every model call from the request the decision's tools
+	// policy and selection have already narrowed (see buildLooperRequest).
+	// The trusted-facts gate runs inside Looper, per model attempt, at each
+	// attempt's own stage.
 	resp, errorResponse := r.runLooper(ctx, request, decision, reqCtx)
 	if errorResponse != nil {
 		return errorResponse, nil
@@ -279,6 +280,9 @@ func (r *OpenAIRouter) buildLooperRequest(
 	})
 	if _, err := r.applyDispatchRequestParams(request, reqCtx); err != nil {
 		return nil, r.createErrorResponse(400, "Invalid request parameter policy")
+	}
+	if refused := r.applyLooperToolsPlugin(request, reqCtx); refused != nil {
+		return nil, refused
 	}
 	if carriesReasoningContinuity(request, nil) {
 		return nil, r.recordLooperFailure(

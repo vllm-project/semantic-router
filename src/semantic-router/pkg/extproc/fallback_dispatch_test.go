@@ -24,6 +24,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -321,6 +322,75 @@ func TestFallbackCrossProtocolOpenAIToAnthropic(t *testing.T) {
 	}
 }
 
+// The trace names the protocol of the upstream that answered: after a
+// fallback to an Anthropic candidate, Anthropic, as in the native gateway.
+func TestFallbackCrossProtocolTraceNamesTheCandidateProtocol(t *testing.T) {
+	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-2"})
+	ctx.UpstreamStatusCode = http.StatusBadGateway
+	router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+		return []byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"hi"}],"model":"claude","stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`), http.StatusOK, nil
+	}
+
+	resp := router.handleUpstreamTransportError([]byte(`{"error":{"message":"bad gateway"}}`), ctx)
+	require.NotNil(t, resp.GetImmediateResponse())
+	require.Equal(t, "model-fallback-2", ctx.VSRSelectedModel)
+	trace := fallbackTrace(t, resp, ctx)
+	require.Equal(t, "openai", trace[headers.TraceClientProtocol])
+	require.Equal(t, "anthropic", trace[headers.TraceUpstreamProtocol])
+}
+
+// Behind Envoy the fallback answers in place of the failed primary's headers,
+// so the candidate's own response time, from its dispatch, is its first
+// response time. A streaming client's candidate is called buffered, so its
+// time is the whole answer, not a first token, and is not recorded.
+func TestFallbackRecordsTheCandidatesFirstResponseTime(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		latency.RemoveModelFromTTFTCache("model-primary")
+		latency.RemoveModelFromTTFTCache("model-fallback-1")
+		router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+		ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
+		ctx.ProcessingStartTime = time.Now().Add(-2 * time.Second)
+		ctx.ExpectStreamingResponse = streaming
+		ctx.SemanticRequest.Stream = streaming
+		router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+			time.Sleep(20 * time.Millisecond)
+			return []byte(`{"id":"c1","object":"chat.completion","created":1,"model":"model-fallback-1","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`), http.StatusOK, nil
+		}
+
+		resp, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{ResponseHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "503"}}},
+		}}, ctx)
+		require.NoError(t, err)
+		require.NotNil(t, resp.GetImmediateResponse())
+		_, primaryRecorded := latency.GetTTFTPercentile("model-primary", 90)
+		require.False(t, primaryRecorded, "the primary failed")
+		ttft, recorded := latency.GetTTFTPercentile("model-fallback-1", 90)
+		if streaming {
+			require.False(t, recorded, "a buffered answer is not a first token")
+			continue
+		}
+		require.True(t, recorded, "the candidate that answered has no first-response time")
+		require.True(t, ttft >= 0.02 && ttft < 1, "ttft = %.3fs, want the candidate's own time, not the request's", ttft)
+		require.Equal(t, ttft, ctx.TTFTSeconds)
+	}
+}
+
+// A candidate that fails after the request switched to it, at its finalized
+// stream or wire validation, rolls the protocol back with the model, so the
+// primary's error is read in the primary's protocol. Reaching that failure at
+// the boundary takes a response over the codec's 64 MiB body limit, so this
+// checks the rollback itself.
+func TestFallbackRollbackRestoresThePrimaryProtocol(t *testing.T) {
+	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	ctx := testFallbackRequestContext("model-fallback-2", []string{"model-primary", "model-fallback-2"})
+	ctx.TargetFormat = llmprotocol.AnthropicMessagesV1
+
+	router.rollbackFallbackContext(ctx, "model-primary", http.StatusBadGateway, "", nil, false, llmprotocol.OpenAIChatV1)
+	require.Equal(t, "model-primary", ctx.VSRSelectedModel)
+	require.Equal(t, llmprotocol.OpenAIChatV1, ctx.TargetFormat)
+}
+
 func TestFallbackSafetyGateStreamingCommitted(t *testing.T) {
 	policy := fallback.DefaultEnabledPolicy()
 	router, _ := setupFallbackTestRouter(t, policy)
@@ -417,9 +487,9 @@ func TestFallbackExhaustion(t *testing.T) {
 	if resp == nil {
 		t.Fatal("expected non-nil response on candidate exhaustion")
 	}
-	// When candidates fail, falls back to original transport error translation
-	if resp.GetImmediateResponse() != nil {
-		t.Fatal("must not return ImmediateResponse when all fallback candidates failed")
+	// When every candidate fails, the client gets the last attempt's outcome.
+	if immediate := resp.GetImmediateResponse(); immediate == nil || immediate.GetStatus().GetCode() != typev3.StatusCode_ServiceUnavailable {
+		t.Fatalf("expected the last candidate's 503, got: %#v", resp)
 	}
 	if ctx.FallbackRecord == nil {
 		t.Fatal("expected FallbackRecord to be created")
@@ -750,8 +820,8 @@ func TestFallbackMaxAttemptsExceededAcrossMultipleCandidates(t *testing.T) {
 	if resp == nil {
 		t.Fatal("expected response")
 	}
-	if resp.GetImmediateResponse() != nil {
-		t.Fatal("expected standard error translation after max attempts reached")
+	if immediate := resp.GetImmediateResponse(); immediate == nil || immediate.GetStatus().GetCode() != typev3.StatusCode_ServiceUnavailable {
+		t.Fatalf("expected the last candidate's 503 after max attempts reached, got: %#v", resp)
 	}
 
 	// With MaxAttempts=2, primary is Attempt 1, model-fallback-1 is Attempt 2.
@@ -932,13 +1002,6 @@ func TestFallbackFailureInHandleResponseHeadersMarksContinued(t *testing.T) {
 	policy := fallback.DefaultEnabledPolicy()
 	router, _ := setupFallbackTestRouter(t, policy)
 
-	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
-
-	// Fallback candidate also fails
-	router.fallbackCaller = func(callCtx context.Context, model string, body []byte, headers map[string]string) ([]byte, int, error) {
-		return []byte(`{"error": "candidate also 503"}`), 503, nil
-	}
-
 	reqHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{
 			Headers: &core.HeaderMap{
@@ -949,7 +1012,22 @@ func TestFallbackFailureInHandleResponseHeadersMarksContinued(t *testing.T) {
 		},
 	}
 
-	resp, err := router.handleResponseHeaders(reqHeaders, ctx)
+	// A candidate that also fails answers the client with its own outcome.
+	failed := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
+	router.fallbackCaller = func(callCtx context.Context, model string, body []byte, headers map[string]string) ([]byte, int, error) {
+		return []byte(`{"error": "candidate also 503"}`), 503, nil
+	}
+	resp, err := router.handleResponseHeaders(reqHeaders, failed)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.GetImmediateResponse() == nil || failed.ResponseHeadersContinued {
+		t.Fatalf("expected the candidate's outcome as the answer, got: %#v", resp)
+	}
+
+	// A chain that sends no candidate continues the primary's response.
+	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-unknown"})
+	resp, err = router.handleResponseHeaders(reqHeaders, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -957,7 +1035,7 @@ func TestFallbackFailureInHandleResponseHeadersMarksContinued(t *testing.T) {
 		t.Fatal("expected non-nil response")
 	}
 	if resp.GetImmediateResponse() != nil {
-		t.Fatal("expected continue response when all fallback candidates fail, got ImmediateResponse")
+		t.Fatal("expected continue response when no fallback candidate was sent, got ImmediateResponse")
 	}
 
 	// Once continue response is returned from handleResponseHeaders, headers are committed downstream
@@ -4031,7 +4109,8 @@ func TestFallbackPersistsExhaustedExecution(t *testing.T) {
 	}
 
 	resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx)
-	require.Nil(t, resp.GetImmediateResponse())
+	require.NotNil(t, resp.GetImmediateResponse())
+	require.EqualValues(t, http.StatusServiceUnavailable, resp.GetImmediateResponse().GetStatus().GetCode())
 	record, ok := recorder.GetRecord(recordID)
 	require.True(t, ok)
 	require.NotEmpty(t, record.Outcomes)

@@ -730,8 +730,13 @@ var applicationFieldForms = []ConfigForm{
 				}
 			}
 			moveInput(m, at.Node, "include_history", "history")
+			// source: tool_result read only the tool results, neither the user
+			// turn nor its history, so the rule keeps reading only them
 			if scalarAt(at.Node, "source") == "tool_result" {
-				setNode(ensureMapping(at.Node, "input"), "tool_results", boolScalar())
+				input := ensureMapping(at.Node, "input")
+				m.Delete(input, "history")
+				setNode(input, "tool_results", boolScalar())
+				setNode(input, "request", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "false"})
 			}
 			m.Delete(at.Node, "source")
 			return nil
@@ -914,27 +919,30 @@ func removedModuleForm(module, thresholdKey, threshold string, collections []str
 }
 
 // migrateGuardFailures carries a guard module's failure handling over to its
-// jailbreak or pii rules. on_error: block matched a request whose classifier
-// failed, so the module's request-stage rules get on_unknown: match; allow,
-// the default, is the rules' own default. Content the model does not read in
-// full matches whatever on_unscanned said.
+// jailbreak or pii rules that set none. on_error: block matched a request
+// whose classifier failed, as on_unknown: match does; allow passed it, as
+// on_unknown: no_match does. on_unscanned: allow decided on what the model
+// read, as on_unscanned: best_effort does; block matched, as match does.
 func migrateGuardFailures(m *Migration, at FormMatch, collections []string) {
 	if !slices.Contains(collections, "jailbreak") && !slices.Contains(collections, "pii") {
 		return
 	}
-	if scalarAt(at.Node, "on_error") == "block" {
-		for _, signals := range allScopeSignals(m.Root()) {
-			for _, collection := range collections {
-				for _, rule := range sequenceAt(signals, collection) {
-					if mappingValue(rule, "on_unknown") == nil && scalarAt(rule, "stage") != SystemOneStageResponse {
-						setNode(rule, "on_unknown", Scalar(string(RuleOnUnknownMatch)))
-					}
+	onUnknown := map[string]string{OnErrorBlock: string(RuleOnUnknownMatch), OnErrorAllow: string(RuleOnUnknownNoMatch)}[scalarAt(at.Node, "on_error")]
+	onUnscanned := map[string]string{OnErrorAllow: SystemOneUnscannedBestEffort, OnErrorBlock: SystemOneUnscannedMatch}[scalarAt(at.Node, "on_unscanned")]
+	for _, signals := range allScopeSignals(m.Root()) {
+		for _, collection := range collections {
+			if collection != "jailbreak" && collection != "pii" {
+				continue
+			}
+			for _, rule := range sequenceAt(signals, collection) {
+				if onUnknown != "" && mappingValue(rule, "on_unknown") == nil && scalarAt(rule, "stage") != SystemOneStageResponse {
+					setNode(rule, "on_unknown", Scalar(onUnknown))
+				}
+				if onUnscanned != "" && mappingValue(rule, "on_unscanned") == nil {
+					setNode(rule, "on_unscanned", Scalar(onUnscanned))
 				}
 			}
 		}
-	}
-	if scalarAt(at.Node, "on_unscanned") == "allow" {
-		m.Note(at.Path+".on_unscanned", "allow has no replacement: content the model does not read in full matches the rule")
 	}
 }
 

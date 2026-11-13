@@ -84,23 +84,17 @@ func validateEndpointAddress(address string) error {
 	return nil
 }
 
-// validateCanonicalEndpointRefs checks each backend endpoint's shape: host:port
-// with the backend's protocol, or a full http(s) URL, path included, as a
-// deployment's endpoint is written. A key never travels in the URL.
+// validateCanonicalEndpointRefs checks each backend endpoint's shape as the
+// Router reads it: host:port, path optional, with the backend's protocol, or a
+// full http(s) URL, path included. A key never travels in the URL.
 func validateCanonicalEndpointRefs(configData routerconfig.CanonicalConfig) error {
 	for modelIndex, model := range configData.Providers.Models {
 		for backendIndex, backend := range model.BackendRefs {
 			endpoint := strings.TrimSpace(backend.Endpoint)
-			if endpoint == "" {
+			if endpoint == "" || !strings.Contains(endpoint, "://") {
 				continue
 			}
 			field := fmt.Sprintf("providers.models[%d].backend_refs[%d].endpoint %q", modelIndex, backendIndex, endpoint)
-			if !strings.Contains(endpoint, "://") {
-				if strings.Contains(endpoint, "/") {
-					return fmt.Errorf("%s has a path; write a full URL such as http://host:port/v1", field)
-				}
-				continue
-			}
 			parsed, err := url.Parse(endpoint)
 			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 				return fmt.Errorf("%s must be an http or https URL", field)

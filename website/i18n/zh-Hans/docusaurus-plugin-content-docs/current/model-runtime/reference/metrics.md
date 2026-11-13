@@ -21,7 +21,7 @@ router（9190 端口）：
 | 指标 | 标签 | 含义 |
 | --- | --- | --- |
 | `vsr_model_runtime_ready` | `deployment` | 部署能答题期间为 1。 |
-| `vsr_model_runtime_requests_total` | `deployment`、`outcome` | 按结果分的调用：`ok`、`timeout`、`unavailable`、`overloaded`、`rejected`、`failed`。 |
+| `vsr_model_runtime_requests_total` | `deployment`、`outcome` | 按结果分的调用：`ok`、`timeout`、`cancelled`、`unknown_deployment`、`unavailable`、`overloaded`、`rejected`、`failed`。配置中未声明的部署的调用在 `deployment="unknown"` 下记为 `unknown_deployment`。 |
 | `vsr_model_runtime_request_duration_seconds` | `deployment` | 到达 runtime 的调用延迟。 |
 | `vsr_model_runtime_unknown_answers_total` | `deployment`、`reason` | 按原因分的未知答案。 |
 | `vsr_model_runtime_restarts_total` | `deployment` | 托管进程的重启。 |

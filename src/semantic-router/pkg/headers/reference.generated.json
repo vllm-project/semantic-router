@@ -27,7 +27,7 @@
       "sensitivity": "none",
       "owner": "response_contract",
       "version": "v0.4",
-      "doc": "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`."
+      "doc": "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`."
     },
     {
       "name": "x-vsr-config-version",
@@ -60,7 +60,7 @@
       "sensitivity": "none",
       "owner": "response_contract",
       "version": "v0.5",
-      "doc": "Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."
+      "doc": "Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."
     },
     {
       "name": "x-vsr-selected-recipe",
@@ -962,6 +962,11 @@
       "doc": "Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`."
     },
     {
+      "key": "scan_coverage",
+      "owner": "signals",
+      "doc": "Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts."
+    },
+    {
       "key": "context_tokens",
       "owner": "signals",
       "doc": "Token count the `context` signal measured."
@@ -1039,6 +1044,10 @@
   ],
   "trace_example": "confidence=0.91, algorithm=static, routing_latency_ms=3.2, signals=(\"context:long-context\" \"projection:use-reasoning-model\"), session_phase=tool_loop",
   "warning_codes": [
+    {
+      "code": "scan_partial",
+      "doc": "A request-stage guard rule (`jailbreak`, `safety` or `pii`) read only some of a long input's windows, or none, and the request was routed on what it read."
+    },
     {
       "code": "hallucination",
       "doc": "A `response_guard` rule over a `hallucination` signal flagged the answer."

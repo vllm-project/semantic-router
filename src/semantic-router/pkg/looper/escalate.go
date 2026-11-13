@@ -622,7 +622,7 @@ func (l *EscalateLooper) judgeAnswer(run *escalateRun, modelName, accessKey stri
 	req, acceptance := run.req, run.acceptance
 	switch {
 	case acceptance.answerCheck != nil:
-		question := extractQuestionFromRequest(req.OriginalRequest)
+		question := extractOriginalContent(req.OriginalRequest)
 		if question == "" {
 			return 0, 0, false, fmt.Errorf("could not extract user question from request")
 		}
@@ -633,7 +633,7 @@ func (l *EscalateLooper) judgeAnswer(run *escalateRun, modelName, accessKey stri
 		threshold := *acceptance.answerCheck.GTE
 		return probability, threshold, probability >= threshold, nil
 	case acceptance.refusal:
-		question := extractQuestionFromRequest(req.OriginalRequest)
+		question := extractOriginalContent(req.OriginalRequest)
 		if question == "" {
 			return 0, 0, false, fmt.Errorf("could not extract user question from request")
 		}
@@ -692,7 +692,7 @@ func (l *EscalateLooper) performSelfVerification(
 	iteration int,
 ) (selfVerificationExecution, error) {
 	// Extract original question from the request
-	originalQuestion := extractQuestionFromRequest(req.OriginalRequest)
+	originalQuestion := extractOriginalContent(req.OriginalRequest)
 	if originalQuestion == "" {
 		return selfVerificationExecution{}, fmt.Errorf("could not extract user question from request")
 	}
@@ -758,59 +758,6 @@ func (l *EscalateLooper) performSelfVerification(
 		Response:   verifyResp,
 		Attempted:  true,
 	}, nil
-}
-
-// extractQuestionFromRequest extracts the user's question from the original request
-// Uses JSON marshaling for robust extraction across SDK versions
-func extractQuestionFromRequest(originalRequest *openai.ChatCompletionNewParams) string {
-	if originalRequest == nil {
-		return ""
-	}
-
-	// Marshal to JSON and parse to extract messages
-	data, err := json.Marshal(originalRequest)
-	if err != nil {
-		return ""
-	}
-
-	var reqMap map[string]interface{}
-	if err := json.Unmarshal(data, &reqMap); err != nil {
-		return ""
-	}
-
-	messages, ok := reqMap["messages"].([]interface{})
-	if !ok || len(messages) == 0 {
-		return ""
-	}
-
-	// Find the last user message
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg, ok := messages[i].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		role, _ := msg["role"].(string)
-		if role == "user" {
-			// Content can be a string or array of parts
-			switch content := msg["content"].(type) {
-			case string:
-				return content
-			case []interface{}:
-				// Array of content parts
-				for _, part := range content {
-					if partMap, ok := part.(map[string]interface{}); ok {
-						if partMap["type"] == "text" {
-							if text, ok := partMap["text"].(string); ok {
-								return text
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return ""
 }
 
 // buildSelfVerificationRequest creates a new request for self-verification

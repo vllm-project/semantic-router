@@ -220,15 +220,6 @@ config:
               - who
               - where
               - when
-        domains:
-          - name: code
-            description: Programming, debugging, and software engineering tasks
-            labels: ["computer science"]
-          - name: general
-            description: General knowledge, conversation, and miscellaneous topics
-            labels: [other]
-          - name: other
-            description: Catch-all for unclassified queries
         jailbreak:
           - name: jailbreak_dev
             description: Relaxed jailbreak detection for dev environment
@@ -258,6 +249,7 @@ config:
           provider: systemone
           endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
           model: e2e/fake-systemone
+          schema: vllm-sr/4.0
           timeout_ms: 5000
           capabilities:
             question_types: [choice, noul, span]

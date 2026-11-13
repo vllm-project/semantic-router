@@ -66,7 +66,8 @@ TRACE_NOTES = (
     (
         ("confidence",),
         "`confidence` is absent when the decision rests on policy leaves, "
-        "aggregates several evidence leaves, or resolves through an error policy.",
+        "aggregates several evidence leaves, resolves through an error policy, "
+        "or is a catch-all.",
     ),
     (
         ("fallback_attempts",),
@@ -422,8 +423,9 @@ def render(reference: dict) -> str:
         "",
         "### Credentials",
         "",
-        "Credentials, by name only. None reaches a client, and a per-user key "
-        "reaches a provider only as its credential.",
+        "Credentials, by name only. None reaches a client, and a provider receives "
+        "only the credential its `auth` sets: a per-user key only as that credential, "
+        "and never a client's own credential header.",
         "",
         *table(
             "| Header | Hops |",

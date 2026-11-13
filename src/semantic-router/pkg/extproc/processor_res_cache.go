@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -32,6 +33,13 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	}
 	if ctx.CacheWriteBypass {
 		metrics.RecordCacheWriteSkipped("request_no_store")
+		return
+	}
+	// An answer the output limit cut inside a tool call is the asking
+	// client's to keep; a hit would give another request the cut call.
+	if response := ctx.SemanticResponse; response != nil &&
+		llmprotocol.TruncatedToolCall(*response, llmprotocol.DefaultPolicy().Limits.JSONDepth) != nil {
+		metrics.RecordCacheWriteSkipped("tool_call_cut")
 		return
 	}
 	// A cache hit runs no guard, so an answer is kept only as the guard let it

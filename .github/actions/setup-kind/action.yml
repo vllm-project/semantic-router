@@ -10,6 +10,10 @@ inputs:
     description: Move Docker's data root and temporary files to /mnt.
     required: false
     default: "false"
+  min-free-gb:
+    description: Skip the disk cleanup when the root disk already has this many GB free; 0 always cleans.
+    required: false
+    default: "0"
 
 runs:
   using: composite
@@ -19,6 +23,7 @@ runs:
       with:
         show-usage: ${{ inputs.show-usage }}
         relocate-docker: ${{ inputs.relocate-docker }}
+        min-free-gb: ${{ inputs.min-free-gb }}
 
     - name: Install Kind
       shell: bash

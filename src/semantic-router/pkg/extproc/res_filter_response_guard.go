@@ -97,14 +97,16 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *res
 }
 
 // responseInput is what response-stage rules read about the request and its
-// answer: the grounding context is the retrieved documents and the tool
-// results of the request as it was sent.
+// answer: the grounding context is the retrieved documents and memories, in
+// whichever injection mode, and the tool results of the request as it was sent.
 func (ctx *RequestContext) responseInput(answer string) classification.ResponseInput {
 	input := ctx.ResponseStage
 	input.Answer = answer
 	var grounding []string
-	if ctx.RAGRetrievedContext != "" {
-		grounding = append(grounding, ctx.RAGRetrievedContext)
+	for _, retrieved := range []string{ctx.RAGRetrievedContext, ctx.MemoryContext} {
+		if retrieved != "" {
+			grounding = append(grounding, retrieved)
+		}
 	}
 	if ctx.SemanticRequest != nil {
 		for _, message := range ctx.SemanticRequest.Messages {
@@ -112,7 +114,9 @@ func (ctx *RequestContext) responseInput(answer string) classification.ResponseI
 				if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
 					continue
 				}
-				if _, retrieved := ctx.RAGToolCallIDs[content.ToolResult.CallID]; retrieved {
+				_, rag := ctx.RAGToolCallIDs[content.ToolResult.CallID]
+				_, memory := ctx.MemoryToolCallIDs[content.ToolResult.CallID]
+				if rag || memory {
 					continue
 				}
 				if text := semanticText(content.ToolResult.Content); text != "" {

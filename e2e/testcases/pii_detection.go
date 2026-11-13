@@ -16,6 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("pii-detection", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Test PII detection and blocking functionality",
 		Tags:        []string{"kubernetes", "security", "pii"},
 		Fn:          testPIIDetection,

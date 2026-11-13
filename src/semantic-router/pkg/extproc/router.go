@@ -33,6 +33,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -48,7 +49,10 @@ type OpenAIRouter struct {
 	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
 	decisionDecider modelservice.Decider
 	// systemOneDecider answers decision selectors on systemone deployments.
-	systemOneDecider     modelservice.Remote
+	systemOneDecider modelservice.Remote
+	// tokenizers loads the tokenizers that count prompts for the context
+	// window check; nil uses the process-wide registry.
+	tokenizers           *tokencount.Registry
 	decisionCards        map[string]modelservice.ModelCard
 	Embeddings           *embedding.Set
 	serviceEmbeddings    *embedding.Set
