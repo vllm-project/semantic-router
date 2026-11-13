@@ -153,7 +153,12 @@ class NativeEngineModel(EngineModel):
         )
         self.kernels = accelerator.kernels(device_info)
         self.kernels.allow_approximate = (
-            not options.exact_kernels_only and spec.dtype.approximate_kernels
+            not options.exact_kernels_only
+            and spec.dtype.approximate_kernels
+            and (
+                spec.dtype.approximate_accelerators is None
+                or accelerator.name in spec.dtype.approximate_accelerators
+            )
         )
         self.kernels.use_variants(spec.kernel_variants)
         fused_int4 = self.kernels.allow_approximate and torch.version.hip is None

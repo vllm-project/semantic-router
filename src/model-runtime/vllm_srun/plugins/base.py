@@ -156,7 +156,9 @@ class DtypePolicy:
     ``"bfloat16"`` (only where ``DeviceInfo.bf16``), ``"float32-packed"``
     (oneDNN's pre-packed FP32 linear) or ``"int8"`` (dynamic); None keeps the
     exact weights. ``approximate_kernels`` consents to the accelerator's
-    approximate kernels (``EngineOptions.exact_kernels_only`` off). Consented
+    approximate kernels (``EngineOptions.exact_kernels_only`` off);
+    ``approximate_accelerators`` scopes that consent to the named accelerators
+    (None: every accelerator the spec runs on). Consented
     copies and kernels run by default at the published precision, so a family
     consents only where its records show no decision changed and at least 99%
     agreement per answer type against the model's own batches (embeddings:
@@ -172,6 +174,7 @@ class DtypePolicy:
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
+    approximate_accelerators: frozenset[str] | None = None
 
     @property
     def needs_gpu_bf16(self) -> bool:

@@ -78,6 +78,7 @@ def test_families_consent_to_copies_and_approximate_kernels_explicitly():
     policy = DtypePolicy()
     assert policy.reduced_gpu is None and policy.reduced_cpu is None
     assert not policy.approximate_kernels
+    assert policy.approximate_accelerators is None
 
 
 def test_third_party_entry_points_are_loaded(monkeypatch):
