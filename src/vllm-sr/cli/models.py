@@ -1771,8 +1771,9 @@ class FallbackCircuitBreaker(BaseModel):
 
 
 # Names forward_request_headers may not list, beside the credential carriers
-# above and a backend's own auth header, which the Router checks. Keep in
-# step with validateForwardRequestHeaders in the Router's pkg/config.
+# above, a backend's own auth header and the identity names
+# global.services.authz.identity sets, which the Router checks. Keep in step
+# with validateForwardRequestHeaders in the Router's pkg/config.
 FORWARD_CREDENTIAL_HEADERS = SHADOW_CREDENTIAL_HEADERS | {
     "ocp-apim-subscription-key",
     "api-subscription-key",

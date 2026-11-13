@@ -109,6 +109,50 @@ func validateFallbackForwardRequestHeaders(cfg *RouterConfig) error {
 	return nil
 }
 
+// validateForwardedIdentityHeaders refuses a forward_request_headers entry
+// that names a header the identity configuration reads the caller from. The
+// Router keeps those from upstreams like the x-authz- set, so no call it
+// makes may copy one.
+func validateForwardedIdentityHeaders(cfg *RouterConfig) error {
+	// The gateway strips these names from client requests, so one that is not
+	// a header name would never be stripped, nor ever be set.
+	for _, field := range []struct{ key, name string }{
+		{"user_id_header", cfg.Authz.Identity.UserIDHeader},
+		{"user_groups_header", cfg.Authz.Identity.UserGroupsHeader},
+	} {
+		if trimmed := strings.TrimSpace(field.name); trimmed != "" && !httpguts.ValidHeaderFieldName(trimmed) {
+			return fmt.Errorf("global.services.authz.identity.%s %q is not an HTTP header name", field.key, trimmed)
+		}
+	}
+	identity := cfg.Authz.Identity.HeaderNames()
+	check := func(path string, names []string) error {
+		for _, name := range names {
+			if trimmed := strings.TrimSpace(name); slices.Contains(identity, strings.ToLower(trimmed)) {
+				return fmt.Errorf("%s: forward_request_headers cannot include identity header %q, which the Router keeps from upstreams", path, trimmed)
+			}
+		}
+		return nil
+	}
+	if policy := cfg.RoutingDefaults.Fallback; policy != nil {
+		if err := check("global.router.fallback", policy.ForwardRequestHeaders); err != nil {
+			return err
+		}
+	}
+	for _, recipe := range cfg.Recipes {
+		if policy := recipe.Profile.Fallback; policy != nil {
+			if err := check(recipePath(string(recipe.Name))+".fallback", policy.ForwardRequestHeaders); err != nil {
+				return err
+			}
+		}
+	}
+	for _, name := range sortedModelKeys(cfg.ModelDeployments) {
+		if err := check("global.model_catalog.deployments."+name, cfg.ModelDeployments[name].ForwardRequestHeaders); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // providerAuthHeaders are the auth headers the provider profiles send their
 // credential in: each backend's own, else its provider's.
 func providerAuthHeaders(cfg *RouterConfig) []string {
