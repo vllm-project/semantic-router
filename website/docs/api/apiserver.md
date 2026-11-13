@@ -102,7 +102,9 @@ configuration reload does not turn `/ready` back to `503`: the previous
 configuration serves until the new one's models are ready. The standalone
 listeners and the ext_proc gRPC port open only once those models are ready, so
 the listener's `/ready` and the gRPC health service never report ready before
-the management `/ready` does.
+the management `/ready` does. With `config_source: kubernetes`, both also wait
+until the first configuration from Kubernetes is active. Both report not ready
+once shutdown begins, while in-flight requests drain.
 
 For a Router with a runtime registry, `/ready` and `/startup-status` report that
 replica's observed startup state. Another replica's shared file or Redis record
@@ -147,7 +149,39 @@ capability, or quorum. `RequiredDependenciesUnobserved` must not be treated as
 ready. HTTP `200` means the status document was retrieved, not that traffic can
 be served. The existing `/health`, `/ready`, and `/startup-status` contracts are
 unchanged; this endpoint does not replace their deployment probes. Fleet
-aggregation, per-replica persistence/TTL, and probe wiring remain separate work.
+aggregation and probe wiring remain separate work.
+
+### Redis startup persistence
+
+With `global.services.startup_status.store_backend: redis`, the Router publishes
+`vllm-sr:startup-status:<instance_id>` using the same opaque process identity as
+`/api/v1/status`. `/startup-status` includes that identity too. A restart creates
+a new identity, so an old process cannot overwrite its replacement's record.
+
+Records expire after 30 seconds; the publisher refreshes the last observation
+every 10 seconds. Heartbeats preserve `updated_at`, which identifies the last
+startup observation, not the last Redis refresh. They establish process presence,
+not dependency health or request readiness. Shutdown stops the heartbeat, and
+crashed or stopped processes disappear within the remaining TTL.
+
+Redis may be unavailable at startup or lose connectivity later. The publisher
+retains only its latest observation and retries on the next heartbeat. Local
+`/ready` and `/startup-status` continue using in-process state during an outage.
+External readers must treat a missing, expired, or unreadable record as unknown.
+
+Consumers of Redis must select an explicit instance ID and require a positive
+TTL. The Go `startupstatus.LoadFromRedis(client, instanceID)` helper checks both
+the expiry and the payload identity. The former unscoped key
+`vllm-sr:startup-status` is no longer written or read; it may remain from an older
+version and must not be used as a fallback. Existing single-instance Router and
+Dashboard HTTP status clients continue using the same endpoints.
+
+An API server embedded without a runtime registry cannot infer which Redis
+record belongs to it. With Redis configured, that legacy path now returns
+unknown (`503`) instead of substituting shared Redis or file state. Embedders
+must supply a runtime registry. File-only startup status behavior is unchanged.
+This slice does not enumerate replicas, compute fleet readiness, or change
+deployment probes.
 
 ## Inspect signals without an inference call
 
@@ -333,9 +367,9 @@ connection pools when the providers' backends and the listeners are unchanged.
 A request in standalone mode is served by the version it started on, from routing through
 its fallback chain to the last byte. Such a Router binds its listeners at
 startup, so a change to the set of listeners or to a listener's `address`,
-`port` or `timeout` is rejected with code `restart_required` at that
-listener's path; restart the Router to apply it. Listener `api_keys` change
-without a restart.
+`port`, `timeout` or `tls` is rejected with code `restart_required` at that
+listener's path; restart the Router to apply it. A listener's `api_keys`,
+`apis` and `identity` change without a restart.
 
 The Router records every activation, from any source, in one history of the
 last 10 versions (`-config-history-limit` changes it). Every configuration file
@@ -404,6 +438,10 @@ fields. They exist only on the management listener. `/v1/files` and
 `/v1/vector_stores` are not inference-listener aliases and are not registered
 by the Router API.
 
+Deleting a file first detaches it from every vector store it is attached to,
+so its chunks stop answering searches. If a detach fails, the delete returns
+`500` and the file and its attachments stay, so the delete can be retried.
+
 ## Discover and inspect plugins
 
 `GET /api/v1/plugins` projects the canonical plugin registry, including each
@@ -456,6 +494,14 @@ audited invalidation.
 | `POST` | `/api/v1/storage/response-cache/test` | Validate and probe a candidate configuration |
 | `POST` | `/api/v1/storage/response-cache/invalidate` | Dry-run or invalidate a scoped partition |
 | `POST` | `/api/v1/storage/response-cache/flush` | Advance a scoped or global cache epoch |
+
+`invalidate` advances the epoch of the partition `selector.partition` names,
+so that partition's entries become misses, and refuses a selector without a
+partition with `400`. `flush` advances a partition's epoch or, without a
+partition, the global epoch, and needs `cache.manage` and
+`"confirm": "flush response cache"`. Neither call deletes or counts the
+entries it reaches, so both report `matched_estimate` and `deleted` as `0`
+with `count_unknown: true`.
 
 Prefer scoped invalidation and a dry run before a destructive cache mutation.
 Bearer roles distinguish read, invalidate, and broader cache-management

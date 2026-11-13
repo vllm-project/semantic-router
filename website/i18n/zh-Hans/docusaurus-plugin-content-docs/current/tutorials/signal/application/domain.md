@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`domains` 按请求所属的学科路由，学科由决策模型从 14 个中选出。每条规则指定它匹配的学科。它提出 `domain` [预设](../../../system-one/reference#preset-catalog)问题：“Which subject area is this request about?”，选项为 `biology`、`business`、`chemistry`、`computer science`、`economics`、`engineering`、`health`、`history`、`law`、`math`、`other`、`philosophy`、`physics` 和 `psychology`。
+`domains` 按请求所属的学科路由，学科由决策模型从 14 个中选出。每条规则指定它匹配的学科。它提出 `domain` [预设](../../../system-one/reference/presets#preset-catalog)问题：“Which subject area is this request about?”，选项为 `biology`、`business`、`chemistry`、`computer science`、`economics`、`engineering`、`health`、`history`、`law`、`math`、`other`、`philosophy`、`physics` 和 `psychology`。
 
 ## 主要优势 {#key-advantages}
 
@@ -72,6 +72,6 @@ recipes:
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `domain` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有领域规则；见[选择部署](../../../system-one/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 有该问题的训练形式；其他 System One 模型零样本回答。该问题读取当前用户轮次，并截断到模型的输入长度。
+除非 `domain` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有领域规则；见[选择部署](../../../system-one/deploy/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 有该问题的训练形式；其他 System One 模型零样本回答。该问题读取当前用户轮次，并截断到模型的输入长度。
 
 通过 Router 时，路由预览（`POST /api/v1/routing/preview`）会报告匹配的领域规则。完整示例见 [`config/fragments/signal/domain/mmlu.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/domain/mmlu.yaml)。

@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// applyToolsPlugin applies the selected decision's tools plugin to the
+// applyToolsPlugin applies the tools plugin the request runs to the
 // provider-bound request: the trusted-facts gate, the policy, then the
 // selection, which runs when the request leaves the choice of tools to the
 // model. A selection that refuses the request turns response into the
@@ -19,19 +19,46 @@ func (r *OpenAIRouter) applyToolsPlugin(request *llmprotocol.Request, response *
 	if response.GetImmediateResponse() != nil {
 		return
 	}
-	plugin := resolveDecisionToolsConfig(ctx)
+	plugin := resolveDecisionToolsConfig(r.Config, ctx)
 	if plugin != nil && plugin.Enabled && !r.applyTrustedFactsGate(request, ctx, plugin, trustedFactsRequestStage) {
-		if applyToolsPolicy(request, plugin.Policy) && plugin.Select != nil && leavesToolChoiceToModel(request) {
-			if failure := r.selectTools(request, plugin, ctx); failure != nil {
-				response.Response = r.routingFailureResponse(ctx, *failure).Response
-				return
-			}
+		if failure := r.applyToolsPolicyAndSelection(request, plugin, ctx); failure != nil {
+			response.Response = r.routingFailureResponse(ctx, *failure).Response
+			return
 		}
 	}
 	clearSemanticToolChoiceWhenNoTools(request)
 	if err := commitToolSelection(request, ctx); err != nil {
 		logging.Errorf("Error applying the tools plugin: %v", err)
 	}
+}
+
+// applyLooperToolsPlugin applies the decision's tools policy and selection to
+// the request every Looper model call is built from, as applyToolsPlugin
+// does to a single-model request. The trusted-facts gate stays per call
+// (looperToolStageGate); under it a selection adds no catalog tools, since a
+// call it narrows keeps only the request's own allowed tools.
+func (r *OpenAIRouter) applyLooperToolsPlugin(request *llmprotocol.Request, ctx *RequestContext) *ext_proc.ProcessingResponse {
+	plugin := resolveDecisionToolsConfig(r.Config, ctx)
+	if plugin == nil || !plugin.Enabled {
+		return nil
+	}
+	if plugin.TrustedFactsEnabled() && plugin.Select != nil && plugin.Select.Mode == config.ToolsSelectModeAdd {
+		applyToolsPolicy(request, plugin.Policy)
+	} else if failure := r.applyToolsPolicyAndSelection(request, plugin, ctx); failure != nil {
+		return r.routingFailureResponse(ctx, *failure)
+	}
+	clearSemanticToolChoiceWhenNoTools(request)
+	return nil
+}
+
+// applyToolsPolicyAndSelection applies the policy, then the selection when
+// the request leaves the choice of tools to the model. It returns the failure
+// to answer the client with when the selection refuses the request.
+func (r *OpenAIRouter) applyToolsPolicyAndSelection(request *llmprotocol.Request, plugin *config.ToolsPluginConfig, ctx *RequestContext) *routingFailure {
+	if !applyToolsPolicy(request, plugin.Policy) || plugin.Select == nil || !leavesToolChoiceToModel(request) {
+		return nil
+	}
+	return r.selectTools(request, plugin, ctx)
 }
 
 // applyToolsPolicy applies the policy to the request's tools and reports
@@ -46,6 +73,20 @@ func applyToolsPolicy(request *llmprotocol.Request, policy *config.ToolsPolicyCo
 	case config.ToolsPolicyModeFiltered:
 		if filtered := filterToolsByPolicy(request.Tools, policy); len(filtered) != len(request.Tools) {
 			request.Tools = filtered
+			// A tool_choice naming a removed tool goes with it, as under none,
+			// and the model chooses among the tools left.
+			if request.ToolChoice.Mode == llmprotocol.ToolChoiceNamed && !policy.Allows(request.ToolChoice.Name) {
+				request.ToolChoice = llmprotocol.ToolChoice{}
+			}
+			request.Generation++
+		}
+		// The hosted image_generation tool lives outside Tools and goes by its
+		// type, the word its tool_choice uses too.
+		if request.ImageGeneration != nil && !policy.Allows(string(llmprotocol.ToolChoiceImageGeneration)) {
+			request.ImageGeneration = nil
+			if request.ToolChoice.Mode == llmprotocol.ToolChoiceImageGeneration {
+				request.ToolChoice = llmprotocol.ToolChoice{}
+			}
 			request.Generation++
 		}
 	}
@@ -69,11 +110,11 @@ func filterToolsByPolicy(tools []llmprotocol.Tool, policy *config.ToolsPolicyCon
 	return filtered
 }
 
-func resolveDecisionToolsConfig(ctx *RequestContext) *config.ToolsPluginConfig {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+func resolveDecisionToolsConfig(cfg *config.RouterConfig, ctx *RequestContext) *config.ToolsPluginConfig {
+	if ctx == nil {
 		return nil
 	}
-	return ctx.VSRSelectedDecision.GetToolsConfig()
+	return config.ToolsPluginOf(requestPlugins(cfg, ctx))
 }
 
 // commitToolSelection publishes the mutated neutral request to the dispatch

@@ -80,3 +80,6 @@ global:
       store_backend: memory
       ttl_seconds: 3600
       max_responses: 1000
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

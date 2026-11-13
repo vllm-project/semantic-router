@@ -2,11 +2,21 @@
 
 import json
 import math
+import os
 import re
 from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
+from .api_registry import (
+    API_NAMES,
+    DEFAULT_LISTENER_APIS,
+    LISTENER_SCHEMAS,
+    SCHEMAS,
+    canonical_api,
+    upstream_schema,
+)
+from .api_registry import SETTINGS as API_SETTINGS
 from .models_systemone import SystemOneRule
 from .models_native import CalibrationArtifact
 from .models_predicates import NumericPredicate
@@ -25,6 +35,7 @@ from .models_application import (
 )
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -38,7 +49,11 @@ from pydantic import (
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import UnknownPolicy
 from .config_schema import routing_surface_catalog, surface_types
-from .context_bands import normalize_token_count, validate_context_band
+from .context_bands import (
+    normalize_token_count,
+    references_environment,
+    validate_context_band,
+)
 from .durations import parse_duration
 
 RoutingStrategy = Literal["priority", "confidence"]
@@ -86,27 +101,54 @@ class ListenerIdentity(BaseModel):
     )
 
 
-class ListenerSystemOne(BaseModel):
-    """Explicit public models for native System One inference."""
+class ListenerAPI(BaseModel):
+    """One API a listener serves: its schema (only for a versioned API, systemone), the models it accepts
+    (omitted: every model of its kind) and the API's own settings."""
 
-    model_config = ConfigDict(extra="forbid")
-    models: List[str] = Field(min_length=1)
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    schema_: Optional[str] = Field(
+        default=None,
+        alias="schema",
+        description="The version of a versioned API the listener speaks: for "
+        "systemone, vllm-sr/5.0 (the default) or vllm-sr/4.0, which also "
+        "accepts the earlier contract's request forms.",
+    )
+    models: Optional[List[str]] = Field(
+        default=None,
+        description="The only request models this API accepts, by exact "
+        "'model' value; others are rejected with HTTP 403 model_not_allowed. "
+        "Omitted, every model of the API's kind.",
+    )
     max_deadline_ms: Optional[int] = Field(
         default=None,
         gt=0,
-        description="The longest this listener waits for a model it calls "
-        "directly, however long a request's options.deadline_ms asks for. "
-        "Omitted, 600000 (10 minutes).",
+        description="systemone: the longest this listener waits for a model it "
+        "calls directly, however long a request's options.deadline_ms asks "
+        "for. Omitted, 600000 (10 minutes).",
     )
 
     @field_validator("models")
     @classmethod
     def exact_model_names(cls, names):
+        if names is None:
+            return names
+        if not names:
+            raise ValueError(
+                "models lists no model; omit it to accept every model of the API"
+            )
         if any(not name or name != name.strip() for name in names):
-            raise ValueError("systemone.models requires exact non-empty public names")
+            raise ValueError("models requires exact non-empty model names")
         if len(set(names)) != len(names):
-            raise ValueError("systemone.models must not contain duplicate names")
+            raise ValueError("models must not contain duplicate names")
         return names
+
+
+# Listener fields apis replaced, and what replaces them.
+REMOVED_LISTENER_FIELDS = {
+    "models": "apis: {chat_completions: {models: [...]}, responses: {models: [...]}, messages: {models: [...]}, images: {models: [...]}}",
+    "systemone": "apis: {systemone: {schema: vllm-sr/4.0, models: [...], max_deadline_ms: ...}} next to the LLM APIs it serves",
+}
 
 
 class Listener(BaseModel):
@@ -123,17 +165,15 @@ class Listener(BaseModel):
         "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
         "'api-key: <key>'; other requests are rejected with HTTP 401.",
     )
-    models: Optional[List[str]] = Field(
+    apis: Optional[Dict[str, ListenerAPI]] = Field(
         default=None,
-        description="The only request models this listener accepts, by exact "
-        "'model' value; other models are rejected with HTTP 403 "
-        "model_not_allowed and /v1/models lists only these. Empty accepts "
-        "every model. Standalone mode enforces it; --gateway extproc rejects it.",
-    )
-    systemone: Optional[ListenerSystemOne] = Field(
-        default=None,
-        description="Publish native System One inference for these exact public "
-        "model IDs. Omitted keeps the API private; Chat model access is unchanged.",
+        description="The APIs this listener serves, by API name: "
+        "chat_completions, responses, messages, images and systemone (openai "
+        "and anthropic are aliases of chat_completions and messages). Other "
+        "API paths answer 404. Omitted, the listener serves chat_completions, "
+        "responses, messages and images, and not systemone. A model "
+        "allow-list is enforced in standalone mode; --gateway extproc rejects it. "
+        "Standalone mode serves systemone; --gateway extproc rejects it.",
     )
     tls: Optional[ListenerTLS] = Field(
         default=None,
@@ -144,6 +184,74 @@ class Listener(BaseModel):
         default=None,
         description="The identity sources this listener trusts; by default none.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_removed_fields(cls, data):
+        if isinstance(data, dict):
+            for field, becomes in REMOVED_LISTENER_FIELDS.items():
+                if field in data:
+                    raise ValueError(
+                        f"{field} is removed; run `vllm-sr config migrate` ({becomes})"
+                    )
+        return data
+
+    @field_validator("apis")
+    @classmethod
+    def resolve_apis(cls, apis):
+        """Each API by its name, an alias read as its API; one API named twice, or an entry the API does not
+        take, is refused."""
+        if apis is None:
+            return apis
+        if not apis:
+            raise ValueError(
+                "apis names no API; name the APIs the listener serves, or omit apis to serve "
+                "chat_completions, responses, messages and images"
+            )
+        resolved: dict[str, ListenerAPI] = {}
+        named: dict[str, str] = {}
+        for key in sorted(apis):
+            name = canonical_api(key)
+            if name in named:
+                first, second = named[name], key
+                if first == name:
+                    first, second = second, first
+                raise ValueError(
+                    f"{first} and {second} name the same API, {name}; keep one ({first} is an alias of {name})"
+                )
+            entry = apis[key]
+            if entry.schema_ is not None:
+                schemas = LISTENER_SCHEMAS.get(name)
+                if schemas is None:
+                    raise ValueError(
+                        f"apis.{key}.schema: api {name} has one schema, {SCHEMAS[name][0]}, so a listener names none"
+                    )
+                if entry.schema_ not in schemas:
+                    raise ValueError(
+                        f"apis.{key}.schema: a listener serves api {name} in {' or '.join(schemas)}, not {entry.schema_!r}"
+                    )
+            if (
+                entry.max_deadline_ms is not None
+                and "max_deadline_ms" not in API_SETTINGS.get(name, ())
+            ):
+                raise ValueError(
+                    f"apis.{key}.max_deadline_ms: the {name} API takes no max_deadline_ms setting"
+                )
+            named[name] = key
+            resolved[name] = entry
+        return resolved
+
+    def served_apis(self) -> tuple[str, ...]:
+        """The APIs the listener serves, by name."""
+        if self.apis is None:
+            return DEFAULT_LISTENER_APIS
+        return tuple(name for name in API_NAMES if name in self.apis)
+
+    def systemone_models(self) -> Optional[List[str]]:
+        """The models the listener's systemone API names; None when it serves systemone for every model, or
+        serves no systemone."""
+        entry = (self.apis or {}).get("systemone")
+        return None if entry is None else entry.models
 
 
 class KeywordSignal(BaseModel):
@@ -605,7 +713,16 @@ class ResponseCachePluginConfig(BaseModel):
     revision: Optional[ResponseCacheRevisionConfig] = None
 
 
-CompressionTokenLimit = Literal["auto"] | int
+def _environment_reference(value: str) -> str:
+    if not references_environment(value):
+        raise ValueError("must reference the environment")
+    return value
+
+
+# The Router expands a reference before it decodes a number-or-auto field, so a
+# reference can stand for "auto" or a count there.
+EnvironmentReference = Annotated[str, AfterValidator(_environment_reference)]
+CompressionTokenLimit = Literal["auto"] | int | EnvironmentReference
 
 
 class ContextBudgetConfig(BaseModel):
@@ -849,9 +966,19 @@ class PromptCachePluginConfig(BaseModel):
 
 
 class FastResponsePluginConfig(BaseModel):
-    """Configuration for fast_response plugin."""
+    """Configuration for fast_response plugin.
 
-    message: str
+    enabled: false turns off the fast_response a decision inherits.
+    """
+
+    enabled: bool = True
+    message: Optional[str] = None
+
+    @model_validator(mode="after")
+    def message_when_enabled(self):
+        if self.enabled and self.message is None:
+            raise ValueError("message is required")
+        return self
 
 
 class RequestParamsPluginConfig(BaseModel):
@@ -859,11 +986,23 @@ class RequestParamsPluginConfig(BaseModel):
 
     blocked_params: Optional[List[str]] = None
     default_max_tokens: Optional[
-        Annotated[int, Field(ge=1, strict=True)] | Literal["auto"]
+        Annotated[int, Field(ge=1, strict=True)]
+        | Literal["auto"]
+        | EnvironmentReference
     ] = None
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
-    strip_unknown: Optional[bool] = None
+
+    @field_validator("blocked_params")
+    @classmethod
+    def keep_stream(cls, names: Optional[List[str]]) -> Optional[List[str]]:
+        # Mirrors the Router's ValidateRequestParamsPluginConfig.
+        if any(name.strip() == "stream" for name in names or []):
+            raise ValueError(
+                "blocked_params cannot include stream: the Router streams "
+                "the answer when the client asks for a stream"
+            )
+        return names
 
 
 ResponseGuardAction = Literal["block", "annotate", "none"]
@@ -890,12 +1029,20 @@ class ResponseGuardPluginConfig(BaseModel):
 
     Each rule reads named signals over the answer (and the request); a rule
     whose response-stage signal could not be read takes on_unknown.
+    enabled: false turns off the guard a decision inherits.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    rules: List[ResponseGuardRule] = Field(min_length=1)
+    enabled: bool = True
+    rules: List[ResponseGuardRule] = Field(default_factory=list)
     on_unknown: Optional[ResponseGuardAction] = None
+
+    @model_validator(mode="after")
+    def rules_when_enabled(self):
+        if self.enabled and not self.rules:
+            raise ValueError("rules: at least one rule is required")
+        return self
 
 
 class ToolsPolicyConfig(BaseModel):
@@ -1466,6 +1613,42 @@ class DecisionAction(BaseModel):
         return self
 
 
+# The retry_on names Envoy documents, HTTP then gRPC, as the Router's
+# config.RetryOnConditions lists them. Envoy and the standalone gateway both
+# ignore a name they do not know, so a typo would turn its retries off.
+RETRY_ON_CONDITIONS = (
+    "5xx",
+    "gateway-error",
+    "reset",
+    "reset-before-request",
+    "connect-failure",
+    "envoy-ratelimited",
+    "retriable-4xx",
+    "refused-stream",
+    "retriable-status-codes",
+    "retriable-headers",
+    "http3-post-connect-failure",
+    "cancelled",
+    "deadline-exceeded",
+    "internal",
+    "resource-exhausted",
+    "unavailable",
+)
+
+
+def _known_retry_on(value: str) -> str:
+    for raw in value.split(","):
+        token = raw.strip()
+        if token and token not in RETRY_ON_CONDITIONS:
+            raise ValueError(
+                f"has unknown condition {token!r}; expected any of "
+                + ", ".join(RETRY_ON_CONDITIONS)
+            )
+    return value
+
+
+RetryOn = Annotated[str, AfterValidator(_known_retry_on)]
+
 # Decision reliability fields Envoy cannot apply to one request.
 DECISION_RELIABILITY_NATIVE_ONLY = (
     "idle_timeout",
@@ -1492,7 +1675,7 @@ class DecisionReliability(BaseModel):
     idle_timeout: Optional[str] = None
     first_byte_timeout: Optional[str] = None
     retry_count: Optional[int] = Field(default=None, ge=0, le=5)
-    retry_on: Optional[str] = None
+    retry_on: Optional[RetryOn] = None
     retriable_status_codes: Optional[List[Annotated[int, Field(ge=100, le=599)]]] = None
     retry_back_off_base: Optional[str] = None
     retry_back_off_max: Optional[str] = None
@@ -1587,12 +1770,97 @@ class FallbackCircuitBreaker(BaseModel):
     half_open_probes: Optional[int] = Field(default=None, ge=0)
 
 
+# Names forward_request_headers may not list, beside the credential carriers
+# above, a backend's own auth header and the identity names
+# global.services.authz.identity sets, which the Router checks. Keep in step
+# with validateForwardRequestHeaders in the Router's pkg/config.
+FORWARD_CREDENTIAL_HEADERS = SHADOW_CREDENTIAL_HEADERS | {
+    "ocp-apim-subscription-key",
+    "api-subscription-key",
+    "x-user-cloudflare-workers-ai-key",
+}
+FORWARD_FRAMING_HEADERS = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+        "host",
+        "content-length",
+        "content-type",
+        "content-encoding",
+        "accept",
+        "accept-encoding",
+        "expect",
+    }
+)
+_HEADER_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
+
+
+def _forwardable_request_headers(names: list[str]) -> list[str]:
+    seen: set[str] = set()
+    for name in names:
+        stripped = name.strip()
+        lower = stripped.lower()
+        if not stripped:
+            raise ValueError("forward_request_headers entries cannot be empty")
+        if stripped.startswith(":"):
+            raise ValueError(
+                f"forward_request_headers cannot include pseudo-header {stripped!r}"
+            )
+        if not _HEADER_NAME.fullmatch(stripped):
+            raise ValueError(
+                f"forward_request_headers lists {stripped!r}, which is not an "
+                "HTTP header name"
+            )
+        if lower in FORWARD_CREDENTIAL_HEADERS:
+            raise ValueError(
+                "forward_request_headers cannot include credential header "
+                f"{stripped!r}"
+            )
+        if lower in FORWARD_FRAMING_HEADERS or lower.startswith("proxy-"):
+            raise ValueError(
+                f"forward_request_headers cannot include {stripped!r}: the Router "
+                "sets the framing and body headers of its own request"
+            )
+        if lower.startswith(("x-vsr-", "x-envoy-")):
+            raise ValueError(
+                f"forward_request_headers cannot include {stripped!r}: x-vsr- and "
+                "x-envoy- headers belong to the Router and Envoy"
+            )
+        if lower.startswith("x-authz-"):
+            raise ValueError(
+                f"forward_request_headers cannot include identity header "
+                f"{stripped!r}, which the Router keeps from upstreams"
+            )
+        if lower in seen:
+            raise ValueError(f"forward_request_headers lists {stripped!r} twice")
+        seen.add(lower)
+    return names
+
+
 class FallbackPolicy(FallbackOverride):
     """A recipe's cross-model fallback policy (routing.fallback): the
-    decision fields plus the version and the per-backend circuit breaker."""
+    decision fields plus the version, the per-backend circuit breaker and
+    the client request headers a fallback attempt the Router sends itself
+    copies."""
 
     version: Optional[Literal[0, 1]] = None
     circuit_breaker: Optional[FallbackCircuitBreaker] = None
+    forward_request_headers: Optional[List[str]] = None
+
+    @field_validator("forward_request_headers")
+    @classmethod
+    def _forwardable(cls, names: Optional[List[str]]) -> Optional[List[str]]:
+        return None if names is None else _forwardable_request_headers(names)
+
+
+class CandidateIteration(BaseModel):
+    """A decision's candidate iteration; the CLI checks only its models."""
+
+    models: List[ModelRef] = Field(default_factory=list)
 
 
 class Decision(BaseModel):
@@ -1611,6 +1879,7 @@ class Decision(BaseModel):
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(default_factory=list, alias="modelRefs")
+    candidateIterations: List[CandidateIteration] = Field(default_factory=list)
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
     reliability: Optional[DecisionReliability] = None
@@ -1709,7 +1978,7 @@ class ProviderReliability(BaseModel):
 
     lb_policy: Literal["round_robin", "least_request"] = "round_robin"
     retry_count: int = Field(default=0, ge=0, le=5)
-    retry_on: str = "connect-failure,refused-stream"
+    retry_on: RetryOn = "connect-failure,refused-stream"
     consecutive_5xx: int = Field(default=0, ge=0)
     base_ejection_time: str = "30s"
     max_ejection_percent: int = Field(default=50, ge=0, le=100)
@@ -1766,6 +2035,42 @@ class ProviderReliability(BaseModel):
         if parse_duration(self.retry_back_off_max) < base:
             raise ValueError("retry_back_off_max must not be below retry_back_off_base")
         return self
+
+
+TOKENIZER_BUILTINS = ("o200k_base", "cl100k_base")
+_TOKENIZER_HUB_REPO = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)?$"
+)
+# Each part of a revision starts with a letter or digit, so none climbs out of
+# the Hugging Face cache, which keeps a revision under its own name.
+_TOKENIZER_HUB_REVISION = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9._+-]*(/[A-Za-z0-9][A-Za-z0-9._+-]*)*$"
+)
+
+
+def validate_tokenizer_spec(value: Optional[str]) -> Optional[str]:
+    """A tokenizer the Router counts prompts with: a built-in encoding, a
+    tokenizer.json path or a Hugging Face repo id, as the Router reads it."""
+    if value is None:
+        return value
+    spec = value.strip()
+    if not spec:
+        raise ValueError("a tokenizer cannot be empty")
+    if (
+        spec in TOKENIZER_BUILTINS
+        or spec.startswith(("/", "./", "../"))
+        or spec.endswith(".json")
+    ):
+        return value
+    repo, _, revision = spec.partition("@")
+    if not _TOKENIZER_HUB_REPO.match(repo) or (
+        revision and not _TOKENIZER_HUB_REVISION.match(revision)
+    ):
+        raise ValueError(
+            "a tokenizer is a built-in encoding (o200k_base, cl100k_base), "
+            "a tokenizer.json path or a Hugging Face repo id"
+        )
+    return value
 
 
 class Reasoning(BaseModel):
@@ -1930,6 +2235,12 @@ class EvaluationRecord(BaseModel):
     source: Optional[str] = None
     measured_at: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("measured_at", mode="before")
+    @classmethod
+    def normalize_measured_at(cls, value: Any) -> Any:
+        # YAML reads an unquoted 2026-09-09 as a date; the Router keeps its text.
+        return value.isoformat() if isinstance(value, date) else value
 
     @model_validator(mode="after")
     def validate_measurement(self):
@@ -2154,7 +2465,7 @@ class Model(ModelFacts):
     """A providers.models[] entry: its transport, and the facts routing reads
     about it."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: str
     catalog: Optional[str] = None
@@ -2164,8 +2475,55 @@ class Model(ModelFacts):
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
     reliability: Optional[ProviderReliability] = None
-    api_format: Optional[str] = None
+    api_format: Optional[str] = Field(
+        default=None,
+        description="The API the model's backends serve: chat_completions "
+        "(the default), responses, messages, images or systemone; openai and "
+        "anthropic are aliases of chat_completions and messages.",
+    )
+    schema_: Optional[str] = Field(
+        default=None,
+        alias="schema",
+        description="The version of that API the backends speak; omitted, the "
+        "API's default (systemone/0.2 for systemone).",
+    )
     external_model_ids: Optional[Dict[str, str]] = None
+    unsupported_capabilities: Optional[List[str]] = Field(
+        default=None,
+        description="Request capabilities the model's backends reject, "
+        "sampling_min_p or sampling_logit_bias; the Router sends this model "
+        "requests without those fields.",
+    )
+    tokenizer: Optional[str] = Field(
+        default=None,
+        description="Counts the model's prompts for the context window check: "
+        "a Hugging Face repo id ([org/]name[@revision]), whose tokenizer.json "
+        "the Router downloads beside its models, a built-in encoding "
+        "(o200k_base, cl100k_base), or a path to a tokenizer.json. Omitted, it "
+        "is the repo the model comes from, if any; else "
+        "global.router.context_window.proxy_tokenizer counts.",
+    )
+
+    @field_validator("api_format")
+    @classmethod
+    def canonical_api_format(cls, value):
+        return None if value is None else canonical_api(value)
+
+    @field_validator("tokenizer")
+    @classmethod
+    def _tokenizer_spec(cls, value):
+        return validate_tokenizer_spec(value)
+
+    @model_validator(mode="after")
+    def validate_schema(self):
+        if self.schema_ is not None:
+            if self.deployment:
+                raise ValueError(
+                    "schema: a model on a deployment speaks that deployment's API; "
+                    "schema applies to a model its backend_refs reach"
+                )
+            upstream_schema(self.api_format or "chat_completions", self.schema_)
+        return self
 
     def declares_facts(self) -> bool:
         return any(getattr(self, field) is not None for field in MODEL_FACT_FIELDS)
@@ -2211,11 +2569,44 @@ class BackendAuth(BaseModel):
     api_key_env: Optional[str] = None
 
 
+class BackendTLS(BaseModel):
+    """How Envoy and the Router verify an https backend, as a deployment's tls
+    block does: ca_file replaces the system roots, server_name the endpoint's
+    host, and cert_file with key_file present a client certificate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ca_file: Optional[str] = None
+    server_name: Optional[str] = None
+    cert_file: Optional[str] = None
+    key_file: Optional[str] = None
+    insecure_skip_verify: bool = False
+
+    @model_validator(mode="after")
+    def validate_shape(self):
+        if self.insecure_skip_verify:
+            raise ValueError(
+                "tls.insecure_skip_verify applies to global.model_catalog.deployments; "
+                "Envoy and the Router always verify a chat backend, so name its CA "
+                "in tls.ca_file"
+            )
+        for field in ("ca_file", "cert_file", "key_file"):
+            path = getattr(self, field)
+            if path and not os.path.isabs(path):
+                raise ValueError(f"tls.{field} must be an absolute path")
+        if bool(self.cert_file) != bool(self.key_file):
+            raise ValueError("tls.cert_file and tls.key_file go together")
+        server_name = self.server_name or ""
+        if server_name != server_name.strip() or any(c in server_name for c in "/: "):
+            raise ValueError("tls.server_name must be a host name")
+        return self
+
+
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs.
 
     A backend connects as a deployment does: endpoint (host:port with protocol,
-    or a full URL), auth and headers.
+    or a full URL), auth, headers and tls.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -2230,6 +2621,7 @@ class BackendRef(BaseModel):
     api_version: Optional[str] = None
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
+    tls: Optional[BackendTLS] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -2254,10 +2646,24 @@ class BackendRef(BaseModel):
         if self.api_key:
             return self.api_key
         if self.auth is not None and self.auth.api_key_env:
-            import os
-
             return os.getenv(self.auth.api_key_env)
         return None
+
+
+class ProviderDefaultsTLS(BaseModel):
+    """The CA bundle of every https backend whose own tls names none. Like a
+    backend's ca_file it replaces the system roots."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ca_file: str = Field(min_length=1)
+
+    @field_validator("ca_file")
+    @classmethod
+    def absolute_path(cls, value: str) -> str:
+        if not os.path.isabs(value):
+            raise ValueError("tls.ca_file must be an absolute path")
+        return value
 
 
 class ProviderDefaults(BaseModel):
@@ -2267,6 +2673,7 @@ class ProviderDefaults(BaseModel):
 
     model: Optional[str] = None
     reasoning_effort: Optional[str] = None
+    tls: Optional[ProviderDefaultsTLS] = None
 
 
 class Providers(BaseModel):
@@ -2390,6 +2797,19 @@ class UserConfig(BaseModel):
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
+
+    @field_validator("listeners")
+    @classmethod
+    def unique_listener_names(cls, listeners):
+        names = set()
+        for listener in listeners:
+            if listener.name in names:
+                raise ValueError(
+                    f"listener '{listener.name}' is defined twice; "
+                    "give each listener its own name"
+                )
+            names.add(listener.name)
+        return listeners
 
     @field_validator("global_")
     @classmethod

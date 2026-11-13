@@ -13,7 +13,7 @@ translation:
 Router 早已用同一个模型家族，即 System One 决策模型，回答大多数路由问题。但它的配置描述的仍是一套更早的系统：每个信号都有自己的小型专用模型，或依赖嵌入相似度技巧。v0.5 让决策模型成为一等模型：
 
 - **信号分为三层：** 用于你自己编写问题的 `systemone` 原语；十一个应用信号，每个都编译成一个 `systemone` 问题；以及七个确定性的启发式信号。
-- **处处零样本。** 每个 System One 模型都能零样本回答它支持的每个问题；训练过的适配器和校准阈值是按家族进行的优化。各模型能回答的问题类型不同：Decision 1.0、2.0 和 3.0 不返回 span，vela3-fast 不回答 score 问题。问题解析到不能回答其类型的部署时，配置加载失败（`span_required`、`question_type_unsupported`）。
+- **处处零样本。** 每个 System One 模型都能零样本回答它支持的每个问题；训练过的适配器和校准阈值是按家族进行的优化。各模型能回答的问题类型不同：Decision 1.0、2.0 和 3.0 不返回 span，vela3-fast 不回答 score 问题。问题解析到不能回答其类型的部署时，配置加载失败：规则报 `span_required` 或 `question_type_unsupported`，评审、`systemone` 选择器或 escalate 检查报一条指出该部署及其能回答的类型的消息。
 - **相似度只有一个 `match` 块**，包含可选的嵌入或 BM25 `recall` 阶段，以及可选的 System One `judge` 阶段。每个评审对候选数都有硬上限，溢出只会截断，绝不会报错。
 - **嵌入只用于召回，并按需启动。** 没有任何决策路径使用嵌入。
 - **调用 System One 只有一种方式：** 标准请求，或一组命名标准请求组成的批量请求。
@@ -39,7 +39,7 @@ Router 早已用同一个模型家族，即 System One 决策模型，回答大�
 - **`vllm-sr config migrate` 需要一个 Router**（二进制或镜像），`--offline` 已移除。采用 config v0.3 之前布局的配置，一次运行即可迁移到 v0.5。
 - **Looper 的名称和端点：** `global.integrations.looper.*.model_names` 在加载时会被拒绝；migrate 会把这些名称写成一个入口，指向它写出的配方：默认配方中只保留运行该算法的决策。`global.integrations.looper.endpoint` 会被拒绝，migrate 会删除它：Router 在进程内发起 Looper 的模型调用。Dashboard 去掉了 External Models 卡片，它的 Looper 卡片只编辑超时和请求头；operator 拒绝 `external_models`。
 - **模型的输出事实是 `capabilities` 和 `modalities`。** 模型的 `modality` 关键词（`ar`、`diffusion`、`omni`）、基于 `DIFFUSION` 或 `BOTH` 的图片路由、`image_gen` 插件以及音频嵌入规则都已移除；migrate 能改写的会改写，会删除没有决策能执行的路由，其余的会指出来。
-- **System One 批量形式只使用 `states`。** 批量请求体在 `states` 下携带命名的标准请求，没有顶层 `state`、`questions`、`images` 或 `videos`；混用两种形式的请求体，或 `states` 为空的请求体，会以 `invalid_request` 被拒绝。批量响应没有顶层 `answers`，其 `usage` 统计所有条目。见 [API](../system-one/api)。
+- **System One 批量形式只使用 `states`。** 批量请求体在 `states` 下携带命名的标准请求，没有顶层 `state`、`questions`、`images` 或 `videos`；混用两种形式的请求体，或 `states` 为空的请求体，会以 `invalid_request` 被拒绝。批量响应没有顶层 `answers`，其 `usage` 统计所有条目。见 [API](../system-one/use/api)。
 - **模型运行时契约 4.0.0。** 本版本的 Router 拒绝任何其他契约的模型运行时；Router 和它的运行时来自同一个版本。
 - **每个请求阶段一次 System One 调用，远程部署也是如此。** Router 不再把一个阶段发往远程 System One API 的问题拆成每次最多八段文本的多次调用。你自己运行的 System One API 必须接受条目数与该阶段所问文本数相同的批量请求，每个评审最多 `judge.max_candidates` 条。
 - **Kubernetes operator 的 `SemanticRouter` 资源采用新结构。** `spec.config.routing` 会被拒绝；它的字段改为 `spec.config.recipes`（每个配方的信号、投影、决策、模型绑定和插件），以及 `spec.config.entrypoints`、`spec.config.plugins` 和 `spec.config.models`（`providers.models[]` 的事实）。
@@ -49,7 +49,7 @@ Router 早已用同一个模型家族，即 System One 决策模型，回答大�
 ## 预期的行为变化 {#behavior-to-expect}
 
 - **模型没有给出答案的 `jailbreak` 和 `pii` 规则不匹配。** 默认的 `on_unknown` 与以前一样是 `no_match`：决策模型宕机时，防护会放行流量。`on_unknown: match` 是失败关闭的显式选择，migrate 会为早期版本的 `on_error: block` 写入它。模型没能读到的文本仍按攻击或个人数据计入。
-- **原来属于其他模型的阈值已重新拟合。** 没有 `predicate` 的规则使用回答模型的校准阈值，否则使用 0.5 并给出 `uncalibrated_preset` 警告。
+- **原来属于其他模型的阈值已重新拟合。** 没有 `predicate` 的 domain、用户反馈、modality 或 PII 规则，以及读取其预设正向选项（`FACT_CHECK_NEEDED`、`unsafe`、`refusal`、`jailbreak`）的规则，使用回答模型的校准阈值，否则使用 0.5 并给出 `uncalibrated_preset` 警告。其他没有 `predicate` 的规则以模型自己的选择为准，hallucination 规则以模型自己的 span 阈值为准。
 - **能拒绝或改写回答的 `response_guard` 会扣住流式回答。** 对于守卫会拦截或写入说明的决策，Router 会缓冲它的流，直到守卫读完整个回答，再发送原有事件，或以该协议的流错误形式发送拒绝消息。首 token 时间只在这些决策上增加，被扣住的回答上限为 64 MiB。只做标注或只记录的守卫保持真正的流式传输。
 - **需要 span 的规则必须解析到支持 span 的部署**，否则配置以 `span_required` 失败。默认决策模型 vela3-fast 能返回 span。
 - **RAG 相关性和工具选择由决策模型评判**，语义缓存命中由它的 `same_request` 问题确认。响应缓存的语义匹配默认使用嵌入召回（`top_k: 3`，`min_similarity: 0.8`），再由 `same_request` 确认（`min_score: 0.8`）；`mode: exact` 不变。
@@ -82,7 +82,7 @@ Router 早已用同一个模型家族，即 System One 决策模型，回答大�
 
 客户端发送的其他 `x-vsr-*` 头，以及提供方返回的每个 `x-vsr-*` 头，都会被 Router 丢弃。Router 从身份验证器读取的是 `x-vsr-delegated-credential`：启用 `global.services.authz.delegated_credential` 时，它和身份请求头一样被信任；任何上游都收不到这个请求头，只有委托上游会收到它的值。
 
-[响应头参考](../troubleshooting/vsr-headers)列出了注册表定义的每个响应头。
+[响应头参考](../api/headers)列出了注册表定义的每个响应头。
 
 ## 已移除的测试配置 {#removed-test-profiles}
 

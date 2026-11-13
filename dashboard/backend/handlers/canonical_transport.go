@@ -45,7 +45,18 @@ func decodeYAMLTaggedBody[T any](reader io.Reader) (T, error) {
 	if err != nil {
 		return value, err
 	}
-	return decodeYAMLTaggedBytes[T](data)
+	return decodeConfigDocument[T](data)
+}
+
+// decodeConfigDocument decodes a whole config as the Router reads it, with
+// its renamed forms in their canonical form.
+func decodeConfigDocument[T any](data []byte) (T, error) {
+	canonical, err := routerconfig.CanonicalConfigBytes(data)
+	if err != nil {
+		var value T
+		return value, err
+	}
+	return decodeYAMLTaggedBytes[T](canonical)
 }
 
 func decodeYAMLTaggedBytes[T any](data []byte) (T, error) {
@@ -97,7 +108,7 @@ func readCanonicalConfigFile(configPath string) (*canonicalConfigTransport, erro
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := decodeYAMLTaggedBytes[canonicalConfigTransport](data)
+	cfg, err := decodeConfigDocument[canonicalConfigTransport](data)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +120,7 @@ func readSetupConfigFile(configPath string) (*setupConfigFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := decodeYAMLTaggedBytes[setupConfigFile](data)
+	cfg, err := decodeConfigDocument[setupConfigFile](data)
 	if err != nil {
 		return nil, err
 	}

@@ -23,6 +23,8 @@ CASES = (
     "removed-plugin-hallucination",
     "removed-field-masking-threshold",
     "invalid-value-system-prompt-mode",
+    "removed-field-request-params-strip-unknown",
+    "removed-field-request-params-strip-unknown-global",
 )
 
 
@@ -48,4 +50,17 @@ def test_parsing_refuses_a_removed_plugin_form(tmp_path):
         ConfigParseError,
         match="removed_plugin_type: plugin response_jailbreak was removed",
     ):
+        parse_user_config(str(path), log_summary=False)
+
+
+def test_strip_unknown_is_refused_in_global_and_recipe_plugins(tmp_path):
+    before = _golden("removed-field-request-params-strip-unknown-global", "before.yaml")
+    lines = removed_plugin_forms(yaml.safe_load(before))
+    assert [line.split(": ", 1)[0] for line in lines] == [
+        "recipes[default].plugins[0]",
+        "global.plugins[0]",
+    ]
+    path = tmp_path / "config.yaml"
+    path.write_text(before, encoding="utf-8")
+    with pytest.raises(ConfigParseError, match="vllm-sr config migrate"):
         parse_user_config(str(path), log_summary=False)

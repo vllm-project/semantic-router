@@ -33,3 +33,6 @@ recipes:
         priority: 100
         rules: {type: systemone, name: needs_tools}
         modelRefs: [{model: general}]
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

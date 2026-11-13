@@ -1,16 +1,22 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
+import json
 import os
 import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from cli.api_registry import served_path_regex
 from cli.catalog_provider_projection import project_provider_models_for_envoy
 from cli.config_contract import iter_routing_profiles
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.durations import envoy_duration
-from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
+from cli.envoy_backend_pool import (
+    default_backend_ca_file,
+    is_ip_address,
+    project_envoy_backend_group,
+)
 from cli.models import Model, UserConfig
 from cli.utils import get_logger
 
@@ -231,23 +237,46 @@ def generate_envoy_config_from_user_config(
                     "mode, and --gateway extproc does not terminate TLS; serve "
                     "with --gateway standalone or remove tls from the listener"
                 )
-            if getattr(listener, "models", None):
+            restricted = [
+                name
+                for name, entry in (listener.apis or {}).items()
+                if name != "systemone" and entry.models is not None
+            ]
+            if restricted:
                 raise ValueError(
-                    f"listener '{listener.name}': models is enforced in "
-                    "standalone mode, and the --gateway extproc Envoy listener "
-                    "does not enforce it; serve with --gateway standalone or "
-                    "remove models from the listener"
+                    f"listener '{listener.name}': apis.{restricted[0]}.models is "
+                    "enforced in standalone mode, and the --gateway extproc Envoy "
+                    "listener does not enforce it; serve with --gateway standalone "
+                    "or remove models from the listener's apis"
                 )
+            if "systemone" in (listener.apis or {}):
+                raise ValueError(
+                    f"listener '{listener.name}': apis.systemone is served in "
+                    "standalone mode, and the --gateway extproc Envoy listener "
+                    "does not serve the System One API; serve with --gateway "
+                    "standalone or remove systemone from the listener's apis"
+                )
+            gate = {}
+            if listener.apis is not None:
+                served = listener.served_apis()
+                gate = {
+                    "served_path_regex": served_path_regex(served),
+                    "unserved_body": json.dumps(
+                        {
+                            "detail": f"listener {json.dumps(listener.name)} does not serve "
+                            f"this path; it serves {', '.join(served)}"
+                        }
+                    ),
+                }
             listeners.append(
                 {
+                    **gate,
                     "name": listener.name,
                     "address": os.getenv(
                         ENVOY_CONTAINER_LISTENER_ADDRESS_ENV, listener.address
                     ),
                     "port": listener.port,
-                    "timeout": (
-                        listener.timeout if hasattr(listener, "timeout") else "300s"
-                    ),
+                    "timeout": envoy_duration(listener.timeout or "300s"),
                     "api_keys": (
                         list(listener.api_keys)
                         if getattr(listener, "api_keys", None)
@@ -272,8 +301,9 @@ def generate_envoy_config_from_user_config(
     # Extract models and their endpoints
     # Group endpoints by model for cluster creation
     models = []
+    default_ca_file = default_backend_ca_file(user_config)
     for model in project_provider_models_for_envoy(user_config):
-        backend_group = project_envoy_backend_group(model)
+        backend_group = project_envoy_backend_group(model, default_ca_file)
         endpoints = list(backend_group.endpoints)
         has_https = backend_group.has_https
         uses_dns = backend_group.uses_dns
@@ -311,6 +341,7 @@ def generate_envoy_config_from_user_config(
                 "endpoints": endpoints,
                 "cluster_type": cluster_type,
                 "has_https": has_https,
+                "tls": backend_group.tls,
                 "path_prefix": path_prefix,
                 "route_request_headers": route_request_headers,
                 "auto_host_rewrite": auto_host_rewrite,

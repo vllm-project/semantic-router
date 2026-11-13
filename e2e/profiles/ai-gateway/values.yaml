@@ -153,7 +153,6 @@ config:
                   - presence_penalty
                 max_tokens_limit: 64
                 max_n: 1
-                strip_unknown: true
             - type: header_mutation
               configuration:
                 add:
@@ -738,10 +737,55 @@ config:
             input:
               previous_turns: 4
     - name: e2e-domain
-      description: Domain classification using the unchanged baseline labels and model selections.
+      description: Domain routing on the baseline labels and model selections, answered by the System One fixture.
       strategy: priority
       signals:
-        domains: *baseline_domain_signals
+        # The same labels as the default recipe, asked of the fixture, so the
+        # domain-routing case pins each route by its marker instead of
+        # measuring a classifier.
+        domains:
+          - name: business
+            description: Business, corporate strategy, management, finance, marketing
+            deployment: fake-systemone
+          - name: law
+            description: Legal principles, case law, statutory interpretation, legal procedures
+            deployment: fake-systemone
+          - name: psychology
+            description: Cognitive processes, behavioral patterns, mental health, developmental psychology
+            deployment: fake-systemone
+          - name: biology
+            description: Molecular biology, genetics, cell biology, ecology, evolution, anatomy
+            deployment: fake-systemone
+          - name: chemistry
+            description: Chemical reactions, molecular structures, laboratory techniques
+            deployment: fake-systemone
+          - name: history
+            description: Historical events, time periods, cultures, civilizations
+            deployment: fake-systemone
+          - name: health
+            description: Anatomy, physiology, diseases, treatments, preventive care, nutrition
+            deployment: fake-systemone
+          - name: economics
+            description: Microeconomics, macroeconomics, financial markets, monetary policy, trade
+            deployment: fake-systemone
+          - name: math
+            description: Mathematics, algebra, calculus, geometry, statistics
+            deployment: fake-systemone
+          - name: physics
+            description: Physical laws, mechanics, thermodynamics, electromagnetism, quantum physics
+            deployment: fake-systemone
+          - name: computer science
+            description: Algorithms, data structures, programming, software engineering
+            deployment: fake-systemone
+          - name: philosophy
+            description: Philosophical traditions, ethics, logic, metaphysics, epistemology
+            deployment: fake-systemone
+          - name: engineering
+            description: Engineering disciplines, design, problem-solving, systems
+            deployment: fake-systemone
+          - name: other
+            description: General knowledge and miscellaneous topics
+            deployment: fake-systemone
       decisions:
         - !!merge <<: *business_decision
           plugins: []
@@ -915,6 +959,15 @@ config:
   global:
     model_catalog:
       deployments:
+        # provider-mocker's embedding fixture (see its README) stands in for
+        # the embedding model, so the Router downloads none.
+        fixture-embedding:
+          provider: openai_embeddings
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1
+          model: e2e/fixture-embedding
+          timeout_ms: 5000
+          capabilities:
+            dimensions: 256
         # provider-mocker's System One fixture answers the jailbreak, PII and
         # turn_relation rules, so the shared cases are pinned by their markers
         # (tools/test/services/provider-mocker/README.md).
@@ -922,6 +975,7 @@ config:
           provider: systemone
           endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
           model: e2e/fake-systemone
+          schema: vllm-sr/4.0
           timeout_ms: 5000
           capabilities:
             question_types: [choice, noul, span]
@@ -929,6 +983,9 @@ config:
         jailbreak: fake-systemone
         pii: fake-systemone
         turn_relation: fake-systemone
+        domain: fake-systemone
+      embeddings:
+        default: {deployment: fixture-embedding}
     router:
       strategy: priority
     services:

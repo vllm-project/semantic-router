@@ -8,7 +8,11 @@ from functools import lru_cache
 from typing import Any
 from urllib.parse import urlsplit
 
-from cli.envoy_backend_pool import project_envoy_backend_group
+from cli.api_registry import ALIASES
+from cli.envoy_backend_pool import (
+    default_backend_ca_file,
+    project_envoy_backend_group,
+)
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.model_catalog_types import ModelCatalogError
 from cli.models import BackendAuth, BackendRef, Model, UserConfig
@@ -26,9 +30,9 @@ class _CatalogProviderIndex:
 
 
 _API_FORMAT_TO_PROTOCOL = {
-    "openai": "openai/chat-completions@1",
+    "chat_completions": "openai/chat-completions@1",
     "responses": "openai/responses@1",
-    "anthropic": "anthropic/messages@1",
+    "messages": "anthropic/messages@1",
     "images": "openai/images@1",
     "systemone": "vllm-sr/systemone@1",
 }
@@ -111,9 +115,10 @@ def validate_provider_model_configuration(
         user_config,
         allow_backendless_physical=allow_backendless_physical,
     )
+    default_ca_file = default_backend_ca_file(user_config)
     for model in projected_models:
         try:
-            project_envoy_backend_group(model)
+            project_envoy_backend_group(model, default_ca_file)
         except ValueError as backend_error:
             raise CatalogProviderProjectionError(str(backend_error)) from backend_error
 
@@ -505,11 +510,12 @@ def _validate_backend_url(backend: BackendRef, path: str) -> None:
 
 
 def _protocol_for_api_format(api_format: str, path: str) -> str:
-    protocol = _API_FORMAT_TO_PROTOCOL.get(api_format)
+    protocol = _API_FORMAT_TO_PROTOCOL.get(ALIASES.get(api_format, api_format))
     if protocol is None:
         raise CatalogProviderProjectionError(
-            f"{path}.api_format {api_format!r} is unsupported; use openai, "
-            "responses, anthropic, images, or systemone"
+            f"{path}.api_format {api_format!r} is unsupported; use chat_completions, "
+            "responses, messages, images or systemone (openai and anthropic are "
+            "aliases of chat_completions and messages)"
         )
     return protocol
 

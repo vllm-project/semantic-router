@@ -138,7 +138,7 @@ probabilities:
 | `span` | Where in the text is each label? | The most probable span of a label |
 
 A question is written in plain language, with a description for each option,
-so a model answers it without training. [System One concepts](../system-one/concepts)
+so a model answers it without training. [System One concepts](../system-one/get-started/concepts)
 covers the state, the stages and the limits.
 
 ## 2. Motivation
@@ -363,7 +363,7 @@ flowchart TB
 
 A decision's rules cannot read a response-stage rule, because a decision
 routes the request before an answer exists; a configuration that tries fails
-to load. [How the Router uses System One](../system-one/router) shows the call
+to load. [How the Router uses System One](../system-one/use/router) shows the call
 each feature makes.
 
 ## 5. Module design
@@ -413,7 +413,7 @@ adds the last turns (`previous_turns`, four by default); and `jailbreak`,
 for. The response-stage presets read the answer, and `hallucination` its
 grounding context. The judges read the request and each candidate. These parts
 are what a question to a remote deployment sends
-([What leaves the host](../system-one/deployments#what-leaves-the-host)).
+([What leaves the host](../system-one/deploy/deployments#what-leaves-the-host)).
 
 **Trained bindings.** Three model families have trained forms of some presets,
 and the Router asks a family in its trained form when one exists:
@@ -451,7 +451,7 @@ these are jailbreak 0.88, domain 0.41, PII 0.18, fact check 0.9999, feedback
 0.47, harm 0.52 and modality 0.63. Response-stage rules, and every other
 model, use 0.5, and the configuration load reports `uncalibrated_preset`,
 naming the rule. No model inherits another model's thresholds. The
-[support matrix](../system-one/reference#support-matrix) shows, for each preset
+[support matrix](../system-one/reference/support-matrix#support-matrix) shows, for each preset
 and family, whether answers are trained and calibrated, trained, zero-shot or
 impossible.
 
@@ -477,7 +477,7 @@ recipes:
             history: false                # the earlier user turns
             previous_turns: 0             # the last N turns, user and assistant (0 to 32)
             tool_results: false
-            image: false                  # the current turn's images
+            image: false                  # every image the request carries
           coverage: truncate              # truncate (the default) or full, read in windows
           timeout_ms: 1000
 ```
@@ -672,8 +672,8 @@ global:
 
 #### Media inputs
 
-A rule reads the current turn's images with `input.image`, and its audio and
-video with `input.audio` and `input.video`. The answering deployment must
+A rule reads the request's images with `input.image`, and the current turn's
+audio and video with `input.audio` and `input.video`. The answering deployment must
 declare that it reads the medium, or the load fails with
 `input_modality_unsupported`. The d3 family and the Vela 3.0 d3 sizes read
 images and video; vela3-fast, Vela 2.0 and the Decision models read text. The
@@ -685,7 +685,7 @@ its model card when the questions are prepared.
 ### 5.3 How the Router calls System One
 
 Every System One question the Router asks goes through one client, in one of
-two forms of [the API](../system-one/api). The forms never mix.
+two forms of [the API](../system-one/use/api). The forms never mix.
 
 **A standard request** is one state and its questions:
 
@@ -1413,7 +1413,7 @@ flowchart LR
   vela3-lite on a GPU. Every built-in artifact is pinned to an exact Hugging
   Face revision, which the runtime downloads; an air-gapped cluster fetches
   the artifacts into the model volume first
-  ([Deploy the model runtime](../model-runtime/deploy)).
+  ([Deploy the model runtime](../model-runtime/deploy/connect-the-router)).
 - **Attached.** A `model_runtime` deployment with an `endpoint` attaches to a
   runtime the Router does not manage, such as a GPU server shared by several
   Routers. The Router reads the runtime's model card when it is up, and checks
@@ -1431,7 +1431,7 @@ flowchart LR
   the state its preset reads ([5.1](#51-presets-canonical-zero-shot-questions)).
   With a remote decision model, that includes the assistant answer a
   `user_feedbacks` rule reads and, at the response stage, the model's
-  answers. The [deployments page](../system-one/deployments#what-leaves-the-host)
+  answers. The [deployments page](../system-one/deploy/deployments#what-leaves-the-host)
   lists the parts per preset. A remote model has no calibrated thresholds, so
   its presets use 0.5 with the `uncalibrated_preset` warning until a rule
   writes its own `predicate`.
@@ -2017,7 +2017,7 @@ and refuses `modality`.
 - The [release note](../release-notes/decision-model-first-class) covers the
   breaking changes, the behavior to expect, the header mapping and the deleted
   test profiles.
-- The [header reference](../troubleshooting/vsr-headers) and its trace-member
+- The [header reference](../api/headers) and its trace-member
   table are generated from the registry.
 
 ### 7.6 The agent skill

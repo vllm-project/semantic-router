@@ -8,7 +8,13 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import ValidationError
 
-from . import ollama_fixture, openrouter_fixture, vllm_fixture, workflow_chat
+from . import (
+    held_stream,
+    ollama_fixture,
+    openrouter_fixture,
+    vllm_fixture,
+    workflow_chat,
+)
 from .chat_request import ChatRequest, build_chat_content
 from .chat_wire import (
     build_chat_custom_tool_response,
@@ -241,15 +247,18 @@ async def _chat_reply(
             },
         )
 
+    chunks = generate_chat_stream(
+        req,
+        response,
+        content,
+        usage,
+        created_ts,
+        complete=is_complete,
+    )
+    if chat_contains(req, held_stream.MARKER):
+        chunks = held_stream.hold(request.headers.get(SESSION_HEADER, ""), chunks)
     return StreamingResponse(
-        generate_chat_stream(
-            req,
-            response,
-            content,
-            usage,
-            created_ts,
-            complete=is_complete,
-        ),
+        chunks,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

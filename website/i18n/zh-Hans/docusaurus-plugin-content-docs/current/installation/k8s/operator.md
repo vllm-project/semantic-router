@@ -129,7 +129,7 @@ spec:
 
 `spec.config.routing` 已移除；设置它的资源会被拒绝。
 
-其余 `spec.config` 字段是 Operator 对共享 Router 设置的 adapter，例如响应缓存、分类器、工具、可观测性和推理家族。它们会被转换为规范 `global` 和提供商段落。查阅 CRD 参考，不要把本地 `config.yaml` 中的字段复制到任意 CR 路径。
+其余 `spec.config` 字段是 Operator 对共享 Router 设置的 adapter，例如响应缓存、推理强度、API 和可观测性。它们会被转换为规范 `global` 和提供商段落。查阅 CRD 参考，不要把本地 `config.yaml` 中的字段复制到任意 CR 路径。
 
 ## 后端发现
 
@@ -250,6 +250,8 @@ spec:
 ```
 
 省略主机名可让 OpenShift 分配一个，或提供由你的 DNS 和证书配置覆盖的主机名。
+
+在独立模式下，Route 将客户端发送到 Router 的推理监听器，即 Service 端口 8801（`http-8801`），未设置 `servicePort` 的 `spec.ingress` 路径也是如此。使用 `spec.gateway.existingRef` 时，Router 不提供 HTTP 推理端口，请通过该 Gateway 访问。
 
 ## 密钥
 

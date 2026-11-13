@@ -11,16 +11,14 @@ import (
 )
 
 const (
-	// Conservative floors for the baseline kubernetes contract.
-	// These catch severe behavioral regressions without turning E2E into
-	// a model-benchmark gate.
-	minBaselineDomainClassificationAccuracy = 60.0
-	minBaselineSemanticCacheHitRate         = 40.0
-	minBaselinePIIDetectionRate             = 65.0
-	minBaselineJailbreakDetectionRate       = 70.0
-	minBaselineDecisionPriorityAccuracy     = 75.0
-	minBaselineDecisionFallbackAccuracy     = 85.0
-	minBaselineSequentialStressSuccessRate  = 95.0
+	// Floors for the baseline kubernetes contract. These cases run on
+	// provider-mocker fixtures with pinned answers, so every request must
+	// pass; the release benchmarks measure model quality.
+	minBaselineSemanticCacheHitRate     = 100.0
+	minBaselinePIIDetectionRate         = 100.0
+	minBaselineJailbreakDetectionRate   = 100.0
+	minBaselineDecisionPriorityAccuracy = 100.0
+	minBaselineDecisionFallbackAccuracy = 100.0
 	// Progressive stress requests wait out the gateway's deadline, so an
 	// unanswered request is a gateway or Router failure, not slow inference.
 	minBaselineProgressiveStressOverallRate = 100.0
@@ -51,14 +49,6 @@ type progressiveStressFloor struct {
 const baselineRouterContractProfile = "envoy-ai-gateway"
 
 var baselineAcceptanceContracts = map[string]acceptanceContract{
-	"domain-classify": applyFlatRateContract(flatRateContract{
-		actualKey:      "accuracy_rate",
-		minimumKey:     "minimum_accuracy_rate",
-		numeratorKey:   "correct_tests",
-		denominatorKey: "total_tests",
-		minimum:        minBaselineDomainClassificationAccuracy,
-		metricName:     "correct classifications",
-	}),
 	"semantic-cache": applyFlatRateContract(flatRateContract{
 		actualKey:      "hit_rate",
 		minimumKey:     "minimum_hit_rate",
@@ -98,14 +88,6 @@ var baselineAcceptanceContracts = map[string]acceptanceContract{
 		denominatorKey: "total_tests",
 		minimum:        minBaselineDecisionFallbackAccuracy,
 		metricName:     "correct fallback behaviors",
-	}),
-	"chat-completions-stress-request": applyFlatRateContract(flatRateContract{
-		actualKey:      "success_rate",
-		minimumKey:     "minimum_success_rate",
-		numeratorKey:   "successful",
-		denominatorKey: "total_requests",
-		minimum:        minBaselineSequentialStressSuccessRate,
-		metricName:     "successful requests",
 	}),
 	"chat-completions-progressive-stress": applyProgressiveStressContract,
 }
