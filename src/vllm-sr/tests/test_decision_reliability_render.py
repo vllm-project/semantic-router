@@ -1,6 +1,7 @@
-"""routing.decisions[].reliability: validation and the Envoy rendering it needs."""
+"""recipes[].decisions[].reliability: validation and the Envoy rendering it needs."""
 
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -22,9 +23,8 @@ providers:
       backend_refs:
         - endpoint: 10.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: m
+recipes:
+  - name: default
 """
 
 _RELIABILITY_HEADERS = (
@@ -34,25 +34,23 @@ _RELIABILITY_HEADERS = (
 
 
 def _decisions(reliability: str = "") -> str:
-    return (
-        """
-  decisions:
-    - name: bounded-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: m
-"""
-        + reliability
+    return """    decisions:
+      - name: bounded-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: m
+""" + textwrap.indent(
+        reliability, "  "
     )
 
 
 def _render(tmp_path, monkeypatch, document: str):
     config_path = tmp_path / "config.yaml"
     output_path = tmp_path / "envoy.yaml"
-    config_path.write_text("version: v0.3\n" + document)
+    config_path.write_text("version: v0.5\n" + document)
     monkeypatch.setenv("ENVOY_EXTPROC_ADDRESS", "localhost")
     monkeypatch.setenv("ENVOY_ROUTER_API_ADDRESS", "localhost")
     generate_envoy_config_from_user_config(
@@ -126,19 +124,21 @@ def test_envoy_render_names_the_recipe_of_a_rejected_decision(tmp_path, monkeypa
     document = (
         _PROVIDERS
         + _decisions()
-        + """recipes:
-  - name: support
-    routing:
-      decisions:
-        - name: slow-route
-          priority: 10
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: m
-          reliability:
-            idle_timeout: 30s
+        + """  - name: support
+    decisions:
+      - name: slow-route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: m
+        reliability:
+          idle_timeout: 30s
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 """
     )
     with pytest.raises(ValueError, match=r"recipes\['support'\].*'slow-route'"):

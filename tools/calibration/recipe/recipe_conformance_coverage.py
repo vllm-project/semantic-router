@@ -6,31 +6,29 @@ from collections import Counter
 from typing import Any
 
 from router_calibration_probe import Probe
-from router_calibration_signal_values import signal_value_reference
+from router_calibration_signal_values import (
+    LABELLED_TYPES,
+    VALUE_RESPONSE_TYPES,
+    signal_value_reference,
+)
 
 SIGNAL_RESPONSE_TYPES = {
     "keywords": "keywords",
-    "embeddings": "embeddings",
     "domains": "domains",
     "fact_check": "fact_check",
     "user_feedbacks": "user_feedback",
-    "reasks": "reask",
-    "preferences": "preferences",
     "language": "language",
     "context": "context",
-    "structure": "structure",
     "complexity": "complexity",
     "modality": "modality",
     "role_bindings": "authz",
     "jailbreak": "jailbreak",
     "pii": "pii",
-    "kb": "kb",
     "conversation": "conversation",
-    "events": "event",
     "metadata": "metadata",
-    "classifiers": "classifier",
     "input_modality": "input_modality",
 }
+LABELLED_FAMILIES = {VALUE_RESPONSE_TYPES.get(name, name) for name in LABELLED_TYPES}
 TAG_CATEGORIES = (
     "language",
     "negative",
@@ -374,9 +372,9 @@ def _decision_surface_key(recipe: str, decision: str, surface: str) -> str:
 
 
 def _signal_key(signal_type: str, name: str) -> str:
-    # Complexity and independent classifier outcomes carry a label suffix;
-    # coverage counts the configured rule. Outcome matching stays label-exact.
-    if signal_type in {"complexity", "classifier"}:
+    # A System One rule's outcomes carry a label suffix; coverage counts the
+    # configured rule. Outcome matching stays label-exact.
+    if signal_type in LABELLED_FAMILIES:
         name = name.split(":", 1)[0]
     return f"{signal_type}:{name}"
 

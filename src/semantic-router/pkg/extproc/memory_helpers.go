@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -53,6 +54,17 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 	return sessionID, userID, history, nil
 }
 
+// historyBeforeCurrentTurn is the conversation before its last user message,
+// the current turn, which the extractor adds to a session window itself.
+func historyBeforeCurrentTurn(history []llmprotocol.Message) []llmprotocol.Message {
+	for index := len(history) - 1; index >= 0; index-- {
+		if history[index].Role == llmprotocol.RoleUser {
+			return history[:index]
+		}
+	}
+	return history
+}
+
 // deriveSessionIDFromMessages creates a session ID from Chat Completions messages.
 // Uses a hash of the first few messages + userID to group related conversations.
 func deriveSessionIDFromSemanticMessages(messages []llmprotocol.Message, userID string) string {
@@ -80,30 +92,74 @@ func deriveSessionIDFromSemanticMessages(messages []llmprotocol.Message, userID 
 	return "cc-" + hex.EncodeToString(hash[:])[:16]
 }
 
-const sessionMessageFingerprintMaxRunes = 100
+// conversationStartRunes bounds how much of the instructions and of the first
+// user message a conversation-start fingerprint reads, so that text a client
+// keeps further into a long system prompt, such as a date or a file listing,
+// cannot change it.
+const conversationStartRunes = 512
 
-// deriveSessionIDFromMessagesStructure builds a session ID from the full message
-// list (roles + truncated content). Used when no stable user ID is available.
-// Prefix "cc-full-" distinguishes IDs from deriveSessionIDFromMessages (cc-).
-func deriveSessionIDFromSemanticStructure(messages []llmprotocol.Message) string {
-	if len(messages) == 0 {
+// deriveConversationStartID fingerprints what every request of one
+// conversation repeats: the leading text of the system and developer
+// instructions and of the first user message, scoped by the authenticated
+// tenant when the gateway names one. Later turns only append messages, so
+// they keep the fingerprint; two conversations that start the same way share
+// it. Prefix "cc-start-" distinguishes IDs from
+// deriveSessionIDFromSemanticMessages (cc-).
+func deriveConversationStartID(request *llmprotocol.Request, tenant string) string {
+	if request == nil {
 		return ""
 	}
-	var b strings.Builder
-	for i := range messages {
-		if i > 0 {
-			b.WriteByte('|')
+	instructions := make([]string, 0, len(request.Instructions))
+	for _, block := range request.Instructions {
+		if text := semanticText(block.Content); text != "" {
+			instructions = append(instructions, text)
 		}
-		b.WriteString(string(messages[i].Role))
-		b.WriteByte(':')
-		content := semanticText(messages[i].Content)
-		if len(content) > sessionMessageFingerprintMaxRunes {
-			content = content[:sessionMessageFingerprintMaxRunes]
-		}
-		b.WriteString(content)
 	}
-	hash := sha256.Sum256([]byte(b.String()))
-	return "cc-full-" + hex.EncodeToString(hash[:])[:16]
+	firstUser := ""
+	for _, message := range request.Messages {
+		if message.Role == llmprotocol.RoleUser {
+			firstUser = semanticText(message.Content)
+			break
+		}
+	}
+	if len(instructions) == 0 && firstUser == "" {
+		return ""
+	}
+	var encoded strings.Builder
+	for _, part := range []string{
+		tenant,
+		leadingRunes(strings.Join(instructions, "\n"), conversationStartRunes),
+		leadingRunes(firstUser, conversationStartRunes),
+	} {
+		fmt.Fprintf(&encoded, "%d:%s\n", len(part), part)
+	}
+	return "cc-start-" + hex.EncodeToString(conversationStartDigest(encoded.String()))[:16]
+}
+
+// conversationStartDigest keys the fingerprint with the deployment's
+// USER_SCOPE_NAMESPACE_SECRET, as response-cache scoping keys a user's
+// scope, so that whoever lacks the secret can neither confirm a guessed
+// conversation start from its id nor match ids across deployments. Without
+// the secret it is a plain SHA-256: weaker, and still no text is kept.
+func conversationStartDigest(encoded string) []byte {
+	if secret, keyed := stickyToolIdentitySecret(); keyed {
+		mac := hmac.New(sha256.New, []byte(secret))
+		_, _ = mac.Write([]byte("conversation-start\n" + encoded))
+		return mac.Sum(nil)
+	}
+	sum := sha256.Sum256([]byte(encoded))
+	return sum[:]
+}
+
+func leadingRunes(text string, limit int) string {
+	count := 0
+	for index := range text {
+		if count == limit {
+			return text[:index]
+		}
+		count++
+	}
+	return text
 }
 
 // deriveSessionIDFromRequestID returns a deterministic pseudo-session from

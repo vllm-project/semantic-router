@@ -24,7 +24,7 @@ type HybridCacheOptions struct {
 	HNSWM                   int
 	HNSWEfConstruction      int
 	Milvus                  *config.MilvusConfig
-	EmbeddingModel          string
+	EmbeddingDeployment     string
 	MilvusConfigPath        string
 	DisableRebuildOnStartup bool
 }
@@ -92,6 +92,11 @@ func (h *HybridCache) FindSimilarWithThreshold(model string, query string, thres
 // LookupSimilarWithThreshold returns a request-scoped miss in stub builds.
 func (h *HybridCache) LookupSimilarWithThreshold(_ context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	return LookupResult{}, nil
+}
+
+// LookupSimilar returns a request-scoped miss in stub builds.
+func (h *HybridCache) LookupSimilar(_ context.Context, model string, query string, bounds SimilarityBounds) (SimilarEntries, error) {
+	return SimilarEntries{}, nil
 }
 
 // FindExact is unavailable when CGO support is disabled.

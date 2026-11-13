@@ -28,7 +28,7 @@ func TestBuildHeaderMutationsUsesDistinctAddAndUpdateSemantics(t *testing.T) {
 		},
 	}
 
-	setHeaders, removeHeaders := (&OpenAIRouter{}).buildHeaderMutations(decision)
+	setHeaders, removeHeaders := (&OpenAIRouter{}).buildHeaderMutations(&RequestContext{VSRSelectedDecision: decision})
 	if len(setHeaders) != 2 {
 		t.Fatalf("set headers = %d, want 2", len(setHeaders))
 	}

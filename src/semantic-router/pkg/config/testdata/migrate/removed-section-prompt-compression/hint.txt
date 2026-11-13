@@ -1,0 +1,1 @@
+global.model_catalog.modules.prompt_compression: removed_section: global.model_catalog.modules.prompt_compression is removed; run `vllm-sr config migrate` (compress.signals of a context plugin in global.plugins)

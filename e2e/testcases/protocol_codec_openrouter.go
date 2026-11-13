@@ -80,7 +80,7 @@ func testProtocolCodecOpenRouterReply(ctx context.Context, client *kubernetes.Cl
 				if err := clientContract.validateBuffered(result.Body, openRouterReplyAnswer); err != nil {
 					return fmt.Errorf("%s response: %w", cell, err)
 				}
-				warnings := result.Headers.Get("x-vsr-protocol-warnings")
+				warnings := result.Headers.Get(warningsHeader)
 				for _, field := range []string{
 					"provider", "choices.native_finish_reason", "usage.cost", "usage.is_byok",
 					"usage.cost_details", "usage.server_tool_use", "usage.prompt_tokens_details.video_tokens",
@@ -201,9 +201,9 @@ func testOpenRouterReasoningForMessagesClient(ctx context.Context, session *fixt
 			return fmt.Errorf("a Messages client of OpenRouter reasoning stream=%t did not degrade to the reasoning text: %s", streamed, truncateString(body, 600))
 		}
 		// A stream has sent its headers before the drop is known, so only a
-		// buffered reply can report it in x-vsr-protocol-warnings.
-		if !streamed && !hasProtocolFieldDiagnostic(result.Headers.Get("x-vsr-protocol-warnings"), "dropped", "reasoning_details") {
-			return fmt.Errorf("a Messages client dropped continuity blocks without a diagnostic: %q", result.Headers.Get("x-vsr-protocol-warnings"))
+		// buffered reply can report it in x-vsr-warnings.
+		if !streamed && !hasProtocolFieldDiagnostic(result.Headers.Get(warningsHeader), "dropped", "reasoning_details") {
+			return fmt.Errorf("a Messages client dropped continuity blocks without a diagnostic: %q", result.Headers.Get(warningsHeader))
 		}
 	}
 	return nil

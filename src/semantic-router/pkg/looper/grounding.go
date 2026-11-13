@@ -2,7 +2,6 @@ package looper
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -269,40 +268,39 @@ func filterPanelByScore(panel []*ModelResponse, scores []groundingScore, cfg fus
 }
 
 // extractGroundingContext returns the authoritative context for the request:
-// the concatenation of system and tool message contents (where RAG/tool output
-// is conventionally injected). Empty when the request carries no such context.
+// the text of its system and tool messages, string content or text parts
+// (where RAG/tool output is conventionally injected). Empty when the request
+// carries no such context.
 func extractGroundingContext(req *openai.ChatCompletionNewParams) string {
 	if req == nil {
 		return ""
 	}
-	data, err := json.Marshal(req)
-	if err != nil {
-		return ""
-	}
-	var reqMap map[string]interface{}
-	if err := json.Unmarshal(data, &reqMap); err != nil {
-		return ""
-	}
-	messages, ok := reqMap["messages"].([]interface{})
-	if !ok {
-		return ""
-	}
 	var b strings.Builder
-	for _, m := range messages {
-		msg, ok := m.(map[string]interface{})
-		if !ok {
-			continue
+	for _, message := range req.Messages {
+		var texts []string
+		switch {
+		case message.OfSystem != nil:
+			texts = contentTexts(message.OfSystem.Content.OfString.Value, message.OfSystem.Content.OfArrayOfContentParts)
+		case message.OfTool != nil:
+			texts = contentTexts(message.OfTool.Content.OfString.Value, message.OfTool.Content.OfArrayOfContentParts)
 		}
-		role, _ := msg["role"].(string)
-		if role != "system" && role != "tool" {
-			continue
-		}
-		if content, ok := msg["content"].(string); ok && strings.TrimSpace(content) != "" {
-			b.WriteString(content)
-			b.WriteString("\n")
+		for _, text := range texts {
+			if strings.TrimSpace(text) != "" {
+				b.WriteString(text)
+				b.WriteString("\n")
+			}
 		}
 	}
 	return strings.TrimSpace(b.String())
+}
+
+// contentTexts lists a message's string content and the text of its parts.
+func contentTexts(text string, parts []openai.ChatCompletionContentPartTextParam) []string {
+	texts := []string{text}
+	for _, part := range parts {
+		texts = append(texts, part.Text)
+	}
+	return texts
 }
 
 // formatGroundingNotes renders a concise groundedness summary for the judge

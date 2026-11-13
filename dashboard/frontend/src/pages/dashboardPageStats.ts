@@ -18,28 +18,14 @@ export function countDecisions(cfg: RouterConfig): number {
 
 export function countModels(cfg: RouterConfig): number {
   const models = cfg.providers?.models
-  if (Array.isArray(models)) {
-    return models.length
-  }
-
-  const legacyRootEndpoints = cfg.vllm_endpoints
-  if (Array.isArray(legacyRootEndpoints)) return legacyRootEndpoints.length
-
-  const legacyProviderEndpoints = cfg.providers?.vllm_endpoints
-  return Array.isArray(legacyProviderEndpoints) ? legacyProviderEndpoints.length : 0
+  return Array.isArray(models) ? models.length : 0
 }
 
 export function countPlugins(cfg: RouterConfig): number {
-  const decisions = getAllDecisions(cfg)
-  if (decisions.length > 0) {
-    return decisions.reduce(
-      (count, decision) =>
-        count + (Array.isArray(decision.plugins) ? decision.plugins.length : 0),
-      0,
-    )
-  }
-  if (!cfg.plugins || typeof cfg.plugins !== 'object') return 0
-  return Object.keys(cfg.plugins).length
+  return getAllDecisions(cfg).reduce(
+    (count, decision) => count + (Array.isArray(decision.plugins) ? decision.plugins.length : 0),
+    0,
+  )
 }
 
 export function getAllDecisions(cfg: RouterConfig): DecisionRule[] {
@@ -61,19 +47,24 @@ export function getDecisionCategory(priority?: number): 'guardrail' | 'routing' 
 /** Palette for signal type labels (flow diagram + breakdown). */
 export const SIGNAL_COLORS: Record<string, string> = {
   keywords: '#4EC9B0',
-  embeddings: '#9CDCFE',
   domains: '#DCDCAA',
   fact_check: '#CE9178',
   user_feedbacks: '#C586C0',
-  reasks: '#FFB454',
-  preferences: '#4FC1FF',
   language: '#B5CEA8',
   context: '#D7BA7D',
   complexity: '#569CD6',
   modality: '#D4D4D4',
-  authz: '#F48771',
+  role_bindings: '#F48771',
   jailbreak: '#F48771',
+  safety: '#F44747',
+  hallucination: '#D16969',
+  refusal: '#CCA700',
+  turn_relation: '#9CDCFE',
   pii: '#FF6B6B',
+  conversation: '#6A9955',
+  metadata: '#808080',
+  input_modality: '#4FC1FF',
+  systemone: '#B180D7',
 }
 
 export function categorizeDecisions(config: RouterConfig | null): {

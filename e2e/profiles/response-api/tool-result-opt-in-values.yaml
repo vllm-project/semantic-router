@@ -6,7 +6,7 @@
 # model declares no file input, and files reach it as a note. It also sends
 # images from tool results to Chat backends as a user message.
 configOverride:
-  version: v0.3
+  version: v0.5
   listeners:
     - name: http-8899
       address: 0.0.0.0
@@ -17,6 +17,7 @@ configOverride:
       model: mock/opt-in-chat
     models:
       - name: mock/opt-in-chat
+        capabilities: [chat, image_input]
         backend_refs:
           - name: provider-mocker
             endpoint: provider-mocker.default.svc.cluster.local:8000
@@ -27,21 +28,18 @@ configOverride:
           - name: provider-mocker
             endpoint: provider-mocker.default.svc.cluster.local:8000
             provider: vllm
-  routing:
-    modelCards:
-      - name: mock/opt-in-chat
-        capabilities: [chat, image_input]
-      - name: mock/opt-in-responses
-    decisions:
-      - name: opt_in_default
-        description: Every request without a concrete model.
-        priority: 100
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: mock/opt-in-chat
-            use_reasoning: false
+  recipes:
+    - name: default
+      decisions:
+        - name: opt_in_default
+          description: Every request without a concrete model.
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: mock/opt-in-chat
+              use_reasoning: false
   global:
     router:
       allow_lossy_translation:

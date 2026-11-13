@@ -17,8 +17,25 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 from ci_plan import digest, display_dispatch, make_plan  # noqa: E402
-from execution_batches import e2e_batches, validate_execution_batch  # noqa: E402
+from execution_batches import (  # noqa: E402
+    e2e_batches,
+    platform_batches,
+    validate_execution_batch,
+)
 from run_platform_batch import run_batch, run_command  # noqa: E402
+
+MODELS = "platform.models-cpu"
+
+
+def platform_contracts() -> list[dict]:
+    """The published-model contract and a compatible contract planned before it."""
+    plan = make_plan([], source_sha="a" * 40, requested=(MODELS,))
+    record = plan["verifications"][0]
+    fixture = {**record, "id": "platform.fixture-cpu", "target": "test-fixture"}
+    fixture["contract_sha256"] = digest(
+        {key: value for key, value in fixture.items() if key != "contract_sha256"}
+    )
+    return [fixture, record]
 
 
 class ExecutionBatchTests(unittest.TestCase):
@@ -87,9 +104,9 @@ class ExecutionBatchTests(unittest.TestCase):
                     time.sleep(0.01)
 
     def test_metadata_stages_use_the_same_contract_deadline(self):
-        batch = make_plan(
-            [], source_sha="a" * 40, requested=("platform.image-calibration-cpu",)
-        )["platform_batches"][0]
+        batch = make_plan([], source_sha="a" * 40, requested=(MODELS,))[
+            "platform_batches"
+        ][0]
         budgets = []
 
         def process(_command, **kwargs):
@@ -106,15 +123,7 @@ class ExecutionBatchTests(unittest.TestCase):
         self.assertEqual(budgets, [7190, 7180, 7170])
 
     def test_platform_contracts_share_setup_and_keep_distinct_contracts(self):
-        plan = make_plan(
-            [],
-            source_sha="a" * 40,
-            requested=(
-                "platform.image-calibration-cpu",
-                "platform.models-cpu",
-            ),
-        )
-        batches = plan["platform_batches"]
+        batches = platform_batches(platform_contracts())
         self.assertEqual(len(batches), 1)
         for batch in batches:
             validate_execution_batch(batch, "platform")
@@ -137,9 +146,6 @@ class ExecutionBatchTests(unittest.TestCase):
                 self.assertEqual(record["runtime"], batch["runtime"])
                 seen.append(record["id"])
         self.assertEqual(sorted(seen), sorted(row["id"] for row in records))
-        self.assertTrue(
-            {"e2e.vela-omni", "e2e.vela-halu", "e2e.multimodal-routing"} <= set(seen)
-        )
 
     def test_extra_fixture_profiles_keep_unique_matrix_labels(self):
         plan = make_plan(
@@ -157,11 +163,13 @@ class ExecutionBatchTests(unittest.TestCase):
         display_dispatch(plan)
 
     def test_explicit_exclusive_profiles_get_separate_workers(self):
-        plan = make_plan([], source_sha="a" * 40, requested=("e2e.vela-omni",))
-        record = plan["verifications"][0]
-        self.assertEqual(record["batch_policy"], "exclusive")
+        plan = make_plan([], source_sha="a" * 40, requested=("e2e.envoy-ai-gateway",))
         # Presentation metadata does not decide packing policy.
-        record = {**record, "resource_class": "standard"}
+        record = {
+            **plan["verifications"][0],
+            "batch_policy": "exclusive",
+            "resource_class": "standard",
+        }
         records = []
         for i in range(3):
             candidate = {**record, "id": f"e2e.model-{i}", "profile": f"model-{i}"}
@@ -195,15 +203,7 @@ class ExecutionBatchTests(unittest.TestCase):
                 e2e_batches([{**record, "timeout_minutes": budget}])
 
     def test_tampered_duplicate_or_mixed_worker_contracts_are_rejected(self):
-        plan = make_plan(
-            [],
-            source_sha="a" * 40,
-            requested=(
-                "platform.image-calibration-cpu",
-                "platform.models-cpu",
-            ),
-        )
-        original = plan["platform_batches"][0]
+        original = platform_batches(platform_contracts())[0]
         variants = []
         changed = copy.deepcopy(original)
         changed["images"] = ["vllm-sr"]
@@ -224,19 +224,12 @@ class ExecutionBatchTests(unittest.TestCase):
     def test_platform_failure_does_not_hide_independent_contract_and_reports_stay_isolated(
         self,
     ):
-        batches = make_plan(
-            [],
-            source_sha="a" * 40,
-            requested=(
-                "platform.image-calibration-cpu",
-                "platform.models-cpu",
-            ),
-        )["platform_batches"]
+        batches = platform_batches(platform_contracts())
         calls = []
 
         def process(command, **kwargs):
             calls.append((command, kwargs["env"]))
-            if command[:2] == ["make", "verify-image-routing-calibration"]:
+            if command[:2] == ["make", "test-fixture"]:
                 return SimpleNamespace(returncode=1)
             if "--verification" in command:
                 destination = Path(command[command.index("--output") + 1])
@@ -252,7 +245,7 @@ class ExecutionBatchTests(unittest.TestCase):
                 run_batch(batches[0], Path(directory) / batches[0]["id"], run=process)
             )
             results = list(Path(directory).glob("*/results/*.json"))
-            self.assertEqual([path.stem for path in results], ["platform.models-cpu"])
+            self.assertEqual([path.stem for path in results], [MODELS])
             make_envs = [env for command, env in calls if command[0] == "make"]
             self.assertEqual(len(make_envs), 2)
             self.assertNotEqual(

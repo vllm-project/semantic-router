@@ -1,9 +1,9 @@
 package extproc
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -21,6 +21,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -42,8 +43,6 @@ type providerDispatch struct {
 	decisionName   string
 	useReasoning   bool
 }
-
-const preparedDispatchReceiptVersion = 1
 
 // prepareProviderDispatch is the only point where a neutral request becomes a
 // provider-bound request. Routing and plugins mutate semantic state first;
@@ -256,7 +255,12 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	ctx *RequestContext,
 ) (bool, error) {
 	if dispatch.decisionName == "" {
-		return false, nil
+		// A Looper hop already carries its decision's prompt; a request that
+		// matched no decision, or names a concrete model, runs its defaults'.
+		if ctx.VSRSelectedDecision != nil || ctx.LooperRequest {
+			return false, nil
+		}
+		return r.addSemanticSystemPromptIfConfigured(request, "", dispatch.logicalModel, ctx)
 	}
 	changed := false
 	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
@@ -275,19 +279,21 @@ func (r *OpenAIRouter) applyDispatchRequestParams(
 	request *llmprotocol.Request,
 	ctx *RequestContext,
 ) (bool, error) {
-	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil {
-		return r.applySemanticRequestParams(
-			ctx.VSRSelectedDecision, request, ctx.Routing.RecipeName(),
-		)
+	decisionName := ""
+	if ctx.VSRSelectedDecision != nil {
+		decisionName = ctx.VSRSelectedDecision.Name
 	}
-	return false, nil
+	return r.applySemanticRequestParams(
+		config.RequestParamsPluginOf(requestPlugins(r.Config, ctx)), request,
+		config.RoutingDecisionKey(ctx.Routing.RecipeName(), decisionName),
+	)
 }
 
 func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 	switch strings.ToLower(strings.TrimSpace(apiFormat)) {
-	case "", config.APIFormatOpenAI, "openai.chat", string(llmprotocol.OpenAIChatV1):
+	case "", config.APIFormatChatCompletions, config.APIFormatOpenAI, "openai.chat", string(llmprotocol.OpenAIChatV1):
 		return llmprotocol.OpenAIChatV1, nil
-	case config.APIFormatAnthropic, "anthropic.messages", string(llmprotocol.AnthropicMessagesV1):
+	case config.APIFormatMessages, config.APIFormatAnthropic, "anthropic.messages", string(llmprotocol.AnthropicMessagesV1):
 		return llmprotocol.AnthropicMessagesV1, nil
 	case config.APIFormatResponses, "openai.responses", string(llmprotocol.OpenAIResponsesV1):
 		return llmprotocol.OpenAIResponsesV1, nil
@@ -386,23 +392,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		ctx.SemanticRequest,
 		dispatch.logicalModel,
 	)
-	body, err := r.encodeDispatchRequest(ctx)
+	prepared, err := r.materializePreparedProviderRequest(dispatch, ctx)
 	if err != nil {
-		var protocolError *llmprotocol.ProtocolError
-		if errors.As(err, &protocolError) &&
-			protocolError.Code == promptCacheErrorTargetUnsupported {
-			if ctx != nil {
-				ctx.ImmediateProtocolError = protocolError
-			}
-			return nil, err
-		}
-		metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
-		return nil, dispatchWireError(err, ctx, "encode provider request")
-	}
-	body, err = r.adaptProviderRequest(body, dispatch, ctx)
-	if err != nil {
-		metrics.RecordRequestError(dispatch.logicalModel, "provider_adapter_error")
-		return nil, dispatchWireError(err, ctx, "adapt provider request")
+		return nil, err
 	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
@@ -411,16 +403,16 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if common.HeaderMutation == nil {
 		common.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
-	appendContentLengthHeader(&common.HeaderMutation.SetHeaders, len(body))
+	appendContentLengthHeader(&common.HeaderMutation.SetHeaders, prepared.byteLength())
 	if err := commitAgenticSessionDecision(ctx); err != nil {
 		return nil, err
 	}
-	bindPreparedDispatchArtifact(common, ctx, body, dispatch.targetFormat)
+	bindPreparedDispatchArtifact(common, ctx, prepared)
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_encoded", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
 		"wire_format": dispatch.targetFormat,
-		"body_bytes":  len(body),
+		"body_bytes":  prepared.byteLength(),
 	})
 	return response, nil
 }
@@ -433,19 +425,17 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 func bindPreparedDispatchArtifact(
 	common *ext_proc.CommonResponse,
 	ctx *RequestContext,
-	body []byte,
-	format llmprotocol.WireFormat,
+	prepared *preparedProviderRequest,
 ) {
 	common.BodyMutation = &ext_proc.BodyMutation{
-		Mutation: &ext_proc.BodyMutation_Body{Body: body},
+		Mutation: &ext_proc.BodyMutation_Body{Body: prepared.body},
 	}
 	if !shouldStartRouterReplay(ctx) {
 		return
 	}
-	digest := sha256.Sum256(body)
 	ctx.preparedDispatchReceipt = &routerreplay.PreparedDispatchReceipt{
-		Version: preparedDispatchReceiptVersion, WireFormat: string(format),
-		SHA256: fmt.Sprintf("%x", digest), ByteLength: len(body),
+		Version: preparedDispatchReceiptVersion, WireFormat: string(prepared.metadata.wireFormat),
+		SHA256: prepared.payloadSHA256(), ByteLength: prepared.byteLength(),
 	}
 }
 
@@ -524,10 +514,20 @@ func (r *OpenAIRouter) appendProviderCredential(
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
+	// No upstream receives the authenticator's delegated credential header; a
+	// delegated backend receives its value under the provider auth header.
+	state.removeHeaders = append(state.removeHeaders, r.delegatedCredentialHeadersForRemoval()...)
+	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
+		return refused
+	}
+	if state.profile.Delegated() {
+		return r.appendDelegatedCredential(state, providerAuth, model, backendName, ctx)
+	}
 	if providerAuth.Strategy == "none" {
 		if r.CredentialResolver != nil {
 			state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 		}
+		removeClientCredentials(state, providerAuth.Header, false)
 		return nil
 	}
 	if r.CredentialResolver == nil {
@@ -542,11 +542,74 @@ func (r *OpenAIRouter) appendProviderCredential(
 		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
 	if accessKey == "" {
+		removeClientCredentials(state, providerAuth.Header, false)
 		return nil
 	}
+	removeClientCredentials(state, providerAuth.Header, true)
 	value := accessKey
 	if providerAuth.Prefix != "" {
 		value = providerAuth.Prefix + " " + accessKey
+	}
+	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
+	return nil
+}
+
+// removeClientCredentials keeps a client's own credentials from a provider the
+// Router configures: the request carries only what the upstream's auth sets,
+// under authHeader when sets is true.
+func removeClientCredentials(state *routeHeaderState, authHeader string, sets bool) {
+	names := headers.ProviderCredentials()
+	if header := strings.ToLower(strings.TrimSpace(authHeader)); header != "" && !slices.Contains(names, header) {
+		names = append(names, header)
+	}
+	for _, name := range names {
+		if (sets && strings.EqualFold(name, authHeader)) || slices.Contains(state.removeHeaders, name) {
+			continue
+		}
+		state.removeHeaders = append(state.removeHeaders, name)
+	}
+}
+
+// appendDelegatedCredential presents the request's delegated credential to a
+// delegated backend, replacing whatever the client sent under the auth
+// header. Static and per-user provider keys are not consulted: a request
+// without the credential fails before dispatch. The credential is the call's
+// principal's, so a Looper hop's refusal is its client request's too.
+func (r *OpenAIRouter) appendDelegatedCredential(
+	state *routeHeaderState,
+	providerAuth modelcatalog.ProviderAuth,
+	model string,
+	backendName string,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	if r.CredentialResolver != nil {
+		state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+	}
+	if providerAuth.Strategy == "none" || providerAuth.Header == "" {
+		logging.ComponentErrorEvent("extproc", "delegated_auth_header_missing", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName,
+		})
+		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	credential, err := principal.Delegated(ctx.TraceContext)
+	if err != nil {
+		logging.ComponentWarnEvent("extproc", "delegated_credential_missing", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName,
+		})
+		return r.delegatedCredentialMissing(ctx)
+	}
+	// The backend receives the delegated credential and no other: a client's
+	// own Authorization or key header does not travel beside it when the
+	// backend authenticates on a different header.
+	for _, name := range config.CredentialCarrierHeaders() {
+		if !strings.EqualFold(name, providerAuth.Header) {
+			state.removeHeaders = append(state.removeHeaders, name)
+		}
+	}
+	removeClientCredentials(state, providerAuth.Header, true)
+	value := credential
+	if providerAuth.Prefix != "" {
+		value = providerAuth.Prefix + " " + credential
 	}
 	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
 	return nil
@@ -589,7 +652,7 @@ func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {
 		return
 	}
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-		Key: headers.SelectedModel, RawValue: []byte(model),
+		Key: headers.VSRRouteModel, RawValue: []byte(model),
 	}})
 }
 
@@ -600,13 +663,15 @@ func appendContentLengthHeader(headersOut *[]*core.HeaderValueOption, bodyLength
 }
 
 func (r *OpenAIRouter) applyDecisionHeaderMutations(state *routeHeaderState, ctx *RequestContext) {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil {
 		return
 	}
-	setHeaders, removeHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
+	setHeaders, removeHeaders := r.buildHeaderMutations(ctx)
 	state.setHeaders = append(state.setHeaders, setHeaders...)
 	state.removeHeaders = append(state.removeHeaders, removeHeaders...)
-	r.runRequestExtensions(state, ctx)
+	if ctx.VSRSelectedDecision != nil {
+		r.runRequestExtensions(state, ctx)
+	}
 }
 
 func buildRequestBodyContinueResponse(

@@ -103,7 +103,7 @@ verifications:
     executor: core
     category: components
     workflow: .github/workflows/test-and-build.yml
-    inventory: go-core-and-selector-parity
+    inventory: go-core-framework-discovery
   storage:
     layer: runtime
     execution: approved
@@ -193,21 +193,6 @@ verifications:
     runtime: model-runtime
     device: cpu
     inventory: maintained-recipe-source-aware-shards
-  platform.image-calibration-cpu:
-    layer: runtime
-    execution: approved
-    display_name: Image Routing Conformance
-    activity: test
-    boundary: [unit, integration]
-    executor: platform
-    category: conformance
-    workflow: .github/workflows/test-platform.yml
-    platform_id: model-runtime-cpu
-    runtime: model-runtime
-    device: cpu
-    target: verify-image-routing-calibration
-    inventory: image-routing-calibration-source-fixtures-and-thresholds
-    evidence: image-calibration
   platform.models-cpu:
     layer: runtime
     execution: approved
@@ -356,11 +341,12 @@ verifications:
     target: test-e2e-unit
     inventory: e2e-go-helper-and-profile-discovery
 
-# Versioned required inventory, shared by /ci run full, weekly and release. A new
+# Versioned required inventory, shared by /ci run full, Nightly and the release
+# qualification profile when it is requested. A new
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 # Authoring tools remain affected/manual contracts, outside product qualification.
 full_cpu:
-  version: 5
+  version: 8
   required:
     - quality
     - generated-contracts
@@ -374,7 +360,6 @@ full_cpu:
     - local.memory
     - recipe-conformance
     - platform.models-cpu
-    - platform.image-calibration-cpu
     - performance
     - cli-package
     - cli-unit
@@ -384,15 +369,17 @@ full_cpu:
     - e2e-unit
     - e2e.standalone
     - e2e.envoy-ai-gateway
-    - e2e.routing-errors
-    - e2e.local-classifier-backend
     - e2e.dashboard
     - e2e.remote-embedding
     - e2e.streaming
-    - e2e.vela-omni
-    - e2e.vela-halu
-    - e2e.vela-shield
-    - e2e.multimodal-routing
+    # The only E2E profile that starts a real model through the Router; every
+    # other profile answers its signals from provider-mocker fixtures.
+    - e2e.model-runtime-vela3
+    # Deployed security and Responses-state contracts that full qualification
+    # must not skip, whatever a PR's paths selected. Redis stays in storage.
+    - e2e.authz-rbac
+    - e2e.delegated-credential
+    - e2e.response-api
   support_contracts:
     Helm chart: [core, e2e.standalone]
     Local deployment: [local.cli]

@@ -13,8 +13,7 @@ keep the Model custom.
 ## Bind a custom model
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: private-chat
@@ -27,17 +26,15 @@ providers:
           provider: vllm
           endpoint: model-gateway.example:8000
           protocol: http
-
-routing:
-  modelCards:
-    - name: private-chat
       display_name: Private Chat
       context_window_size: 131072
       capabilities: [chat, tools]
       tags: [private, production]
+recipes:
+  - name: default
 ```
 
-For a custom Model, `routing.modelCards[].name` must equal the Model alias. The
+For a custom Model, `providers.models[].name` must equal the Model alias. The
 card is optional: omit it when the Router only needs a backend binding. If
 `provider_model_id` is omitted, the upstream ID defaults to the alias; set it
 explicitly whenever the served checkpoint uses another name.
@@ -92,7 +89,7 @@ reasoning:
 ```
 
 Choose exactly one form. The previous global custom-family registry is not part
-of canonical v0.3; inline definitions live on the custom Model that uses them.
+of canonical v0.5; inline definitions live on the custom Model that uses them.
 See [Reasoning configuration](model-reasoning) for field semantics and
 decision controls.
 

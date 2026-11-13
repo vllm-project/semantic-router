@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -19,7 +20,6 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/response-api/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
@@ -34,7 +34,11 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "response-api",
 			SemanticRouterValuesFile: valuesFile,
-			ResourceManifests:        resourceManifests,
+			// provider-mocker serves the embedding fixture, which the Router
+			// prepares as it starts.
+			PrerequisiteManifests: []string{"deploy/kubernetes/response-api/provider-mocker.yaml"},
+			PrerequisiteWaits:     []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
+			ResourceManifests:     resourceManifests,
 		}),
 	}
 }

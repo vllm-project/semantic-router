@@ -1,0 +1,1 @@
+global.model_catalog.admission.embedding:mmbert: removed_field: admission by embedding model keyword is removed; run `vllm-sr config migrate` (the admission of the embedding deployment, keyed by its name)

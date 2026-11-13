@@ -14,7 +14,7 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
-const toolResultMediaWarning = "approximated;tool-result images and files sent as a user message after the results;tool_result.content"
+const toolResultMediaWarning = `protocol;action=approximated;reason="tool-result images and files sent as a user message after the results";field="tool_result.content"`
 
 func init() {
 	pkgtestcases.Register("protocol-codec-tool-result-media-opt-in", pkgtestcases.TestCase{
@@ -68,8 +68,8 @@ func testProtocolCodecToolResultMediaOptIn(ctx context.Context, client *kubernet
 			return fmt.Errorf("opted-in tool-result image was not dispatched (stream=%t): status=%d body=%s",
 				stream, result.StatusCode, truncateString(string(result.Body), 500))
 		}
-		if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !strings.Contains(warnings, toolResultMediaWarning) {
-			return fmt.Errorf("x-vsr-protocol-warnings = %q, want %q (stream=%t)", warnings, toolResultMediaWarning, stream)
+		if warnings := result.Headers.Get(warningsHeader); !strings.Contains(warnings, toolResultMediaWarning) {
+			return fmt.Errorf("x-vsr-warnings = %q, want %q (stream=%t)", warnings, toolResultMediaWarning, stream)
 		}
 		raw, err := lastProviderSimulatorRequest(ctx, provider, sessionID)
 		if err != nil {

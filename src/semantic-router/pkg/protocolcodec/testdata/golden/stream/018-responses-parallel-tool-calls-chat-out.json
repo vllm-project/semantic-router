@@ -80,12 +80,9 @@
               "tool_calls": [
                 {
                   "function": {
-                    "arguments": "\"UTC\"}",
-                    "name": "lookup_time"
+                    "arguments": "\"UTC\"}"
                   },
-                  "id": "call_time",
-                  "index": 1,
-                  "type": "function"
+                  "index": 1
                 }
               ]
             },
@@ -107,12 +104,9 @@
               "tool_calls": [
                 {
                   "function": {
-                    "arguments": "\"Paris\"}",
-                    "name": "lookup_weather"
+                    "arguments": "\"Paris\"}"
                   },
-                  "id": "call_weather",
-                  "index": 0,
-                  "type": "function"
+                  "index": 0
                 }
               ]
             },

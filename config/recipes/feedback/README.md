@@ -49,10 +49,12 @@ because the repeated-question judgment needs earlier turns.
 | `clarify` | Yes or no, at 0.6 | Does the latest message ask to explain an earlier answer again, more clearly, more simply or with an example? | Whether a follow-up that does not call the answer wrong stays on the low-cost clarification lane. |
 | `code` | Yes or no, at 0.5 | Is the request about software, such as code, a program error or exception, a failing test or a bug? | Whether recovery takes a code-repair lane. |
 | `sources` | Yes or no, at 0.6 | Does the user ask for sources, citations or a fact check of the answer? | Whether recovery takes the verified lane. |
-| `persistently_dissatisfied` | Built-in re-ask judgment, at 0.8 | Does the current user turn repeat the last two user turns? | Whether recovery escalates to a premium lane. |
+| `persistently_dissatisfied` | Turn relation `reask`, over the last four turns | Does the current user turn repeat or rephrase what an earlier user turn already asked? | Whether recovery escalates to a premium lane, once the user has had two answers. |
 
-One conversation fact needs no model: `feedback_has_images` is true when the
-request carries image content.
+Two conversation facts need no model: `feedback_has_images` is true when the
+request carries image content, and `two_prior_answers` when the conversation
+already holds two assistant answers, so one re-ask after one answer stays on
+the mid-cost lanes.
 
 ## Routing behavior
 
@@ -61,12 +63,14 @@ Decisions are tried by priority, and the first that matches wins.
 | Priority | Decision | Reads | Candidate |
 | --- | --- | --- | --- |
 | 260 | `omni` | `feedback_has_images` | `local/omni` |
-| 240 | `feedback_verified_recovery` | (`wrong` or `persistently_dissatisfied`) and `sources`, not `code` | `openai/gpt5.4` |
-| 230 | `feedback_persistent_code_recovery` | `code` and `persistently_dissatisfied` | `openai/gpt5.4` |
-| 220 | `feedback_code_recovery` | `code` and `wrong`, not `persistently_dissatisfied` | `google/gemini-3.1-pro` |
-| 210 | `feedback_persistent_recovery` | `persistently_dissatisfied`, not `code` or `sources` | `openai/gpt5.4` |
-| 200 | `feedback_general_recovery` | `wrong`, not `code`, `sources` or `persistently_dissatisfied` | `google/gemini-3.1-pro` |
-| 180 | `feedback_need_clarification` | `clarify`, not `wrong` or `persistently_dissatisfied` | `qwen/qwen3.5-rocm` |
+| 240 | `feedback_verified_recovery` | (`wrong` or a persistent re-ask) and `sources`, not `code` | `openai/gpt5.4` |
+| 230 | `feedback_persistent_code_recovery` | `code` and a persistent re-ask | `openai/gpt5.4` |
+| 220 | `feedback_code_recovery` | `code` and `wrong`, not a persistent re-ask | `google/gemini-3.1-pro` |
+| 210 | `feedback_persistent_recovery` | A persistent re-ask, not `code` or `sources` | `openai/gpt5.4` |
+| 200 | `feedback_general_recovery` | `wrong`, not `code`, `sources` or a persistent re-ask | `google/gemini-3.1-pro` |
+| 180 | `feedback_need_clarification` | `clarify`, not `wrong` or a persistent re-ask | `qwen/qwen3.5-rocm` |
+
+A persistent re-ask is `persistently_dissatisfied` and `two_prior_answers`.
 | 10 | `feedback_default` | Nothing; the fallback | `qwen/qwen3.5-rocm` |
 
 A message that says an answer was wrong and also asks to explain it again is

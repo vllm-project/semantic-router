@@ -98,11 +98,11 @@ func TestConfigYAMLReturnsOriginalBytesWhenNoListenerHasKeys(t *testing.T) {
 
 func TestConfigYAMLNeverServesListenerKeysHiddenBehindYAMLIndirection(t *testing.T) {
 	documents := map[string]string{
-		"alias listener": "version: v0.3\nx-gated: &gated\n  name: a\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - *gated\n",
-		"merge key":      "version: v0.3\nx-gated: &gated\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - <<: *gated\n    name: b\n",
-		"duplicate key":  "version: v0.3\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [first]\n    api_keys: [" + listenerKeyFixture + "]\n",
-		"alias keys":     "version: v0.3\nx-keys: &keys [" + listenerKeyFixture + "]\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: *keys\n",
-		"alias key item": "version: v0.3\nx-key: &key " + listenerKeyFixture + "\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [*key]\n",
+		"alias listener": "version: v0.5\nx-gated: &gated\n  name: a\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - *gated\n",
+		"merge key":      "version: v0.5\nx-gated: &gated\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - <<: *gated\n    name: b\n",
+		"duplicate key":  "version: v0.5\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [first]\n    api_keys: [" + listenerKeyFixture + "]\n",
+		"alias keys":     "version: v0.5\nx-keys: &keys [" + listenerKeyFixture + "]\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: *keys\n",
+		"alias key item": "version: v0.5\nx-key: &key " + listenerKeyFixture + "\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [*key]\n",
 	}
 	for name, document := range documents {
 		t.Run(name, func(t *testing.T) {

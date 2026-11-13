@@ -102,8 +102,8 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 		FrequencyPenalty: request.Sampling.FrequencyPenalty, PresencePenalty: request.Sampling.PresencePenalty,
 		ReasoningEffort: request.ReasoningEffort, ReasoningBudget: request.ReasoningBudgetTokens,
 		ChatTemplateKwargs: request.ChatTemplateKwargs, CacheSalt: request.CacheSalt,
-		TopK: request.Sampling.TopK, MinP: request.Sampling.MinP, RepetitionPenalty: request.Sampling.RepetitionPenalty,
-		PromptCacheKey: request.PromptCacheKey,
+		TopK: request.Sampling.TopK, MinP: request.Sampling.MinP, LogitBias: request.Sampling.LogitBias,
+		RepetitionPenalty: request.Sampling.RepetitionPenalty, PromptCacheKey: request.PromptCacheKey,
 	}
 	if request.TextVerbosity != "" {
 		wire.Verbosity, _ = json.Marshal(request.TextVerbosity)

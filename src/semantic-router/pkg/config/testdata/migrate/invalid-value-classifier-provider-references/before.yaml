@@ -1,0 +1,43 @@
+# Rules, bindings and an admission gate that named a classify deployment. The
+# deployment is dropped with what names it, and the decision model answers
+# those signals: the unsafe-content rule is the v0.4 content-safety fragment's,
+# the complexity rule a remote difficulty scorer's.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    signals:
+      safety:
+        - {name: unsafe-content, deployment: content-safety-binary, predicate: {gte: 0.5}}
+        - {name: unsafe-privacy, labels: [PII/Privacy, S7], predicate: {gte: 0.6}}
+      complexity:
+        - {name: needs_reasoning, deployment: difficulty-scorer, labels: [hard]}
+    model_bindings:
+      safety.unsafe-privacy: content-safety-binary
+    decisions:
+      - name: unsafe-privacy-content
+        priority: 310
+        rules: {type: safety, name: unsafe-privacy}
+        modelRefs: [{model: general}]
+      - name: unsafe-content
+        priority: 300
+        rules: {type: safety, name: unsafe-content}
+        modelRefs: [{model: general}]
+      - name: reasoning
+        priority: 200
+        rules: {type: complexity, name: needs_reasoning}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      content-safety-binary: {provider: classify, endpoint: "http://safety-binary:8080", timeout_ms: 10000}
+      difficulty-scorer: {provider: classify, endpoint: "http://difficulty-scorer:8080"}
+      pii-spans: {provider: classify, endpoint: "http://pii-spans:8080"}
+    bindings:
+      pii: {deployment: pii-spans}
+    admission:
+      pii-spans: {max_concurrency: 2}

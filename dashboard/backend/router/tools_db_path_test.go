@@ -30,12 +30,7 @@ func writeConfig(t *testing.T, body string) (*config.Config, string) {
 	return &config.Config{ConfigDir: configDir, AbsConfigPath: configPath, ConfigBaseDir: root}, root
 }
 
-const toolsConfig = `global:
-  integrations:
-    tools:
-      enabled: true
-      tools_db_path: config/runtime/tools/tools_db.json
-`
+var toolsConfig = toolsCatalogConfig("config/runtime/tools/tools_db.json")
 
 // A configured tools_db_path is relative to the project root, which is how
 // config/config.yaml spells it. Returning it unchanged left it to resolve
@@ -67,7 +62,7 @@ func TestResolveToolsDBPathResolvesRelativeConfiguredPathAgainstProjectRoot(t *t
 func TestResolveToolsDBPathDoesNotDoubleTheConfigDirectory(t *testing.T) {
 	t.Parallel()
 
-	cfg, root := writeConfig(t, "global:\n  integrations:\n    tools:\n      enabled: true\n")
+	cfg, root := writeConfig(t, "global: {}\n")
 	got := resolveToolsDBPath(cfg)
 
 	if doubled := filepath.Join(cfg.ConfigDir, "config"); strings.HasPrefix(got, doubled) {
@@ -104,10 +99,10 @@ func TestResolveToolsDBPathLeavesAnAbsoluteConfiguredPathAlone(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(outside), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(outside, []byte("[]"), 0o644); err != nil {
+	if err := os.WriteFile(outside, []byte(fixtureCatalog), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	cfg, _ := writeConfig(t, "global:\n  integrations:\n    tools:\n      enabled: true\n      tools_db_path: "+outside+"\n")
+	cfg, _ := writeConfig(t, toolsCatalogConfig(outside))
 
 	if got := resolveToolsDBPath(cfg); got != outside {
 		t.Errorf("resolveToolsDBPath() = %q, want the configured absolute path %q", got, outside)

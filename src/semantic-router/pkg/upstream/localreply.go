@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // Envoy 1.35's router local-reply bodies.
@@ -53,7 +55,7 @@ func (c *call) localReply(failure *Error) *Response {
 		"Content-Length": {strconv.Itoa(len(body))},
 	}
 	if failure.Kind == KindOverflow {
-		header.Set("X-Envoy-Overloaded", "true")
+		header.Set(headers.EnvoyOverloaded, "true")
 	}
 	return &Response{
 		StatusCode:   status,
