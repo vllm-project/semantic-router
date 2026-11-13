@@ -16,7 +16,10 @@ import (
 // layer reads the output limit only from max_tokens, and documents no
 // max_completion_tokens support:
 // https://github.com/ollama/ollama/blob/6383a0fa9cbf97494b847226e189f6e36b401a08/docs/api/openai-compatibility.mdx?plain=1#L224-L243
-const ollamaProviderType = "ollama"
+const (
+	ollamaProviderType = "ollama"
+	vllmProviderType   = "vllm"
+)
 
 // adaptProviderRequest applies backend-dialect extensions after the standard
 // wire codec has rendered the request. Official protocol semantics stay in
@@ -31,6 +34,10 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	body, mutation, err := r.projectProviderRequest(body, dispatch, ctx)
 	if err != nil {
 		return body, err
+	}
+	body, err = adaptChatReasoningBudget(body, dispatch)
+	if err != nil {
+		return nil, err
 	}
 	if explicitAnthropicReasoningDisabled(ctx, dispatch) &&
 		(mutation == nil || !mutation.reasoningApplied) {
@@ -48,6 +55,42 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	}
 	reportDroppedReasoningSummary(ctx, dispatch, encoded, body)
 	return body, nil
+}
+
+// adaptChatReasoningBudget projects the Router-neutral Chat budget only when
+// the selected provider is vLLM. If both fields reach the provider boundary,
+// the explicit vLLM-native value wins and the neutral alias is consumed.
+func adaptChatReasoningBudget(body []byte, dispatch *providerDispatch) ([]byte, error) {
+	if dispatch == nil || dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+		return body, nil
+	}
+	neutralBudget := gjson.GetBytes(body, "reasoning_budget_tokens")
+	if !neutralBudget.Exists() {
+		return body, nil
+	}
+
+	providerType := ""
+	if dispatch.profile != nil {
+		providerType, _ = dispatch.profile.ProviderType()
+	}
+	if providerType != vllmProviderType {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_capability",
+			"the selected provider cannot honor reasoning_budget_tokens",
+			nil,
+		)
+	}
+
+	nativeBudget := gjson.GetBytes(body, "thinking_token_budget")
+	if nativeBudget.Exists() && nativeBudget.Type != gjson.Null {
+		return sjson.DeleteBytes(body, "reasoning_budget_tokens")
+	}
+	body, err := sjson.SetRawBytes(body, "thinking_token_budget", []byte(neutralBudget.Raw))
+	if err != nil {
+		return nil, err
+	}
+	return sjson.DeleteBytes(body, "reasoning_budget_tokens")
 }
 
 // reportDroppedReasoningSummary records a Responses summary request removed by

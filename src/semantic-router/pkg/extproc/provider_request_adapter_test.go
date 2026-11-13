@@ -129,6 +129,103 @@ func TestResponsesLocalReasoningUsesOneWireControl(t *testing.T) {
 	assert.False(t, hasOutputEffort)
 }
 
+func TestVLLMChatReasoningBudgetProjection(t *testing.T) {
+	decision := reasoningDecision("route", "", 0, "deepseek-model", boolPtr(true), "max")
+	router := newReasoningRouter(
+		config.ReasoningConfig{ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+			"deepseek": {
+				Type: config.ReasoningFamilyTypeReasoningEffort, Parameter: "reasoning_effort",
+				Levels: []string{"low", "high", "max"}, Default: "high",
+				Modes: []string{config.ReasoningModeEnabled, config.ReasoningModeDisabled},
+			},
+		}},
+		[]config.Decision{decision},
+		map[string]config.ModelParams{"deepseek-model": {ReasoningFamily: "deepseek"}},
+	)
+	dispatch := &providerDispatch{
+		logicalModel: "deepseek-model", targetFormat: llmprotocol.OpenAIChatV1,
+		decisionName: "route", useReasoning: true, profile: &config.ProviderProfile{Type: "vllm"},
+	}
+	ctx := &RequestContext{VSRSelectedDecision: &decision}
+
+	for _, test := range []struct {
+		name       string
+		body       string
+		wantBudget interface{}
+	}{
+		{
+			name:       "projects neutral budget",
+			body:       `{"model":"deepseek-model","messages":[],"reasoning_effort":"max","reasoning_budget_tokens":1024}`,
+			wantBudget: float64(1024),
+		},
+		{
+			name:       "native value takes precedence",
+			body:       `{"model":"deepseek-model","messages":[],"reasoning_effort":"max","reasoning_budget_tokens":1024,"thinking_token_budget":2048}`,
+			wantBudget: float64(2048),
+		},
+		{
+			name:       "neutral budget replaces null native field",
+			body:       `{"model":"deepseek-model","messages":[],"reasoning_effort":"max","reasoning_budget_tokens":1024,"thinking_token_budget":null}`,
+			wantBudget: float64(1024),
+		},
+		{
+			name:       "native-only value is preserved",
+			body:       `{"model":"deepseek-model","messages":[],"reasoning_effort":"max","thinking_token_budget":4096}`,
+			wantBudget: float64(4096),
+		},
+		{
+			name: "omitted budget stays omitted",
+			body: `{"model":"deepseek-model","messages":[],"reasoning_effort":"max"}`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			adapted, err := router.adaptProviderRequest([]byte(test.body), dispatch, ctx)
+			require.NoError(t, err)
+			request := unmarshalReasoningRequest(t, adapted)
+			assert.Equal(t, test.wantBudget, request["thinking_token_budget"])
+			assert.NotContains(t, request, "reasoning_budget_tokens")
+			assertChatTemplateReasoningField(t, request, "reasoning_effort", "max")
+		})
+	}
+}
+
+func TestChatReasoningBudgetRequiresSupportingProvider(t *testing.T) {
+	decision := reasoningDecision("route", "", 0, "deepseek-model", boolPtr(true), "max")
+	router := newReasoningRouter(
+		config.ReasoningConfig{ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+			"deepseek": {
+				Type: config.ReasoningFamilyTypeReasoningEffort, Parameter: "reasoning_effort",
+				Levels: []string{"low", "high", "max"}, Default: "high",
+				Modes: []string{config.ReasoningModeEnabled, config.ReasoningModeDisabled},
+			},
+		}},
+		[]config.Decision{decision},
+		map[string]config.ModelParams{"deepseek-model": {ReasoningFamily: "deepseek"}},
+	)
+	dispatch := &providerDispatch{
+		logicalModel: "deepseek-model", targetFormat: llmprotocol.OpenAIChatV1,
+		decisionName: "route", useReasoning: true, profile: &config.ProviderProfile{Type: "openai"},
+	}
+	ctx := &RequestContext{VSRSelectedDecision: &decision}
+
+	noBudgetBody := []byte(`{"model":"deepseek-model","messages":[]}`)
+	adapted, err := adaptChatReasoningBudget(noBudgetBody, dispatch)
+	require.NoError(t, err)
+	assert.Equal(t, noBudgetBody, adapted)
+
+	adapted, err = router.adaptProviderRequest(
+		[]byte(`{"model":"deepseek-model","messages":[],"reasoning_effort":"max","reasoning_budget_tokens":1024}`),
+		dispatch,
+		ctx,
+	)
+	var protocolErr *llmprotocol.ProtocolError
+	require.ErrorAs(t, err, &protocolErr)
+	assert.Equal(t, llmprotocol.ErrorUnsupportedFeature, protocolErr.Category)
+	assert.Equal(t, "unsupported_capability", protocolErr.Code)
+	require.ErrorContains(t, err, "cannot honor reasoning_budget_tokens")
+	assert.Nil(t, adapted)
+}
+
 func TestCustomModelWithoutReasoningFamilyPreservesRequest(t *testing.T) {
 	router := newReasoningRouter(
 		config.ReasoningConfig{},
