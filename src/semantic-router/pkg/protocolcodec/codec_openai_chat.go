@@ -113,15 +113,17 @@ type chatMessageWire struct {
 // message, an id-only reference to one. The payload fields are therefore
 // optional: re-encoding a reference must not invent empty data for it.
 type chatAudioOutputWire struct {
-	ID         string `json:"id"`
+	ID         string `json:"id,omitempty"`
 	Data       string `json:"data,omitempty"`
 	ExpiresAt  int64  `json:"expires_at,omitempty"`
 	Transcript string `json:"transcript,omitempty"`
 }
 
 type chatAudioRequestWire struct {
-	Voice  string `json:"voice,omitempty"`
-	Format string `json:"format,omitempty"`
+	// Voice is a preset name, or a custom-voice reference object this wire
+	// models only far enough to refuse it with a precise diagnostic.
+	Voice  json.RawMessage `json:"voice,omitempty"`
+	Format string          `json:"format,omitempty"`
 }
 
 type chatLegacyCallWire struct {
@@ -419,7 +421,7 @@ func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotoco
 	}
 	// Returned history carries the same text in both forms. The typed blocks
 	// are what the provider needs back, so the alias is not forwarded twice.
-	return assembleChatMessage(wire, index, role, details, len(details) == 0, contents, policy)
+	return assembleChatMessage(wire, index, role, false, details, len(details) == 0, contents, policy)
 }
 
 func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
@@ -433,11 +435,8 @@ func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotoc
 	if _, err := validateChatMessageEnvelope(wire); err != nil {
 		return llmprotocol.Message{}, err
 	}
-	if wire.Audio != nil && wire.Audio.ID == "" && wire.Audio.Data == "" {
-		return llmprotocol.Message{}, invalidProviderResponse(
-			"invalid_audio_output",
-			"Chat Completions response audio carries neither an id nor data",
-		)
+	if audioErr := validateChatResponseAudio(wire.Audio); audioErr != nil {
+		return llmprotocol.Message{}, audioErr
 	}
 	contents, err := decodeChatResponseMessageContent(wire.Content)
 	if err != nil {
@@ -449,7 +448,7 @@ func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotoc
 	}
 	// Clients render the plain reasoning text, and a format that cannot carry
 	// the typed blocks still translates it, so a reply keeps both.
-	message, err := assembleChatMessage(wire, index, role, details, true, contents, policy)
+	message, err := assembleChatMessage(wire, index, role, true, details, true, contents, policy)
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
@@ -477,6 +476,7 @@ func assembleChatMessage(
 	wire chatMessageWire,
 	index int,
 	role llmprotocol.Role,
+	fromResponse bool,
 	details []llmprotocol.Content,
 	keepReasoningText bool,
 	contents []llmprotocol.Content,
@@ -504,7 +504,7 @@ func assembleChatMessage(
 	}
 	message.Content = append(message.Content, contents...)
 	if wire.Audio != nil {
-		audio, audioErr := decodeChatMessageAudio(role, wire.Audio)
+		audio, audioErr := decodeChatMessageAudio(role, wire.Audio, fromResponse)
 		if audioErr != nil {
 			return llmprotocol.Message{}, audioErr
 		}

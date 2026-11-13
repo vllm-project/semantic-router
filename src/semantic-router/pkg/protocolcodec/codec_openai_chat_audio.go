@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"encoding/base64"
 	"encoding/json"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -13,10 +14,11 @@ func decodeChatAudioOutputOptions(raw json.RawMessage, audio *chatAudioRequestWi
 			return nil, invalidChatModalities(err)
 		}
 	}
-	hasAudio := false
+	hasAudio, hasText := false, false
 	for _, modality := range modalities {
 		switch modality {
 		case "text":
+			hasText = true
 		case "audio":
 			hasAudio = true
 		default:
@@ -29,37 +31,52 @@ func decodeChatAudioOutputOptions(raw json.RawMessage, audio *chatAudioRequestWi
 	if !hasAudio {
 		return nil, nil
 	}
-	options := &llmprotocol.AudioOutputOptions{}
-	if audio != nil {
-		options.Voice, options.Format = audio.Voice, audio.Format
+	// The encoder derives ["text","audio"], so an audio-only request would come
+	// back with a modality it did not ask for. Refuse it instead of rewriting it.
+	if !hasText {
+		return nil, invalidChatModalities(nil)
 	}
+	options := &llmprotocol.AudioOutputOptions{Format: audioFormat(audio)}
+	voice, err := decodeChatAudioVoice(audio)
+	if err != nil {
+		return nil, err
+	}
+	options.Voice = voice
 	return options, nil
+}
+
+func audioFormat(audio *chatAudioRequestWire) string {
+	if audio == nil {
+		return ""
+	}
+	return audio.Format
+}
+
+// decodeChatAudioVoice reads a preset voice name. A custom-voice reference is a
+// modelled request the neutral layer does not carry yet, so it is refused with
+// its own code rather than reported as malformed JSON.
+func decodeChatAudioVoice(audio *chatAudioRequestWire) (string, error) {
+	if audio == nil || len(audio.Voice) == 0 {
+		return "", nil
+	}
+	var name string
+	if err := json.Unmarshal(audio.Voice, &name); err == nil {
+		return name, nil
+	}
+	var reference struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(audio.Voice, &reference); err == nil && reference.ID != "" {
+		return "", llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_custom_voice",
+			"Chat Completions custom voice references are unsupported; name a preset voice", nil)
+	}
+	return "", invalidChatModalities(nil)
 }
 
 func invalidChatModalities(cause error) error {
 	return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_modalities", "Chat modalities may contain only text and audio", cause)
 }
 
-// decodeChatMessageAudio admits message.audio on an assistant message only: in
-// Chat, audio is the assistant's spoken answer or a reference to one, never an
-// attachment on a user, system or tool turn.
-func decodeChatMessageAudio(role llmprotocol.Role, wire *chatAudioOutputWire) (llmprotocol.Content, error) {
-	if role != llmprotocol.RoleAssistant {
-		return llmprotocol.Content{}, llmprotocol.NewError(
-			llmprotocol.ErrorInvalidRequest, "audio_requires_assistant_role",
-			"Chat message audio is only valid on an assistant message", nil,
-		)
-	}
-	return llmprotocol.Content{
-		Kind: llmprotocol.ContentAudio,
-		GeneratedAudio: &llmprotocol.GeneratedAudio{
-			ID: wire.ID, Data: wire.Data, ExpiresAt: wire.ExpiresAt, Transcript: wire.Transcript,
-		},
-	}, nil
-}
-
-// Wire format names belong to the codec. Neutral media always uses MIME types,
-// so routing and other consumers do not need provider-specific format aliases.
 func decodeChatAudioContent(part chatContentWire) (llmprotocol.Content, error) {
 	var mediaType string
 	switch part.InputAudio.Format {
@@ -71,6 +88,50 @@ func decodeChatAudioContent(part chatContentWire) (llmprotocol.Content, error) {
 		return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "unsupported_audio_format", "chat input audio format must be wav or mp3", nil)
 	}
 	return llmprotocol.Content{Kind: llmprotocol.ContentAudio, Data: part.InputAudio.Data, MediaType: mediaType, Cache: decodeAnthropicCacheControl(part.CacheControl)}, nil
+}
+
+// decodeChatMessageAudio admits message.audio on an assistant message only: in
+// Chat, audio is the assistant's spoken answer or a reference to one, never an
+// attachment on a user, system or tool turn. A request turn can only reference
+// an earlier answer, so it must name one; a response carries the answer itself.
+func decodeChatMessageAudio(role llmprotocol.Role, wire *chatAudioOutputWire, fromResponse bool) (llmprotocol.Content, error) {
+	if role != llmprotocol.RoleAssistant {
+		return llmprotocol.Content{}, llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest, "audio_requires_assistant_role",
+			"Chat message audio is only valid on an assistant message", nil,
+		)
+	}
+	if !fromResponse && wire.ID == "" {
+		return llmprotocol.Content{}, llmprotocol.NewError(
+			llmprotocol.ErrorInvalidRequest, "audio_reference_requires_id",
+			"Chat assistant message audio must reference an audio id", nil,
+		)
+	}
+	return llmprotocol.Content{
+		Kind: llmprotocol.ContentAudio,
+		GeneratedAudio: &llmprotocol.GeneratedAudio{
+			ID: wire.ID, Data: wire.Data, ExpiresAt: wire.ExpiresAt, Transcript: wire.Transcript,
+		},
+	}, nil
+}
+
+// validateChatResponseAudio refuses an upstream artifact that names no audio and
+// one whose inline payload is not base64. Both are provider faults: a client
+// must not receive them as its own bad request, nor as an empty success.
+func validateChatResponseAudio(wire *chatAudioOutputWire) error {
+	if wire == nil {
+		return nil
+	}
+	if wire.ID == "" && wire.Data == "" {
+		return invalidProviderResponse("invalid_audio_output", "Chat Completions response audio carries neither an id nor data")
+	}
+	if wire.Data == "" {
+		return nil
+	}
+	if _, err := base64.StdEncoding.Strict().DecodeString(wire.Data); err != nil {
+		return invalidProviderResponse("invalid_audio_output", "Chat Completions response audio payload is not base64")
+	}
+	return nil
 }
 
 func (state *chatMessageEncodingState) appendAudio(content llmprotocol.Content) error {

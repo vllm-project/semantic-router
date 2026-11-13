@@ -191,3 +191,45 @@ func TestChatAudioOutputMessageRoleAndArtifactGates(t *testing.T) {
 		requireProtocolErrorCode(t, err, "audio_requires_generated_artifact")
 	})
 }
+
+func TestChatAudioOutputWireShapes(t *testing.T) {
+	engine := NewBuiltinEngine()
+	const base = `{"model":"m","messages":[{"role":"user","content":"hi"}],`
+	for _, test := range []struct{ name, body, code string }{
+		{
+			name: "audio-only modality is refused, not rewritten",
+			body: base + `"modalities":["audio"]}`, code: "invalid_modalities",
+		},
+		{
+			name: "custom voice reference",
+			body: base + `"modalities":["text","audio"],"audio":{"voice":{"id":"voice_1"}}}`, code: "unsupported_custom_voice",
+		},
+		{
+			name: "empty assistant reference",
+			body: `{"model":"m","messages":[{"role":"assistant","content":"hi","audio":{}}]}`, code: "audio_reference_requires_id",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, _, _, err := engine.DecodeRequest(llmprotocol.OpenAIChatV1, []byte(test.body))
+			requireProtocolErrorCode(t, err, test.code)
+		})
+	}
+
+	t.Run("data-only artifact round-trip", func(t *testing.T) {
+		fixture := `{"id":"chatcmpl_a","object":"chat.completion","created":1,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"hi","audio":{"data":"UklGRg=="}}}]}`
+		response, _, _, err := engine.DecodeResponse(llmprotocol.OpenAIChatV1, []byte(fixture))
+		require.NoError(t, err)
+		encoded, err := engine.EncodeResponse(llmprotocol.OpenAIChatV1, response, llmprotocol.Envelope{})
+		require.NoError(t, err)
+		require.JSONEq(t, fixture, string(encoded.Body))
+	})
+
+	t.Run("malformed upstream payload is an upstream fault", func(t *testing.T) {
+		fixture := `{"id":"chatcmpl_a","object":"chat.completion","created":1,"model":"m","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"hi","audio":{"id":"audio_1","data":"not-base64"}}}]}`
+		_, _, _, err := engine.DecodeResponse(llmprotocol.OpenAIChatV1, []byte(fixture))
+		requireProtocolErrorCode(t, err, "invalid_audio_output")
+		var protocolError *llmprotocol.ProtocolError
+		require.ErrorAs(t, err, &protocolError)
+		require.Equal(t, llmprotocol.ErrorUpstreamUnavailable, protocolError.Category)
+	})
+}
