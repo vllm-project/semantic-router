@@ -22,6 +22,9 @@ from cli import harness_router_check as rc
 from cli.chat_client import resolve_chat_base_url
 from cli.terminal import echo, heading, output_width, success, warning
 
+# The vSR plugin's marketplace: this repository on GitHub.
+VSR_SOURCE = "vllm-project/semantic-router"
+
 
 def _options(command):
     for option in reversed(
@@ -72,10 +75,17 @@ def _options(command):
                 " the entrypoint, and Codex budgets with it.",
             ),
             click.option(
-                "--vsr",
-                is_flag=True,
-                help="Also set up vSR (System One) beside the agent: its plugin,"
-                " asking this listener's System One model.",
+                "--vsr/--no-vsr",
+                default=True,
+                help="Also set up vSR (System One) beside the agent when the listener"
+                " publishes a System One model: install its plugin and point it there.",
+            ),
+            click.option(
+                "--vsr-source",
+                default=VSR_SOURCE,
+                show_default=True,
+                help="Where the vSR plugin installs from: a marketplace's owner/repo,"
+                " Git URL, or a local checkout.",
             ),
             click.option("--yes", is_flag=True, help="Write without asking."),
             click.option(
@@ -120,6 +130,7 @@ def claude_code(
     context_window,
     yes,
     vsr,
+    vsr_source,
     launch,
     harness_args,
     scope,
@@ -128,7 +139,7 @@ def claude_code(
     """Route Claude Code's model calls through the gateway."""
     env = dict(os.environ)
     path = hc.claude_settings_path(scope, Path.cwd(), env)
-    _check_launch(launch, harness_args, undo, status_line, vsr)
+    _check_launch(launch, harness_args, undo, status_line)
     if undo:
         _undo(path.parent)
         return
@@ -165,37 +176,34 @@ def claude_code(
         changes.append(script)
     changes.append(hc.Change(path, "json-env", values))
     label = f"<${api_key_env}>" if from_env else token
-    options = _vsr_options(gateway, doc) if vsr else None
-    if options and not dry_run and shutil.which("claude") is None:
-        raise click.ClickException(
-            "--vsr runs claude plugin, and claude is not on PATH."
-        )
-    plugin_id = _vsr_plugin_id(env) if options else None
-    # read before anything is written: a plugin whose options cannot be read is left alone
-    state = _plugin_state(env, plugin_id) if options and plugin_id else None
-    if state and not from_env and "runtimeToken" in state[1]:
-        # Claude Code cannot clear a stored token, and the plugin sends it to any URL
-        raise click.ClickException(
-            f"{plugin_id} holds a runtime token from before, which it would send to"
-            f" {options['runtimeUrl']}. Set ${api_key_env} to this listener's key, or"
-            f" remove the token with /plugin configure {plugin_id} in Claude Code."
-        )
-    plan = _vsr_claude_plan(options, plugin_id, api_key_env if from_env else None)
+    options, plugin_id, state = _vsr_claude_start(
+        env, gateway, doc, vsr, from_env, api_key_env
+    )
+    install = _installs("claude", vsr_source) if options and not plugin_id else []
+    plan = _vsr_claude_plan(
+        options, plugin_id, install, api_key_env if from_env else None
+    )
     if not _run(
         "claude-code", changes, path.parent, label, doc, dry_run, yes, notes, plan
     ):
         return
     if options:
         before = state[0] if state else None
-        _setup_vsr_claude(
-            env, plugin_id, options, token if from_env else "", path.parent, before
+        secret = token if from_env else ""
+        _vsr_step(
+            lambda: _setup_vsr_claude(
+                env, plugin_id, install, options, secret, path.parent, before
+            ),
+            plan,
         )
     if scope == "project":
         for kept in hc.keep_out_of_git([path, path.parent / hc.MANIFEST], Path.cwd()):
             echo(f"Added {kept} to this repository's .git/info/exclude.")
     if from_env:
         warning(f"{path} now holds the API key from ${api_key_env}.")
-    overrides = list(hc.claude_overrides(Path.cwd(), values)) if scope == "user" else []
+    overrides = (
+        list(hc.claude_overrides(Path.cwd(), values, path)) if scope == "user" else []
+    )
     # a project file that sets the key itself sends it again, and is warned about below
     if env.get(hc.API_KEY) and all(hc.API_KEY not in keys for _, keys in overrides):
         echo(
@@ -239,6 +247,7 @@ def codex(
     context_window,
     yes,
     vsr,
+    vsr_source,
     launch,
     harness_args,
     profile,
@@ -246,7 +255,7 @@ def codex(
     """Route Codex CLI through the gateway with a profile of its own."""
     env = dict(os.environ)
     home = hc.codex_home(env)
-    _check_launch(launch, harness_args, undo, vsr=vsr)
+    _check_launch(launch, harness_args, undo)
     if undo:
         _undo(home)
         return
@@ -270,13 +279,25 @@ def codex(
     change = hc.codex_change(home, profile, gateway, model, key_env, context_window)
     changes = [change]
     options = _vsr_options(gateway, doc) if vsr else None
-    plan = []
+    if options and shutil.which("codex") is None:
+        warning("vSR is not set up: codex is not on PATH.")
+        options = None
+    install = (
+        []
+        if not options or _vsr_codex_installed(env)
+        else _installs("codex", vsr_source)
+    )
+    plan = [shlex.join(argv) for argv in install]
     if options:
         # the vSR plugin's own settings: connect owns the runtime keys, the rest stays
         changes.append(hc.Change(home / "vsr.json", "json", options))
-        plan = [shlex.join(argv) for argv in VSR_CODEX_INSTALL]
     if not _run("codex", changes, home, "", doc, dry_run, yes, notes, plan):
         return
+    if options:
+        _vsr_step(lambda: [_must(argv, env) for argv in install], plan)
+        success(
+            f"vSR: the Codex plugin asks {options['runtimeModel']} at {options['runtimeUrl']}."
+        )
     if from_env:
         echo(f"Codex reads the key from ${api_key_env}; keep it set when you start it.")
 
@@ -328,13 +349,13 @@ def _run(
     return True
 
 
-def _check_launch(launch, harness_args, undo, status_line=False, vsr=False) -> None:
+def _check_launch(launch, harness_args, undo, status_line=False) -> None:
     if harness_args and not launch:
         raise click.UsageError(
             "arguments after -- go to the harness only with --launch"
         )
-    if launch and (undo or status_line or vsr):
-        flag = "--undo" if undo else "--status-line" if status_line else "--vsr"
+    if launch and (undo or status_line):
+        flag = "--undo" if undo else "--status-line"
         raise click.UsageError(f"--launch writes nothing, so it does not take {flag}")
 
 
@@ -431,15 +452,60 @@ def _check_router(harness: str, doc: dict | None) -> None:
 
 # vSR beside the agent (System One): the plugin, from this repository's marketplace.
 VSR_PLUGIN = "vsr@vllm-sr"
-VSR_CLAUDE_INSTALL = (
-    ["claude", "plugin", "marketplace", "add", "vllm-project/semantic-router"],
-    ["claude", "plugin", "install", VSR_PLUGIN],
-)
-# The Codex plugin installs from a checkout until it is on main (#6413).
-VSR_CODEX_INSTALL = (
-    ["codex", "plugin", "marketplace", "add", "<semantic-router checkout>"],
-    ["codex", "plugin", "add", VSR_PLUGIN],
-)
+
+
+def _installs(harness_cli: str, source: str) -> list[list[str]]:
+    """The commands that add the marketplace and install the plugin, in the agent's
+    own CLI (Claude Code says install, Codex add)."""
+    verb = "install" if harness_cli == "claude" else "add"
+    return [
+        [harness_cli, "plugin", "marketplace", "add", source],
+        [harness_cli, "plugin", verb, VSR_PLUGIN],
+    ]
+
+
+def _vsr_step(step, plan: list[str]) -> None:
+    """Run a vSR step after the gateway settings are written; a failure leaves those
+    in place and says what to run by hand."""
+    try:
+        step()
+    except click.ClickException as exc:
+        warning(f"vSR is not set up: {exc.message}")
+        for line in plan:
+            echo(f"  {line}")
+
+
+def _vsr_codex_installed(env: dict[str, str]) -> bool:
+    found = _json_of(["codex", "plugin", "list", "--json"], env) or {}
+    return any(
+        str(p.get("pluginId", "")).startswith("vsr@") and p.get("enabled")
+        for p in found.get("installed") or []
+    )
+
+
+def _vsr_claude_start(env, gateway, doc, vsr, from_env, key_env):
+    """The runtime options to set, the installed plugin's id, and its current state,
+    or no options with a line saying why vSR is left out. Read before anything is
+    written, so a plugin that cannot be read or that holds a token is left alone."""
+    options = _vsr_options(gateway, doc) if vsr else None
+    if options and shutil.which("claude") is None:
+        warning("vSR is not set up: claude is not on PATH.")
+        return None, None, None
+    plugin_id = _vsr_plugin_id(env) if options else None
+    try:
+        state = _plugin_state(env, plugin_id) if options and plugin_id else None
+    except click.ClickException as exc:
+        warning(f"vSR is not set up: {exc.message}")
+        return None, None, None
+    if state and not from_env and "runtimeToken" in state[1]:
+        # Claude Code cannot clear a stored token, and the plugin sends it to any URL
+        warning(
+            f"vSR is not set up: {plugin_id} holds a runtime token from before, which"
+            f" it would send to {options['runtimeUrl']}. Set ${key_env} to this"
+            f" listener's key, or remove the token with /plugin configure {plugin_id}."
+        )
+        return None, None, None
+    return options, plugin_id, state
 
 
 def _vsr_options(gateway: str, doc: dict | None) -> dict[str, str] | None:
@@ -459,18 +525,17 @@ def _vsr_options(gateway: str, doc: dict | None) -> dict[str, str] | None:
     }
 
 
-def _vsr_claude_plan(options, plugin_id, key_env) -> list[str]:
-    """What --vsr runs for Claude Code, as shown before it runs (the key named, never
-    shown)."""
+def _vsr_claude_plan(options, plugin_id, install, key_env) -> list[str]:
+    """What vSR's setup runs for Claude Code, as shown before it runs (the key named,
+    never shown)."""
     if not options:
         return []
     shown = {
         **_claude_vsr_values(options),
         **({"runtimeToken": f"<${key_env}>"} if key_env else {}),
     }
-    install = [] if plugin_id else [shlex.join(argv) for argv in VSR_CLAUDE_INSTALL]
     configure = f"claude plugin configure {plugin_id or VSR_PLUGIN} --values-stdin"
-    return [*install, f"{configure} <<< '{json.dumps(shown)}'"]
+    return [*map(shlex.join, install), f"{configure} <<< '{json.dumps(shown)}'"]
 
 
 def _claude_vsr_values(options: dict[str, str]) -> dict[str, str]:
@@ -478,11 +543,11 @@ def _claude_vsr_values(options: dict[str, str]) -> dict[str, str]:
     return {"runtime": "remote", **options, "router": "false"}
 
 
-def _setup_vsr_claude(env, plugin_id, options, token, manifest_dir, before) -> None:
+def _setup_vsr_claude(env, plugin_id, install, options, token, manifest_dir, before):
     """Install the plugin when it is missing and set its runtime through Claude Code's
     own command, which keeps the token in its credential store. --undo puts back the
     options it changed; the token stays."""
-    for argv in () if plugin_id else VSR_CLAUDE_INSTALL:
+    for argv in install:
         _must(argv, env)
     plugin_id = plugin_id or VSR_PLUGIN
     configure = ["claude", "plugin", "configure", plugin_id]

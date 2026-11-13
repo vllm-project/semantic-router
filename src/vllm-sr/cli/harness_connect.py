@@ -143,12 +143,15 @@ def claude_env(gateway: str, model: str, token: str) -> dict[str, str]:
     }
 
 
-def claude_overrides(cwd: Path, keys) -> list[tuple[Path, list[str]]]:
+def claude_overrides(cwd: Path, keys, user: Path) -> list[tuple[Path, list[str]]]:
     """The project settings in cwd that set any of keys in their env: Claude Code
-    reads them only where it starts, and they win over the user's settings."""
+    reads them only where it starts, and they win over the user's settings. Started
+    in the home directory, ./.claude/settings.json is the user's own file."""
     found = []
     for name in ("settings.json", "settings.local.json"):
         path = cwd / ".claude" / name
+        if path.resolve() == user.resolve():
+            continue
         try:
             env = _settings(path.read_text(encoding="utf-8")).get("env") or {}
         except (OSError, ValueError):
