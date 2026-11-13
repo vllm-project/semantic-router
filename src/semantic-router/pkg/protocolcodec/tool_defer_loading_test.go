@@ -20,6 +20,9 @@ func TestDeferLoadingOptIn(t *testing.T) {
 	responses := `{"model":"m","input":"hi","tools":[
 		{"type":"function","name":"lookup","parameters":{"type":"object"},"defer_loading":true},
 		{"type":"custom","name":"patch","defer_loading":true}]}`
+	namespaced := `{"model":"m","input":"hi","tools":[
+		{"type":"namespace","name":"mcp__echo","description":"Echo server","tools":[
+			{"type":"function","name":"echo","parameters":{"type":"object"},"defer_loading":true}]}]}`
 	cases := []struct {
 		source, target llmprotocol.WireFormat
 		body           string
@@ -28,6 +31,7 @@ func TestDeferLoadingOptIn(t *testing.T) {
 		{llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, anthropic, 3},
 		{llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1, anthropic, 3},
 		{llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIResponsesV1, responses, 2},
+		{llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIChatV1, namespaced, 1},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.source)+"->"+string(tc.target), func(t *testing.T) {

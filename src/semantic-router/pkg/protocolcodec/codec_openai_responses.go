@@ -421,7 +421,7 @@ func decodeResponsesTool(
 		return decodeResponsesCustomTool(body, request, policy, diagnostics)
 	}
 	if toolType == "namespace" {
-		return decodeResponsesNamespaceTool(body, request, policy)
+		return decodeResponsesNamespaceTool(body, request, policy, diagnostics)
 	}
 	if toolType != "function" {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function tools enter the model protocol", nil)

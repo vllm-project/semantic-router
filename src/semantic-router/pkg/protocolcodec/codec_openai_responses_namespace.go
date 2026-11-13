@@ -17,7 +17,7 @@ type responsesNamespaceToolWire struct {
 // decodeResponsesNamespaceTool flattens a namespace into the neutral tool list.
 // Every backend receives flat names, including a Responses backend, so one
 // mapping serves all three formats and no backend needs namespace support.
-func decodeResponsesNamespaceTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeResponsesNamespaceTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) error {
 	var wire responsesNamespaceToolWire
 	if err := decodeWireValue(body, &wire, policy); err != nil {
 		return err
@@ -26,7 +26,7 @@ func decodeResponsesNamespaceTool(body json.RawMessage, request *llmprotocol.Req
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Responses namespace requires a name and tools", nil)
 	}
 	for _, entry := range wire.Tools {
-		if err := decodeResponsesNamespaceEntry(entry, wire, request, policy); err != nil {
+		if err := decodeResponsesNamespaceEntry(entry, wire, request, policy, diagnostics); err != nil {
 			return err
 		}
 	}
@@ -39,6 +39,7 @@ func decodeResponsesNamespaceEntry(
 	namespace responsesNamespaceToolWire,
 	request *llmprotocol.Request,
 	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
 ) error {
 	toolType, err := responsesToolDiscriminator(body)
 	if err != nil {
@@ -49,9 +50,9 @@ func decodeResponsesNamespaceEntry(
 	}
 	switch toolType {
 	case "function":
-		err = decodeResponsesFunctionTool(body, request, policy)
+		err = decodeResponsesFunctionTool(body, request, policy, diagnostics)
 	case "custom":
-		err = decodeResponsesCustomTool(body, request, policy)
+		err = decodeResponsesCustomTool(body, request, policy, diagnostics)
 	default:
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "a Responses namespace can hold only function and custom tools", nil)
 	}
