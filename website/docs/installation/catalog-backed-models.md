@@ -13,8 +13,7 @@ transport, pricing, and any restrictions known for that Provider.
 ## Configure the smallest binding
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: production
@@ -25,8 +24,8 @@ providers:
         - name: openai-primary
           provider: openai
           auth: {api_key_env: OPENAI_API_KEY}
-
-routing: {}
+recipes:
+  - name: default
 ```
 
 `production` is the local alias. The Router resolves the canonical card and the
@@ -50,7 +49,7 @@ The card records the checkpoint's 1,048,576-token context window from its
 The MiniMax API mapping separately records its 1,000,000-token service limit.
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: flash
@@ -59,17 +58,18 @@ providers:
         - name: primary
           provider: minimax
           auth: {api_key_env: MINIMAX_API_KEY}
-routing:
-  decisions:
-    - name: flash_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: flash
-          use_reasoning: true
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: flash_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: flash
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 The model uses adaptive thinking and supports `low`, `medium`, `high`, `xhigh`,
@@ -96,8 +96,8 @@ The mapping resolves `MiniMaxAI/MiniMax-M3.1-Flash` and sends effort inside
 version requires vLLM 0.33.0 nightly with the dedicated `minimax-m31-flash`
 image, `--block-size 128`, and `minimax_m3` reasoning/tool parsers. A stable pip
 installation is not sufficient. The Hopper example limits context to 262,144
-and disables video; match your served window and capabilities with canonical
-card overrides as described below. The mapping is experimental and does not
+and disables video; set your served window and capabilities on the alias as
+described below. The mapping is experimental and does not
 certify a particular deployment.
 
 Five published benchmark records are attributed to the
@@ -126,21 +126,36 @@ providers:
 
 The Dashboard shows **Deployment name** or **Provider model ID** only when the
 selected mapping requires one. It is an upstream identifier, not a second
-catalog identity.
+catalog identity, so the mapping's pricing, reasoning transport, and effort
+limits still apply. Set it the same way when a self-hosted server serves the
+model under another name, such as vLLM's `--served-model-name`.
 
 ## Override only operator-owned metadata
 
-You can add local tags, descriptions, capabilities, or evaluations without
-forking the built-in card. The override must use the canonical `catalog` ID,
-not the local alias:
+You can set local tags, a description, a narrower capability list, or the
+served limits without forking the built-in card. Set them on the
+catalog-backed alias; each value replaces the card's value for that alias only:
 
 ```yaml
-routing:
-  modelCards:
-    - name: openai/gpt-5.6-sol
+version: v0.5
+providers:
+  models:
+    - name: production
+      catalog: openai/gpt-5.6-sol
       tags: [production, approved]
       description: Approved for production reasoning traffic.
+      backend_refs:
+        - name: openai-primary
+          provider: openai
+          auth: {api_key_env: OPENAI_API_KEY}
+recipes:
+  - name: default
 ```
+
+A separate `providers.models` entry named after the catalog ID, such as
+`name: openai/gpt-5.6-sol`, does not reach the alias: next to an alias that
+binds that card it is rejected as ambiguous, and on its own it declares a
+separate Model with no backend.
 
 Do not set `providers.models[].reasoning` on a catalog-backed Model. That
 combination is rejected so an alias cannot silently change a repository-owned
@@ -152,23 +167,16 @@ A built-in card declares the model's full context window. A vLLM server
 started with a smaller `--max-model-len` rejects longer requests, but the
 Router still uses the card's window to decide which candidates fit a request
 and how much input context compression may keep. To align them, start vLLM
-with a matching `--max-model-len`, or set the served window on the canonical
-card:
-
-```yaml
-routing:
-  modelCards:
-    - name: qwen/qwen3.6-27b
-      context_window_size: 32768
-```
+with a matching `--max-model-len`, or set the served window on the
+catalog-backed alias.
 
 For example, vLLM 0.11.1 derives a 32,768-token limit from the pinned
 [Hunyuan 7B Instruct config](https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/config.json)
 and rejects `max_model_len=262144`, although the model card and tokenizer
-advertise 256K. For that deployment, override the canonical card window:
+advertise 256K. For that deployment, set the window on the alias:
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: local-hunyuan
@@ -178,15 +186,14 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: http://127.0.0.1:8000/v1
-routing:
-  modelCards:
-    - name: tencent/hunyuan-7b-instruct
       context_window_size: 32768
+recipes:
+  - name: default
 ```
 
-The override uses the canonical card ID, not `local-hunyuan`. Keep the published
-card unchanged, and revalidate the deployment limit after changing the serving
-runtime or model revision.
+The window applies to `local-hunyuan` only, and the published card stays
+unchanged. Revalidate the deployment limit after changing the serving runtime
+or model revision.
 
 When a configuration loads or reloads, the Router reads `max_model_len` from
 each `vllm` backend's `/v1/models` response. If a backend serves less than the

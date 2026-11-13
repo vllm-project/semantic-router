@@ -109,6 +109,18 @@ class RuntimeMetrics:
             "1 when the model passed its golden check.",
             registry=self.registry,
         )
+        self.live = Gauge(
+            "vllm_srun_live",
+            "0 while a forward has run longer than --forward-timeout-seconds.",
+            registry=self.registry,
+        )
+        self.live.set(1)
+        self.stalled_forwards = Counter(
+            "vllm_srun_stalled_forwards",
+            "Forwards that ran longer than --forward-timeout-seconds, by model.",
+            ["model"],
+            registry=self.registry,
+        )
         self.model_memory = Gauge(
             "vllm_srun_model_memory_bytes",
             "Bytes of a model's loaded weights, packed layouts and reduced-precision copies.",

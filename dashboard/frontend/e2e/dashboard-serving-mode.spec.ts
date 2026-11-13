@@ -22,9 +22,9 @@ for (const scenario of [
     await page.route('**/api/router/config/all', (route) =>
       route.fulfill({
         json: {
-          version: 'v0.3',
+          version: 'v0.5',
           providers: { models: scenario.models },
-          routing: { signals: {}, decisions: [] },
+          recipes: [{ name: 'default' }],
         },
       }),
     )

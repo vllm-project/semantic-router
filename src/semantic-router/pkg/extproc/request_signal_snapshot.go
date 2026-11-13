@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 )
 
@@ -20,7 +21,13 @@ type requestSignalSnapshot struct {
 	LastUserHasText   bool
 	FirstImageURL     string
 	FirstAudio        string
-	ImageContentCount int
+	// Turns are the user and assistant messages with text, in order; the
+	// last user one is the current turn (PriorTurns). Images are every image
+	// the request carries (requestImages); UserVideos are the inline videos
+	// of the last user message.
+	Turns      []classification.ConversationTurn
+	Images     []string
+	UserVideos []string
 	// InputModality holds the structural input-modality counts for the
 	// input_modality signal family, scoped to user messages.
 	InputModality classification.InputModalityFacts
@@ -30,6 +37,7 @@ type requestSignalSnapshot struct {
 	ContextTextBytes       int
 	ContextEquivalentBytes int
 	ContextHasNonText      bool
+	ContextReserveTokens   int
 
 	HasDeveloperMessage       bool
 	UserMessageCount          int
@@ -41,7 +49,6 @@ type requestSignalSnapshot struct {
 	ToolChoiceNone            bool
 	AssistantToolCallCount    int
 	ToolResultCount           int
-	AssistantToolNames        []string
 	LastAssistantToolNames    []string
 	LastAssistantToolArgs     []string
 	LastMessageRole           string
@@ -51,6 +58,16 @@ type requestSignalSnapshot struct {
 	LastUserAfterToolResult   bool
 
 	RoutingInput routinginput.Outcome
+}
+
+// PriorTurns are the user and assistant turns before the current user turn.
+func (r *requestSignalSnapshot) PriorTurns() []classification.ConversationTurn {
+	for index := len(r.Turns) - 1; index >= 0; index-- {
+		if r.Turns[index].Role == string(llmprotocol.RoleUser) {
+			return append([]classification.ConversationTurn(nil), r.Turns[:index]...)
+		}
+	}
+	return append([]classification.ConversationTurn(nil), r.Turns...)
 }
 
 func recordNonUserSignalMessage(result *requestSignalSnapshot, role string, text string) {

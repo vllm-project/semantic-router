@@ -74,14 +74,14 @@ func TestShouldWriteKVAddressRegistryRequiresAuthenticatedPrincipal(t *testing.T
 
 func TestShouldWriteKVAddressRegistrySkipsDerivedSessionProvenance(t *testing.T) {
 	ctx := testKVAddressRoutingContext(t)
-	ctx.SessionID = "cc-full-a1b2c3d4e5f67890"
+	ctx.SessionID = "cc-start-a1b2c3d4e5f67890"
 	ctx.SessionProvenance = SessionProvenanceMessageHash
 	ctx.RequestModel = "qwen3-14b"
 	ctx.UpstreamBackendAddress = "10.0.1.5:8000"
 	ctx.UpstreamStatusCode = 200
 
 	if shouldWriteKVAddressRegistry(ctx) {
-		t.Fatal("shouldWriteKVAddressRegistry() = true, want false for message_hash / cc-full sessions")
+		t.Fatal("shouldWriteKVAddressRegistry() = true, want false for message_hash / cc-start sessions")
 	}
 }
 

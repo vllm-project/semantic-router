@@ -1,6 +1,9 @@
 package extproc
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -12,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
@@ -39,6 +43,7 @@ type semanticStreamItem struct {
 	reasoning        string
 	reasoningSig     string
 	toolCall         *llmprotocol.ToolCall
+	image            *llmprotocol.GeneratedImage
 	completed        bool
 	reasoningDetails map[int]llmprotocol.ReasoningDetail
 }
@@ -49,14 +54,36 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	recordStreamingTTFT(ctx)
+	if ctx.ResponseGuardHold != nil {
+		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
+	}
 	r.initializeSemanticResponseStream(ctx)
 	buffers := semanticStreamBuffers{}
+	responseBody, endOfStream = r.bridgeBufferedBody(&buffers, responseBody, endOfStream, ctx)
 	buffers.push(responseBody, ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
 	}
 	return buffers.processingResponse(ctx)
+}
+
+// bridgeBufferedBody replaces a buffered provider object with stream events.
+// Only a provider body that is not SSE can be a buffered answer. Such a reply
+// arrives as one body message, whose end_of_stream is false when trailers
+// follow, so a complete object ends the read rather than the flag.
+func (r *OpenAIRouter) bridgeBufferedBody(
+	buffers *semanticStreamBuffers,
+	body []byte,
+	endOfStream bool,
+	ctx *RequestContext,
+) ([]byte, bool) {
+	bridged, ok := r.bridgeBufferedResponsesBody(body, ctx)
+	if !ok {
+		return body, endOfStream
+	}
+	buffers.bridged = true
+	return bridged, true
 }
 
 func (r *OpenAIRouter) initializeSemanticResponseStream(ctx *RequestContext) {
@@ -75,6 +102,10 @@ type semanticStreamBuffers struct {
 	public     []byte
 	errorFrame []byte
 	streamErr  error
+	// bridged marks a body the Router rewrote from a buffered provider object
+	// into stream events, so the client keeps the codec's frames instead of the
+	// upstream bytes.
+	bridged bool
 }
 
 func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestContext) {
@@ -125,6 +156,71 @@ func (buffers *semanticStreamBuffers) recordError(ctx *RequestContext, err error
 	ctx.StreamingAborted = true
 }
 
+// bridgeBufferedResponsesBody renders a buffered provider answer as the event
+// stream the client asked for. A provider may ignore stream:true and reply with
+// one JSON object; that body carries no data: line for the SSE decoder, so the
+// forced streaming path would drop every byte and report stream_incomplete. The
+// neutral response is decoded and re-emitted through the same encoder synthetic
+// producers and cache replay use.
+//
+// It only applies to a body the provider did not send as SSE, and only once the
+// body is complete: the header phase keeps such an answer out of streamed reads
+// so the whole object arrives in one message. A gzip reply is decoded here,
+// since the streaming path leaves content coding to the client; the client body
+// is encoded again under that header.
+func (r *OpenAIRouter) bridgeBufferedResponsesBody(body []byte, ctx *RequestContext) ([]byte, bool) {
+	if !isResponseAPIStreamRequest(ctx) || ctx.UpstreamBodyStreamed {
+		return nil, false
+	}
+	if ctx.UpstreamResponseGzip {
+		decoded, err := gunzipBounded(ctx.TraceContext, body, maxDecodedUpstreamBodyBytes)
+		if err != nil {
+			return nil, false
+		}
+		body = decoded
+	}
+	if !bytes.HasPrefix(bytes.TrimSpace(body), []byte("{")) || !json.Valid(body) {
+		return nil, false
+	}
+	var probe struct {
+		Object string `json:"object"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil || probe.Object != "response" {
+		return nil, false
+	}
+	engine, err := r.protocolEngineForBackend(ctx)
+	if err != nil {
+		return nil, false
+	}
+	source, target := responseWireFormats(ctx)
+	response, _, diagnostics, err := engine.DecodeResponse(source, body)
+	if err != nil {
+		return nil, false
+	}
+	frames, encoded, err := engine.EncodeResponseStream(target, response, responseStreamContext(ctx, source, target))
+	if err != nil || len(frames) == 0 {
+		return nil, false
+	}
+	// The synthesized stream cannot report what decoding already stripped, so
+	// the buffered path's diagnostics are recorded here.
+	observeProtocolStream(ctx, nil, append(diagnostics, encoded...))
+	return frames, true
+}
+
+// encodeGzip encodes frames under the coding the client's content-encoding
+// header still names.
+func encodeGzip(frames []byte) ([]byte, error) {
+	var out bytes.Buffer
+	writer := gzip.NewWriter(&out)
+	if _, err := writer.Write(frames); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
 func appendProtocolFrames(body []byte, frames [][]byte) []byte {
 	for _, frame := range frames {
 		body = append(body, frame...)
@@ -141,9 +237,8 @@ func observeProtocolStream(
 	// Streaming headers have already been emitted. Keep late compatibility
 	// warnings observable through the same counter and structured diagnostics
 	// as buffered responses instead of retaining them only in request state.
-	for _, diagnostic := range diagnostics {
-		recordProtocolDiagnostic(ctx, normalizeProtocol(string(ctx.SourceFormat)), normalizeProtocol(string(ctx.TargetFormat)), diagnostic)
-	}
+	recordProtocolDiagnostics(ctx, diagnostics)
+	ctx.protocolDiagnosticsReported = len(ctx.ProtocolDiagnostics)
 	ctx.SemanticStreamState.observe(events)
 }
 
@@ -170,9 +265,17 @@ func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *e
 		}, nil)
 	}
 	if ctx.ProtocolResponseStream != nil &&
-		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted) {
+		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted || buffers.bridged) {
+		body := buffers.translated
+		// A bridged answer replaces a gzip provider body, and the client's
+		// content-encoding still names that coding, so the frames carry it too.
+		if buffers.bridged && ctx.UpstreamResponseGzip {
+			if encoded, err := encodeGzip(body); err == nil {
+				body = encoded
+			}
+		}
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
-			Mutation: &ext_proc.BodyMutation_Body{Body: buffers.translated},
+			Mutation: &ext_proc.BodyMutation_Body{Body: body},
 		}, nil)
 	}
 	if ctx.PublicChatUsageFilter != nil {
@@ -205,6 +308,23 @@ func recordStreamingTTFT(ctx *RequestContext) {
 	logging.Debugf("Recorded TTFT on first streamed body chunk: model=%q, TTFT=%.4fs", ctx.RequestModel, ttft)
 }
 
+func responseStreamContext(
+	ctx *RequestContext,
+	source, target llmprotocol.WireFormat,
+) llmprotocol.StreamContext {
+	streamContext := llmprotocol.StreamContext{
+		Context: ctx.TraceContext, Source: source, Target: target,
+		Options:     clientStreamOptions(ctx),
+		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
+		// The model the upstream reports, as buffered and same-format replies pass it through.
+		PreferProviderModel: true,
+	}
+	if responseID := responseObjectPublicID(ctx); responseID != "" {
+		streamContext.ResponseID = responseID
+	}
+	return streamContext
+}
+
 func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	if ctx == nil {
 		return fmt.Errorf("request context is unavailable")
@@ -217,17 +337,8 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		return err
 	}
 	source, target := responseWireFormats(ctx)
-	streamContext := llmprotocol.StreamContext{
-		Context: ctx.TraceContext, Source: source, Target: target,
-		Options:     clientStreamOptions(ctx),
-		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
-		// The model the upstream reports, as buffered and same-format replies pass it through.
-		PreferProviderModel: true,
-	}
+	streamContext := responseStreamContext(ctx, source, target)
 	mutation := clientStreamMutation(ctx, source)
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
-		streamContext.ResponseID = responseID
-	}
 	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {
 		return err
@@ -333,6 +444,10 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				call := *event.ToolCall
 				item.toolCall = &call
 			}
+			if event.Content != nil && event.Content.GeneratedImage != nil {
+				image := *event.Content.GeneratedImage
+				item.image = &image
+			}
 		case llmprotocol.EventResponseCompleted:
 			state.terminal = true
 			state.stopSeq = event.MatchedStopSequence
@@ -393,6 +508,10 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 			call := *item.toolCall
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &call})
 		}
+		if item.image != nil {
+			image := *item.image
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentGeneratedImage, GeneratedImage: &image})
+		}
 		if len(contents) == 0 {
 			return nil, fmt.Errorf("semantic stream output item is empty")
 		}
@@ -413,8 +532,17 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 }
 
 func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, streamErr error) {
+	if semanticResponse := r.completeSemanticStream(ctx, streamErr); semanticResponse != nil {
+		r.commitStreamedAnswer(ctx, semanticResponse)
+	}
+}
+
+// completeSemanticStream settles a stream once it ended: its latency, usage
+// and inflight admission. It returns the answer the stream reconstructs, or
+// nil when the stream ended without one or was settled before.
+func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr error) *llmprotocol.Response {
 	if ctx == nil || ctx.StreamingComplete {
-		return
+		return nil
 	}
 	ctx.StreamingComplete = true
 	if streamErr != nil || ctx.SemanticStreamState == nil || !ctx.SemanticStreamState.terminal {
@@ -448,10 +576,24 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"error":      responseErr.Error(),
 		})
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
-		return
+		return nil
 	}
+	return semanticResponse
+}
+
+// commitStreamedAnswer keeps an answer the client received as it streamed:
+// the selected decision's response_guard, which neither blocks nor writes
+// notes, reads it and records what it found, and the answer reaches the
+// cache, memory, the Responses object and Router Replay. An answer the guard
+// could not read for want of the request's delegated credential reaches
+// Router Replay only.
+func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticResponse *llmprotocol.Response) {
 	recordPrimaryOutputDigest(ctx, semanticResponse)
-	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
+	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
+	if ctx.ResponseGuard != nil {
+		ctx.ResponseGuard.live = true
+	}
+	r.recordRouterReplayResponseGuard(ctx)
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "neutral_stream_replay_encode_failed", map[string]interface{}{
@@ -462,10 +604,21 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_encode_failed", true)
 		return
 	}
-	r.updateResponseCache(ctx, encoded)
 	r.updateKVAddressRegistry(ctx)
-	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
-	r.persistResponseObject(ctx)
+	if principal.Refused(ctx.TraceContext) {
+		// The client already has the answer, so it is not refused, but
+		// nothing keeps an answer nothing checked.
+		logging.ComponentWarnEvent("extproc", "streamed_answer_not_kept", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"reason":     delegatedCredentialCode,
+		})
+		metrics.RecordCacheWriteSkipped(delegatedCredentialCode)
+		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", delegatedCredentialCode, false)
+	} else {
+		r.updateResponseCache(ctx, encoded)
+		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
+		r.persistResponseObject(ctx)
+	}
 	r.attachRouterReplayResponse(ctx, encoded, true)
 }
 

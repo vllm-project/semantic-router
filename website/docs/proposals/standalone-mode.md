@@ -11,7 +11,7 @@ status: Implemented
 > **Lifecycle update:** Engine and Router modes share one persistent frontend
 > and model pool. Router is the default even when a model is supplied. Use
 > `vllm-sr serve ARTIFACT --engine` for Engine mode; see
-> [the current Quickstart](../model-runtime/quickstart.md).
+> [the current Quickstart](../model-runtime/get-started/quickstart.md).
 
 ## Summary
 
@@ -51,7 +51,7 @@ and the Looper executor carries over.
    Helm values. Engine mode (`vllm-sr serve MODEL --engine`) runs the model runtime in a container from the same image,
    on the docker target, using the release-pinned ROCm or CUDA dependencies. Numerical parity must still be validated for the selected hardware and profile.
 5. `vllm-sr` is the only package on PyPI. The Router binary and the model runtime (`vllm-srun`) ship only inside
-   one image family: `vllm-sr` (CPU, amd64 and arm64), `vllm-sr-rocm` and `vllm-sr-cuda` (amd64), which serve
+   one image family: `vllm-sr` (CPU, amd64 and arm64), `vllm-sr-cuda` (amd64 and arm64) and `vllm-sr-rocm` (amd64), which serve
    docker and kubernetes, both modes and engine mode. The former `extproc` and `extproc-rocm` images are alias
    tags of the same digests for one release. Upstream Envoy is used only for docker `extproc`.
 6. The Router keeps talking to the model runtime over HTTP/JSON on a Unix domain socket. A binary fast path is
@@ -424,7 +424,7 @@ How it lands here:
 
 - **Typed extension registries:** signals, algorithms, plugins, graph nodes and filters register by `type` with
   their Go implementation, schema, defaults and validator; adding an extension needs no change to core code.
-- **Validation:** the JSON schema generated from the Go types (`router-config-v0.3.schema.json` today), plus
+- **Validation:** the JSON schema generated from the Go types (`router-config-v0.5.schema.json` today), plus
   cross-reference checks, plus capability checks. A field the active mode cannot honor fails at load and points
   to the mode that can (for example `--gateway extproc`).
 - **Lifecycle:** compile, validate, warm, activate (an atomic swap, as the router generation swap does today),

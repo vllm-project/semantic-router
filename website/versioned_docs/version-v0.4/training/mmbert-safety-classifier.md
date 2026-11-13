@@ -129,7 +129,7 @@ graphs exported from those same weights.
 Configure the models through
 [local bindings](../installation/runtime/in-process.md) or a supported
 [external service](../installation/runtime/external.md).
-The [Safety signal guide](/docs/tutorials/signal/learned/safety) explains how
+The [Safety signal guide](/docs/v0.4/tutorials/signal/learned/safety) explains how
 to use a binary risk rule or a category condition. In a category-specific
 Safety rule, the router runs Hazard after Safety passes its threshold.
 

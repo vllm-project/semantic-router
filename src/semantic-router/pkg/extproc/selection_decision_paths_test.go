@@ -50,7 +50,7 @@ func TestSelectionPathsObserveErrorComposition(t *testing.T) {
 						Model: "frontier", LoRAName: "frontier-adapter",
 						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: extprocBoolPtr(true), ReasoningEffort: "high"},
 					}}
-					input := router.buildSelectionContext(refs, "audit", "continue", nil, "", nil, ctx)
+					input := router.buildSelectionContext(refs, "audit", "continue", "", nil, ctx)
 					base := (&selection.SelectionResult{Score: 1, Method: selection.MethodStatic}).WithCandidate(refs[0])
 					_, result, selected, applied, err := router.applyRouterLearning(input, base, &refs[0], ctx)
 					if mode == "apply" && boundary != "portable" {
@@ -94,12 +94,12 @@ func TestSelectionPathsRescueScoreDirection(t *testing.T) {
 			ctx.VSRSelectedDecision = &config.Decision{Name: "audit"}
 			refs := []config.ModelRef{{Model: "cheap"}, {Model: "frontier"}}
 			sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{SessionID: "audit-session", SelectedModel: "cheap", SelectedCandidate: &refs[0], DecisionName: "audit", Timestamp: time.Now()})
-			input := router.buildSelectionContext(refs, "audit", "continue", nil, "", nil, ctx)
+			input := router.buildSelectionContext(refs, "audit", "continue", "", nil, ctx)
 			scores := selection.CandidateScores{{Candidate: refs[0], Score: 1}, {Candidate: refs[1], Score: 2}}
 			if direction == selection.LowerIsBetter {
 				scores[0].Score, scores[1].Score = 2, 1
 			}
-			base := (&selection.SelectionResult{Score: scores[1].Score, ScoreDirection: direction, Method: selection.MethodLatencyAware}).WithCandidate(refs[1]).WithScores(scores)
+			base := (&selection.SelectionResult{Score: scores[1].Score, ScoreDirection: direction, Method: selection.MethodMultiFactor}).WithCandidate(refs[1]).WithScores(scores)
 			_, _, selected, _, err := router.applyRouterLearning(input, base, &refs[1], ctx)
 			require.NoError(t, err)
 			policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection)
@@ -127,7 +127,7 @@ func TestSelectionPathsWarmScopedPreflight(t *testing.T) {
 			require.True(t, ok)
 			sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{SessionID: identity.memoryKey, SelectedModel: "cheap", SelectedCandidate: &refs[0], DecisionName: "audit", Timestamp: time.Now()})
 			sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{SessionID: identity.memoryKey, Model: "cheap", PromptTokens: 1000, CachedPromptTokens: 900})
-			input := router.buildSelectionContext(refs, "audit", "continue", nil, "", nil, ctx)
+			input := router.buildSelectionContext(refs, "audit", "continue", "", nil, ctx)
 			protected := router.protectionSelectionContext(input, ctx, identity)
 			require.True(t, sessionHasWarmPreviousModel(protected.AgenticSession), "fixture must establish a warm scoped owner")
 			base := (&selection.SelectionResult{Score: 1, Method: selection.MethodStatic}).WithCandidate(refs[0])
@@ -138,7 +138,7 @@ func TestSelectionPathsWarmScopedPreflight(t *testing.T) {
 			// A new conversation releases conversation-scoped warmth, but not a
 			// session-scoped owner. Never suppress exploration using another CID.
 			ctx.Headers["x-conversation-id"] = "fresh-conversation"
-			input = router.buildSelectionContext(refs, "audit", "new topic", nil, "", nil, ctx)
+			input = router.buildSelectionContext(refs, "audit", "new topic", "", nil, ctx)
 			_, _, _, _, err = router.applyRouterLearning(input, base, &refs[0], ctx)
 			require.NoError(t, err)
 			wantCalls := 0
@@ -223,7 +223,7 @@ func TestSelectionPathsLateRejectionPreservesOwner(t *testing.T) {
 			sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{SessionID: identity.memoryKey, SelectedModel: owner.Model, SelectedCandidate: &owner, DecisionName: "previous-decision", Timestamp: time.Now()})
 			before, ok := sessiontelemetry.GetRouterSessionSnapshot(identity.memoryKey, time.Now())
 			require.True(t, ok)
-			input := router.buildSelectionContext(decision.ModelRefs, decision.Name, "hello", decision.Algorithm, "", nil, ctx)
+			input := router.buildSelectionContext(decision.ModelRefs, decision.Name, "hello", "", nil, ctx)
 			chosen, _, err := router.selectModelFromCandidates(input, decision.Algorithm, ctx)
 			require.NoError(t, err)
 			require.Equal(t, "A", chosen.Model)
@@ -296,7 +296,7 @@ func TestSelectionPathsLateFailureCannotUndoNewerDispatch(t *testing.T) {
 		if i == 1 {
 			refs = refs[3:] // New request admits C, rather than the older A proposal.
 		}
-		input := router.buildSelectionContext(refs, decision.Name, "hello", decision.Algorithm, "", nil, ctx)
+		input := router.buildSelectionContext(refs, decision.Name, "hello", "", nil, ctx)
 		_, _, err := router.selectModelFromCandidates(input, decision.Algorithm, ctx)
 		require.NoError(t, err)
 	}

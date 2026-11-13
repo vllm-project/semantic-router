@@ -16,7 +16,6 @@ MODEL_RUNTIME = REPO_ROOT / "src" / "model-runtime"
 STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)\s+AS\s+(\S+)\s*$", re.M)
 STAGES = (
     "router-build",
-    "image-routing-assets",
     "python-base",
     "torch-cpu",
     "torch-rocm-base",
@@ -111,10 +110,10 @@ def test_runtime_takes_pytorch_from_the_accelerator_wheels() -> None:
     assert "https://download.pytorch.org/whl/rocm7.2" in graph["torch-rocm-base"][1]
     assert "https://download.pytorch.org/whl/cu" in graph["torch-cuda"][1]
     assert "fla-core" not in graph["torch-cpu"][1]
+    assert 'test "$TARGETARCH" = amd64' in graph["torch-rocm-base"][1]
+    assert 'test "$TARGETARCH" = amd64' not in graph["torch-cuda"][1]
     for stage in ("torch-rocm-base", "torch-cuda"):
-        body = graph[stage][1]
-        assert 'test "$TARGETARCH" = amd64' in body, stage
-        assert "fla-core==" in body, stage
+        assert "fla-core==" in graph[stage][1], stage
 
 
 def test_rocm_image_builds_causal_conv1d_with_the_released_rocm_sdk() -> None:
@@ -182,10 +181,6 @@ def test_router_images_carry_no_onnx_runtime_or_prepared_bundles() -> None:
 def test_router_images_share_the_model_assets() -> None:
     router = stages()["vllm-sr"][1]
 
-    assert (
-        "COPY --link --from=image-routing-assets /out/ /app/share/image-routing/"
-        in (router)
-    )
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in router
     assert "ENV VLLM_SRUN_CACHE_DIR=/app/models/model-runtime" in router
     # The charts' root filesystem is read-only: GPU caches live in the model volume.
@@ -208,8 +203,8 @@ def test_vllm_sr_image_ships_the_cli_runtime_sync_and_catalog() -> None:
     ) in vllm_sr
     assert "config/recipes/privacy/" not in vllm_sr
     assert (
-        "COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json "
-        "/app/cli/config_schema/router-config-v0.3.schema.json"
+        "COPY src/semantic-router/pkg/configschema/router-config-v0.5.schema.json "
+        "/app/cli/config_schema/router-config-v0.5.schema.json"
     ) in vllm_sr
     # The script is not executable in git; the entrypoint needs the bit.
     assert (
@@ -247,7 +242,7 @@ def test_entrypoint_dispatches_flags_and_config_paths(tmp_path: Path) -> None:
     entrypoint = tmp_path / "start-router.sh"
     entrypoint.write_text(script, encoding="utf-8")
     config = tmp_path / "config.yaml"
-    config.write_text("version: v0.3\n", encoding="utf-8")
+    config.write_text("version: v0.5\n", encoding="utf-8")
 
     def run(*args: str) -> str:
         return (

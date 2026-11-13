@@ -33,7 +33,7 @@ func TestLastToolCallCountsListedNames(t *testing.T) {
 func TestLastToolCallToolsNeedTheirSource(t *testing.T) {
 	rule := config.ConversationRule{Name: "x", Feature: config.ConversationFeature{
 		Type: "count", Source: config.ConversationSource{Type: "assistant_tool_call", Tools: []string{"Read"}},
-	}}
+	}, Predicate: &config.NumericPredicate{GTE: ptrFloat(1)}}
 	if err := config.ValidateConversationRuleContract(rule); err == nil {
 		t.Fatal("tools on assistant_tool_call should be rejected")
 	}
@@ -87,7 +87,7 @@ func TestLastToolCallMatchesCommandArguments(t *testing.T) {
 func TestLastToolCallMatchersAreValidated(t *testing.T) {
 	rule := func(source config.ConversationSource) config.ConversationRule {
 		source.Type = "last_tool_call"
-		return config.ConversationRule{Name: "x", Feature: config.ConversationFeature{Type: "count", Source: source}}
+		return config.ConversationRule{Name: "x", Feature: config.ConversationFeature{Type: "count", Source: source}, Predicate: &config.NumericPredicate{GTE: ptrFloat(1)}}
 	}
 	for name, source := range map[string]config.ConversationSource{
 		"argument without pattern": {Calls: []config.ToolCallMatch{{Tools: []string{"Bash"}, Argument: "command"}}},

@@ -23,7 +23,7 @@ type InMemoryStore struct {
 
 // NewInMemoryStore creates a new in-memory memory store with default embedding config.
 func NewInMemoryStore() *InMemoryStore {
-	return NewInMemoryStoreWithConfig(EmbeddingConfig{Model: EmbeddingModelMMBERT})
+	return NewInMemoryStoreWithConfig(defaultEmbeddingConfig())
 }
 
 // NewInMemoryStoreWithConfig creates a new in-memory memory store with custom embedding config.
@@ -254,6 +254,16 @@ func (s *InMemoryStore) Update(ctx context.Context, id string, memory *Memory) e
 	}
 	if memory.Source != "" {
 		existing.Source = memory.Source
+	}
+
+	if memory.CreatedByUserID != "" {
+		existing.CreatedByUserID = memory.CreatedByUserID
+	}
+	if memory.ConversationID != "" {
+		existing.ConversationID = memory.ConversationID
+	}
+	if memory.CreatedVia != "" {
+		existing.CreatedVia = memory.CreatedVia
 	}
 
 	logging.Debugf("InMemoryStore: updated memory id=%s", id)

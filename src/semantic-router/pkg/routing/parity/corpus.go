@@ -19,6 +19,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
@@ -134,8 +135,8 @@ func (c Case) GatewayRequest() *routing.Request {
 		header = append(header, routing.HeaderField{Name: "content-length", Value: strconv.Itoa(len(c.Request.Body))})
 	}
 	header = append(header,
-		routing.HeaderField{Name: "x-forwarded-proto", Value: "http"},
-		routing.HeaderField{Name: "x-request-id", Value: "parity-" + c.Name},
+		routing.HeaderField{Name: headers.XForwardedProto, Value: "http"},
+		routing.HeaderField{Name: headers.RequestID, Value: "parity-" + c.Name},
 	)
 	return &routing.Request{Header: header, Body: []byte(c.Request.Body)}
 }

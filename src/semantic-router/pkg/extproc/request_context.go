@@ -24,40 +24,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/topiccontinuity"
 )
-
-// EnhancedHallucinationSpan is one unsupported span with its offsets, score,
-// severity and explanation.
-type EnhancedHallucinationSpan struct {
-	Text                    string  `json:"text"`
-	Start                   int     `json:"start"`
-	End                     int     `json:"end"`
-	HallucinationConfidence float32 `json:"hallucination_confidence,omitempty"`
-	ScoreAvailable          bool    `json:"score_available"`
-	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
-	Explanation             string  `json:"explanation"` // Human-readable explanation
-}
-
-// ResponseHallucinationEvidence is the detector output behind the
-// hallucination signal: the verdict, its confidence, and the spans it rests
-// on, with span details when the detector explains them.
-type ResponseHallucinationEvidence struct {
-	Detected       bool
-	Confidence     float32
-	ScoreAvailable bool
-	ScoreKind      string
-	Spans          []string
-	Enhanced       *EnhancedHallucinationInfo
-}
-
-// EnhancedHallucinationInfo contains detailed NLI analysis of hallucinations.
-type EnhancedHallucinationInfo struct {
-	Confidence     float32                     `json:"confidence,omitempty"`
-	ScoreAvailable bool                        `json:"score_available"`
-	ScoreKind      string                      `json:"score_kind,omitempty"`
-	Spans          []EnhancedHallucinationSpan `json:"spans"`
-}
 
 // SessionProvenance identifies how RequestContext.SessionID was derived. A
 // closed enum: only the values declared below are valid, and callers must
@@ -72,14 +39,15 @@ const (
 	// SessionProvenanceResponseAPI: SessionID came from server-retained
 	// Response API state (ResponseObjectState.SessionTrackingID) — trusted.
 	SessionProvenanceResponseAPI SessionProvenance = "response_api"
-	// SessionProvenanceHeader: SessionID came from the client-supplied
-	// x-session-id header — trusted only because it is scoped inside
-	// AuthenticatedPrincipal's hard namespace by callers that need
-	// trust (a header alone is never authentication).
+	// SessionProvenanceHeader: SessionID came from x-vsr-session-id or a
+	// header global.router.headers.session_id_headers accepts — trusted
+	// only because it is scoped inside AuthenticatedPrincipal's hard
+	// namespace by callers that need trust (a header alone is never
+	// authentication).
 	SessionProvenanceHeader SessionProvenance = "header"
-	// SessionProvenanceAnthropicPromptCache: SessionID came from Anthropic
-	// transport/body signals (x-claude-code-session-id or
-	// metadata.user_id) — client-influenced, not trusted for sticky state.
+	// SessionProvenanceAnthropicPromptCache: SessionID came from the
+	// Anthropic body's metadata.user_id — client-influenced, not trusted for
+	// sticky state.
 	SessionProvenanceAnthropicPromptCache SessionProvenance = "anthropic_prompt_cache"
 	// SessionProvenanceMessageHash: SessionID is a derived fingerprint of
 	// message content/structure — a heuristic grouping signal, not an
@@ -97,10 +65,15 @@ type RequestContext struct {
 	learningPreview           *routerLearningPreviewSnapshot // Request-local, read-only selection state; never used by generation.
 	AutomaticCandidateDemands map[string]selection.CandidateDemand
 	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.
+	// BenchmarkConfigHash is the runtime document hash a config-bound
+	// evaluation request was admitted on, and BenchmarkInferenceCalls the
+	// provider calls its receipt counts; both ride in x-vsr-trace.
+	BenchmarkConfigHash     string
+	BenchmarkInferenceCalls int
+	// protocolDiagnosticsReported counts the ProtocolDiagnostics an
+	// x-vsr-warnings header already carried, which metrics counted.
+	protocolDiagnosticsReported int
 
-	RAGRerankLatency    time.Duration
-	RAGRerankScores     []float32
-	RAGRerankerIdentity string
 	// ConfigVersion is the version of the configuration snapshot that serves
 	// the request; 0 when the router serves without the lifecycle.
 	ConfigVersion uint64
@@ -142,6 +115,10 @@ type RequestContext struct {
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
+	// UpstreamBodyStreamed reports the provider body's own mode. A client that
+	// asked for a stream gets IsStreamingResponse even when the provider
+	// answered with one JSON object, and that body has to be read whole.
+	UpstreamBodyStreamed bool
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
@@ -204,6 +181,17 @@ type RequestContext struct {
 	// could influence or collide, not an explicit session declaration. See
 	// ResolveStickyToolIdentity in sticky_tool_identity.go.
 	SessionProvenance SessionProvenance
+	// SessionIDHeader names the header that pinned SessionID, when one did,
+	// of the sessionIDHeaders the Router reads in order.
+	SessionIDHeader  string
+	sessionIDHeaders []string
+	// conversationStartID is read through conversationStart, which takes it
+	// once per request.
+	conversationStartID    string
+	conversationStartTaken bool
+	// identity names the headers the Router reads the caller's user and
+	// groups from: global.services.authz.identity, else the x-authz-* names.
+	identity config.IdentityConfig
 	// AuthenticatedPrincipal is the trusted gateway-authenticated user ID
 	// (from the configured authz header, via authHeaderUserID) — never a
 	// client-supplied or derived value. Empty when the request carries no
@@ -211,11 +199,17 @@ type RequestContext struct {
 	// authentication; this field must only ever be populated from the
 	// configured auth gateway header, never from request-body content.
 	AuthenticatedPrincipal string
-	TurnIndex              int     // Number of prior turns in this session (0 = first turn)
-	PreviousModel          string  // Model used in the immediately preceding turn; empty on first turn
-	CacheWarmthEstimate    float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
-	SessionIdleSeconds     float64 // Seconds since the last locally observed turn for this session
-	SessionIdleKnown       bool    // True when SessionIdleSeconds came from local session observation
+	// delegatedCredential is the requesting user's credential the deployment
+	// authenticator attached for delegated upstreams, taken off the headers at
+	// capture (see captureDelegatedCredential). Unexported so no
+	// serialization or dump of the context carries it; read it through
+	// requestDelegatedCredential.
+	delegatedCredential string
+	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
+	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
+	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+	SessionIdleSeconds  float64 // Seconds since the last locally observed turn for this session
+	SessionIdleKnown    bool    // True when SessionIdleSeconds came from local session observation
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation
@@ -238,16 +232,11 @@ type RequestContext struct {
 	VSRSelectedDecisionConfidenceScored bool                                        // False for structural and error-policy matches without model scores
 	VSRReasoningMode                    string                                      // "on" or "off" - whether reasoning mode was determined to be used
 	VSRSelectedModel                    string                                      // The model selected by VSR
-	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "static", "systemone", "escalate")
 	VSRSelectionReasoning               string                                      // Bounded human-readable selector rationale for replay
 	VSRSelectionTrace                   *selectiontrace.MultiFactorObjective        // Base objective evidence, before Router Learning
 	VSRFusionQuorum                     *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
 	VSRLooperDiagnostics                *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
-	VSRPromptHelperModel                string                                      // Concrete prompt-selector helper model
-	VSRPromptHelperPromptTokens         int64                                       // Prompt tokens consumed by the helper
-	VSRPromptHelperCompletionTokens     int64                                       // Completion tokens consumed by the helper
-	VSRPromptHelperTotalTokens          int64                                       // Total helper tokens
-	VSRPromptHelperLatencyMs            int64                                       // Helper model round-trip latency
 	VSRLearningPolicy                   *routerLearningPolicy                       // Primary Router Learning trace
 	VSRLearningPolicies                 routerLearningPolicies                      // Router Learning traces by component
 	VSRLearningProtectionPreflight      *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
@@ -290,6 +279,30 @@ type RequestContext struct {
 	// fallbackExecutedByCaller is set when the native gateway runs the
 	// request's fallback chain; the response phases then never fall back.
 	fallbackExecutedByCaller bool
+	// fallbackLastFailure is the last fallback candidate's failed upstream
+	// answer; a chain that ends without a success answers the client with it.
+	fallbackLastFailure *failedAttempt
+
+	// contextCounts holds the Router's counts of the request's prompt and
+	// contextBounds its byte bounds (context_window_count.go);
+	// contextWindowKept names the models the window filter kept although
+	// only the estimate said they do not fit, and contextInBand those whose
+	// windows the count falls within the margin of.
+	contextCounts     map[contextCountKey]contextCount
+	contextBounds     map[contextCountKey]int
+	contextWindowKept map[string]struct{}
+	contextInBand     map[string]struct{}
+	// contextTokenizers fixes the tokenizer of each model the request is
+	// counted for; contextVerdicts names the model and prompt shape pairs
+	// whose window check is logged and counted.
+	contextTokenizers map[string]modelTokenizer
+	contextVerdicts   map[string]struct{}
+	// contextAdmission counts a request whose bytes could exceed a window it
+	// can reach, beside its signals (context_window_parallel.go).
+	contextAdmission *contextAdmission
+	// fallbackMinWindow is the widest window whose backend refused the
+	// request for its length; fallback goes on only to wider windows.
+	fallbackMinWindow int
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
@@ -297,12 +310,9 @@ type RequestContext struct {
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
 	// values). It defaults to "upstream"; immediate-response paths (cache,
-	// fast_response, looper, rate-limit, error, image generation) set it
-	// explicitly so the emitted path is accurate. See issue #2203.
+	// fast_response, looper, rate-limit, error) set it explicitly so the
+	// emitted path is accurate. See issue #2203.
 	ResponsePath string
-
-	// Modality routing classification result (AR/DIFFUSION/BOTH)
-	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
 
 	// RequestDemandSnapshots retains at most one content-free demand estimate for
 	// each stable request stage. It is observe-only until final admission lands.
@@ -310,31 +320,24 @@ type RequestContext struct {
 
 	// VSR signal tracking - stores all matched signals for response headers
 	VSRMatchedKeywords        []string // Matched keyword rule names
-	VSRMatchedEmbeddings      []string // Matched embedding rule names
 	VSRMatchedDomains         []string // Matched domain rule names
 	VSRMatchedFactCheck       []string // Matched fact-check signals
 	VSRMatchedUserFeedback    []string // Matched user feedback signals
-	VSRMatchedReask           []string // Matched repeated-question dissatisfaction signals
-	VSRMatchedPreference      []string // Matched preference signals
+	VSRMatchedTurnRelation    []string // Matched turn_relation rules and rule:label references
 	VSRMatchedLanguage        []string // Matched language signals
-	VSRMatchedAction          []string // Matched action signal names
 	VSRMatchedContext         []string // Matched context rule names (e.g. "low_token_count")
 	VSRContextTokenCount      int      // Conservative request-context token estimate used for routing
 	VSRContextTextBytes       int      // Actual semantic-text bytes eligible for online text calibration
 	VSRContextEquivalentBytes int      // Content-free byte equivalent of the conservative routing floor
 	VSRContextHasNonText      bool     // Structured JSON or image reserves make text-only calibration unsafe
-	VSRMatchedStructure       []string // Matched structure rule names
 	VSRMatchedComplexity      []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	VSRMatchedModality        []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
+	VSRMatchedModality        []string // Matched modality rule names
 	VSRMatchedAuthz           []string // Matched authz rule names for user-level routing
 	VSRMatchedJailbreak       []string // Matched jailbreak rule names (confidence >= threshold)
 	VSRMatchedSafety          []string // Matched safety rule names (confidence >= threshold)
 	VSRMatchedPII             []string // Matched PII rule names (denied PII types detected)
-	VSRMatchedKB              []string // Matched knowledge-base signal names
 	VSRMatchedConversation    []string // Matched conversation-shape signal names
-	VSRMatchedEvent           []string // Matched event signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
-	VSRMatchedClassifier      []string // Matched generic classifier signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
 	VSRConversationFacts      classification.ConversationFacts
@@ -344,41 +347,38 @@ type RequestContext struct {
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
 	VSRSignalErrorMatches     map[string]bool
-	// VSRMatchedResponseJailbreak holds response-direction jailbreak rules that
-	// matched. Populated after the model answers, unlike every VSRMatched*
-	// above it.
-	VSRMatchedResponseJailbreak []string
-	// VSRResponseJailbreakType and VSRResponseJailbreakRisk are the evidence the
-	// response-stage signal was computed from, kept so the plugin does not have
-	// to re-derive them from the per-rule confidences.
-	VSRResponseJailbreakType           string
-	VSRResponseJailbreakRisk           float32
-	VSRResponseJailbreakScoreAvailable bool
-	VSRResponseJailbreakDecision       *tasks.LabelDecision
-	// VSRMatchedHallucination holds hallucination rules that matched once the
-	// model answered. VSRHallucinationEvidence is what the observation was
-	// computed from, kept for the plugin that consumes it and for Router
-	// Replay; it is nil when the rule was not evaluated for this request.
-	VSRMatchedHallucination  []string
-	VSRHallucinationEvidence *ResponseHallucinationEvidence
-	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
-	VSRProjectionTrace       *projectiontrace.Trace
+	// VSRScanCoverage is how much of their input the guard rules that read
+	// it in windows read, by "type:name".
+	VSRScanCoverage map[string]string
+	// RoutedSignals is the decision engine's view of the request-stage
+	// signals, which the selected decision's response_guard reads once the
+	// model has answered.
+	RoutedSignals *decision.SignalMatches
+	// ResponseStage is what response-stage rules read about the request; the
+	// answer and its grounding context join it once the model has answered.
+	ResponseStage classification.ResponseInput
+	// ResponseGuard is what the selected decision's response_guard made of
+	// the answer, nil until it ran.
+	ResponseGuard *responseGuardRun
+	// ResponseGuardHold is the streamed answer the Router holds until the
+	// guard has read all of it, nil for an answer it does not hold.
+	ResponseGuardHold      *responseGuardHold
+	VSRDecisionDiagnostics decision.EvaluationDiagnostics
+	VSRProjectionTrace     *projectiontrace.Trace
 
-	// Hallucination mitigation tracking
-	FactCheckNeeded             bool     // Result of fact-check classification
-	FactCheckConfidence         float32  // Confidence score of fact-check classification
-	HasToolsForFactCheck        bool     // Request has tools that provide context for fact-checking
-	ToolResultsContext          string   // Aggregated tool results for hallucination check
-	UserContent                 string   // Stored user content for hallucination detection
-	RequestAudio                string   // First inline user audio, never a remote URL or local path
-	RequestImageURL             string   // First image URL from user messages (for Tier 1 complexity classification)
-	HallucinationDetected       bool     // Result of hallucination detection
-	HallucinationSpans          []string // Unsupported spans found in answer (basic mode)
-	HallucinationScoreAvailable bool
-	HallucinationScoreKind      string
-	HallucinationConfidence     float32                    // Confidence score of hallucination detection
-	EnhancedHallucinationInfo   *EnhancedHallucinationInfo // Detailed NLI info (when use_nli enabled)
-	UnverifiedFactualResponse   bool                       // True if fact-check needed but no tools to verify against
+	// VSRContextReserveTokens is the reserve part of VSRContextTokenCount
+	// (llmprotocol.InputEstimate.ReserveTokens). Refusals rest on the count
+	// without it; once a decision needs that count, the Router drops the
+	// reserve from VSRContextTokenCount for the rest of the request.
+	VSRContextReserveTokens int
+
+	// Fact-check state that memory admission and RAG read.
+	FactCheckNeeded      bool    // Result of fact-check classification
+	FactCheckConfidence  float32 // Confidence score of fact-check classification
+	HasToolsForFactCheck bool    // Request has tools that provide context for fact-checking
+	UserContent          string  // The routing text the request selected
+	RequestAudio         string  // First inline user audio, never a remote URL or local path
+	RequestImageURL      string  // First image URL from user messages (for Tier 1 complexity classification)
 
 	// Jailbreak Detection Results (request-level, from signal classification)
 	JailbreakDetected       bool   // True if jailbreak was detected in user input
@@ -386,13 +386,6 @@ type RequestContext struct {
 	JailbreakDecision       *tasks.LabelDecision
 	JailbreakConfidence     float32 // Confidence score of jailbreak detection
 	JailbreakScoreAvailable bool
-
-	// Response-level Jailbreak Detection Results (from response body scanning)
-	ResponseJailbreakDetected       bool   // True if jailbreak content detected in LLM response
-	ResponseJailbreakType           string // Type of jailbreak detected in response
-	ResponseJailbreakDecision       *tasks.LabelDecision
-	ResponseJailbreakConfidence     float32 // Confidence score of response jailbreak detection
-	ResponseJailbreakScoreAvailable bool
 
 	// PII Detection Results
 	// PIIContentVerified means the classifier fully scanned the available text without PII.
@@ -426,19 +419,20 @@ type RequestContext struct {
 	// separately checks stage-specific evidence and the resolved capture policy.
 	RouterReplayContentOmitted bool
 
-	// pendingTrustedFactsOutcomes holds trusted-facts gate outcomes evaluated
-	// before Replay created its record; startRouterReplay appends them.
-	pendingTrustedFactsOutcomes []routerreplay.Outcome
-
-	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
-	// configuration, or nil when the selected decision declares none.
-	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
-
+	// pendingToolsOutcomes holds the tools plugin's outcomes (its
+	// trusted-facts gate and its selection) recorded before Replay created
+	// its record; startRouterReplay appends them.
+	pendingToolsOutcomes []routerreplay.Outcome
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
+	// LooperTrace is what the Looper's execution reports in x-vsr-trace.
+	LooperTrace *looperTrace
+	// ToolsSelection is what the tools plugin's selection did, for
+	// x-vsr-trace.
+	ToolsSelection *toolsSelection
 
 	// ListenerModels, when set, are the only request models the listener the
 	// client request arrived on accepts.
@@ -457,17 +451,7 @@ type RequestContext struct {
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
-	// originalConversation memoizes one decode of OriginalContextHistory for
-	// the request. It is read-only by contract: consumers must not mutate it.
-	originalConversation       *contextcompression.ConversationHistory
-	originalConversationLoaded bool
-	// TopicContinuityEvaluations holds the selected recipe's topic-continuity
-	// results in rule declaration order, with content-free cost receipts.
-	TopicContinuityEvaluations []topiccontinuity.RuleEvaluation
-	// TopicContinuityResults indexes the same results by rule name. Values are
-	// plain structs, so reads are detached copies.
-	TopicContinuityResults map[string]topiccontinuity.Result
-	SemanticResponse       *llmprotocol.Response
+	SemanticResponse         *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would
@@ -489,11 +473,14 @@ type RequestContext struct {
 	Masking *masking.Allocator
 
 	// RAG (Retrieval-Augmented Generation) tracking
-	RAGRetrievedContext string  // Retrieved context from RAG plugin
-	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "mcp", "hybrid")
-	RAGSimilarityScore  float32 // Best similarity score from retrieval
+	RAGRetrievedContext string  // Retrieved context of the context plugin's rag source
+	RAGBackend          string  // Backend used for retrieval ("milvus", "external_api", "hybrid", ...)
+	RAGSimilarityScore  float32 // Best similarity of the documents kept
 	RAGRetrievalLatency float64 // Retrieval latency in seconds
 	RAGToolCallIDs      map[string]struct{}
+	// contextPrefixBlocks counts the system-prompt blocks the context plugin
+	// prepended, so each source's lands after the ones before it.
+	contextPrefixBlocks int
 
 	// Memory retrieval tracking
 	// Stores formatted memory context to be injected after system prompt
@@ -504,7 +491,7 @@ type RequestContext struct {
 	MemoryFallbackReason string
 	MemoryFailOpen       bool
 	MemoryResultCount    int
-	MemoryMessageIndexes map[int]struct{}
+	MemoryToolCallIDs    map[string]struct{}
 
 	// PluginBackendModel is the model selected before plugins run, and
 	// PluginSkips lists the plugins that capability gating kept from running.
@@ -530,11 +517,11 @@ type RequestContext struct {
 	// Protocol codecs never read or mutate admission state.
 	RateLimitCtx *ratelimit.Context
 
-	// EmittedRetention is a deep-clone snapshot of the retention directive
-	// emitted by the matched Decision. The clone owns its own pointer fields
-	// so that any later mutation does not poison the read-only config tree.
-	// nil means the matched decision had no EMIT retention block.
-	EmittedRetention *config.RetentionDirective
+	// Retention is a deep-clone snapshot of the matched Decision's retention
+	// attribute. The clone owns its own pointer fields so that any later
+	// mutation does not poison the read-only config tree. nil means the
+	// matched decision declares no retention.
+	Retention *config.DecisionRetention
 }
 
 // embeddingContext returns the request-scoped context for outbound embedding

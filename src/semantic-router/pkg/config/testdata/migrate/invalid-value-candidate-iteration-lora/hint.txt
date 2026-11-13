@@ -1,0 +1,1 @@
+recipes[default].decisions[support].candidateIterations[0].models[1]: invalid_value: a candidate iteration model names a lora_name its model does not declare; run `vllm-sr config migrate` (the model without lora_name; declare the LoRA in the model's loras to keep it)

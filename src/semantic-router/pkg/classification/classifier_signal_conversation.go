@@ -24,7 +24,6 @@ type ConversationFacts struct {
 	ToolChoiceNone            bool
 	AssistantToolCallCount    int
 	ToolResultCount           int
-	ImageContentCount         int
 	LastMessageRole           string
 	LastMessageToolResult     bool
 	LastMessageFlowToolResult bool
@@ -120,8 +119,6 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 		return activeToolLoopCount(facts)
 	case "flow_tool_state":
 		return conversationBoolCount(facts.LastMessageFlowToolResult)
-	case "image_content":
-		return facts.ImageContentCount
 	case "last_tool_call":
 		return countLastToolCalls(feature.Source, facts.LastAssistantToolNames, facts.LastAssistantToolArgs)
 	default:

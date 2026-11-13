@@ -500,17 +500,19 @@ func applyResponsesStopReason(
 	diagnostics *llmprotocol.Diagnostics,
 ) error {
 	switch stopReason {
-	case llmprotocol.StopMaxTokens, llmprotocol.StopContentFilter:
+	case llmprotocol.StopMaxTokens, llmprotocol.StopContextWindow, llmprotocol.StopContentFilter:
 		wire.Status = "incomplete"
 		reason := "max_output_tokens"
 		if stopReason == llmprotocol.StopContentFilter {
 			reason = "content_filter"
+		} else if stopReason == llmprotocol.StopContextWindow {
+			appendContextWindowProjection(diagnostics, policy, source, llmprotocol.OpenAIResponsesV1)
 		}
 		wire.IncompleteDetails = &struct {
 			Reason string `json:"reason"`
 		}{Reason: reason}
 		return nil
-	case llmprotocol.StopPaused, llmprotocol.StopContextWindow, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
+	case llmprotocol.StopPaused, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
 		return appendLossy(diagnostics, policy, source, llmprotocol.OpenAIResponsesV1, "response.stop_reason", "Responses cannot represent the source terminal reason")
 	default:
 		return nil
@@ -546,8 +548,11 @@ func encodeResponsesUsage(usage llmprotocol.Usage) *responsesUsageWire {
 		InputTokens:  tokenValue(usage.InputTotal),
 		OutputTokens: tokenValue(usage.OutputTotal),
 		TotalTokens:  tokenValue(usage.Total),
+		// The Responses schema requires an integer cached_tokens, and Codex CLI
+		// fails the turn without one. An unreported cache read is sent as 0, as
+		// vLLM's own Responses server does; an unreported cache write is omitted.
 		InputTokensDetails: &responsesInputUsageDetails{
-			CachedTokens: usage.InputCacheRead.Value, CacheWriteTokens: usage.InputCacheWrite.Value,
+			CachedTokens: llmprotocol.Int64(tokenValue(usage.InputCacheRead)), CacheWriteTokens: usage.InputCacheWrite.Value,
 		},
 		OutputTokensDetails: &responsesOutputUsageDetails{ReasoningTokens: tokenValue(usage.OutputReasoning)},
 	}

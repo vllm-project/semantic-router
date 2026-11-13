@@ -1,6 +1,7 @@
 import type {
   BackendRefAuth,
   BackendRefEntry,
+  BackendRefTLS,
   ConfigData,
   LoRAAdapter,
   EvaluationRecordConfig,
@@ -41,14 +42,27 @@ function backendRefAuth(value: unknown): BackendRefAuth | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const entry = value as Record<string, unknown>
   const auth: BackendRefAuth = {}
+  if (entry.credential === 'delegated') auth.credential = 'delegated'
   if (typeof entry.header === 'string' && entry.header.trim()) auth.header = entry.header.trim()
-  // As with auth_prefix, an explicit empty prefix sends the bare key.
+  // Presence is semantic: an explicit empty prefix sends the bare key instead
+  // of the provider's catalog default.
   if (typeof entry.prefix === 'string') auth.prefix = entry.prefix.trim()
   if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim())
     auth.api_key_env = entry.api_key_env.trim()
   if (typeof entry.api_key_file === 'string' && entry.api_key_file.trim())
     auth.api_key_file = entry.api_key_file.trim()
   return auth
+}
+
+function backendRefTLS(value: unknown): BackendRefTLS | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const entry = value as Record<string, unknown>
+  const tls: BackendRefTLS = {}
+  for (const field of ['ca_file', 'server_name', 'cert_file', 'key_file'] as const) {
+    const fieldValue = entry[field]
+    if (typeof fieldValue === 'string' && fieldValue.trim()) tls[field] = fieldValue.trim()
+  }
+  return Object.keys(tls).length > 0 ? tls : undefined
 }
 
 export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
@@ -68,17 +82,8 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
       else if (entry.protocol === 'http') normalized.protocol = 'http'
       if (typeof entry.weight === 'number' && Number.isFinite(entry.weight))
         normalized.weight = entry.weight
-      if (typeof entry.base_url === 'string' && entry.base_url.trim())
-        normalized.base_url = entry.base_url.trim()
       if (typeof entry.provider === 'string' && entry.provider.trim())
         normalized.provider = entry.provider.trim()
-      if (typeof entry.auth_header === 'string' && entry.auth_header.trim())
-        normalized.auth_header = entry.auth_header.trim()
-      // Presence is semantic: an explicit empty prefix disables a provider's
-      // catalog default instead of falling back to it.
-      if (typeof entry.auth_prefix === 'string') normalized.auth_prefix = entry.auth_prefix.trim()
-      const extraHeaders = stringMap(entry.extra_headers)
-      if (extraHeaders) normalized.extra_headers = extraHeaders
       const headers = stringMap(entry.headers)
       if (headers) normalized.headers = headers
       const auth = backendRefAuth(entry.auth)
@@ -89,8 +94,8 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
         normalized.chat_path = entry.chat_path.trim()
       if (typeof entry.api_key === 'string' && entry.api_key.trim())
         normalized.api_key = entry.api_key.trim()
-      if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim())
-        normalized.api_key_env = entry.api_key_env.trim()
+      const tls = backendRefTLS(entry.tls)
+      if (tls) normalized.tls = tls
       return normalized
     })
 }
@@ -380,9 +385,10 @@ export function effectiveModelCardFormData(model: NormalizedModel): Record<strin
     context_window_size: model.context_window_size ?? '',
     description: model.description ?? '',
     capabilities: model.capabilities ?? [],
+    input_modalities: model.modalities?.input ?? [],
+    output_modalities: model.modalities?.output ?? [],
     loras: model.loras ?? [],
     tags: model.tags ?? [],
-    modality: model.modality ?? '',
   }
 }
 

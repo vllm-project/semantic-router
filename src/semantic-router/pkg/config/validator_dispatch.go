@@ -20,29 +20,25 @@ var (
 		validateRoutingPreviewConfig,
 		validateModelPricingContracts,
 		validateReasoningFamilyContracts,
-		validateExternalModelReasoningContracts,
-		validateGlobalSemanticCacheContracts,
 		validateGlobalMemoryContracts,
-		validateEmbeddingModelContracts,
-		validateGlobalModalityContracts,
+		validateEmbeddingStores,
 		validateModelSelectionConfig,
-		validateCategoryModelBackendContracts,
-		validateComplexityModelBackendContracts,
-		validatePIIModelBackendContracts,
 		validateGlobalRouterLearningConfig,
 		validateLossyTranslationContracts,
 		validateRoutingInputContracts,
+		validateContextWindowContracts,
 		validateRouterHeadersContracts,
 		validateFlowContracts,
-		validateAdvancedToolFilteringConfig,
-		validatePromptCompressionContracts,
-		validateHallucinationContracts,
 		validateModelAdmissionContracts,
 		validateModelSignalTimeoutContracts,
+		validateBackendTLSFiles,
 		validateModelDeploymentContracts,
+		validateFallbackForwardRequestHeaders,
+		validateForwardedIdentityHeaders,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
 		validateGlobalRouterReplayCaptureContracts,
+		validateGlobalPluginContracts,
 	}
 
 	// These contracts need the complete routing graph, including all recipes.
@@ -50,39 +46,28 @@ var (
 		validateKVTransferConfig,
 		validateModelBindingContracts,
 		validateModelResolutionContracts,
-		validateGlobalClassifierRuntimeContracts,
-		validateComplexityRoutingContracts,
 		logConfigWarnings,
 	}
 
 	routingProfileContractValidators = []configContractValidator{
-		validatePromptGuardBackend,
-		validatePIIContracts,
-		ValidatePIIWindow,
 		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
+		validateKeywordContracts,
 		validateLanguageContracts,
-		validateActionContracts,
 		validateContextContracts,
 		validateContextCapacity,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
 		validateDomainContracts,
-		validateStructureContracts,
-		validateReaskContracts,
+		validateApplicationSignalContracts,
 		validateProjectionContracts,
-		validateKnowledgeBaseContracts,
 		validateConversationContracts,
 		validateDecisionContracts,
-		validateDecisionSemanticCacheContracts,
-		validateDecisionMemoryContracts,
-		validateEmbeddingSignalContracts,
-		validateRoutingModalityContracts,
-		validateComplexityContracts,
-		validateJailbreakContracts,
+		validateDecisionOutputContracts,
 		validateSignalStageContracts,
-		validateHallucinationSignalContracts,
-		validateTopicContinuityContracts,
+		validateResponseGuardReferences,
+		validateMaskingSignals,
+		validateHeaderMutationContracts,
 		validateDecisionRouterLearningConfig,
 		validateDecisionRouterReplayCaptureContracts,
 	}
@@ -101,12 +86,6 @@ func validateConfigStructure(cfg *RouterConfig) error {
 // ValidateKubernetesConfigContracts validates the complete candidate after CRDs
 // have been merged, before the reconciler publishes it to the runtime.
 func ValidateKubernetesConfigContracts(cfg *RouterConfig) error {
-	if cfg != nil {
-		if err := cfg.translateModelResources(); err != nil {
-			return err
-		}
-		cfg.applyModuleThresholds()
-	}
 	return validateConfigContracts(cfg)
 }
 
@@ -119,7 +98,7 @@ func validateConfigContractsAtStage(cfg *RouterConfig, stage configValidationSta
 		return fmt.Errorf("router configuration is nil")
 	}
 	effective := *cfg
-	effective.ModelBindings = cfg.EffectiveModelBindings(cfg.Signals, cfg.ModelBindings)
+	effective.ModelBindings = cfg.EffectiveModelBindings(cfg.ModelBindings)
 	if effective.scopedBindings == nil {
 		effective.scopedBindings = cloneModelMap(cfg.ModelBindings)
 		if effective.scopedBindings == nil {
@@ -136,9 +115,14 @@ func validateConfigContractsAtStage(cfg *RouterConfig, stage configValidationSta
 	if err := runConfigContractValidators(cfg, routingConfigContractValidators); err != nil {
 		return err
 	}
-	return visitRoutingProfileConfigs(cfg, func(profile *RouterConfig) error {
+	if err := visitRoutingProfileConfigs(cfg, func(profile *RouterConfig) error {
 		return runConfigContractValidators(profile, routingProfileContractValidators)
-	})
+	}); err != nil {
+		return err
+	}
+	// Which calls reach a delegated upstream follows from the whole, valid
+	// routing graph.
+	return validateDelegatedUpstreams(cfg)
 }
 
 func runConfigContractValidators(cfg *RouterConfig, validators []configContractValidator) error {

@@ -40,14 +40,15 @@ def test_decimal_scalar_preserves_uint64_and_float_fallbacks(scalar, expected):
 def test_long_decimal_token_count_reaches_normal_validation(field):
     scalar = "9" * 4301
     document = (
-        "routing:\n"
-        "  signals:\n"
-        "    context:\n"
-        "      - name: long_decimal\n"
-        f"        {field}: {scalar}\n"
+        "recipes:\n"
+        "  - name: default\n"
+        "    signals:\n"
+        "      context:\n"
+        "        - name: long_decimal\n"
+        f"          {field}: {scalar}\n"
     )
     data = safe_load_router_config(document)
-    value = data["routing"]["signals"]["context"][0][field]
+    value = data["recipes"][0]["signals"]["context"][0][field]
     assert value == scalar
     with pytest.raises(ValueError, match=r"^invalid token count format:"):
         parse_token_count(value)

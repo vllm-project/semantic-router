@@ -15,33 +15,17 @@ type ModelTextDiagnosticRequest struct {
 	ModelDiagnosticTarget
 	Text string `json:"text"`
 }
-type ModelRerankPair struct {
-	Query    string `json:"query"`
-	Document string `json:"document"`
-}
-type ModelRerankDiagnosticRequest struct {
-	ModelDiagnosticTarget
-	Pairs []ModelRerankPair `json:"pairs"`
-}
 type ModelDiagnosticWindow struct {
 	Size    int `json:"size"`
 	Overlap int `json:"overlap"`
 }
 type ModelDiagnosticEmbeddingCapability struct {
-	Dimension     int                             `json:"dimension"`
-	Layer         int                             `json:"layer"`
-	Pooling       string                          `json:"pooling"`
-	Normalization string                          `json:"normalization"`
-	Modalities    []string                        `json:"modalities"`
-	Dimensions    []int                           `json:"dimensions,omitempty"`
-	Audio         *ModelDiagnosticAudioCapability `json:"audio,omitempty"`
-}
-type ModelDiagnosticAudioCapability struct {
-	SampleRates   []int  `json:"sample_rates,omitempty"`
-	MaxSampleRate int    `json:"max_sample_rate"`
-	MaxSeconds    int    `json:"max_seconds"`
-	MaxChannels   int    `json:"max_channels"`
-	Layout        string `json:"layout"`
+	Dimension     int      `json:"dimension"`
+	Layer         int      `json:"layer"`
+	Pooling       string   `json:"pooling"`
+	Normalization string   `json:"normalization"`
+	Modalities    []string `json:"modalities"`
+	Dimensions    []int    `json:"dimensions,omitempty"`
 }
 type ModelDiagnosticBinding struct {
 	Recipe     string                              `json:"recipe"`
@@ -74,54 +58,9 @@ type ModelDiagnosticInputUsage struct {
 	ProcessedTokens int  `json:"processed_tokens"`
 	Truncated       bool `json:"truncated"`
 }
-type ModelDiagnosticLabelWindow struct {
-	Start         int       `json:"start"`
-	End           int       `json:"end"`
-	Probabilities []float32 `json:"probabilities"`
-}
-type ModelDiagnosticLabelsResult struct {
-	Probabilities []float32                    `json:"probabilities,omitempty"`
-	Windows       []ModelDiagnosticLabelWindow `json:"windows,omitempty"`
-	ContentTokens int                          `json:"content_tokens,omitempty"`
-	Input         *ModelDiagnosticInputUsage   `json:"input,omitempty"`
-}
-type ModelDiagnosticScoreWindow struct {
-	Start  int       `json:"start"`
-	End    int       `json:"end"`
-	Scores []float32 `json:"scores"`
-}
-type ModelDiagnosticScoresResult struct {
-	Scores       []float32                    `json:"scores,omitempty"`
-	Windows      []ModelDiagnosticScoreWindow `json:"windows,omitempty"`
-	Input        *ModelDiagnosticInputUsage   `json:"input,omitempty"`
-	PolicySHA256 string                       `json:"policy_sha256,omitempty"`
-	Thresholds   []float32                    `json:"thresholds,omitempty"`
-	WindowRanges [][2]int                     `json:"window_ranges,omitempty"`
-}
-type ModelDiagnosticEntity struct {
-	Type       string   `json:"type"`
-	Start      int      `json:"start"`
-	End        int      `json:"end"`
-	Text       string   `json:"text"`
-	Confidence *float32 `json:"confidence,omitempty"`
-}
-type ModelDiagnosticTokensResult struct {
-	Entities        []ModelDiagnosticEntity    `json:"entities"`
-	Input           *ModelDiagnosticInputUsage `json:"input,omitempty"`
-	ScoresAvailable bool                       `json:"scores_available"`
-	ScanIncomplete  bool                       `json:"scan_incomplete"`
-	TruncatedAt     *int                       `json:"truncated_at,omitempty"`
-	Windows         [][2]int                   `json:"windows,omitempty"`
-	ContentTokens   int                        `json:"content_tokens,omitempty"`
-}
 type ModelDiagnosticEmbeddingResult struct {
 	Embedding []float32                  `json:"embedding"`
 	Input     *ModelDiagnosticInputUsage `json:"input,omitempty"`
-}
-type ModelDiagnosticRerankResult struct {
-	Scores    []float32                    `json:"scores"`
-	ScoreType string                       `json:"score_type"`
-	Inputs    []*ModelDiagnosticInputUsage `json:"inputs"`
 }
 
 func diagnosticBinding(info binding.PreparedBinding) ModelDiagnosticBinding {
@@ -133,9 +72,6 @@ func diagnosticBinding(info binding.PreparedBinding) ModelDiagnosticBinding {
 	if c.Embedding != nil {
 		e := c.Embedding
 		out.Embedding = &ModelDiagnosticEmbeddingCapability{Dimension: e.Dimension, Layer: e.Layer, Pooling: e.Pooling, Normalization: e.Normalization, Modalities: e.Modalities, Dimensions: e.AvailableDimensions}
-		if a := e.Audio; a != nil {
-			out.Embedding.Audio = &ModelDiagnosticAudioCapability{SampleRates: a.SampleRates, MaxSampleRate: a.MaxSampleRate, MaxSeconds: a.MaxSeconds, MaxChannels: a.MaxChannels, Layout: a.Layout}
-		}
 	}
 	return out
 }

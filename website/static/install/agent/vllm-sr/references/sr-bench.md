@@ -3,7 +3,28 @@
 Use sr-bench to compare single models and MoM on shared cases, then improve a
 recipe with measured quality, cost and latency. Discover commands with
 `vllm-sr benchmark --help`; use the [product guide](https://vllm-sr.ai/docs/benchmarking/sr-bench)
-for adapters, dataset preparation, manifests and accounting details.
+for adapters, dataset preparation, manifests and accounting details. The
+[Optimization](https://vllm-sr.ai/install/agent/vllm-sr/references/optimization.md#run-a-short-sr-bench-evaluation) reference has a complete
+smoke run to start from.
+
+## Targets on a local stack
+
+- The stack's sr-bench worker runs in its own container (port 8090 on the
+  host; absent with `--minimal`). A target's `base_url` is the address the
+  container reaches: `http://host.docker.internal:PORT/v1` for a server on the
+  host, `http://vllm-sr-router-container:8899/v1` for the stack's listener
+  (`NAME-vllm-sr-router-container` for a stack named `NAME`), never
+  `127.0.0.1`.
+- A MoM target binds the active configuration: its `config_hash` is
+  `active_runtime_hash` from `GET /api/v1/config/hash`, and the worker sends it
+  as `x-vsr-bench-expected-config-hash`; another active configuration fails the
+  call with 412. Read the hash again after every configuration change.
+- The Router returns a MoM call's receipts (`config_hash`, `inference_calls`,
+  `model_usage`) as `x-vsr-trace` members, so the worker's requests need debug
+  access (`global.router.headers.debug: any` on a loopback stack). Without it
+  the run fails with `Frozen runtime identity verification failed`.
+- Size `limits.max_output_tokens` above the longest answer: a longer one fails
+  the case with `Output token cap exceeded`.
 
 ## Choose the scope
 
