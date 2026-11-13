@@ -27,11 +27,23 @@ export type Tiers = { easyBelow: number; hardFrom: number }
 // The tag a hidden piece of text is replaced with, without its brackets.
 export type Tag = 'name' | 'email' | 'phone' | 'card' | 'ip' | 'date' | 'ssn' | 'iban' | 'address' | 'id' | 'secret'
 
+// What a route or a keep decided on: a subagent, or one of your own turns (`routerTurns`), which is drawn under the
+// prompt that started it.
+export type RouteScope = 'subagent' | 'turn'
+
+// What a move to a smaller model would have re-read without the prompt cache, its cost, and what the turns it must pay
+// back in (PAYBACK_TURNS turns like the last one) would save.
+export type Reread = { tokens: number; cost: number; saving: number }
+
 export type Decision =
   | {
       kind: 'route'
       id: string
       at: string
+      scope?: RouteScope
+      prompt?: string
+      // For a turn: the model the turn before it ran on, which it moved from.
+      from?: string
       toolUseId?: string
       agentId?: string
       task: string
@@ -56,6 +68,8 @@ export type Decision =
       kind: 'keep'
       id: string
       at: string
+      scope?: RouteScope
+      prompt?: string
       toolUseId?: string
       task: string
       level: number
@@ -64,8 +78,12 @@ export type Decision =
       tiers: Tiers
       // The confidence the move needed: the router's line, or the higher one a smaller model than the session's needs.
       minConfidence: number
-      // Why it stayed: the answer was too spread, too unsure for a smaller model, or the goal never uses one.
-      reason?: 'unsure' | 'downgrade' | 'quality'
+      // Why it stayed: the answer was too spread, too unsure for a smaller model, the goal never uses one, a short
+      // reply follows the turn before it, or the move would cost more in cache misses than it saves.
+      reason?: 'unsure' | 'downgrade' | 'quality' | 'follow-up' | 'cache'
+      // For a turn the router would have moved to a smaller model: the model it would have picked.
+      would?: Model
+      reread?: Reread
       latencyMs: number
     }
   | {
@@ -117,6 +135,8 @@ export type Decision =
       at: string
       prompt: string
       signals: Signal[]
+      // Set when the router routes your turns: the turn this prompt starts climbs too, not only the next subagent.
+      turns?: true
       // Every `user_feedback` probability, and the reask score; null where the question failed or was not asked.
       feedback: Record<string, number> | null
       reask: number | null
@@ -168,6 +188,14 @@ export type Decision =
 // A pushback in force until the turn that answers it ends.
 export type Escalation = { prompt: string; signals: Signal[]; turnId?: string }
 
+// The model your turns run on while the router keeps them off the session's (`routerTurns`): the effort the steps rule
+// picked and whether it may drop below the session's own, and the session model it was set against: a different one
+// later means you picked it with /model.
+export type TurnRoute = { model: Model; picked: Effort; effortFrom: Exclude<EffortFrom, 'floor'>; floor: boolean; anchor: string }
+
+// The last main request's prompt, in tokens, and the model that read it: what a move to another model re-reads.
+export type TurnContext = { tokens: number; model: string }
+
 // What the main loop's turn read so far, for check.
 export type TurnReads = { prompt: string; files: number; commands: number; context: string }
 
@@ -198,6 +226,13 @@ declare module 'claude-code' {
       spend: Spend
       // The session model each routed subagent was routed from, by its agent id.
       routedFrom: Record<string, string>
+      // Where your turns run while the router moves them; null while they run on the session's model.
+      turnRoute: TurnRoute | null
+      // The model you picked with /model, which your turns stay on until /vsr turns on; empty when not paused.
+      turnPaused: string
+      turnContext: TurnContext | null
+      // The last main turn's usage, priced on two models to see what a move saves.
+      lastTurnUsage: TurnUsage | null
     }
   }
 }

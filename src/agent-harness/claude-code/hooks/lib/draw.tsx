@@ -1,6 +1,6 @@
 import type { EngineInterface } from 'claude-code'
 
-import type { App, Calibration, Decision, Spend } from '../../types'
+import type { App, Calibration, Decision, Spend, TurnRoute } from '../../types'
 import { APP_NAMES, APPS, type Color, LOOKS, SECTIONS, sectionOf } from './apps'
 import { type Body, type Described, describe, type Gauge, type TallyItem, tallyOf, tallyWidth, type Weight } from './describe'
 import { ANSWERS, type Answer, answersFor } from './labels'
@@ -258,7 +258,15 @@ export function band(
 // What the pane's foot says of the setup: where the classifier runs, the lines in force, the last calibration (the
 // controls at its top show the apps and the waits).
 // `spend` is what routing cost against the session's model; `labeled`, the answers given this session.
-export type Overview = { settings: Settings; calibration: Calibration; isOffline: boolean; spend: Spend; labeled: number }
+export type Overview = {
+  settings: Settings
+  calibration: Calibration
+  isOffline: boolean
+  spend: Spend
+  // Where your turns run while the router routes them, and the model you picked with /model when that paused it.
+  turns: { route: TurnRoute | null; paused: string }
+  labeled: number
+}
 
 const dollars = (value: number) => (value < 0.01 ? '<$0.01' : `$${value.toFixed(2)}`)
 
@@ -268,17 +276,27 @@ function spendWords({ spend }: Overview) {
   if (spend.turns === 0 || sessionModel === undefined || spend.baseline === 0) return undefined
   const change = 1 - spend.actual / spend.baseline
   const verdict = change >= 0 ? `saved ${Math.round(change * 100)}%` : `cost ${Math.round(-change * 100)}% more`
-  return `${dollars(spend.actual)} for ${spend.turns} subagent ${spend.turns === 1 ? 'turn' : 'turns'} vs ${dollars(spend.baseline)} on ${modelName(sessionModel)} · ${verdict} · est. at list price`
+  return `${dollars(spend.actual)} for ${spend.turns} routed ${spend.turns === 1 ? 'turn' : 'turns'} vs ${dollars(spend.baseline)} on ${modelName(sessionModel)} · ${verdict} · est. at list price`
 }
 
 const tokenWords = ({ url, token }: Settings['runtime']) =>
   token === '' ? '' : isCleartextRemote(url) ? ' · token set, sent unencrypted' : ' · token set'
 
+// Where your turns run: off, on the session's model, on another, or paused on the one you picked.
+function turnsWords({ settings, turns }: Overview) {
+  if (!settings.apps.router) return undefined
+  if (!settings.routerTurns) return 'on the model you picked · /vsr turns on lets the router pick'
+  if (turns.paused !== '') return `paused on ${modelName(turns.paused)}, which you picked with /model · /vsr turns on`
+  return turns.route === null ? 'the router picks · on your model now' : `the router picks · on ${modelName(turns.route.model)} at ${turns.route.picked} now`
+}
+
 function overviewRows(about: Overview) {
   const { settings: { runtime, thresholds: t, log }, calibration, isOffline, labeled } = about
   const routing = spendWords(about)
+  const turns = turnsWords(about)
   const since = `${calibration.since} ${calibration.since === 1 ? 'decision' : 'decisions'} since`
   return [
+    ...(turns === undefined ? [] : [['your turns', turns] as const]),
     ...(routing === undefined ? [] : [['routing', routing] as const]),
     ['model', `${runtime.kind} · ${runtime.url}${tokenWords(runtime)}${isOffline ? ' · not answering' : ''}`],
     [

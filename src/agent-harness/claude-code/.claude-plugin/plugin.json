@@ -54,6 +54,12 @@
       "description": "Routes each general-purpose subagent to Haiku, Sonnet or Opus by how hard its task is, and sets its starting effort by how many steps it needs. Off: no classifier call, no card.",
       "default": true
     },
+    "routerTurns": {
+      "type": "boolean",
+      "title": "App: router · your turns",
+      "description": "The router also picks the model (Sonnet or Opus, Haiku too with the save goal) and effort for each prompt you send, on your own Claude login. A turn keeps its model through its tool calls, a short reply keeps the last turn's, and a move to a smaller model waits while re-reading the conversation without the prompt cache would cost more than it saves. Picking a model with /model pauses it until /vsr turns on. Off: your turns run on the model you picked.",
+      "default": false
+    },
     "escalate": {
       "type": "boolean",
       "title": "App: escalate",

@@ -7,8 +7,8 @@ your machine or on a runtime you host; your requests still go to Claude as usual
 
 | App | What it does |
 | --- | --- |
-| router | Gives each general-purpose subagent a model (Haiku, Sonnet or Opus) and an effort level that fit its task. |
-| escalate | When you push back on an answer, Claude re-checks it and the next subagent goes one step up. |
+| router | Gives each general-purpose subagent a model (Haiku, Sonnet or Opus) and an effort level that fit its task, and with [your turns](#your-turns) on, each prompt you send. |
+| escalate | When you push back on an answer, Claude re-checks it and the next subagent, or with your turns routed the turn itself, goes one step up. |
 | redact | Hides personal data and secrets in `Read` and Bash output before Claude reads them. |
 | shield | Warns Claude when a file or web page tries to give it instructions. |
 | guard | Holds a risky Bash command for you to confirm, part by part. |
@@ -68,11 +68,13 @@ By default (`display: normal`) vSR only interrupts when it matters:
     no output from that file or command. The card says why.
 - **One line in a dim frame**, set apart from Claude's reply, when vSR changed something, or the
   router decided on a subagent:
-  - `ROUTED`: the subagent's model and effort, and how hard the task looked.
-  - `KEPT`: the subagent stays on your session's model, and why (the router was not sure enough, or
-    `routerGoal` is `quality`).
+  - `ROUTED`: the subagent's model and effort, and how hard the task looked; under a prompt, the
+    model and effort your turn moved to and the one it moved from.
+  - `KEPT`: the subagent stays on your session's model, or your turn on the model it ran on, and why
+    (the router was not sure enough, `routerGoal` is `quality`, a short reply, or a move that would
+    re-read more of the conversation than it saves).
   - `REDACTED`: what kinds of data were hidden from a file or command. The same kinds hidden from the same file again are not repeated.
-  - `ESCALATED`: you pushed back; Claude re-checks and the next subagent goes one step up.
+  - `ESCALATED`: you pushed back; Claude re-checks and the next subagent (or this turn) goes one step up.
   - `PARTIAL`: an output was read only in part, and the rest went to Claude unchecked.
   - `SKIPPED`: an app got no answer in time, and the line says what went unchecked (for example
     `ticket.txt went to Claude unchecked for personal data`); Claude went on without it.
@@ -85,7 +87,7 @@ In `/vsr`, each decision a score decided has buttons to say whether it was right
 `wrong call`, and for a routed subagent `right model`, `needed stronger` or `could be lighter`.
 Your answers are saved beside the decision log, and `/vsr:calibrate` fits the thresholds to them.
 Once subagents have run on a routed model, a `routing` row estimates what they cost against your
-session's model, at list price: for example `$0.15 for 1 subagent turn vs $6.00 on Opus · saved 98%`.
+session's model, at list price: for example `$0.15 for 1 routed turn vs $6.00 on Opus · saved 98%`.
 It is an estimate. Haiku 5.5 is priced for prompts up to 100K tokens (longer ones cost five times as
 much, so their saving is overstated), and a model with no known price is left out.
 
@@ -108,11 +110,37 @@ how many reasoning steps it needs.
 - When you push back on an answer, the next subagent goes one step up: never below your session's
   model, one effort level higher.
 
-vSR never changes the model or effort of your main conversation, and it picks a subagent's model only
-when the subagent starts, so no conversation's prompt cache is lost. Forks, teammates and calls that
+Unless [your turns](#your-turns) are on, vSR never changes the model or effort of your main
+conversation, and it picks a subagent's model only when the subagent starts, so no conversation's
+prompt cache is lost. Forks, teammates and calls that
 name a model are left alone. So is a subagent you resume: it keeps the model it ran on. A
 subagent routed to your session's own tier keeps your session's exact model (a pinned
 `claude-opus-4-8` stays itself).
+
+## Your turns
+
+The router can pick the model of your own turns too, on your own Claude login: `/vsr turns on`, or
+`routerTurns` in `/config`. It is off by default, since it changes the model you picked. The same
+decision model reads each prompt you send, in milliseconds on your machine and with no Claude call of
+its own, and the turn runs on what it picked:
+
+- Hard prompts go to Opus and the rest to Sonnet, each at the effort the steps answer gives. Haiku runs
+  your turns only with `routerGoal: save`, or when your session is on Haiku already.
+- A turn keeps its model through all its tool calls, and a turn you did not type (a continuation, a
+  notification) runs where the last one did.
+- A move to a smaller model than your session's needs the same confidence as a subagent's, and never
+  happens with `routerGoal: quality`. A short reply (12 words or fewer, such as `yes, do it`) never
+  moves your turns to a smaller model: it follows the turn before it.
+- A move to a smaller model re-reads the whole conversation without the prompt cache. vSR prices that
+  re-read against what three turns like the last one would save, and waits while the re-read costs
+  more: `KEPT · Sonnet would re-read 101K tokens uncached: $0.23, 3 turns save $0.06`.
+- A pushback moves the turn one step up from where the last one ran, one effort level higher.
+- Picking a model with `/model` pauses this: your turns stay on what you picked until
+  `/vsr turns on`, and a toast says so.
+
+The status line says where your turns run (`vSR ⇢ your turns on Opus · xhigh`), each move is a
+`ROUTED` line under the prompt that made it, the `/vsr` pane has a `your turns` row, and routed turns
+count in its `routing` estimate. Behind a Router gateway that already routes each call, leave this off.
 
 ## Guard
 
