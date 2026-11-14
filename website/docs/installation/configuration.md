@@ -61,7 +61,7 @@ decision, algorithm, plugin and global block.
 | `apis.<api>.models` | The only request models an API accepts. | every model of its kind |
 | `apis.systemone.schema` | The System One schema the listener speaks to its clients: `vllm-sr/5.0`, or `vllm-sr/4.0`, which also accepts every request form of the earlier contract. See [System One schemas](../system-one/use/schemas.md). | `vllm-sr/5.0` |
 | `apis.systemone.max_deadline_ms` | The longest a System One request waits for a model. | 10 minutes |
-| `apis.systemone.vsr` | What the vSR agent plugins pointed at the listener do: `redact`, `shield`, `guard`, `check`, `escalate`, `router` and `router_turns` on or off, and `router_goal` (`quality`, `balanced` or `save`). The listing (`GET /v1/systemone/models`) hands it to the plugins, and each field set here wins over the plugin's own option. The Dashboard edits it as checkboxes under Config › Global Config › vSR agent plugins. See [Agent harnesses](agent-harness.md). | the plugins' own options |
+| `apis.systemone.vsr` | What the vSR agent plugins pointed at the listener do: `redact`, `shield`, `guard`, `check`, `escalate`, `router` and `router_turns` on or off, and `router_goal` (`quality`, `balanced` or `save`). The listing (`GET /v1/systemone/models`) hands it to the plugins, and each field set here wins over the plugin's own option. The Dashboard edits each field as Default (left out), On or Off under Config › Global Config › vSR agent plugins. See [Agent harnesses](agent-harness.md). | the plugins' own options |
 | `tls.cert_file`, `tls.key_file` | One-way TLS. | off |
 | `identity.trust_headers`, `identity.trusted_peers` | The identity sources the listener trusts, in standalone mode. | none |
 
