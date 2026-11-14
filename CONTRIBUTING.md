@@ -316,6 +316,14 @@ Summary check shows the effective conditions, including inherited requirements.
   recovery. Do not rerun a cancelled sibling or repeatedly requeue the same
   head to try to erase a required failure.
 
+  The diagnostic separates successful qualification from check visibility,
+  suite conclusions, and the commit rollup. A required green publisher Gate
+  in an unsuccessful suite reports `suite_mismatch`; an unsuccessful rollup
+  reports `rollup_blocked`. A successful sibling suite is valid even when its
+  ID differs from the qualification run's suite. Missing or changing evidence
+  cannot establish a healthy state. These reports never authorize cleanup or
+  claim that GitHub's final merge evaluation will succeed.
+
   Any fresh-head recovery needs the author's or maintainer's explicit consent
   and confirmation that the PR is no longer queued. Use a normal merge from
   upstream `main` or **Update branch**, not a default rebase/force-push. Confirm

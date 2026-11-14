@@ -698,6 +698,42 @@ class DiagnosticClient(Client):
         self.mutate_on_final = None
         self.run_reads = {}
         self.live_base = BASE
+        self.rollup = {"oid": HEAD, "state": "SUCCESS"}
+        self.suites = {
+            identity: {
+                "id": identity,
+                "head_sha": HEAD,
+                "app": {"id": APP_ID},
+                "status": "completed",
+                "conclusion": conclusion,
+            }
+            for identity, conclusion in ((19, "cancelled"), (20, "success"))
+        }
+
+    def gh(self, arguments, *, read, text):
+        assert read and text and arguments[:3] == ["gh", "api", "graphql"]
+        assert f"head={HEAD}" in arguments
+        return type(
+            "Response",
+            (),
+            {
+                "returncode": 0,
+                "stdout": json.dumps(
+                    {
+                        "data": {
+                            "repository": {
+                                "object": {
+                                    "oid": self.rollup["oid"],
+                                    "statusCheckRollup": {
+                                        "state": self.rollup["state"]
+                                    },
+                                }
+                            }
+                        }
+                    }
+                ),
+            },
+        )()
 
     def advance_main_unrelated(self):
         self.live_base = "d" * 40
@@ -724,6 +760,8 @@ class DiagnosticClient(Client):
         assert kwargs.get("method", "GET") == "GET"
         self.reads.append(endpoint)
         path = endpoint.removeprefix(f"repos/{REPO}/")
+        if path.startswith("check-suites/"):
+            return copy.deepcopy(self.suites[int(path.rsplit("/", 1)[1])])
         if path.startswith(f"commits/{HEAD}/check-runs?"):
             checks = self.checks
             if "filter=latest" in path:
@@ -774,6 +812,7 @@ class DiagnosticTests(unittest.TestCase):
     def test_healthy_without_native_failure_does_not_claim_recovery(self):
         client = DiagnosticClient()
         client.checks.pop()
+        client.checks[0]["check_suite"]["id"] = 20
         result = self.diagnose(client)
         self.assertEqual(result["state"], "healthy")
         self.assertFalse(result["evidence"]["competition"])
