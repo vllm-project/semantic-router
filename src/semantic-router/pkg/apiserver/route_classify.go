@@ -4,7 +4,6 @@ package apiserver
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -34,10 +33,16 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CONFIG_HASH_UNAVAILABLE", err.Error())
 		return
 	}
-	if errors.Is(err, services.ErrEmptyText) ||
+	if errors.Is(err, services.ErrInvalidClassificationInput) ||
+		errors.Is(err, binding.ErrInvalidInput) ||
+		errors.Is(err, services.ErrEmptyText) ||
 		errors.Is(err, services.ErrInvalidRequestFacts) ||
 		errors.Is(err, binding.ErrInputLimit) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+	if errors.Is(err, binding.ErrCapability) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "UNSUPPORTED_INPUT", "the selected task and prepared model do not support this input")
 		return
 	}
 	if errors.Is(err, services.ErrUnknownDiagnosticRecipe) {
@@ -66,7 +71,7 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 // handleIntentClassification handles intent classification requests
 func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.IntentRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if err := parseIntentClassificationRequest(r, &req, false); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
@@ -90,7 +95,7 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CONFIG_HASH", "expected config hash must be a lowercase SHA-256 digest")
 		return
 	}
-	if err := s.parseStrictJSONRequest(r, &req); err != nil {
+	if err := parseIntentClassificationRequest(r, &req, true); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
@@ -159,6 +164,10 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 		return
 	}
 	service = selected
+	if len(req.Inputs) > 0 {
+		s.handleTypedBatchClassification(w, r, service, req)
+		return
+	}
 	metrics.RecordBatchClassificationTexts("unified", len(req.Texts))
 	if !s.ensureUnifiedClassifierAvailable(w, service) {
 		return
@@ -198,16 +207,21 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(
 		return BatchClassificationRequest{}, false
 	}
 
-	var rawReq map[string]json.RawMessage
-	if unmarshalErr := decodeJSONBody(body, &rawReq); unmarshalErr != nil {
+	rawReq, duplicate, unmarshalErr := classificationEnvelopeFields(body)
+	if unmarshalErr != nil {
 		metrics.RecordBatchClassificationError("unified", "invalid_json")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON format")
 		return BatchClassificationRequest{}, false
 	}
 
-	if _, exists := rawReq["texts"]; !exists {
-		metrics.RecordBatchClassificationError("unified", "missing_texts_field")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts field is required")
+	_, hasTexts := rawReq["texts"]
+	_, hasInputs := rawReq["inputs"]
+	if hasTexts == hasInputs || (hasInputs && duplicate) {
+		message := "exactly one of texts or inputs is required"
+		if !hasTexts && !hasInputs {
+			message = "texts field is required"
+		}
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", message)
 		return BatchClassificationRequest{}, false
 	}
 
@@ -218,16 +232,21 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(
 		return BatchClassificationRequest{}, false
 	}
 
-	if len(req.Texts) == 0 {
-		metrics.RecordBatchClassificationError("unified", "empty_texts")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
+	count, field := len(req.Texts), "texts"
+	if hasInputs {
+		count, field = len(req.Inputs), "inputs"
+		if maxBatchSize <= 0 {
+			maxBatchSize = defaultTypedClassificationBatchLimit
+		}
+	}
+	if count == 0 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", field+" array cannot be empty")
 		return BatchClassificationRequest{}, false
 	}
-
-	if maxBatchSize > 0 && len(req.Texts) > maxBatchSize {
+	if maxBatchSize > 0 && count > maxBatchSize {
 		metrics.RecordBatchClassificationError("unified", "batch_too_large")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
-			fmt.Sprintf("texts array exceeds max_batch_size %d", maxBatchSize))
+			fmt.Sprintf("%s array exceeds max_batch_size %d", field, maxBatchSize))
 		return BatchClassificationRequest{}, false
 	}
 
@@ -271,7 +290,12 @@ func (s *ClassificationAPIServer) calculateUnifiedStatistics(unifiedResults *ser
 	lowConfidenceCount := 0
 	lowConfidenceThreshold := 0.7
 
-	for _, intentResult := range unifiedResults.IntentResults {
+	successful := 0
+	for index, intentResult := range unifiedResults.IntentResults {
+		if index < len(unifiedResults.ItemErrors) && unifiedResults.ItemErrors[index] != nil {
+			continue
+		}
+		successful++
 		categoryDistribution[intentResult.Category]++
 		confidence := float64(intentResult.Confidence)
 		totalConfidence += confidence
@@ -282,8 +306,8 @@ func (s *ClassificationAPIServer) calculateUnifiedStatistics(unifiedResults *ser
 	}
 
 	avgConfidence := 0.0
-	if len(unifiedResults.IntentResults) > 0 {
-		avgConfidence = totalConfidence / float64(len(unifiedResults.IntentResults))
+	if successful > 0 {
+		avgConfidence = totalConfidence / float64(successful)
 	}
 
 	return CategoryClassificationStatistics{
@@ -295,16 +319,23 @@ func (s *ClassificationAPIServer) calculateUnifiedStatistics(unifiedResults *ser
 
 // extractRequestedResults converts unified results to batch format based on task type
 func (s *ClassificationAPIServer) extractRequestedResults(unifiedResults *services.UnifiedBatchResponse, taskType string, options *ClassificationOptions) []BatchClassificationResult {
+	var results []BatchClassificationResult
 	switch taskType {
 	case "pii":
-		return piiBatchResults(unifiedResults)
+		results = piiBatchResults(unifiedResults)
 	case "security":
-		return securityBatchResults(unifiedResults)
+		results = securityBatchResults(unifiedResults)
 	case "all":
-		return allBatchResults(unifiedResults, options)
+		results = allBatchResults(unifiedResults, options)
 	default:
-		return intentBatchResults(unifiedResults, options)
+		results = intentBatchResults(unifiedResults, options)
 	}
+	for index, err := range unifiedResults.ItemErrors {
+		if err != nil && index < len(results) {
+			results[index] = BatchClassificationResult{Error: services.ClassificationErrorForItem(err)}
+		}
+	}
+	return results
 }
 
 // allBatchResults keeps the intent projection and attaches the PII and security

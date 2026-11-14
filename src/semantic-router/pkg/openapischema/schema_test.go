@@ -92,6 +92,33 @@ func TestOverridesReplaceDerivedSchemas(t *testing.T) {
 	}
 }
 
+func TestPointerOverrideCanExcludeNull(t *testing.T) {
+	closed := Schema{Type: "object", Required: []string{"value"}, Properties: map[string]Schema{"value": {Type: "string"}}, AdditionalProperties: false}
+	overrides := Overrides{reflect.TypeFor[*tokenLimit](): closed}
+	if got := For[withOverride](overrides).Properties["optional"]; !reflect.DeepEqual(got, closed) {
+		t.Fatalf("explicit pointer override = %+v, want non-nullable closed object", got)
+	}
+	if got := For[*tokenLimit](overrides); !reflect.DeepEqual(got, closed) {
+		t.Fatalf("top-level pointer override = %+v, want non-nullable closed object", got)
+	}
+}
+
+func TestSchemaEncodesExclusionAndArrayBounds(t *testing.T) {
+	minimum := int64(1)
+	schema := Schema{Not: &Schema{Required: []string{"legacy"}}, Properties: map[string]Schema{
+		"items":  {Type: "array", MinItems: &minimum, Items: &Schema{Type: "string"}},
+		"legacy": {Not: &Schema{}},
+	}}
+	encoded, err := json.Marshal(schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"not":{"required":["legacy"]},"properties":{"items":{"minItems":1,"type":"array","items":{"type":"string"}},"legacy":{"not":{}}}}`
+	if string(encoded) != want {
+		t.Fatalf("schema JSON = %s, want %s", encoded, want)
+	}
+}
+
 type wireScore struct {
 	Score          float64 `json:"score"`
 	ScoreAvailable bool    `json:"-"`

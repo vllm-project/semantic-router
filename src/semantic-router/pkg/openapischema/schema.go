@@ -13,6 +13,8 @@ import (
 
 // Schema describes an OpenAPI 3.0 schema object.
 type Schema struct {
+	Not                  *Schema           `json:"not,omitempty"`
+	MinItems             *int64            `json:"minItems,omitempty"`
 	Minimum              *int64            `json:"minimum,omitempty"`
 	OneOf                []Schema          `json:"oneOf,omitempty"`
 	Nullable             bool              `json:"nullable,omitempty"`
@@ -53,7 +55,8 @@ func (s Schema) Accepts(keys []string) bool {
 }
 
 // Overrides replaces the derived schema of specific types, for types whose
-// JSON encoding reflection cannot see.
+// JSON encoding reflection cannot see. An explicit pointer-type override also
+// replaces the default nullable wrapper for that pointer.
 type Overrides map[reflect.Type]Schema
 
 var (
@@ -84,13 +87,13 @@ type generator struct {
 }
 
 func (g generator) schema(valueType reflect.Type) Schema {
+	if override, ok := g.overrides[valueType]; ok {
+		return override
+	}
 	if valueType.Kind() == reflect.Pointer {
 		schema := g.schema(valueType.Elem())
 		schema.Nullable = true
 		return schema
-	}
-	if override, ok := g.overrides[valueType]; ok {
-		return override
 	}
 	if valueType == jsonRawMessageType {
 		return Schema{}
