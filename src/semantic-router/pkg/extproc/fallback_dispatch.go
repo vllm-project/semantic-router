@@ -753,6 +753,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
 	requestBackendStreamUsage(dispatch.targetFormat, &projected)
+	r.requestUnstoredOnCallerLogin(dispatch.targetFormat, &projected)
 	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
 	if encodeErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr

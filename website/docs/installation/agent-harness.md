@@ -222,7 +222,7 @@ describes. An `anthropic` backend receives those as sent.
 
 Claude Code signed in to a Claude subscription can use the gateway without an
 API key: give every backend `auth: {credential: caller}`
-([Security Hardening](security-hardening#send-the-clients-own-login-to-anthropic)),
+([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)),
 and point Claude Code at the listener without a gateway token, so it sends its
 own login:
 
@@ -251,7 +251,7 @@ model's `pricing` is the API's list price, not the plan's, so leave it out or
 read the cost as an API-price estimate. The login stays its owner's: serve this
 to your own Claude Code, or to your organization's members, never to other
 people as a service
-([Security Hardening](security-hardening#send-the-clients-own-login-to-anthropic)).
+([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)).
 
 ### Router settings for Codex CLI
 
@@ -290,6 +290,27 @@ ends in a `lossy_translation` error where the thinking block closes, and Codex
 reconnects until it gives up. The Responses endpoint needs the Router's
 Responses service and store. See [Codex CLI](protocol-compatibility#codex-cli)
 for the other fields Codex sends.
+
+### Codex on its own ChatGPT login
+
+Codex signed in with ChatGPT can use the gateway without an API key as well:
+give every backend `provider: openai`, the endpoint
+`https://chatgpt.com/backend-api/codex` and `auth: {credential: caller}`
+([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)),
+and add `requires_openai_auth = true` to the gateway's provider in the Codex
+profile, so Codex sends its own login with the request:
+
+```toml
+[model_providers.vllm-sr]
+name = "vLLM Semantic Router"
+base_url = "http://localhost:8899/v1"
+wire_api = "responses"
+requires_openai_auth = true
+```
+
+Keep `web_search = "disabled"` in the profile, which `vllm-sr connect` writes:
+the Router takes function tools only. The plan's usage limits apply to each
+call, and the login stays its owner's, as for Claude Code above.
 
 ### With the vSR plugin
 

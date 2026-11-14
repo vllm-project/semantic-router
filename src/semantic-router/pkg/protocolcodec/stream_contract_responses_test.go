@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -553,4 +554,41 @@ var officialResponsesStreamMarkers = []map[string]any{
 		"type": "response.reasoning_text.done", "sequence_number": 19,
 		"item_id": "item_3", "output_index": 2, "content_index": 0, "text": "reasoning",
 	},
+}
+
+// ChatGPT's Codex backend sends response.metadata between output events. It
+// must not fail the stream, and its drop is reported.
+func TestResponsesStreamDropsChatGPTModerationMetadata(t *testing.T) {
+	stream := "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"model\":\"gpt-6-luna\",\"status\":\"in_progress\",\"output\":[]}}\n\n" +
+		"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n" +
+		"event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[]}}\n\n" +
+		"event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"delta\":\"ok\"}\n\n" +
+		"event: response.metadata\ndata: {\"type\":\"response.metadata\",\"sequence_number\":4,\"response_id\":\"resp_1\",\"metadata\":{\"openai_chatgpt_moderation_metadata\":{}}}\n\n" +
+		"event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":5,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"text\":\"ok\"}\n\n" +
+		"event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":6,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"ok\",\"annotations\":[]}}\n\n" +
+		"event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":7,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\",\"annotations\":[]}]}}\n\n" +
+		"event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":8,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"model\":\"gpt-6-luna\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":2,\"output_tokens\":1,\"total_tokens\":3}}}\n\n"
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1} {
+		engine, err := NewBuiltinEngine().NewStream(llmprotocol.OpenAIResponsesV1, target,
+			llmprotocol.StreamContext{Context: context.Background(), PublicModel: "vllm-sr/auto"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, events, diagnostics, err := engine.Push([]byte(stream))
+		if err != nil {
+			t.Fatalf("%s: the stream failed: %v", target, err)
+		}
+		_, final, _, err := engine.Finalize(nil)
+		if err != nil {
+			t.Fatalf("%s: finalize: %v", target, err)
+		}
+		for _, event := range append(events, final...) {
+			if event.Type == llmprotocol.EventResponseFailed {
+				t.Fatalf("%s: the stream ended failed: %+v", target, event)
+			}
+		}
+		if !slices.ContainsFunc(diagnostics, func(d llmprotocol.Diagnostic) bool { return d.Field == "stream.response.metadata" }) {
+			t.Fatalf("%s: the dropped metadata was not reported: %+v", target, diagnostics)
+		}
+	}
 }
