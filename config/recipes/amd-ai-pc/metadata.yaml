@@ -1,0 +1,20 @@
+schema_version: vllm-sr/recipe-metadata/v1
+id: amd-ai-pc
+name: AMD AI PC
+version: 0.1.0
+description: >-
+  Serves requests from a small local model on an AMD AI PC's CPU and uses an
+  external model only when a request explicitly allows it.
+authors:
+  - name: vLLM Semantic Router Contributors
+    url: https://github.com/vllm-project/semantic-router/graphs/contributors
+license: Apache-2.0
+tags:
+  - amd
+  - ai-pc
+  - cpu
+  - local-first
+  - privacy
+links:
+  source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/amd-ai-pc
+  documentation: https://github.com/vllm-project/semantic-router/blob/main/config/recipes/amd-ai-pc/README.md

@@ -258,6 +258,10 @@
   "config/recipes/agent/metadata.yaml": {
     "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
+  "config/recipes/amd-ai-pc/config.yaml": {},
+  "config/recipes/amd-ai-pc/metadata.yaml": {
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
+  },
   "config/recipes/balance/config.yaml": {
     "signals": {
       "default/systemone.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
