@@ -26,6 +26,9 @@ import (
 type semanticResponseStreamState struct {
 	responseID string
 	model      string
+	// sawContent marks the first event that carries an answer item, so TTFT
+	// and the session's latency keep ignoring keepalive frames.
+	sawContent bool
 	stop       llmprotocol.StopReason
 	stopSeq    string
 	usage      llmprotocol.Usage
@@ -53,7 +56,6 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	endOfStream bool,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	recordStreamingTTFT(ctx)
 	if ctx.ResponseGuardHold != nil {
 		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
 	}
@@ -65,6 +67,9 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
 	}
+	// TTFT waits for the first event that carries content: a keepalive or
+	// comment frame a gateway sends while it queues is not the model's answer.
+	recordStreamingTTFT(ctx)
 	return buffers.processingResponse(ctx)
 }
 
@@ -290,6 +295,9 @@ func recordStreamingTTFT(ctx *RequestContext) {
 	if ctx == nil || ctx.TTFTRecorded || ctx.ProcessingStartTime.IsZero() || ctx.RequestModel == "" {
 		return
 	}
+	if state := ctx.SemanticStreamState; state == nil || !state.sawContent {
+		return
+	}
 
 	ttft := time.Since(ctx.ProcessingStartTime).Seconds()
 	if ttft <= 0 {
@@ -367,6 +375,10 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 		return
 	}
 	for _, event := range events {
+		switch event.Type {
+		case llmprotocol.EventOutputItemStarted, llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta, llmprotocol.EventToolCallDelta:
+			state.sawContent = true
+		}
 		if event.ResponseID != "" {
 			state.responseID = event.ResponseID
 		}
