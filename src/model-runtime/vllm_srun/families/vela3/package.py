@@ -9,7 +9,8 @@ UltraBERT backbone in ``model.safetensors``. An adapter whose file the package
 does not ship routes off, as the released runtime does. The family loads the
 two configs, the router questions, the tokenizer and the weights; every loaded
 byte must match the built-in table's digest for a pinned revision and the
-package's ``SHA256SUMS``; bundled Python is never read. ``config.json``
+package's ``SHA256SUMS``. A bundled ``render31.py`` is fingerprinted as data
+to select its question semantics, never imported or executed. ``config.json``
 names the eight markers by distinct token IDs inside the backbone's
 vocabulary. The identity is the SHA-256 of the weight files' digests.
 """
@@ -36,6 +37,10 @@ from ..vela3_shared import CONFIG_FILE, config_file
 ENCODER = "vela3-encoder/1"
 BACKBONE_FILE = "model.safetensors"
 COMMON_FILES = ("config.json", CONFIG_FILE, "router_questions.json", "tokenizer.json")
+RENDER31_FILE = "render31.py"
+# Shared renderer shipped by vllm-sr/vela3.1-fast@0ed6ed301fbbf0c312f11a13ad17e3a6f8887262.
+# Its fingerprint selects semantics without importing or executing package code.
+RENDER31_SHA256 = "d0c8ebc0896c7d3b942f5eba98cdd247ef01e08d329237015bef4fc55009c8ad"
 LORA_TARGETS = (
     "q_proj",
     "k_proj",
@@ -205,6 +210,7 @@ class Vela3Package:
     adapters: dict[str, Adapter]
     files: dict[str, str]
     model_sha256: str
+    render31: bool = False
 
     @property
     def max_input_tokens(self) -> int:
@@ -249,7 +255,14 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
     vela3 = read_json(root / CONFIG_FILE, mapping=True)
     team, adapter_files = roster(root, vela3)
     weight_names = [BACKBONE_FILE, *sorted(set(adapter_files.values()))]
-    files = named_files(root, [*COMMON_FILES, *weight_names])
+    sums = read_sums(root)
+    render31 = RENDER31_FILE in sums or (root / RENDER31_FILE).exists()
+    names = [*COMMON_FILES, *weight_names]
+    if render31:
+        names.append(RENDER31_FILE)
+    files = named_files(root, names)
+    if render31 and files[RENDER31_FILE] != RENDER31_SHA256:
+        raise PackageError("unsupported Vela question renderer fingerprint")
     if expected is not None:
         wrong = sorted(
             name
@@ -258,7 +271,6 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
         )
         if wrong:
             raise PackageError(f"files differ from the pinned revision: {wrong[:5]}")
-    sums = read_sums(root)
     mismatched = sorted(
         name for name, digest in files.items() if name in sums and sums[name] != digest
     )
@@ -289,4 +301,5 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
         adapters=adapters,
         files=files,
         model_sha256=sha256_json({name: files[name] for name in weight_names}),
+        render31=render31,
     )

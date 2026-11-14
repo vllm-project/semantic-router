@@ -1,0 +1,137 @@
+"""render31.py: the one question renderer of Vela 3.1 / pico / loki (6 Nov 2026).
+
+Every place that turns a question into text imports this file:
+- the training-data builders (d3 / decision rows, router and span pools, pad blocks);
+- the trainers;
+- the dev and test readers;
+- the shipped packages.
+
+A shipped package carries a byte-identical copy (the tests check the sha256).
+
+The rule: a question is rendered exactly as it is given. There is no compact or described mode, no environment switch, and nothing is filled in.
+- An option or label that carries a description renders "name: description". One without a description renders "name".
+- A noul renders as the two-option choice {"no": <false text>, "yes": <true text>}; a side with no description renders bare. A noul with no
+  descriptions is {"no": "", "yes": ""}.
+- A built-in question asked by its text with no criteria is rendered as written in the package's built-in table
+  (router_questions.json, vela3_config.json span.schemas). When the request does give criteria, those are rendered as given: names only
+  stay names only, and nothing is copied over from the built-in table.
+- A state or a description that is not a string renders as compact JSON (separators "," and ":", ensure_ascii False).
+
+Pure Python, no third-party imports, so any trainer, reader or package can import it.
+Import contract: `import render31 as R`, with the module's directory on sys.path.
+- R.text(x)
+- R.option_text(name, desc)
+- R.options(q, builtin=None)
+- R.question_text(q, builtin=None)
+- R.span_labels(q, builtin=None)
+- R.to_row(rid, state, q, gold=None, soft=None, weight=1.0)
+- R.schema_option_strings(sch)
+- R.without_descriptions(q)
+- R.VERSION
+"""
+import json
+
+VERSION = "render31/1"
+NOUL_OPTIONS = {"no": "", "yes": ""}
+
+
+def text(x):
+    """A state, an instruction or a description -> its rendered string: a string as is, None as "", anything else as compact JSON."""
+    if x is None:
+        return ""
+    return x if isinstance(x, str) else json.dumps(x, ensure_ascii=False, separators=(",", ":"))
+
+
+def option_text(name, desc):
+    """One option or label block: "name: description", or "name" when there is no description."""
+    d = text(desc)
+    return str(name) if not d else f"{name}: {d}"
+
+
+def _as_given(crit):
+    """criteria as given -> ordered {name: description or ""}: a dict keeps its descriptions, a list / tuple gives names only."""
+    if isinstance(crit, dict):
+        return {str(k): text(v) for k, v in crit.items()}
+    if isinstance(crit, (list, tuple)):
+        names = [str(k) for k in crit]
+        if len(set(names)) != len(names):
+            raise ValueError("option / label names must be distinct")
+        return {n: "" for n in names}
+    raise ValueError("criteria must be an object {name: description or null} or a list of names")
+
+
+def options(q, builtin=None):
+    """A request question {type, instructions, criteria} -> ordered {option name: description or ""}, exactly as given.
+    noul: {"no": false text, "yes": true text} ("true" / "false" criteria; "" on a side that has none).
+    choice / set / score: the criteria as given. With no criteria, a built-in question's options as written (builtin = its table entry, which
+    holds "options"); otherwise an error."""
+    t = q.get("type")
+    if t == "noul":
+        c = q.get("criteria") or {}
+        if not isinstance(c, dict):
+            raise ValueError("noul criteria must be an object {true: text, false: text}")
+        return {"no": text(c.get("false")), "yes": text(c.get("true"))}
+    crit = q.get("criteria")
+    if crit is None or (isinstance(crit, (dict, list, tuple)) and len(crit) == 0):
+        if builtin is not None and builtin.get("options"):
+            return _as_given(builtin["options"])
+        raise ValueError(f"a {t} question needs criteria")
+    return _as_given(crit)
+
+
+def span_labels(q, builtin=None):
+    """A span question -> ordered {label: description or ""}, as given (criteria or labels). With none given, a built-in label set as written
+    (builtin = vela3_config span.schemas[set], which holds "labels")."""
+    crit = q.get("criteria") if q.get("criteria") is not None else q.get("labels")
+    if crit is None or (isinstance(crit, (dict, list, tuple)) and len(crit) == 0):
+        if builtin is not None and builtin.get("labels"):
+            return _as_given(builtin["labels"])
+        raise ValueError("span questions need criteria: {label: description or null} or a list of labels")
+    return _as_given(crit)
+
+
+def question_text(q, builtin=None):
+    """The question text as given; a built-in question's text as written only when the request gives none."""
+    s = text(q.get("instructions"))
+    if not s and builtin is not None:
+        s = text(builtin.get("question") or builtin.get("text"))
+    return s
+
+
+def to_row(rid, state, q, gold=None, soft=None, weight=1.0):
+    """A typed decision (Decision Index wire format) -> the training / inference row contract: the state as one "user" part, the question
+    as one choice over the options as given (a noul as {no, yes}), nodrop, no [ABS]. gold: option name (noul: "yes" / "no")."""
+    opts = options(q)
+    qq = dict(id="d3:" + q["type"], type="choice", over="user", text=text(q.get("instructions", "")), question_paraphrases=[],
+              options=opts, abstain=False, nodrop=True, gold=gold if gold is not None else next(iter(opts)))
+    if soft is not None:
+        qq["soft"] = soft
+    if weight != 1.0:
+        qq["weight"] = weight
+    return dict(id=rid, parts=[dict(role="user", text=text(state))], questions=[qq])
+
+
+def without_descriptions(q):
+    """The same question with its descriptions removed (a request that gives names only). Dev readers use it for bare-form reads; the
+    rendering is still the one path above."""
+    q = dict(q)
+    if q.get("type") == "noul":
+        q.pop("criteria", None); q.pop("choices", None)
+    elif isinstance(q.get("criteria"), dict):
+        q["criteria"] = list(q["criteria"])
+    elif isinstance(q.get("labels"), dict):
+        q["labels"] = list(q["labels"])
+    return q
+
+
+def schema_option_strings(sch):
+    """A training-row / generic-contract question schema {type, text, options | labels | levels} -> (question string, [block strings]):
+    the exact strings a trainer, a reader and a package tokenise for it (no sampling, no anonymising)."""
+    t = sch["type"]
+    if t == "span":
+        lab = sch.get("labels") or {}
+        return text(sch.get("text")), [option_text(n, d) for n, d in lab.items()]
+    if t == "score":
+        return text(sch.get("text")), [option_text(n, (sch.get("options") or {}).get(n)) for n in sch["levels"]]
+    o = sch.get("options") or {}
+    return text(sch.get("text")), [option_text(n, d) for n, d in o.items()]
