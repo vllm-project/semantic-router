@@ -54,6 +54,7 @@ type routerComponents struct {
 	recipeModelSelectors        map[config.RecipeName]*selection.Registry
 	lookupTable                 lookuptable.LookupTable
 	memoryStore                 memory.Store
+	memoryStoreRuntime          *memoryStoreRuntime
 	memoryStatus                routerruntime.MemoryStatus
 	memoryExtractor             *memory.MemoryExtractor
 	memoryPersistence           *memory.PersistenceRunner
@@ -335,8 +336,17 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
 	}
-	if components.memoryStore != nil {
-		components.resources.add(components.memoryStore.Close)
+	if cfg.UsesMemory() {
+		components.memoryStoreRuntime = newMemoryStoreRuntime(components.memoryStore)
+		components.resources.add(components.memoryStoreRuntime.Close)
+		if components.memoryStore == nil && components.memoryStatus.Reason == routerruntime.MemoryReasonBackendUnavailable {
+			components.memoryStoreRuntime.startRecovery(
+				cfg,
+				[]*embedding.Set{components.serviceEmbeddings},
+				createMemoryStoreWithContext,
+				defaultMemoryReconnectPolicy,
+			)
+		}
 	}
 	// Resources close in reverse order, so retire writes before closing the store.
 	components.memoryPersistence = createMemoryPersistenceRunner(cfg, components.memoryExtractor)
@@ -459,11 +469,11 @@ func registerRouterSessionStore(
 	})
 }
 
-func createMemoryPersistenceRunner(cfg *config.RouterConfig, extractor *memory.MemoryExtractor) *memory.PersistenceRunner {
-	// Workers and queue storage follow the memory store that was actually built:
-	// enablement alone still yields a nil extractor when the backend is
-	// unreachable, and every write would then be suppressed as "no_extractor".
-	if cfg == nil || extractor == nil || !cfg.UsesMemory() {
+func createMemoryPersistenceRunner(cfg *config.RouterConfig, _ *memory.MemoryExtractor) *memory.PersistenceRunner {
+	// The runner belongs to the configured memory generation, even while its
+	// backend is reconnecting. Jobs remain suppressed until the atomic store slot
+	// is populated, then use an extractor snapshot backed by the recovered store.
+	if cfg == nil || !cfg.UsesMemory() {
 		return nil
 	}
 	persistence := cfg.Memory.Persistence
@@ -525,6 +535,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorders:             components.replayRecorders,
 		ShadowDispatcher:            components.shadowDispatcher,
 		MemoryStore:                 components.memoryStore,
+		memoryStore:                 memoryStoreSlot(components.memoryStoreRuntime),
 		MemoryStatus:                components.memoryStatus,
 		MemoryExtractor:             components.memoryExtractor,
 		memoryPersistence:           components.memoryPersistence,

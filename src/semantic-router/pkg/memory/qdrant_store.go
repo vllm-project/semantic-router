@@ -48,6 +48,15 @@ type QdrantStoreOptions struct {
 }
 
 func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
+	return NewQdrantStoreWithContext(context.Background(), opts)
+}
+
+// NewQdrantStoreWithContext creates a Qdrant store whose initialization is
+// bounded by ctx as well as the store's existing initialization timeout.
+func NewQdrantStoreWithContext(ctx context.Context, opts QdrantStoreOptions) (*QdrantStore, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if !opts.Enabled {
 		return &QdrantStore{enabled: false}, nil
 	}
@@ -85,9 +94,9 @@ func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
 		embeddingConfig: embCfg,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	initCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	if err := s.ensureCollection(ctx); err != nil {
+	if err := s.ensureCollection(initCtx); err != nil {
 		return nil, fmt.Errorf("failed to initialise qdrant memory collection: %w", err)
 	}
 

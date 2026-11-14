@@ -36,9 +36,10 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 		}
 	}()
 	status, reason, suppressed := r.suppressedResponseMemoryStore(ctx)
+	extractor := r.getMemoryExtractor()
 	logging.Infof(
 		"Memory store check: MemoryExtractor=%v, suppressed=%v, reason=%s",
-		r.MemoryExtractor != nil, suppressed, reason,
+		extractor != nil, suppressed, reason,
 	)
 	if suppressed {
 		r.recordMemoryPersistenceOutcome(ctx, status, reason, false, nil)
@@ -87,7 +88,7 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 		return
 	}
 	reservation.Start(memoryPersistenceJob{
-		extractor:         r.MemoryExtractor,
+		extractor:         extractor,
 		codecs:            r.ProtocolCodecs,
 		allowedLossy:      r.Config.AllowLossyTranslation,
 		sessionID:         sessionID,
@@ -167,7 +168,7 @@ func (r *OpenAIRouter) recordUnscheduledResponseMemoryStore(
 // suppressedResponseMemoryStore is the single enablement and response-stage
 // policy ladder: every path that owes a receipt reports the same verdict.
 func (r *OpenAIRouter) suppressedResponseMemoryStore(ctx *RequestContext) (string, string, bool) {
-	if r.MemoryExtractor == nil {
+	if r.getMemoryExtractor() == nil {
 		return "disabled", "no_extractor", true
 	}
 	if !r.responseMemoryAutoStoreEnabled(ctx) {
