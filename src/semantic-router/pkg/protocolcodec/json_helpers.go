@@ -767,3 +767,63 @@ func marshalWire(value any) ([]byte, error) {
 	}
 	return body, nil
 }
+
+func stringifyMetadataJSONValue(raw json.RawMessage) string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return ""
+	}
+	if bytes.Equal(trimmed, []byte("null")) {
+		return "null"
+	}
+	var s string
+	if err := json.Unmarshal(trimmed, &s); err == nil {
+		return s
+	}
+	return string(trimmed)
+}
+
+func stringifyWireMetadataJSON(raw map[string]json.RawMessage) map[string]string {
+	if len(raw) == 0 {
+		return nil
+	}
+	metadata := make(map[string]string, len(raw))
+	for k, v := range raw {
+		metadata[k] = stringifyMetadataJSONValue(v)
+	}
+	return metadata
+}
+
+func cloneWireMetadataJSON(src map[string]json.RawMessage) map[string]json.RawMessage {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]json.RawMessage, len(src))
+	for k, v := range src {
+		if v == nil {
+			dst[k] = nil
+			continue
+		}
+		raw := make(json.RawMessage, len(v))
+		copy(raw, v)
+		dst[k] = raw
+	}
+	return dst
+}
+
+func encodeWireMetadataJSON(request llmprotocol.Request) map[string]json.RawMessage {
+	if len(request.MetadataJSON) == 0 && len(request.Metadata) == 0 {
+		return nil
+	}
+	wire := cloneWireMetadataJSON(request.MetadataJSON)
+	if wire == nil {
+		wire = make(map[string]json.RawMessage, len(request.Metadata))
+	}
+	for k, v := range request.Metadata {
+		if _, exists := wire[k]; !exists {
+			data, _ := json.Marshal(v)
+			wire[k] = data
+		}
+	}
+	return wire
+}

@@ -297,7 +297,13 @@ type Request struct {
 	ReasoningDisplay   string
 	Stream             bool
 	StreamOptions      StreamOptions
-	Metadata           map[string]string
+	// Metadata carries stringified representations of metadata values for
+	// backward compatibility with string-based routing predicates and limits.
+	Metadata map[string]string
+	// MetadataJSON preserves client-supplied metadata as raw JSON byte values,
+	// maintaining original JSON types (arrays, booleans, objects, numbers, and
+	// integers without float64 precision loss) across request re-encoding.
+	MetadataJSON map[string]json.RawMessage
 	EndUserID          string
 	PreviousResponseID string
 	ConversationID     string
