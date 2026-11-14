@@ -264,6 +264,7 @@ func TestOfficialNestedJSONInventoriesAreClosed(t *testing.T) {
 		"chat_file_input":                 reflect.TypeOf(chatFileWire{}),
 		"chat_image_url_input":            reflect.TypeOf(chatImageURLWire{}),
 		"chat_audio_input":                reflect.TypeOf(chatInputAudioWire{}),
+		"chat_audio_request":              reflect.TypeOf(chatAudioRequestWire{}),
 		"chat_function_definition":        reflect.TypeOf(chatFunctionDefinitionWire{}),
 		"chat_custom_tool":                reflect.TypeOf(chatCustomToolWire{}),
 		"custom_tool_format":              reflect.TypeOf(customToolFormatWire{}),

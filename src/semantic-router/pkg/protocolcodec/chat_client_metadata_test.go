@@ -145,7 +145,6 @@ func TestOpenAIChatRequestStillRefusesOtherReplayFields(t *testing.T) {
 	}
 	for name, test := range map[string]struct{ body, code string }{
 		"signed thinking blocks":    {assistant(`"thinking_blocks":[{"type":"thinking","thinking":"x","signature":"sig"}]`), "invalid_json"},
-		"output audio":              {assistant(`"audio":{"id":"audio_1","data":"","expires_at":1,"transcript":"ok"}`), "unsupported_output_audio"},
 		"legacy function call":      {assistant(`"function_call":{"name":"bash","arguments":"{}"}`), "unsupported_legacy_function_call"},
 		"an unknown member":         {assistant(`"x_client":1`), "invalid_json"},
 		"another spelling":          {assistant(`"Parsed":null`), "invalid_json"},

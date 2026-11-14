@@ -16,6 +16,7 @@ func (OpenAIChatCodec) Stateless() bool                { return true }
 func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 	return llmprotocol.Capabilities(
 		llmprotocol.CapabilityText, llmprotocol.CapabilityImageInput, llmprotocol.CapabilityAudioInput,
+		llmprotocol.CapabilityAudioOutput,
 		llmprotocol.CapabilityFileInput,
 		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityCustomTools,
 		llmprotocol.CapabilityReasoning,
@@ -62,7 +63,7 @@ type chatRequestWire struct {
 	PromptCacheRetention json.RawMessage        `json:"prompt_cache_retention,omitempty"`
 	PromptCacheOptions   json.RawMessage        `json:"prompt_cache_options,omitempty"`
 	SafetyIdentifier     json.RawMessage        `json:"safety_identifier,omitempty"`
-	Audio                json.RawMessage        `json:"audio,omitempty"`
+	Audio                *chatAudioRequestWire  `json:"audio,omitempty"`
 	FunctionCall         json.RawMessage        `json:"function_call,omitempty"`
 	Functions            json.RawMessage        `json:"functions,omitempty"`
 	LogitBias            map[string]float64     `json:"logit_bias,omitempty"`
@@ -108,11 +109,21 @@ type chatMessageWire struct {
 	Name                   json.RawMessage      `json:"name,omitempty"`
 }
 
+// chatAudioOutputWire is both a produced artifact and, on an assistant request
+// message, an id-only reference to one. The payload fields are therefore
+// optional: re-encoding a reference must not invent empty data for it.
 type chatAudioOutputWire struct {
-	ID         string `json:"id"`
-	Data       string `json:"data"`
-	ExpiresAt  int64  `json:"expires_at"`
-	Transcript string `json:"transcript"`
+	ID         string `json:"id,omitempty"`
+	Data       string `json:"data,omitempty"`
+	ExpiresAt  int64  `json:"expires_at,omitempty"`
+	Transcript string `json:"transcript,omitempty"`
+}
+
+type chatAudioRequestWire struct {
+	// Voice is a preset name, or a custom-voice reference object this wire
+	// models only far enough to refuse it with a precise diagnostic.
+	Voice  json.RawMessage `json:"voice,omitempty"`
+	Format string          `json:"format,omitempty"`
 }
 
 type chatLegacyCallWire struct {
@@ -206,6 +217,10 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	request := decodeChatBaseRequest(wire)
+	request.AudioOutput, err = decodeChatAudioOutputOptions(wire.Modalities, wire.Audio)
+	if err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
 	if err := decodeTextVerbosity(wire.Verbosity, &request.TextVerbosity); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
@@ -246,8 +261,8 @@ func validateChatRequestWire(wire chatRequestWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"prompt_cache_retention": wire.PromptCacheRetention,
 		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
-		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
-		"logprobs": logprobs, "modalities": wire.Modalities,
+		"function_call": wire.FunctionCall, "functions": wire.Functions,
+		"logprobs":   logprobs,
 		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
 		"top_logprobs":       wire.TopLogprobs,
 		"web_search_options": wire.WebSearchOptions,
@@ -406,7 +421,7 @@ func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotoco
 	}
 	// Returned history carries the same text in both forms. The typed blocks
 	// are what the provider needs back, so the alias is not forwarded twice.
-	return assembleChatMessage(wire, index, role, details, len(details) == 0, contents, policy)
+	return assembleChatMessage(wire, index, role, false, details, len(details) == 0, contents, policy)
 }
 
 func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
@@ -420,6 +435,9 @@ func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotoc
 	if _, err := validateChatMessageEnvelope(wire); err != nil {
 		return llmprotocol.Message{}, err
 	}
+	if audioErr := validateChatResponseAudio(wire.Audio); audioErr != nil {
+		return llmprotocol.Message{}, audioErr
+	}
 	contents, err := decodeChatResponseMessageContent(wire.Content)
 	if err != nil {
 		return llmprotocol.Message{}, err
@@ -430,7 +448,7 @@ func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotoc
 	}
 	// Clients render the plain reasoning text, and a format that cannot carry
 	// the typed blocks still translates it, so a reply keeps both.
-	message, err := assembleChatMessage(wire, index, role, details, true, contents, policy)
+	message, err := assembleChatMessage(wire, index, role, true, details, true, contents, policy)
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
@@ -458,6 +476,7 @@ func assembleChatMessage(
 	wire chatMessageWire,
 	index int,
 	role llmprotocol.Role,
+	fromResponse bool,
 	details []llmprotocol.Content,
 	keepReasoningText bool,
 	contents []llmprotocol.Content,
@@ -484,6 +503,13 @@ func assembleChatMessage(
 		})
 	}
 	message.Content = append(message.Content, contents...)
+	if wire.Audio != nil {
+		audio, audioErr := decodeChatMessageAudio(role, wire.Audio, fromResponse)
+		if audioErr != nil {
+			return llmprotocol.Message{}, audioErr
+		}
+		message.Content = append(message.Content, audio)
+	}
 	if wire.Refusal != nil {
 		message.Content = append(message.Content, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: *wire.Refusal})
 	}
@@ -517,11 +543,6 @@ func decodeChatMessageName(raw json.RawMessage) (string, error) {
 }
 
 func validateChatMessageEnvelope(wire chatMessageWire) (llmprotocol.Role, error) {
-	if wire.Audio != nil {
-		return "", llmprotocol.NewError(
-			llmprotocol.ErrorUnsupportedFeature, "unsupported_output_audio", "Chat output audio is unsupported", nil,
-		)
-	}
 	if wire.LegacyFunctionCall != nil {
 		return "", llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature, "unsupported_legacy_function_call", "legacy Chat function calls are unsupported", nil,

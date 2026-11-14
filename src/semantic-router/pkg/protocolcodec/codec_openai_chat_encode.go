@@ -105,6 +105,18 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 	if request.TextVerbosity != "" {
 		wire.Verbosity, _ = json.Marshal(request.TextVerbosity)
 	}
+	if request.AudioOutput != nil {
+		wire.Modalities, _ = json.Marshal([]string{"text", "audio"})
+		// Emit the options object only when the client supplied one, so a request
+		// that asked for audio by modality alone round-trips unchanged.
+		if request.AudioOutput.Voice != "" || request.AudioOutput.Format != "" {
+			options := &chatAudioRequestWire{Format: request.AudioOutput.Format}
+			if request.AudioOutput.Voice != "" {
+				options.Voice, _ = json.Marshal(request.AudioOutput.Voice)
+			}
+			wire.Audio = options
+		}
+	}
 	if request.Stream && (request.StreamOptions.IncludeUsage != nil || request.StreamOptions.IncludeObfuscation != nil) {
 		wire.StreamOptions = &chatStreamOptionsWire{
 			IncludeUsage:       request.StreamOptions.IncludeUsage,
