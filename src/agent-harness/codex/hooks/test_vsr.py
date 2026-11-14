@@ -423,10 +423,10 @@ class ListenerRulesTest(unittest.TestCase):
         self.runtime.vsr = listing([PROD], [])
         self.runtime.rules = lambda request: None
         reply = run("pre", bash("ls"), self.env)
-        self.assertIn(
-            "required rule prod_database could not be checked",
-            reply["hookSpecificOutput"]["permissionDecisionReason"],
-        )
+        reason = reply["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("required rule prod_database could not be checked", reason)
+        # The rules are the listener's: a failed call names it, not the decision model.
+        self.assertIn("the listener answered HTTP 503", reason)
 
         self.runtime.vsr = listing([{**PROD, "required": False}], [])
         self.fresh()
@@ -540,6 +540,18 @@ class ListenerRulesTest(unittest.TestCase):
                 for body in self.runtime.seen
             )
         )
+
+    def test_where_a_rule_and_a_pii_span_cover_the_same_text_the_rule_names_the_tag(
+        self,
+    ):
+        text = "Pay ACCT-48392017 now"
+        self.runtime.vsr = listing([], [{**EMPLOYEE, "name": "customer_account"}])
+        self.runtime.rules = answer(
+            spans=lambda t: [{"start": 4, "end": 17, "rule": "customer_account"}]
+        )
+        self.runtime.spans = [span("IBAN_CODE", text, "ACCT-48392017", 0.99)]
+        reply = run("post", bash("cat pay.txt", text), self.env)
+        self.assertTrue(reply["reason"].startswith("Pay [vsr:customer_account] now"))
 
     def test_a_listing_that_is_not_one_keeps_the_rules_read_before(self):
         self.assertIsNone(vsr.rules_of(None))

@@ -267,7 +267,7 @@ def rules_unchecked(app: str, opts: dict, asked: dict | Exception, part: int) ->
     """
     bound = opts["rules"][app]
     if isinstance(asked, Exception):
-        return [(rule, failed(asked)) for rule in bound]
+        return [(rule, failed(asked, "the listener")) for rule in bound]
     if asked["revision"] != opts["rules"]["revision"]:
         read_listing_again(opts)
         return [(rule, "the listener's rules changed") for rule in bound]
@@ -323,13 +323,13 @@ def clip(text: str, width: int = 60) -> str:
     return one if len(one) <= width else one[: width - 1] + "…"
 
 
-def failed(error: Exception) -> str:
+def failed(error: Exception, who: str = "the decision model") -> str:
     if isinstance(error, urllib.error.HTTPError):
-        return f"the decision model answered HTTP {error.code}"
+        return f"{who} answered HTTP {error.code}"
     if isinstance(error, (TimeoutError, OSError)) and "timed out" in str(error):
-        return "the decision model did not answer in time"
+        return f"{who} did not answer in time"
     if isinstance(error, urllib.error.URLError):
-        return "the decision model is not answering"
+        return f"{who} is not answering"
     return f"vSR could not read the answer ({type(error).__name__})"
 
 
