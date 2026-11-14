@@ -45,7 +45,9 @@ vSR reads `vsr.json` in the Codex home (`$CODEX_HOME`, by default `~/.codex`). E
 ```
 
 `VSR_RUNTIME_URL` and `VSR_RUNTIME_MODEL` override the file, and `VSR_RUNTIME_TOKEN` is sent as a
-bearer token; keep the token out of `vsr.json`. With Codex pointed at a Router through
+bearer token; keep the token out of `vsr.json`. `runtimeTokenEnv` names another variable to read the
+token from when `VSR_RUNTIME_TOKEN` is unset: `vllm-sr connect codex` writes it for a listener with
+`api_keys`, which checks the same key on System One. With Codex pointed at a Router through
 `vllm-sr connect codex`, set `runtimeUrl` to that listener's `/v1/decisions` and `runtimeModel` to the
 System One model it publishes, so one listener serves both the agent's calls and vSR's questions.
 
