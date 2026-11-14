@@ -128,12 +128,15 @@ export default function ConfigPageListenerVSRPanel({
         {listeners.map(({ index, listener, vsr }) => {
           // The listener's rules are not a plugin setting: a reset keeps them.
           const set = Object.keys(vsr ?? {}).filter((key) => key !== 'rules').length
+          const bound = (vsr?.rules?.guard?.length ?? 0) + (vsr?.rules?.redact?.length ?? 0)
+          const state = [set === 0 ? 'All plugin defaults' : `${set} set here`]
+          if (bound > 0) state.push(`${bound} ${bound === 1 ? 'rule' : 'rules'} bound`)
           return (
             <article key={index} className={styles.vsrListener}>
               <header className={styles.vsrListenerHead}>
                 <h4 className={styles.cardTitle}>{`${listener.name} · port ${listener.port}`}</h4>
                 <span className={styles.vsrListenerState}>
-                  {saving ? 'Saving…' : set === 0 ? 'All plugin defaults' : `${set} set here`}
+                  {saving ? 'Saving…' : state.join(' · ')}
                 </span>
                 {set > 0 ? (
                   <button
