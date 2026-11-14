@@ -83,6 +83,51 @@ test('an answer for another revision of the rules holds a command a required rul
   expect(verdict.reason).toContain("the listener's rules changed")
 })
 
+test('a rule changed in the Dashboard applies to the next call, with no unchecked window', { options: REMOTE }, async ($, on) => {
+  const reply: Reply = { listing: listingOf([PROD], [{ ...EMPLOYEE, required: true }]), review: 0.1, rules: { answer: answerOf({}) } }
+  engine(on, reply)
+  fileHolds(on, 'Paid by E-104233')
+  await $.session.start(START)
+  // The person turns both rules off; the session still holds revision r1.
+  reply.listing = listingOf([], [], 'r2')
+  reply.rules = { answer: answerOf({ revision: 'r2' }) }
+
+  const verdict = await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
+  const ran = await read($)
+
+  expect(verdict?.decision).not.toBe('ask')
+  expect(ran.deny).toBeUndefined()
+  expect((ran.result as { file: { content: string } }).file.content).toBe('Paid by E-104233')
+})
+
+test('a guard rule added in the Dashboard holds its first match', { options: REMOTE }, async ($, on) => {
+  const reply: Reply = { listing: listingOf([PROD]), review: 0.1, rules: { answer: answerOf({}) } }
+  engine(on, reply)
+  await $.session.start(START)
+  const deploy = { ...PROD, name: 'deploy', description: 'deploys to production.' }
+  reply.listing = listingOf([PROD, deploy], [], 'r2')
+  reply.rules = { answer: answerOf({ revision: 'r2', matched: ['deploy'] }) }
+
+  const verdict = await $.tool.check({ tool: 'Bash', input: { command: 'make deploy' } })
+
+  expect(verdict).toMatchObject({ decision: 'ask' })
+  expect(verdict.reason).toContain('deploys to production')
+})
+
+test('a rule added in the Dashboard is read before its first find is used', { options: REMOTE }, async ($, on) => {
+  const reply: Reply = { listing: listingOf([], [EMPLOYEE]), rules: { answer: answerOf({}) } }
+  engine(on, reply)
+  fileHolds(on, 'Ticket INC-483921 by E-104233')
+  await $.session.start(START)
+  const ticket = { ...EMPLOYEE, name: 'support_ticket', required: true }
+  reply.listing = listingOf([], [EMPLOYEE, ticket], 'r2')
+  reply.rules = { answer: answerOf({ revision: 'r2', spans: () => [{ start: 7, end: 17, rule: 'support_ticket' }, { start: 21, end: 29, rule: 'employee_id' }] }) }
+
+  const ran = await read($)
+
+  expect((ran.result as { file: { content: string } }).file.content).toBe('Ticket [vsr:support_ticket] by [vsr:employee_id]')
+})
+
 test('the rules read before still hold when the listing does not answer', { options: REMOTE }, async ($, on) => {
   const reply: Reply = { listing: listingOf([PROD]), review: 0.1, rules: { answer: answerOf({ matched: ['prod_database'] }) } }
   engine(on, reply)

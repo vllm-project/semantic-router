@@ -505,8 +505,8 @@ class ListenerRulesTest(unittest.TestCase):
         )
         self.assertIn("permissionDecision", json.dumps(reply))
 
-        # The listener's rules change under a cached listing: the first answer for the new
-        # revision holds, and the next call reads the listing again.
+        # The listener's rules change under a cached listing: the call that gets an answer
+        # for the new revision reads the listing again and acts on it.
         self.runtime.listing_status = 200
         self.runtime.vsr = listing([PROD], [])
         self.runtime.rules = answer()
@@ -515,13 +515,14 @@ class ListenerRulesTest(unittest.TestCase):
         asked = self.runtime.listings
         self.runtime.vsr = listing([PROD], [], revision="r2")
         self.runtime.rules = answer(revision="r2")
-        reply = run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"})
-        self.assertIn("the listener's rules changed", json.dumps(reply))
-        self.assertEqual(self.runtime.listings, asked)
         self.assertEqual(
             run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"}), {}
         )
         self.assertEqual(self.runtime.listings, asked + 1)
+        # A listing that still names the old revision leaves the call unchecked.
+        self.runtime.rules = answer(revision="r3")
+        reply = run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"})
+        self.assertIn("the listener's rules changed", json.dumps(reply))
 
     def test_the_decision_model_reads_what_the_rules_read_and_crossing_finds_join(self):
         text = "Mail E-104233@corp.example now"
@@ -552,6 +553,30 @@ class ListenerRulesTest(unittest.TestCase):
         self.runtime.spans = [span("IBAN_CODE", text, "ACCT-48392017", 0.99)]
         reply = run("post", bash("cat pay.txt", text), self.env)
         self.assertTrue(reply["reason"].startswith("Pay [vsr:customer_account] now"))
+
+    def test_a_rule_changed_in_the_dashboard_applies_to_the_next_call(self):
+        self.runtime.vsr = listing([PROD], [{**EMPLOYEE, "required": True}])
+        self.runtime.rules = answer()
+        run("pre", bash("ls"), self.env)
+        # The person turns both rules off; the session still holds revision r1.
+        self.runtime.vsr = listing([], [], "r2")
+        self.runtime.rules = answer(revision="r2")
+        self.assertNotIn("hookSpecificOutput", run("pre", bash("ls"), self.env))
+        reply = run("post", bash("cat pay.txt", "Paid by E-104233"), self.env)
+        self.assertNotEqual(reply.get("decision"), "block")
+
+    def test_a_guard_rule_added_in_the_dashboard_holds_its_first_match(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer()
+        run("pre", bash("ls"), self.env)
+        deploy = {**PROD, "name": "deploy", "description": "deploys to production."}
+        self.runtime.vsr = listing([PROD, deploy], [], "r2")
+        self.runtime.rules = answer(revision="r2", matches=["deploy"])
+        reply = run("pre", bash("make deploy"), self.env)
+        self.assertIn(
+            "deploys to production",
+            reply["hookSpecificOutput"]["permissionDecisionReason"],
+        )
 
     def test_a_listing_that_is_not_one_keeps_the_rules_read_before(self):
         self.assertIsNone(vsr.rules_of(None))

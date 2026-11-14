@@ -55,7 +55,8 @@ That listener can also turn `guard`, `redact` and `shield` on or off for every p
 under `apis.systemone.vsr` in the Router's config or as Default, On or Off in the Dashboard (Config ›
 Global Config › vSR agent plugins).
 vSR reads the listener's listing (`GET /v1/systemone/models`) at most once a minute and keeps the
-answer in `vsr-listener.json` in the Codex home. An app you name in `vsr.json` stays yours; the
+answer in `vsr-listener.json` in the Codex home. A rules answer for another revision, such as after
+a change in the Dashboard, makes it read the listing again and ask once more in the same call. An app you name in `vsr.json` stays yours; the
 listener sets the others.
 
 Rules the listener binds to guard and redact (`vsr.rules`) come with the same listing, by name and
