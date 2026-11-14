@@ -286,10 +286,12 @@ reach someone else, or be used without the person's request:
   429 for a block put first, 200 for the same block put last), so a decision
   cannot use `system_prompt`.
 
-A request that reaches a caller backend without a login is answered `401`
-with `caller_credential_missing`. The Router keeps the login for the request
-only, in memory: it does not log it, and takes it out of an upstream error
-body or a stored response that echoes it. A caller backend's `401`, `403` or
+A request that reaches a caller backend without a login, or on another
+provider's API, is answered `401` with `caller_credential_missing`: a bearer
+that came in on Responses is not a Claude login and never reaches Anthropic.
+The Router keeps the login for the request only, in memory: it does not log
+it, and takes it out of an upstream error body or a stored response that
+echoes it. A caller backend's `401`, `403` or
 `429` speaks of one person's login or plan, so it never opens the circuit
 breaker other requests share. The provider's terms for that login apply to
 every call made with it.
