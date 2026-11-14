@@ -293,7 +293,9 @@ or a web page, should read the tool results and leave the user turn out
 its own instructions and reminders, and a rule that reads it also judges those.
 
 Turn the plugin's router app off (`/vsr router off`) so the plugin and the
-Router do not both choose a subagent's model. Its escalate app still asks Claude
+Router do not both choose a subagent's model, and with it the plugin's routing
+of your own turns (`routerTurns`), which is for Claude Code talking to Anthropic
+directly. Its escalate app still asks Claude
 to re-check an answer you push back on, but no longer moves the next subagent
 up a model, since that step belongs to the router app. The other apps work as
 before. When the plugin's decision runtime does not answer, its tally says

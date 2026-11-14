@@ -10,6 +10,7 @@ import { APP_NAMES } from './lib/apps'
 import { parseSettings, type Settings } from './lib/settings'
 import { inspectOutput, writeBackOf } from './output'
 import { checkRouterModel, countSpend, routeSpawn, routeStep } from './router'
+import { askTurn, endTurn, modelPicked, showTurns, startTurn, stepTurn } from './turns'
 import { loadLook, registerCommand, registerView } from './view'
 
 // A tool's result as Claude gets it: redacted and shielded, then kept for check.
@@ -34,15 +35,20 @@ export const register: Register = (on, options) => {
         .catch(() => undefined)
     }
     if (settings.apps.router) void checkRouterModel($, settings.runtime)
+    await showTurns($, settings)
     return next(e)
   })
 
-  on('prompt.submit', ($, e, next) => escalatePrompt($, e, next, settings))
+  on('prompt.submit', ($, e, next) => {
+    askTurn($, e, settings)
+    return escalatePrompt($, e, next, settings)
+  })
 
   on('turn.start', async ($, e, next) => {
     if (e.agentId === undefined) {
       await holdEscalation($, e)
       await startTurnReads($, e)
+      await startTurn($, e, settings)
     }
     return next(e)
   })
@@ -51,6 +57,7 @@ export const register: Register = (on, options) => {
     const done = await next(e)
     if (e.agentId === undefined) {
       await releaseEscalation($, e)
+      await endTurn($, e)
       await checkTurn($, e, settings)
     } else {
       await countSpend($, e)
@@ -58,9 +65,14 @@ export const register: Register = (on, options) => {
     return done
   })
 
+  on('classic.PostModelSwitch', async ($, e, next) => {
+    await modelPicked($, e, settings)
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
   on('agent.spawn', ($, e, next) => routeSpawn($, e, next, settings))
   on('turn.step', async function* ($, e, next) {
-    return yield* routeStep($, e, next, settings)
+    return yield* e.agentId === undefined ? stepTurn($, e, next, settings) : routeStep($, e, next, settings)
   })
 
   on('tool.check', { tool: 'Bash' }, ($, e, next) => guardCheck($, e, next, settings)).catch(($, e, next) => next(e))

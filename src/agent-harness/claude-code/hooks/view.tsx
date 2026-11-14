@@ -3,8 +3,8 @@ import type { ConfigValue, EngineInterface, On } from 'claude-code'
 import type { Decision } from '../types'
 import { readOffline } from './lib/classify'
 import { describe, named } from './lib/describe'
-import { APP_NAMES } from './lib/apps'
-import { band, type Controls, controls, dashboard, type Elements, overview, rowView } from './lib/draw'
+import { APP_NAMES, appOf } from './lib/apps'
+import { band, type Controls, controls, dashboard, type Elements, overview, rowView, turnsWords } from './lib/draw'
 import { type Answer, giveLabel, labelsFile, readLabels } from './lib/labels'
 import { markCalibrated, readCalibration } from './lib/log'
 import { BLOCKS_LOGO, loadLogo, type Logo, NO_LOGO, wordmark } from './lib/logo'
@@ -13,6 +13,7 @@ import { readDecisions } from './lib/state'
 import { stamp } from './lib/env'
 import { answerKey } from './lib/text'
 import { readSpend } from './router'
+import { readTurns, resumeTurns } from './turns'
 import type { App } from '../types'
 
 const PANE = 'vsr-decisions'
@@ -37,9 +38,13 @@ const callIdOf = (decision: Decision) => (decision.kind === 'guard' ? decision.i
 const forCall = (list: readonly Decision[], toolUseId: string | undefined) =>
   toolUseId === undefined ? [] : list.filter(decision => callIdOf(decision) === toolUseId)
 
-// The newest decision made on this prompt.
-const forPrompt = (list: readonly Decision[], text: string) =>
-  [...list].reverse().find(d => (d.kind === 'escalate' || d.kind === 'unavailable') && d.prompt !== undefined && d.prompt === text)
+// The decisions made on this prompt: a pushback, where the turn it started runs, a call skipped. A row names its
+// prompt by text alone, so a prompt sent twice shows the newest of each kind, not both turns' stacked.
+const ON_PROMPT = new Set<Decision['kind']>(['escalate', 'unavailable', 'route', 'keep'])
+function forPrompt(list: readonly Decision[], text: string) {
+  const found = list.filter(d => ON_PROMPT.has(d.kind) && 'prompt' in d && d.prompt === text)
+  return found.filter((d, i) => !found.slice(i + 1).some(later => appOf(later) === appOf(d)))
+}
 
 // The newest check whose answer ends the way this block does.
 function forAnswerBlock(list: readonly Decision[], text: string) {
@@ -86,8 +91,8 @@ export async function registerCommand($: EngineInterface) {
   await $.command.register({
     name: 'vsr',
     description:
-      'Show what the vSR decision model decided and how it is set up, in a pane; /vsr <app> on|off turns an app on or off, /vsr <redact|shield|guard> wait 1|2|3|done sets how long it waits',
-    argumentHint: '[<app> on|off | <redact|shield|guard> wait 1|2|3|done]',
+      'Show what the vSR decision model decided and how it is set up, in a pane; /vsr <app> on|off turns an app on or off, /vsr turns on|off routes your own turns too, /vsr <redact|shield|guard> wait 1|2|3|done sets how long it waits',
+    argumentHint: '[<app> on|off | turns [on|off] | <redact|shield|guard> wait 1|2|3|done]',
   })
 }
 
@@ -109,7 +114,7 @@ export async function setOption($: EngineInterface, field: string, value: Config
 
 const waitWords = (choice: WaitChoice) => (choice === 'done' ? 'waits until done' : `waits ${choice} s`)
 
-const USAGE = `vSR: /vsr opens the pane; /vsr <app> on|off (${APP_NAMES.join(', ')}); /vsr <${WAIT_APPS.join('|')}> wait ${WAIT_CHOICES.join('|')}.`
+const USAGE = `vSR: /vsr opens the pane; /vsr <app> on|off (${APP_NAMES.join(', ')}); /vsr turns [on|off]; /vsr <${WAIT_APPS.join('|')}> wait ${WAIT_CHOICES.join('|')}.`
 
 // `/vsr <app> on|off` and `/vsr <app> wait <choice>`: the option it changes and the words that say so, or undefined.
 function changeOf(words: readonly string[]): { field: string; value: ConfigValue; said: string } | undefined {
@@ -122,6 +127,14 @@ function changeOf(words: readonly string[]): { field: string; value: ConfigValue
     return { field: `${waitApp}Wait`, value: waitChoice, said: `${waitApp} ${waitWords(waitChoice)}` }
   }
   return undefined
+}
+
+// `/vsr turns on|off`. On, it also hands back turns paused by a /model pick; it needs the router app on.
+async function turnsCommand($: EngineInterface, settings: Settings, isOn: boolean) {
+  if (isOn && !settings.apps.router) return 'vSR: turn on the router first: /vsr router on.'
+  if (settings.routerTurns !== isOn && !(await setOption($, 'routerTurns', isOn))) return 'vSR: turns not changed.'
+  if (isOn) await resumeTurns($, settings)
+  return isOn ? 'vSR: the router picks the model of your turns from now on.' : 'vSR: your turns run on the model you picked.'
 }
 
 // What the pane's controls do: each press changes one option.
@@ -160,6 +173,10 @@ export function registerView(on: On, settings: Settings) {
       await $.ui.open({ id: PANE, title: PANE_TITLE })
       return { text: 'vSR pane opened.' }
     }
+    if (words.length === 1 && words[0] === 'turns') {
+      return { text: `vSR: your turns ${turnsWords({ settings, turns: await readTurns($) }) ?? 'run on the model you picked: the router app is off · /vsr router on'}.` }
+    }
+    if (words.length === 2 && words[0] === 'turns' && (words[1] === 'on' || words[1] === 'off')) return { text: await turnsCommand($, settings, words[1] === 'on') }
     const change = changeOf(words)
     if (change === undefined) return { text: USAGE }
     return { text: (await setOption($, change.field, change.value)) ? `vSR: ${change.said}.` : `vSR: ${change.said.split(' ')[0]} not changed.` }
@@ -183,8 +200,8 @@ export function registerView(on: On, settings: Settings) {
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
     const all = await readDecisions($)
     const found = forPrompt(all, e.props.text)
-    if (found === undefined) return next(e)
-    return under($.ui.resolve(e), await next(e), [found], inlineColumns(e), { all, display: settings.display })
+    if (found.length === 0) return next(e)
+    return under($.ui.resolve(e), await next(e), found, inlineColumns(e), { all, display: settings.display })
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
@@ -212,6 +229,7 @@ export function registerView(on: On, settings: Settings) {
       calibration: await readCalibration($),
       isOffline: await readOffline($),
       spend: await readSpend($),
+      turns: await readTurns($),
       labeled: Object.keys(given).length,
     }
     if (list.length === 0) {

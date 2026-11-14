@@ -236,7 +236,7 @@ test('a /vsr the command does not know answers with the usage and changes nothin
   const refused = await $.command.run({ command: 'vsr', args: 'redact off' })
   const opened = await $.command.run({ command: 'vsr', args: '' })
 
-  for (const answer of answers) expect(answer.text).toBe('vSR: /vsr opens the pane; /vsr <app> on|off (guard, check, shield, redact, router, escalate); /vsr <redact|shield|guard> wait 1|2|3|done.')
+  for (const answer of answers) expect(answer.text).toBe('vSR: /vsr opens the pane; /vsr <app> on|off (guard, check, shield, redact, router, escalate); /vsr turns [on|off]; /vsr <redact|shield|guard> wait 1|2|3|done.')
   expect(sets).toEqual([{ key: 'vsr.redact', value: false }])
   expect(refused.text).toBe('vSR: redact not changed.')
   expect(reply.toasts).toEqual(['vSR: could not change redact: locked'])

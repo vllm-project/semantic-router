@@ -72,8 +72,11 @@ export type Reply = {
   headers?: (Record<string, string> | undefined)[]
   // Collects the URL of every request.
   urls?: string[]
-  // Collects every toast's text.
+  // The session's id while a test changes it, as /clear does.
+  sessionId?: { now: string }
+  // Collects every toast's text, and every status line entry.
   toasts?: string[]
+  statuses?: (string | undefined)[]
   // What `$.fs.write` last wrote, by path.
   files?: Record<string, string>
   // What `$.store` holds at the start, and the environment.
@@ -137,7 +140,7 @@ export function engine(on: On, reply: Reply) {
   const clock = mock.clock(on)
   mock.store(on, reply.store)
   mock.env(on, reply.env ?? { HOME })
-  on('session.id', () => ({ value: SESSION }))
+  on('session.id', () => ({ value: reply.sessionId?.now ?? SESSION }))
   on('fs.write', (_, e) => {
     if (reply.files) reply.files[e.path] = e.text
     return { value: undefined }
@@ -149,6 +152,10 @@ export function engine(on: On, reply: Reply) {
     return { value: undefined }
   })
   on('command.register', () => ({ value: { command: 'vsr' } }))
+  on('ui.status', (_, e) => {
+    reply.statuses?.push(e.text)
+    return { value: undefined }
+  })
   on('ui.open', (_, e) => {
     reply.opened?.push(e.id)
     return { value: { isPlaced: true } }
