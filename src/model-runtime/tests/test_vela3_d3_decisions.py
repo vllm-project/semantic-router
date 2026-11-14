@@ -121,6 +121,25 @@ def call(runtime, body):
     return asyncio.run(runtime.call("decisions", body))
 
 
+def test_the_family_consent_is_scoped_to_the_npu(runtimes) -> None:
+    """The vela3_d3 consent covers the npu only.
+
+    ``describe()`` sees no device, so the policy carries the scope and the
+    engine applies it: on any other accelerator the CUDA and ROCm approximate
+    kernels (``cuda-fused-approximate.md``) keep the base's consent, which is
+    off -- no GPU record covers this family.
+    """
+    engine = runtimes[0].lookup(None).model.engine_model
+    policy = engine.spec.dtype
+    assert policy.approximate_kernels
+    assert policy.approximate_accelerators == frozenset({"npu"})
+    # The engine applies the scope: the CPU accelerator is outside it, so the
+    # loaded kernels stay exact despite the consent.
+    assert not engine.kernels.allow_approximate
+    base = runtimes[1].lookup(None).model.engine_model.spec.dtype
+    assert not base.approximate_kernels and base.approximate_accelerators is None
+
+
 def test_a_blank_state_is_refused_as_the_other_vela_families_refuse_it(
     runtimes,
 ) -> None:

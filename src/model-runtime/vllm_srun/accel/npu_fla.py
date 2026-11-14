@@ -1,19 +1,29 @@
 """The fla-npu Ascend C chunk kernel as an NPU kernel-slot candidate.
 
-Approximate slot: the Ascend C chunk rounds 1-2 bf16 ulp away from the
-reference per call -- both implementations sit at max 1 ulp from the FP64
-reference, so this is two equally-correct rounding paths, not a wrong kernel.
+Approximate slot: a bounded rounding path of the reference. On Ascend 950DT
+the per-call divergence sits at 1-2 bf16 ulp and both implementations sit at
+max 1 ulp from the FP64 reference; on Ascend 910B1 the per-call divergence is
+sparse and bounded (mean 8.4e-7, max at the 2^-8 BF16 GDN rounding floor, no
+compounding across the 24 GDN layers) but the 950DT round's max-1-ulp-from-FP64
+result does not reproduce there (61.8% of elements beyond half an ulp), so the
+registration rests on the reference-relative bounds and the serve-level label
+diff within the readiness gate, not on a correctly-rounded verdict.
 Measured on Ascend 950DT
-(``docs/records/npu-fla-chunk-ascend950dt.md``): the 60-answer label-diff
-flips 4 of 60 requests (row agreement 93.3%), every flip on a borderline leaf
+(``docs/records/npu-fla-chunk-ascend950dt.md``) and Ascend 910B1
+(``docs/records/npu-fla-chunk-ascend910b1.md``, the fla-npu a2 wheel): the
+60-answer label-diff flips 4 of 60 requests on the 950DT (row agreement
+93.3%), every flip on a borderline leaf
 (two-option probability gap <= 0.02), the two flip directions opposite; the
-divergence does not compound across the 24 GDN layers (measured growth 0.96x)
-and does not grow with sequence length. The slot registers approximate, and
+divergence does not compound across the 24 GDN layers (measured growth 0.96x
+on the 950DT, 0.50x on the 910B1) and does not grow with sequence length. The
+slot registers approximate, and
 stays off by default everywhere: the released BF16 decision packages keep
 exact kernels, and the quantized d3 accuracy record for this combination is
 pending (the quantized package is validated as its own model) -- registering
 the slot requires the explicit ``FLA_NPU_APPROXIMATE`` opt-in on top of the
-family's ``DtypePolicy.approximate_kernels`` consent.
+family's ``DtypePolicy.approximate_kernels`` consent, scoped to the npu
+(``approximate_accelerators``) so other accelerators' approximate kernels keep
+their own consent.
 
 fla-npu (https://github.com/flashserve/flash-linear-attention-npu) ships the
 Ascend C GDN ops vllm-ascend binds for Qwen3.5. Its README documents the
@@ -36,8 +46,10 @@ import torch
 from .kernels import chunk_gated_delta_rule_ref
 
 # SoCs the slot was measured on: registered (approximate) only there -- the
-# rocm.py precedent of exact/approximate only where measured.
-MEASURED = frozenset({"Ascend950DT"})
+# rocm.py precedent of exact/approximate only where measured. 950DT:
+# docs/records/npu-fla-chunk-ascend950dt.md; 910B1 (the fla-npu a2 wheel):
+# docs/records/npu-fla-chunk-ascend910b1.md.
+MEASURED = frozenset({"Ascend950DT", "Ascend910B1"})
 
 # The default-off gate: approximate kernels change answers (the record's
 # 93.3% row agreement), so the slot registers only on an explicit opt-in --
