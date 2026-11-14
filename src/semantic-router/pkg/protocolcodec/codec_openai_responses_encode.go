@@ -39,6 +39,9 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 	if hasParticipantNames(request) {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "messages[].name", "Responses has no participant names")
 	}
+	if len(request.Safeguards) > 0 {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "safeguards", "only Anthropic reviews auto mode's classifier context")
+	}
 	if len(request.ContextManagement) > 0 {
 		if err := appendLossy(&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIResponsesV1,
 			"context_management", "Responses cannot apply Anthropic context edits"); err != nil {

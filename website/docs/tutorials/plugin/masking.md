@@ -162,7 +162,7 @@ The same holds for the `[vsr:<tag>]` marks, such as `[vsr:email]` or `[vsr:emplo
 
 ## What is deliberately not masked
 
-The masking walk touches message content, system/developer instructions, tool-call arguments, and tool results — and nothing else.
+The masking walk touches message content, system/developer instructions, tool-call arguments, tool results, and the string values of the `safeguards` array Claude Code's auto mode sends — and nothing else.
 
 Tool payloads are masked according to their kind. A function call's JSON arguments and a structured tool result are decoded first and masked at their string leaves, so object keys stay intact, the payload stays valid JSON, and an escaped value such as `alice@example.com` is still caught. A custom tool's free-form input and a plain-text tool result are masked as text.
 

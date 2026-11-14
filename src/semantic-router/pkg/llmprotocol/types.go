@@ -312,6 +312,10 @@ type Request struct {
 	// ContextManagement carries Anthropic context edits through routing and
 	// same-format re-encoding. Other wire formats must reject or report its loss.
 	ContextManagement json.RawMessage
+	// Safeguards carries the context Claude Code's auto mode sends for
+	// Anthropic's server-side classifier review, as sent. Only Anthropic
+	// Messages re-encodes it; other wire formats report its omission.
+	Safeguards json.RawMessage
 	// CacheSalt isolates backend prefix-cache entries; it is never prompt text.
 	CacheSalt *string
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model

@@ -631,6 +631,20 @@ func TestApply_PlainTextToolResultStillMasked(t *testing.T) {
 	}
 }
 
+// Auto mode's classifier context reaches an Anthropic backend, so a value in
+// it is masked like one in a structured tool result.
+func TestApply_SafeguardsStringLeavesMasked(t *testing.T) {
+	request := &llmprotocol.Request{Safeguards: json.RawMessage(`[{"type":"auto_mode","classifier_context":{"live_cwd":"/home/alice@example.com/repo","v":1}}]`)}
+	result, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := string(request.Safeguards)
+	if !result.Changed || strings.Contains(got, "alice@example.com") || !strings.Contains(got, "/home/[EMAIL_ADDRESS_0]/repo") {
+		t.Fatalf("safeguards = %s, want the address masked", got)
+	}
+}
+
 // A custom tool's result is free-form text even when it looks like JSON.
 func TestApply_CustomToolResultKeepsTextMasking(t *testing.T) {
 	request := &llmprotocol.Request{

@@ -35,6 +35,9 @@ func cloneSemanticRequestForReplay(request *llmprotocol.Request) (*llmprotocol.R
 	if request.ContextManagement == nil {
 		cloned.ContextManagement = nil
 	}
+	if request.Safeguards == nil {
+		cloned.Safeguards = nil
+	}
 	for i := range request.Tools {
 		if request.Tools[i].InputSchema == nil {
 			cloned.Tools[i].InputSchema = nil
