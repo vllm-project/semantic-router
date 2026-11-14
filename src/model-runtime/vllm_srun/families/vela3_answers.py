@@ -6,34 +6,54 @@ two-option choice. A router Set question is a sigmoid per label against the
 request's threshold, else the package's (0.5): it answers ``sets.<id>`` and a
 Noul per label (``<id>.<label>``). A Span question decodes its word
 probabilities, a sigmoid at its route's temperature, against its route's
-threshold (``routing.Router.span_threshold``, by the target's token count),
-or the request's: it answers ``spans.<id>`` (code-point offsets into the field
-it reads) and a Noul that is its highest word probability over that field.
+threshold (the package's ``Routes.span_threshold``, by the target's token
+count), or the request's: it answers ``spans.<id>`` (code-point offsets into
+the field it reads) and a Noul that is its highest word probability over that
+field. The Vela 3.0 families (``vela3``, ``vela3_pico``) share this readout;
+each supplies its own routes (set threshold and span policy).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import numpy as np
 
-from ...errors import INVALID_MODEL_OUTPUT
-from ...systemone import choice_confidence
-from ..vela2.calibration import sigmoid, softmax
-from ..vela2.raw import RawRow
-from ..vela2.request import State
-from ..vela2.words import decode_spans, trim
-from .request import Asked
-from .routing import Router
+from ..errors import INVALID_MODEL_OUTPUT
+from ..systemone import choice_confidence
+from .vela2.calibration import sigmoid, softmax
+from .vela2.raw import RawRow
+from .vela2.request import Question, State
+from .vela2.words import decode_spans, trim
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 
+class Asked(Protocol):
+    """A valid question and, for a span question, the route its package answers it on."""
+
+    @property
+    def question(self) -> Question: ...
+
+    @property
+    def route(self) -> Any: ...
+
+
+class Routes(Protocol):
+    """A package's router set threshold and span threshold policy."""
+
+    set_threshold: float
+
+    def span_threshold(self, route: Any, target_tokens: int) -> tuple[float, float]:
+        """(threshold, temperature) of a span question over a target of ``target_tokens`` tokens."""
+        ...
+
+
 class Answerer:
     """Answers of one package (its router set threshold and span routes)."""
 
-    def __init__(self, router: Router):
+    def __init__(self, router: Routes):
         self.router = router
 
     def answer(

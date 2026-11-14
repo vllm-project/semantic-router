@@ -15,20 +15,20 @@ The last column says what the Router does with the field when the target deploym
 
 | Field | Type | Since | Families | On systemone/0.2 | Description |
 | --- | --- | --- | --- | --- | --- |
-| `roles` | object of `user` or `context` or `answer` | 5.0 | vela2, vela3, vela3_d3 | stripped | Which state keys hold the user's content, context, or the answer under check. Role-aware families read the state's parts by these roles; without `roles`, the whole state is the user's content on every family. |
+| `roles` | object of `user` or `context` or `answer` | 5.0 | vela2, vela3, vela3_d3, vela3_pico | stripped | Which state keys hold the user's content, context, or the answer under check. Role-aware families read the state's parts by these roles; without `roles`, the whole state is the user's content on every family. |
 | `options` | object | 5.0 | all | stripped | `deadline_ms` (work not started by then is not run, and its questions answer `deadline_exceeded`), `return_meta` (the response adds `meta`) and `max_tokens` (the scan budget of a model that reads a long part in windows). A standard target is bounded by the client's own timeout instead. |
 
 ## Question
 
 | Field | Type | Since | Families | On systemone/0.2 | Description |
 | --- | --- | --- | --- | --- | --- |
-| `preset` | string | 5.0 | decision1, vela2, vela3, vela3_d3 | stripped | A question the model was trained on, such as `pii`, answered by its trained head. The question still carries its own `instructions` and `criteria`, which any other server answers. |
-| `head` (span) | `router` or `broad` | 5.0 | vela2, vela3, vela3_d3 | refused at load | The span head that answers: `router`, or `broad` on models that have a broad span head. |
+| `preset` | string | 5.0 | decision1, vela2, vela3, vela3_d3, vela3_pico | stripped | A question the model was trained on, such as `pii`, answered by its trained head. The question still carries its own `instructions` and `criteria`, which any other server answers. |
+| `head` (span) | `router` or `broad` | 5.0 | vela2, vela3, vela3_d3, vela3_pico | refused at load | The span head that answers: `router`, or `broad` on models that have a broad span head. |
 | `decision_adapter` (choice, noul, score) | boolean | 5.0 | vela3_d3 | refused at load | Answers with the package's opt-in decision adapter, on Vela 3.0 d3 sizes that declare one. |
-| `over` | string or array of string | 5.0 | vela2, vela3, vela3_d3 | refused at load | The state keys the question reads, in state order; by default the whole state (a span: its answer part if present, else its user part). |
-| `overflow` | `window` or `truncate` | 5.0 | vela2, vela3, vela3_d3 | stripped | How a model with a scan budget reads a part longer than one input: `window` (whole, in windows) or `truncate` (its first tokens). |
+| `over` | string or array of string | 5.0 | vela2, vela3, vela3_d3, vela3_pico | refused at load | The state keys the question reads, in state order; by default the whole state (a span: its answer part if present, else its user part). |
+| `overflow` | `window` or `truncate` | 5.0 | vela2, vela3, vela3_d3, vela3_pico | stripped | How a model with a scan budget reads a part longer than one input: `window` (whole, in windows) or `truncate` (its first tokens). |
 | `require_full_input` | boolean | 5.0 | all | refused at load | Fails the question unless every state part is read completely; its answer then carries `input_coverage: complete`, which the standard has no field for. |
-| `threshold` (set, span) | number | 5.0 | vela2, vela3, vela3_d3 | refused at load | Replaces the model's decision threshold for a set or span question; the applied value comes back in `thresholds`. |
+| `threshold` (set, span) | number | 5.0 | vela2, vela3, vela3_d3, vela3_pico | refused at load | Replaces the model's decision threshold for a set or span question; the applied value comes back in `thresholds`. |
 | `at` (box) | number | 5.0 | decision3, vela3_d3 | refused at load | A box question on a video: the second to read, from the start of the state's only video. |
 | `rate` (track) | `1` or `2` | 5.0 | decision3, vela3_d3 | refused at load | A track question's updates per second over the whole video, 1 (the default) or 2. |
 
@@ -36,8 +36,8 @@ The last column says what the Router does with the field when the target deploym
 
 | Field | Type | Since | Families | On systemone/0.2 | Description |
 | --- | --- | --- | --- | --- | --- |
-| `span` | object | 5.0 | vela2, vela3, vela3_d3 | refused at load | Where each label of `criteria` occurs in the text it reads. The answer is a noul (the highest probability any word reached) and its spans under `spans`. |
-| `set` | object | 5.0 | vela2, vela3 | refused at load | Which labels of `criteria` apply, each with its own probability, under `sets`; each label also answers as a noul under `<question>.<label>`. |
+| `span` | object | 5.0 | vela2, vela3, vela3_d3, vela3_pico | refused at load | Where each label of `criteria` occurs in the text it reads. The answer is a noul (the highest probability any word reached) and its spans under `spans`. |
+| `set` | object | 5.0 | vela2, vela3, vela3_pico | refused at load | Which labels of `criteria` apply, each with its own probability, under `sets`; each label also answers as a noul under `<question>.<label>`. |
 | `track` | object | 5.0 | decision3, vela3_d3 | refused at load | A box for each sampled moment of the state's only video, on models whose card declares track questions. |
 
 ## Asset type
@@ -50,7 +50,7 @@ The last column says what the Router does with the field when the target deploym
 
 | Field | Type | Since | Families | On systemone/0.2 | Description |
 | --- | --- | --- | --- | --- | --- |
-| `abstain_probability` (choice, noul) | number | 5.0 | vela2, vela3 | never sent | The probability of the model's abstain option, where it has one (not calibrated). |
+| `abstain_probability` (choice, noul) | number | 5.0 | vela2, vela3, vela3_pico | never sent | The probability of the model's abstain option, where it has one (not calibrated). |
 | `input_coverage` | `complete` | 5.0 | all | never sent | Proof that a `require_full_input` question read every state part completely. |
 | `error` | `invalid_question` or `invalid_input` or `max_length_exceeded` or `scan_budget_exceeded` or `invalid_model_output` or `deadline_exceeded` or `unavailable` | 5.0 | all | never sent | Why this question has no answer, on `POST /v1/decisions`, which answers the other questions in the same 200. |
 | `reason` | string | 5.0 | all | never sent | A fixed word for why the question failed; it never carries request data. |
@@ -60,9 +60,9 @@ The last column says what the Router does with the field when the target deploym
 
 | Field | Type | Since | Families | On systemone/0.2 | Description |
 | --- | --- | --- | --- | --- | --- |
-| `spans` | object of array of object | 5.0 | vela2, vela3, vela3_d3 | never sent | Each span question's spans: label, `start` and `end` (Unicode code points into the text it read, end exclusive), text and probability. |
-| `sets` | object of object | 5.0 | vela2, vela3 | never sent | Each set question's selected labels and the probability of every label. |
-| `thresholds` | object of number | 5.0 | vela2, vela3, vela3_d3 | never sent | The threshold applied to each set or span question. |
+| `spans` | object of array of object | 5.0 | vela2, vela3, vela3_d3, vela3_pico | never sent | Each span question's spans: label, `start` and `end` (Unicode code points into the text it read, end exclusive), text and probability. |
+| `sets` | object of object | 5.0 | vela2, vela3, vela3_pico | never sent | Each set question's selected labels and the probability of every label. |
+| `thresholds` | object of number | 5.0 | vela2, vela3, vela3_d3, vela3_pico | never sent | The threshold applied to each set or span question. |
 | `span_heads` | object of `router` or `broad` | 5.0 | vela2 | never sent | The span head that answered each span question, on models with a broad span head. |
 | `meta` | object | 5.0 | all | never sent | With `options.return_meta`, the model's verified identity, revision, precision, numerics, engine, device and timings. |
 | `routing` | object | 5.0 | the Router | never sent | Added by the Router's `vllm-sr/auto` routing: the recipe, decision, algorithm, stage and model that answered, and the model calls made. |

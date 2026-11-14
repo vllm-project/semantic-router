@@ -51,6 +51,7 @@ PRECISION = {
     ("vela2", "qwen3_5_text"): ("BF16", "FP32"),
     ("vela2", "modernbert"): ("FP32", "FP32"),
     ("vela3", "ultrabert"): ("FP32", "FP32"),
+    ("vela3_pico", "ultrabert"): ("FP32", "FP32"),
 }
 BYTES = {"BF16": 2, "FP32": 4}
 BACKBONES = {

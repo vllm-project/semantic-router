@@ -605,7 +605,7 @@ type DecisionRequest struct {
 	// Questions A standard request's named questions; answers keep this order.
 	Questions map[string]Question `json:"questions,omitempty"`
 
-	// Roles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+	// Roles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3, vela3_pico): the `user`'s
 	// content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
 	// their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
 	// the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they
@@ -662,7 +662,7 @@ type DecisionResponse struct {
 	Usage      Usage               `json:"usage"`
 }
 
-// DecisionRoles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+// DecisionRoles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3, vela3_pico): the `user`'s
 // content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
 // their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
 // the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they
@@ -681,7 +681,7 @@ type DecisionState struct {
 	// Questions Named questions about this state; answers keep this order.
 	Questions map[string]Question `json:"questions"`
 
-	// Roles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+	// Roles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3, vela3_pico): the `user`'s
 	// content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
 	// their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
 	// the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they

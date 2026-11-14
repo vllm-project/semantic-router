@@ -1,0 +1,412 @@
+{
+ "vllm-sr/vela3.1-pico-150m": {
+  "answers": {
+   "cpu": {
+    "domain": {
+     "abstain_probability": 0.02881289318530232,
+     "choice": "health",
+     "confidence": 0.7117925901755974,
+     "probabilities": {
+      "biology": 0.0012802460674977937,
+      "business": 0.003827224350955241,
+      "chemistry": 0.0007725990783805094,
+      "computer science": 0.0015420132786952325,
+      "economics": 0.0006139551538049971,
+      "engineering": 0.0006470752962155155,
+      "health": 0.7310064174972242,
+      "history": 0.0007512510439182235,
+      "law": 0.0016787602020305371,
+      "math": 0.0032789382224558223,
+      "other": 0.2464099223692106,
+      "philosophy": 0.002079271566765667,
+      "physics": 0.000587653090036593,
+      "psychology": 0.004111280524148263,
+      "religion": 0.001413392258660945
+     },
+     "type": "choice"
+    },
+    "drugs": {
+     "noul": 0.7907854244072265,
+     "type": "noul"
+    },
+    "halu": {
+     "noul": 0.9989109574702121,
+     "type": "noul"
+    },
+    "hazards.Controlled/Regulated Substances": {
+     "noul": 0.017438423641215017,
+     "type": "noul"
+    },
+    "hazards.Copyright/Trademark/Plagiarism": {
+     "noul": 0.0007866769429834315,
+     "type": "noul"
+    },
+    "hazards.Criminal Planning/Confessions": {
+     "noul": 0.0021100873608652353,
+     "type": "noul"
+    },
+    "hazards.Fraud/Deception": {
+     "noul": 0.0014403886061967997,
+     "type": "noul"
+    },
+    "hazards.Guns and Illegal Weapons": {
+     "noul": 0.0008161511138382231,
+     "type": "noul"
+    },
+    "hazards.Harassment": {
+     "noul": 0.002388186146259091,
+     "type": "noul"
+    },
+    "hazards.Hate/Identity Hate": {
+     "noul": 0.0011047470364191144,
+     "type": "noul"
+    },
+    "hazards.High Risk Gov Decision Making": {
+     "noul": 0.0010656091337431035,
+     "type": "noul"
+    },
+    "hazards.Illegal Activity": {
+     "noul": 0.0011520430159846975,
+     "type": "noul"
+    },
+    "hazards.Immoral/Unethical": {
+     "noul": 0.0008919881081821765,
+     "type": "noul"
+    },
+    "hazards.Needs Caution": {
+     "noul": 0.009554068955857673,
+     "type": "noul"
+    },
+    "hazards.Other": {
+     "noul": 0.0014818938705082447,
+     "type": "noul"
+    },
+    "hazards.PII/Privacy": {
+     "noul": 0.0023041219990530197,
+     "type": "noul"
+    },
+    "hazards.Political/Misinformation/Conspiracy": {
+     "noul": 0.0024344283280632725,
+     "type": "noul"
+    },
+    "hazards.Profanity": {
+     "noul": 0.0019259187338276338,
+     "type": "noul"
+    },
+    "hazards.S1": {
+     "noul": 0.0013787787275333513,
+     "type": "noul"
+    },
+    "hazards.S10": {
+     "noul": 0.0013662147928185907,
+     "type": "noul"
+    },
+    "hazards.S11": {
+     "noul": 0.0034605905733557777,
+     "type": "noul"
+    },
+    "hazards.S12": {
+     "noul": 0.0016933122198237174,
+     "type": "noul"
+    },
+    "hazards.S14": {
+     "noul": 0.0007913577074681305,
+     "type": "noul"
+    },
+    "hazards.S2": {
+     "noul": 0.0009718288728646745,
+     "type": "noul"
+    },
+    "hazards.S3": {
+     "noul": 0.0010502502274660776,
+     "type": "noul"
+    },
+    "hazards.S4": {
+     "noul": 0.001223787349816046,
+     "type": "noul"
+    },
+    "hazards.S5": {
+     "noul": 0.003483101436175112,
+     "type": "noul"
+    },
+    "hazards.S6": {
+     "noul": 0.008634221383993205,
+     "type": "noul"
+    },
+    "hazards.S7": {
+     "noul": 0.0026923427521322566,
+     "type": "noul"
+    },
+    "hazards.S8": {
+     "noul": 0.0010934647880908597,
+     "type": "noul"
+    },
+    "hazards.S9": {
+     "noul": 0.0011944631798547591,
+     "type": "noul"
+    },
+    "hazards.Sexual": {
+     "noul": 0.002157832602297666,
+     "type": "noul"
+    },
+    "hazards.Sexual (minor)": {
+     "noul": 0.0014494115202565645,
+     "type": "noul"
+    },
+    "hazards.Suicide and Self Harm": {
+     "noul": 0.003057489703720296,
+     "type": "noul"
+    },
+    "hazards.Threat": {
+     "noul": 0.0013072559751825172,
+     "type": "noul"
+    },
+    "hazards.Unauthorized Advice": {
+     "noul": 0.007771279863581814,
+     "type": "noul"
+    },
+    "hazards.Violence": {
+     "noul": 0.0014540898535719033,
+     "type": "noul"
+    },
+    "jailbreak": {
+     "abstain_probability": 0.010459260735262675,
+     "choice": "benign",
+     "confidence": 0.9861335376292795,
+     "probabilities": {
+      "benign": 0.9930667688146397,
+      "jailbreak": 0.006933231185360153
+     },
+     "type": "choice"
+    },
+    "pii": {
+     "noul": 0.9992788309737268,
+     "type": "noul"
+    },
+    "topic": {
+     "choice": "medical",
+     "confidence": 0.9519202541658218,
+     "probabilities": {
+      "legal": 0.0006796023868313703,
+      "medical": 0.9679468361105479,
+      "other": 0.03137356150262089
+     },
+     "type": "choice"
+    },
+    "urgent": {
+     "noul": 0.07074499463761709,
+     "type": "noul"
+    }
+   }
+  },
+  "revision": "dad77ad7a83c884b3e608a58c13cf25beba00803",
+  "torch": {
+   "cpu": "2.14.1+cpu"
+  }
+ },
+ "vllm-sr/vela3.1-pico-380m": {
+  "answers": {
+   "cpu": {
+    "domain": {
+     "abstain_probability": 0.001971211942515927,
+     "choice": "health",
+     "confidence": 0.9255645743903244,
+     "probabilities": {
+      "biology": 0.000812906318191101,
+      "business": 0.0010057447692261435,
+      "chemistry": 0.0003994065155585551,
+      "computer science": 0.0005515032930621376,
+      "economics": 0.00019035257156893337,
+      "engineering": 0.00019846526915997945,
+      "health": 0.930526936097636,
+      "history": 0.00025328694107616375,
+      "law": 0.00044341738251505504,
+      "math": 0.0005122483550192624,
+      "other": 0.06240737203876298,
+      "philosophy": 0.0005741137453038851,
+      "physics": 0.00033482872320595705,
+      "psychology": 0.0014169126447627876,
+      "religion": 0.00037250533495127085
+     },
+     "type": "choice"
+    },
+    "drugs": {
+     "noul": 0.8870729672828386,
+     "type": "noul"
+    },
+    "halu": {
+     "noul": 0.9990145903854766,
+     "type": "noul"
+    },
+    "hazards.Controlled/Regulated Substances": {
+     "noul": 0.08371746821591508,
+     "type": "noul"
+    },
+    "hazards.Copyright/Trademark/Plagiarism": {
+     "noul": 0.00037763378750611446,
+     "type": "noul"
+    },
+    "hazards.Criminal Planning/Confessions": {
+     "noul": 0.0017092532831596103,
+     "type": "noul"
+    },
+    "hazards.Fraud/Deception": {
+     "noul": 0.0010103971208839768,
+     "type": "noul"
+    },
+    "hazards.Guns and Illegal Weapons": {
+     "noul": 0.0006122966195399783,
+     "type": "noul"
+    },
+    "hazards.Harassment": {
+     "noul": 0.0013478441404760559,
+     "type": "noul"
+    },
+    "hazards.Hate/Identity Hate": {
+     "noul": 0.0010002075228982407,
+     "type": "noul"
+    },
+    "hazards.High Risk Gov Decision Making": {
+     "noul": 0.0007876190583388414,
+     "type": "noul"
+    },
+    "hazards.Illegal Activity": {
+     "noul": 0.0004912819361857235,
+     "type": "noul"
+    },
+    "hazards.Immoral/Unethical": {
+     "noul": 0.0008223165971267975,
+     "type": "noul"
+    },
+    "hazards.Needs Caution": {
+     "noul": 0.0058736520687655185,
+     "type": "noul"
+    },
+    "hazards.Other": {
+     "noul": 0.0010737373772238144,
+     "type": "noul"
+    },
+    "hazards.PII/Privacy": {
+     "noul": 0.0013321679087764744,
+     "type": "noul"
+    },
+    "hazards.Political/Misinformation/Conspiracy": {
+     "noul": 0.0006828939110063886,
+     "type": "noul"
+    },
+    "hazards.Profanity": {
+     "noul": 0.0011219986210193671,
+     "type": "noul"
+    },
+    "hazards.S1": {
+     "noul": 0.0014870379392222255,
+     "type": "noul"
+    },
+    "hazards.S10": {
+     "noul": 0.000581862021867052,
+     "type": "noul"
+    },
+    "hazards.S11": {
+     "noul": 0.002007568715629808,
+     "type": "noul"
+    },
+    "hazards.S12": {
+     "noul": 0.002805120078746605,
+     "type": "noul"
+    },
+    "hazards.S14": {
+     "noul": 0.0002929242647357896,
+     "type": "noul"
+    },
+    "hazards.S2": {
+     "noul": 0.0012133122450369803,
+     "type": "noul"
+    },
+    "hazards.S3": {
+     "noul": 0.0011593578422267727,
+     "type": "noul"
+    },
+    "hazards.S4": {
+     "noul": 0.002063417970377764,
+     "type": "noul"
+    },
+    "hazards.S5": {
+     "noul": 0.0008892933025889139,
+     "type": "noul"
+    },
+    "hazards.S6": {
+     "noul": 0.025705985394386878,
+     "type": "noul"
+    },
+    "hazards.S7": {
+     "noul": 0.0026327743408849132,
+     "type": "noul"
+    },
+    "hazards.S8": {
+     "noul": 0.0007174726368341676,
+     "type": "noul"
+    },
+    "hazards.S9": {
+     "noul": 0.0005607468469888043,
+     "type": "noul"
+    },
+    "hazards.Sexual": {
+     "noul": 0.0033411120962201363,
+     "type": "noul"
+    },
+    "hazards.Sexual (minor)": {
+     "noul": 0.0018269644640704823,
+     "type": "noul"
+    },
+    "hazards.Suicide and Self Harm": {
+     "noul": 0.0027137437226290527,
+     "type": "noul"
+    },
+    "hazards.Threat": {
+     "noul": 0.0007288761645106168,
+     "type": "noul"
+    },
+    "hazards.Unauthorized Advice": {
+     "noul": 0.015976309510320367,
+     "type": "noul"
+    },
+    "hazards.Violence": {
+     "noul": 0.0008339884812515312,
+     "type": "noul"
+    },
+    "jailbreak": {
+     "abstain_probability": 5.7828164076955376e-06,
+     "choice": "benign",
+     "confidence": 0.9969200722745957,
+     "probabilities": {
+      "benign": 0.9984600361372978,
+      "jailbreak": 0.0015399638627021327
+     },
+     "type": "choice"
+    },
+    "pii": {
+     "noul": 0.9977311995222473,
+     "type": "noul"
+    },
+    "topic": {
+     "choice": "medical",
+     "confidence": 0.5470915454360826,
+     "probabilities": {
+      "legal": 0.0006503173131087467,
+      "medical": 0.6980610302907218,
+      "other": 0.3012886523961695
+     },
+     "type": "choice"
+    },
+    "urgent": {
+     "noul": 0.11881856361910648,
+     "type": "noul"
+    }
+   }
+  },
+  "revision": "a79cbf66ee09245ef8f40f66afa9bcbd57ccf5a5",
+  "torch": {
+   "cpu": "2.14.1+cpu"
+  }
+ }
+}

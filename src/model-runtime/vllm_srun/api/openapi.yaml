@@ -415,7 +415,7 @@ components:
       # A client that leaves roles unset must omit the member: null means no roles.
       x-omitempty: true
       description: |
-        What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+        What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3, vela3_pico): the `user`'s
         content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
         their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
         the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they

@@ -277,6 +277,22 @@ def backend_projection(data):
                 "span_heads": vela3_heads,
             }
         )
+    # The Vela 3.1 picos answer the vela3 kinds on one network, text only.
+    pico_kinds = list(
+        ast.literal_eval(
+            assignment(RUNTIME / "families/vela3_pico/family.py", "QUESTION_TYPES")
+        )
+    )
+    for entry in vela_entries("vela3_pico"):
+        models.append(
+            {
+                "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
+                "family": "vela3_pico",
+                "question_types": pico_kinds,
+                "modalities": descriptor_modalities("vela3_pico"),
+                "span_heads": vela3_heads,
+            }
+        )
     return {"models": models}
 
 

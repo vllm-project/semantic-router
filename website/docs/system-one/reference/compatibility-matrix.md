@@ -9,24 +9,24 @@ description: Which schema carries each System One feature, and which model famil
 
 Each row is a feature: a question type of the standard, or a field of the extension set. `systemone/0.2` is the published standard and `vllm-sr/5.0` the standard plus the vllm-sr extension set. A family column says whether the model runtime's family honours the feature; a dash means it does not.
 
-| Feature | systemone/0.2 | vllm-sr/5.0 | decision1 | decision2 | decision3 | vela2 | vela3 | vela3_d3 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `noul` question | yes | yes | yes | yes | yes | yes | yes | yes |
-| `choice` question | yes | yes | yes | yes | yes | yes | yes | yes |
-| `score` question | yes | yes | yes | yes | yes | yes | yes | yes |
-| `box` question | yes | yes | yes | yes | yes | yes | yes | yes |
-| `roles` request | stripped | yes | — | — | — | yes | yes | yes |
-| `options` request | stripped | yes | yes | yes | yes | yes | yes | yes |
-| `preset` question | stripped | yes | yes | — | — | yes | yes | yes |
-| `head` question | refused at load | yes | — | — | — | yes | yes | yes |
-| `decision_adapter` question | refused at load | yes | — | — | — | — | — | yes |
-| `over` question | refused at load | yes | — | — | — | yes | yes | yes |
-| `overflow` question | stripped | yes | — | — | — | yes | yes | yes |
-| `require_full_input` question | refused at load | yes | yes | yes | yes | yes | yes | yes |
-| `threshold` question | refused at load | yes | — | — | — | yes | yes | yes |
-| `at` question | refused at load | yes | — | — | yes | — | — | yes |
-| `rate` question | refused at load | yes | — | — | yes | — | — | yes |
-| `span` question | refused at load | yes | — | — | — | yes | yes | yes |
-| `set` question | refused at load | yes | — | — | — | yes | yes | — |
-| `track` question | refused at load | yes | — | — | yes | — | — | yes |
-| `video` asset type | refused at load | yes | — | — | yes | — | — | yes |
+| Feature | systemone/0.2 | vllm-sr/5.0 | decision1 | decision2 | decision3 | vela2 | vela3 | vela3_d3 | vela3_pico |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `noul` question | yes | yes | yes | yes | yes | yes | yes | yes | yes |
+| `choice` question | yes | yes | yes | yes | yes | yes | yes | yes | yes |
+| `score` question | yes | yes | yes | yes | yes | yes | yes | yes | yes |
+| `box` question | yes | yes | yes | yes | yes | yes | yes | yes | yes |
+| `roles` request | stripped | yes | — | — | — | yes | yes | yes | yes |
+| `options` request | stripped | yes | yes | yes | yes | yes | yes | yes | yes |
+| `preset` question | stripped | yes | yes | — | — | yes | yes | yes | yes |
+| `head` question | refused at load | yes | — | — | — | yes | yes | yes | yes |
+| `decision_adapter` question | refused at load | yes | — | — | — | — | — | yes | — |
+| `over` question | refused at load | yes | — | — | — | yes | yes | yes | yes |
+| `overflow` question | stripped | yes | — | — | — | yes | yes | yes | yes |
+| `require_full_input` question | refused at load | yes | yes | yes | yes | yes | yes | yes | yes |
+| `threshold` question | refused at load | yes | — | — | — | yes | yes | yes | yes |
+| `at` question | refused at load | yes | — | — | yes | — | — | yes | — |
+| `rate` question | refused at load | yes | — | — | yes | — | — | yes | — |
+| `span` question | refused at load | yes | — | — | — | yes | yes | yes | yes |
+| `set` question | refused at load | yes | — | — | — | yes | yes | — | yes |
+| `track` question | refused at load | yes | — | — | yes | — | — | yes | — |
+| `video` asset type | refused at load | yes | — | — | yes | — | — | yes | — |
