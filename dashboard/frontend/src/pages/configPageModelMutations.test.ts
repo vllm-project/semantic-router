@@ -192,4 +192,21 @@ describe('effective model edit round trips', () => {
     const result = serialized(buildAddedModelConfig({ providers: { models: [] } }, 'local', form))
     expect(result.providers?.models[0]).not.toHaveProperty('reasoning')
   })
+
+  it('saves a deployment-bound native alias without adding a provider model identity', () => {
+    const config: ConfigData = {
+      providers: {
+        models: [{ name: 'native-kai', api_format: 'systemone', deployment: 'decision-kai' }],
+      },
+    }
+    const model = normalized(config)
+    const form = editModelFormData(model)
+    validateModelStructuredFields(form)
+
+    const saved = serialized(buildEditedModelConfig(config, model, form)).providers?.models[0]
+    expect(saved).toMatchObject(config.providers!.models[0])
+    expect(saved).not.toHaveProperty('provider_model_id')
+    expect(saved).not.toHaveProperty('external_model_ids')
+    expect(saved?.backend_refs ?? []).toHaveLength(0)
+  })
 })
