@@ -224,7 +224,8 @@ func isSystemOnePath(path string) bool {
 
 // serveListing answers GET /v1/models on a listener that serves LLM APIs and
 // systemone: the LLM models as OpenAI data, with the System One listing's
-// models beside them.
+// models beside them. A listing that already carries models, the empty
+// catalog Codex asks for, stays as the routing core wrote it.
 func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange) {
 	llm := newBufferedResponse()
 	h.serveRouted(llm, r, serving, x, serving.Models)
@@ -232,7 +233,8 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving S
 	serving.SystemOne.ServeHTTP(systemOne, r.Clone(r.Context()))
 	var listed, native map[string]json.RawMessage
 	if llm.status != http.StatusOK || json.Unmarshal(llm.body.Bytes(), &listed) != nil || listed == nil ||
-		systemOne.status != http.StatusOK || json.Unmarshal(systemOne.body.Bytes(), &native) != nil || native["models"] == nil {
+		listed["models"] != nil || systemOne.status != http.StatusOK || json.Unmarshal(systemOne.body.Bytes(), &native) != nil ||
+		native["models"] == nil {
 		llm.writeTo(w)
 		return
 	}

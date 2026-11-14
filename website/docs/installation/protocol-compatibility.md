@@ -644,6 +644,12 @@ Point Codex at the Router through a model provider of your own, not
 - **The model.** Set `model` to a Router entrypoint as well, such as
   `vllm-sr/auto`; a name that matches no entrypoint is sent to a backend model
   of that name.
+- **The catalog.** On a ChatGPT login (`requires_openai_auth = true`, see
+  [Agent Harness](agent-harness#codex-on-its-own-chatgpt-login)), Codex also
+  asks for its own model catalog with `GET /v1/models?client_version=…`. The
+  Router answers that request with an empty `models` catalog beside the model
+  list, so Codex keeps its default model metadata instead of logging that it
+  cannot read the list.
 
 ```toml
 model = "vllm-sr/auto"
