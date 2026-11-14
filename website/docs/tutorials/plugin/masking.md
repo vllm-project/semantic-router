@@ -158,7 +158,7 @@ If a response happens to echo a placeholder like `[EMAIL_ADDRESS_0]` back to the
 
 An agent that keeps working with placeholders sends them back in its later requests, for example in a file it writes with `Hi [PERSON_0],`. A detected span that lies inside text shaped like a placeholder this plugin produces, the default `[TYPE_n]` shape or a configured template that has a letter besides `{index}`, with digits for `{index}`, is not masked again, even when the detector reads part of it as personal data. A span that reaches past it, such as an email address whose local part is a placeholder, is still masked, and a template such as `{index}` or `#{index}` is not recognized, since its digits could be part of a real phone number. Without that, the agent would see its own earlier output turn into `[[PERSON_1]]` on the next turn and its edits would stop matching the file it wrote.
 
-The same holds for the `[vsr:<tag>]` marks, such as `[vsr:email]` or `[vsr:employee_id]` for a listener rule, that the vSR plugins for Claude Code and Codex leave where their redact app hid a value from a tool's output. With the plugin and the gateway running together, a tool result reaches the Router already redacted, and the marks pass through as they are.
+The same holds for the `[vsr:<tag>]` marks, such as `[vsr:email]` or `[vsr:employee_id]` for a listener rule, that the vSR plugins for Claude Code and Codex leave where their redact app hid a value from a tool's output. With the plugin and the gateway running together, a tool result reaches the Router already redacted, and the marks pass through as they are, also at the start of a tool result.
 
 ## What is deliberately not masked
 
@@ -166,7 +166,7 @@ The masking walk touches message content, system/developer instructions, tool-ca
 
 Tool payloads are masked according to their kind. A function call's JSON arguments and a structured tool result are decoded first and masked at their string leaves, so object keys stay intact, the payload stays valid JSON, and an escaped value such as `alice@example.com` is still caught. A custom tool's free-form input and a plain-text tool result are masked as text.
 
-A tool result is treated as structured when it opens with `{` or `[`. Such a payload must decode faithfully — exactly one JSON value, nothing after it, and no object repeating a member name — or masking fails closed (D4). Both of these are refused rather than forwarded:
+A tool result is treated as structured when it opens the way JSON does: `{` before a member name or `}`, or `[` before `]`, a string, an object, an array, or a number or `true`, `false` or `null` followed by `,` or `]`. Text that only begins with a bracket, such as a log line `[INFO] build ok` or `[2026-11-14 10:00:00] ...`, a `[vsr:employee_id]` mark, or `{not json`, is ordinary text. A structured payload must decode faithfully — exactly one JSON value, nothing after it, and no object repeating a member name — or masking fails closed (D4). Both of these are refused rather than forwarded:
 
 - `{"note":"safe"} alice@example.com` — more than one value. Decoding reads only the first, leaving the rest unscanned.
 - `{"value":"alice@example.com","value":"safe"}` — a repeated member name. Decoding keeps only the last one.
