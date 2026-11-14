@@ -27,6 +27,10 @@ func decodeStrictSetupConfig(data []byte) (setupConfigFile, error) {
 	if err := documents.Decode(&trailing); !errors.Is(err, io.EOF) {
 		return cfg, fmt.Errorf("setup config must contain one canonical document")
 	}
+	// Fields the Router rejects by presence would vanish here when null.
+	if err := routerconfig.ValidateRawFields(data); err != nil {
+		return cfg, err
+	}
 	// Read renamed forms as the Router does, before unknown fields are refused.
 	data, err := routerconfig.CanonicalConfigBytes(data)
 	if err != nil {
