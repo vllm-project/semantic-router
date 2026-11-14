@@ -308,9 +308,15 @@ wire_api = "responses"
 requires_openai_auth = true
 ```
 
-Keep `web_search = "disabled"` in the profile, which `vllm-sr connect` writes:
-the Router takes function tools only. The plan's usage limits apply to each
-call, and the login stays its owner's, as for Claude Code above.
+Keep `web_search = "disabled"` in the profile: the Router takes function tools
+only. `vllm-sr connect codex --config <your config>` writes this profile for
+such a configuration, with `requires_openai_auth` and without a key variable,
+and does not probe the gateway, which answers only on Codex's own login. Each
+`connect` command stops before writing anything for a gateway whose caller
+backends name the other provider: the Router takes an `anthropic` login only on
+Messages and an `openai` one only on Responses or Chat, so every call would be
+refused. The plan's usage limits apply to each call, and the login stays its
+owner's, as for Claude Code above.
 
 ### With the vSR plugin
 

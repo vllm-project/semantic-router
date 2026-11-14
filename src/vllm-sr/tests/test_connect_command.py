@@ -604,6 +604,67 @@ def test_cli_leaves_the_login_to_claude_code_for_a_caller_gateway(
     assert len(seen) == asked
 
 
+def _caller_config(tmp_path, provider):
+    config = tmp_path / "config.yaml"
+    backend = {"name": provider, "provider": provider, "auth": {"credential": "caller"}}
+    model = {"name": "a-model", "backend_refs": [backend]}
+    config.write_text(yaml.safe_dump({"providers": {"models": [model]}}))
+    return config
+
+
+def test_cli_leaves_the_login_to_codex_for_a_chatgpt_caller_gateway(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, seen, _ = gateway
+    config = _caller_config(tmp_path, "openai")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    asked = len(seen)
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--config", str(config), "--base-url", url, "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    written = (tmp_path / "vllm-sr.config.toml").read_text()
+    # Codex sends its own sign-in only when its provider asks for it, and a key
+    # variable would go in its place
+    assert "requires_openai_auth = true" in written
+    assert "env_key" not in written
+    assert "Not probed: the gateway answers only on the login Codex" in result.output
+    assert len(seen) == asked
+
+    launch = ["--config", str(config), "--base-url", url, "--launch", "--", "exec"]
+    result = CliRunner().invoke(main, ["connect", "codex", *launch, "hi"])
+    assert result.exit_code == 3, result.output
+    ran = json.loads(harness_bin.read_text())
+    overrides = dict(arg.split("=", 1) for arg in ran["args"][1:-2:2] if "=" in arg)
+    assert overrides["model_providers.vllm-sr.requires_openai_auth"] == "true"
+    assert "model_providers.vllm-sr.env_key" not in overrides
+    assert len(seen) == asked
+
+
+@pytest.mark.parametrize(
+    ("harness", "provider"), [("codex", "anthropic"), ("claude-code", "openai")]
+)
+def test_cli_refuses_a_caller_gateway_of_another_provider(
+    tmp_path, gateway, monkeypatch, harness, provider
+):
+    url, seen, _ = gateway
+    config = _caller_config(tmp_path, provider)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    asked = len(seen)
+    result = CliRunner().invoke(
+        main, ["connect", harness, "--config", str(config), "--base-url", url, "--yes"]
+    )
+    assert result.exit_code != 0
+    assert f"own {provider} login upstream" in result.output
+    assert not (tmp_path / "vllm-sr.config.toml").exists()
+    assert not (tmp_path / "claude").exists()
+    assert len(seen) == asked
+
+
 def test_cli_fails_when_the_gateway_refuses(tmp_path, gateway, monkeypatch):
     url, _, _ = gateway
     monkeypatch.chdir(tmp_path)

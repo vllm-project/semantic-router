@@ -283,11 +283,16 @@ def codex_home(env: dict[str, str]) -> Path:
 
 
 def codex_settings(
-    gateway: str, model: str, key_env: str | None, context_window: int | None
+    gateway: str,
+    model: str,
+    key_env: str | None,
+    context_window: int | None,
+    login: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """The top-level settings, then the provider's. key_env is left out for a
     listener without keys: Codex refuses to start while the variable a provider
-    names is unset."""
+    names is unset. login has Codex send its own sign-in, for a gateway that
+    presents it upstream."""
     top = {
         "model": model,
         "model_context_window": context_window,
@@ -300,6 +305,7 @@ def codex_settings(
         "base_url": gateway.rstrip("/") + "/v1",
         "wire_api": "responses",
         "env_key": key_env,
+        "requires_openai_auth": login,
     }
     return (
         {k: v for k, v in top.items() if v},
@@ -314,10 +320,11 @@ def codex_change(
     model: str,
     key_env: str | None,
     context_window: int | None = None,
+    login: bool = False,
 ) -> Change:
     """The profile file. Codex layers it over config.toml with --profile, and it
     holds the provider too, so config.toml is not touched."""
-    top, provider = codex_settings(gateway, model, key_env, context_window)
+    top, provider = codex_settings(gateway, model, key_env, context_window, login)
     lines = [f"{k} = {json.dumps(v)}" for k, v in top.items()]
     lines += ["", f"[model_providers.{PROVIDER}]"]
     lines += [f"{k} = {json.dumps(v)}" for k, v in provider.items()]
@@ -326,11 +333,15 @@ def codex_change(
 
 
 def codex_launch_args(
-    gateway: str, model: str, key_env: str | None, context_window: int | None
+    gateway: str,
+    model: str,
+    key_env: str | None,
+    context_window: int | None,
+    login: bool = False,
 ) -> list[str]:
     """The same settings as command-line overrides, which win over every
     configuration file, a trusted project's included (0.166)."""
-    top, provider = codex_settings(gateway, model, key_env, context_window)
+    top, provider = codex_settings(gateway, model, key_env, context_window, login)
     pairs = [*top.items()]
     pairs += [(f"model_providers.{PROVIDER}.{k}", v) for k, v in provider.items()]
     return [arg for k, v in pairs for arg in ("-c", f"{k}={json.dumps(v)}")]
