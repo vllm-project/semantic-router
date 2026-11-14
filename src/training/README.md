@@ -23,6 +23,35 @@ machine-readable configuration, explicit data/output paths, train and export
 entrypoints, and lightweight contract tests. Model weights, datasets, caches,
 checkpoints, and run logs stay outside Git.
 
+## Legacy classifier launchers
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) before
+running the legacy classifier shell scripts or the `train-mmbert32k-intent`,
+`train-mmbert32k-factcheck`, and `train-mmbert32k-pii*` Make targets. These
+launchers use each task's existing project with `uv run --locked --project`;
+uv prepares its environment from the committed lockfile without a manual pip
+install or virtual environment activation. Model and dataset downloads still
+require network access, and GPU training requires a compatible driver.
+
+From the repository root, run all four legacy classifier tasks on a smaller
+sample with their existing model and LoRA settings:
+
+```bash
+TRAINING_WORK_DIR="$PWD/.cache/training-smoke" \
+  EPOCHS=1 BATCH_SIZE=2 MAX_SAMPLES=200 \
+  bash src/training/model_classifier/train_mmbert_gpu.sh
+```
+
+The default settings remain 10 epochs, batch size 64, and 10,000 samples.
+`TRAINING_WORK_DIR` controls intermediate outputs; `MODEL_OUTPUT_DIR` defaults
+to its `models` subdirectory. The modality-only launcher also uses its own
+locked project for the GPU diagnostic, training, and inference demo:
+
+```bash
+EPOCHS=1 BATCH_SIZE=2 MAX_SAMPLES=200 \
+  bash src/training/model_classifier/modality_routing_classifier/run_training.sh
+```
+
 Start with the public [model training guide](../../website/docs/training/training-overview.md)
 to choose a model family. Use the README beside a trainer for its environment,
 data preparation, commands, evaluation, and artifact format.
