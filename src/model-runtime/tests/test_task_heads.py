@@ -15,6 +15,7 @@ from vllm_srun.families.task_heads.family import (
     TaskHeadsFamily,
     batch_invariant,
 )
+from vllm_srun.families.task_heads.package import labels_of
 from vllm_srun.heads.task import identical
 from vllm_srun.plugins.base import PackageRef, SurfaceRequest
 from vllm_srun.registry import builtin
@@ -538,6 +539,54 @@ def test_verification_is_local_unless_a_pin_matches(monkeypatch, packages, tmp_p
     )
     with pytest.raises(PackageError, match=r"config\.json"):
         family.verify(ref)
+
+
+@pytest.mark.parametrize(
+    "id2label",
+    [
+        {"0": "A", "00": "B"},
+        {"0": "A", "+1": "B"},
+        {"0": "A", " 1": "B"},
+        {"0": "A", "1_0": "B"},
+    ],
+)
+def test_noncanonical_label_indices_are_refused(id2label):
+    with pytest.raises(PackageError, match="canonical integers"):
+        labels_of({"id2label": id2label})
+
+
+@pytest.mark.parametrize(
+    "id2label, expected",
+    [
+        ({"0": "NEGATIVE", "1": "POSITIVE"}, ("NEGATIVE", "POSITIVE")),
+        (
+            {"0": "NEGATIVE", "1": "NEUTRAL", "2": "POSITIVE"},
+            ("NEGATIVE", "NEUTRAL", "POSITIVE"),
+        ),
+    ],
+)
+def test_canonical_label_indices_are_accepted(id2label, expected):
+    assert labels_of({"id2label": id2label}) == expected
+
+
+def test_duplicate_normalized_label_indices_are_refused(packages, tmp_path):
+    import json
+    import shutil
+
+    copy = tmp_path / "duplicate-label-indices"
+    shutil.copytree(packages["sequence"], copy)
+
+    config_path = copy / "config.json"
+    config = json.loads(config_path.read_text())
+    config["id2label"] = {
+        "0": "NEGATIVE",
+        "00": "SHADOW",
+        "1": "POSITIVE",
+    }
+    config_path.write_text(json.dumps(config))
+
+    with pytest.raises(PackageError, match="id2label"):
+        TaskHeadsFamily().verify(PackageRef(root=copy))
 
 
 def test_unservable_checkpoints_are_refused(packages, tmp_path):
