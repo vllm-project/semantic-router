@@ -17,6 +17,12 @@ const (
 
 var UnknownPolicies = []UnknownPolicy{RuleOnUnknownNoMatch, RuleOnUnknownMatch, RuleOnUnknownFailRequest}
 
+// Policies a classifier or decision condition sets with on_error.
+const (
+	RuleOnErrorNoMatch = "no_match"
+	RuleOnErrorMatch   = "match"
+)
+
 func (p UnknownPolicy) IsValid() bool {
 	return slices.Contains(UnknownPolicies, p)
 }

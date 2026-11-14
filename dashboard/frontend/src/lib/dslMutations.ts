@@ -11,6 +11,7 @@
 
 import type { BoolExprNode, DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
+import { boolExprToRuleNode, quoteDSLString, serializeRuleExpr } from './decisionRuleDsl'
 import { keepRouteSettingsOutsideForm } from './dslRouteBlock'
 
 // ---------- Block finding ----------
@@ -164,10 +165,7 @@ export function deleteModel(src: string, name: string): string {
 
 // ---------- Signal mutations ----------
 
-// JSON string escapes are a subset of the Go escapes the DSL parser unquotes.
-export function quoteDSLString(value: string): string {
-  return JSON.stringify(value)
-}
+export { quoteDSLString }
 
 /**
  * Serialize a signal's fields to DSL block body text.
@@ -643,26 +641,13 @@ export function addRoute(
 }
 
 /**
- * Serialize a BoolExprNode back to DSL text.
+ * Serialize a BoolExprNode back to DSL text, including signal-reference
+ * label, predicate and on_error fields. Delegates to the shared WHEN
+ * serializer so the Builder has one DSL expression implementation.
  */
 export function serializeBoolExpr(expr: BoolExprNode | null): string {
-  if (!expr) return ''
-  const type = expr.type
-  switch (type) {
-    case 'signal_ref':
-      return `${expr.signalType}(${quoteDSLString(expr.signalName)})`
-    case 'and':
-      return `${serializeBoolExpr(expr.left)} AND ${serializeBoolExpr(expr.right)}`
-    case 'or':
-      return `(${serializeBoolExpr(expr.left)} OR ${serializeBoolExpr(expr.right)})`
-    case 'not': {
-      const operand = serializeBoolExpr(expr.expr)
-      // NOT binds tighter than AND, so an AND operand keeps its parentheses.
-      return expr.expr.type === 'and' ? `NOT (${operand})` : `NOT ${operand}`
-    }
-    default:
-      return ''
-  }
+  const tree = boolExprToRuleNode(expr)
+  return tree ? serializeRuleExpr(tree).text : ''
 }
 
 function isDSLFieldObject(value: DSLFieldValue): value is DSLFieldObject {
