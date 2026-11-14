@@ -329,6 +329,7 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	}
 	appendRoutingHeaders(&state.setHeaders, dispatch.effectiveBackendModel())
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
+	r.appendReliabilityHeaders(&state.setHeaders, dispatch.logicalModel, dispatch.effectiveBackendModel())
 	r.applyDecisionHeaderMutations(state, ctx)
 	// Removals apply before every set, so an operator deletion wins only once
 	// the negotiated value yields to it.

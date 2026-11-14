@@ -77,11 +77,11 @@ func (r *OpenAIRouter) failedAttemptError(attempt *failedAttempt) *llmprotocol.P
 	}
 	engine, err := r.protocolEngine()
 	if err != nil {
-		return upstreamTransportFallback(attempt.status, err)
+		return upstreamTransportFallback(attempt.status, attempt.body, err)
 	}
 	decoded, _, err := engine.DecodeTransportError(attempt.format, attempt.body)
 	if err != nil || decoded.Error == nil {
-		return upstreamTransportFallback(attempt.status, err)
+		return upstreamTransportFallback(attempt.status, attempt.body, err)
 	}
 	_ = normalizeUpstreamContextLength(attempt.status)(&decoded)
 	return decoded.Error

@@ -4,7 +4,7 @@ import "testing"
 
 func TestBaselineInventoryHasNoDuplicates(t *testing.T) {
 	full := BaselineCases()
-	if len(full) != 34 {
+	if len(full) != 35 {
 		t.Fatalf("inventory changed: %d cases", len(full))
 	}
 	seen := map[string]bool{}

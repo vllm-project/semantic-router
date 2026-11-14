@@ -54,8 +54,11 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	recordStreamingTTFT(ctx)
-	if ctx.ResponseGuardHold != nil {
-		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
+	if ctx != nil {
+		ctx.LastStreamChunkTime = time.Now()
+		if ctx.ResponseGuardHold != nil {
+			return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
+		}
 	}
 	r.initializeSemanticResponseStream(ctx)
 	buffers := semanticStreamBuffers{}

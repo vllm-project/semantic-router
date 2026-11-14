@@ -131,3 +131,22 @@ func TestRoutingSessionReportsTheDecisionsReliability(t *testing.T) {
 	require.Equal(t, 2*time.Second, *got.TotalTimeout)
 	require.Nil(t, (&routingSession{ctx: &RequestContext{}}).Reliability())
 }
+
+func TestEnvoyReliabilityHeadersRoundsUpPositiveSubmillisecondDeadlines(t *testing.T) {
+	oneHundredUs := 100 * time.Microsecond
+	fifteenHundredUs := 1500 * time.Microsecond
+	zero := time.Duration(0)
+	override := &routing.Reliability{
+		TotalTimeout:  &oneHundredUs,
+		PerTryTimeout: &fifteenHundredUs,
+	}
+	headers := headerValues(envoyReliabilityHeaders(override, true))
+	require.Equal(t, "1", headers["x-envoy-upstream-rq-timeout-ms"])
+	require.Equal(t, "2", headers["x-envoy-upstream-rq-per-try-timeout-ms"])
+
+	zeroOverride := &routing.Reliability{
+		TotalTimeout: &zero,
+	}
+	zeroHeaders := headerValues(envoyReliabilityHeaders(zeroOverride, true))
+	require.Equal(t, "0", zeroHeaders["x-envoy-upstream-rq-timeout-ms"])
+}
