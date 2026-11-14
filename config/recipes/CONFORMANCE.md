@@ -229,7 +229,7 @@ inputs weigh the same. Run one shard with
 `RECIPE_CONFORMANCE_PROBE_SHARD=<index>/<count>`; it writes its report under
 `<recipe>/shards/<index>/`. The report step merges a recipe's shards into its
 `eval-report.json` only when every shard reported, then applies the tag policy
-and the execution check to the whole manifest. MoM V1 uses 16 shards because
+and the execution check to the whole manifest. MoM V1 uses 8 shards because
 its decision model reads long inputs slowly on a CPU.
 
 ### Policy and deployment scope

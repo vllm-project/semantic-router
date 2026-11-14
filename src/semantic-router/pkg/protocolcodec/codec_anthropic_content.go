@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -38,11 +39,38 @@ func decodeAnthropicContentArray(
 }
 
 func decodeAnthropicRequestContentBlock(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, error) {
+	if content, ok, err := decodeAnthropicToolReference(body, policy); ok {
+		return content, err
+	}
 	typeName, err := anthropicRequestContentType(body)
 	if err != nil {
 		return llmprotocol.Content{}, err
 	}
 	return decodeAnthropicContentBlock(body, typeName, policy, false)
+}
+
+// decodeAnthropicToolReference reads a tool search result that names a deferred
+// tool. Once the operator accepts the tools.defer_loading loss every tool is
+// already sent in full, so the reference reaches the backend as the tool's name.
+// Without that opt-in the block stays unsupported.
+func decodeAnthropicToolReference(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, bool, error) {
+	if !slices.Contains(policy.AllowedLossyFields, llmprotocol.LossyFieldToolDeferLoading) {
+		return llmprotocol.Content{}, false, nil
+	}
+	var reference struct {
+		Type     string `json:"type"`
+		ToolName string `json:"tool_name"`
+	}
+	if err := json.Unmarshal(body, &reference); err != nil || reference.Type != "tool_reference" {
+		return llmprotocol.Content{}, false, nil
+	}
+	if err := decodeWireValue(body, &reference, policy); err != nil {
+		return llmprotocol.Content{}, true, err
+	}
+	if reference.ToolName == "" {
+		return llmprotocol.Content{}, true, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_content_variant", "Anthropic tool_reference requires tool_name", nil)
+	}
+	return llmprotocol.Content{Kind: llmprotocol.ContentText, Text: reference.ToolName}, true, nil
 }
 
 func decodeAnthropicResponseContentBlock(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, error) {

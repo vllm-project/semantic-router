@@ -69,7 +69,8 @@ with `timeout`, `malformed` and `queue` scenarios. POST `/reset` accepts `health
 `hold` or `malformed`; POST `/release` frees held requests. A hold expires after
 60 seconds, increments an observable expiration counter and returns HTTP 504.
 
-Protocol marker inputs select tool calls (`__mock_tool_call__`), structured schema
+Protocol marker inputs select tool calls (`__mock_tool_call__`, which calls `lookup`
+unless `__mock_tool_name:<name>:__` names another tool), structured schema
 echo (`__mock_structured_output__`), HTTP 429 (`__mock_provider_error__`), incomplete
 SSE (`__mock_incomplete_stream__`), a Chat stream held after its first chunk until
 `POST /debug/held-stream/{session}/release` (`__mock_held_stream__`; `GET

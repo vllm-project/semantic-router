@@ -203,10 +203,17 @@ func buildReplayStreamingToolTrace(ctx *RequestContext) *routerreplay.ToolTrace 
 	)
 }
 
+// replayToolCallStep records a call by the name the backend saw. A call
+// restored to its Responses namespace for the client keeps the flat name, so a
+// tool has one name across request history and response.
 func replayToolCallStep(source, role, apiType string, call llmprotocol.ToolCall) routerreplay.ToolTraceStep {
+	name := call.Name
+	if call.Namespace != "" {
+		name = llmprotocol.FlattenToolName(call.Namespace, call.Name)
+	}
 	return routerreplay.ToolTraceStep{
 		Type: replayToolStepAssistantToolCall, Source: source, Role: role,
-		ToolName: call.Name, ToolCallID: call.ID,
+		ToolName: name, ToolCallID: call.ID,
 		Arguments: call.Arguments, RawArguments: call.Arguments, APIType: apiType,
 	}
 }
@@ -258,7 +265,12 @@ func mergeReplayToolTraces(
 		}
 		steps = append(steps, step)
 	}
-	return newReplayToolTrace(steps)
+	merged := newReplayToolTrace(steps)
+	if merged != nil {
+		merged.StepsTruncated = left.StepsTruncated || right.StepsTruncated
+		merged.DroppedStepCount = left.DroppedStepCount + right.DroppedStepCount
+	}
+	return merged
 }
 
 func newReplayToolTrace(steps []routerreplay.ToolTraceStep) *routerreplay.ToolTrace {
@@ -310,7 +322,8 @@ func replayToolTraceStepsEqual(left, right routerreplay.ToolTraceStep) bool {
 		left.Status == right.Status && left.ContentRedacted == right.ContentRedacted &&
 		left.Arguments == right.Arguments && left.RawArguments == right.RawArguments &&
 		left.RawOutput == right.RawOutput && left.Output == right.Output &&
-		left.APIType == right.APIType && left.Truncated == right.Truncated
+		left.APIType == right.APIType && left.Truncated == right.Truncated &&
+		left.RawTruncated == right.RawTruncated
 }
 
 func replayToolTraceStepLabel(stepType string) string {

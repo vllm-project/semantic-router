@@ -98,6 +98,10 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 				}
 				list["models"] = listed
 			}
+			// The vSR plugins pointed at this listener read their profile here.
+			if api, _ := listener.API(apiregistry.SystemOne); api.VSR != nil {
+				list["vsr"] = api.VSR
+			}
 			_ = json.NewEncoder(w).Encode(list)
 			return
 		}

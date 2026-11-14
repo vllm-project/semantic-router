@@ -78,6 +78,9 @@ func TestListenerAPIEntriesAreCheckedByTheRegistry(t *testing.T) {
 		"      systemone: {schema: systemone/0.2}":          "a listener serves api systemone in vllm-sr/5.0 or vllm-sr/4.0",
 		"      systemone: {schema: vllm-sr/6.0}":            "a listener serves api systemone in vllm-sr/5.0 or vllm-sr/4.0",
 		"      systemone: {max_deadline_ms: 0}":             "apis.systemone.max_deadline_ms: invalid_value: must be greater than zero",
+		"      chat_completions: {vsr: {redact: false}}":    "apis.chat_completions.vsr: invalid_value: the chat_completions API takes no vsr setting",
+		"      systemone: {vsr: {router_goal: cheap}}":      `apis.systemone.vsr.router_goal: invalid_value: "cheap" is not a router goal; use one of quality, balanced, save`,
+		"      systemone: {vsr: {pii: false}}":              `unknown field "pii"`,
 		"      chat_completions: {models: []}":              "apis.chat_completions.models: invalid_value: lists no model",
 		"      chat_completions: {models: [m, m]}":          `lists "m" twice`,
 		"      systemone: {models: [not-a-decision-model]}": `public System One model "not-a-decision-model" is not declared`,
@@ -89,6 +92,28 @@ func TestListenerAPIEntriesAreCheckedByTheRegistry(t *testing.T) {
 	}
 	if _, err := loadListenerAPIs(t, "      {}", "chat_completions"); err == nil || !strings.Contains(err.Error(), "names no API") {
 		t.Errorf("empty apis: %v", err)
+	}
+}
+
+func TestAVSRProfileSurvivesCanonicalExport(t *testing.T) {
+	cfg, err := loadListenerAPIs(t, "      chat_completions: {}\n      systemone: {vsr: {redact: false, router_turns: true, router_goal: save}}", "chat_completions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := cfg.Listeners[0].APIs["systemone"].VSR
+	if profile == nil || *profile.Redact || !*profile.RouterTurns || profile.RouterGoal != "save" || profile.Guard != nil {
+		t.Fatalf("profile %+v", profile)
+	}
+	exported, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := ParseYAMLBytes(exported)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, exported)
+	}
+	if again := reloaded.Listeners[0].APIs["systemone"].VSR; again == nil || *again.Redact || again.RouterGoal != "save" || again.Guard != nil {
+		t.Fatalf("exported profile %+v\n%s", again, exported)
 	}
 }
 

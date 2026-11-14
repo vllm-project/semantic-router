@@ -850,6 +850,18 @@ func (r *OpenAIRouter) fallbackProviderAuthorizer(
 	if err != nil {
 		return nil, err
 	}
+	if profile.Caller() {
+		// The same contract as primary dispatch: only the client's own login,
+		// and the attempt fails before the call without it.
+		present, err := callerCredentialAuthorizer(reqCtx)
+		if err != nil {
+			return nil, err
+		}
+		return func(_ context.Context, request *http.Request) error {
+			present(request)
+			return nil
+		}, nil
+	}
 	if profile.Delegated() {
 		// The same contract as primary dispatch: only the request's delegated
 		// credential, and the attempt fails before the call without it.
@@ -959,7 +971,7 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		var connErr *connector.Error
 		if errors.As(err, &connErr) && connErr.Kind == connector.KindStatus {
 			errBody, _ := connErr.ResponseBody()
-			return errBody, connErr.StatusCode, err
+			return redactCallerCredential(reqCtx, errBody), connErr.StatusCode, err
 		}
 		return nil, 0, err
 	}

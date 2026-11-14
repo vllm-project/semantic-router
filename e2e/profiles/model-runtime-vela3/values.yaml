@@ -1,7 +1,7 @@
 # vela3-fast on CPU, served by the Router's managed model runtime as the
-# default decision deployment. Opt-in: the runtime downloads about 6.6 GB from
-# the Hugging Face Hub at start-up, so this profile is not part of the CPU CI
-# lanes.
+# default decision deployment. The runtime downloads about 6.6 GB from the
+# Hugging Face Hub at start-up, so the profile runs in the nightly full CPU
+# qualification rather than on pull requests.
 #
 # - The built-in prompt guard and PII signals run on the default deployment
 #   (primary, vllm-sr/vela3-fast) at its calibrated thresholds;
@@ -137,10 +137,13 @@ extraEnv:
   - name: VLLM_SRUN_DIR
     value: /tmp/vsr-runtime
 
+# A GitHub-hosted runner has 4 vCPUs, and the Kind worker that holds the
+# Router also holds the gateways and the backends, so a 4 CPU request never
+# schedules there.
 resources:
   requests:
     memory: 8Gi
-    cpu: "4"
+    cpu: "2"
   limits:
     memory: 24Gi
     cpu: "8"

@@ -1,5 +1,6 @@
 # The replay service says where records are stored; recording and what a
-# record captures are a router_replay plugin in global.plugins.
+# record captures are a router_replay plugin in global.plugins, where
+# capture_personal_data: true is prompt_capture: raw.
 version: v0.5
 providers:
   defaults: {model: general}
@@ -11,6 +12,7 @@ global:
     router_replay:
       enabled: true
       capture_request_body: false
+      capture_personal_data: true
       store_backend: memory
       ttl_seconds: 3600
 recipes:
