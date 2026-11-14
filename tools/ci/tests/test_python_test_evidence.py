@@ -14,7 +14,7 @@ from python_test_evidence import summarize  # noqa: E402
 
 
 class FrameworkObserverTests(unittest.TestCase):
-    def run_framework(self, source, framework):
+    def run_framework(self, source, framework, workers=0):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "sitecustomize.py").write_text(
@@ -36,6 +36,15 @@ class FrameworkObserverTests(unittest.TestCase):
                 if framework == "unittest"
                 else [sys.executable, "-m", "pytest", "-q", str(test)]
             )
+            if workers:
+                (root / "test_second.py").write_text(source)
+                command += [
+                    "-p",
+                    "xdist",
+                    "-n",
+                    str(workers),
+                    str(root / "test_second.py"),
+                ]
             process = subprocess.run(
                 command,
                 cwd=root,
@@ -85,6 +94,16 @@ class Selected(unittest.TestCase):
             "def test_real():\n    assert 2 + 2 == 4\n", "pytest"
         )
         self.assertEqual(len(report["cases"]), 1)
+        self.assertEqual(collection_errors(report, "test"), [])
+
+    def test_pytest_xdist_workers_report_each_case_once(self):
+        report = self.run_framework(
+            "import pytest\n@pytest.mark.parametrize('n', [1, 2, 3])\ndef test_real(n):\n    assert n\n",
+            "pytest",
+            workers=2,
+        )
+        self.assertEqual(len(report["expected_cases"]), 6)
+        self.assertEqual(len(report["cases"]), 6)
         self.assertEqual(collection_errors(report, "test"), [])
 
 

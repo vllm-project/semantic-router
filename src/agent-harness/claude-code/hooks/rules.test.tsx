@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { BOTTOM, engine, paneText, type Reply, type Test } from './kit'
+import { BOTTOM, engine, paneText, readCallOf, type Reply, rowTree, type Test, toolRow } from './kit'
 import { rulesOf } from './lib/rules'
 
 const REMOTE = { runtime: 'remote', runtimeUrl: 'http://localhost:8899/v1/decisions', runtimeModel: 'vela3-lite' } as const
@@ -109,6 +109,9 @@ test('what a redact rule finds is hidden as its tag, past an astral character, a
   const ran = await read($)
 
   expect((ran.result as { file: { content: string } }).file.content).toBe('Paid 😀 by [vsr:employee_id]today')
+  // A tag longer than the value it hides is not text the checks left unread.
+  const { texts } = await rowTree($, toolRow(readCallOf('r1', '/repo/t.txt')))
+  expect(texts.some(one => /went to Claude unchecked/.test(one))).toBe(false)
 })
 
 test('an output a required redact rule could not check is withheld, with no advice to wait less', { options: REMOTE }, async ($, on) => {
