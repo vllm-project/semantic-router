@@ -173,10 +173,15 @@ function framedLine(elements: Elements, described: Described, columns: number) {
 export function rowView(elements: Elements, described: Described, columns: number, narrow: Described, display: Display) {
   if (display === 'verbose' || described.weight === 'act') return inlineView(elements, described, columns, narrow)
   if (display === 'quiet' || described.weight === 'quiet') return null
-  // The plain words go first when the row is short: a cut word reads worse than none.
+  // The plain words go first when the row is short: the headline stays whole, and the brief, what a redact hid,
+  // gives way.
   const room = columns - CARD_CHROME >= MIN_FRAMED_COLUMNS ? columns - CARD_CHROME : columns
   const fits = `${BRAND}  ${described.badge}  ${described.line}`.length <= room
-  return framedLine(elements, { ...described, headline: fits ? described.line : described.headline, detail: '' }, columns)
+  return framedLine(
+    elements,
+    { ...described, headline: fits ? described.line : described.headline, detail: fits ? '' : described.brief },
+    columns,
+  )
 }
 
 // A card for a decision worth noticing, a compact line for an allowed command, the one-line form where the row is narrow.

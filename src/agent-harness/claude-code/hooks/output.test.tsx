@@ -435,3 +435,23 @@ test('by default hidden data is one line, and the same kinds hidden from the sam
   expect(again.texts).toEqual(['the engine row'])
   expect(other.texts[1]).toBe(' vSR   REDACTED  4 items hidden: name, email, phone, card · support/ticket-1043.txt')
 })
+
+test('a one-line row too long for the terminal keeps the headline and as much of what was hidden as fits', async ($, on) => {
+  const record = 'Maria Gonzalez <maria.gonzalez@example.com>, 415-555-0188, card 4111 1111 1111 1111, SSN 078-05-1120, IBAN GB82WEST12345698765432'
+  engine(on, {
+    pii: [
+      spanOf(record, 'Maria Gonzalez', 'PERSON', 0.95),
+      spanOf(record, 'maria.gonzalez@example.com', 'EMAIL_ADDRESS', 0.99),
+      spanOf(record, '415-555-0188', 'PHONE_NUMBER', 0.99),
+      spanOf(record, '4111 1111 1111 1111', 'CREDIT_CARD', 1),
+      spanOf(record, '078-05-1120', 'US_SSN', 0.99),
+      spanOf(record, 'GB82WEST12345698765432', 'IBAN_CODE', 0.99),
+    ],
+  })
+  on('tool.call', () => readResult(record))
+  await $.tool.call({ tool: 'Read', file_path: TICKET_PATH, tool_use_id: 'r1' })
+
+  const row = await rowTree($, toolRow(readCallOf('r1', TICKET_PATH)))
+
+  expect(row.texts[1]).toBe(' vSR   REDACTED  6 items hidden before Claude read support/ticket-1042.txt  name, email, ph…')
+})
