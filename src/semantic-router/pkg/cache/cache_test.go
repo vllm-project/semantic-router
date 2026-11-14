@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
@@ -3451,6 +3452,40 @@ func TestInMemoryCacheHNSW(t *testing.T) {
 		t.Logf("After cleanup: %d entries, %d HNSW nodes",
 			len(cacheTTL.entries), len(cacheTTL.hnswIndex.nodes))
 	})
+}
+
+func TestResponseCacheServiceReclaimsExpiredSemanticEntriesWithoutDefaultTTL(t *testing.T) {
+	backend := NewInMemoryCache(InMemoryCacheOptions{
+		Enabled:           true,
+		TTLSeconds:        0,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+	})
+	t.Cleanup(func() { require.NoError(t, backend.Close()) })
+	service := NewResponseCacheService(NewLegacyBackendAdapter(backend, InMemoryCacheType), DefaultResponseCacheServiceOptions())
+	for _, id := range []string{"expired", "new"} {
+		require.NoError(t, service.StoreSemantic(context.Background(), CacheWrite{
+			Identity: CacheIdentity{
+				Partition:     CachePartition{RequestModel: "model"},
+				SemanticQuery: id,
+			},
+			RequestID:    id,
+			ResponseBody: []byte(id),
+			TTL:          TTL(time.Minute),
+		}))
+		if id == "expired" {
+			require.Len(t, backend.entries, 1)
+			expiresAt := time.Now().Add(-time.Second)
+			backend.mu.Lock()
+			backend.entries[0].ExpiresAt = expiresAt
+			backend.expirationHeap.UpdateExpiration(id, expiresAt)
+			backend.mu.Unlock()
+		}
+	}
+	require.Len(t, backend.entries, 1)
+	require.Equal(t, "new", backend.entries[0].RequestID)
+	require.Equal(t, map[string]int{"new": 0}, backend.entryMap)
+	require.Equal(t, 1, backend.expirationHeap.Size())
+	require.NotContains(t, backend.expirationHeap.nodeMap, "expired")
 }
 
 // ===== Benchmark Tests =====
