@@ -70,7 +70,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             "vllm-sr-test-integration:", 1
         )[0]
         # The whole directory runs, so no CLI test file can be left out of CI.
-        self.assertIn("-m pytest -q -n auto --dist loadfile src/vllm-sr/tests\n", unit)
+        self.assertIn("-m pytest -q src/vllm-sr/tests\n", unit)
         self.assertIn("run_cli_tests.py --verbose", unit)
 
     def test_router_image_platform_selects_the_runtime_accelerator(self) -> None:
