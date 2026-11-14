@@ -213,15 +213,26 @@ func TestARemoteDeploymentReadsOnlyTheModalitiesItsCardLists(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			api := &remoteCardAPI{listing: tc.listing}
-			router, err := buildOpenAIRouterFromConfig(moduleSystemOneRouterConfig(t, remoteCardYAML(tc.recipe, tc.capabilities), api))
-			if err == nil {
-				_ = router.Close()
+			cfg, loadErr := moduleSystemOneRouterConfigTry(t, remoteCardYAML(tc.recipe, tc.capabilities), api)
+			var (
+				router *OpenAIRouter
+				err    error
+			)
+			if loadErr == nil {
+				router, err = buildOpenAIRouterFromConfig(cfg)
+				if err == nil {
+					_ = router.Close()
+				}
+			}
+			refusal := loadErr
+			if refusal == nil {
+				refusal = err
 			}
 			switch {
-			case tc.want == "" && err != nil:
-				t.Fatalf("the generation failed with %v, want it prepared", err)
-			case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
-				t.Fatalf("error %v, want %q", err, tc.want)
+			case tc.want == "" && refusal != nil:
+				t.Fatalf("the generation failed with %v, want it prepared", refusal)
+			case tc.want != "" && (refusal == nil || !strings.Contains(refusal.Error(), tc.want)):
+				t.Fatalf("error %v, want %q", refusal, tc.want)
 			}
 		})
 	}
