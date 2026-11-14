@@ -45,7 +45,7 @@ func TestBenchmarkUsageDirectProofAndCallLimit(t *testing.T) {
 			}
 			ctx := &RequestContext{Headers: map[string]string{headers.VSRBenchExpectedConfigHash: hash, headers.VSRBenchMaxInferenceCalls: "1"}, BenchmarkConfigHash: hash, VSRSelectedDecision: d, VSRSelectedModel: "small", UpstreamStatusCode: 200, VSRCacheHit: tc.cache}
 			if tc.shadow {
-				ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: &config.RouterReplayShadowConfig{Model: "candidate"}}
+				ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: &config.RouterReplayShadowConfig{Models: []string{"candidate"}}}
 			}
 			router.recordBenchmarkInferenceCall(ctx, true)
 			if (ctx.BenchmarkInferenceCalls == 1) != tc.known {
@@ -97,7 +97,7 @@ func TestBenchmarkUsageLooperIncludesEveryCallAndFailsClosed(t *testing.T) {
 		t.Fatal("conflicting cache-write aliases marked complete")
 	}
 	resp.ExecutionTrace.Attempts[1].Usage = usage
-	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: &config.RouterReplayShadowConfig{Model: "candidate"}}
+	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: &config.RouterReplayShadowConfig{Models: []string{"candidate"}}}
 	if read().Complete {
 		t.Fatal("untraced shadow calls omitted")
 	}

@@ -44,7 +44,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests Router Replay management access, Postgres restart recovery, and single-shadow failure isolation"
+	return "Tests Router Replay management access, Postgres restart recovery, and multi-model shadow dispatch and failure isolation"
 }
 
 // Setup deploys Postgres, the router, and gateway resources.
@@ -67,6 +67,7 @@ func (p *Profile) GetTestCases() []string {
 		"router-replay-session-turn-progression",
 		"router-replay-tool-result-capture",
 		"shadow-dispatch-observes-candidate-model",
+		"shadow-dispatch-multi-model-completes",
 		"shadow-dataset-export-manifest",
 		"shadow-dataset-judge-tasks",
 		"shadow-dispatch-fail-open-unreachable-backend",

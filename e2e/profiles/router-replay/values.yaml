@@ -21,6 +21,11 @@ config:
           - name: shadow-endpoint
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
+      - name: openai/shadow-second
+        backend_refs:
+          - name: shadow-second-endpoint
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
       - name: openai/shadow-unreachable
         backend_refs:
           - name: shadow-unreachable-endpoint
@@ -51,6 +56,10 @@ config:
       recipe: replay-second
     - model_names: ["vllm-sr/replay-tool-results"]
       recipe: replay-tool-results
+    - model_names: ["vllm-sr/shadow-multi"]
+      recipe: shadow-multi
+    - model_names: ["vllm-sr/shadow-multi-failure"]
+      recipe: shadow-multi-failure
     - model_names: ["vllm-sr/shadow-ok"]
       recipe: shadow-ok
     - model_names: ["vllm-sr/shadow-judge"]
@@ -173,14 +182,72 @@ config:
                 capture_response_body: true
                 max_body_bytes: 65536
                 shadow:
-                  model: openai/shadow-candidate
+                  models: [openai/shadow-candidate]
                   sample_rate: 1.0
-                  max_concurrency: 2
-                  max_queue_depth: 8
-                  timeout_seconds: 20
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  execution:
+                    max_concurrency: 2
+                    max_queue_size: 8
+                    timeout: 20s
+                  budget:
+                    max_response_bytes: 1048576
+    - name: shadow-multi
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shadow_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: true
+                capture_response_body: true
+                max_body_bytes: 65536
+                shadow:
+                  models: [openai/shadow-candidate, openai/shadow-second]
+                  sample_rate: 1.0
+                  execution:
+                    max_concurrency: 1
+                    max_queue_size: 8
+                    timeout: 20s
+                  budget:
+                    max_response_bytes: 2097152
+    - name: shadow-multi-failure
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shadow_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                max_records: 1000
+                capture_request_body: true
+                capture_response_body: true
+                max_body_bytes: 65536
+                shadow:
+                  models: [openai/shadow-malformed, openai/shadow-candidate]
+                  sample_rate: 1.0
+                  execution:
+                    max_concurrency: 1
+                    max_queue_size: 8
+                    timeout: 20s
+                  budget:
+                    max_response_bytes: 2097152
     - name: shadow-judge
       strategy: priority
       signals: {}
@@ -203,15 +270,17 @@ config:
                 capture_response_body: true
                 max_body_bytes: 65536
                 shadow:
-                  model: openai/shadow-candidate
+                  models: [openai/shadow-candidate]
                   sample_rate: 1.0
-                  max_concurrency: 2
-                  max_queue_depth: 8
-                  timeout_seconds: 20
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: true
-                  max_capture_bytes: 4096
+                  execution:
+                    max_concurrency: 2
+                    max_queue_size: 8
+                    timeout: 20s
+                  budget:
+                    max_response_bytes: 1048576
+                  capture:
+                    enabled: true
+                    max_bytes: 4096
     - name: shadow-timeout
       strategy: priority
       signals: {}
@@ -234,14 +303,14 @@ config:
                 capture_response_body: true
                 max_body_bytes: 65536
                 shadow:
-                  model: openai/shadow-timeout
+                  models: [openai/shadow-timeout]
                   sample_rate: 1.0
-                  max_concurrency: 1
-                  max_queue_depth: 1
-                  timeout_seconds: 5
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  execution:
+                    max_concurrency: 1
+                    max_queue_size: 1
+                    timeout: 5s
+                  budget:
+                    max_response_bytes: 1048576
     - name: shadow-malformed
       strategy: priority
       signals: {}
@@ -264,14 +333,14 @@ config:
                 capture_response_body: true
                 max_body_bytes: 65536
                 shadow:
-                  model: openai/shadow-malformed
+                  models: [openai/shadow-malformed]
                   sample_rate: 1.0
-                  max_concurrency: 1
-                  max_queue_depth: 1
-                  timeout_seconds: 5
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  execution:
+                    max_concurrency: 1
+                    max_queue_size: 1
+                    timeout: 5s
+                  budget:
+                    max_response_bytes: 1048576
     - name: shadow-queue
       strategy: priority
       signals: {}
@@ -294,14 +363,14 @@ config:
                 capture_response_body: true
                 max_body_bytes: 65536
                 shadow:
-                  model: openai/shadow-queue
+                  models: [openai/shadow-queue]
                   sample_rate: 1.0
-                  max_concurrency: 1
-                  max_queue_depth: 1
-                  timeout_seconds: 30
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  execution:
+                    max_concurrency: 1
+                    max_queue_size: 1
+                    timeout: 30s
+                  budget:
+                    max_response_bytes: 1048576
     - name: shadow-down
       strategy: priority
       signals: {}
@@ -324,14 +393,14 @@ config:
                 capture_response_body: true
                 max_body_bytes: 65536
                 shadow:
-                  model: openai/shadow-unreachable
+                  models: [openai/shadow-unreachable]
                   sample_rate: 1.0
-                  max_concurrency: 2
-                  max_queue_depth: 8
-                  timeout_seconds: 5
-                  max_response_bytes: 1048576
-                  max_retries: 0
-                  capture_response_body: false
+                  execution:
+                    max_concurrency: 2
+                    max_queue_size: 8
+                    timeout: 5s
+                  budget:
+                    max_response_bytes: 1048576
   global:
     router:
       strategy: priority

@@ -269,7 +269,7 @@ func TestDefaultPluginsCannotPairAutomaticOutputWithAShadow(t *testing.T) {
     - type: router_replay
       configuration:
         enabled: true
-        shadow: {model: model-a}
+        shadow: {models: [model-a]}
 `
 	_, err := ParseYAMLBytes([]byte(doc))
 	if err == nil || !strings.Contains(err.Error(), `"recipes[default].plugins": automatic output does not support a router_replay shadow`) {

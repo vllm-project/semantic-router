@@ -202,10 +202,10 @@ type RouterReplayPluginConfig struct {
 	// oldest steps are dropped and ToolTrace.StepsTruncated is set so callers
 	// can see that a cap was applied. 0 means no limit.
 	MaxToolTraceSteps int `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
-	// Shadow sends a sampled copy of the decision's requests to a shadow
-	// model, whose outcome the replay record keeps. It runs while the
+	// Shadow sends sampled copies of the decision's requests to candidate
+	// models, whose outcomes the replay record keeps. It runs while the
 	// decision records replays.
-	Shadow *RouterReplayShadowConfig `json:"shadow,omitempty" yaml:"shadow,omitempty"`
+	Shadow *RouterReplayShadowConfig `json:"shadow,omitempty" yaml:"shadow,omitempty" jsonschema:"nullable"`
 	// CapturePersonalData is the deprecated form of PromptCapture: false
 	// meant verified and true raw. Loading a configuration rewrites it as
 	// prompt_capture in its own layer, with a warning; in a policy assembled
@@ -213,49 +213,39 @@ type RouterReplayPluginConfig struct {
 	CapturePersonalData *bool `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
 }
 
-// RouterReplayShadowConfig is router_replay's shadow: a bounded, sampled copy
-// of the approved provider-bound request, sent to a secondary configured
-// model after the primary dispatch has been finalized. The primary response
-// never waits on, or changes because of, the shadow call.
+// RouterReplayShadowConfig sends bounded, sampled copies of the approved
+// provider-bound request to candidate models and captures their outcomes in Replay.
 type RouterReplayShadowConfig struct {
-	// Model is the configured logical model that receives the shadow copy.
-	Model string `json:"model" yaml:"model"`
+	// Models names the configured backends observed for the same approved input.
+	Models []string `json:"models" yaml:"models"`
 	// SampleRate is the fraction of eligible requests that are shadowed, in
 	// [0, 1]. nil means every eligible request; 0 disables dispatch while
 	// keeping the shadow declared.
-	SampleRate *float64 `json:"sample_rate,omitempty" yaml:"sample_rate,omitempty"`
-	// MaxConcurrency bounds in-flight shadow calls for this decision.
-	MaxConcurrency int `json:"max_concurrency,omitempty" yaml:"max_concurrency,omitempty"`
-	// MaxQueueDepth bounds shadow calls waiting for an in-flight slot. Calls
-	// beyond the depth are dropped with a queue_full reason.
-	MaxQueueDepth int `json:"max_queue_depth,omitempty" yaml:"max_queue_depth,omitempty"`
-	// TimeoutSeconds bounds queue wait plus execution for one shadow call.
-	TimeoutSeconds int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
-	// MaxResponseBytes bounds the shadow response body read from the backend.
-	MaxResponseBytes int `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
-	// MaxRetries bounds additional attempts on transport errors or retryable
-	// upstream statuses. All attempts share the same deadline.
-	MaxRetries int `json:"max_retries,omitempty" yaml:"max_retries,omitempty"`
-	// CaptureResponseBody stores a bounded excerpt of the shadow output text
-	// in the replay outcome when the request's prompt_capture is raw, which
-	// alone keeps generated text. Off by default: only hashes and sizes are
-	// kept.
-	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
-	// MaxCaptureBytes bounds the stored excerpt when CaptureResponseBody is on.
-	MaxCaptureBytes int `json:"max_capture_bytes,omitempty" yaml:"max_capture_bytes,omitempty"`
-	// TLSSkipVerify disables certificate verification for an https shadow
-	// backend. The primary path reaches backends through Envoy, which does not
-	// verify upstream certificates, so this matches that posture for internal
-	// CAs. Off by default.
-	TLSSkipVerify bool `json:"tls_skip_verify,omitempty" yaml:"tls_skip_verify,omitempty"`
-	// ForwardHeaders names the decision header_mutation headers a shadow copy
-	// may carry. Nothing a decision sets for the primary backend is forwarded
-	// unless listed here, so a custom credential such as X-Internal-Token
-	// stays on the primary path. Known credential carriers (Authorization,
-	// Proxy-Authorization, Cookie, x-api-key, api-key, x-goog-api-key, the
-	// x-user-*-key headers) cannot be listed. Names match case-insensitively.
-	// Empty by default.
+	SampleRate *float64              `json:"sample_rate,omitempty" yaml:"sample_rate,omitempty" jsonschema:"nullable"`
+	Execution  ShadowExecutionConfig `json:"execution,omitempty" yaml:"execution,omitempty"`
+	Budget     ShadowBudgetConfig    `json:"budget,omitempty" yaml:"budget,omitempty"`
+	Capture    ShadowCaptureConfig   `json:"capture,omitempty" yaml:"capture,omitempty"`
+	// ForwardHeaders lists decision header mutations explicitly allowed on shadow copies.
 	ForwardHeaders []string `json:"forward_headers,omitempty" yaml:"forward_headers,omitempty"`
+}
+
+// ShadowExecutionConfig bounds all observations of one recipe and decision.
+type ShadowExecutionConfig struct {
+	MaxConcurrency *int `json:"max_concurrency,omitempty" yaml:"max_concurrency,omitempty" jsonschema:"nullable"`
+	MaxQueueSize   *int `json:"max_queue_size,omitempty" yaml:"max_queue_size,omitempty" jsonschema:"nullable"`
+	// Timeout includes queue wait and every candidate's execution.
+	Timeout string `json:"timeout,omitempty" yaml:"timeout,omitempty" jsonschema:"minLength=1,maxLength=128"`
+}
+
+// ShadowBudgetConfig applies to one sampled request, across all candidates.
+type ShadowBudgetConfig struct {
+	MaxResponseBytes *int `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty" jsonschema:"nullable"`
+}
+
+// ShadowCaptureConfig controls aggregate answer-text capture for one request.
+type ShadowCaptureConfig struct {
+	Enabled  bool `json:"enabled" yaml:"enabled"`
+	MaxBytes *int `json:"max_bytes,omitempty" yaml:"max_bytes,omitempty" jsonschema:"nullable"`
 }
 
 // GetPlugin returns the plugin entry for a specific plugin type.

@@ -164,16 +164,12 @@ global: {}
 	}
 }
 
-// A shadow copy trusts the backend's CA unless its decision opted out of
-// verification.
+// A shadow copy uses the backend's configured certificate trust.
 func TestShadowConnectorTrustsTheBackendCA(t *testing.T) {
 	backendTLS := &tls.Config{ServerName: privateBackendName, RootCAs: x509.NewCertPool()}
-	options := shadowConnectorOptions(config.RouterReplayShadowConfig{TimeoutSeconds: 1, MaxResponseBytes: 1024}, backendTLS)
+	options := shadowConnectorOptions(&shadowJob{timeout: time.Second, responseLimit: 1024}, backendTLS)
 	require.Same(t, backendTLS, options.TLSConfig)
-
-	options = shadowConnectorOptions(config.RouterReplayShadowConfig{TimeoutSeconds: 1, MaxResponseBytes: 1024, TLSSkipVerify: true}, backendTLS)
-	require.NotNil(t, options.TLSConfig)
-	assert.True(t, options.TLSConfig.InsecureSkipVerify)
+	assert.False(t, options.TLSConfig.InsecureSkipVerify)
 }
 
 func TestProviderTLSConfigLoadsTheBackendTrust(t *testing.T) {

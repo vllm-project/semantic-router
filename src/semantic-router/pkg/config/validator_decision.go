@@ -418,6 +418,8 @@ func validatePluginContracts(
 		}
 		path := configuration(index, plugin.Type)
 		switch typed := payload.(type) {
+		case *RouterReplayPluginConfig:
+			err = validateReplayShadowModels(cfg, owner, typed.Shadow)
 		case *ToolsPluginConfig:
 			err = validateToolsPlugin(cfg, path, typed)
 		case *ContextPluginConfig:
