@@ -1,0 +1,40 @@
+.trace {
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.trace h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.trace details {
+  border-top: 1px solid var(--border-color, #444);
+  padding: 8px 0;
+}
+
+.trace summary {
+  cursor: pointer;
+}
+
+.trace ul {
+  padding-left: 16px;
+  margin: 6px 0;
+}
+
+.trace p {
+  margin: 4px 0;
+}
+
+.node {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.node strong[data-state='unknown'],
+.error {
+  color: var(--color-warning, #ffb74d);
+}

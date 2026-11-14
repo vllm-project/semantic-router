@@ -259,6 +259,9 @@ export interface CollapseState {
 export type TestQueryMode = 'simulate' | 'dry-run'
 
 export interface TestQueryResult {
+  requestedModel?: string
+  recipe?: string
+  algorithm?: string
   query: string
   mode: TestQueryMode
   matchedSignals: MatchedSignal[]
