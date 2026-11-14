@@ -231,9 +231,17 @@ class TaskHeadsModel(LoadedModel[Item, Any]):
         window = card.get("window")
         if "window" in raw:
             spec = raw["window"]
-            if not isinstance(spec, dict) or not isinstance(spec.get("tokens"), int):
-                raise ValueError("window is {tokens, overlap}")
-            window = (spec["tokens"], int(spec.get("overlap", 0)))
+            tokens = spec.get("tokens") if isinstance(spec, dict) else None
+            overlap = spec.get("overlap", 0) if isinstance(spec, dict) else None
+            if (
+                not isinstance(spec, dict)
+                or isinstance(tokens, bool)
+                or not isinstance(tokens, int)
+                or isinstance(overlap, bool)
+                or not isinstance(overlap, int)
+            ):
+                raise ValueError("window tokens and overlap must be integers")
+            window = (tokens, overlap)
         if overflow == "window" and window is not None and window[0] > self.limit:
             raise ValueError(f"window tokens exceed the model's limit of {self.limit}")
         threshold = raw.get("threshold")
