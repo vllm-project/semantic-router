@@ -1750,6 +1750,21 @@
         },
         "role": {
           "type": "string"
+        },
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "calls": {
+          "items": {
+            "$ref": "#/$defs/ToolCallMatch"
+          },
+          "type": "array"
+        },
+        "match": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -6700,6 +6715,24 @@
             "insert",
             "replace"
           ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ToolCallMatch": {
+      "properties": {
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "argument": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

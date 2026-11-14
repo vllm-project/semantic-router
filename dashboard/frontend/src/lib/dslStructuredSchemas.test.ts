@@ -153,7 +153,18 @@ describe('DSL structured field schemas', () => {
       'assistant_tool_cycle',
       'active_tool_loop',
       'flow_tool_state',
+      'last_tool_call',
     ])
     expect(role.options).toContain('non_user')
+  })
+
+  it('offers the last_tool_call tools, calls and match fields', () => {
+    const conversationFeature = requireField(getSignalFieldSchema('conversation'), 'feature')
+    const source = requireField(conversationFeature.fields || [], 'source')
+    expect(requireField(source.fields || [], 'tools').type).toBe('string[]')
+    const calls = requireField(source.fields || [], 'calls')
+    expect(calls.type).toBe('object[]')
+    expect(calls.fields?.map((field) => field.key)).toEqual(['tools', 'argument', 'pattern'])
+    expect(requireField(source.fields || [], 'match').options).toEqual(['', 'match', 'no_match'])
   })
 })

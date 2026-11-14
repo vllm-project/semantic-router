@@ -182,8 +182,9 @@ func (c *Compiler) compileConversationSignal(s *SignalDecl) {
 		return
 	}
 
+	// Strict, so a wrong matcher field name fails instead of widening the match.
 	var rule config.ConversationRule
-	if err := yaml.Unmarshal(raw, &rule); err != nil {
+	if err := yaml.UnmarshalStrict(raw, &rule); err != nil {
 		c.addError(s.Pos, "failed to decode conversation signal %q: %v", s.Name, err)
 		return
 	}

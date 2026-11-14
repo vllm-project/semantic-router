@@ -184,6 +184,7 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
                     'assistant_tool_cycle',
                     'active_tool_loop',
                     'flow_tool_state',
+                    'last_tool_call',
                   ],
                   required: true,
                 },
@@ -196,6 +197,51 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
                   // validator_conversation.go:25 and used by config/config.yaml:497.
                   options: ['', 'system', 'developer', 'user', 'assistant', 'tool', 'non_user'],
                   description: 'Only used when the source type is message.',
+                },
+                {
+                  key: 'tools',
+                  label: 'Tool Names',
+                  type: 'string[]',
+                  placeholder: 'Read',
+                  description:
+                    'Only used by last_tool_call: count the latest assistant turn calls with these names.',
+                },
+                {
+                  key: 'calls',
+                  label: 'Tool Calls',
+                  type: 'object[]',
+                  description:
+                    'Only used by last_tool_call, instead of tools: a call matches an entry when its name is listed and its argument matches the pattern.',
+                  addLabel: 'Add call',
+                  emptyLabel: 'No calls configured.',
+                  itemLabel: 'Call',
+                  itemLabelKey: 'argument',
+                  fields: [
+                    { key: 'tools', label: 'Tool Names', type: 'string[]', placeholder: 'Bash' },
+                    {
+                      key: 'argument',
+                      label: 'Argument',
+                      type: 'string',
+                      placeholder: 'command',
+                      description:
+                        'A string field of the call arguments; empty reads the raw arguments.',
+                    },
+                    {
+                      key: 'pattern',
+                      label: 'Pattern',
+                      type: 'string',
+                      placeholder: '^\\s*(ls|cat)\\b',
+                      description: 'An RE2 regular expression, required with an argument.',
+                    },
+                  ],
+                },
+                {
+                  key: 'match',
+                  label: 'Match',
+                  type: 'select',
+                  options: ['', 'match', 'no_match'],
+                  description:
+                    'Only used by last_tool_call: no_match counts the latest calls that match no entry.',
                 },
               ],
             },

@@ -130,7 +130,8 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 
 //nolint:gocognit,cyclop,funlen // Signal extraction walks the complete neutral message content vocabulary.
 func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.Message) {
-	previousWasTool := result.LastMessageToolResult || result.LastMessageRole == string(llmprotocol.RoleTool)
+	previousRole := result.LastMessageRole
+	previousWasTool := result.LastMessageToolResult || previousRole == string(llmprotocol.RoleTool)
 	role := string(message.Role)
 	text := semanticText(message.Content)
 	// Like the request's instructions, a system or developer message inside
@@ -159,6 +160,12 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		}
 	case llmprotocol.RoleAssistant:
 		result.AssistantMessageCount++
+		// Consecutive assistant messages are one turn: a Responses history
+		// carries each call of a turn as its own item.
+		if previousRole != string(llmprotocol.RoleAssistant) || previousWasTool {
+			result.LastAssistantToolNames = nil
+			result.LastAssistantToolArgs = nil
+		}
 		result.HasAssistantReply = result.HasAssistantReply || text != ""
 		recordNonUserSignalMessage(result, role, text)
 		if text != "" {
@@ -188,6 +195,10 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 			result.AssistantToolCallCount++
 			if message.Role == llmprotocol.RoleAssistant {
 				result.LastAssistantToolCall = true
+			}
+			if message.Role == llmprotocol.RoleAssistant && content.ToolCall != nil && content.ToolCall.Name != "" {
+				result.LastAssistantToolNames = append(result.LastAssistantToolNames, content.ToolCall.Name)
+				result.LastAssistantToolArgs = append(result.LastAssistantToolArgs, content.ToolCall.Arguments)
 			}
 		case llmprotocol.ContentToolResult:
 			result.ToolResultCount++

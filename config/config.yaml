@@ -670,6 +670,29 @@ recipes:
               type: tool_definition
           predicate:
             gte: 1
+        - name: last_turn_read_only
+          description: The latest assistant turn called a read-only tool.
+          feature:
+            type: count
+            source:
+              type: last_tool_call
+              tools: [Read, Grep, Glob]
+          predicate:
+            gte: 1
+        - name: last_turn_changed_something
+          description: The latest assistant turn made a call that is not a read, judged by tool name and, for shell tools, by the command.
+          feature:
+            type: count
+            source:
+              type: last_tool_call
+              calls:
+                - tools: [Read, Grep, Glob]
+                - tools: [Bash]
+                  argument: command
+                  pattern: '^[ \t]*(ls|cat|head|tail|wc|file|stat|rg|grep|tree|pwd|git (status|log|show))([ \t][^;&|<>\n`$]*)?$'
+              match: no_match
+          predicate:
+            gte: 1
         - name: requires_tool_execution
           description: Request protocol requires at least one tool call.
           feature:
