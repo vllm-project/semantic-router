@@ -2256,7 +2256,7 @@ global:
       forward_request_headers: [x-user-id, x-request-id]
     streamed_body:
       enabled: true
-      max_bytes: 1048576
+      max_bytes: 10485760
       timeout_sec: 15
     skip_processing:
       enabled: false
