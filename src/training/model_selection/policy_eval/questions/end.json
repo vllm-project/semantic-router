@@ -1,0 +1,26 @@
+{
+ "resolve": {
+  "type": "noul",
+  "instructions": "Will this agent's final patch resolve the issue in the task, so that the repository's tests for it pass?"
+ },
+ "outcome": {
+  "type": "choice",
+  "instructions": "Which outcome is most likely for this task?",
+  "criteria": {
+   "agent_resolves": "This low-cost agent resolves the issue on its own",
+   "stronger_needed": "This agent fails, but a much stronger model starting from scratch would resolve it",
+   "unsolvable": "Neither this agent nor a much stronger model would resolve it"
+  }
+ },
+ "difficulty": {
+  "type": "score",
+  "instructions": "How hard is it to fix this issue correctly in this repository?",
+  "criteria": [
+   "Trivial",
+   "Easy",
+   "Moderate",
+   "Hard",
+   "Very hard"
+  ]
+ }
+}

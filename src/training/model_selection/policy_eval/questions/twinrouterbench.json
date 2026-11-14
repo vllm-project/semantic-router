@@ -1,0 +1,12 @@
+{
+ "tier": {
+  "type": "choice",
+  "instructions": "The transcript ends right before the assistant's next model call. Which is the cheapest model tier that would still produce a correct next step, so the task can still be completed?",
+  "criteria": {
+   "low": "A small, cheap model (around 8B parameters) is enough for this next step",
+   "mid": "A mid-size open model is needed for this next step",
+   "mid_high": "A strong model is needed, but not a frontier one",
+   "high": "Only a frontier model (such as Claude Opus or GPT-5) gets this next step right"
+  }
+ }
+}
