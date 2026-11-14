@@ -12,7 +12,7 @@ import (
 )
 
 // Codes of the one-line load errors and warnings. The removed_* codes,
-// invalid_value and the two renamed_* codes name forms the Router no longer
+// invalid_value and the renamed_* codes name forms the Router no longer
 // reads as written, which `vllm-sr config migrate` rewrites; the others are
 // checks of a canonical configuration.
 const (
@@ -24,6 +24,7 @@ const (
 	CodeInvalidValue             = "invalid_value"
 	CodeRenamedSignalType        = "renamed_signal_type"
 	CodeRenamedAlgorithmType     = "renamed_algorithm_type"
+	CodeRenamedField             = "renamed_field"
 	CodeReservedHeader           = "reserved_header"
 	CodeSpanRequired             = "span_required"
 	CodeInputModalityUnsupported = "input_modality_unsupported"
@@ -69,9 +70,9 @@ func migrateHint(what, becomes string) string {
 }
 
 // ConfigForm is a form of the configuration the Router no longer reads as
-// written. A removed form fails the load; a renamed one (only decision ->
-// systemone) loads as its canonical form, with a warning. `vllm-sr config
-// migrate` rewrites both with Migrate.
+// written. A removed form fails the load; a renamed one (decision ->
+// systemone, capture_personal_data -> prompt_capture) loads as its canonical
+// form, with a warning. `vllm-sr config migrate` rewrites both with Migrate.
 type ConfigForm struct {
 	Code string
 	// Paths are patterns over the raw document: dotted mapping keys, `name[]`
@@ -128,7 +129,7 @@ func (at FormMatch) Above(levels int) *yaml.Node {
 // the previous release migrated, which migrate refuses before rewriting
 // anything, then the v0.3 layout, the global feature switches and last the
 // Looper model names, whose recipe copies the default recipe as migrated.
-var configForms = slices.Concat(previousReleaseForms, structureForms, legacyRouterForms, systemOneForms, pluginForms, applicationForms, heuristicForms, algorithmForms, toolsForms, contextForms, responseCacheForms, routerReplayForms, retentionForms, embeddingForms, multimodalForms, modelRuntimeForms, modelResourceForms, switchForms, looperModelNameForms)
+var configForms = slices.Concat(previousReleaseForms, structureForms, legacyRouterForms, systemOneForms, listenerForms, pluginForms, applicationForms, heuristicForms, algorithmForms, toolsForms, contextForms, responseCacheForms, routerReplayForms, retentionForms, candidateIterationForms, embeddingForms, multimodalForms, modelRuntimeForms, modelResourceForms, switchForms, looperModelNameForms)
 
 // RoutingScopes returns the patterns of suffix in every recipe of a v0.5
 // document. Forms match v0.5 paths only: migrate rewrites the v0.3 structure
@@ -327,4 +328,12 @@ func encodeDocument(document *yaml.Node) ([]byte, error) {
 		return nil, err
 	}
 	return out.Bytes(), nil
+}
+
+// CanonicalConfigBytes returns a document as the Router reads it, for an
+// editor that decodes it into the canonical types: each renamed form in its
+// canonical form, and an error for a removed one.
+func CanonicalConfigBytes(data []byte) ([]byte, error) {
+	canonical, _, err := applyConfigForms(data, configForms)
+	return canonical, err
 }

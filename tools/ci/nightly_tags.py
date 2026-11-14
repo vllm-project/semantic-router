@@ -25,7 +25,7 @@ MISSING = re.compile(r"manifest unknown|name unknown|not found", re.IGNORECASE)
 def registry_manifest(reference: str) -> bytes | None:
     """A tag's raw manifest, or None when the registry has no such tag."""
     result = subprocess.run(
-        ["skopeo", "inspect", "--raw", f"docker://{reference}"],
+        ["skopeo", "inspect", "--retry-times", "3", "--raw", f"docker://{reference}"],
         capture_output=True,
         check=False,
     )

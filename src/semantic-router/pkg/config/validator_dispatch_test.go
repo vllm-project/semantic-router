@@ -56,6 +56,10 @@ func TestConfigLoadValidatesGlobalsForEverySource(t *testing.T) {
 		{"remom_models", `integrations: {looper: {remom: {model_names: [""]}}}`, "global.integrations.looper.remom.model_names: removed_field: the model names of a Looper algorithm are removed"},
 		{"fusion_models", `integrations: {looper: {fusion: {model_names: [""]}}}`, "global.integrations.looper.fusion.model_names: removed_field: the model names of a Looper algorithm are removed"},
 		{"flow_backend", `integrations: {looper: {flow: {state: {store_backend: unknown}}}}`, "state.store_backend"},
+		// Merged onto the defaults, an empty section would zero them.
+		{"empty_section", `services:`, "global.services is empty: remove it to keep its defaults, or give it fields"},
+		{"empty_nested_section", `stores: {response_cache: null}`, "global.stores.response_cache is empty"},
+		{"empty_value", `router: {clear_route_cache: null}`, "global.router.clear_route_cache is empty: remove it to keep its default, or give it a value"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -110,6 +114,12 @@ model_catalog:
 				t.Fatalf("valid complete configuration rejected: %v", err)
 			}
 		})
+	}
+}
+
+func TestParseYAMLBytesRefusesAnEmptyGlobal(t *testing.T) {
+	if _, err := ParseYAMLBytes([]byte("version: v0.5\nglobal:\n")); err == nil || !strings.Contains(err.Error(), "global is empty") {
+		t.Errorf("ParseYAMLBytes() error = %v, want global is empty", err)
 	}
 }
 

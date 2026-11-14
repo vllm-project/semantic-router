@@ -55,13 +55,18 @@ decision's requests.
 
 Bi-encoder similarity cannot tell *"turn on dark mode"* from *"turn off dark
 mode"*: opposite-meaning queries often score above the recall's
-`min_similarity` while genuine paraphrases score below it, so raising the threshold does not
-reliably prevent false hits. Every cache backend applies a lexical guard
-before it serves a semantic candidate: it catches negation cues and known
-antonym swaps in near-identical English token sets. It needs no model, has no
-setting, and runs for the in-memory, Redis,
-Valkey, Milvus, Qdrant and hybrid caches. It does not cover cue-less,
-word-order-only or non-English changes.
+`min_similarity` while real paraphrases score below it, so raising the
+threshold does not reliably prevent false hits.
+
+Every cache backend therefore applies a lexical guard before it serves a
+semantic candidate:
+
+- **What it catches:** negation cues and known antonym swaps in
+  near-identical English token sets.
+- **What it needs:** no model and no setting. It runs for the in-memory,
+  Redis, Valkey, Milvus, Qdrant and hybrid caches.
+- **What it misses:** changes with no cue, word-order-only changes and
+  non-English changes.
 
 Rejections are logged as `cache_negation_reject`, count as misses, and still
 surface the rejected score as `cache_similarity` in `x-vsr-trace`. Remote and hybrid
@@ -134,14 +139,21 @@ global:
       default_similarity_threshold: 0.30
 ```
 
-All three examples embed with Vela Embedding, which `embeddings.default` names,
-so `dimension` is one of its sizes: 64, 128, 256, 512 or 768. A store indexed
-with another model names its deployment and dimension in an `embedding` block
-(see [Embeddings](../../model-runtime/guides/embeddings.md#stores-indexed-with-another-model)). With any other size
-the router logs `Failed to create memory store: … Memory will be disabled` and
-runs without memory. The Qdrant example's 0.30 threshold, on plain cosine
-scores, is a starting point, not a calibrated value. Check unrelated queries
-and corrected facts before using it with your data.
+All three examples embed with Vela Embedding, which `embeddings.default`
+names, so `dimension` is one of its sizes: 64, 128, 256, 512 or 768.
+
+- **Another model.** A store indexed with another model names its deployment
+  and dimension in an `embedding` block; see
+  [Embeddings](../../model-runtime/guides/embeddings.md#stores-indexed-with-another-model).
+- **Any other size** makes the Router log
+  `Failed to create memory store: … Memory will be disabled`, and run without
+  memory.
+
+:::note
+The Qdrant example's 0.30 threshold, on plain cosine scores, is a starting
+point, not a calibrated value. Check unrelated queries and corrected facts
+before using it with your data.
+:::
 
 For full deployment instructions, see:
 
@@ -187,18 +199,23 @@ already ran.
 
 #### Write path bounds
 
-Automatic persistence first respects Memory enablement, retention policy, and
-an explicit `store: {auto: false}` on the selected decision's memory source. A
-Responses request may opt out, but cannot override these server restrictions.
-When policy permits persistence, the Responses request's `auto_store` takes
-precedence over the decision's value, followed by `global.stores.memory`.
+Automatic persistence first respects the server's restrictions: Memory
+enablement, the retention policy, and an explicit `store: {auto: false}` on the
+selected decision's memory source. A Responses request can opt out, but cannot
+override them. When policy permits persistence, the value comes from, most
+specific first:
+
+1. the Responses request's `auto_store`;
+2. the decision's value;
+3. `global.stores.memory`.
+
 Only an omitted value falls back to the next level.
 
-Response handling does not wait for Memory persistence to complete. Identity
-checks and capacity reservation precede the bounded history snapshot, which is
-taken while the response path still owns the conversation state; protocol
-encoding and writes run in the background. Other response-path Replay
-operations remain synchronous.
+Response handling doesn't wait for persistence. Identity checks and capacity
+reservation come before the bounded history snapshot, which is taken while the
+response path still owns the conversation state; protocol encoding and writes
+then run in the background. Other response-path Replay operations stay
+synchronous.
 
 Configure `global.stores.memory.persistence`:
 
@@ -210,31 +227,41 @@ Configure `global.stores.memory.persistence`:
 | `shutdown_grace_seconds` | Seconds to drain writes on reload or shutdown before cancellation; 0–9,223,372,036 | 5 |
 
 Omit a field or set it to `0` to take the default. Negative values and values
-above the listed limits are rejected during configuration
-validation, before workers or queue storage are allocated at startup or reload.
-This also applies to the initial `config_source: kubernetes` document, before
-the controller loads routing CRDs; global resource bounds are not deferred.
+above the listed limits fail configuration validation, before workers or queue
+storage are allocated. That includes the initial `config_source: kubernetes`
+document, before the controller loads routing CRDs.
 
-Each persistence attempt has a shared 1 MiB payload budget for request history,
-retained Responses history, and the current assistant response. Assistant text
-is counted before think-tag stripping. History is also limited to 256
-messages/items and 32 nested content levels; history and the current response
-share a 4096-node structural limit. Bounded length checks run before reserving
-persistence capacity; text assembly and history copying run only after admission.
-Exceeding a limit skips persistence with `skipped` / `history_too_large` and
-`fail_open=true`, without occupying persistence capacity or truncating the model
-response or history. Missing user identity skips preparation with `skipped` /
-`memory_info_unavailable` and `fail_open=true`. A response the jailbreak or
-hallucination policy blocks reports `policy_blocked` instead of persisting.
-Background contexts retain only span context and tracestate.
+Each persistence attempt has these limits:
 
-For requests with a Router Replay record, accepted attempts reserve capacity for
-`scheduled` and one terminal receipt, protecting both from queue saturation.
-Storage errors, shutdown drain expiry, or process crashes can still lose receipts.
-Exhausted persistence or receipt capacity rejects new writes with `queue_full` or
-`receipt_queue_full`; retired pools use `shutting_down`. These remain fail-open
-and are logged by request ID. Monitor
-`llm_plugin_execution_total{plugin_type="memory_persistence", status="rejected"}`.
+| Limit | Value |
+| --- | --- |
+| Payload: request history, retained Responses history and the current assistant response, counted before think-tag stripping | 1 MiB, shared |
+| History items | 256 messages or items |
+| Nesting | 32 content levels |
+| Structure: history and the current response together | 4096 nodes |
+
+Length checks run before persistence capacity is reserved; text assembly and
+history copying run only after admission. When an attempt is skipped:
+
+| Outcome | Cause |
+| --- | --- |
+| `skipped` / `history_too_large`, `fail_open=true` | A limit is exceeded. No capacity is used, and nothing is truncated. |
+| `skipped` / `memory_info_unavailable`, `fail_open=true` | User identity is missing. |
+| `policy_blocked` | The jailbreak or hallucination policy blocked the response. |
+
+Background contexts keep only the span context and tracestate.
+
+For requests with a Router Replay record, accepted attempts reserve capacity
+for `scheduled` and one terminal receipt, protecting both from queue
+saturation:
+
+- **Receipts can still be lost** to storage errors, an expired shutdown drain
+  or a process crash.
+- **Full capacity** rejects new writes with `queue_full` or
+  `receipt_queue_full`; retired pools use `shutting_down`. These stay
+  fail-open and are logged by request ID.
+- **Monitor**
+  `llm_plugin_execution_total{plugin_type="memory_persistence", status="rejected"}`.
 
 Timeout and cancellation report one terminal outcome even while queued; cancelled
 jobs do not start. Native embedding calls cannot be interrupted, so active work
@@ -268,18 +295,24 @@ local experiments because store and file metadata is lost on router restart.
 
 With embeddings from the [model runtime](../../model-runtime/guides/embeddings.md),
 including Vela Embedding, each new vector store records the identity of the
-representation that created its vectors. Existing stores remain visible and their
-uploaded files are retained. Searching or attaching files to an incompatible or
-untagged store returns `409 EMBEDDING_REINDEX_REQUIRED`. Create a new vector
-store and reattach the original uploaded file IDs to generate compatible
-vectors. Client metadata cannot replace the router-owned
-`_router_embedding_identity` field.
+representation that created its vectors:
 
-The same check applies to request-time RAG and cached retrieval results. The
-`llama_stack` backend embeds search queries remotely, so it cannot currently be
+- **Existing stores** stay visible, and their uploaded files are kept.
+- **An incompatible or untagged store** returns
+  `409 EMBEDDING_REINDEX_REQUIRED` on search or file attach. Create a new
+  vector store and reattach the original uploaded file IDs to generate
+  compatible vectors.
+- **The identity is the Router's.** Client metadata cannot replace the
+  `_router_embedding_identity` field.
+- **RAG too.** The same check applies to request-time RAG and cached retrieval
+  results.
+
+:::note
+The `llama_stack` backend embeds search queries remotely, so it can't be
 combined with identity-bound runtime document embeddings. Use `memory`,
-`milvus`, `valkey`, or `qdrant` for that configuration. Remote provider identity
-verification is a separate capability.
+`milvus`, `valkey` or `qdrant` for that. Remote provider identity verification
+is a separate capability.
+:::
 
 ### Tools
 

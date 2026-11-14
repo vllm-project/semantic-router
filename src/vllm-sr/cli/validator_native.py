@@ -243,14 +243,14 @@ def _native_stage_errors(stages, models, refs, path):
                 ValidationError("first stage must be enabled and native", field=field)
             )
         model = models.get(stage["model"])
-        expected = "systemone" if kind == "native" else "openai"
+        expected = "systemone" if kind == "native" else "chat_completions"
         if stage["model"] not in refs or model is None:
             errors.append(
                 ValidationError(
                     "stage model must name a declared provider modelRef", field=field
                 )
             )
-        elif (model.api_format or "openai") != expected:
+        elif (model.api_format or "chat_completions") != expected:
             errors.append(
                 ValidationError(f"stage requires api_format: {expected}", field=field)
             )

@@ -43,7 +43,7 @@ func sendLocalChatConversation(
 	ctx context.Context,
 	localPort string,
 	model string,
-	messages []map[string]string,
+	messages any,
 	timeout time.Duration,
 ) (*localChatCompletionResponse, error) {
 	requestBody := map[string]interface{}{

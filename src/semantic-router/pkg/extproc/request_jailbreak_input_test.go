@@ -59,23 +59,19 @@ func TestGuardProvenanceNeutralSnapshot(t *testing.T) {
 }
 
 func TestGuardProvenanceNoTrustedFallbackOrStaleCurrentUser(t *testing.T) {
-	for _, role := range []llmprotocol.Role{llmprotocol.RoleSystem, llmprotocol.RoleDeveloper, llmprotocol.RoleAssistant} {
-		t.Run(string(role), func(t *testing.T) {
-			request := &llmprotocol.Request{Messages: []llmprotocol.Message{
-				{Role: llmprotocol.RoleUser, Content: guardProvenanceText("older-user")},
-				{Role: role, Content: guardProvenanceText("trusted-final-message")},
-			}}
-			snapshot := extractSemanticRequestSignals(request)
-			if snapshot.JailbreakInput == nil || len(snapshot.JailbreakInput.Current) != 0 {
-				t.Fatal("trusted final message or stale user turn became current Guard evidence")
-			}
-			want := []classification.JailbreakContent{{Role: "user", Text: "older-user"}}
-			if !reflect.DeepEqual(snapshot.JailbreakInput.History, want) {
-				t.Fatal("untrusted prior user was not retained for include_history")
-			}
-		})
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: guardProvenanceText("older-user")},
+		{Role: llmprotocol.RoleAssistant, Content: guardProvenanceText("trusted-final-message")},
+	}}
+	snapshot := extractSemanticRequestSignals(request)
+	if snapshot.JailbreakInput == nil || len(snapshot.JailbreakInput.Current) != 0 {
+		t.Fatal("trusted final message or stale user turn became current Guard evidence")
 	}
-	request := &llmprotocol.Request{Instructions: []llmprotocol.InstructionBlock{{
+	want := []classification.JailbreakContent{{Role: "user", Text: "older-user"}}
+	if !reflect.DeepEqual(snapshot.JailbreakInput.History, want) {
+		t.Fatal("untrusted prior user was not retained for include_history")
+	}
+	request = &llmprotocol.Request{Instructions: []llmprotocol.InstructionBlock{{
 		Role: llmprotocol.RoleSystem, Content: guardProvenanceText("instruction-only"),
 	}}}
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
@@ -83,6 +79,83 @@ func TestGuardProvenanceNoTrustedFallbackOrStaleCurrentUser(t *testing.T) {
 	if input.evaluationText != "instruction-only" || input.requestFacts.JailbreakInput == nil ||
 		len(input.requestFacts.JailbreakInput.Current)+len(input.requestFacts.JailbreakInput.History) != 0 {
 		t.Fatal("general fallback must not become a Guard fallback")
+	}
+}
+
+// Claude Code inserts system messages where they apply: after the user's
+// message, or after a tool result when a file changed on disk. They do not
+// end the turn, and their text is never Guard evidence.
+func TestGuardProvenanceInstructionMessagesInsideTheTurn(t *testing.T) {
+	toolCall := llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+		Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call-1", Name: "lookup", Arguments: "{}"},
+	}}}
+	toolResult := llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{
+		Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call-1", Content: guardProvenanceText("current-tool-result")},
+	}}}
+	user := func(text string) llmprotocol.Message {
+		return llmprotocol.Message{Role: llmprotocol.RoleUser, Content: guardProvenanceText(text)}
+	}
+	for _, role := range []llmprotocol.Role{llmprotocol.RoleSystem, llmprotocol.RoleDeveloper} {
+		instruction := llmprotocol.Message{Role: role, Content: guardProvenanceText("instruction-message")}
+		for name, test := range map[string]struct {
+			messages []llmprotocol.Message
+			current  []classification.JailbreakContent
+			history  []classification.JailbreakContent
+		}{
+			"after the user's message": {
+				[]llmprotocol.Message{user("current-user"), instruction, instruction},
+				[]classification.JailbreakContent{{Role: "user", Text: "current-user"}},
+				nil,
+			},
+			"after a tool result": {
+				[]llmprotocol.Message{user("prior-user"), toolCall, toolResult, instruction},
+				[]classification.JailbreakContent{{Role: "tool", Text: "current-tool-result"}},
+				[]classification.JailbreakContent{{Role: "user", Text: "prior-user"}},
+			},
+			"between a tool result and the user's message": {
+				[]llmprotocol.Message{user("prior-user"), toolCall, toolResult, instruction, user("current-user")},
+				[]classification.JailbreakContent{{Role: "tool", Text: "current-tool-result"}, {Role: "user", Text: "current-user"}},
+				[]classification.JailbreakContent{{Role: "user", Text: "prior-user"}},
+			},
+		} {
+			t.Run(string(role)+" "+name, func(t *testing.T) {
+				got := extractJailbreakInput(&llmprotocol.Request{Messages: test.messages})
+				if !reflect.DeepEqual(got.Current, test.current) || !reflect.DeepEqual(got.History, test.history) {
+					t.Fatalf("Guard projection = %#v, want current %#v and history %#v", got, test.current, test.history)
+				}
+			})
+		}
+	}
+}
+
+// The facts the conversation signals read describe the user turn or tool
+// result a system message follows, as for the request's instructions.
+func TestConversationFactsPassOverInstructionMessages(t *testing.T) {
+	body := []byte(`{"model":"test-model","max_tokens":32,"system":"system-marker","messages":[` +
+		`{"role":"user","content":"first-question"},` +
+		`{"role":"assistant","content":[{"type":"text","text":"answer"},{"type":"tool_use","id":"call-1","name":"lookup","input":{}}]},` +
+		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-1","content":"tool-marker"}]},` +
+		`{"role":"system","content":"file-changed-reminder"}]}`)
+	request, _, _, err := (protocolcodec.AnthropicMessagesCodec{}).DecodeRequest(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := extractSemanticRequestSignals(&request)
+	if !snapshot.LastMessageToolResult || snapshot.LastMessageRole == string(llmprotocol.RoleSystem) || snapshot.SystemMessageCount != 2 {
+		t.Fatalf("a tool loop that a system message follows lost its facts: %+v", snapshot)
+	}
+
+	body = []byte(`{"model":"test-model","max_tokens":32,"messages":[` +
+		`{"role":"user","content":"first-question"},{"role":"assistant","content":"answer"},` +
+		`{"role":"user","content":"that's not right"},{"role":"system","content":"context-reminder"}]}`)
+	request, _, _, err = (protocolcodec.AnthropicMessagesCodec{}).DecodeRequest(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	input := router.prepareSignalEvaluationInput(signalConversationHistoryFromSnapshot(extractSemanticRequestSignals(&request)))
+	if input.currentUserText != "that's not right" || !input.hasAssistantReply || input.conversationFacts.LastMessageRole != string(llmprotocol.RoleUser) {
+		t.Fatalf("a user turn that a system message follows is no longer the turn: %+v", input.conversationFacts)
 	}
 }
 

@@ -436,6 +436,62 @@ def test_other_forward_errors_fail_only_their_batch():
         scheduler.stop()
 
 
+@pytest.mark.parametrize("boundary", ["budget", "queue", "forward", "planning"])
+def test_worker_failure_answers_all_admitted_jobs_and_closes_admission(boundary):
+    entered, release = threading.Event(), threading.Event()
+    error = RuntimeError(f"injected {boundary} failure")
+
+    def fail():
+        entered.set()
+        if boundary == "planning":
+            # _take holds the condition; let admission proceed while this hook waits.
+            assert scheduler._lock.wait_for(release.is_set, timeout=5)
+        else:
+            assert release.wait(5)
+        raise error
+
+    model = FakeModel()
+    if boundary == "budget":
+        model.forward_token_budget = fail
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs(max_num_seqs=2)),
+        observe=lambda event, values: fail() if event == boundary else None,
+        planning=lambda opened: fail() if boundary == "planning" else False,
+    )
+    # More rows than one forward can hold: a forward failure also leaves ready work.
+    futures = scheduler.submit_group(
+        [[item("a", 8), item("b", 8), item("c", 8)], [item("d", 8)]],
+        deadlines=[None, None],
+    )
+    scheduler.start()
+    try:
+        assert entered.wait(5)
+        queued = scheduler.submit([item("queued", 8)], deadline=None)
+        cancelled = scheduler.submit([item("cancelled", 8)], deadline=None)
+        assert cancelled.cancel()
+        release.set()
+        with scheduler._lock:
+            scheduler._lock.notify_all()
+        for future in [*futures, queued]:
+            with pytest.raises(RuntimeError, match=f"injected {boundary} failure"):
+                future.result(timeout=2)
+        scheduler._thread.join(2)
+        assert not scheduler._thread.is_alive()
+        assert scheduler.failure is error
+        assert scheduler.depth() == 0
+        assert scheduler._pending_jobs == scheduler._pending_tokens == 0
+        assert cancelled.cancelled()
+        with pytest.raises(RuntimeServiceError) as caught:
+            scheduler.submit([item("later", 8)], deadline=None)
+        assert caught.value.code == "not_ready"
+        model.device_thread = False
+        assert scheduler.run_now([[item("inline", 8)]], deadlines=[None]) is None
+    finally:
+        release.set()
+        scheduler.stop()
+
+
 @pytest.mark.parametrize("result_count", [0, 1, 3])
 @pytest.mark.parametrize("inline", [False, True], ids=["worker", "inline"])
 def test_wrong_result_count_fails_every_job_and_keeps_serving(
@@ -1100,11 +1156,19 @@ def test_a_group_is_queued_at_once_and_answered_per_job():
         scheduler.stop()
 
 
-def test_a_group_beyond_the_queue_bound_is_refused_whole():
+def test_a_group_beyond_the_queue_bound_is_admitted_only_when_nothing_is_pending():
     scheduler = Scheduler(FakeModel(), batcher(), SchedulerLimits(max_queue=1))
+    first = scheduler.submit_group(
+        [[item("a", 4)], [item("b", 4)]], deadlines=[None, None]
+    )
     with pytest.raises(RuntimeServiceError) as error:
-        scheduler.submit_group([[item("a", 4)], [item("b", 4)]], deadlines=[None, None])
-    assert error.value.code == "overloaded"
+        scheduler.submit_group([[item("c", 4)], [item("d", 4)]], deadlines=[None, None])
+    assert error.value.code == "overloaded" and scheduler.depth() == 2
+    scheduler.start()
+    try:
+        assert [future.result(timeout=5) for future in first] == [[[0.0, 4.0]]] * 2
+    finally:
+        scheduler.stop()
 
 
 def test_a_group_timing_counts_a_forward_once_however_many_of_its_jobs_it_holds():

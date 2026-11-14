@@ -1,6 +1,24 @@
 package config
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+import (
+	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
+
+// What a replay record keeps of the request and its answer besides routing
+// data (the decision, model, signals, timing, ids and usage).
+const (
+	// PromptCaptureNone keeps no request or response text, and reads no
+	// prompt for personal data. It is the default.
+	PromptCaptureNone = "none"
+	// PromptCaptureRaw keeps the prompt, and the bodies and tool traces the
+	// capture switches allow, as they came.
+	PromptCaptureRaw = "raw"
+	// PromptCaptureVerified keeps the exact prompt alone, once the recipe's
+	// pii rules read it whole and find no personal data.
+	PromptCaptureVerified = "verified"
+)
 
 const (
 	defaultRouterReplayMaxRecords   = 10000
@@ -11,8 +29,26 @@ const (
 	// flows without losing the user query at the head of the timeline; the
 	// truncation policy is "drop oldest" so the most recent steps stay.
 	defaultRouterReplayMaxToolTraceSteps = 100
+	// defaultRouterReplayMaxPromptBytes caps the prompt a record keeps under
+	// raw and verified capture when neither max_prompt_bytes nor
+	// max_tool_trace_bytes is set: 64 KiB, about 16K tokens of English text,
+	// keeps nearly every chat prompt whole and the head of a long one, so
+	// 10,000 records of 1M-token prompts take some 640 MiB, not 40 GB.
+	defaultRouterReplayMaxPromptBytes = 64 << 10
+	// defaultRouterReplayMaxToolTraceBytes caps each text field of a trace
+	// step, and the tool definitions, where no layer sets
+	// max_tool_trace_bytes: the prompt's 64 KiB, so that a long user turn
+	// keeps no more in the trace than in the prompt.
+	defaultRouterReplayMaxToolTraceBytes = 64 << 10
+	// defaultRouterReplayMaxToolTraceTotalBytes caps the text of all steps of
+	// a record together where neither trace limit is set: 256 KiB, so that
+	// 100 steps cannot keep 100 times a field's limit, and 10,000 records of
+	// long agent sessions take some 2.5 GiB of trace, not tens of GB.
+	defaultRouterReplayMaxToolTraceTotalBytes = 256 << 10
 )
 
+// DefaultRouterReplayPluginConfig leaves PromptCapture unset, which is none,
+// so that a deprecated capture_personal_data still decides where it is set.
 func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 	return RouterReplayPluginConfig{
 		Enabled:             true,
@@ -63,23 +99,144 @@ func RouterReplayPolicyOf(plugins []DecisionPlugin) *RouterReplayPluginConfig {
 	return &base
 }
 
-// CapturesPersonalData reports the resolved content policy. An omitted setting
-// preserves the established capture behavior.
-func (p *RouterReplayPluginConfig) CapturesPersonalData() bool {
-	return p == nil || p.CapturePersonalData == nil || *p.CapturePersonalData
+// PromptCaptureMode is the policy's prompt capture mode: the prompt_capture
+// set, else what a deprecated capture_personal_data meant, else none. A value
+// loading refuses is none too, so that no unknown mode keeps text.
+func (p *RouterReplayPluginConfig) PromptCaptureMode() string {
+	if p == nil {
+		return PromptCaptureNone
+	}
+	mode := p.PromptCapture
+	if mode == "" && p.CapturePersonalData != nil {
+		mode = personalDataPromptCapture(*p.CapturePersonalData)
+	}
+	if mode == PromptCaptureRaw || mode == PromptCaptureVerified {
+		return mode
+	}
+	return PromptCaptureNone
+}
+
+// personalDataPromptCapture is the prompt capture mode a deprecated
+// capture_personal_data value meant.
+func personalDataPromptCapture(capture bool) string {
+	if capture {
+		return PromptCaptureRaw
+	}
+	return PromptCaptureVerified
+}
+
+// ValidatePromptCapture refuses a prompt_capture other than none, raw or
+// verified, and a negative max_prompt_bytes or max_tool_trace_total_bytes.
+func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
+	switch p.PromptCapture {
+	case "", PromptCaptureNone, PromptCaptureRaw, PromptCaptureVerified:
+	default:
+		return fmt.Errorf("prompt_capture must be none, raw or verified, not %q", p.PromptCapture)
+	}
+	if p.MaxPromptBytes != nil && *p.MaxPromptBytes < 0 {
+		return fmt.Errorf("max_prompt_bytes cannot be negative; 0 keeps the whole prompt")
+	}
+	if p.MaxToolTraceTotalBytes != nil && *p.MaxToolTraceTotalBytes < 0 {
+		return fmt.Errorf("max_tool_trace_total_bytes cannot be negative; 0 keeps every step")
+	}
+	return nil
+}
+
+// ToolTraceByteLimit is how many bytes each tool text field a record keeps
+// may hold (the tool definitions, and a trace step's text, arguments and
+// output), 0 for no limit: max_tool_trace_bytes from the most specific layer
+// that sets it, a negative value meaning no limit as before; else 64 KiB.
+func (p *RouterReplayPluginConfig) ToolTraceByteLimit() int {
+	if p == nil || p.MaxToolTraceBytes == nil {
+		return defaultRouterReplayMaxToolTraceBytes
+	}
+	return max(*p.MaxToolTraceBytes, 0)
+}
+
+// RawToolTraceByteLimit is how many bytes a trace step's raw copies of its
+// arguments and output may hold, 0 for no limit. A configured
+// max_tool_trace_bytes keeps them whole, as before the default existed, for
+// readers that replay a call byte for byte; where no layer sets it, they keep
+// the default 64 KiB, since whole copies would leave the trace unbounded.
+func (p *RouterReplayPluginConfig) RawToolTraceByteLimit() int {
+	if p == nil || p.MaxToolTraceBytes == nil {
+		return defaultRouterReplayMaxToolTraceBytes
+	}
+	return 0
+}
+
+// ToolTraceTotalByteLimit is how many bytes the steps of a record's trace may
+// hold together, raw copies included, 0 for no limit: max_tool_trace_total_bytes
+// from the most specific layer that sets it; where none does, 256 KiB while
+// max_tool_trace_bytes is unset too, and no limit where a layer sets it, which
+// kept every step before the budget existed.
+func (p *RouterReplayPluginConfig) ToolTraceTotalByteLimit() int {
+	switch {
+	case p != nil && p.MaxToolTraceTotalBytes != nil:
+		return *p.MaxToolTraceTotalBytes
+	case p != nil && p.MaxToolTraceBytes != nil:
+		return 0
+	default:
+		return defaultRouterReplayMaxToolTraceTotalBytes
+	}
+}
+
+// PromptByteLimit is how many bytes of the prompt a record keeps under raw and
+// verified, 0 for the whole prompt: max_prompt_bytes from the most specific
+// layer that sets it; where none does, a max_tool_trace_bytes a layer sets
+// above 0, since it bounded the prompt before max_prompt_bytes existed and no
+// configuration may keep more of the prompt after an upgrade; else 64 KiB.
+// The trace's own default never feeds it.
+func (p *RouterReplayPluginConfig) PromptByteLimit() int {
+	switch {
+	case p == nil:
+		return defaultRouterReplayMaxPromptBytes
+	case p.MaxPromptBytes != nil:
+		return *p.MaxPromptBytes
+	case p.MaxToolTraceBytes != nil && *p.MaxToolTraceBytes > 0:
+		return *p.MaxToolTraceBytes
+	default:
+		return defaultRouterReplayMaxPromptBytes
+	}
+}
+
+// CapturesRawContent reports whether records keep request and response text
+// as it came, without reading it for personal data.
+func (p *RouterReplayPluginConfig) CapturesRawContent() bool {
+	return p.PromptCaptureMode() == PromptCaptureRaw
+}
+
+// VerifiesPrompt reports whether records keep the prompt alone, once the
+// recipe's pii rules find it clean.
+func (p *RouterReplayPluginConfig) VerifiesPrompt() bool {
+	return p.PromptCaptureMode() == PromptCaptureVerified
+}
+
+// CapturesRequestText reports whether a record may hold request text at all:
+// the prompt, the body and the request's tool trace. prompt_capture: none
+// holds none, whatever capture_request_body says.
+func (p *RouterReplayPluginConfig) CapturesRequestText() bool {
+	return p != nil && p.CaptureRequestBody && p.PromptCaptureMode() != PromptCaptureNone
+}
+
+// CapturesResponseText reports the same for the answer: the body, its tool
+// trace, detector excerpts and provider replies.
+func (p *RouterReplayPluginConfig) CapturesResponseText() bool {
+	return p != nil && p.CaptureResponseBody && p.PromptCaptureMode() != PromptCaptureNone
 }
 
 // CapturesToolResults reports whether client tool-result text is stored.
-// Configuration loading refuses it without personal-data capture; requiring
-// both here keeps a policy built outside that path redacted.
+// Tool results are raw client data, so only raw capture stores them;
+// configuration loading refuses them with verified.
 func (p *RouterReplayPluginConfig) CapturesToolResults() bool {
-	return p != nil && p.CaptureToolResults && p.CapturesPersonalData()
+	return p != nil && p.CaptureToolResults && p.CapturesRawContent()
 }
 
 // ReplayNeedsPIIEvidence marks existing PII rules as consumers whenever an
-// enabled global default or possible selected decision can suppress personal
-// content. No rules means no model dependency: capture will omit unverified
-// content conservatively at runtime.
+// enabled global default or possible selected decision keeps prompts only
+// once verified. none and raw read no prompt for personal data. No rules
+// means no model dependency: verified capture omits the prompt
+// conservatively at runtime.
 func (c *RouterConfig) ReplayNeedsPIIEvidence() bool {
 	if c == nil || len(c.PIIRules) == 0 {
 		return false
@@ -91,11 +248,11 @@ func (c *RouterConfig) replayNeedsPIIEvidenceForDecisions(decisions []Decision) 
 	if c == nil || len(c.PIIRules) == 0 {
 		return false
 	}
-	if policy := c.EffectiveRouterReplayConfig(nil); policy != nil && !policy.CapturesPersonalData() {
+	if c.EffectiveRouterReplayConfig(nil).VerifiesPrompt() {
 		return true
 	}
 	for i := range decisions {
-		if policy := c.EffectiveRouterReplayConfig(&decisions[i]); policy != nil && !policy.CapturesPersonalData() {
+		if c.EffectiveRouterReplayConfig(&decisions[i]).VerifiesPrompt() {
 			return true
 		}
 	}

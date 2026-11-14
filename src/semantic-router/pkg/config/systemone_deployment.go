@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http/httpguts"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // SystemOneProvider serves a deployment through a remote System One API. The
@@ -24,8 +26,9 @@ const SystemOneProvider = "systemone"
 type DeploymentAuth struct {
 	// Credential is the credential mode. delegated sends the requesting
 	// user's credential (global.services.authz.delegated_credential) in place
-	// of a key, and refuses calls the Router makes on its own behalf; unset
-	// sends the key, or nothing without one.
+	// of a key, and refuses calls the Router makes on its own behalf; caller
+	// (a provider backend only) sends the provider login the client itself
+	// sent the Router; unset sends the key, or nothing without one.
 	Credential string  `yaml:"credential,omitempty" json:"credential,omitempty"`
 	Header     string  `yaml:"header,omitempty" json:"header,omitempty"`
 	Prefix     *string `yaml:"prefix,omitempty" json:"prefix,omitempty"`
@@ -62,17 +65,27 @@ func (a *DeploymentAuth) Delegated() bool {
 	return a != nil && a.Credential == CredentialDelegated
 }
 
+// CredentialCaller is the credential mode of a provider backend that takes the
+// client's own provider login, the credential the client sent the Router, as
+// Claude Code sends its Claude login: the gateway holds no key for it.
+const CredentialCaller = "caller"
+
+// Caller reports whether the backend takes the client's own provider login.
+func (a *DeploymentAuth) Caller() bool {
+	return a != nil && a.Credential == CredentialCaller
+}
+
 // validateCredential checks the credential mode against the static key the
 // upstream also names; keys lists where that key may be written.
 func (a *DeploymentAuth) validateCredential(keys string, hasKey bool) error {
 	if a == nil || a.Credential == "" {
 		return nil
 	}
-	if a.Credential != CredentialDelegated {
-		return fmt.Errorf("auth.credential %q is not a credential mode; write delegated, or leave it unset for a static key or none", a.Credential)
+	if a.Credential != CredentialDelegated && a.Credential != CredentialCaller {
+		return fmt.Errorf("auth.credential %q is not a credential mode; write delegated or caller, or leave it unset for a static key or none", a.Credential)
 	}
 	if hasKey {
-		return fmt.Errorf("auth.credential: delegated cannot combine with a static key (%s); a delegated upstream takes only the requesting user's credential", keys)
+		return fmt.Errorf("auth.credential: %s cannot combine with a static key (%s); the upstream takes only the credential the request brings", a.Credential, keys)
 	}
 	return nil
 }
@@ -120,8 +133,8 @@ func (a *DeploymentAuth) Key() (string, error) {
 }
 
 func (d ModelDeployment) validateSystemOne() error {
-	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.PublicName != "" {
-		return fmt.Errorf("a systemone deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits) and capabilities; artifact, revision, device, engine arguments, replicas and public_name belong to model_runtime")
+	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.OutlierDetection != nil || d.PublicName != "" {
+		return fmt.Errorf("a systemone deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits), its schema, deviations and max_concurrency, and capabilities; artifact, revision, device, engine arguments, replicas, outlier_detection and public_name belong to model_runtime")
 	}
 	if d.Input.MaxTokens != 0 || (d.Input.Overflow != "" && d.Input.Overflow != "reject") {
 		return fmt.Errorf("a systemone deployment takes no input budget: its API reads one bounded input")
@@ -142,9 +155,10 @@ func (d ModelDeployment) validateSystemOne() error {
 	seen := make(map[string]bool)
 	for _, questionType := range d.DeclaredQuestionTypes() {
 		switch questionType {
-		case SystemOneQuestionChoice, SystemOneQuestionNoul, SystemOneQuestionScore, SystemOneQuestionSet, SystemOneQuestionSpan:
+		case SystemOneQuestionChoice, SystemOneQuestionNoul, SystemOneQuestionScore, SystemOneQuestionSet, SystemOneQuestionSpan,
+			SystemOneQuestionBox, SystemOneQuestionTrack:
 		default:
-			return fmt.Errorf("capabilities.question_types lists %q; the types are choice, noul, score, set and span", questionType)
+			return fmt.Errorf("capabilities.question_types lists %q; the types are choice, noul, score, box, track, set and span", questionType)
 		}
 		if seen[questionType] {
 			return fmt.Errorf("capabilities.question_types lists %q twice", questionType)
@@ -164,7 +178,41 @@ func (d ModelDeployment) validateSystemOne() error {
 	if err := validateDeclaredModalities(d.DeclaredModalities()); err != nil {
 		return err
 	}
+	if err := d.validateSchema(); err != nil {
+		return err
+	}
 	return d.validateConnection(endpoint, MaxSystemOneTimeoutMs)
+}
+
+// validateSchema checks the schema and deviations a systemone deployment
+// names, its max_concurrency, and that what it declares is what its schema
+// carries: a systemone/0.2 API has no set or span questions, presets or
+// video.
+func (d ModelDeployment) validateSchema() error {
+	codec, _, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(d.Schema), d.Deviations)
+	if err != nil {
+		return err
+	}
+	if d.MaxConcurrency != nil && *d.MaxConcurrency < 1 {
+		return fmt.Errorf("max_concurrency must be at least 1")
+	}
+	capabilities := codec.Capabilities()
+	for _, questionType := range d.DeclaredQuestionTypes() {
+		if (questionType == SystemOneQuestionSet && !capabilities.Has(systemonecodec.CapabilitySetQuestions)) ||
+			(questionType == SystemOneQuestionSpan && !capabilities.Has(systemonecodec.CapabilitySpan)) {
+			return fmt.Errorf("capabilities.question_types lists %s, which schema %s has no questions of; the Router asks a set question as one noul per label, and span rules need a vllm-sr/5.0 deployment", questionType, codec.ID())
+		}
+		if questionType == SystemOneQuestionTrack && !capabilities.Has(systemonecodec.CapabilityVideos) {
+			return fmt.Errorf("capabilities.question_types lists track, which schema %s has no questions of; a track question reads a video", codec.ID())
+		}
+	}
+	if len(d.DeclaredPresets()) > 0 && !capabilities.Has(systemonecodec.CapabilityPresets) {
+		return fmt.Errorf("capabilities.presets: schema %s carries no presets; the Router asks its presets with their instructions and criteria", codec.ID())
+	}
+	if slices.Contains(d.DeclaredModalities(), SystemOneModalityVideo) && !capabilities.Has(systemonecodec.CapabilityVideos) {
+		return fmt.Errorf("capabilities.modalities lists video, which schema %s does not carry", codec.ID())
+	}
+	return nil
 }
 
 // validateDeclaredModalities checks the input modalities a systemone
@@ -195,6 +243,9 @@ func (a *DeploymentAuth) validate() error {
 	}
 	if err := a.validateCredential("auth.api_key_env or auth.api_key_file", a.APIKeyEnv != "" || a.APIKeyFile != ""); err != nil {
 		return err
+	}
+	if a.Caller() {
+		return fmt.Errorf("auth.credential: caller applies to providers.models[].backend_refs; the Router calls a deployment itself, with no client login to send")
 	}
 	if a.Delegated() {
 		return nil

@@ -55,7 +55,7 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 	}
 	request, err := systemone.ParseNativeRequest(body)
 	if err != nil {
-		return http.StatusBadRequest, nil, err
+		return http.StatusBadRequest, nil, &systemone.RequestError{Err: err}
 	}
 	requestDuration, requestCalls, err := nativeRequestCeiling(recipe.Profile.Decisions)
 	if err != nil {
@@ -119,6 +119,11 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 	result, err := executor.Execute(ctx, request, invoke)
 	if principal.Refused(ctx) {
 		return http.StatusUnauthorized, nil, principal.ErrCredentialMissing
+	}
+	var incapable *systemone.IncapableError
+	if errors.As(err, &incapable) {
+		incapable.Decision = decision.Decision.Name
+		return http.StatusBadRequest, nil, incapable
 	}
 	if err != nil {
 		if errors.Is(err, budget.ErrExhausted) {

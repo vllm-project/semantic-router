@@ -37,7 +37,8 @@ from cli.runtime_stack import MAX_PORT_OFFSET
 from runtime_http import HTTP_OK, call, page_requests, write_fixture
 
 QUICKSTART = (
-    Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
+    Path(__file__).resolve().parents[3]
+    / "website/docs/model-runtime/get-started/quickstart.md"
 )
 API_KEY = "engine-e2e-key"
 MANAGEMENT_KEY = "engine-e2e-management-key"
@@ -136,8 +137,13 @@ def engine_config():
                 "address": "0.0.0.0",
                 "port": 8899,
                 "api_keys": [API_KEY],
-                "models": ["vllm-sr/auto"],
-                "systemone": {"models": [PUBLIC_MODEL]},
+                "apis": {
+                    "openai": {"models": ["vllm-sr/auto"]},
+                    "systemone": {
+                        "schema": "vllm-sr/4.0",
+                        "models": [PUBLIC_MODEL],
+                    },
+                },
             }
         ],
         "providers": {
@@ -476,11 +482,11 @@ class TestEngineModeEngineArgs(EngineStack):
 
 
 class TestEngineModeDeadlineLimit(EngineStack):
-    """The listener's systemone.max_deadline_ms bounds a request's deadline_ms."""
+    """The listener's apis.systemone.max_deadline_ms bounds a request's deadline_ms."""
 
     def serve(self, *, engine):
         config = engine_config()
-        config["listeners"][0]["systemone"]["max_deadline_ms"] = 1
+        config["listeners"][0]["apis"]["systemone"]["max_deadline_ms"] = 1
         self.config.write_text(yaml.safe_dump(config))
         super().serve(engine=engine)
 

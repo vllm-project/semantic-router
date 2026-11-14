@@ -57,7 +57,13 @@ func validateDelegatedUpstreams(cfg *RouterConfig) error {
 // delegatedRouterOwnError refuses a delegated upstream that a Router-own call
 // needs; reason names the call.
 func delegatedRouterOwnError(path, reason string) error {
-	return fmt.Errorf("%s: auth.credential: delegated, but %s; a Router-own call never carries a user's credential, give it a static key", path, reason)
+	return requestCredentialRouterOwnError(path, CredentialDelegated, reason)
+}
+
+// requestCredentialRouterOwnError refuses an upstream that takes a credential
+// the request brings (mode delegated or caller) when a Router-own call needs it.
+func requestCredentialRouterOwnError(path, mode, reason string) error {
+	return fmt.Errorf("%s: auth.credential: %s, but %s; a Router-own call never carries a user's credential, give it a static key", path, mode, reason)
 }
 
 // validateDelegatedCredentialHeader keeps the delegated credential off a
@@ -71,7 +77,7 @@ func validateDelegatedCredentialHeader(credential DelegatedCredentialConfig, ide
 		identity.GetUserIDHeader(), identity.GetUserGroupsHeader(),
 		headers.AuthzUserID, headers.AuthzUserGroups, headers.AuthzTeamID, headers.AuthzTenantID,
 	} {
-		reserved = reserved || strings.EqualFold(header, strings.TrimSpace(name))
+		reserved = reserved || strings.EqualFold(header, name)
 	}
 	if reserved {
 		return fmt.Errorf(

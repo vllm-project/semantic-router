@@ -58,13 +58,16 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         replicas: [{device: cpu}, {endpoint: http://worker-2.example.com:8100, model: kai}]
+        outlier_detection: {consecutive_timeouts: 3, base_ejection_ms: 30000, max_ejection_ms: 300000, max_ejection_percent: 50}
       # Connection block: an attached model_runtime and every remote provider.
       remote-example:
         provider: systemone              # or openai_chat, openai_embeddings
         endpoint: https://api.example.com/v1/systemone  # full URL; unix:///abs.sock for an attached runtime
         model: vllm-sr/d3-ultra          # the remote model; an attached runtime's served model
+        schema: vllm-sr/5.0
         auth: {header: Authorization, prefix: Bearer, api_key_env: EXAMPLE_KEY}  # or api_key_file: /abs/path
         headers: {X-Org: acme}           # non-secret headers only
+        forward_request_headers: [x-user-id]  # client headers each call made for a request copies
         timeout_ms: 1500                 # per attempt
         max_retries: 1                   # transport retries within the caller's deadline
         tls: {ca_file: /etc/ssl/ca.pem, server_name: api.example.com, insecure_skip_verify: false}
@@ -86,8 +89,9 @@ global:
 | `device` | `cpu`, `auto` (the best device the host has), `cuda`, `rocm`, or one device such as `cuda:0` |
 | `input` | The deployment's input budget: `max_tokens`, and `overflow` (`reject`, `truncate` or `window`) |
 | `replicas` | Workers of one logical deployment: each a `device`, or an `endpoint` and `model` of a worker started elsewhere |
+| `outlier_detection` | When a replica's exchanges run out of their deadline `consecutive_timeouts` times in a row (default 3; 0 turns it off), it leaves dispatch for `base_ejection_ms` (30000), twice as long each time in a row up to `max_ejection_ms` (ten times the base); at most `max_ejection_percent` (50) of the replicas are out at once. See [Eject a replica that keeps timing out](../model-runtime/deploy/placement-and-scaling.md#eject-a-replica-that-keeps-timing-out) |
 | `public_name` | The deployment's name on the inference API |
-| `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | Engine arguments; see [engine arguments](../model-runtime/engine-args.md) |
+| `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | Engine arguments; see [engine arguments](../model-runtime/deploy/engine-args.md) |
 
 ### Connection block
 
@@ -98,8 +102,9 @@ deployment with `endpoint`) and every remote provider.
 | --- | --- | --- |
 | `endpoint` | The full URL of the API, path prefix included. The Router appends the operation path (`/chat/completions`, `/embeddings`); a systemone endpoint is the URL questions are posted to. An attached runtime may use `unix:///abs/path.sock` | `http` or `https`; no credentials or fragment |
 | `model` | The model the remote API answers with; on an attached runtime, the served model | Required for `systemone`, `openai_chat`, `openai_embeddings` |
-| `auth` | `header` (default `Authorization`), `prefix` (default `Bearer`; `""` sends the bare key), and exactly one of `api_key_env` or `api_key_file` (an absolute path, read on each call so a rotated key applies), or `credential: delegated`: each call made for a client request carries the credential the authenticator issued that user ([Security Hardening](security-hardening#delegate-the-users-credential-to-an-upstream)) | A key is never written in the configuration; `credential: delegated` takes no key, and not on `model_runtime` |
+| `auth` | `header` (default `Authorization`), `prefix` (default `Bearer`; `""` sends the bare key), and exactly one of `api_key_env` or `api_key_file` (an absolute path, read on each call so a rotated key applies), or `credential: delegated`: each call made for a client request carries the credential the authenticator issued that user ([Security Hardening](security-hardening#delegate-the-users-credential-to-an-upstream)). An Anthropic provider backend can also take `credential: caller`, the login the client itself sent ([Security Hardening](security-hardening#send-the-clients-own-login-to-anthropic)) | A key is never written in the configuration; `credential: delegated` takes no key, and not on `model_runtime` |
 | `headers` | Further non-secret headers | `Authorization`, `Proxy-Authorization`, `X-Api-Key`, `Api-Key`, `Ocp-Apim-Subscription-Key`, `Cookie` and the `auth` header are refused |
+| `forward_request_headers` | Client request headers each call made for a client request copies; see [Forward client headers](#forward-client-headers) | `systemone`, `openai_chat` and `openai_embeddings` only; credential, framing and identity headers, the `auth` header and the Router's own are refused |
 | `timeout_ms` | Bound of one attempt | systemone ≤ 60000; others ≤ 300000 |
 | `max_retries` | Transport retries after the first attempt, within the caller's deadline | 0–10; not on an attached runtime |
 | `tls` | `ca_file`, `server_name`, `cert_file` and `key_file` (a client certificate), `insecure_skip_verify` | `https` only; files are absolute paths |
@@ -109,6 +114,32 @@ deployment with `endpoint`) and every remote provider.
 
 Redirects are refused, so a credential never follows a redirect to another
 host.
+
+### Forward client headers
+
+A call to a remote deployment carries the deployment's `headers` and its
+credential, and none of the client's headers. To pass some through, such as
+the `x-user-id` an upstream gateway attributes usage by, list them in
+`forward_request_headers`; [R4](#r4-system-one-behind-a-gateway-with-its-own-auth-header)
+shows a gateway that does.
+
+- **Which calls.** Each call made for a client request copies the listed
+  headers the client sent with a value, matched in any letter case: the
+  decision and signal questions of a chat request or of a System One API
+  request, a memory query rewrite, an embedding. A call the Router makes on
+  its own behalf never does: a models listing, the capability discovery at
+  startup, a warm-up or health probe.
+- **Precedence.** The client's value replaces a `headers` value of the same
+  name, which stays the default for a client that sends none. The `auth`
+  header is always the Router's own.
+- **Answers.** A `systemone` deployment that forwards request headers keeps
+  no answer for another request, as with `credential: delegated`: its API may
+  answer by them.
+- **Names.** Only `systemone`, `openai_chat` and `openai_embeddings`
+  deployments take the list. It refuses what a fallback attempt's list
+  refuses
+  ([Carry client headers on a fallback attempt](model-configuration.md#carry-client-headers-on-a-fallback-attempt)),
+  with the deployment's own `auth` header among the credentials.
 
 ## Bindings and rule deployments
 
@@ -147,8 +178,12 @@ question-style signal. Embeddings answer no signal: recall embeds with
 A rule's predicate you do not write comes from the model that answers: the
 threshold calibrated for `vela3-fast` or a Vela 2.0 size; 0.5 for any other
 model, local or `systemone`, which has none (the load warns
-`uncalibrated_preset`, naming the rule). A `predicate` you write is used as
-written.
+`uncalibrated_preset`, naming the rule). That default applies to domain, user
+feedback, modality and PII rules, and to a rule that reads its preset's
+positive option (`FACT_CHECK_NEEDED`, `unsafe`, `refusal`, `jailbreak`); any
+other rule without a predicate matches on the model's own selection, and a
+hallucination rule on the model's own span thresholds. A `predicate` you
+write is used as written.
 
 ## Admission
 
@@ -197,6 +232,7 @@ global:
         provider: systemone
         endpoint: https://judge.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: JUDGE_KEY}
         timeout_ms: 5000
 recipes:
@@ -223,10 +259,13 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           header: Ocp-Apim-Subscription-Key
           prefix: ""                     # no Bearer prefix
           api_key_file: /run/secrets/systemone-key
+        headers: {x-user-id: anonymous}  # sent when the client sends none
+        forward_request_headers: [x-user-id]  # the gateway attributes usage by it
         timeout_ms: 3000
         capabilities: {question_types: [choice, noul, score], presets: [pii, halu]}
     system:
@@ -275,6 +314,7 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}
 ```
 

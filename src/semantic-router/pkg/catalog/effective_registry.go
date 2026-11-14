@@ -17,6 +17,7 @@ func (registry *EffectiveRegistry) Provider(name string) (EffectiveProvider, boo
 	}
 	value.Instance.Endpoints = append([]Endpoint(nil), value.Instance.Endpoints...)
 	value.Instance.Headers = cloneMap(value.Instance.Headers)
+	value.Instance.TLS = cloneProviderTLS(value.Instance.TLS)
 	value.Definition = cloneProvider(value.Definition)
 	return value, true
 }
@@ -43,6 +44,7 @@ func cloneEffectiveModelProviders(values []EffectiveModelProvider) []EffectiveMo
 		value.Binding.ExternalModelIDs = cloneMap(value.Binding.ExternalModelIDs)
 		value.Provider.Instance.Endpoints = append([]Endpoint(nil), value.Provider.Instance.Endpoints...)
 		value.Provider.Instance.Headers = cloneMap(value.Provider.Instance.Headers)
+		value.Provider.Instance.TLS = cloneProviderTLS(value.Provider.Instance.TLS)
 		value.Provider.Definition = cloneProvider(value.Provider.Definition)
 		value.CatalogBinding = cloneCatalogBindingPointer(value.CatalogBinding)
 		result[index] = value

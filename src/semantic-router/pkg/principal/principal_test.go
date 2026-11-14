@@ -36,3 +36,26 @@ func TestDelegatedFollowsTheCallsPrincipal(t *testing.T) {
 		t.Fatal("the request records the refusal, and only a request's calls act for a user")
 	}
 }
+
+func TestRequestHeaderFollowsTheCallsPrincipal(t *testing.T) {
+	background := context.Background()
+	user := ForRequestWithHeaders(background, "", map[string]string{"x-user-id": "alice"})
+	if value, ok := RequestHeader(user, " X-User-Id "); !ok || value != "alice" {
+		t.Fatalf("a user call copies the request's header in any letter case: got %q, %v", value, ok)
+	}
+	if value, _ := RequestHeader(Inherit(context.WithoutCancel(background), user), "x-user-id"); value != "alice" {
+		t.Fatalf("a detached call made for the request keeps its headers: got %q", value)
+	}
+	for name, ctx := range map[string]context.Context{
+		"a Router-own call":                     background,
+		"a Router-own call derived from it":     ForRouter(user),
+		"a request that carried no such header": ForRequest(background, "alice-key"),
+	} {
+		if value, ok := RequestHeader(ctx, "x-user-id"); ok {
+			t.Fatalf("%s has no request header to copy: got %q", name, value)
+		}
+	}
+	if _, ok := RequestHeader(user, "x-other"); ok {
+		t.Fatal("only the headers the principal carries are copied")
+	}
+}

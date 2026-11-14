@@ -22,6 +22,7 @@ type effectiveBackendSemantics struct {
 	discovery          string
 	basePath           string
 	tlsServerName      string
+	tlsFiles           modelcatalog.ProviderTLS
 	credentials        effectiveCredentialIdentity
 	authHeader         string
 	authPrefix         string
@@ -133,8 +134,15 @@ func newEffectiveBackendSemantics(
 		discovery = "ip"
 	}
 	tlsServerName := ""
+	var tlsFiles modelcatalog.ProviderTLS
 	if scheme == "https" {
 		tlsServerName = host
+		if backendTLS := effective.Provider.Instance.TLS; backendTLS != nil {
+			if backendTLS.ServerName != "" {
+				tlsServerName = backendTLS.ServerName
+			}
+			tlsFiles = modelcatalog.ProviderTLS{CAFile: backendTLS.CAFile, CertFile: backendTLS.CertFile, KeyFile: backendTLS.KeyFile}
+		}
 	}
 	return effectiveBackendSemantics{
 		providerID:         effective.Provider.Definition.ID,
@@ -144,6 +152,7 @@ func newEffectiveBackendSemantics(
 		discovery:          discovery,
 		basePath:           strings.TrimSuffix(parsed.Path, "/"),
 		tlsServerName:      tlsServerName,
+		tlsFiles:           tlsFiles,
 		credentials:        effectiveBackendCredential(effective.Provider.Instance),
 		authHeader:         authHeader,
 		authPrefix:         authPrefix,
@@ -158,8 +167,8 @@ func newEffectiveBackendSemantics(
 }
 
 func effectiveBackendCredential(instance modelcatalog.ProviderInstance) effectiveCredentialIdentity {
-	if instance.AuthCredential == CredentialDelegated {
-		return effectiveCredentialIdentity{source: CredentialDelegated}
+	if instance.AuthCredential == CredentialDelegated || instance.AuthCredential == CredentialCaller {
+		return effectiveCredentialIdentity{source: instance.AuthCredential}
 	}
 	credentials := instance.Credentials
 	if credentials.APIKey != "" {
@@ -180,6 +189,7 @@ func effectiveBackendDifferences(left, right effectiveBackendSemantics) []string
 	result = appendDifference(result, left.discovery != right.discovery, "DNS/IP discovery")
 	result = appendDifference(result, left.basePath != right.basePath, "base path")
 	result = appendDifference(result, left.tlsServerName != right.tlsServerName, "TLS server name")
+	result = appendDifference(result, left.tlsFiles != right.tlsFiles, "TLS files")
 	result = appendDifference(result, left.credentials != right.credentials, "credential source")
 	result = appendDifference(result, left.authHeader != right.authHeader, "auth header")
 	result = appendDifference(result, left.authPrefix != right.authPrefix, "auth prefix")

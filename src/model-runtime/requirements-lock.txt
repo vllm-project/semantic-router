@@ -16,7 +16,7 @@ idna==3.20
 numpy==2.5.3
 opencv-python-headless==5.0.0.93
 packaging==26.3
-pillow==12.3.0
+pillow==13.0.0
 prometheus-client==0.26.0
 pyyaml==6.0.3
 safetensors==0.8.0

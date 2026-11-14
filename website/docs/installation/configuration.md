@@ -18,24 +18,25 @@ entrypoints:
 global:
 ```
 
-Most deployments begin with `version`, `listeners`, `providers`, and one
-recipe. A document with one recipe needs no `entrypoints`: the recipe serves
-`vllm-sr/auto`. Several recipes need `entrypoints`, with exactly one chat
-entrypoint marked `default: true`. Add `global` settings only for shared
-services, default plugins, or runtime behavior that differs from the built-in
-defaults.
+- **Start small.** Most deployments begin with `version`, `listeners`,
+  `providers` and one recipe.
+- **One recipe needs no entrypoints.** It serves `vllm-sr/auto`. Several
+  recipes need `entrypoints`, with exactly one chat entrypoint marked
+  `default: true`.
+- **Add `global` only when needed:** for shared services, default plugins, or
+  runtime behavior that differs from the built-in defaults.
 
 ## What belongs where
 
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.5`. |
-| `listeners` | Public Router listeners: address, port, the default time for a whole call including its streamed response (`timeout`, 300s), which also bounds a stalled stream, so `0s` lifts both limits (to lift only the call limit for one model, set that model's `total_timeout: 0s`), optional client API keys, an optional Chat model allowlist (`models`; empty accepts all), separate native System One grants (`systemone.models`; omission publishes none) and the longest they wait for a model (`systemone.max_deadline_ms`, 10 minutes by default), optional one-way TLS (`tls.cert_file`, `tls.key_file`), and the identity sources a listener trusts (`identity.trust_headers`, `identity.trusted_peers`; by default none), which the Router honors in standalone mode. |
+| `listeners` | Public Router listeners: address, port, timeouts, client API keys, model allowlists, TLS and trusted identity. See [Listeners](#listeners). |
 | `providers` | Logical provider models: their backend endpoints, pricing, defaults, and the facts routing reads about each model (`capabilities`, `modalities`, context window, LoRA adapters). |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `recipes` | Isolated routing profiles: each recipe's signals, projections, decisions, strategy, fallback, candidate requirements, model bindings, and default plugins. |
 | `entrypoints` | Public virtual model names mapped to a recipe; with several recipes, exactly one chat entrypoint is the default. |
-| `global` | Router services, stores, integrations, observability, learning, the default plugins every request runs (`global.plugins`), and the models the Router asks (`global.model_catalog`; see the [model catalog reference](model-catalog.md)). |
+| `global` | Router services, stores, integrations, observability, learning, the default plugins every request runs (`global.plugins`), and the models the Router asks (`global.model_catalog`). |
 
 Keep these boundaries clear:
 
@@ -46,63 +47,66 @@ Keep these boundaries clear:
 - plugins add behavior at route-specific hook points; and
 - providers bind logical model names to inference endpoints.
 
-Provider pricing belongs beside each concrete model under
-`providers.models[].pricing`. It accepts an optional uppercase three-letter
-`currency` plus non-negative `prompt_per_1m`, `completion_per_1m`,
-`cached_input_per_1m`, and `cache_write_per_1m` rates. The facts routing reads
-about the model sit on the same entry.
+The [Routing Pipeline](../overview/signal-driven-decisions) explains the design,
+and the pages under **Capabilities** document each signal, projection,
+decision, algorithm, plugin and global block.
 
-Evaluation measurements belong in `evaluation.records[]` and reference a
-canonical Model Card identity through `model`. Built-in benchmark IDs work
-directly; define new benchmark semantics and indices beside the records under
-`evaluation`. See [Custom evaluations](../benchmarking/custom-evaluations).
+### Listeners
 
-Use [Protocol Compatibility](protocol-compatibility) to choose the model's
-backend `api_format`. Then see
-[Backend Target Compatibility](backend-target-compatibility) before moving its
-bindings between Docker, Helm, the Operator, and Dashboard workflows. The
-target matrix distinguishes canonical pass-through from Kubernetes discovery
-and records which URL, path, weight, and provider fields each surface
-preserves.
+| Field | Meaning | Default |
+| --- | --- | --- |
+| `timeout` | The whole call, including its streamed response; it also bounds a stalled stream. `0s` lifts both limits. To lift only one model's call limit, set that model's `total_timeout: 0s`. | `300s` |
+| `api_keys` | Client API keys the listener requires. | none |
+| `apis` | The APIs the listener serves, by API name: `chat_completions`, `responses`, `messages`, `images` and `systemone` (`openai` and `anthropic` are accepted as aliases of `chat_completions` and `messages`). Any other API path answers `404` with a `detail` naming the listener. Standalone mode serves `systemone`; `--gateway extproc` refuses a listener that serves it. | the four LLM APIs, no `systemone` |
+| `apis.<api>.models` | The only request models an API accepts. | every model of its kind |
+| `apis.systemone.schema` | The System One schema the listener speaks to its clients: `vllm-sr/5.0`, or `vllm-sr/4.0`, which also accepts every request form of the earlier contract. See [System One schemas](../system-one/use/schemas.md). | `vllm-sr/5.0` |
+| `apis.systemone.max_deadline_ms` | The longest a System One request waits for a model. | 10 minutes |
+| `apis.systemone.vsr` | What the vSR agent plugins pointed at the listener do: `redact`, `shield`, `guard`, `check`, `escalate`, `router` and `router_turns` on or off, and `router_goal` (`quality`, `balanced` or `save`). The listing (`GET /v1/systemone/models`) hands it to the plugins, and each field set here wins over the plugin's own option. The Dashboard edits it as checkboxes under Config › Global Config › vSR agent plugins. See [Agent harnesses](agent-harness.md). | the plugins' own options |
+| `tls.cert_file`, `tls.key_file` | One-way TLS. | off |
+| `identity.trust_headers`, `identity.trusted_peers` | The identity sources the listener trusts, in standalone mode. | none |
 
-Router-wide debugging surfaces stay closed by default.
-`global.services.observability.profiling` serves Go `pprof` endpoints, and only
-when it is explicitly enabled; it then binds `127.0.0.1:6060` so profiles never
-reach a routable interface without an explicit `bind` change. The switch is read
-once at startup, so changing it requires a Router restart. See
+### Providers and model facts
+
+- **Facts.** The facts routing reads about a model sit on its
+  `providers.models[]` entry.
+- **Pricing.** `providers.models[].pricing` takes an optional uppercase
+  three-letter `currency`, plus non-negative `prompt_per_1m`,
+  `completion_per_1m`, `cached_input_per_1m` and `cache_write_per_1m` rates.
+- **Backend format.** [Protocol Compatibility](protocol-compatibility) helps
+  you choose a backend's `api_format`. Check
+  [Backend Target Compatibility](backend-target-compatibility) before moving
+  bindings between Docker, Helm, the Operator and the Dashboard.
+
+### The Router's own models
+
+The decision model that answers signals and the embedding model that recall
+uses are deployments under `global.model_catalog.deployments`. They run in the
+[model runtime](../model-runtime/get-started/overview.md), or point to a remote API.
+
+- **One default.** The decision model answers every model-judged signal unless
+  something names another deployment.
+- **Overrides, most specific first:** a rule's own `deployment`, then
+  `recipes[].model_bindings.<type>`, then `global.model_catalog.bindings.<type>`.
+- **Limits.** A remote deployment's `limits.max_request_bytes` and
+  `limits.max_response_bytes` cap one exchange with it.
+
+[Choose a model for a signal](choose-a-model-for-a-signal.md) explains the
+rule, and the [model catalog reference](model-catalog.md) lists every
+deployment field.
+
+### Evaluation records
+
+Measurements belong in `evaluation.records[]`, and reference a canonical
+Model Card identity through `model`. Built-in benchmark IDs work directly;
+define new benchmarks and indices beside the records. See
+[Custom evaluations](../benchmarking/custom-evaluations).
+
+:::note Debug surfaces stay closed
+`global.services.observability.profiling` serves Go `pprof` endpoints only
+when enabled, on `127.0.0.1:6060` unless you change `bind`. The Router reads
+it once at startup, so a change needs a restart. See
 [API and Observability](../tutorials/global/api-and-observability).
-
-The models the Router asks, the decision model that answers signals and the
-embedding model that recall uses, are deployments under
-`global.model_catalog.deployments`. The decision model answers every
-question-style signal by default, in the
-[model runtime](model-runtime/overview.md). A binding
-(`global.model_catalog.bindings.<signal>`, or a recipe's
-`recipes[].model_bindings.<signal>`) or a rule's own `deployment` names another
-deployment, such as a larger local model or a remote System One API.
-[Choose a model for a signal](choose-a-model-for-a-signal.md) explains the rule,
-and the [model catalog reference](model-catalog.md) lists every deployment
-field. The earlier `variant`, `use_modernbert` and `use_mmbert_32k` selectors
-are gone; `vllm-sr config migrate` removes them.
-
-A `pii` rule reads the current user turn. `input.history: true` adds the
-earlier user turns, and `input.tool_results: true` the request's textual tool
-results; the router uses the neutral protocol representation, so the same rule
-applies to the supported chat, responses, and messages wire formats. The rule
-needs a deployment that answers span questions, or the configuration fails to
-load with `span_required`; the default decision model, vela3-fast, returns
-spans. When the rule's model gives no answer, its `on_unknown` decides:
-`no_match` (the default) or `match`. Text the model could not read counts as
-personal data.
-
-A `complexity` rule asks the decision model how difficult the request is to
-answer well, `easy`, `medium` or `hard`, and a condition names the level it
-routes on with `label`, such as
-`{type: complexity, name: difficulty, label: hard}`.
-
-The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
-Capability pages under **Capabilities** document each signal, projection,
-decision, algorithm, plugin, and global block.
+:::
 
 ## Capability catalog
 
@@ -245,23 +249,20 @@ providers:
 ```
 
 The `name` remains the local Router alias. A private or newly released model
-omits `catalog` and can optionally define a Model Card and reasoning contract
-under that alias. Start with [Configure models](model-configuration), then use
-[Model configuration patterns](model-configuration-patterns) to compare the
-catalog, custom, reasoning, Provider, and replica combinations. The
-[Model and provider Day-0 guide](../community/model-provider-day-0-support.md)
-is for contributors adding reusable support to the repository catalog.
+omits `catalog`, and can define its own Model Card and reasoning contract
+under that alias.
 
-With `rules.on_unknown` set, a signal that failed or answered late remains
-`Unknown` while the complete boolean tree is evaluated, and `no_match`,
-`match`, or `fail_request` resolves an undetermined terminal result. Without
-it, a failed signal's condition does not match; a `systemone` condition can
-set its own `on_error` (`match` or `no_match`).
+- [Configure models](model-configuration) is the starting point.
+- [Model configuration patterns](model-configuration-patterns) compares the
+  catalog, custom, reasoning, provider and replica combinations.
+- The [Model and provider Day-0 guide](../community/model-provider-day-0-support.md)
+  is for contributors adding support to the repository catalog.
 
-Requests for an entrypoint enter its recipe; `vllm-sr/auto`, unless the default
-entrypoint names others, enters the default recipe.
-A concrete provider model name is a direct pass-through request and bypasses
-recipe signals, decisions, route plugins, cache, learning, and session routing.
+:::tip When a signal fails
+By default, a failed or late signal's condition does not match. Set
+`rules.on_unknown` on a decision to decide otherwise; see
+[Decisions](../tutorials/decision/overview).
+:::
 
 ## Validate and serve
 
@@ -274,11 +275,12 @@ Validation catches schema errors, unresolved references, incompatible recipe
 boundaries, invalid provider bindings, and unsupported plugin or algorithm
 settings before the Router starts.
 
-For portable model-free Recipes, set
-`recipes[].decisions[].algorithm.minimum_candidates` to the smallest pool that
-preserves the decision's intended behavior. Empty built-in assets remain
-valid, while a published Entrypoint is rejected if its concrete assignments do
-not meet the declared cardinality.
+:::tip Portable recipes
+For a recipe shared without models, set
+`recipes[].decisions[].algorithm.minimum_candidates` to the smallest pool the
+decision needs. The empty recipe stays valid; publishing an entrypoint fails
+if its assigned models fall short.
+:::
 
 ## Environment references and secrets
 
@@ -288,25 +290,30 @@ Keep credentials outside the YAML file:
 api_key: ${MODEL_API_KEY}
 ```
 
-Supported string substitutions are:
+| Form | Expands to |
+| --- | --- |
+| `${VAR}`, `$VAR` | The value of `VAR` |
+| `${VAR:-default}` | `default` when `VAR` is unset or empty |
+| `${VAR-default}` | `default` when `VAR` is unset |
+| `$$` | A literal `$` |
 
-- `${VAR}` and `$VAR`;
-- `${VAR:-default}` when `VAR` is unset or empty;
-- `${VAR-default}` when `VAR` is unset; and
-- `$$` for a literal `$`.
-
-For a custom Recipe, authorize required host variables explicitly with
-`--recipe-env NAME`. Kubernetes deployments place sensitive environment values
-in Secrets rather than ConfigMaps or Helm values. See
-[Security Hardening](security-hardening).
+- `VAR` is an uppercase name: `A`-`Z`, digits and `_`, not starting with a
+  digit. Any other `$` text stays as written, such as `$100`, a template's
+  `{{range $i := ...}}` or a `${user_content}` placeholder.
+- A custom recipe must authorize the host variables it needs with
+  `--recipe-env NAME`.
+- On Kubernetes, put sensitive values in Secrets, not ConfigMaps or Helm
+  values. See [Security Hardening](security-hardening).
 
 ## Entrypoints and recipes
 
-A document with one recipe needs no entrypoints: the recipe is the default and
-is published as `vllm-sr/auto`. With several recipes, `entrypoints` maps their
-public model names, and exactly one chat entrypoint is marked `default: true`;
-its recipe is the default recipe, and `vllm-sr/auto` is published only when an
-entrypoint names it. `MoM` has no implicit special meaning.
+- **One recipe:** no entrypoints are needed. The recipe is the default, and is
+  published as `vllm-sr/auto`.
+- **Several recipes:** `entrypoints` maps their public model names, and exactly
+  one chat entrypoint is marked `default: true`. `vllm-sr/auto` is published
+  only when an entrypoint names it.
+
+Names have no implicit meaning: a recipe called `MoM` is just a name.
 
 ```yaml
 recipes:
@@ -322,50 +329,51 @@ entrypoints:
     recipe: private
 ```
 
-An entrypoint maps one or more public model aliases to a recipe. A recipe owns
-its signal, projection, decision, algorithm, plugin, cache, learning,
-and routing state. Providers, stores, and the model catalog's deployments may
-be shared without allowing policy state to cross recipe boundaries.
+| Field | Meaning |
+| --- | --- |
+| `entrypoints[].model_names` | The public model aliases. |
+| `entrypoints[].recipe` | The recipe those aliases enter. |
+| `entrypoints[].default` | Marks the default chat entrypoint. |
+| `recipes[]` | One recipe's policy: its signals, projections, decisions, algorithms, plugins, cache, learning and routing state. |
 
-Set `limits.max_response_bytes` on a remote deployment to cap one upstream
-response.
-
-In the schema, `entrypoints[].model_names` lists the public aliases,
-`entrypoints[].recipe` selects a recipe, `entrypoints[].default` marks the
-default one, and each `recipes[]` entry holds that recipe's policy.
+Providers, stores and the model catalog's deployments can be shared without
+letting policy state cross recipe boundaries. A concrete provider model name
+skips recipes: it bypasses signals, decisions, plugins, cache, learning and
+session routing.
 
 ## Defaults and overrides
 
-Defaults live in `global`, and a recipe or a decision overrides them:
+Defaults live in `global`; a recipe overrides them, and a decision overrides
+its recipe:
 
-- `global.router.strategy` and `global.router.fallback` are shared defaults.
-  Each recipe resolves its own `strategy` and `fallback` against them; recipes
-  never inherit from one another. A decision's fallback overrides its recipe's.
-  Sparse overrides such as `fallback: {enabled: false}` keep the remaining
+| Setting | Default in | Overridden by |
+| --- | --- | --- |
+| Strategy and fallback | `global.router.strategy`, `global.router.fallback` | Each recipe's `strategy` and `fallback`; a decision's fallback |
+| Plugins | `global.plugins` | A recipe's `plugins`, then a decision's `plugins` |
+| Deployments that answer signals | `global.model_catalog.bindings` | A recipe's `model_bindings`, then a rule's `deployment` |
+
+- **No inheritance between recipes.** Each recipe resolves its own settings
+  against `global`.
+- **Sparse overrides.** `fallback: {enabled: false}` keeps the other fallback
   defaults. The runtime strategy default is `priority`.
-- `global.plugins` are the default plugins of every request. A recipe's
-  `plugins` override them, and a decision's `plugins` override the recipe's.
-  Plugins layer by type, field by field: mappings merge key by key, and any
-  other value (a list, a scalar) replaces the one below it. A request that
-  matches no decision runs its recipe's layered defaults; a request for a
-  concrete model runs `global.plugins`.
-- `global.model_catalog.bindings` name the deployment each signal family asks.
-  A recipe's `model_bindings` override them, and a rule's own `deployment`
-  overrides both.
+- **Plugins merge by type, field by field.** Mappings merge key by key; a list
+  or scalar replaces the value below it.
+- **Unmatched requests.** A request that matches no decision runs its recipe's
+  layered plugins; a request for a concrete model runs `global.plugins` but
+  skips what needs a recipe: the response cache, the context plugin's
+  retrieval, `response_guard` and masking.
+- **Model facts.** `capabilities`, `modalities`, `context_window_size`,
+  `max_output_tokens` and `loras` sit on the model's `providers.models[]`
+  entry.
 
-The facts routing reads about a model, such as `capabilities`, `modalities`,
-`context_window_size`, `max_output_tokens`, and `loras`, sit on its
-`providers.models[]` entry.
+If no decision matches, the recipe uses `providers.defaults.model`. The
+virtual entrypoint name never reaches a backend.
 
-If no decision matches, the recipe uses `providers.defaults.model`.
-The virtual entrypoint name never reaches a backend.
-
-See
-[Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
-for built-in virtual models, CLI serving, backend binding, forking, packaging,
-and migration. See
-[Virtual Models](../tutorials/global/entrypoints-and-recipes)
-for the complete schema.
+- [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
+  covers built-in virtual models, CLI serving, backend binding, forking,
+  packaging and migration.
+- [Virtual Models](../tutorials/global/entrypoints-and-recipes) has the
+  complete schema.
 
 ### Recipe candidate requirements
 
@@ -377,19 +385,21 @@ candidate_requirements:
   context: known_limits
 ```
 
-`capabilities: declared` requires the assigned model to declare support for the
-request's task, including tools and image input, as well as a compatible provider
-protocol. `context: known_limits` checks estimated input demand plus the effective
-output reserve against declared model limits, and refuses a request only when it
-does not fit even without the input estimate's reserves for structured data and
-media. The request must supply an output
-bound, or its decision must configure `request_params.default_max_tokens` as a
-positive integer or `auto` (see below).
-That default applies only when the caller omits the bound; `max_tokens_limit` then
-caps it as usual. A model's maximum output capacity is not a request default.
-Missing required model facts or an effective output bound make a candidate ineligible. Input accounting remains estimated, especially for
-multimodal content; this is not an exact provider token-capacity guarantee. Omit a
-field to retain that dimension's existing compatibility behavior.
+| Requirement | A candidate is eligible when |
+| --- | --- |
+| `capabilities: declared` | It declares support for the request's task, including tools and image input, and a compatible provider protocol. |
+| `context: known_limits` | The estimated input plus the output reserve fits its declared limits. A request is refused only when it doesn't fit even without the estimate's reserves for structured data and media. |
+
+Omit a field to keep that dimension's default compatibility behavior.
+
+- **An output bound is required.** The request must set one, or its decision
+  must set `request_params.default_max_tokens` to a positive integer or `auto`.
+  That default applies only when the caller omits a bound, and
+  `max_tokens_limit` still caps it.
+- **Missing facts make a candidate ineligible**, and so does a missing output
+  bound. A model's maximum output is never used as a request default.
+- **Input is estimated**, especially for multimodal content. This is not an
+  exact provider token-capacity guarantee.
 
 For example, a decision can supply the bound through its existing plugin:
 
@@ -414,80 +424,81 @@ plugins:
       default_max_tokens: auto
 ```
 
-`auto` requires an explicit `vllm` provider, one backend per model, the OpenAI
-Chat format, and declared context and output limits. Enable the backend's
-`/v1/chat/completions/render` API with `vllm serve --enable-scale-out` on a vLLM
-version that supports it. The Router preprocesses each candidate's complete
-provider request without generating an answer, then repeats that check after
-final request changes. It uses the actual templated input length to allocate
-`min(max_output_tokens, context_window - input_tokens)`. A smaller backend limit
-than declared is a configuration error; align the deployment and model card.
-Explicit caller limits keep their existing behavior and need no render call.
-`max_tokens_limit` still caps the resulting output budget.
+With `auto`, the Router asks each candidate's backend to render the complete
+provider request, without generating an answer, and repeats the check after
+the final request changes. It then allocates
+`min(max_output_tokens, context_window - input_tokens)` from the real input
+length.
 
-`expected_output_tokens` is a positive cost forecast, **not an output limit**.
-It is required for `multi_factor` with `auto`, and is bounded by the caller's
-limit or each candidate's available capacity. Different maximum context windows
-do not by themselves make a model's forecast more expensive. Without this field,
-non-automatic requests retain their existing cost calculation.
+:::warning `auto` needs a render-capable vLLM backend
 
-A request that fits a candidate is not truncated based on a text-length estimate.
-If every compatible candidate reports input overflow, the Router applies the
-configured context compression policy once and verifies the result with the
-backend. Compression can be conservative; final capacity checking is exact.
-Without a suitable compression policy, overflow remains an error. An unavailable
-or invalid render API fails clearly and never triggers compression. Preview
-reports `execution_required` because it does not have the complete provider
-request. Automatic budgets currently support text and tool requests, excluding
-multimodal input, provider truncation, LoRA, Looper, and shadow dispatch.
+- an explicit `vllm` provider, one backend per model, the OpenAI Chat format,
+  and declared context and output limits;
+- the backend's `/v1/chat/completions/render` API, enabled with
+  `vllm serve --enable-scale-out` on a vLLM version that supports it;
+- text and tool requests only: not multimodal input, provider truncation, LoRA,
+  Looper or shadow dispatch.
 
-For multi-factor selection, `latency_metric: ttft` compares time to first token;
-`tpot` compares time per output token. Omission preserves the existing TPOT-then-TTFT
-fallback. Pair the metric with explicit quality evidence and a lexicographic
-objective when quality is a floor rather than a score to trade away.
+A backend limit smaller than the declared one is a configuration error. An
+unavailable or invalid render API fails clearly.
+:::
+
+- **Caller limits win.** An explicit caller limit keeps its behavior and needs
+  no render call; `max_tokens_limit` still caps the budget.
+- **`expected_output_tokens` is a cost forecast, not a limit.** `multi_factor`
+  needs it with `auto`, bounded by the caller's limit or each candidate's
+  capacity. Without it, other requests keep their usual cost calculation.
+- **Overflow.** A request that fits is never truncated by a length estimate.
+  If every compatible candidate overflows, the Router applies the configured
+  context compression once and checks the result with the backend; without a
+  compression policy, overflow stays an error.
+- **Preview.** It reports `execution_required`, because it doesn't have the
+  complete provider request.
+
+For `multi_factor`, `latency_metric: ttft` compares time to first token and
+`tpot` time per output token; see [Multi Factor](../tutorials/algorithm/selection/multi-factor).
 
 Discover the current contract with
-`vllm-sr config schema --section recipes.candidate_requirements`.
-DSL `ROUTING` blocks support the same object, and Kubernetes CRD emission
-preserves it for every recipe.
+`vllm-sr config schema --section recipes.candidate_requirements`. DSL
+`ROUTING` blocks support the same object, and the Kubernetes CRD keeps it for
+every recipe.
 
 ### Replay capture defaults and decision overrides
 
-`global.services.router_replay` owns shared storage and retention. Enablement
-and capture defaults are a `router_replay` plugin in `global.plugins`; a
-recipe's or a decision's `router_replay` plugin overrides only the fields it
-sets. Omitted fields inherit; `enabled: false` disables capture for that recipe
-or decision, while `enabled: true` can opt in when the default is disabled.
-There is no `data_policy`.
+| Where | What it sets |
+| --- | --- |
+| `global.services.router_replay` | Shared storage and retention. |
+| A `router_replay` plugin in `global.plugins` | Whether capture is on, and the capture defaults. |
+| A recipe's or decision's `router_replay` plugin | Only the fields it sets. `enabled: false` turns capture off there; `enabled: true` opts in when the default is off. |
 
-Set `capture_personal_data: false` in `global.plugins` or in the decision plugin to retain
-routing evidence while omitting content when PII is detected or its status is
-unknown. Missing PII detectors suppress content conservatively rather than
-preventing startup. Client tool results stay redacted unless
-`capture_tool_results: true`, which requires `capture_personal_data: true`;
-startup refuses the combination with `capture_personal_data: false`. Rejected
-requests without a selected decision use the capture defaults of their recipe. These
-controls do not govern other stores or backend retention.
-See [Router Replay](../tutorials/plugin/router-replay) for the complete fields and
-examples, or inspect `vllm-sr config schema --section global.services.router_replay`.
+- **Prompt text.** `prompt_capture` says what a record keeps besides routing
+  evidence. `none`, the default, keeps no request or response text and reads
+  nothing for personal data. `raw` keeps the text the capture switches allow,
+  unverified. `verified` keeps the prompt alone once the PII rules find it
+  clean, and omits it when PII is detected or its status is unknown; without a
+  PII detector the prompt is omitted rather than blocking startup.
+  `capture_personal_data` is the deprecated form: `false` loads as `verified`
+  and `true` as `raw`, with a warning.
+- **Tool results** stay redacted unless `capture_tool_results: true`, which
+  stores them under `prompt_capture: raw` only.
+- **Rejected requests** without a selected decision use their recipe's
+  capture defaults.
+
+These controls don't govern other stores or a backend's retention. See
+[Router Replay](../tutorials/plugin/router-replay) for every field, or run
+`vllm-sr config schema --section global.services.router_replay`.
 
 ## Configuration workflows
 
-The canonical document can be authored or applied through several interfaces:
+The canonical document can be authored or applied through the local CLI and
+YAML, the Dashboard, Helm or `vllm-sr serve --target k8s`, the Kubernetes
+Operator, or the routing DSL.
 
-- local CLI and YAML;
-- Dashboard setup and visual routing tools;
-- Helm or `vllm-sr serve --target k8s`;
-- the Kubernetes Operator; and
-- the routing DSL.
-
-[Configuration Workflows](configuration-workflows) explains which interface
-owns which part of the document and how to avoid competing sources of truth.
-[Configuration Contract](configuration-contract) describes the generated
-machine-readable schema, Router discovery and validation APIs, and the safe
-authoring loop for tools and agents. [Configuration Management](configuration-management)
-explains how a change activates on a running Router, how a rejected change is
-reported, and how to list and roll back versions.
+| Page | Covers |
+| --- | --- |
+| [Configuration Workflows](configuration-workflows) | Which interface owns which part of the document, and how to avoid competing sources of truth. |
+| [Configuration Contract](configuration-contract) | The generated schema, the Router's discovery and validation APIs, and the safe authoring loop for tools and agents. |
+| [Configuration Management](configuration-management) | How a change activates on a running Router, how a rejection is reported, and how to roll back. |
 
 ## Reference sources
 
@@ -495,7 +506,7 @@ reported, and how to list and roll back versions.
   is the exhaustive canonical example.
 - [`config/fragments/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments)
   contains reusable signal, decision, algorithm, and plugin fragments.
-- [Providers and routing tutorials](../tutorials/global/overview) describe
+- [Providers and routing tutorials](./global-settings) describe
   shared runtime configuration.
 - [Unified Config Contract v0.3](../proposals/unified-config-contract-v0-3)
   records the design the v0.5 structure builds on.

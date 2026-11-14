@@ -26,7 +26,7 @@ DEFINITIONS = {
     "operator-bundle": ("deploy/operator", "deploy/operator/bundle/Dockerfile", DUAL),
     "vllm-sr": (".", ROUTER_DOCKERFILE, DUAL),
     "vllm-sr-riscv64": (".", ATTACHED_DOCKERFILE, ["linux/riscv64"]),
-    "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
+    "vllm-sr-cuda": (".", ROUTER_DOCKERFILE, DUAL),
     "vllm-sr-rocm": (".", ROUTER_DOCKERFILE, ["linux/amd64"]),
 }
 # Router images are one Dockerfile target per accelerator: (target, accelerator).
@@ -213,6 +213,9 @@ def publication_tags(
     else:
         raise ValueError("PR artifacts cannot be published")
     if latest:
+        if mode != "release":
+            # latest_tags.py moves it once main's complete image set exists.
+            raise ValueError("only a release publishes latest with its images")
         tags.append("latest")
     return tags
 
@@ -382,6 +385,8 @@ def main() -> None:
                         [
                             "skopeo",
                             "copy",
+                            "--retry-times",
+                            "3",
                             "--all",
                             "--preserve-digests",
                             "--digestfile",
@@ -414,6 +419,8 @@ def acquire_published(directory: Path) -> None:
         [
             "skopeo",
             "copy",
+            "--retry-times",
+            "3",
             "--all",
             "--preserve-digests",
             "docker://" + record["ref"],

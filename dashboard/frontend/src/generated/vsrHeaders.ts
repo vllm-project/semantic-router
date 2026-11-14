@@ -151,7 +151,7 @@ export const X_VSR_CACHE_CONTROL = 'x-vsr-cache-control'
 /** Context-compression directives for the request, when the plugin's `request_controls` allow them. Surface: control. */
 export const X_VSR_COMPRESSION_CONTROL = 'x-vsr-compression-control'
 
-/** SHA-256 of the active runtime document, on routing previews and configuration activations. Surface: public. */
+/** SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`. Surface: public. */
 export const X_VSR_CONFIG_HASH = 'x-vsr-config-hash'
 
 /** Version of the configuration snapshot that served the request. Surface: public. */
@@ -196,7 +196,7 @@ export const X_VSR_PROTECTION_RELEASE = 'x-vsr-protection-release'
 /** Router Replay record id, when the record was persisted. Surface: public. */
 export const X_VSR_REPLAY_ID = 'x-vsr-replay-id'
 
-/** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
+/** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
 export const X_VSR_RESPONSE_PATH = 'x-vsr-response-path'
 
 /** Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own. Surface: internal. */
@@ -223,13 +223,13 @@ export const X_VSR_SKIP_PROCESSING = 'x-vsr-skip-processing'
 /** Marks a System One request one Router forwards to another, which refuses to forward it again. Surface: internal. */
 export const X_VSR_SYSTEMONE_BACKEND = 'x-vsr-systemone-backend'
 
-/** Routing details as an RFC 8941 dictionary of at most 4 KB, for a caller `global.router.headers.debug` allows; the members follow this table. Surface: debug. */
+/** Routing details as an RFC 8941 dictionary of at most 4 KB, for a caller `global.router.headers.debug` allows. Surface: debug. */
 export const X_VSR_TRACE = 'x-vsr-trace'
 
 /** Endpoint Envoy reports on the provider response for KV registry writes; removed before the client. Surface: internal. */
 export const X_VSR_UPSTREAM_HOST = 'x-vsr-upstream-host'
 
-/** Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. Surface: public. */
+/** Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, `guard_overloaded` on the retryable error answered instead of a refusal or a forward that rules unread on an overloaded decision runtime decide, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. Surface: public. */
 export const X_VSR_WARNINGS = 'x-vsr-warnings'
 
 // The members of x-vsr-trace, from src/semantic-router/pkg/headers/trace.go.
@@ -272,6 +272,9 @@ export const TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS = 'effective_max_output_tokens'
 
 /** Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. */
 export const TRACE_SIGNALS = 'signals'
+
+/** Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. */
+export const TRACE_SCAN_COVERAGE = 'scan_coverage'
 
 /** Token count the `context` signal measured. */
 export const TRACE_CONTEXT_TOKENS = 'context_tokens'
@@ -333,6 +336,7 @@ export const TRACE_MEMBERS = [
   TRACE_EFFECTIVE_INPUT_TOKENS,
   TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS,
   TRACE_SIGNALS,
+  TRACE_SCAN_COVERAGE,
   TRACE_CONTEXT_TOKENS,
   TRACE_CATEGORY,
   TRACE_REASONING,

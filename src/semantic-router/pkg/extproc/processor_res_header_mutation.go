@@ -56,7 +56,7 @@ func (builder *responseHeaderMutationBuilder) addString(key string, value string
 // response: x-vsr-schema-version stamps the contract revision and
 // x-vsr-response-path names how the response was produced. The path
 // defaults to "upstream" when the caller has not classified a more specific
-// path (cache, fast_response, looper, rate_limited, error, image_generation).
+// path (cache, fast_response, looper, blocked, rate_limited, error, fallback).
 func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 	path := ctx.ResponsePath
 	if path == "" {
@@ -97,12 +97,32 @@ func (builder *responseHeaderMutationBuilder) addTrace(ctx *RequestContext) {
 // responseWarnings encodes x-vsr-warnings and counts and logs, once per
 // request, each diagnostic it carries.
 func responseWarnings(ctx *RequestContext) string {
-	value, included := formatWarnings(ctx.ResponseGuard.warnings(), ctx.ProtocolDiagnostics)
+	warnings := scanWarnings(ctx.VSRScanCoverage)
+	if ctx.guardOverloadAnswered {
+		warnings = append(warnings, headers.WarningGuardOverloaded)
+	}
+	value, included := formatWarnings(append(warnings, ctx.ResponseGuard.warnings()...), ctx.ProtocolDiagnostics)
 	if reported := min(ctx.protocolDiagnosticsReported, included); included > reported {
 		recordProtocolDiagnostics(ctx, ctx.ProtocolDiagnostics[reported:included])
 		ctx.protocolDiagnosticsReported = included
 	}
 	return value
+}
+
+// scanCoverageFull is the scan coverage of a guard rule that read every
+// window of its input; the others are "partial n/m" and "none".
+const scanCoverageFull = "full"
+
+// scanWarnings is scan_partial when a request-stage guard rule read only
+// some of its input's windows, or none; the counts stay in x-vsr-trace and
+// the replay record.
+func scanWarnings(coverage map[string]string) []string {
+	for _, read := range coverage {
+		if read != scanCoverageFull {
+			return []string{headers.WarningScanPartial}
+		}
+	}
+	return nil
 }
 
 // bufferedWarnings is the x-vsr-warnings value the buffered body phase

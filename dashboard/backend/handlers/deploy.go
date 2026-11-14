@@ -437,7 +437,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 // replaced as one unit; in merge mode an omitted list remains untouched and a
 // supplied recipe keeps the fields of the base recipe of its name it omits.
 func mergeDSLOwnedNodes(baseRoot, fragmentRoot *yaml.Node, mode DeployMode) error {
-	preserveBaseDecisionAdaptations(baseRoot, fragmentRoot)
+	preserveBaseDecisionFields(baseRoot, fragmentRoot)
 	if mode == DeployModeReplace && mappingValueNode(fragmentRoot, "recipes") == nil {
 		return fmt.Errorf("compiled routing fragment must contain recipes")
 	}
@@ -703,7 +703,7 @@ func canonicalizeYAMLForDiff(raw []byte) string {
 	}
 
 	if looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(raw); err == nil && looksLikeFullBase {
-		if configData, decodeErr := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](raw); decodeErr == nil {
+		if configData, decodeErr := decodeConfigDocument[routerconfig.CanonicalConfig](raw); decodeErr == nil {
 			if canonical, marshalErr := marshalYAMLBytes(configData); marshalErr == nil {
 				return string(canonical)
 			}

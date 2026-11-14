@@ -1,0 +1,29 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "chatcmpl_cut_first",
+    "object": "chat.completion",
+    "model": "provider-model",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "call_1",
+              "type": "function",
+              "function": {"name": "lookup", "arguments": "{\"query\":\"wea"}
+            },
+            {
+              "id": "call_2",
+              "type": "function",
+              "function": {"name": "lookup", "arguments": "{\"query\":\"time\"}"}
+            }
+          ]
+        },
+        "finish_reason": "length"
+      }
+    ]
+  }
+}

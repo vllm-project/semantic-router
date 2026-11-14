@@ -37,7 +37,7 @@ func (r *OpenAIRouter) selectionCapabilityRequest(ctx *RequestContext) (*llmprot
 	}
 	request := *ctx.SemanticRequest
 	request.Stream = ctx.ExpectStreamingResponse
-	if policy := resolveDecisionToolsConfig(ctx).ActivePolicy(); policy.EffectiveMode() == config.ToolsPolicyModeNone {
+	if policy := resolveDecisionToolsConfig(r.Config, ctx).ActivePolicy(); policy.EffectiveMode() == config.ToolsPolicyModeNone {
 		if policy.StripToolHistory {
 			request.Messages = cloneMessagesForToolStrip(request.Messages)
 		}
@@ -125,7 +125,7 @@ func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.Selec
 		}
 	}
 	for _, ref := range input.CandidateModels {
-		if (!decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(requirements) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
+		if (!decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(requirements) && r.modelRefExceedsContextWindow(ctx, ref, ctx.VSRContextTokenCount)) ||
 			(ctx.VSREligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSREligibleModelRefs)) ||
 			(ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) {
 			onlyUnsupported = false

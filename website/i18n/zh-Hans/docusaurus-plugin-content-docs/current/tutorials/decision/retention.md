@@ -73,7 +73,7 @@ ROUTE sensitive-turn {
 | 字段 | 效果 | 重要限制 |
 |---|---|---|
 | `drop: true` | 跳过匹配决策的响应缓存写入 | 它不会阻止同一请求更早的缓存读取 |
-| `ttl_turns` | 用 Router 的回合到时间映射覆盖响应缓存条目存活时间 | 它是缓存 TTL 提示，不是持久会话保留 |
+| `ttl_turns` | 用 Router 的回合到时间映射把响应缓存条目存活时间缩短到最多 `ttl_turns` 个回合；更短的 `ttl_seconds`（插件的，否则是存储的）或调用方 `ttl` 仍然生效，其中任一为 `0` 时仍不写入 | 它是缓存 TTL 提示，不是持久会话保留 |
 | `keep_current_model: true` | 强制模型切换门保持在已知当前模型上 | 当会话/当前模型身份不可用时没有效果 |
 | `prefer_prefix_retention: true` | 在 `x-vsr-trace` 的 `retention` 成员中报告为 `prefer_prefix` | Router 本身不管理提供商的 KV-cache 驱逐 |
 

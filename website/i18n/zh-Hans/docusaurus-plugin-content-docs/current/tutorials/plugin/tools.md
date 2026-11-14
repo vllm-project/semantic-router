@@ -63,11 +63,15 @@ plugins:
 ### 策略
 
 - `passthrough`（默认）保持请求的工具不变。
-- `filtered` 在 `allow_tools` 列出工具时只保留这些工具，并移除 `block_tools` 列出的工具。
-- `none` 移除所有工具以及请求的 `tool_choice`。设置 `strip_tool_history: true` 时，还会从发往
+- `filtered` 在 `allow_tools` 列出工具时只保留这些工具，并移除 `block_tools` 列出的工具。Responses 托管工具按其类型（例如 `image_generation`）计。指名被移除工具（包括托管工具）的 `tool_choice` 也随之移除，由模型在剩下的工具中选择。
+- `none` 移除所有工具（包括 Responses 托管工具，例如 `image_generation`）以及请求的 `tool_choice`。设置 `strip_tool_history: true` 时，还会从发往
   提供方的请求中移除先前的助手工具调用和工具结果。策略在信号与决策评估之后执行，因此不会改变匹配的路由。
 - `trusted_facts` 根据运维策略、网关证明和新鲜的运行时可用性（当决策的选择从目录添加工具时，
   即该目录）门控工具使用。除非启用，否则关闭。
+
+算法会发起多次模型调用的决策（例如 `escalate`、`fusion` 或 `workflows`）对请求只执行一次策略和选择，
+它发起的每次调用最多携带剩下的工具。客户端执行工具调用后恢复的工作流，会让它根据暂停时的请求构造的调用
+遵循恢复时生效的策略。启用 `trusted_facts` 时，这类决策的选择不会从目录添加工具。
 
 ### 选择
 
@@ -93,8 +97,8 @@ plugins:
   [`tool_selection_failed`](../../api/router.md#routing-errors)。
 - 一个问题最多有 255 个选项，所以 judge 最多读取 `match.judge.max_candidates` 个工具（默认 255）：按请求
   或目录列出的顺序取前面的工具。更多的工具从不被拒绝；也可以写 `recall: {method: bm25, top_k: ...}`，按与请求
-  共有的词把工具缩小到描述最相关的那些。每次截断都会在请求的 trace span 上记一个 `match.judge.truncated`
-  事件，并计入 `vsr_match_judge_truncated_total`。
+  共有的词把工具缩小到描述最相关的那些。召回只负责缩小范围，因此没有 judge 的 `match` 块在加载时失败。
+  每次截断都会在请求的 trace span 上记一个 `match.judge.truncated` 事件，并计入 `vsr_match_judge_truncated_total`。
 - `timeout_ms` 限制调用时长，最多 60000。未设置时使用 systemone 部署自己的 `timeout_ms`，否则为 1000。
   judge 自己的 `on_error` 和 `timeout_ms` 不被接受：以选择的设置为准。
 

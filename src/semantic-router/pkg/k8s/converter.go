@@ -409,6 +409,9 @@ func validateRouterReplayPluginConfig(rawConfig []byte) error {
 	if cfg.MaxBodyBytes < 0 {
 		return fmt.Errorf("router_replay max_body_bytes cannot be negative")
 	}
+	if err := cfg.ValidatePromptCapture(); err != nil {
+		return fmt.Errorf("router_replay %w", err)
+	}
 	if err := cfg.Shadow.Validate(); err != nil {
 		return fmt.Errorf("router_replay shadow %w", err)
 	}

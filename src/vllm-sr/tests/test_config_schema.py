@@ -9,6 +9,8 @@ from cli.config_schema.validation import validate_config_structure
 from cli.config_schema.views import schema_view
 from cli.config_yaml import safe_load_router_config
 from cli.main import main
+from cli.parser import parse_user_config_data
+from cli.validator import validate_user_config
 from click.testing import CliRunner
 from jsonschema import Draft202012Validator
 
@@ -251,3 +253,58 @@ def test_memory_persistence_schema_rejects_negative_durations(field: str) -> Non
     errors = validate_config_structure(config)
     assert errors
     assert any(field in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("document", "path"),
+    [
+        ({"listeners": [{"name": "http", "port": "${PORT}"}]}, "listeners.0.port"),
+        (
+            {"global": {"router": {"streamed_body": {"enabled": "${STREAMED}"}}}},
+            "global.router.streamed_body.enabled",
+        ),
+    ],
+)
+def test_environment_reference_is_refused_in_a_number_or_boolean_field(
+    document: dict, path: str
+) -> None:
+    # The Router expands a reference to text, which no number or boolean
+    # field decodes, so the config never loads.
+    errors = validate_config_structure({"version": "v0.5", **document})
+
+    assert any(error.startswith(f"{path}: ") for error in errors), errors
+
+
+@pytest.mark.parametrize(
+    "plugin",
+    [
+        {"type": "request_params", "configuration": {"default_max_tokens": "${MAX}"}},
+        {
+            "type": "context",
+            "configuration": {
+                "enabled": True,
+                "compress": {},
+                "budget": {"max_tokens": "${MAX}", "reserve_output_tokens": "${OUT}"},
+            },
+        },
+    ],
+)
+def test_environment_reference_is_accepted_in_a_number_or_auto_field(
+    plugin: dict,
+) -> None:
+    # These fields also take text, "auto", so the Router loads a reference
+    # that expands to it.
+    model = {"name": "a", "backend_refs": [{"name": "a", "endpoint": "127.0.0.1:8000"}]}
+    decision = {"name": "r", "priority": 1, "modelRefs": [{"model": "a"}]}
+    config = parse_user_config_data(
+        {
+            "version": "v0.5",
+            "providers": {"models": [model]},
+            "recipes": [
+                {"name": "default", "decisions": [{**decision, "plugins": [plugin]}]}
+            ],
+        },
+        log_summary=False,
+    )
+
+    assert validate_user_config(config, log_summary=False) == []
