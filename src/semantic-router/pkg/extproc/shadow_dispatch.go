@@ -20,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -57,6 +58,9 @@ const (
 	shadowReasonRedirectRejected     = "redirect_rejected"
 	shadowReasonResponseTooLarge     = "response_too_large"
 	shadowReasonMalformedResponse    = "malformed_response"
+
+	// shadowReasonBackendLacksCapability shares the plugin gate's typed reason.
+	shadowReasonBackendLacksCapability = string(pluginruntime.SkipBackendLacksCapability)
 
 	// shadowDispatchDrainTimeout is how long Close lets in-flight shadows
 	// finish before cancelling them. Their primary requests already completed
@@ -223,18 +227,30 @@ func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch 
 	}
 	cfg := replay.Shadow.WithDefaults()
 	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
-		routerConfig: r.Config,
-		engine:       engine,
-		encode:       r.shadowRequestEncoder(ctx, dispatch, engine),
-		extraHeaders: r.shadowExtraHeaders(ctx, dispatch, &cfg),
+		routerConfig:         r.Config,
+		engine:               engine,
+		encode:               r.shadowRequestEncoder(ctx, dispatch, engine),
+		extraHeaders:         r.shadowExtraHeaders(ctx, dispatch, &cfg),
+		modelLacksCapability: r.shadowModelLacksCapability(ctx, cfg.Model),
 	})
 }
 
 type shadowSubmitDeps struct {
-	routerConfig *config.RouterConfig
-	engine       *protocolcodec.Engine
-	encode       shadowRequestEncoder
-	extraHeaders map[string]string
+	routerConfig         *config.RouterConfig
+	engine               *protocolcodec.Engine
+	encode               shadowRequestEncoder
+	extraHeaders         map[string]string
+	modelLacksCapability bool // the shadow model's card omits a task capability the request needs
+}
+
+// shadowModelLacksCapability reports whether the shadow model's declared capabilities
+// leave out a task capability the request needs, so the media never reaches it.
+func (r *OpenAIRouter) shadowModelLacksCapability(ctx *RequestContext, model string) bool {
+	if ctx.SemanticRequest == nil {
+		return false
+	}
+	declared, annotated := r.declaredModelCapabilities(model)
+	return !pluginruntime.CoversRequest(llmprotocol.RequiredCapabilities(*ctx.SemanticRequest), declared, annotated)
 }
 
 // shadowRequestEncoder mirrors the primary pipeline for the shadow model:
@@ -400,6 +416,9 @@ func (d *shadowDispatcher) submit(
 		return
 	case ctx.SemanticRequest == nil || deps.routerConfig == nil || deps.engine == nil || deps.encode == nil:
 		dropEarly(shadowReasonRequestUnavailable)
+		return
+	case deps.modelLacksCapability:
+		dropEarly(shadowReasonBackendLacksCapability)
 		return
 	}
 	rate := cfg.EffectiveSampleRate()

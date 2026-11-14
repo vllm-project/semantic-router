@@ -49,3 +49,27 @@ func TestApplicableGatesBackendOnTaskCapabilities(t *testing.T) {
 		t.Fatal("image plugin was skipped on a card that declares image input")
 	}
 }
+
+func TestCoversRequest(t *testing.T) {
+	text := llmprotocol.Capabilities(llmprotocol.CapabilityText)
+	image := llmprotocol.Capabilities(llmprotocol.CapabilityImageInput)
+	both := llmprotocol.Capabilities(llmprotocol.CapabilityText, llmprotocol.CapabilityImageInput)
+	for _, tc := range []struct {
+		name     string
+		request  llmprotocol.CapabilitySet
+		backend  llmprotocol.CapabilitySet
+		declared bool
+		covers   bool
+	}{
+		{"text request on a card without text", text, image, true, true},
+		{"image request on a text card", both, text, true, false},
+		{"image request on an image card", both, image, true, true},
+		{"image request, undeclared card", both, llmprotocol.CapabilitySet{}, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CoversRequest(tc.request, tc.backend, tc.declared); got != tc.covers {
+				t.Fatalf("CoversRequest() = %v, want %v", got, tc.covers)
+			}
+		})
+	}
+}

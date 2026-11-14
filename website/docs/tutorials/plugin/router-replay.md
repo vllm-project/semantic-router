@@ -452,8 +452,10 @@ result:
 | --- | --- |
 | `completed` | `completed` |
 | `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
-| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable` |
+| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability` |
 | `sampled_out` | `sampled_out` |
+
+A request that needs a modality the shadow model's card omits, such as an image sent to a text-only model, is dropped with `backend_lacks_capability` and never reaches the shadow backend. A shadow model with no recognized declaration is not gated.
 
 - **Metrics.** Results and reasons are exported as
   `sr_shadow_dispatch_total{decision,result,reason}`, with
