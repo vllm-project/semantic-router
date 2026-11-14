@@ -635,11 +635,14 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	}
 	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
+		// The stream carried no usable usage, so the request is settled with
+		// what it knows, as the buffered path does: skipping the report would
+		// leave its output tokens out of a token budget.
 		r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
-		return
+		usage = responseUsageMetrics{}
 	}
 	totalTokens := responseUsageTotal(usage)
-	if r.RateLimiter != nil && ctx.RateLimitCtx != nil && totalTokens > 0 {
+	if r.RateLimiter != nil && ctx.RateLimitCtx != nil {
 		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
 			InputTokens:  usage.promptTokens,
 			OutputTokens: usage.completionTokens,
