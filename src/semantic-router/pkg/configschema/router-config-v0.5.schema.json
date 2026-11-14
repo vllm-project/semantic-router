@@ -3518,6 +3518,12 @@
         "signal": {
           "type": "string"
         },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/SignalRef"
+          },
+          "type": "array"
+        },
         "entity_types": {
           "items": {
             "type": "string"
@@ -6428,6 +6434,27 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "SignalRef": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "keyword",
+            "systemone"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "name"
+      ]
     },
     "SkipProcessingConfig": {
       "properties": {

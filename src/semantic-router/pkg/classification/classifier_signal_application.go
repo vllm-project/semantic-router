@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
@@ -292,10 +293,43 @@ func (c *Classifier) PIIRuleSpans(ctx context.Context, ruleName string, text str
 	if index < 0 {
 		return nil, fmt.Errorf("pii rule %q is not declared in this recipe", ruleName)
 	}
-	asked := applicationAsked(c.applicationRules[index])
+	return c.askedSpans(ctx, applicationAsked(c.applicationRules[index]), text)
+}
+
+// RuleSpans returns what a rule that finds text finds in text, in code
+// points: a pii rule's personal data (PIIRuleSpans), a systemone span rule's
+// spans, read the same way and labeled with the rule's name, or a keyword
+// rule's places. An error means the text could not be read whole.
+func (c *Classifier) RuleSpans(ctx context.Context, signalType, name, text string) ([]modelservice.Span, error) {
+	switch signalType {
+	case config.SignalTypePII:
+		return c.PIIRuleSpans(ctx, name, text)
+	case config.SignalTypeKeyword:
+		return c.keywordClassifier.RuleSpans(name, text)
+	case config.SignalTypeSystemOne:
+		index := slices.IndexFunc(c.Config.SystemOneRules, func(rule config.SystemOneRule) bool { return rule.Name == name })
+		if index < 0 || c.Config.SystemOneRules[index].Question.Type != config.SystemOneQuestionSpan {
+			return nil, fmt.Errorf("systemone span rule %q is not declared in this recipe", name)
+		}
+		// Masking acts on the whole text, so the rule reads all of it,
+		// whatever coverage a decision condition on it asks.
+		rule := c.Config.SystemOneRules[index]
+		rule.Coverage = config.SystemOneCoverageFull
+		spans, err := c.askedSpans(ctx, systemOneAsked(rule), text)
+		for i := range spans {
+			spans[i].Label = name
+		}
+		return spans, err
+	}
+	return nil, fmt.Errorf("a %s rule does not find text", signalType)
+}
+
+// askedSpans asks one rule that finds text about text, in windows when it is
+// longer than one, and requires every part of it to be read whole.
+func (c *Classifier) askedSpans(ctx context.Context, asked askedRule, text string) ([]modelservice.Span, error) {
 	deployment := c.Config.SystemOneRuleDeployment(asked.rule)
 	if scan := newGuardScan(deployment, modelservice.Request{State: text}, c.scanWindowBudget(deployment)); scan != nil {
-		return c.piiScanSpans(ctx, ruleName, text, asked, scan)
+		return c.scanSpans(ctx, text, asked, scan)
 	}
 	call := &systemOneCall{deployment: deployment, request: modelservice.Request{State: text}, rules: []askedRule{asked}}
 	var answer modelservice.Answer
@@ -309,32 +343,46 @@ func (c *Classifier) PIIRuleSpans(ctx context.Context, ruleName string, text str
 	case askErr != nil:
 		return nil, askErr
 	case !answered:
-		return nil, fmt.Errorf("pii rule %q: %w: missing answer", ruleName, modelservice.ErrUnavailable)
+		return nil, fmt.Errorf("%s rule %q: %w: missing answer", asked.signalType, asked.rule.Name, modelservice.ErrUnavailable)
 	case answer.Error != "":
-		return nil, fmt.Errorf("pii rule %q: %w: %s", ruleName, modelservice.ErrUnavailable, answer.Error)
+		return nil, fmt.Errorf("%s rule %q: %w: %s", asked.signalType, asked.rule.Name, modelservice.ErrUnavailable, answer.Error)
 	case answer.InputCoverage != "complete":
-		return nil, fmt.Errorf("pii rule %q read only part of the text", ruleName)
+		return nil, fmt.Errorf("%s rule %q read only part of the text", asked.signalType, asked.rule.Name)
 	}
-	return CoverRepeatedSpans(text, matchedSpans(asked.rule, answer)), nil
+	return spansInText(asked, text, matchedSpans(asked.rule, answer))
 }
 
-// piiScanSpans is PIIRuleSpans of a text longer than one window: every window
+// scanSpans is askedSpans of a text longer than one window: every window
 // must be read whole, and their spans count at their places in the text.
-func (c *Classifier) piiScanSpans(ctx context.Context, ruleName, text string, asked askedRule, scan *guardScan) ([]modelservice.Span, error) {
+func (c *Classifier) scanSpans(ctx context.Context, text string, asked askedRule, scan *guardScan) ([]modelservice.Span, error) {
 	scan.rules = []askedRule{asked}
 	readers, release := c.windowReaders(ctx, []*guardScan{scan})
 	modelservice.Fan(ctx, len(readers), func(i int) { readers[i]() })
 	release()
 	read, covered, reason := scan.answers(asked)
 	if covered < scan.cut {
-		return nil, fmt.Errorf("pii rule %q read %d of the text's %d windows: %w: %s", ruleName, covered, scan.cut, modelservice.ErrUnavailable, reason)
+		return nil, fmt.Errorf("%s rule %q read %d of the text's %d windows: %w: %s", asked.signalType, asked.rule.Name, covered, scan.cut, modelservice.ErrUnavailable, reason)
 	}
 	for _, entry := range read {
 		if entry.answer.InputCoverage != "complete" {
-			return nil, fmt.Errorf("pii rule %q read only part of the text", ruleName)
+			return nil, fmt.Errorf("%s rule %q read only part of the text", asked.signalType, asked.rule.Name)
 		}
 	}
-	return CoverRepeatedSpans(text, matchedSpans(asked.rule, mergedSpanAnswer(read, scan))), nil
+	return spansInText(asked, text, matchedSpans(asked.rule, mergedSpanAnswer(read, scan)))
+}
+
+// spansInText refuses an answer with a span outside text, whose offsets
+// masking would otherwise clamp onto a range that leaves part of the value in
+// clear text, and adds every other copy of the values (CoverRepeatedSpans).
+func spansInText(asked askedRule, text string, spans []modelservice.Span) ([]modelservice.Span, error) {
+	points := utf8.RuneCountInString(text)
+	for _, span := range spans {
+		if span.Start < 0 || span.End > points || span.Start >= span.End {
+			return nil, fmt.Errorf("%s rule %q: %w: span [%d,%d) is outside the text's %d code points",
+				asked.signalType, asked.rule.Name, modelservice.ErrUnavailable, span.Start, span.End, points)
+		}
+	}
+	return CoverRepeatedSpans(text, spans), nil
 }
 
 // AskPreset asks the deployment an application signal type's rules that name

@@ -120,6 +120,14 @@ The rule publishes the number as its value whether or not its predicate holds:
 a decision condition can apply its own `predicate` to `keyword:<rule>`, and a
 projection input can read it with `value_source: raw`.
 
+## Masking What a Rule Finds
+
+An `OR` rule of literal keywords or `method: regex`, without `fuzzy_match`,
+`count` or `density`, says where each match is, so the
+[masking plugin](../../plugin/masking#masking-your-own-rules) can hide what
+it finds before the request reaches the provider. Name it in the plugin's
+`rules` as `{type: keyword, name: <rule>}`.
+
 ## Dependencies and Limitations
 
 Keyword rules require no model, but they are sensitive to wording and can be
