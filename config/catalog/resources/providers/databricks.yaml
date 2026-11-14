@@ -1,0 +1,30 @@
+id: databricks
+display_name: Databricks
+description: Foundation models served from a Databricks workspace.
+category: model_api
+support_tier: compatible
+# No default_base_url: the serving root is workspace-specific. Operators set
+# ProviderInstance.base_url to https://<workspace-host>/serving-endpoints
+# (precedent: azure-openai, bedrock, vertex-ai). ResolveOperationPath strips the
+# protocol's /v1 default_base_path whenever a base path is configured, so that
+# base URL resolves create to /serving-endpoints/chat/completions, matching the
+# root Databricks documents for the OpenAI client. The AI Gateway roots
+# (/ai-gateway/mlflow/v1, /ai-gateway/openai/v1) compose the same way.
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+# list_models is not declared: endpoint listing lives on /api/2.0/serving-endpoints,
+# a different root from the serving base URL, so it is not reachable by path
+# composition from the configured base_url.
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: monogram
+  monogram: DB
+  monochrome: true
+conformance:
+  status: unverified
