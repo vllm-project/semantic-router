@@ -31,6 +31,16 @@ func newAPIKeys(keys []string) *apiKeys {
 // authorize reports whether r carries a valid key, removing the credential
 // headers when it does.
 func (k *apiKeys) authorize(r *http.Request) bool {
+	if !k.check(r) {
+		return false
+	}
+	k.strip(r)
+	return true
+}
+
+// check reports whether r carries a valid key and leaves the request as it is,
+// for a handler that forwards the request to one that checks the key itself.
+func (k *apiKeys) check(r *http.Request) bool {
 	if k == nil {
 		return true
 	}
@@ -38,12 +48,17 @@ func (k *apiKeys) authorize(r *http.Request) bool {
 	if !ok || !k.valid(token) {
 		token = r.Header.Get("Api-Key")
 	}
-	if token == "" || !k.valid(token) {
-		return false
+	return token != "" && k.valid(token)
+}
+
+// strip removes the credential headers, which authenticate the client to the
+// Router and to nothing upstream.
+func (k *apiKeys) strip(r *http.Request) {
+	if k == nil {
+		return
 	}
 	r.Header.Del("Authorization")
 	r.Header.Del("Api-Key")
-	return true
 }
 
 func (k *apiKeys) valid(token string) bool {
