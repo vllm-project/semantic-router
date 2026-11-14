@@ -215,7 +215,10 @@ func outcome(value any, err error) string {
 		if !errors.As(err, &protocolErr) {
 			return "unexpected error type: " + err.Error()
 		}
-		return "error " + protocolErr.Code + ": " + protocolErr.Message
+		// Which unknown field is named depends on the order each pass walks a
+		// body with several, so only the error itself is compared.
+		message, _, _ := strings.Cut(protocolErr.Message, ": unknown field ")
+		return "error " + protocolErr.Code + ": " + message
 	}
 	encoded, marshalErr := json.Marshal(value)
 	if marshalErr != nil {

@@ -437,7 +437,9 @@ tools or error translation.
 ## Validation and failure behavior
 
 - Public requests are decoded into the neutral contract even when client and
-  backend formats match. Unknown or unsupported request fields fail closed.
+  backend formats match. Unknown or unsupported request fields fail closed,
+  and the error names an unknown field, such as
+  `request JSON contains a non-canonical field: unknown field "new_field"`.
 - Chat requests accept and don't forward the fields that client libraries add
   to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
   which holds the reply fields its message type lacks, and `parsed` and
