@@ -89,8 +89,8 @@ adds guard, shield, redact and check to it without a gateway. Route Claude Code
 or Codex CLI through the Router when your own models or provider keys should
 answer: the Router then chooses the model for every call, the main
 conversation included, while vSR keeps judging tool output and shell commands
-inside Claude Code. Codex reaches the Router the same way; its vSR plugin requires a checkout
-with Codex plugin support (PR #6413).
+inside Claude Code. Codex reaches the Router the same way, with its own vSR
+plugin.
 
 The two harnesses need different Router-wide settings: the losses the Router
 accepts, the headers that identify a session and a subagent, and defaults for
@@ -239,7 +239,10 @@ env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
 The Router then routes each call among Claude models on that login, and
 Insights shows the session's calls with the model each decision picked. A
 model's `pricing` is the API's list price, not the plan's, so leave it out or
-read the cost as an API-price estimate.
+read the cost as an API-price estimate. The login stays its owner's: serve this
+to your own Claude Code, or to your organization's members, never to other
+people as a service
+([Security Hardening](security-hardening#send-the-clients-own-login-to-anthropic)).
 
 ### Router settings for Codex CLI
 
@@ -329,8 +332,7 @@ models. When the API key variable is set it also passes `runtimeToken`, which
 Claude Code keeps in its credential store, not in `settings.json`; the preview
 names the variable and never shows the key. For Codex it writes
 `runtimeUrl` and `runtimeModel` to `$CODEX_HOME/vsr.json` (default
-`~/.codex/vsr.json`), keeping its other settings. Until the Codex plugin from
-PR #6413 is on main, point `--vsr-source` at a checkout that has it.
+`~/.codex/vsr.json`), keeping its other settings.
 
 Both harnesses preview everything with `--dry-run`, the plugin commands
 included, which run only when writing. `--undo` sets back the plugin options the
