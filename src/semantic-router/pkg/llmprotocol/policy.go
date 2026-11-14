@@ -173,7 +173,7 @@ func DefaultPolicy() Policy {
 			Alternatives: 32, OutputItems: 4096, ContentBlocks: 16_384,
 			Citations: 256, CitationURLBytes: 16 << 10, CitationTitleBytes: 16 << 10,
 			JSONDepth: 128, ToolResultDepth: 8,
-			Tools: 256, ToolNameBytes: 256, ToolDescriptionBytes: 16 << 10,
+			Tools: 256, ToolNameBytes: 256, ToolDescriptionBytes: 256 << 10,
 			IdentifierBytes: 1024, SchemaBytes: 4 << 20, MetadataBytes: 64 << 10,
 			MetadataEntries: 256, MetadataKeyBytes: 256, MetadataValueBytes: 8 << 10,
 			ToolArgumentsBytes: 4 << 20, ReasoningEffortBytes: 32,
