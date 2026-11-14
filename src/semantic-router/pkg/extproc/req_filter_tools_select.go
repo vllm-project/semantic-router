@@ -67,6 +67,11 @@ func (r *OpenAIRouter) selectTools(request *llmprotocol.Request, plugin *config.
 	if spec.Input.History {
 		input.History = strings.Join(snapshot.PriorUserMessages, "\n\n")
 	}
+	if strings.TrimSpace(input.Request) == "" && len(snapshot.ToolResults) > 0 {
+		// A tool-continuation turn carries the results instead of user text:
+		// the selection reads them rather than skipping the turn.
+		input.Request = strings.Join(snapshot.ToolResults, "\n\n")
+	}
 	if strings.TrimSpace(input.Request) == "" {
 		return nil
 	}

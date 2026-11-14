@@ -173,6 +173,13 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 	case llmprotocol.RoleTool:
 		result.ToolMessageCount++
 		result.LastMessageToolResult = true
+		for _, content := range message.Content {
+			if content.Kind == llmprotocol.ContentToolResult && content.ToolResult != nil {
+				if text := semanticText(content.ToolResult.Content); text != "" {
+					result.ToolResults = append(result.ToolResults, text)
+				}
+			}
+		}
 	}
 	for _, content := range message.Content {
 		switch content.Kind {
