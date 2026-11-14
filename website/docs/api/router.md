@@ -439,6 +439,7 @@ names no model, decision, or request content:
 | `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
 | `context_length_exceeded` | 400 | `invalid_request_error` | The Router's count puts the request beyond the band around the `context_window_size` of every model that could serve it (3% with a model's own tokenizer, 30% with the proxy tokenizer): beside the signals, for every model the request can reach, which cancels the signals still running, or after the decision, for its candidates. `param` is `messages`, and the message names the widest window and the request's estimated count, as OpenAI's does: `This model's maximum context length is 1048576 tokens. However, your request has an estimated 1100000 input tokens. Please reduce the length of the input.` Anthropic Messages clients get `prompt is too long: 1100000 tokens > 1048576 maximum`. See [the context window check](../installation/model-configuration#check-prompts-against-the-context-window). The [request budget check](#request-budget-errors) answers the same code. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
+| `overloaded` | 429 | `rate_limit_error` | The request's guard could not be read because its decision model was overloaded, and `global.model_catalog.on_signal_overload` is `retry`. Either only rules that failed closed on it refuse the request, or a rule it could not read would refuse it, even one that fails open. Anthropic Messages clients get `529` with `overloaded_error`. The response carries `Retry-After` and `x-vsr-warnings: guard_overloaded`. See [when the decision model is overloaded](../system-one/deploy/performance#when-the-decision-model-is-overloaded). |
 | `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. The `on_unknown` member of `x-vsr-trace` names the decision. |
 | `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
 | `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
@@ -559,11 +560,15 @@ is displayed explicitly. Replay capture uses `global.services.router_replay`
 defaults and the selected decision's `router_replay` plugin overrides. Rejected
 requests without a selected decision use the global defaults layered with their
 recipe's own plugins.
-`capture_personal_data: false` retains routing evidence but suppresses content
-when personal data is detected or PII evidence is unavailable.
+`prompt_capture` decides what a record keeps besides routing evidence:
+`none`, the default, keeps no request or response text; `raw` keeps the text
+the capture switches allow; `verified` keeps the prompt alone when the recipe's
+PII rules find it clean, and leaves it out when personal data is detected or
+PII evidence is unavailable. `capture_personal_data` is its deprecated form:
+`false` loads as `verified` and `true` as `raw`.
 
-Client tool results are stored only with `capture_tool_results: true`, which
-requires `capture_personal_data: true`. A `client_tool_result` step then carries
+Client tool results are stored only with `capture_tool_results: true` under
+`prompt_capture: raw`. A `client_tool_result` step then carries
 the result text in `output` with `content_redacted: false`, cut to
 `max_tool_trace_bytes` and flagged `truncated` when cut, and a trajectory's
 tool message carries it as `content` with `content_truncated`. Otherwise the
@@ -580,7 +585,19 @@ name, call ID and status. The left-out text is absent, not marked
 `content_redacted`, which keeps marking content hidden from the reader's role
 and tool results that `capture_tool_results` keeps out. `max_tool_trace_bytes`
 cuts step text too, and a trajectory's user and assistant messages then carry
-`content_truncated`.
+`content_truncated`. Where no layer sets it, each field keeps 65,536 bytes
+(64 KiB), the steps' `raw_arguments` and `raw_output` included, which then
+carry `raw_truncated: true`, and `max_tool_trace_total_bytes`, 262,144 bytes
+(256 KiB) then, bounds the steps together: the oldest are dropped and
+`tool_trace` carries `steps_truncated: true` with `dropped_step_count`, as for
+`max_tool_trace_steps`.
+
+`prompt` is cut on a UTF-8 character boundary to its limit: `max_prompt_bytes`,
+or a `max_tool_trace_bytes` a layer sets where none sets `max_prompt_bytes`, or
+65,536 bytes (64 KiB) when neither is set; `max_prompt_bytes: 0` keeps it whole. A cut
+record carries `prompt_truncated: true` with the whole prompt's size in
+`prompt_original_bytes` and its SHA-256 in `prompt_original_sha256`. The hash
+is redacted with the prompt for callers without `replay.detail`.
 
 Every Replay read route applies the same redaction. Without `replay.detail`,
 trajectory `routes` return `selection_reasoning` and `session_reason` empty,

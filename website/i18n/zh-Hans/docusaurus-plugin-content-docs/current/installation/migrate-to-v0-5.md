@@ -48,7 +48,7 @@ VLLM_SR_GATEWAY=extproc vllm-sr config migrate --config config.yaml
 | `removed_section` | Router 不再读取的整个段落 |
 | `invalid_value` | 含义已经改变的值，例如 `version: v0.3` |
 
-有两种形式因为只是改名，仍能加载并给出警告：`signals.decision` 和 `type: decision` 条件按 `systemone` 加载（`renamed_signal_type`），`algorithm.type: decision` 按 `systemone` 选择器加载（`renamed_algorithm_type`）。migrate 会改写两者；Dashboard 也按同样方式读取两者，保存时写为 `systemone`。
+有三种形式因为只是改名，仍能加载并给出警告：`signals.decision` 和 `type: decision` 条件按 `systemone` 加载（`renamed_signal_type`），`algorithm.type: decision` 按 `systemone` 选择器加载（`renamed_algorithm_type`），`router_replay` 插件的 `capture_personal_data` 按它的 `prompt_capture` 加载，`false` 为 `verified`，`true` 为 `raw`（`renamed_field`）。migrate 会改写这三种形式；Dashboard 按同样方式读取前两种，保存时写为 `systemone`。
 
 ## 3. 检查变化 {#3-review-what-changed}
 
@@ -253,7 +253,7 @@ recipes:
 | `semantic-cache`、`semantic_cache`、`response-cache`；扁平的缓存字段 | 带 `semantic.match` 的 [`response_cache`](../tutorials/plugin/response-cache) |
 | `global.stores.semantic_cache` | `global.stores.response_cache` |
 | `shadow_dispatch` | [`router_replay`](../tutorials/plugin/router-replay) 的 `shadow` 块 |
-| 配方的 `data_policy` | 配方的 `router_replay` 插件：`replay: false` 对应 `enabled: false`，`replay_personal_data: false` 对应 `capture_personal_data: false`，其决策上的插件也一样 |
+| 配方的 `data_policy` | 配方的 `router_replay` 插件：`replay: false` 对应 `enabled: false`，`replay_personal_data: false` 对应 `prompt_capture: verified`，其决策上的插件也一样 |
 | `emits[].retention` | 决策的 [`retention`](../tutorials/decision/retention) 属性 |
 | `masking` 的 `threshold` | `masking.signal`，指定一条 `pii` 规则，使用它的 `predicate` |
 | `system_prompt` 的 `mode: append` | `mode: replace`，它丢弃调用方发送的所有 system 和 developer 指令，而 `append` 只替换第一条 system 消息 |

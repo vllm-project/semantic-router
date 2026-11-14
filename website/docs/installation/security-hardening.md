@@ -143,18 +143,19 @@ providers:
 Every upstream the Router calls takes one `auth` block of the same shape: a
 provider backend, a decision-model or remote embedding deployment, the judge
 model of an `escalate` stage and an `api_format: systemone` target alike. It
-has one of three modes:
+has one of four modes:
 
 | Mode | Set with | Calls carry |
 | --- | --- | --- |
 | Static key | `auth.api_key_env` or `auth.api_key_file`, or a backend's `api_key` | the Router's own key |
 | Delegated | `credential: delegated` | the requesting user's credential |
+| Caller | `credential: caller`, on an Anthropic provider backend only | the login the client itself sent, see [below](#send-the-clients-own-login-to-anthropic) |
 | None | neither | no credential |
 
 Whatever the mode, a call carries no other credential: a client's own
 `Authorization`, `api-key`, `x-api-key`, `x-goog-api-key`,
 `api-subscription-key` or `Ocp-Apim-Subscription-Key` header never reaches the
-upstream. A model declared without backends behind an external gateway
+upstream, except the one a caller backend takes. A model declared without backends behind an external gateway
 (`listeners: []`) keeps them for that gateway.
 
 The delegated contract is disabled by default. Once it's enabled, the rules
@@ -242,6 +243,56 @@ The principal is a property of the call:
   and that request's credential.
 - **Policy stays upstream.** Caller attribution and any tenant, quota, budget
   or spend policy stay with the upstream.
+
+### Send the client's own login to Anthropic
+
+A coding agent signed in to its provider, such as Claude Code on a Claude
+subscription, sends the Router its own login. With `credential: caller` on an
+Anthropic backend, the Router routes the request and presents that login to
+Anthropic in the header the client sent it in, so the gateway holds no key and
+each person's own plan pays for their calls. The Dashboard's Insights record
+every call as for any gateway traffic.
+
+```yaml
+providers:
+  models:
+    - name: claude-sonnet-5-5
+      provider_model_id: claude-sonnet-5-5
+      api_format: anthropic
+      backend_refs:
+        - name: anthropic
+          provider: anthropic
+          endpoint: https://api.anthropic.com
+          auth: {credential: caller}
+```
+
+A login is a person's, so the configuration fails to load wherever it could
+reach someone else, or be used without the person's request:
+
+- **One payer, one provider.** Once one backend takes the caller's login, every
+  backend does, so neither routing nor a fallback moves a request from the
+  person's plan to a key or another provider, and each is `anthropic`.
+- **The issuer only.** The endpoint is `https://api.anthropic.com`, or an
+  endpoint on this machine such as a test stub.
+- **No listener keys.** A listener's `api_keys` read the `Authorization` header,
+  which here carries the login.
+- **Only the client's request.** A call the Router makes on its own behalf, an
+  in-process hop (an executor algorithm, context recovery), a
+  `router_replay.shadow` copy and an automatic output render have no login and
+  are refused, and so is `response_cache`, which would answer one person with
+  another's result.
+- **The client's system prompt.** Anthropic refuses a request on a person's
+  login whose system prompt does not start with the client's own (measured:
+  429 for a block put first, 200 for the same block put last), so a decision
+  cannot use `system_prompt`.
+
+A request that reaches a caller backend without a login is answered `401`
+with `caller_credential_missing`. The Router keeps the login for the request
+only, in memory: it does not log it, and takes it out of an upstream error
+body or a stored response that echoes it. A caller backend's `401`, `403` or
+`429` speaks of one person's login or plan, so it never opens the circuit
+breaker other requests share. The provider's terms for that login apply to
+every call made with it.
 
 ### Isolate sr-bench credentials
 

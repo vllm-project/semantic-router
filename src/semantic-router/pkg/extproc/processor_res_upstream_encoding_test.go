@@ -66,7 +66,7 @@ func TestGzipReplyKeepsReplayAndUsage(t *testing.T) {
 		ctx := looperTransportContext(llmprotocol.AnthropicMessagesV1, false)
 		ctx.LooperRequest = false
 		ctx.RouterReplayID = id
-		ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, CaptureResponseBody: true}
+		ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureResponseBody: true}
 		result := runBufferedReply(t, router, ctx, 200, body, encoding)
 		require.Nil(t, result.body.GetImmediateResponse())
 		record, ok := recorder.GetRecord(id)

@@ -268,12 +268,29 @@ func (r *OpenAIRouter) runDecisionEngine(
 	}
 	if result == nil || result.Decision == nil {
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy), false)
+		ctx.VSRGuardOverload = overloadedRules(classifier, signals, candidates, nil)
 		return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 	}
 
 	observeDecisionIdentity(ctx, decisionSpan, result.Decision)
 	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, string(strategy), result.ConfidenceScored)
+	ctx.VSRGuardOverload = overloadedRules(classifier, signals, candidates, result)
 	return result, "", nil
+}
+
+// overloadedRules are, with on_signal_overload retry, the rules that failed
+// on an overloaded decision runtime and decide the request: alone they make
+// it refused, or it is not refused but one of them would have refused it.
+// The request keeps its decision: answering the retryable error instead is
+// guardOverloadResponse's, and nothing forwards it.
+func overloadedRules(classifier *classification.Classifier, signals *classification.SignalResults, candidates []config.Decision, result *decision.DecisionResult) []string {
+	if !classifier.Config.SignalOverloadRetries() {
+		return nil
+	}
+	if rules := classifier.OverloadedRefusal(signals, candidates, result); rules != nil {
+		return rules
+	}
+	return classifier.OverloadedUnread(signals, candidates, result)
 }
 
 func (r *OpenAIRouter) defaultModelForUnmatchedDecision(originalModel string) string {
