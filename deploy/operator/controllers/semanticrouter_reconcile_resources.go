@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -324,6 +325,7 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 				Reason:             "Progressing",
 				Message:            fmt.Sprintf("%d/%d replicas ready", deployment.Status.ReadyReplicas, deployment.Status.Replicas),
 			})
+			meta.SetStatusCondition(&sr.Status.Conditions, partialReadyAvailableCondition(deployment, sr.Generation))
 		} else {
 			sr.Status.Phase = "Running"
 			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
@@ -338,6 +340,56 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 
 		return r.Status().Patch(ctx, sr, client.MergeFrom(baseSR))
 	})
+}
+
+// partialReadyAvailableCondition reports Available while some Deployment pods
+// are not ready. It follows the Deployment controller's own availability rule:
+// the router stays Available as long as ready replicas cover spec.replicas
+// minus the rolling update's maxUnavailable. Surge pods created during a
+// rollout raise status.replicas but not the desired count, so they do not flip
+// the condition; a drop below the floor does.
+func partialReadyAvailableCondition(deployment *appsv1.Deployment, generation int64) metav1.Condition {
+	desired := int32(1)
+	if deployment.Spec.Replicas != nil {
+		desired = *deployment.Spec.Replicas
+	}
+	ready := deployment.Status.ReadyReplicas
+	minimum := int(desired) - deploymentMaxUnavailable(deployment, desired)
+
+	condition := metav1.Condition{ObservedGeneration: generation, Type: typeAvailableSemanticRouter}
+	switch {
+	case ready >= desired:
+		condition.Status = metav1.ConditionTrue
+		condition.Reason = "AllReplicasReady"
+		condition.Message = "All replicas are ready"
+	case int(ready) >= minimum:
+		condition.Status = metav1.ConditionTrue
+		condition.Reason = "MinimumReplicasAvailable"
+		condition.Message = fmt.Sprintf("%d/%d replicas ready, minimum %d", ready, desired, minimum)
+	default:
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = "MinimumReplicasUnavailable"
+		condition.Message = fmt.Sprintf("%d/%d replicas ready, minimum %d", ready, desired, minimum)
+	}
+	return condition
+}
+
+// deploymentMaxUnavailable resolves maxUnavailable the way the Deployment
+// controller does: rounded down, zero for Recreate, and the API defaults
+// (RollingUpdate, 25%) when the strategy is left unset.
+func deploymentMaxUnavailable(deployment *appsv1.Deployment, desired int32) int {
+	if desired <= 0 || deployment.Spec.Strategy.Type == appsv1.RecreateDeploymentStrategyType {
+		return 0
+	}
+	maxUnavailable := intstr.FromString("25%")
+	if rolling := deployment.Spec.Strategy.RollingUpdate; rolling != nil && rolling.MaxUnavailable != nil {
+		maxUnavailable = *rolling.MaxUnavailable
+	}
+	unavailable, err := intstr.GetScaledValueFromIntOrPercent(&maxUnavailable, int(desired), false)
+	if err != nil || unavailable < 0 {
+		return 0
+	}
+	return min(unavailable, int(desired))
 }
 
 func (r *SemanticRouterReconciler) finalizeSemanticRouter(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
