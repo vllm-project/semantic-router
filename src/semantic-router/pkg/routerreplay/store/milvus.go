@@ -310,7 +310,30 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (Record, bool, error) 
 	return m.getRecord(ctx, id)
 }
 
+// validRecordID reports whether id is opaque record-id syntax. Milvus takes a
+// boolean expression as a string, so anything outside this set would change
+// the expression instead of naming a record.
+func validRecordID(id string) bool {
+	if id == "" || len(id) > 128 {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '-', r == '_', r == '.', r == ':':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func (m *MilvusStore) getRecord(ctx context.Context, id string) (Record, bool, error) {
+	if !validRecordID(id) {
+		// A record ID that is not opaque syntax cannot name a record, and must
+		// never reach the expression below.
+		return Record{}, false, nil
+	}
 	if m.asyncWrites {
 		if err := runAsyncOp(ctx, m.asyncChan, func() error { return nil }); err != nil {
 			return Record{}, false, err
