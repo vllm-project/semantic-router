@@ -1,0 +1,65 @@
+# Default values for semantic-router-operator.
+# These defaults render the same workload as the operator's make-based
+# install (`make install` + `make deploy` in deploy/operator, i.e.
+# `kustomize build config/default` with the default IMG).
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/vllm-project/semantic-router-operator
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created.
+  create: true
+  # Annotations to add to the service account.
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template.
+  name: ""
+
+# The manager's --leader-elect flag. Leader election uses the Role and
+# RoleBinding this chart installs alongside the ClusterRole.
+leaderElection:
+  enabled: true
+
+# Extra arguments to pass to the manager, after --leader-elect.
+extraArgs: []
+
+podAnnotations:
+  kubectl.kubernetes.io/default-container: manager
+
+podLabels: {}
+
+# Matches the security context of the kustomize deployment in
+# deploy/operator/config/manager/manager.yaml.
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

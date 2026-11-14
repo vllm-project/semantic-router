@@ -1,0 +1,14 @@
+The Semantic Router operator has been installed in namespace {{ .Release.Namespace }}.
+
+Check that the controller manager is running:
+
+  kubectl get deployment {{ include "semantic-router-operator.fullname" . }}-controller-manager \
+    --namespace {{ .Release.Namespace }}
+
+The SemanticRouter CRD (semanticrouters.vllm.ai) ships in this chart's crds/
+directory. Helm installs it with the release but does not upgrade or delete
+it on later operations; see the chart README for the CRD lifecycle.
+
+Create a SemanticRouter to have the operator manage a Router install:
+
+  kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_simple.yaml

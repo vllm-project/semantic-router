@@ -1,0 +1,23 @@
+apiVersion: v2
+name: semantic-router-operator
+description: A Helm chart for deploying the Semantic Router operator, which manages SemanticRouter custom resources
+type: application
+version: 0.1.0
+# appVersion is the default image tag used from a source checkout. It matches
+# the operator Makefile's default IMG tag today (the mutable main-channel
+# tag); the publication pipeline should override it with the release image
+# tag attached to the packaged chart, as it does for the Router chart.
+appVersion: "latest"
+keywords:
+  - semantic-router
+  - operator
+  - kubernetes
+  - llm
+  - vllm
+home: https://github.com/vllm-project/semantic-router
+sources:
+  - https://github.com/vllm-project/semantic-router
+maintainers:
+  - name: Semantic Router Team
+    url: https://github.com/vllm-project/semantic-router
+icon: https://raw.githubusercontent.com/vllm-project/semantic-router/main/website/static/img/logo.png
