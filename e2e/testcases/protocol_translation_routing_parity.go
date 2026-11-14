@@ -17,6 +17,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("protocol-translation-routing-parity", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify one request through Chat, Messages, and Responses selects the same recipe, decision, and backend, lands identical plugin effects at the provider, and short-circuits identically on a guardrail (issue #3182)",
 		Tags:        []string{"kubernetes", "routing", "protocol-codec", "plugins", "security"},
 		Fn:          testProtocolTranslationRoutingParity,
@@ -53,7 +54,7 @@ const (
 )
 
 // parityProtocol is one public client protocol: the path it enters on and
-// the x-vsr-client-protocol marker the router stamps for it.
+// the client_protocol the Router's trace names for it.
 type parityProtocol struct {
 	name   string
 	path   string
@@ -80,6 +81,9 @@ type parityGuardrail struct {
 
 // parityGuardrails reuses the prompts of e2e/testcases/streaming_safety.go
 // and plugin_short_circuit_dispatch.go so the guardrail cases move together.
+// The profile's System One fixture answers both rules by marker: the attack
+// phrase that opens the jailbreak prompt and the __PII_SPAN__ span that
+// closes the PII prompt.
 var parityGuardrails = []parityGuardrail{
 	{
 		name:     "jailbreak",
@@ -89,7 +93,7 @@ var parityGuardrails = []parityGuardrail{
 	},
 	{
 		name:     "pii",
-		prompt:   "My SSN is 123-45-6789, please help me calculate my tax return",
+		prompt:   "My SSN is 123-45-6789, please help me calculate my tax return __PII_SPAN__ US_SSN 123-45-6789",
 		decision: "block_pii",
 		message:  "Your request contains personal information. Please remove any sensitive data and try again.",
 	},
@@ -223,8 +227,8 @@ func runParityRoutedProbe(
 		false,
 		map[string]string{
 			"x-vsr-debug":             "true",
-			"x-vsr-e2e-deleted":       "remove-me",
-			"x-vsr-e2e-updated":       "client-value",
+			"x-e2e-deleted":           "remove-me",
+			"x-e2e-updated":           "client-value",
 			shortCircuitSessionHeader: sessionID,
 		},
 	)
@@ -260,9 +264,9 @@ func runParityRoutedProbe(
 	facts.selectedModel = response.Headers.Get("x-vsr-selected-model")
 
 	return facts, map[string]interface{}{
-		"response_path":      response.Headers.Get("x-vsr-response-path"),
-		"client_protocol":    response.Headers.Get("x-vsr-client-protocol"),
-		"upstream_protocol":  response.Headers.Get("x-vsr-upstream-protocol"),
+		"response_path":      response.Headers.Get(responsePathHeader),
+		"client_protocol":    traceValue(response.Headers, "client_protocol"),
+		"upstream_protocol":  traceValue(response.Headers, "upstream_protocol"),
 		"recipe":             facts.recipe,
 		"decision":           facts.decision,
 		"selected_model":     facts.selectedModel,
@@ -274,21 +278,29 @@ func runParityRoutedProbe(
 }
 
 // assertParityRoutedHeaders checks the client-visible routing facts. The
-// decision header and the protocol markers ride on the debug surface, which
-// every probe requests.
+// recipe, decision, and model are public headers. Both wire protocols ride
+// in x-vsr-trace, which every probe asks for with x-vsr-debug.
 func assertParityRoutedHeaders(label string, protocol parityProtocol, headers http.Header) error {
 	expected := []struct{ name, want string }{
-		{"x-vsr-schema-version", "2"},
-		{"x-vsr-response-path", "upstream"},
+		{"x-vsr-schema-version", routerSchemaVersion},
+		{responsePathHeader, "upstream"},
 		{"x-vsr-selected-recipe", parityPluginRecipe},
 		{"x-vsr-selected-decision", parityPluginDecision},
-		{"x-vsr-client-protocol", protocol.marker},
-		{"x-vsr-upstream-protocol", parityUpstreamProtocol},
 	}
 	for _, header := range expected {
 		if got := headers.Get(header.name); got != header.want {
 			return fmt.Errorf("%s: expected %s=%s, got %q\n%s",
 				label, header.name, header.want, got, formatResponseHeaders(headers))
+		}
+	}
+	traced := []struct{ name, want string }{
+		{"client_protocol", protocol.marker},
+		{"upstream_protocol", parityUpstreamProtocol},
+	}
+	for _, member := range traced {
+		if got := traceValue(headers, member.name); got != member.want {
+			return fmt.Errorf("%s: expected the trace's %s=%s, got %q\n%s",
+				label, member.name, member.want, got, formatResponseHeaders(headers))
 		}
 	}
 	if headers.Get("x-vsr-selected-model") == "" {
@@ -353,8 +365,8 @@ func assertParityDispatch(label string, protocol parityProtocol, observation *pa
 	}
 
 	mutated := []struct{ name, want string }{
-		{"x-vsr-e2e-added", "added-by-router"},
-		{"x-vsr-e2e-updated", "updated-by-router"},
+		{"x-e2e-added", "added-by-router"},
+		{"x-e2e-updated", "updated-by-router"},
 	}
 	for _, header := range mutated {
 		values := observation.HeaderValues[header.name]
@@ -363,7 +375,7 @@ func assertParityDispatch(label string, protocol parityProtocol, observation *pa
 				label, header.name, header.want, values)
 		}
 	}
-	if _, exists := observation.HeaderValues["x-vsr-e2e-deleted"]; exists {
+	if _, exists := observation.HeaderValues["x-e2e-deleted"]; exists {
 		return facts, fmt.Errorf("%s: header_mutation delete was not observed at the provider: %#v",
 			label, observation.HeaderValues)
 	}
@@ -424,9 +436,8 @@ func runParityGuardrailProbe(
 	}
 
 	expected := []struct{ name, want string }{
-		{"x-vsr-schema-version", "2"},
-		{"x-vsr-fast-response", "true"},
-		{"x-vsr-response-path", "fast_response"},
+		{"x-vsr-schema-version", routerSchemaVersion},
+		{responsePathHeader, "fast_response"},
 		{"x-vsr-selected-decision", guardrail.decision},
 		{"x-vsr-selected-recipe", parityGuardrailRecipe},
 	}
@@ -456,9 +467,8 @@ func runParityGuardrailProbe(
 	}
 
 	return map[string]interface{}{
-		"response_path":      response.Headers.Get("x-vsr-response-path"),
+		"response_path":      response.Headers.Get(responsePathHeader),
 		"decision":           response.Headers.Get("x-vsr-selected-decision"),
-		"fast_response":      response.Headers.Get("x-vsr-fast-response"),
 		"dispatched":         false,
 		"session_identifier": sessionID,
 	}, nil
