@@ -29,7 +29,7 @@ event: response.content_part.done
 data: {"output_index":0,"item_id":"rs_1","content_index":0,"type":"response.content_part.done","part":{"type":"reasoning_text","text":"think"},"sequence_number":9}
 
 event: response.output_item.done
-data: {"type":"response.output_item.done","output_index":0,"item":{"id":"rs_1","type":"reasoning","status":"completed","summary":[{"type":"summary_text","text":"summary"}],"content":[{"type":"reasoning_text","text":"think"}]},"sequence_number":10}
+data: {"type":"response.output_item.done","output_index":0,"item":{"id":"rs_1","type":"reasoning","status":"completed","summary":[{"type":"summary_text","text":"summary"}],"content":[{"type":"reasoning_text","text":"think"}],"encrypted_content":"cipher_A"},"sequence_number":10}
 
 event: response.output_item.added
 data: {"type":"response.output_item.added","output_index":1,"item":{"id":"msg_1","type":"message","role":"assistant","status":"in_progress","content":[]},"sequence_number":11}
@@ -50,5 +50,5 @@ event: response.output_item.done
 data: {"type":"response.output_item.done","output_index":1,"item":{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]},"sequence_number":16}
 
 event: response.completed
-data: {"type":"response.completed","response":{"id":"resp_1","object":"response","created_at":100,"model":"provider-model","status":"completed","output":[{"id":"rs_1","type":"reasoning","status":"completed","summary":[{"type":"summary_text","text":"summary"}],"content":[{"type":"reasoning_text","text":"think"}]},{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]}],"usage":{"input_tokens":2,"input_tokens_details":{"cached_tokens":0},"output_tokens":3,"output_tokens_details":{"reasoning_tokens":2},"total_tokens":5}},"sequence_number":17}
+data: {"type":"response.completed","response":{"id":"resp_1","object":"response","created_at":100,"model":"provider-model","status":"completed","output":[{"id":"rs_1","type":"reasoning","status":"completed","summary":[{"type":"summary_text","text":"summary"}],"content":[{"type":"reasoning_text","text":"think"}],"encrypted_content":"cipher_B"},{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"done","annotations":[]}]}],"usage":{"input_tokens":2,"input_tokens_details":{"cached_tokens":0},"output_tokens":3,"output_tokens_details":{"reasoning_tokens":2},"total_tokens":5}},"sequence_number":17}
 
