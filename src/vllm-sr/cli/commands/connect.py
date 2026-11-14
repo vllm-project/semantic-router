@@ -145,6 +145,10 @@ def claude_code(
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
+    if rc.caller_login(doc):
+        # the Router presents Claude Code's own login to Anthropic, and a gateway
+        # token would go in its place
+        token, from_env = "", False
     context_window, notes = _context_window(doc, model, context_window)
     values = hc.claude_env(gateway, model, token)
     if context_window:
@@ -225,7 +229,7 @@ def claude_code(
             " (1,000,000 tokens in 2.1.323) and says so at start; --context-window sets"
             " the real window."
         )
-    _probe(gateway, "claude-code", model, token)
+    _probe_or_say_why(gateway, "claude-code", model, token, doc)
     echo("Start a new Claude Code session to use it.")
 
 
@@ -411,7 +415,7 @@ def _launch(harness, argv, doc, gateway, model, token, notes, dry_run, settings=
             raise click.exceptions.Exit(0)
         if settings is not None:
             hc.write_private(path, json.dumps(settings, indent=2))
-        _probe(gateway, harness, model, token, written=False)
+        _probe_or_say_why(gateway, harness, model, token, doc, written=False)
         # Ctrl-C belongs to the harness while it runs
         previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
@@ -670,6 +674,16 @@ def _json_of(argv: list[str], env: dict[str, str]):
         return json.loads(result.stdout) if result.returncode == 0 else None
     except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
         return None
+
+
+def _probe_or_say_why(gateway, harness, model, token, doc, written=True) -> None:
+    if rc.caller_login(doc):
+        echo(
+            "Not probed: the gateway answers only on the login Claude Code itself"
+            " sends, which this command does not hold."
+        )
+        return
+    _probe(gateway, harness, model, token, written)
 
 
 def _probe(

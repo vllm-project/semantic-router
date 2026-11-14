@@ -233,8 +233,17 @@ env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
   ANTHROPIC_DEFAULT_HAIKU_MODEL=vllm-sr/auto \
   ANTHROPIC_DEFAULT_SONNET_MODEL=vllm-sr/auto \
   ANTHROPIC_DEFAULT_OPUS_MODEL=vllm-sr/auto \
+  CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000 \
   claude
 ```
+
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS` is the smallest context window among the
+models the entrypoint reaches; without it Claude Code does not know
+`vllm-sr/auto` and says so at start. `vllm-sr connect claude-code --config
+<your config>` writes the same settings for such a configuration: it leaves
+`ANTHROPIC_AUTH_TOKEN` empty, so neither a gateway key nor one your shell
+exports replaces the login, and it does not probe the gateway, which answers
+only on that login.
 
 The Router then routes each call among Claude models on that login, and
 Insights shows the session's calls with the model each decision picked. A
