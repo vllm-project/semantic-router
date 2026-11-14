@@ -414,7 +414,8 @@ func migrateMemorySwitch(m *Migration, at FormMatch) error {
 }
 
 // routerReplayPluginFields are the fields of the replay service that its
-// plugin now holds: the switch and the capture defaults.
+// plugin now holds: the switch and the capture defaults, capture_personal_data
+// as the plugin's prompt_capture.
 func routerReplayPluginFields(service *yaml.Node) []string {
 	var fields []string
 	for _, field := range []string{
@@ -437,6 +438,9 @@ func migrateRouterReplaySwitches(m *Migration, at FormMatch) error {
 	configuration := mappingNode()
 	for _, field := range routerReplayPluginFields(at.Node) {
 		moveField(at.Node, configuration, field)
+	}
+	if err := renameCapturePersonalData(m, configuration); err != nil {
+		return err
 	}
 	dropEmpty(m, at.Parent, "router_replay")
 	dropEmpty(m, at.Above(2), "services")

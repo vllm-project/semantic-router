@@ -26,8 +26,9 @@ const SystemOneProvider = "systemone"
 type DeploymentAuth struct {
 	// Credential is the credential mode. delegated sends the requesting
 	// user's credential (global.services.authz.delegated_credential) in place
-	// of a key, and refuses calls the Router makes on its own behalf; unset
-	// sends the key, or nothing without one.
+	// of a key, and refuses calls the Router makes on its own behalf; caller
+	// (a provider backend only) sends the provider login the client itself
+	// sent the Router; unset sends the key, or nothing without one.
 	Credential string  `yaml:"credential,omitempty" json:"credential,omitempty"`
 	Header     string  `yaml:"header,omitempty" json:"header,omitempty"`
 	Prefix     *string `yaml:"prefix,omitempty" json:"prefix,omitempty"`
@@ -64,17 +65,27 @@ func (a *DeploymentAuth) Delegated() bool {
 	return a != nil && a.Credential == CredentialDelegated
 }
 
+// CredentialCaller is the credential mode of a provider backend that takes the
+// client's own provider login, the credential the client sent the Router, as
+// Claude Code sends its Claude login: the gateway holds no key for it.
+const CredentialCaller = "caller"
+
+// Caller reports whether the backend takes the client's own provider login.
+func (a *DeploymentAuth) Caller() bool {
+	return a != nil && a.Credential == CredentialCaller
+}
+
 // validateCredential checks the credential mode against the static key the
 // upstream also names; keys lists where that key may be written.
 func (a *DeploymentAuth) validateCredential(keys string, hasKey bool) error {
 	if a == nil || a.Credential == "" {
 		return nil
 	}
-	if a.Credential != CredentialDelegated {
-		return fmt.Errorf("auth.credential %q is not a credential mode; write delegated, or leave it unset for a static key or none", a.Credential)
+	if a.Credential != CredentialDelegated && a.Credential != CredentialCaller {
+		return fmt.Errorf("auth.credential %q is not a credential mode; write delegated or caller, or leave it unset for a static key or none", a.Credential)
 	}
 	if hasKey {
-		return fmt.Errorf("auth.credential: delegated cannot combine with a static key (%s); a delegated upstream takes only the requesting user's credential", keys)
+		return fmt.Errorf("auth.credential: %s cannot combine with a static key (%s); the upstream takes only the credential the request brings", a.Credential, keys)
 	}
 	return nil
 }
@@ -232,6 +243,9 @@ func (a *DeploymentAuth) validate() error {
 	}
 	if err := a.validateCredential("auth.api_key_env or auth.api_key_file", a.APIKeyEnv != "" || a.APIKeyFile != ""); err != nil {
 		return err
+	}
+	if a.Caller() {
+		return fmt.Errorf("auth.credential: caller applies to providers.models[].backend_refs; the Router calls a deployment itself, with no client login to send")
 	}
 	if a.Delegated() {
 		return nil

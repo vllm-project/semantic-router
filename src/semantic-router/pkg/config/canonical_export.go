@@ -128,6 +128,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			RoutingInput:          cfg.RoutingInput,
 			Headers:               cfg.Headers,
 			ContextWindow:         cfg.ContextWindow,
+			DrainTimeoutSeconds:   cfg.DrainTimeoutSeconds,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -381,8 +382,8 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 		ChatPath:   profile.ChatPath,
 		APIKey:     endpoint.APIKey,
 	}
-	if profile.AuthHeader != "" || profile.AuthPrefixSet || profile.AuthPrefix != "" || profile.Delegated() {
-		// A delegated backend has no static key to export; the request supplies it.
+	if profile.AuthHeader != "" || profile.AuthPrefixSet || profile.AuthPrefix != "" || profile.Delegated() || profile.Caller() {
+		// A delegated or caller backend has no static key to export; the request supplies it.
 		ref.Auth = &DeploymentAuth{Credential: profile.AuthCredential, Header: profile.AuthHeader}
 		if profile.AuthPrefixSet || profile.AuthPrefix != "" {
 			prefix := profile.AuthPrefix

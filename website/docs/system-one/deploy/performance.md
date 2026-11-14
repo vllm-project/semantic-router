@@ -217,6 +217,12 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
   windows still unread are read, closest to its threshold first, so a scan
   that fell behind reads its runs before such re-reads. A part that the
   input's windows already read and answered is not read again.
+- The tail holds what the model reads last before it answers, where an
+  injection works best, and an injection at the very end shares it with up to
+  a whole window of earlier text. A tail whose answer leaves a rule short of
+  its threshold by at most `scan_window.reread_margin` has the input's last
+  half window read again, at once: one more window, which still ends the scan
+  early when it matches.
 - An input whose windows are all read by the signals' deadline is read at the
   configured size, as fast as its windows are read. A scan that falls behind,
   whose windows left would not all be read in time at the pace it read the

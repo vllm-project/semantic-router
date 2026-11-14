@@ -1224,18 +1224,30 @@ class RouterReplayPluginConfig(BaseModel):
 
     Omitted fields inherit the shared service policy. Explicit false and zero
     remain present so a decision can disable capture or remove a trace limit.
+    prompt_capture is what a record keeps besides routing data: none (the
+    default), raw or verified. capture_personal_data is its deprecated form,
+    which the Router loads as prompt_capture with a warning: false as verified
+    and true as raw. max_prompt_bytes bounds the prompt a record keeps under
+    raw and verified, and 0 keeps the whole prompt; where no layer sets it, the
+    prompt keeps max_tool_trace_bytes's bound when that is above 0, else 65536.
+    Where no layer sets max_tool_trace_bytes, each tool text field keeps 65536
+    bytes, raw copies included, and max_tool_trace_total_bytes, the steps' text
+    in all, defaults to 262144; 0 removes either limit.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: Optional[StrictBool] = None
+    prompt_capture: Optional[Literal["none", "raw", "verified"]] = None
     capture_request_body: Optional[StrictBool] = None
     capture_response_body: Optional[StrictBool] = None
     capture_personal_data: Optional[StrictBool] = None
     capture_tool_results: Optional[StrictBool] = None
     max_records: Optional[int] = Field(default=None, ge=0)
     max_body_bytes: Optional[int] = Field(default=None, ge=0)
+    max_prompt_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
+    max_tool_trace_total_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
     shadow: Optional["RouterReplayShadowConfig"] = None
 

@@ -54,8 +54,8 @@ type ProviderProfile struct {
 	ChatPath      string            `yaml:"chat_path,omitempty"`
 	// AuthCredential is the backend's credential mode (auth.credential):
 	// delegated selects the requesting user's delegated credential as this
-	// backend's credential; static keys and per-user provider keys are not
-	// consulted for it.
+	// backend's credential, caller the provider login the client sent; static
+	// keys and per-user provider keys are not consulted for either.
 	AuthCredential string `yaml:"auth_credential,omitempty"`
 	// TLS is how an https backend is verified, its tls block with the default
 	// CA applied; nil keeps the system roots and the endpoint's host. Envoy's
@@ -67,6 +67,12 @@ type ProviderProfile struct {
 // delegated credential instead of a key.
 func (p *ProviderProfile) Delegated() bool {
 	return p != nil && p.AuthCredential == CredentialDelegated
+}
+
+// Caller reports whether the backend takes the client's own provider login
+// instead of a key.
+func (p *ProviderProfile) Caller() bool {
+	return p != nil && p.AuthCredential == CredentialCaller
 }
 
 type ModelPricing struct {
