@@ -217,6 +217,10 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	if err := validateCanonicalDelegatedBackends(canonical); err != nil {
 		return err
 	}
+	if global := canonical.Global; global != nil && global.Router.StreamedBody.Enabled && global.Router.StreamedBody.MaxBytes <= 0 {
+		// The handler accumulates without a bound until this names a ceiling.
+		return fmt.Errorf("global.router.streamed_body.max_bytes: an enabled streamed body needs a positive max_bytes")
+	}
 	cards, err := canonicalModelCardIndex(canonical.Providers.Models)
 	if err != nil {
 		return err
