@@ -4,10 +4,12 @@ import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import ProductIcon from '../components/ProductIcon'
 import { responseConfigWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import styles from './ConfigPageRouterConfigSection.module.css'
+import ConfigPageListenerVSRPanel from './ConfigPageListenerVSRPanel'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
   buildEffectiveRouterConfig,
   buildRouterSectionCards,
+  editedRouterSectionPatch,
   routerLayerMeta,
   type RouterSectionBadge,
 } from './configPageRouterDefaultsSupport'
@@ -21,6 +23,7 @@ interface ConfigPageRouterConfigSectionProps {
   isReadonly: boolean
   openEditModal: OpenEditModal
   refreshConfig: () => Promise<void>
+  saveConfig: (config: ConfigData) => Promise<void>
 }
 
 function badgeClassName(badge: RouterSectionBadge): string {
@@ -39,6 +42,7 @@ export default function ConfigPageRouterConfigSection({
   isReadonly,
   openEditModal,
   refreshConfig,
+  saveConfig,
 }: ConfigPageRouterConfigSectionProps) {
   const { hash } = useLocation()
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
@@ -165,7 +169,10 @@ export default function ConfigPageRouterConfigSection({
       card.editData,
       card.editFields,
       async (data) => {
-        await saveRouterSettings(card.save(data))
+        const updates = isConfigured ? editedRouterSectionPatch(card, data) : card.save(data)
+        if (updates) {
+          await saveRouterSettings(updates)
+        }
       },
       isConfigured ? 'edit' : 'add',
     )
@@ -352,6 +359,11 @@ export default function ConfigPageRouterConfigSection({
                   </div>
                 </section>
               ))}
+              <ConfigPageListenerVSRPanel
+                config={config}
+                isReadonly={isReadonly}
+                saveConfig={saveConfig}
+              />
             </div>
           </div>
         ) : (

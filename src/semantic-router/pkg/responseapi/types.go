@@ -136,7 +136,8 @@ type ResponseAPIResponse struct {
 // InputItem represents an input item in a Response API request.
 type InputItem struct {
 	// Type is the item type: "message", "function_call",
-	// "function_call_output", "reasoning", or "item_reference".
+	// "function_call_output", "custom_tool_call", "custom_tool_call_output",
+	// "reasoning", or "item_reference".
 	Type string `json:"type"`
 
 	// ID is the item identifier (for item_reference)
@@ -148,11 +149,13 @@ type InputItem struct {
 	// Content can be string or array of content parts
 	Content json.RawMessage `json:"content,omitempty"`
 
-	// Function call fields are retained so a previous_response_id continuation
+	// Tool call fields are retained so a previous_response_id continuation
 	// can materialize the complete tool lifecycle for a stateless backend.
 	Name      string          `json:"name,omitempty"`
+	Namespace string          `json:"namespace,omitempty"`
 	CallID    string          `json:"call_id,omitempty"`
 	Arguments string          `json:"arguments,omitempty"`
+	Input     *string         `json:"input,omitempty"`
 	Output    json.RawMessage `json:"output,omitempty"`
 
 	// Summary contains reasoning summary blocks. Reasoning content uses Content.
@@ -164,7 +167,8 @@ type InputItem struct {
 
 // OutputItem represents an output item in a Response API response.
 type OutputItem struct {
-	// Type is the item type: "message", "function_call", "function_call_output"
+	// Type is the item type: "message", "function_call", "function_call_output",
+	// "custom_tool_call", "custom_tool_call_output", or "reasoning".
 	Type string `json:"type"`
 
 	// ID is the item identifier
@@ -182,11 +186,13 @@ type OutputItem struct {
 	// Status of the output item
 	Status string `json:"status,omitempty"`
 
-	// Function call fields
-	Name      string `json:"name,omitempty"`
-	CallID    string `json:"call_id,omitempty"`
-	Arguments string `json:"arguments,omitempty"`
-	Output    string `json:"output,omitempty"`
+	// Tool call fields
+	Name      string  `json:"name,omitempty"`
+	Namespace string  `json:"namespace,omitempty"`
+	CallID    string  `json:"call_id,omitempty"`
+	Arguments string  `json:"arguments,omitempty"`
+	Input     *string `json:"input,omitempty"`
+	Output    string  `json:"output,omitempty"`
 }
 
 // DeleteResponseResult represents the result of deleting a response.

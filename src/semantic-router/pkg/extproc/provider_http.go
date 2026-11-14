@@ -92,9 +92,9 @@ func configuredProviderAuthorizer(
 	if err != nil {
 		return nil, err
 	}
-	if profile.Delegated() {
+	if profile.Delegated() || profile.Caller() {
 		logging.ComponentWarnEvent("extproc", "delegated_router_call_refused", map[string]interface{}{
-			"call": call, "model": model,
+			"call": call, "model": model, "credential": profile.AuthCredential,
 		})
 		return nil, principal.ErrRouterCall
 	}

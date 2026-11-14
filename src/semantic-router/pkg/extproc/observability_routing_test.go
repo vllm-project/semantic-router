@@ -412,8 +412,8 @@ func TestRoutingTraceCountsAzureInferencePathsAsInference(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := parity.NewRecorder(&extprocStreamProcessor{router: newParityRouter(t, cfg)}, routing.DefaultOptions)
-	// The prompt outgrows every context window, so each request ends in a
-	// 422 without an upstream call.
+	// The Router counts the prompt beyond every context window, so each
+	// request ends in a 400 without an upstream call.
 	messages := `"messages":[{"role":"user","content":"` + strings.Repeat("Summarize these meeting notes carefully. ", 40) + `"}]`
 	for _, tc := range []struct{ path, body string }{
 		{"/v1/chat/completions", `{"model":"vllm-sr/auto",` + messages + `}`},
@@ -425,8 +425,8 @@ func TestRoutingTraceCountsAzureInferencePathsAsInference(t *testing.T) {
 			other := requestOutcomeCount(t, "other", "client_error")
 			c := routingFailureCase{name: tc.path, path: tc.path, body: tc.body}
 			got := recorder.Run(context.Background(), c.parityCase())
-			if got.Response == nil || got.Response.Status != 422 {
-				t.Fatalf("response = %+v, want the context-length 422", got.Response)
+			if got.Response == nil || got.Response.Status != 400 {
+				t.Fatalf("response = %+v, want the context-length 400", got.Response)
 			}
 			gotInference, gotOther := requestOutcomeCount(t, "inference", "client_error"), requestOutcomeCount(t, "other", "client_error")
 			if gotInference != inference+1 || gotOther != other {

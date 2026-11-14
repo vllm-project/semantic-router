@@ -39,6 +39,9 @@ const (
 	TriggerClass5xx           TriggerClass = "upstream_5xx"
 	TriggerClassRateLimit     TriggerClass = "rate_limit"
 	TriggerClassProtocolError TriggerClass = "protocol_error"
+	// TriggerClassContextLength: the backend refused the prompt as longer
+	// than its context window; only a wider window can serve it.
+	TriggerClassContextLength TriggerClass = "context_length"
 )
 
 // FallbackPolicy defines the bounded execution parameters for cross-model fallback.
@@ -57,6 +60,10 @@ type FallbackPolicy struct {
 	ForwardRequestHeaders []string `json:"forward_request_headers,omitempty" yaml:"forward_request_headers,omitempty"`
 
 	rawEnabled *bool
+	// perUserCredentials marks backends that each request authenticates with
+	// its own login (auth.credential: caller): their 401, 403 and 429 speak of
+	// that person's login or plan, not of the backend.
+	perUserCredentials bool
 }
 
 // ExplicitEnabled returns whether the enabled field was explicitly configured (tri-state).
@@ -408,6 +415,10 @@ type AttemptOutcome struct {
 	Cost              float64       `json:"cost,omitempty"`
 	Currency          string        `json:"currency,omitempty"`
 	Discarded         bool          `json:"discarded"`
+	// ContextLengthExceeded marks a backend's refusal of the prompt as longer
+	// than its window. Such a client error may still fall back, to a
+	// candidate with a wider window.
+	ContextLengthExceeded bool `json:"context_length_exceeded,omitempty"`
 	// ForwardedHeaders names the client request headers an attempt the
 	// Router sent itself copied (forward_request_headers); never their values.
 	ForwardedHeaders []string `json:"forwarded_headers,omitempty"`
@@ -437,4 +448,12 @@ type ExecutionRecord struct {
 	FinalStatus    string            `json:"final_status"`
 	UsageSummary   TokenUsageSummary `json:"usage_summary"`
 	VisitedModels  []string          `json:"visited_models"`
+}
+
+// ForPerUserCredentials returns the policy for backends that each request
+// authenticates with its own login: one person's refused login or spent plan
+// never trips the circuit breaker the other requests share.
+func (p FallbackPolicy) ForPerUserCredentials() FallbackPolicy {
+	p.perUserCredentials = true
+	return p
 }

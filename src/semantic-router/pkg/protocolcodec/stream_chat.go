@@ -2,6 +2,7 @@ package protocolcodec
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"sort"
 
@@ -108,6 +109,14 @@ type chatChunkWire struct {
 	// dropped with a diagnostic instead of failing the strict decode.
 	Citations     json.RawMessage `json:"citations,omitempty"`
 	SearchResults json.RawMessage `json:"search_results,omitempty"`
+}
+
+// chatUsageChunkWire is the usage-only chunk that ends a stream whose client
+// asked for usage. OpenAI sends its choices as an empty list, and clients find
+// the chunk by that list, so it is never left out.
+type chatUsageChunkWire struct {
+	chatChunkWire
+	Choices []chatChunkChoiceWire `json:"choices"`
 }
 
 // vllmServingMetadata is chatResponseWire.vllmServingMetadata for a chunk.
@@ -339,7 +348,10 @@ func (decoder *chatStreamDecoder) nextAfterHeld(event llmprotocol.Event) ([]llmp
 		return events, err
 	}
 	terminal, err := decoder.next(event)
-	return append(events, terminal), err
+	if err != nil {
+		return events, err
+	}
+	return append(events, terminal), nil
 }
 
 // chatChunkIsQuiet reports a chunk whose choices decode to no events, such
@@ -543,18 +555,39 @@ func validateChatStreamChunk(chunk chatChunkWire) error {
 		if err := validateChatChunkChoiceExtensions(choice); err != nil {
 			return err
 		}
-		seenToolIndexes := make(map[int]struct{}, len(choice.Delta.ToolCalls))
-		for _, call := range choice.Delta.ToolCalls {
-			if call.Index < 0 {
-				return invalidProviderResponse("invalid_stream_tool_index", "Chat stream tool index must be non-negative")
-			}
-			if _, duplicate := seenToolIndexes[call.Index]; duplicate {
-				return invalidProviderResponse("duplicate_stream_tool_index", "Chat stream tool indexes must be unique within a chunk")
-			}
-			seenToolIndexes[call.Index] = struct{}{}
+		if err := validateChatChunkToolIndexes(choice.Delta.ToolCalls); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// validateChatChunkToolIndexes lets entries that share an index continue one
+// call, in order, as clients join them: vLLM's last chunk can carry a call's
+// latest fragment and its tool parser's flush of the rest as two entries. Two
+// entries with one index that name different calls fail.
+func validateChatChunkToolIndexes(calls []chatChunkToolCallWire) error {
+	type identity struct{ id, name string }
+	seen := make(map[int]identity, len(calls))
+	for _, call := range calls {
+		if call.Index < 0 {
+			return invalidProviderResponse("invalid_stream_tool_index", "Chat stream tool index must be non-negative")
+		}
+		current := identity{id: call.ID, name: call.Function.Name}
+		if call.Custom != nil {
+			current.name = call.Custom.Name
+		}
+		earlier, repeated := seen[call.Index]
+		if repeated && (conflictingIdentity(earlier.id, current.id) || conflictingIdentity(earlier.name, current.name)) {
+			return invalidProviderResponse("duplicate_stream_tool_index", "Chat stream tool entries with one index name different calls")
+		}
+		seen[call.Index] = identity{id: cmp.Or(earlier.id, current.id), name: cmp.Or(earlier.name, current.name)}
+	}
+	return nil
+}
+
+func conflictingIdentity(earlier, current string) bool {
+	return earlier != "" && current != "" && earlier != current
 }
 
 func validateChatStreamEnvelope(chunk chatChunkWire) error {
@@ -1091,11 +1124,10 @@ func (encoder *chatStreamEncoder) encodeCompletion(
 		return nil, nil, err
 	}
 	if streamUsageRequested(encoder.context) && event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
-		usageChunk := chatChunkWire{
+		usageFrame, err := encodeChatUsageFrame(encoder.context, chatChunkWire{
 			ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model,
 			Usage: encodeChatUsage(*event.Usage),
-		}
-		usageFrame, err := encodeChatStreamFrame(encoder.context, usageChunk)
+		})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1111,6 +1143,15 @@ func encodeChatStreamFrame(context llmprotocol.StreamContext, chunk chatChunkWir
 	}
 	chunk.Obfuscation = obfuscation
 	return encodeSSE("", chunk)
+}
+
+func encodeChatUsageFrame(context llmprotocol.StreamContext, chunk chatChunkWire) ([]byte, error) {
+	obfuscation, err := newStreamObfuscation(context)
+	if err != nil {
+		return nil, err
+	}
+	chunk.Obfuscation = obfuscation
+	return encodeSSE("", chatUsageChunkWire{chatChunkWire: chunk, Choices: []chatChunkChoiceWire{}})
 }
 
 func (encoder *chatStreamEncoder) Finalize(reason error) ([][]byte, llmprotocol.Diagnostics, error) {

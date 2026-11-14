@@ -71,6 +71,94 @@ or feature decides. A deadline ends the Router's wait, but does not stop a
 forward pass already running.
 :::
 
+## When the decision model is overloaded
+
+A decision model refuses a call it has no room for: its request queue is full,
+and it answers `overloaded`. A rule that fails closed then matches. A
+request-stage `jailbreak` or `pii` rule does so unless its `on_unknown` is
+`no_match`. A decision with a `fast_response` then refuses the request as if it
+were unsafe. Under load this refuses most requests, and coding agents take the
+refusal as final.
+
+`global.model_catalog.on_signal_overload` makes such a request get an error the
+client retries. Without it, nothing changes:
+
+```yaml
+global:
+  model_catalog:
+    on_signal_overload:
+      action: retry          # refuse (the default) or retry
+      wait_ms: 2000          # 0 to 60,000; 0 does not wait
+      retry_after_seconds: 0 # up to 60; 0 derives it from wait_ms
+```
+
+With `action: retry`:
+
+- **Wait for capacity.** Every request-stage call that comes back
+  `overloaded` is asked again while the request waits for capacity, whatever
+  its rules' failure policy. That covers a rule that fails closed, one that
+  fails open such as `safety`, and a routing question. If the model answers,
+  the request is read as it is without the overload.
+  - The wait lasts up to `wait_ms` from the request's first overloaded answer,
+    within the signals' deadline. A rule's own `timeout_ms` bounds each attempt
+    of its call, not the wait.
+  - A request's calls to one model ask again together, in rounds, so the
+    questions one call carried travel in one call again.
+- **Bound the load.** A request's calls to a model ask again in at most 3
+  rounds, a step apart at least: at a quarter of its wait, at half and at its
+  end. Its calls that reach a round just after another of them took one ask
+  in that round, so a model that answers some calls and refuses others does
+  not spend a request's rounds at once.
+  - While the model refuses calls as overloaded, one waiting request's round
+    asks it per step, however many requests wait. The step is jittered, from
+    100 ms doubling to 1 s.
+  - In such a round, a request with more than 8 calls waiting for the model,
+    such as a long input's windows, sends only one of them, on its own, as a
+    probe. The probe does not count as one of the 3 rounds.
+  - The first answer to any call opens the model again, and every request
+    waiting for it has its round then.
+- **Learn no pace from the wait.** A guard scan that waited learns no pace for
+  its model: its time says nothing of how fast the model reads. It judges
+  whether it fell behind only from when the model answered it again, over
+  the windows it read since, so a long input it can no longer read whole in
+  windows of the configured size is still read in larger ones.
+- **Answer a retryable error.** If the model still does not answer, the Router
+  answers an error the client retries in two cases:
+  - Only rules that failed closed on the overloaded model refuse the request.
+    The error replaces the refusal.
+  - A rule left unread because the model was overloaded would refuse the
+    request had it matched. The error replaces the forward. A rule that fails
+    open, such as `safety`, no longer lets the request through when the model
+    was too busy to read it.
+
+  An Anthropic Messages client gets `529 overloaded_error`. An OpenAI Chat
+  Completions or Responses client gets `429` with the code `overloaded`. Its
+  SDK and agents retry a 429 after its `Retry-After`, where some treat a 5xx as
+  a failure. Both errors reach the client before any byte of a stream, and
+  carry:
+  - `Retry-After`: `retry_after_seconds`, else `wait_ms` rounded up to whole
+    seconds, at least 1. It is at most 60: some clients ignore a longer value,
+    and others sleep it in full.
+  - `x-vsr-warnings: guard_overloaded`.
+- **Never forward unchecked.** The request is never forwarded while a rule
+  that could refuse it is unread for overload.
+  - A rule that matches still refuses it, and so does a decision whose
+    condition matches on error.
+  - Other failures, such as a timeout or a model that is not ready, keep
+    their outcome.
+  - A prompt beyond every context window still gets
+    `400 context_length_exceeded`.
+  - A routing question left unread lets the request go on: it can choose a
+    route, but not refuse the request.
+
+These are counted apart from refusals and from the `signal_failed_closed` log:
+
+- `vsr_signal_overload_waits_total{deployment, outcome}` counts the calls asked
+  again, by how the last one ended: `ok` when capacity freed, `overloaded`
+  when the wait ran out, or the reason of another failure.
+- `vsr_signal_overload_retryable_total{format}` counts the requests answered
+  the retryable error, by the client's wire format.
+
 ## Long inputs
 
 A long user turn, such as a pasted document, a log or a long tool output, is
@@ -93,12 +181,56 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
 
 - An input longer than one `scan_window` is split into windows that overlap by
   `scan_window.overlap`, so text across a cut is read whole by one of them.
-- The windows are read tail first, then the head, then the middle in order:
-  one batch to a local model, and at most `max_concurrency` calls at a time to a
-  remote API.
+- The windows are read tail first, then the head, then the middle by halves:
+  the window at its middle, then those at its quarters, its eighths and so on,
+  from a starting point that changes with every request. The windows read by
+  any moment are spread over the whole input, so no part of it is predictably
+  left unread. Each window is a call of its own, at most
+  `scan_window.max_parallel` at a time per deployment. The `jailbreak`,
+  `safety` and `pii` rules that read the same input share each window's call,
+  and a window's answers count as soon as it is read.
 - Any window that finds an attack, a harm or personal data flags the input.
   `pii` spans keep their places in the input, so masking replaces every one.
-- One input reads at most 64 windows; the rest counts as unread.
+- A window that makes a rule match decides it: no unread window can undo a
+  match. When that match alone refuses the request, because a decision with a
+  `fast_response` plugin matches on the rule by itself and no other decision
+  ranks above it, the window ends the request's guard scans: the windows not
+  read yet are not sent, and the request is refused at once instead of at the
+  deadline.
+- One input reads at most 256 windows. An input that needs more of them is
+  read in larger windows between its head and its tail, up to
+  `scan_window.max_tokens` (by default the largest the model takes: 31,744
+  bytes for a 32,768-token validated length), so 256 cover it whole. Only an
+  input longer than 256 of the largest windows, about 7.5 MB, leaves windows
+  unread, and they count as unread.
+- A larger window dilutes what it holds: the same injection scores lower in a
+  window of 8,000 tokens than in one of 2,000. The head and the tail, the first
+  and the last `scan_window.tokens` of the input, are always read at that
+  size. A larger window whose answer leaves a rule short of its threshold, by
+  at most `scan_window.reread_margin` in log-odds, is read again in windows of
+  `scan_window.tokens` before the rule decides. Dilution lowers a score's
+  log-odds by about the same amount at any threshold, so the default of 3
+  re-reads from about 0.91 for a rule at 0.995, 0.27 at 0.88 and 0.05 at 0.5,
+  and never once the window matched. A window within half the margin, where a
+  diluted match lands, is read again at once, ahead of every window not yet
+  sent, and can still end the scan early; one further below waits until the
+  windows still unread are read, closest to its threshold first, so a scan
+  that fell behind reads its runs before such re-reads. A part that the
+  input's windows already read and answered is not read again.
+- The tail holds what the model reads last before it answers, where an
+  injection works best, and an injection at the very end shares it with up to
+  a whole window of earlier text. A tail whose answer leaves a rule short of
+  its threshold by at most `scan_window.reread_margin` has the input's last
+  half window read again, at once: one more window, which still ends the scan
+  early when it matches.
+- An input whose windows are all read by the signals' deadline is read at the
+  configured size, as fast as its windows are read. A scan that falls behind,
+  whose windows left would not all be read in time at the pace it read the
+  others, reads them in runs of windows read as one when the deployment's
+  measured pace says those would be read in time, the shortest runs that are;
+  otherwise it keeps its windows and reads what it can. A decision model reads
+  each token at about the same cost in a window of any size, so larger windows
+  save little time and seldom fit.
 
 ```yaml
 global:
@@ -108,7 +240,7 @@ global:
         provider: model_runtime
         artifact: vllm-sr/vela3-fast
         routing_view: {max_tokens: 8192, head_share: 0.25}
-        scan_window: {tokens: 8192, overlap: 512}
+        scan_window: {tokens: 8192, overlap: 512, max_parallel: 4}
       hosted-decision:
         provider: systemone
         endpoint: https://decisions.example.com/v1/systemone
@@ -124,6 +256,9 @@ global:
 | `routing_view.head_share` | 0.25 | 0 to 1 |
 | `scan_window.tokens` | 8,192; 4,096 for `provider: systemone` | 256 to 1,048,576 |
 | `scan_window.overlap` | 512; 256 for `provider: systemone` | 0 to less than half a window |
+| `scan_window.max_parallel` | 4 | 1 to 64 |
+| `scan_window.max_tokens` | the model's validated length less 1,024 | `scan_window.tokens` to 1,048,576 |
+| `scan_window.reread_margin` | 3 (log-odds below the rule's threshold) | 0 to 20 (0 reads no window again) |
 
 **Views and windows are sized in bytes.** A token of `max_tokens` or
 `scan_window.tokens` counts as four bytes, about what a token of prose takes,
@@ -143,24 +278,47 @@ takes T seconds to answer the smallest call, a view of up to
 `(timeout - T) × R` tokens answers in time: an API that reads 2,000 tokens a
 second and takes 2 s for the smallest call reads about 8,000 tokens in a 6 s
 timeout, a `max_tokens` of 8,000 for prose, or about 2,700 if turns are often
-JSON or base64. A scan's windows share the deadline: a local model reads them
-in one batch, and a remote API `max_concurrency` at a time. Windows that do not
-answer in time count as unread, and with `best_effort` the rule decides on the
-windows read. Lower `scan_window.tokens` for a slow API, and raise
-`max_concurrency` or the deadline for inputs you expect to scan in full.
+JSON or base64. A scan's windows share the deadline: the deployment reads
+`scan_window.max_parallel` of them at a time, the tail and the head first, so
+the windows read when the deadline comes are the ones a partial scan decides
+on. A window not read in time counts as unread, and with `best_effort` the rule
+decides on the windows read. A scan that falls behind reads the rest in larger
+windows only when the deployment's measured pace says they would be read in
+time; the cost a call adds besides its text is all they save, so on one
+decision model an input of about a million tokens may be read only in part,
+and `scan_partial` says so. Lower `scan_window.tokens` for a slow API, and
+raise the deadline for inputs you expect to scan in full; more windows in
+flight help only while the model has room to batch them.
 
 **Coverage and failures.** When the deadline ends a scan before every window is
-read, `on_unscanned` decides: `best_effort` (the default) decides on the windows
-read, `match` matches (strict), `no_match` does not, and `unknown` leaves the rule
-to `on_unknown`. When no window is read at all (the model is down, or no
-window answered in time), a `jailbreak` or `pii` rule follows `on_unknown`,
-which matches by default (fail closed), and a `safety` rule is unknown, which
-its decision's `rules.on_unknown` decides.
+read, and no window read decides the rule, `on_unscanned` decides:
+`best_effort` (the default) decides on the windows read, `match` matches
+(strict), `no_match` does not, and `unknown` leaves the rule to `on_unknown`. A
+rule's `min_coverage`, a share from 0 to 1 that is off by default, sets how
+much `best_effort` must have read: below it the rule reads as `unknown`, so a
+`jailbreak` or `pii` rule matches by default and the guard refuses what it read
+too little of. When no window is read at all (the model is down, or no window
+answered in time), a `jailbreak` or `pii` rule follows `on_unknown`, which
+matches by default (fail closed), and a `safety` rule is unknown, which its
+decision's `rules.on_unknown` decides.
+
+```yaml
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_attack
+          min_coverage: 0.5
+```
 
 Coverage is reported for every guard rule that read its input in windows:
 
+- `x-vsr-warnings` carries `scan_partial`, for every caller, on a request that
+  was routed while a request-stage guard rule had read only part of its input;
 - `vsr_signal_scan_coverage_total{signal, result}` counts each guard rule's read
-  as `full`, `partial` or `none`;
+  as `full`, `partial` or `none`, `vsr_signal_scan_coverage_ratio{signal}` gives
+  the share of its windows it read, and `vsr_signal_scan_decided_total{signal}`
+  counts the rules a window decided before the rest was read;
 - the routing preview (`scan_coverage`) and the Router Replay record
   (`scan_coverage`) give `full`, `partial n/m` or `none` per rule;
 - `x-vsr-trace` carries it as `scan_coverage` for a caller allowed the debug

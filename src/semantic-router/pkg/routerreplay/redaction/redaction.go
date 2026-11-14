@@ -39,39 +39,38 @@ func redactPayload(payload any) bool {
 	case map[string]any:
 		return redactObjectPayload(typed)
 	case []any:
-		return redactRecordItems(typed)
+		return redactEach(typed, redactRecordMap)
 	default:
 		return false
 	}
 }
 
+// redactObjectPayload redacts a record, a list's records, and a trajectory's
+// messages and routes. A trajectory route repeats a record's route
+// diagnostics and the agent hash from its session policy, so it is redacted
+// the same way.
 func redactObjectPayload(payload map[string]any) bool {
 	changed := redactRecordMap(payload)
-	if messages, ok := payload["messages"].([]any); ok && redactTrajectoryMessages(messages) {
-		changed = true
-	}
-	if data, ok := payload["data"].([]any); ok && redactRecordItems(data) {
-		changed = true
-	}
-	return changed
-}
-
-func redactTrajectoryMessages(messages []any) bool {
-	changed := false
-	for _, item := range messages {
-		message, ok := item.(map[string]any)
-		if ok && redactTrajectoryMessageMap(message) {
+	for _, list := range []struct {
+		field  string
+		redact func(map[string]any) bool
+	}{
+		{"messages", redactTrajectoryMessageMap},
+		{"data", redactRecordMap},
+		{"routes", redactRouteDiagnosticsMap},
+	} {
+		if items, ok := payload[list.field].([]any); ok && redactEach(items, list.redact) {
 			changed = true
 		}
 	}
 	return changed
 }
 
-func redactRecordItems(items []any) bool {
+func redactEach(items []any, redact func(map[string]any) bool) bool {
 	changed := false
 	for _, item := range items {
-		record, ok := item.(map[string]any)
-		if ok && redactRecordMap(record) {
+		object, ok := item.(map[string]any)
+		if ok && redact(object) {
 			changed = true
 		}
 	}
@@ -139,7 +138,7 @@ func redactRecordMap(record map[string]any) bool {
 
 func clearRecordPayloadFields(record map[string]any) bool {
 	changed := false
-	for _, field := range []string{"request_body", "response_body", "prompt", "tool_definitions"} {
+	for _, field := range []string{"request_body", "response_body", "prompt", "prompt_original_sha256", "tool_definitions"} {
 		if clearStringField(record, field) {
 			changed = true
 		}
@@ -209,6 +208,7 @@ func redactNestedMap(record map[string]any, field string, redact func(map[string
 func redactRouteDiagnosticsMap(diagnostics map[string]any) bool {
 	changed := false
 	for _, field := range []string{
+		"agent",
 		"selection_reasoning",
 		"session_reason",
 		"hard_lock_reason",

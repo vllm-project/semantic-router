@@ -68,6 +68,27 @@ func TestResolveSignalInputAppliesRoutingInput(t *testing.T) {
 	}
 }
 
+// A conversation whose every user message matches routing_input is scored
+// on its last user message, as live routing routes it, not on the assistant's
+// text or nothing.
+func TestResolveSignalInputScoresTheLastUserMessageWhenEveryOneMatches(t *testing.T) {
+	req := IntentRequest{Messages: []IntentMessage{
+		previewMessage(t, "user", previewContext),
+		previewMessage(t, "assistant", "Noted."),
+		previewMessage(t, "user", previewMemories),
+	}}
+	input, err := req.resolveSignalInputWith(previewSelector(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.evaluationText != previewMemories || input.currentUserText != previewMemories {
+		t.Fatalf("preview routing text = %q, current = %q, want the last user message", input.evaluationText, input.currentUserText)
+	}
+	if facts := input.conversationFacts; facts.UserMessageCount != 1 {
+		t.Fatalf("conversation facts = %+v, want the routed turn counted", facts)
+	}
+}
+
 func TestResolveSignalInputNeverSkipsMessagesWithMedia(t *testing.T) {
 	req := IntentRequest{Messages: []IntentMessage{previewMessage(t, "user", []map[string]any{
 		{"type": "text", "text": previewContext},

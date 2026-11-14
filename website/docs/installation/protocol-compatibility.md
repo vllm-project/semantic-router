@@ -211,8 +211,10 @@ instead of being silently dropped.
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
 | `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
 | `min_p`, repetition penalty, and cache salt | Supported extensions | Not supported | Not supported |
+| Token logit bias (`logit_bias`) | Supported | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
+| Deferred tool loading (`tools[].defer_loading`) | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full |
 
 This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
@@ -288,6 +290,57 @@ that:
   `content.file`.
 - **Capable models are unaffected.** A model that declares `file_input`, or
   declares no capabilities, still receives the file.
+
+### Deferred tool loading
+
+`tools[].defer_loading` asks the provider's tool search to load a tool on
+demand. The Messages format carries it, but the Router's protocol-neutral
+request has no field for it, so the Router rejects it at ingress with
+`unsupported_tools_defer_loading` whatever the backend format, Messages
+included. Claude Code sets it on its first call, retries without it, and then
+sends every tool definition on every call.
+
+Listing `tools.defer_loading` in `global.router.allow_lossy_translation` keeps
+tool search on:
+
+- **Tools in full.** The Router sends each deferred tool in full.
+- **References by name.** A `tool_reference` block in a tool result reaches the
+  backend as the tool's name.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for
+  `tools.defer_loading`.
+
+### Sampling controls a backend rejects
+
+Some backends reject a sampling control their wire format defines. A vLLM
+backend that runs speculative decoding, for example, answers any request that
+carries `min_p` or `logit_bias` with HTTP 400. List such controls in the
+model's `unsupported_capabilities`:
+
+```yaml
+providers:
+  models:
+    - name: qwen3-mtp
+      api_format: chat_completions
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
+      backend_refs:
+        - name: mtp-pool
+          endpoint: mtp-server:8000
+          provider: vllm
+```
+
+- **Left out for that model.** A request sent to the model, as the decision's
+  choice or as a fallback candidate, reaches it without the listed fields.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for each field
+  left out, `min_p` or `logit_bias`.
+- **Other models are unaffected.** Another model of the same decision still
+  receives the fields.
+
+The list accepts `sampling_min_p` and `sampling_logit_bias`; any other name
+fails at load. The gateway spreads a model's requests across its
+`backend_refs`, so list a control when any of them rejects it. To remove a
+control for every model a decision routes to, list it in the decision's
+[`request_params`](../tutorials/plugin/request-params) `blocked_params`
+instead.
 
 ### Signed reasoning from Anthropic backends
 
@@ -385,6 +438,13 @@ tools or error translation.
 
 - Public requests are decoded into the neutral contract even when client and
   backend formats match. Unknown or unsupported request fields fail closed.
+- Chat requests accept and don't forward the fields that client libraries add
+  to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
+  which holds the reply fields its message type lacks, and `parsed` and
+  `tool_calls[].function.parsed_arguments`, the openai SDK's own parse
+  results. One that carries a value is reported as `dropped`. Like the other
+  Responses input items, a reasoning item may carry `status`, which the openai
+  SDK's stream helper sets.
 - Backend replies are decoded into the same contract. A reply field that its
   `api_format` does not define is dropped and reported instead of failing the
   reply; see
@@ -393,7 +453,8 @@ tools or error translation.
   that cannot be represented return a typed protocol error. A
   `lossy_translation` error for a loss an operator may accept, such as
   `tool_result.is_error`, names the `global.router.allow_lossy_translation`
-  setting that accepts it. The `unsupported_capability` errors for files,
+  setting that accepts it, and so does the `unsupported_tools_defer_loading`
+  error. The `unsupported_capability` errors for files,
   signed reasoning and stored completions don't; their sections above name
   the setting.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
@@ -414,7 +475,8 @@ tools or error translation.
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-warnings` and in `llm_translation_lossy_total`. The list
   also accepts `messages[].role` for system messages inside the conversation
-  and `content.file` for files a model cannot read, both described above,
+  and `content.file` for files a model cannot read and `tools.defer_loading`
+  for deferred tool loading, all described above,
   `reasoning.signature` (see the signed thinking note above), `store` (see
   stored completions above), and every other lossy translation still fails
   closed.
@@ -444,6 +506,21 @@ tools or error translation.
   Anthropic Messages clients receive `stop_reason: "tool_use"` for a turn that
   ends that way and carries `tool_use` blocks. A turn that ends at the output
   limit, on a stop sequence, or on a refusal keeps that reason.
+- When the output limit cuts a buffered reply inside a tool call, the client
+  gets the reply with the limit stop: `finish_reason: "length"` for Chat, an
+  incomplete response with reason `max_output_tokens` for Responses, and
+  `stop_reason: "max_tokens"` for Anthropic Messages. Chat and Responses
+  clients get the call's arguments as the backend sent them. Because
+  `tool_use.input` must be an object, Messages clients get the members the
+  model completed before the cut, and the Router reports an `approximated`
+  diagnostic for `content.tool_use.input`. Only the reply's last call can be
+  cut. Arguments that don't start a JSON object, or a cut call that more
+  output follows, still fail the reply.
+- A Chat stream chunk can carry several `tool_calls` entries with the same
+  `index`, as vLLM's last chunk does when its tool parser flushes the rest of
+  a call. They continue one call in order, as OpenAI's SDKs join them.
+  Entries with the same index that name different calls fail with
+  `duplicate_stream_tool_index`.
 - An Anthropic `model_context_window_exceeded` stop reaches Chat clients as
   `finish_reason: "length"` and Responses clients as an incomplete response
   with reason `max_output_tokens`, as vLLM reports output that reaches
@@ -466,6 +543,19 @@ tools or error translation.
     requires a limit, and reports `max_tokens` as `generated`. Thinking counts
     toward that limit, and a positive integer in the decision's
     `request_params.default_max_tokens` replaces the 4096.
+- When the output limit ends a streamed tool call inside its arguments, or
+  right after its name with none, the Router passes the partial call on with
+  the limit stop, as the providers do: `max_tokens` for Messages, `length` for
+  Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
+  not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
+  response is not cached, stored, or kept as the replay response body.
+- A Responses reasoning item can carry different non-empty `encrypted_content`
+  strings in `response.output_item.done` and the corresponding output item in
+  `response.completed` or `response.incomplete`. The Router accepts this
+  difference while checking every other item field, output count, and output
+  order. A non-empty string becoming missing, null, or empty still fails with
+  `stream_terminal_output_mismatch`. The field remains reported as `dropped`
+  during protocol translation.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../api/headers).
@@ -518,15 +608,11 @@ its own turn the same way, which ends the Codex run.
   Responses backend. A Chat Completions or Messages backend can't request a
   summary, so the Router accepts the turn and reports the dropped setting in
   `x-vsr-warnings`.
-- **Unsupported:** multi-agent namespace tools and hosted web search. Disable
-  them in the Codex `config.toml` that points at the Router; these settings
-  were checked with Codex CLI 0.156.1:
+- **Unsupported:** hosted web search. Disable it in the Codex `config.toml`
+  that points at the Router:
 
 ```toml
 web_search = "disabled"
-
-[features]
-multi_agent = false
 ```
 
 Point Codex at the Router through a model provider of your own, not
@@ -550,3 +636,61 @@ name = "vLLM Semantic Router"
 base_url = "http://localhost:8899/v1"
 wire_api = "responses"
 ```
+
+### Namespace tools: multi-agent and MCP
+
+Codex groups tools into Responses `namespace` tools: `multi_agent_v1` holds
+`spawn_agent` and the other multi-agent tools when `multi_agent` is on, and each
+MCP server's tools arrive in a namespace named `mcp__<server>` by default. The
+Router accepts them, so `multi_agent` no longer needs to be disabled. This was
+checked with Codex CLI 0.166.0 on Chat, Responses and Messages backends.
+
+- Every backend, a Responses backend included, receives each namespaced tool as
+  one tool named `<namespace>__<name>`, for example `mcp__echo__echo` or
+  `multi_agent_v1__spawn_agent`. The namespace's description precedes the
+  tool's own.
+- A flat name keeps to 64 characters of letters, digits, `_` and `-`. A longer
+  name, or one with other characters, is shortened and made unique with a hash
+  of the namespace and name; a call in a later turn maps to the same name.
+- A request in which two different tools would get the same flat name fails
+  with `tool_namespace_collision`, whether the tools are declared or called in
+  the input history or in history retained behind `previous_response_id`. For
+  example, `mcp__a` with `b__c` and `mcp__a__b` with `c` both flatten to
+  `mcp__a__b__c`. A namespace inside a namespace, a hosted tool inside a
+  namespace, and a named `tool_choice` that selects a namespaced tool by its
+  own name are rejected.
+- The model's calls reach Codex with `namespace` and the tool's own `name`,
+  buffered and streamed. Calls in the input history, including history
+  retained behind `previous_response_id`, are sent to the backend under the
+  flat name.
+- A custom tool inside a namespace follows the custom-tool rules above, so it
+  cannot reach a Messages backend.
+- Tool filters, conversation signals and Router Replay see the flat name.
+
+A multi-agent child is a separate Codex request. Codex CLI 0.166.0 sends it with
+the parent's `session-id`, its own `thread-id`, `x-codex-parent-thread-id`
+naming the parent, and `x-openai-subagent: collab_spawn`. Its tools keep the
+MCP namespaces but not `multi_agent_v1`.
+
+`spawn_agent` can start a child on another model. Codex checks the model name
+against its own model catalog before it sends the child's request, and the
+Router answers a name its entrypoints do not publish with `model_not_found`.
+Publish the name in an entrypoint's `model_names`:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto, vllm-sr/cheap]
+    recipe: default
+```
+
+Then give Codex a catalog that lists every name it may use, with
+`model_catalog_json` in `config.toml`. Codex also decides the request shape from
+the catalog entry, so base each entry on an entry the Router accepts.
+`codex debug models --bundled` prints the bundled catalog. In Codex CLI 0.166.0,
+copy its `gpt-5.5` entry, set `slug` and `display_name` to the Router model name,
+and set `supports_search_tool` to `false`, because Codex otherwise replaces the
+namespaces with a `tool_search` tool, which the Router does not support. For a
+Messages backend, also set `apply_patch_tool_type` to `null`, because Codex
+otherwise sends `apply_patch` as a custom tool. The `gpt-6` entries send tools
+in an `additional_tools` input item with `reasoning.context`, which the Router
+rejects.

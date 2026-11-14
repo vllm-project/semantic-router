@@ -239,7 +239,7 @@ func providerHeaders(t *testing.T, client routing.Header, bodyReplies ...*ext_pr
 	t.Helper()
 	header := client.Clone()
 	replies := append([]*ext_proc.ProcessingResponse{
-		newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()),
+		newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation(config.IdentityConfig{})),
 	}, bodyReplies...)
 	for _, reply := range replies {
 		effect, err := routingEffect(reply)

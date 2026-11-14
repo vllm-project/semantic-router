@@ -20562,6 +20562,12 @@
                           "prompt": {
                             "type": "string"
                           },
+                          "prompt_original_bytes": {
+                            "type": "integer"
+                          },
+                          "prompt_original_sha256": {
+                            "type": "string"
+                          },
                           "prompt_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -21580,6 +21586,9 @@
                                     },
                                     "raw_output": {
                                       "type": "string"
+                                    },
+                                    "raw_truncated": {
+                                      "type": "boolean"
                                     },
                                     "role": {
                                       "type": "string"
@@ -23800,6 +23809,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
                           "conversation_id": {
                             "type": "string"
                           },
@@ -25383,6 +25395,12 @@
                     "prompt": {
                       "type": "string"
                     },
+                    "prompt_original_bytes": {
+                      "type": "integer"
+                    },
+                    "prompt_original_sha256": {
+                      "type": "string"
+                    },
                     "prompt_tokens": {
                       "nullable": true,
                       "type": "integer"
@@ -26401,6 +26419,9 @@
                               },
                               "raw_output": {
                                 "type": "string"
+                              },
+                              "raw_truncated": {
+                                "type": "boolean"
                               },
                               "role": {
                                 "type": "string"
@@ -39050,6 +39071,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },
@@ -39760,6 +39784,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },
@@ -47862,6 +47889,9 @@
                         }
                       }
                     },
+                    "instance_id": {
+                      "type": "string"
+                    },
                     "message": {
                       "type": "string"
                     },
@@ -48079,6 +48109,9 @@
                           "type": "string"
                         }
                       }
+                    },
+                    "instance_id": {
+                      "type": "string"
                     },
                     "message": {
                       "type": "string"

@@ -84,7 +84,10 @@ func consumeJSONObject(decoder *json.Decoder, depth, maximumDepth int) error {
 		}
 	}
 	closing, err := decoder.Token()
-	if err != nil || closing != json.Delim('}') {
+	if err != nil {
+		return fmt.Errorf("unterminated JSON object: %w", err)
+	}
+	if closing != json.Delim('}') {
 		return fmt.Errorf("unterminated JSON object")
 	}
 	return nil
@@ -97,7 +100,10 @@ func consumeJSONArray(decoder *json.Decoder, depth, maximumDepth int) error {
 		}
 	}
 	closing, err := decoder.Token()
-	if err != nil || closing != json.Delim(']') {
+	if err != nil {
+		return fmt.Errorf("unterminated JSON array: %w", err)
+	}
+	if closing != json.Delim(']') {
 		return fmt.Errorf("unterminated JSON array")
 	}
 	return nil

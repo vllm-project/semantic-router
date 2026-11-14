@@ -89,7 +89,7 @@ test("the pane says what a routed subagent cost against the session's model, at 
 
   const routing = (await paneLines($, { columns: 140, rows: 60 })).find(line => line.startsWith('routing'))
 
-  expect(routing).toBe('routing  $0.15 for 1 subagent turn vs $6.00 on Opus · saved 98% · est. at list price')
+  expect(routing).toBe('routing  $0.15 for 1 routed turn vs $6.00 on Opus · saved 98% · est. at list price')
 })
 
 test('the spend of a long subagent counts though its route is older than the pane\'s last hundred decisions', async ($, on) => {
@@ -101,7 +101,7 @@ test('the spend of a long subagent counts though its route is older than the pan
 
   const routing = (await paneLines($, { columns: 140, rows: 60 })).find(line => line.startsWith('routing'))
 
-  expect(routing).toBe('routing  $0.15 for 1 subagent turn vs $6.00 on Opus · saved 98% · est. at list price')
+  expect(routing).toBe('routing  $0.15 for 1 routed turn vs $6.00 on Opus · saved 98% · est. at list price')
 })
 
 test('a subagent sent to a stronger model than the session shows what it cost more', async ($, on) => {
@@ -112,7 +112,7 @@ test('a subagent sent to a stronger model than the session shows what it cost mo
 
   const routing = (await paneLines($, { columns: 140, rows: 60 })).find(line => line.startsWith('routing'))
 
-  expect(routing).toBe('routing  $6.00 for 1 subagent turn vs $3.00 on Sonnet 5.5 · cost 100% more · est. at list price')
+  expect(routing).toBe('routing  $6.00 for 1 routed turn vs $3.00 on Sonnet 5.5 · cost 100% more · est. at list price')
 })
 
 test('a cache write costs 1.25 times the input price, a model with no known price costs nothing known', () => {

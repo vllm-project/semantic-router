@@ -13,6 +13,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 	textForSignal func(string) string,
 	priorUserMessages []string,
 	toolResultTexts []string,
+	toolResultsIncomplete bool,
 	convFacts ConversationFacts,
 	requestFacts RequestFacts,
 	usedSignals map[string]bool,
@@ -42,7 +43,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			func(ctx context.Context) {
 				c.evaluateSystemOneSignals(ctx, results, mu, systemOneReading{
 					request: textForSignal(systemOneQuestionText), history: priorUserMessages, turns: requestFacts.Turns,
-					toolResults: toolResultTexts, images: requestFacts.Images, videos: requestFacts.Videos,
+					toolResults: toolResultTexts, toolResultsIncomplete: toolResultsIncomplete, images: requestFacts.Images, videos: requestFacts.Videos,
 				}, usedSignals)
 			},
 		},

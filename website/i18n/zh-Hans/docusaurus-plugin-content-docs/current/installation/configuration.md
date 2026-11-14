@@ -59,6 +59,7 @@ global:
 | `apis.<api>.models` | 某个 API 只接受的请求模型。 | 该类全部模型 |
 | `apis.systemone.schema` | listener 对客户端使用的 System One schema：`vllm-sr/5.0`，或 `vllm-sr/4.0`（同时接受旧契约的全部请求形式）。见 [System One schema](../system-one/use/schemas.md)。 | `vllm-sr/5.0` |
 | `apis.systemone.max_deadline_ms` | System One 请求等待模型的最长时间。 | 10 分钟 |
+| `apis.systemone.vsr` | 指向该 listener 的 vSR 智能体插件的行为：`redact`、`shield`、`guard`、`check`、`escalate`、`router` 和 `router_turns` 的开关，以及 `router_goal`（`quality`、`balanced` 或 `save`）。listing（`GET /v1/systemone/models`）把它交给插件，这里设置的每个字段优先于插件自己的选项。Dashboard 在 Config › Global Config › vSR agent plugins 中以复选框编辑它。 | 插件自己的选项 |
 | `tls.cert_file`、`tls.key_file` | 单向 TLS。 | 关闭 |
 | `identity.trust_headers`、`identity.trusted_peers` | listener 在 standalone 模式下信任的身份来源。 | 无 |
 
@@ -385,8 +386,8 @@ plugins:
 | `global.plugins` 中的 `router_replay` 插件 | 是否开启采集，以及采集默认值。 |
 | 配方或决策的 `router_replay` 插件 | 只覆盖它设置的字段。`enabled: false` 在该处关闭采集；默认关闭时，`enabled: true` 可单独开启。 |
 
-- **个人数据。** `capture_personal_data: false` 保留路由证据，但在检测到 PII 或状态未知时省略内容。没有 PII 检测器时，内容会被省略，而不是阻止启动。
-- **工具结果**保持脱敏，除非设置 `capture_tool_results: true`，而它要求 `capture_personal_data: true`。
+- **提示词文本。** `prompt_capture` 说明记录在路由证据之外保留什么。默认的 `none` 不保留任何请求或响应文本，也不读取任何内容检查个人数据。`raw` 不经检查地保留采集开关允许的文本。`verified` 只在 PII 规则确认提示词不含个人数据后保留提示词，检测到 PII 或状态未知时省略它；没有 PII 检测器时，提示词会被省略，而不是阻止启动。`capture_personal_data` 是已弃用的写法：`false` 加载为 `verified`，`true` 加载为 `raw`，并给出警告。
+- **工具结果**保持脱敏，除非设置 `capture_tool_results: true`，而它只在 `prompt_capture: raw` 下存储结果。
 - **被拒绝的请求**如果还没有选中决策，使用其配方的采集默认值。
 
 这些设置不控制其他存储或后端的数据保留。全部字段见 [Router Replay](../tutorials/plugin/router-replay)，或运行 `vllm-sr config schema --section global.services.router_replay`。

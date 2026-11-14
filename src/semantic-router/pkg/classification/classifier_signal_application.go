@@ -151,6 +151,47 @@ func recordPrivacyEvidence(results *SignalResults, call *systemOneCall, response
 	}
 }
 
+// ReplayPromptReadable reports whether ReplayPromptEvidence could read prompt
+// whole within within: a prompt that one window of each pii rule's deployment
+// holds is one call, and is always readable. A longer one is not readable
+// when it needs more windows than one scan reads, or when its windows would
+// take longer than scanReadShare of within at the deployment's measured pace.
+// Before the deployment has a pace, it is readable unless the request's own
+// guard scans ran out of time on its input (guardReadShort). Once it has one,
+// the pace decides alone: a guard scan may read more than the prompt (earlier
+// turns, tool results), or end in part on windows that failed, and its
+// deadline is not within.
+func (c *Classifier) ReplayPromptReadable(prompt string, within time.Duration, guardReadShort bool) bool {
+	if c == nil || c.Config == nil {
+		return true
+	}
+	for _, rule := range c.applicationRules {
+		if rule.Type != config.SignalTypePII || rule.Rule.Input != (config.SystemOneInput{}) {
+			continue
+		}
+		deployment := c.Config.SystemOneRuleDeployment(applicationAsked(rule).rule)
+		budget := c.scanWindowBudget(deployment)
+		if len(prompt) <= budget.size {
+			continue
+		}
+		windows, grown := cutScanWindows(prompt, budget.size, budget.most, budget.overlap)
+		if len(windows) > maxScanWindows {
+			return false
+		}
+		perCall, perByte, ok := c.windowPaces.line(deployment, budget.parallel)
+		if !ok {
+			if guardReadShort {
+				return false
+			}
+			continue
+		}
+		if float64(len(windows))*(perCall+perByte*float64(grown)) > scanReadShare*within.Seconds() {
+			return false
+		}
+	}
+	return true
+}
+
 // ReplayPromptEvidence reads a prompt with the recipe's pii rules, for Router
 // Replay's privacy check of a prompt routing did not read alone.
 func (c *Classifier) ReplayPromptEvidence(ctx context.Context, prompt string) PrivacyEvidence {
@@ -253,8 +294,7 @@ func (c *Classifier) PIIRuleSpans(ctx context.Context, ruleName string, text str
 	}
 	asked := applicationAsked(c.applicationRules[index])
 	deployment := c.Config.SystemOneRuleDeployment(asked.rule)
-	size, overlap := c.scanWindowBudget(deployment)
-	if scan := newGuardScan(deployment, modelservice.Request{State: text}, size, overlap); scan != nil {
+	if scan := newGuardScan(deployment, modelservice.Request{State: text}, c.scanWindowBudget(deployment)); scan != nil {
 		return c.piiScanSpans(ctx, ruleName, text, asked, scan)
 	}
 	call := &systemOneCall{deployment: deployment, request: modelservice.Request{State: text}, rules: []askedRule{asked}}
@@ -282,14 +322,12 @@ func (c *Classifier) PIIRuleSpans(ctx context.Context, ruleName string, text str
 // must be read whole, and their spans count at their places in the text.
 func (c *Classifier) piiScanSpans(ctx context.Context, ruleName, text string, asked askedRule, scan *guardScan) ([]modelservice.Span, error) {
 	scan.rules = []askedRule{asked}
-	calls := scan.windowCalls()
-	modelservice.Fan(ctx, len(calls), func(i int) {
-		response, latency, err := c.sendCall(ctx, calls[i])
-		scan.record(calls[i].window, response, err, latency)
-	})
-	read, reason := scan.answers(asked)
-	if len(read) < len(scan.windows) {
-		return nil, fmt.Errorf("pii rule %q read %d of the text's %d windows: %w: %s", ruleName, len(read), len(scan.windows), modelservice.ErrUnavailable, reason)
+	readers, release := c.windowReaders(ctx, []*guardScan{scan})
+	modelservice.Fan(ctx, len(readers), func(i int) { readers[i]() })
+	release()
+	read, covered, reason := scan.answers(asked)
+	if covered < scan.cut {
+		return nil, fmt.Errorf("pii rule %q read %d of the text's %d windows: %w: %s", ruleName, covered, scan.cut, modelservice.ErrUnavailable, reason)
 	}
 	for _, entry := range read {
 		if entry.answer.InputCoverage != "complete" {

@@ -11,11 +11,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -136,7 +138,9 @@ func TestRunRouterProcessLoadedShutdownIsBoundedAndReleasesListener(t *testing.T
 		if err != nil {
 			t.Fatalf("runRouterProcess() error = %v", err)
 		}
-	case <-time.After(time.Second):
+	// Well under processShutdownTimeout, so a shutdown that waits it out
+	// fails, with room for a loaded runner.
+	case <-time.After(processShutdownTimeout(config.GatewayExtProc, nil) / 3):
 		t.Fatal("loaded Router shutdown exceeded its bound")
 	}
 
@@ -466,9 +470,20 @@ func waitForTestError(t *testing.T, result <-chan error, failure string) error {
 	}
 }
 
+// readinessWait bounds how long a test waits for a listener to come up. It is
+// not what the tests check, so it leaves room for a loaded CI runner.
+const readinessWait = time.Minute
+
+// goroutineDump is every goroutine's stack, so a wait that runs out shows
+// where the Router was blocked.
+func goroutineDump() string {
+	buf := make([]byte, 1<<20)
+	return string(buf[:runtime.Stack(buf, true)])
+}
+
 func waitForProcessListener(t *testing.T, done <-chan error, address string) {
 	t.Helper()
-	startupDeadline := time.Now().Add(5 * time.Second)
+	startupDeadline := time.Now().Add(readinessWait)
 	for {
 		select {
 		case err := <-done:
@@ -481,7 +496,7 @@ func waitForProcessListener(t *testing.T, done <-chan error, address string) {
 			return
 		}
 		if time.Now().After(startupDeadline) {
-			t.Fatal("ExtProc listener did not become ready")
+			t.Fatalf("ExtProc listener did not become ready within %s; goroutines:\n%s", readinessWait, goroutineDump())
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

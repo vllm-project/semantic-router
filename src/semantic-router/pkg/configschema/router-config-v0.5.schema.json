@@ -709,6 +709,9 @@
         },
         "signal_timeout_ms": {
           "type": "integer"
+        },
+        "on_signal_overload": {
+          "$ref": "#/$defs/SignalOverloadPolicy"
         }
       },
       "additionalProperties": false,
@@ -809,6 +812,19 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "unsupported_capabilities": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "sampling_min_p",
+              "sampling_logit_bias"
+            ]
+          },
+          "type": "array"
+        },
+        "tokenizer": {
+          "type": "string"
         },
         "display_name": {
           "type": "string"
@@ -1095,6 +1111,7 @@
               "tool_result.is_error",
               "messages[].role",
               "content.file",
+              "tools.defer_loading",
               "reasoning.signature",
               "store"
             ]
@@ -1106,6 +1123,14 @@
         },
         "headers": {
           "$ref": "#/$defs/RouterHeadersConfig"
+        },
+        "context_window": {
+          "$ref": "#/$defs/ContextWindowConfig"
+        },
+        "drain_timeout_seconds": {
+          "type": "integer",
+          "maximum": 86400,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -1668,6 +1693,25 @@
       "required": [
         "type"
       ]
+    },
+    "ContextWindowConfig": {
+      "properties": {
+        "margin": {
+          "type": "number",
+          "maximum": 0.5,
+          "minimum": 0
+        },
+        "proxy_margin": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
+        "proxy_tokenizer": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "ConversationFeature": {
       "properties": {
@@ -2367,6 +2411,21 @@
         "overlap": {
           "type": "integer",
           "minimum": 0
+        },
+        "max_parallel": {
+          "type": "integer",
+          "maximum": 64,
+          "minimum": 1
+        },
+        "max_tokens": {
+          "type": "integer",
+          "maximum": 1048576,
+          "minimum": 256
+        },
+        "reread_margin": {
+          "type": "number",
+          "maximum": 20,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -3047,6 +3106,11 @@
             "unknown"
           ]
         },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        },
         "on_unknown": {
           "type": "string",
           "enum": [
@@ -3294,6 +3358,9 @@
         "max_deadline_ms": {
           "type": "integer",
           "minimum": 1
+        },
+        "vsr": {
+          "$ref": "#/$defs/VSRProfile"
         }
       },
       "additionalProperties": false,
@@ -4640,6 +4707,11 @@
             "no_match",
             "unknown"
           ]
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
         },
         "on_unknown": {
           "type": "string",
@@ -5998,11 +6070,17 @@
     },
     "RouterReplayPluginConfig": {
       "properties": {
-        "capture_personal_data": {
-          "type": "boolean"
-        },
         "enabled": {
           "type": "boolean"
+        },
+        "prompt_capture": {
+          "type": "string",
+          "enum": [
+            "none",
+            "raw",
+            "verified"
+          ],
+          "description": "What a record keeps besides routing data: none (the default) keeps no request or response text; raw keeps the text the capture switches allow, unverified; verified keeps the prompt alone, once the pii rules read it whole and find it clean."
         },
         "max_records": {
           "type": "integer"
@@ -6019,14 +6097,27 @@
         "max_body_bytes": {
           "type": "integer"
         },
+        "max_prompt_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
         "max_tool_trace_bytes": {
           "type": "integer"
+        },
+        "max_tool_trace_total_bytes": {
+          "type": "integer",
+          "minimum": 0
         },
         "max_tool_trace_steps": {
           "type": "integer"
         },
         "shadow": {
           "$ref": "#/$defs/RouterReplayShadowConfig"
+        },
+        "capture_personal_data": {
+          "type": "boolean",
+          "description": "Deprecated: write prompt_capture. false loads as prompt_capture: verified and true as prompt_capture: raw.",
+          "deprecated": true
         }
       },
       "additionalProperties": false,
@@ -6305,6 +6396,34 @@
         },
         "timeout_ms": {
           "type": "integer"
+        },
+        "min_coverage": {
+          "type": "number",
+          "maximum": 1,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SignalOverloadPolicy": {
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "refuse",
+            "retry"
+          ]
+        },
+        "wait_ms": {
+          "type": "integer",
+          "maximum": 60000,
+          "minimum": 0
+        },
+        "retry_after_seconds": {
+          "type": "integer",
+          "maximum": 60,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -6851,6 +6970,41 @@
         },
         "timeout_ms": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "VSRProfile": {
+      "properties": {
+        "router": {
+          "type": "boolean"
+        },
+        "router_turns": {
+          "type": "boolean"
+        },
+        "router_goal": {
+          "type": "string",
+          "enum": [
+            "quality",
+            "balanced",
+            "save"
+          ]
+        },
+        "escalate": {
+          "type": "boolean"
+        },
+        "redact": {
+          "type": "boolean"
+        },
+        "shield": {
+          "type": "boolean"
+        },
+        "guard": {
+          "type": "boolean"
+        },
+        "check": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -7884,6 +8038,15 @@
         "path": [
           "model_catalog",
           "signal_timeout_ms"
+        ]
+      },
+      {
+        "key": "on_signal_overload",
+        "layer": "model_catalog",
+        "display_name": "On Signal Overload",
+        "path": [
+          "model_catalog",
+          "on_signal_overload"
         ]
       },
       {

@@ -118,6 +118,8 @@ ALLOWED = {
         "is_byok",
         "cost_details",
         "server_tool_use",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
     },
     "cost_details": {
         "upstream_inference_cost",

@@ -229,7 +229,7 @@ export const X_VSR_TRACE = 'x-vsr-trace'
 /** Endpoint Envoy reports on the provider response for KV registry writes; removed before the client. Surface: internal. */
 export const X_VSR_UPSTREAM_HOST = 'x-vsr-upstream-host'
 
-/** Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. Surface: public. */
+/** Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, `guard_overloaded` on the retryable error answered instead of a refusal or a forward that rules unread on an overloaded decision runtime decide, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. Surface: public. */
 export const X_VSR_WARNINGS = 'x-vsr-warnings'
 
 // The members of x-vsr-trace, from src/semantic-router/pkg/headers/trace.go.

@@ -7,6 +7,8 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount/tokenizerspec"
 )
 
 // CanonicalConfigVersion identifies the steady-state public configuration
@@ -393,6 +395,14 @@ func validateCanonicalProviderModelMetadata(model CanonicalProviderModel) error 
 	}
 	if err := validateProviderReliability(model.Name, model.Reliability); err != nil {
 		return err
+	}
+	if _, err := llmprotocol.ParseUnsupportedCapabilities(model.UnsupportedCapabilities); err != nil {
+		return fmt.Errorf("providers.models[%s].unsupported_capabilities: %w", model.Name, err)
+	}
+	if model.Tokenizer != "" {
+		if _, err := tokenizerspec.Parse(model.Tokenizer); err != nil {
+			return fmt.Errorf("providers.models[%s].tokenizer: %w", model.Name, err)
+		}
 	}
 	return validateModelPricing(model.Name, model.Pricing)
 }

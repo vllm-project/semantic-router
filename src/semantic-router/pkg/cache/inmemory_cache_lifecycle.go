@@ -100,10 +100,6 @@ func (c *InMemoryCache) cleanupExpiredEntriesDeferred() {
 // cleanupExpiredEntriesInternal optionally postpones HNSW rebuild until the caller finishes batching updates.
 // Uses expiration heap for O(k) cleanup where k = number of expired entries.
 func (c *InMemoryCache) cleanupExpiredEntriesInternal(deferRebuild bool) {
-	if c.ttlSeconds <= 0 {
-		return
-	}
-
 	now := time.Now()
 
 	// Use expiration heap for efficient O(k) cleanup where k = expired entries
