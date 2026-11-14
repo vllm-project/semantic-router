@@ -549,6 +549,13 @@ tools or error translation.
   Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
   not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
   response is not cached, stored, or kept as the replay response body.
+- A Responses reasoning item can carry different non-empty `encrypted_content`
+  strings in `response.output_item.done` and the corresponding output item in
+  `response.completed` or `response.incomplete`. The Router accepts this
+  difference while checking every other item field, output count, and output
+  order. A non-empty string becoming missing, null, or empty still fails with
+  `stream_terminal_output_mismatch`. The field remains reported as `dropped`
+  during protocol translation.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../api/headers).
