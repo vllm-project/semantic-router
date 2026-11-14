@@ -188,5 +188,14 @@ describe('vSR agent plugin profile on a System One listener', () => {
     expect(count(profiled, 'aria-pressed="true">Default')).toBe(7)
     expect(profiled).toContain('1 set here')
     expect(profiled).toContain('Reset to plugin defaults')
+
+    // Bound rules are not a plugin setting: they are counted on their own and a reset keeps them.
+    const ruled = render(
+      withListenerVSR(config, 0, {
+        rules: { recipe: 'agents', guard: [{ type: 'keyword', name: 'prod_database' }], redact: [{ type: 'keyword', name: 'employee_id' }] },
+      }),
+    )
+    expect(ruled).toContain('All plugin defaults · 2 rules bound')
+    expect(ruled).not.toContain('Reset to plugin defaults')
   })
 })

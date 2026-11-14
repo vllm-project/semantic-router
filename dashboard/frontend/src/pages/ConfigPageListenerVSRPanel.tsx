@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 
 import type { VSRProfile } from '../types/config'
 import styles from './ConfigPageRouterConfigSection.module.css'
+import { Choices, Row } from './ConfigPageListenerVSRChoices'
+import { ListenerVSRRules } from './ConfigPageListenerVSRRules'
 import {
   VSR_GOAL_HINT,
   VSR_GOALS,
@@ -17,39 +19,6 @@ interface ListenerVSRControlsProps {
   vsr: VSRProfile | undefined
   disabled: boolean
   onChange: (vsr: VSRProfile | undefined) => void
-}
-
-interface Choice {
-  text: string
-  note?: string
-  pressed: boolean
-  pick: () => void
-}
-
-// One segmented row of choices; the pressed one is what the listener sends.
-function Choices({ label, choices, disabled }: { label: string; choices: Choice[]; disabled: boolean }) {
-  return (
-    <div className={styles.vsrChoices} role="group" aria-label={label}>
-      {choices.map(({ text, note, pressed, pick }) => (
-        <button key={text} type="button" aria-pressed={pressed} disabled={disabled} onClick={pick}>
-          {text}
-          {note ? <span className={styles.vsrChoiceNote}>{note}</span> : null}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-function Row({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
-  return (
-    <div className={styles.vsrRow}>
-      <div className={styles.vsrRowText}>
-        <span className={styles.vsrRowLabel}>{label}</span>
-        <span className={styles.vsrRowHint}>{hint}</span>
-      </div>
-      {children}
-    </div>
-  )
 }
 
 const onOff = (on: boolean) => (on ? 'on' : 'off')
@@ -159,12 +128,15 @@ export default function ConfigPageListenerVSRPanel({
         {listeners.map(({ index, listener, vsr }) => {
           // The listener's rules are not a plugin setting: a reset keeps them.
           const set = Object.keys(vsr ?? {}).filter((key) => key !== 'rules').length
+          const bound = (vsr?.rules?.guard?.length ?? 0) + (vsr?.rules?.redact?.length ?? 0)
+          const state = [set === 0 ? 'All plugin defaults' : `${set} set here`]
+          if (bound > 0) state.push(`${bound} ${bound === 1 ? 'rule' : 'rules'} bound`)
           return (
             <article key={index} className={styles.vsrListener}>
               <header className={styles.vsrListenerHead}>
                 <h4 className={styles.cardTitle}>{`${listener.name} · port ${listener.port}`}</h4>
                 <span className={styles.vsrListenerState}>
-                  {saving ? 'Saving…' : set === 0 ? 'All plugin defaults' : `${set} set here`}
+                  {saving ? 'Saving…' : state.join(' · ')}
                 </span>
                 {set > 0 ? (
                   <button
@@ -178,6 +150,13 @@ export default function ConfigPageListenerVSRPanel({
                 ) : null}
               </header>
               <ListenerVSRControls
+                vsr={vsr}
+                disabled={isReadonly || saving}
+                onChange={(next) => void save(index, next)}
+              />
+              <ListenerVSRRules
+                config={config}
+                listener={listener}
                 vsr={vsr}
                 disabled={isReadonly || saving}
                 onChange={(next) => void save(index, next)}

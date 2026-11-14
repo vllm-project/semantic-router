@@ -47,7 +47,7 @@ func registerCoreRoutes(mux routeRegistrar, cfg *config.Config, setupResolver *s
 	registerRecipeRoutes(mux, cfg, store)
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/instance/models", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.InstanceHandler())
-	for _, path := range []string{"/v1/systemone", "/v1/systemone/batch", "/v1/decisions"} {
+	for _, path := range []string{"/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/rules"} {
 		registerRouteFunc(mux, auth.PublicRoute(path, http.MethodPost), handlers.PublicSystemOneHandler(cfg.RouterAPIURL, store))
 	}
 	registerRouteFunc(mux, auth.PublicRoute("/v1/systemone/models", http.MethodGet), handlers.PublicSystemOneHandler(cfg.RouterAPIURL, store))
@@ -139,6 +139,7 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/decision-model/tasks", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.DecisionTaskCatalogHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/decision-model/capabilities", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), decisionModel)
 	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/decision-model/test", auth.PermEvalRun, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost), decisionModel)
+	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/vsr/rules/try", auth.PermConfigWrite, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 1<<20, http.MethodPost), handlers.VSRRulesTryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
 	nativeRoutes := auth.ProtectedRoute("/api/decision-model/routes", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet)
 	nativeRoutes.Policies = append(nativeRoutes.Policies, auth.ProtectedBoundedRoute("/api/decision-model/routes", auth.PermEvalRun, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost).Policies...)
 	nativeRoutes = nativeRoutes.Describe(http.MethodGet, decisionRoutesOperation).Describe(http.MethodPost, decisionRouteRunOperation)
