@@ -198,7 +198,8 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		serving.SystemOne.ServeHTTP(w, r)
 		return
 	}
-	if !newAPIKeys(serving.APIKeys).authorize(r) {
+	keys := newAPIKeys(serving.APIKeys)
+	if !keys.check(r) {
 		writeUnauthorized(w)
 		return
 	}
@@ -207,9 +208,10 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	if listing && serving.ListsSystemOne && serving.SystemOne != nil {
-		h.serveListing(w, r, serving, x)
+		h.serveListing(w, r, serving, x, keys)
 		return
 	}
+	keys.strip(r)
 	h.serveRouted(w, r, serving, x, models)
 }
 
@@ -226,11 +228,16 @@ func isSystemOnePath(path string) bool {
 // systemone: the LLM models as OpenAI data, with the System One listing's
 // models beside them. A listing that already carries models, the empty
 // catalog Codex asks for, stays as the routing core wrote it.
-func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange) {
+func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange, keys *apiKeys) {
+	// The systemone listing checks the listener's key itself, so it gets the
+	// request before the credential is removed; the routed listing forwards a
+	// request that carries none.
+	systemOneRequest := r.Clone(r.Context())
+	keys.strip(r)
 	llm := newBufferedResponse()
 	h.serveRouted(llm, r, serving, x, serving.Models)
 	systemOne := newBufferedResponse()
-	serving.SystemOne.ServeHTTP(systemOne, r.Clone(r.Context()))
+	serving.SystemOne.ServeHTTP(systemOne, systemOneRequest)
 	var listed, native map[string]json.RawMessage
 	if llm.status != http.StatusOK || json.Unmarshal(llm.body.Bytes(), &listed) != nil || listed == nil ||
 		listed["models"] != nil || systemOne.status != http.StatusOK || json.Unmarshal(systemOne.body.Bytes(), &native) != nil ||
