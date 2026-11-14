@@ -340,6 +340,9 @@ class ServedModel:
         self.kernel_choices: KernelChoices | None = None
         self.unpinned: str | None = None
         self._stall: _Stall | None = None
+        # The scheduler failure the model was degraded for (``report_failure``).
+        self._reported: BaseException | None = None
+        self._reporting = threading.Lock()
 
     # -- names ---------------------------------------------------------------
 
@@ -575,6 +578,9 @@ class ServedModel:
             ),
             device_fault=placement.accelerator.device_fault,
             planning=self.runtime.planning_before,
+            on_failure=lambda error: self.report_failure(
+                error, f"model worker failed: {type(error).__name__}: {error}"
+            ),
         )
 
         with self.runtime._lifecycle_lock:
@@ -809,6 +815,19 @@ class ServedModel:
 
     def device_failure(self) -> BaseException | None:
         return self.scheduler.failure if self.scheduler else None
+
+    def report_failure(self, failure: BaseException, reason: str) -> None:
+        """Degrade the model for its scheduler's ``failure`` once, however many callers see it.
+
+        Its health cannot tell a failure already reported: the watchdog also
+        degrades a stalled forward, then restores the replaced state once
+        that forward returns, even when it returned a device fault.
+        """
+        with self._reporting:
+            if failure is self._reported:
+                return
+            self._reported = failure
+        self.runtime.degrade(reason, self)
 
     # -- description ---------------------------------------------------------
 
@@ -1562,7 +1581,7 @@ class Runtime:
         if any(isinstance(result, BaseException) for result in results):
             failure = served.device_failure()
             if failure is not None:
-                self.degrade(f"{type(failure).__name__}: {failure}", served)
+                served.report_failure(failure, f"{type(failure).__name__}: {failure}")
         finished = time.monotonic()
         compute_ms = (finished - submitted) * 1000.0
         for member, (index, prepared) in enumerate(members):

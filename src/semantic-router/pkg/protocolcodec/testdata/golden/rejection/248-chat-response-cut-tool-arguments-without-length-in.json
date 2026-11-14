@@ -1,0 +1,24 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "chatcmpl_cut_tool_calls",
+    "object": "chat.completion",
+    "model": "provider-model",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "call_1",
+              "type": "function",
+              "function": {"name": "lookup", "arguments": "{\"query\":\"wea"}
+            }
+          ]
+        },
+        "finish_reason": "tool_calls"
+      }
+    ]
+  }
+}

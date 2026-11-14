@@ -74,6 +74,8 @@ export type Settings = {
   log: { path: string; calibrateEvery: number }
   logo: LogoMode
   routerGoal: RouterGoal
+  // The router also picks the model and effort of each prompt you send, not only of subagents.
+  routerTurns: boolean
   display: Display
 }
 
@@ -111,6 +113,7 @@ export function parseSettings(options: PluginOptions): Settings {
     log: { path: String(options.logPath).trim(), calibrateEvery: Math.max(0, Math.round(options.calibrateEvery as number)) },
     logo: options.logo as LogoMode,
     routerGoal: options.routerGoal as RouterGoal,
+    routerTurns: options.routerTurns === true,
     display: options.display as Display,
   }
 }

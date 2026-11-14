@@ -62,6 +62,8 @@ func applyEffectiveModelRegistry(
 		if params.AuthoredModel != nil {
 			params.Deployment = params.AuthoredModel.Deployment
 			params.Schema = params.AuthoredModel.Schema
+			params.UnsupportedCapabilities = append([]string(nil), params.AuthoredModel.UnsupportedCapabilities...)
+			params.Tokenizer = params.AuthoredModel.Tokenizer
 		}
 		if model.BindingDefaults.Protocol != "" {
 			apiFormat, err := apiFormatForProtocol(model.BindingDefaults.Protocol)
@@ -93,6 +95,7 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		Catalog:              model.Catalog,
 		ParamSize:            card.ParameterSize,
 		ContextWindowSize:    card.Limits.ContextWindowSize,
+		HubRepo:              hubRepoOf(card.Distribution),
 		MaxOutputTokens:      card.Limits.MaxOutputTokens,
 		Description:          card.Description,
 		Capabilities:         declaredCardCapabilities(model.Card),
@@ -184,6 +187,9 @@ func applyBindingMetadata(
 	binding := effective.Binding
 	providerID := effective.Provider.Definition.ID
 	params.ExternalModelIDs[providerID] = binding.ModelID
+	if params.HubRepo == "" && effective.Provider.Definition.SupportTier == selfHostedSupportTier {
+		params.HubRepo = hubRepoID(binding.ModelID)
+	}
 	for key, value := range binding.ExternalModelIDs {
 		params.ExternalModelIDs[key] = value
 	}
@@ -300,6 +306,7 @@ func materializedProviderProfile(
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
 		ChatPath:       provider.Instance.ChatPath,
 		AuthCredential: provider.Instance.AuthCredential,
+		TLS:            deploymentTLSFromCatalog(provider.Instance.TLS),
 	}
 }
 

@@ -60,14 +60,14 @@ global:
 
 | 范围 | 保护什么 | 什么可以重新路由 |
 | --- | --- | --- |
-| `conversation` | 共享同一个 `x-conversation-id` 的轮次。 | 同一 `x-session-id` 中新的 `x-conversation-id`，或显式释放。 |
+| `conversation` | 共享同一个 `x-conversation-id` 的轮次；没有该请求头时，为同一 session 中对话开头相同的轮次。 | 同一 `x-session-id` 中新的 `x-conversation-id` 或新的对话，或显式释放。 |
 | `session` | 共享同一个 `x-session-id` 的轮次。 | 空闲超时、带 `adaptations.mode: bypass` 的决策，或显式释放。 |
 
 - **使用 `conversation`**：每次 agent 运行都应单独路由。决策变化会重置最少轮次和连续性成本的偏好。
 - **使用 `session`**：一个模型选择应在多次用户发起的运行中保持不变。仅仅是决策或对话发生变化，不会释放一个仍合格的当前模型；空闲超时、绕过、候选被排除、符合条件的救援或显式释放才可以。
 - **两种范围**都不能把之前的模型保留在已准入的候选集合之外。
 
-如果缺少所配置的身份请求头，防护会失败开放，记录诊断信息，而不是让请求失败。
+如果缺少 session 请求头，防护会失败开放，记录诊断信息，而不是让请求失败。缺少 conversation 请求头不算失败：在 `scope: conversation` 下，Router 按对话的开头（其最初的指令和用户消息）为对话命名，因此 session 中的每个对话都保有自己的键。详见[会话标识](../../api/session-identification#choose-the-identity-you-need)。
 
 ### 委派子代理的 Agent {#agents-that-delegate-to-subagents}
 

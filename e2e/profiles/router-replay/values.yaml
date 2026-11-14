@@ -79,6 +79,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: true
                 capture_response_body: true
@@ -100,6 +101,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: true
                 capture_response_body: true
@@ -120,6 +122,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: true
                 capture_response_body: true
@@ -141,6 +144,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: true
                 capture_response_body: true
@@ -163,6 +167,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: true
                 capture_response_body: true
@@ -192,6 +197,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: true
                 capture_response_body: true
@@ -222,6 +228,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: false
                 capture_response_body: true
@@ -251,6 +258,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: false
                 capture_response_body: true
@@ -280,6 +288,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: false
                 capture_response_body: true
@@ -309,6 +318,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: false
                 capture_response_body: true

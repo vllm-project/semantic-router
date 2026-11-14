@@ -33,7 +33,7 @@ router_eval_endpoint: /api/v1/routing/preview
 evaluation:
   request_timeout_seconds: 300
   concurrency: 1
-  shards: 16
+  shards: 8
 acceptance:
   min_probe_pass_rate: 100.0
   min_decision_pass_rate: 100.0

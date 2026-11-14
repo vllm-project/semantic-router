@@ -487,9 +487,9 @@ func TestFallbackExhaustion(t *testing.T) {
 	if resp == nil {
 		t.Fatal("expected non-nil response on candidate exhaustion")
 	}
-	// When candidates fail, falls back to original transport error translation
-	if resp.GetImmediateResponse() != nil {
-		t.Fatal("must not return ImmediateResponse when all fallback candidates failed")
+	// When every candidate fails, the client gets the last attempt's outcome.
+	if immediate := resp.GetImmediateResponse(); immediate == nil || immediate.GetStatus().GetCode() != typev3.StatusCode_ServiceUnavailable {
+		t.Fatalf("expected the last candidate's 503, got: %#v", resp)
 	}
 	if ctx.FallbackRecord == nil {
 		t.Fatal("expected FallbackRecord to be created")
@@ -820,8 +820,8 @@ func TestFallbackMaxAttemptsExceededAcrossMultipleCandidates(t *testing.T) {
 	if resp == nil {
 		t.Fatal("expected response")
 	}
-	if resp.GetImmediateResponse() != nil {
-		t.Fatal("expected standard error translation after max attempts reached")
+	if immediate := resp.GetImmediateResponse(); immediate == nil || immediate.GetStatus().GetCode() != typev3.StatusCode_ServiceUnavailable {
+		t.Fatalf("expected the last candidate's 503 after max attempts reached, got: %#v", resp)
 	}
 
 	// With MaxAttempts=2, primary is Attempt 1, model-fallback-1 is Attempt 2.
@@ -1002,13 +1002,6 @@ func TestFallbackFailureInHandleResponseHeadersMarksContinued(t *testing.T) {
 	policy := fallback.DefaultEnabledPolicy()
 	router, _ := setupFallbackTestRouter(t, policy)
 
-	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
-
-	// Fallback candidate also fails
-	router.fallbackCaller = func(callCtx context.Context, model string, body []byte, headers map[string]string) ([]byte, int, error) {
-		return []byte(`{"error": "candidate also 503"}`), 503, nil
-	}
-
 	reqHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{
 			Headers: &core.HeaderMap{
@@ -1019,7 +1012,22 @@ func TestFallbackFailureInHandleResponseHeadersMarksContinued(t *testing.T) {
 		},
 	}
 
-	resp, err := router.handleResponseHeaders(reqHeaders, ctx)
+	// A candidate that also fails answers the client with its own outcome.
+	failed := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
+	router.fallbackCaller = func(callCtx context.Context, model string, body []byte, headers map[string]string) ([]byte, int, error) {
+		return []byte(`{"error": "candidate also 503"}`), 503, nil
+	}
+	resp, err := router.handleResponseHeaders(reqHeaders, failed)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.GetImmediateResponse() == nil || failed.ResponseHeadersContinued {
+		t.Fatalf("expected the candidate's outcome as the answer, got: %#v", resp)
+	}
+
+	// A chain that sends no candidate continues the primary's response.
+	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-unknown"})
+	resp, err = router.handleResponseHeaders(reqHeaders, ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1027,7 +1035,7 @@ func TestFallbackFailureInHandleResponseHeadersMarksContinued(t *testing.T) {
 		t.Fatal("expected non-nil response")
 	}
 	if resp.GetImmediateResponse() != nil {
-		t.Fatal("expected continue response when all fallback candidates fail, got ImmediateResponse")
+		t.Fatal("expected continue response when no fallback candidate was sent, got ImmediateResponse")
 	}
 
 	// Once continue response is returned from handleResponseHeaders, headers are committed downstream
@@ -4101,7 +4109,8 @@ func TestFallbackPersistsExhaustedExecution(t *testing.T) {
 	}
 
 	resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx)
-	require.Nil(t, resp.GetImmediateResponse())
+	require.NotNil(t, resp.GetImmediateResponse())
+	require.EqualValues(t, http.StatusServiceUnavailable, resp.GetImmediateResponse().GetStatus().GetCode())
 	record, ok := recorder.GetRecord(recordID)
 	require.True(t, ok)
 	require.NotEmpty(t, record.Outcomes)
@@ -4124,11 +4133,12 @@ func TestResponsePolicyPersistenceIsDeferredUntilCommit(t *testing.T) {
 
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
-		RequestID:            "request-deferred-policy-commit",
-		RouterReplayID:       recordID,
-		RouterReplayRecorder: recorder,
-		SourceFormat:         llmprotocol.OpenAIChatV1,
-		UpstreamStatusCode:   http.StatusOK,
+		RequestID:                "request-deferred-policy-commit",
+		RouterReplayID:           recordID,
+		RouterReplayRecorder:     recorder,
+		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureResponseBody: true},
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		UpstreamStatusCode:       http.StatusOK,
 	}
 	response := &llmprotocol.Response{
 		ID:    "chatcmpl-deferred",

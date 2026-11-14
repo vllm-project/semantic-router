@@ -14,6 +14,7 @@ type postgresSafetyEvidence struct {
 	PIIBlocked                  bool                 `json:"pii_blocked,omitempty"`
 	ConfidenceScoreAvailable    bool                 `json:"confidence_score_available"`
 	SignalErrorMatches          map[string]bool      `json:"signal_error_matches,omitempty"`
+	ScanCoverage                map[string]string    `json:"scan_coverage,omitempty"`
 	JailbreakDetected           bool                 `json:"jailbreak_detected,omitempty"`
 	JailbreakType               string               `json:"jailbreak_type,omitempty"`
 	JailbreakConfidence         *float32             `json:"jailbreak_confidence,omitempty"`
@@ -27,6 +28,7 @@ func marshalPostgresSafety(record Record) ([]byte, error) {
 	return json.Marshal(postgresSafetyEvidence{
 		PIIDetected: record.PIIDetected, PIIEntities: record.PIIEntities, PIIBlocked: record.PIIBlocked,
 		ConfidenceScoreAvailable: record.ConfidenceScoreAvailable, SignalErrorMatches: record.SignalErrorMatches,
+		ScanCoverage:      record.ScanCoverage,
 		JailbreakDetected: record.JailbreakDetected, JailbreakType: record.JailbreakType,
 		JailbreakConfidence:     availableFloat32(record.JailbreakConfidence, record.JailbreakScoreAvailable),
 		JailbreakScoreAvailable: record.JailbreakScoreAvailable, JailbreakDecision: record.JailbreakDecision,
@@ -44,6 +46,7 @@ func unmarshalPostgresSafety(encoded []byte, record *Record) error {
 	record.PIIEntities = evidence.PIIEntities
 	record.PIIBlocked = evidence.PIIBlocked
 	record.SignalErrorMatches = evidence.SignalErrorMatches
+	record.ScanCoverage = evidence.ScanCoverage
 	record.JailbreakDetected = evidence.JailbreakDetected
 	record.JailbreakType = evidence.JailbreakType
 	if evidence.JailbreakConfidence != nil {

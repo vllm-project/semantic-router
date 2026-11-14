@@ -147,6 +147,8 @@ runtime dependency; they do not define routing behavior by themselves.
 - A PII rule reads the current user turn. `input.history: true` adds the
   earlier user turns, `input.tool_results: true` the request's textual
   tool results, and `input.request: false` leaves the current turn out.
+  A tool result the Router cannot read as text, such as an image or an
+  unsupported block, counts as unread input, which `on_unscanned` decides.
 - The decision model answers the application signals (domain, PII, jailbreak,
   complexity and the others) as System One questions. A rule's `deployment`, a
   recipe's `model_bindings` or `global.model_catalog.bindings` names another

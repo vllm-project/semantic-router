@@ -172,6 +172,7 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 	@"$(AGENT_PYTHON)" deploy/helm/check-gateway-mode.py $(HELM_CHART_PATH)
 	@echo "Standalone and extproc gateway modes verified"
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_data_volume.py -v
+	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_shutdown_grace.py -v
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_grafana_live.py -v
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_fetch_dependencies.py -v
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"

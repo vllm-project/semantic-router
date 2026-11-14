@@ -377,6 +377,10 @@ func (components *routerComponents) buildFallbackRuntime() {
 	if cfg.RoutingDefaults.Fallback != nil {
 		fallbackPolicy = cfg.RoutingDefaults.Fallback.WithDefaults()
 	}
+	perUser := cfg.HasCallerBackends()
+	if perUser {
+		fallbackPolicy = fallbackPolicy.ForPerUserCredentials()
+	}
 	components.fallbackCircuitBreaker = fallback.NewBackendCircuitBreaker(fallbackPolicy.CircuitBreaker)
 	components.fallbackOrchestrator = fallback.NewOrchestrator(fallbackPolicy, components.fallbackCircuitBreaker)
 
@@ -389,6 +393,9 @@ func (components *routerComponents) buildFallbackRuntime() {
 		recipePolicy := fallback.DefaultPolicy()
 		if recipe.Profile.Fallback != nil {
 			recipePolicy = recipe.Profile.Fallback.WithDefaults()
+		}
+		if perUser {
+			recipePolicy = recipePolicy.ForPerUserCredentials()
 		}
 		breaker, ok := breakersByPolicy[recipePolicy.CircuitBreaker]
 		if !ok {
@@ -494,6 +501,7 @@ func rollbackResources(resources *resourceScope, cause error) error {
 }
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
+	prepareContextWindowCheck(components.cfg)
 	router := &OpenAIRouter{
 		signals:                     components.signals,
 		Config:                      components.cfg,

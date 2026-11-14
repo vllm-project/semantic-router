@@ -69,11 +69,13 @@ becomes:
 | `removed_section` | A whole section the Router no longer reads |
 | `invalid_value` | A value that no longer means what it did, such as `version: v0.3` |
 
-Two forms still load, with a warning, because they are renames:
+Three forms still load, with a warning, because they are renames:
 `signals.decision` and `type: decision` conditions load as `systemone`
-(`renamed_signal_type`), and `algorithm.type: decision` loads as the
-`systemone` selector (`renamed_algorithm_type`). Migrate rewrites both, and
-the Dashboard reads both the same way and saves them as `systemone`.
+(`renamed_signal_type`), `algorithm.type: decision` loads as the `systemone`
+selector (`renamed_algorithm_type`), and a `router_replay` plugin's
+`capture_personal_data` loads as its `prompt_capture`, `false` as `verified`
+and `true` as `raw` (`renamed_field`). Migrate rewrites each of them. The
+Dashboard reads the first two the same way and saves them as `systemone`.
 
 ## 3. Review what changed
 
@@ -184,6 +186,8 @@ recipes:
 | `jailbreak` `threshold`, `direction`, `include_history` | `predicate`, `stage`, `input.history`; a `method: contrastive` threshold bounded a similarity gap, not a probability, and migrate notes to re-fit it |
 | `jailbreak` `method`, `jailbreak_patterns`, `benign_patterns` | Removed: the decision model reads the request. For a deterministic hard block, write the patterns as a [`keywords`](../tutorials/signal/heuristic/keyword) rule that a blocking decision reads |
 | `jailbreak` and `pii` rules under `on_error: block` | `on_unknown: match` on the rules |
+| `jailbreak` and `pii` rules under `on_error: allow` | `on_unknown: no_match` on the rules, since v0.5's rules fail closed by default |
+| `jailbreak` and `pii` rules under `on_unscanned: allow` or `block` | `on_unscanned: best_effort` (decide on the windows read) or `match` on the rules |
 | `safety` `threshold`, `labels`, `unsafe_labels`, `model` | `predicate`; `labels` name [harm categories](../system-one/reference/presets#harm-categories); `deployment` |
 | `safety` `hazard` | The [harm categories](../system-one/reference/presets#harm-categories) its `categories` name, in the rule's `labels`, with `hazard.threshold` as the `predicate`; the unsafe `threshold` has no counterpart, and a rule whose categories name none keeps the unsafe verdict (migrate notes both) |
 | `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`; `source: tool_result` read the tool results alone, so it becomes `input: {tool_results: true, request: false}` and drops `include_history` |
@@ -280,7 +284,7 @@ recipes:
 | `semantic-cache`, `semantic_cache`, `response-cache`; flat cache fields | [`response_cache`](../tutorials/plugin/response-cache) with `semantic.match` |
 | `global.stores.semantic_cache` | `global.stores.response_cache` |
 | `shadow_dispatch` | The `shadow` block of [`router_replay`](../tutorials/plugin/router-replay) |
-| A recipe's `data_policy` | The recipe's `router_replay` plugin: `enabled: false` for `replay: false`, `capture_personal_data: false` for `replay_personal_data: false`, on its decisions too |
+| A recipe's `data_policy` | The recipe's `router_replay` plugin: `enabled: false` for `replay: false`, `prompt_capture: verified` for `replay_personal_data: false`, on its decisions too |
 | `emits[].retention` | The decision's [`retention`](../tutorials/decision/retention) attribute |
 | `masking` `threshold` | `masking.signal`, naming a `pii` rule whose `predicate` applies |
 | `system_prompt` `mode: append` | `mode: replace`, which drops every system and developer instruction the caller sent, where `append` replaced only the first system message |
@@ -574,8 +578,10 @@ vllm-sr serve --config config.migrated.yaml
 - **Span-needing rules must resolve to a span-capable deployment.** `pii`,
   `hallucination`, `span` questions and masking fail to load with
   `span_required` on a deployment without spans, such as a d3 model.
-- **A `jailbreak` or `pii` rule whose model gives no answer does not match**,
-  unless it sets `on_unknown: match`.
+- **A request-stage `jailbreak` or `pii` rule whose model gives no answer
+  matches** (fails closed), unless it sets `on_unknown: no_match`. A long
+  input is read in windows, and a scan the deadline ends early decides on the
+  windows read, unless the rule sets `on_unscanned: match`.
 - **RAG relevance and tool selection are judged by the decision model**, and
   semantic cache hits are confirmed by its `same_request` question.
 - **The embedding model starts only when a recall feature needs it**, and the

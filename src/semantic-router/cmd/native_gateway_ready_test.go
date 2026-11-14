@@ -114,21 +114,44 @@ func TestNativeListenerReadyWaitsForKubernetesActivation(t *testing.T) {
 }
 
 // TestNativeListenerReadyTurnsUnavailableWhenShutdownBegins checks that the
-// listener's /ready answers 503 once the Router begins to shut down, while the
-// listener still drains, as the gRPC health service turns NOT_SERVING then.
+// listener's /ready stops answering 200 once the Router begins to shut down,
+// as the gRPC health service turns NOT_SERVING then, and that the listener
+// closes then too: the drain starts with the serving shutdown, not after what
+// else the shutdown waits for first, such as the management API.
 func TestNativeListenerReadyTurnsUnavailableWhenShutdownBegins(t *testing.T) {
 	server, _, _, readyStatus := startReadyTestGateway(t, "")
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(readinessWait)
 	for readyStatus() != http.StatusOK {
 		if time.Now().After(deadline) {
 			t.Fatal("listener /ready never answered 200")
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+	address := listenerAddressOf(t, server)
 	if err := server.ShutdownServing(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if status := readyStatus(); status != http.StatusServiceUnavailable {
-		t.Fatalf("listener /ready = %d after shutdown began, want 503", status)
+	for until := time.Now().Add(time.Second); ; time.Sleep(10 * time.Millisecond) {
+		resp, err := http.Get("http://" + address + "/ready")
+		if err != nil {
+			return
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			t.Fatal("listener /ready answered 200 after shutdown began")
+		}
+		if time.Now().After(until) {
+			t.Fatalf("the listener still accepts connections 1 s after shutdown began (/ready %d)", resp.StatusCode)
+		}
 	}
+}
+
+// listenerAddressOf is the address of server's one standalone listener.
+func listenerAddressOf(t *testing.T, server *extproc.Server) string {
+	t.Helper()
+	listeners := server.CurrentConfig().Listeners
+	if len(listeners) != 1 {
+		t.Fatalf("%d listeners, want one", len(listeners))
+	}
+	return net.JoinHostPort("127.0.0.1", strconv.Itoa(listeners[0].Port))
 }

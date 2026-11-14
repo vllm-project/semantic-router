@@ -504,6 +504,34 @@
   line-height: 1.5;
 }
 
+.vsrOption {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.vsrOption input[type='checkbox'] {
+  margin: 0;
+  padding: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.vsrOption select {
+  margin-left: auto;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.72rem;
+}
+
+.vsrDefault {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+
 @media (max-width: 900px) {
   .visualWorkspace {
     grid-template-columns: 1fr;

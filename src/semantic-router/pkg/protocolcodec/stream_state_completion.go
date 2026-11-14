@@ -118,6 +118,19 @@ func (state *streamState) mergeStreamToolIdentity(current, incoming llmprotocol.
 		}
 		current.Name = incoming.Name
 	}
+	// A Responses client learns a call's namespace with its name, which a Chat
+	// stream may send after the call's first fragment.
+	if incoming.Namespace != "" {
+		if current.Namespace != "" && current.Namespace != incoming.Namespace {
+			return llmprotocol.ToolCall{}, llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"stream_tool_identity_mismatch",
+				"upstream stream changed a tool namespace",
+				nil,
+			)
+		}
+		current.Namespace = incoming.Namespace
+	}
 	return current, nil
 }
 
@@ -186,9 +199,19 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 		arguments = []byte(event.ToolCall.Arguments)
 	}
 	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
+		if !isTruncatedJSONObject(arguments, state.policy.Limits.JSONDepth) {
+			return nil, nonObjectToolArgumentsError()
+		}
+		// The output limit can cut a call mid-arguments, and Anthropic and OpenAI
+		// then send the partial call with a max_tokens or length stop. Its stop
+		// reason arrives after the item ends, so the terminal event decides.
+		state.cutToolArguments = true
 	}
 	return arguments, nil
+}
+
+func nonObjectToolArgumentsError() error {
+	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
 }
 
 func (state *streamState) markItemComplete(itemIndex int) {
@@ -254,6 +277,9 @@ func (state *streamState) applyTerminalEvent(event llmprotocol.Event) (llmprotoc
 func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmprotocol.Event, error) {
 	if err := state.validateCompletedLifecycle(event); err != nil {
 		return llmprotocol.Event{}, err
+	}
+	if state.cutToolArguments && state.stop != llmprotocol.StopMaxTokens {
+		return llmprotocol.Event{}, nonObjectToolArgumentsError()
 	}
 	event, err := validateCompletedStopReason(event)
 	if err != nil {

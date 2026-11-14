@@ -2,6 +2,7 @@ package classification
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -11,6 +12,14 @@ func (c *Classifier) recordSignalExtraction(signalType, signalName string, laten
 
 func (c *Classifier) recordSignalMatch(signalType, signalName string) {
 	metrics.RecordSignalMatch(signalType, c.scopedSignalName(signalName))
+}
+
+// recordSignalFailClosed logs a guard rule that matched without model
+// evidence: its model did not read the whole input or gave no answer.
+func (c *Classifier) recordSignalFailClosed(signalType, signalName, deployment, reason string) {
+	logging.ComponentWarnEvent("classification", "signal_failed_closed", map[string]interface{}{
+		"signal_type": signalType, "rule": c.scopedSignalName(signalName), "deployment": deployment, "reason": reason,
+	})
 }
 
 func (c *Classifier) scopedSignalName(signalName string) string {

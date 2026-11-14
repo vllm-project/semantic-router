@@ -219,6 +219,21 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertIn("cli-unit", result.selected_jobs)
                 self.assertNotIn("vllm-sr-cli", result.domains)
 
+    def test_dashboard_image_files_the_cli_suite_checks_select_it(self) -> None:
+        for path in (
+            "dashboard/backend/Dockerfile",
+            "dashboard/backend/entrypoint.sh",
+            "dashboard/backend/entrypoint_permissions.py",
+            "dashboard/backend/handlers/logs.go",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn(
+                    "make vllm-sr-test", commands_for_domains(result.domains, "checks")
+                )
+                self.assertIn("cli-unit", result.selected_jobs)
+                self.assertNotIn("vllm-sr-cli", result.domains)
+
     def test_docs_whose_snippets_the_cli_suite_checks_select_it(self) -> None:
         translated = "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current"
         for path in (

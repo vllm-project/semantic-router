@@ -1,10 +1,10 @@
 import type { EngineInterface } from 'claude-code'
 
-import type { App, Calibration, Decision, Spend } from '../../types'
-import { APP_NAMES, APPS, type Color, LOOKS, type Section, SECTIONS, sectionOf } from './apps'
+import type { App, Calibration, Decision, Spend, TurnRoute } from '../../types'
+import { APP_NAMES, APPS, type Color, LOOKS, SECTIONS, sectionOf } from './apps'
 import { type Body, type Described, describe, type Gauge, type TallyItem, tallyOf, tallyWidth, type Weight } from './describe'
 import { ANSWERS, type Answer, answersFor } from './labels'
-import { BRAND, brand, type Logo, wordmark, wordmarkHeight } from './logo'
+import { BRAND, brand, type Logo, wordmark } from './logo'
 import { holdMeter, type Segment, textWidth } from './meters'
 import { choiceOf, type Display, isCleartextRemote, type Settings, WAIT_APPS, WAIT_CHOICES, type WaitApp, type WaitChoice } from './settings'
 import { clip, fixed, modelName } from './text'
@@ -258,7 +258,15 @@ export function band(
 // What the pane's foot says of the setup: where the classifier runs, the lines in force, the last calibration (the
 // controls at its top show the apps and the waits).
 // `spend` is what routing cost against the session's model; `labeled`, the answers given this session.
-export type Overview = { settings: Settings; calibration: Calibration; isOffline: boolean; spend: Spend; labeled: number }
+export type Overview = {
+  settings: Settings
+  calibration: Calibration
+  isOffline: boolean
+  spend: Spend
+  // Where your turns run while the router routes them, and the model you picked with /model when that paused it.
+  turns: { route: TurnRoute | null; paused: string }
+  labeled: number
+}
 
 const dollars = (value: number) => (value < 0.01 ? '<$0.01' : `$${value.toFixed(2)}`)
 
@@ -268,17 +276,27 @@ function spendWords({ spend }: Overview) {
   if (spend.turns === 0 || sessionModel === undefined || spend.baseline === 0) return undefined
   const change = 1 - spend.actual / spend.baseline
   const verdict = change >= 0 ? `saved ${Math.round(change * 100)}%` : `cost ${Math.round(-change * 100)}% more`
-  return `${dollars(spend.actual)} for ${spend.turns} subagent ${spend.turns === 1 ? 'turn' : 'turns'} vs ${dollars(spend.baseline)} on ${modelName(sessionModel)} · ${verdict} · est. at list price`
+  return `${dollars(spend.actual)} for ${spend.turns} routed ${spend.turns === 1 ? 'turn' : 'turns'} vs ${dollars(spend.baseline)} on ${modelName(sessionModel)} · ${verdict} · est. at list price`
 }
 
 const tokenWords = ({ url, token }: Settings['runtime']) =>
   token === '' ? '' : isCleartextRemote(url) ? ' · token set, sent unencrypted' : ' · token set'
 
+// Where your turns run: off, on the session's model, on another, or paused on the one you picked.
+export function turnsWords({ settings, turns }: Pick<Overview, 'settings' | 'turns'>) {
+  if (!settings.apps.router) return undefined
+  if (!settings.routerTurns) return 'on the model you picked · /vsr turns on lets the router pick'
+  if (turns.paused !== '') return `paused on ${modelName(turns.paused)}, which you picked · /vsr turns on`
+  return turns.route === null ? 'the router picks · on your model now' : `the router picks · on ${modelName(turns.route.model)} at ${turns.route.picked} now`
+}
+
 function overviewRows(about: Overview) {
   const { settings: { runtime, thresholds: t, log }, calibration, isOffline, labeled } = about
   const routing = spendWords(about)
+  const turns = turnsWords(about)
   const since = `${calibration.since} ${calibration.since === 1 ? 'decision' : 'decisions'} since`
   return [
+    ...(turns === undefined ? [] : [['your turns', turns] as const]),
     ...(routing === undefined ? [] : [['routing', routing] as const]),
     ['model', `${runtime.kind} · ${runtime.url}${tokenWords(runtime)}${isOffline ? ' · not answering' : ''}`],
     [
@@ -313,10 +331,6 @@ export function overview(elements: Elements, about: Overview) {
   )
 }
 
-// The rows the overview takes at `columns`, its gap above included.
-export const overviewHeight = (about: Overview, columns: number) =>
-  1 + overviewRows(about).reduce((sum, [label, value]) => sum + Math.max(1, Math.ceil((label.length + 2 + value.length) / columns)), 0)
-
 // What pressing a control at the top of the pane does: turn an app on or off, or pick how long one waits.
 export type Controls = { toggle: (app: App) => void; wait: (app: WaitApp, choice: WaitChoice) => void }
 
@@ -327,9 +341,6 @@ const WAIT_WORDS: Record<WaitChoice, string> = { '1': '1s', '2': '2s', '3': '3s'
 const APP_ROWS = Array.from({ length: Math.ceil(APP_NAMES.length / APPS_PER_ROW) }, (_, row) =>
   APP_NAMES.slice(row * APPS_PER_ROW, (row + 1) * APPS_PER_ROW),
 )
-
-// The rows the controls take, their gap below included.
-export const CONTROLS_HEIGHT = APP_ROWS.length + WAIT_APPS.length + 1
 
 // The apps, each pressed (or its digit typed) to turn it on or off, then how long each protective app waits: the
 // chosen wait a pill in the app's colour, the rest dim and as wide, so the row does not shift when the pick moves.
@@ -381,29 +392,8 @@ export function controls(elements: Elements, settings: Settings, act: Controls) 
   )
 }
 
-type Entry = { decision: Decision; described: Described; second: string; rows: number }
-
 // The answers given in the pane, and what pressing one does; absent where answers cannot be kept (the log is off).
 export type Labeling = { given: Readonly<Record<string, Answer>>; answer: (decision: Decision, answer: Answer) => void }
-
-// Each section gets its header and newest entry first, then older entries go round the sections while rows are left.
-function fitSections(sections: { section: Section; entries: Entry[] }[], budget: number) {
-  const shown = sections.map(() => 0)
-  let used = sections.reduce((sum, { entries }) => sum + 1 + entries[0].rows, 0)
-  sections.forEach((_, index) => (shown[index] = 1))
-  for (let isGrowing = true; isGrowing; ) {
-    isGrowing = false
-    sections.forEach(({ entries }, index) => {
-      const next = entries[shown[index]]
-      if (next !== undefined && used + next.rows <= budget) {
-        shown[index] += 1
-        used += next.rows
-        isGrowing = true
-      }
-    })
-  }
-  return sections.map(({ section, entries }, index) => ({ section, count: entries.length, entries: entries.slice(0, shown[index]) }))
-}
 
 const WEIGHT_ORDER: Record<Weight, number> = { act: 0, notice: 1, quiet: 2 }
 
@@ -415,25 +405,19 @@ export function dashboard(
   logo: Logo,
   list: readonly Decision[],
   columns: number,
-  rows: number,
   about: Overview,
   act: Controls,
   labeling?: Labeling,
 ) {
   const { Box, Button, Text } = elements
   const tally = tallyOf(list)
-  const tallyRows = Math.max(1, Math.ceil(tallyWidth(tally) / columns))
   const hint = labeling !== undefined && list.some(decision => answersFor(decision) !== undefined)
+  // Every kept decision is drawn: a pane taller than its window scrolls, so none is left out of reach.
   const sections = SECTIONS.flatMap(section => {
     const entries = list
       .filter(decision => sectionOf(decision) === section)
       .reverse()
-      .map(decision => {
-        const described = describe(decision)
-        const second = `${described.headline} · ${described.detail}`
-        const answers = labeling && answersFor(decision) ? 1 : 0
-        return { decision, described, second, rows: 1 + Math.ceil(second.length / columns) + answers }
-      })
+      .map(decision => ({ decision, described: describe(decision) }))
       // What needed a look (a held command, a withheld output) before what only went on, each newest first, so a
       // run of ALLOWED rows does not push a HELD one out of view.
       .sort((a, b) => WEIGHT_ORDER[a.described.weight] - WEIGHT_ORDER[b.described.weight])
@@ -445,9 +429,9 @@ export function dashboard(
       {controls(elements, about.settings, act)}
       <Text>{tallyText(elements, tally)}</Text>
       {hint ? <Text dimColor>{ANSWER_HINT}</Text> : null}
-      {fitSections(sections, rows - wordmarkHeight(logo) - CONTROLS_HEIGHT - tallyRows - (hint ? Math.ceil(ANSWER_HINT.length / columns) : 0) - overviewHeight(about, columns)).map(({ section, count, entries }) => (
+      {sections.map(({ section, entries }) => (
         <Box flexDirection="column">
-          <Text color={APPS[section].color} weight="bold">{`${APPS[section].glyph} ${APPS[section].name} · ${count}`}</Text>
+          <Text color={APPS[section].color} weight="bold">{`${APPS[section].glyph} ${APPS[section].name} · ${entries.length}`}</Text>
           {entries.map(({ decision, described: { badge, color, subject, more = '', headline, detail } }) => {
             const kind = labeling ? answersFor(decision) : undefined
             return (

@@ -148,7 +148,7 @@ func TestSystemOneRuleFieldErrors(t *testing.T) {
 		}, "on_unscanned applies only to a rule with coverage: full"},
 		"unknown on_unscanned": {func(cfg *RouterConfig) {
 			cfg.SystemOneRules[0].Coverage, cfg.SystemOneRules[0].OnUnscanned = SystemOneCoverageFull, "block"
-		}, "on_unscanned must be match, no_match or unknown"},
+		}, "on_unscanned must be best_effort, match, no_match or unknown"},
 	}
 	for name, test := range cases {
 		cfg := labelledSystemOneConfig()
