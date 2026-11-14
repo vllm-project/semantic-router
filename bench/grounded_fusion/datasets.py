@@ -19,99 +19,27 @@ from __future__ import annotations
 
 import json
 import random
-from dataclasses import dataclass, field
 from pathlib import Path
 
+from cli.sr_bench.draco_rubric import (
+    DracoCriterion,
+    DracoRubric,
+    DracoSample,
+    DracoSection,
+    _parse_rubric,
+    parse_samples,
+    select_samples,
+)
 
-@dataclass
-class DracoCriterion:
-    """A single weighted rubric requirement."""
-
-    id: str
-    weight: float
-    requirement: str
-    section_id: str
-    section_title: str
-
-    @property
-    def is_negative(self) -> bool:
-        """Negative-weight criteria penalize bad behavior (the confident-wrong axis)."""
-        return self.weight < 0
-
-
-@dataclass
-class DracoSection:
-    """A rubric section (e.g. 'Factual Accuracy', 'Citation Quality')."""
-
-    id: str
-    title: str
-    criteria: list[DracoCriterion]
-
-
-@dataclass
-class DracoRubric:
-    """The full weighted rubric for one DRACO problem."""
-
-    id: str
-    sections: list[DracoSection]
-
-    @property
-    def criteria(self) -> list[DracoCriterion]:
-        return [c for s in self.sections for c in s.criteria]
-
-    @property
-    def positive_criteria(self) -> list[DracoCriterion]:
-        return [c for c in self.criteria if not c.is_negative]
-
-    @property
-    def negative_criteria(self) -> list[DracoCriterion]:
-        return [c for c in self.criteria if c.is_negative]
-
-    @property
-    def max_positive_score(self) -> float:
-        """Sum of positive weights -- the ceiling used to normalize scores to [0,1]."""
-        return sum(c.weight for c in self.positive_criteria)
-
-    @property
-    def min_negative_score(self) -> float:
-        """Sum of negative weights -- the floor of the penalty subtotal."""
-        return sum(c.weight for c in self.negative_criteria)
-
-
-@dataclass
-class DracoSample:
-    """One DRACO problem + its rubric."""
-
-    id: str
-    problem: str
-    domain: str
-    rubric: DracoRubric
-    metadata: dict[str, object] = field(default_factory=dict)
-
-
-def _parse_rubric(rubric_id: str, raw: object) -> DracoRubric:
-    """Parse the ``answer`` field (a JSON string or already-decoded dict)."""
-    if isinstance(raw, str):
-        raw = json.loads(raw)
-    if not isinstance(raw, dict):
-        raise ValueError(f"rubric for {rubric_id!r} is not an object: {type(raw)}")
-
-    sections: list[DracoSection] = []
-    for s in raw.get("sections", []):
-        sec_id = str(s.get("id", ""))
-        sec_title = str(s.get("title", sec_id))
-        criteria = [
-            DracoCriterion(
-                id=str(c.get("id", f"{sec_id}-{i}")),
-                weight=float(c.get("weight", 0)),
-                requirement=str(c.get("requirement", "")),
-                section_id=sec_id,
-                section_title=sec_title,
-            )
-            for i, c in enumerate(s.get("criteria", []))
-        ]
-        sections.append(DracoSection(id=sec_id, title=sec_title, criteria=criteria))
-    return DracoRubric(id=str(raw.get("id", rubric_id)), sections=sections)
+__all__: list[str] = [
+    "DracoCriterion",
+    "DracoRubric",
+    "DracoSample",
+    "DracoSection",
+    "get_dataset",
+    "load_draco",
+    "load_jsonl",
+]
 
 
 def load_draco(
@@ -132,28 +60,12 @@ def load_draco(
         List of ``DracoSample``.
     """
     data = json.loads(Path(path).expanduser().read_text())
-    rows = data["rows"] if isinstance(data, dict) and "rows" in data else data
-
-    samples: list[DracoSample] = []
-    for entry in rows:
-        row = entry.get("row", entry) if isinstance(entry, dict) else entry
-        sample = DracoSample(
-            id=str(row["id"]),
-            problem=str(row["problem"]),
-            domain=str(row.get("domain", "unknown")),
-            rubric=_parse_rubric(str(row["id"]), row["answer"]),
-        )
-        samples.append(sample)
-
-    if domains:
-        wanted = {d.lower() for d in domains}
-        samples = [s for s in samples if s.domain.lower() in wanted]
-
-    rng = random.Random(seed)
-    rng.shuffle(samples)
-    if max_samples is not None:
-        samples = samples[:max_samples]
-    return samples
+    return select_samples(
+        samples=parse_samples(data),
+        domains=domains,
+        seed=seed,
+        max_samples=max_samples,
+    )
 
 
 def load_jsonl(

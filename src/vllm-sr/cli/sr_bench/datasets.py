@@ -9,6 +9,7 @@ import tempfile
 import threading
 from collections import Counter, OrderedDict
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 
 from .contracts import canonical, catalog, digest
@@ -28,7 +29,7 @@ from .dataset_io import (
 from .preparation import validate_cases as validate_prepared_cases
 from .preparation import validate_manifest as validate_prepared_manifest
 from .setup import harness_paths
-from .sources import _write_dataset
+from .sources import COUNTS, _write_dataset
 
 MAX_TASK_INPUT_BYTES = 128 * 1024 * 1024
 MAX_MANIFEST_BYTES = 2 * 1024 * 1024
@@ -554,7 +555,7 @@ class DatasetReader:
             "limit": count,
         }
 
-    def selection(self, profile):
+    def selection(self, profile: str) -> dict[str, Any]:
         """Resolve default sources from frozen content, without arbitrary revision picks."""
         if profile not in {"smoke", "quick", "standard"}:
             raise ValueError("Unknown evaluation profile")
@@ -664,6 +665,11 @@ class DatasetReader:
                     ),
                 }
             )
+            if not candidates and limitation is None and benchmark["id"] not in COUNTS:
+                entries[-1].update(
+                    reason_code="local_preparation_required",
+                    reason="Prepare this extension locally or select a custom dataset.",
+                )
         seeds = {
             items[0][4]
             for benchmark, items in groups.items()
@@ -709,11 +715,15 @@ class DatasetReader:
 
     def _compose(self, dataset_ids, benchmarks, spool):
         groups, sources, identity, custom = {}, {}, None, False
+        custom_selection = False
         preparation = {}
         single_source = None
         input_bytes, spool_bytes, index_bytes = 0, 0, 0
         for dataset_id in dict.fromkeys(dataset_ids):
             manifest = self._read_manifest(dataset_id)
+            custom_selection = (
+                custom_selection or manifest.get("selection") != "stratified-hash-v1"
+            )
             _, path = self._paths(dataset_id)
             size = _identity(path)[2]
             current = (manifest["profile"], manifest.get("seed"), manifest["split"])
@@ -801,11 +811,16 @@ class DatasetReader:
                 yield json.loads(content)
 
         return _write_dataset(
-            self.root,
-            cases(),
-            identity[0],
-            identity[1],
-            {benchmark: sources[benchmark] for benchmark in sorted(sources)},
-            custom,
+            root=self.root,
+            cases=cases(),
+            profile=identity[0],
+            seed=identity[1],
+            sources={benchmark: sources[benchmark] for benchmark in sorted(sources)},
+            custom=custom,
             preparation=preparation or None,
+            selection=(
+                "frozen-source-composition-v1"
+                if custom_selection and not preparation
+                else None
+            ),
         )

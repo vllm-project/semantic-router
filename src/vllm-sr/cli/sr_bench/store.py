@@ -44,6 +44,7 @@ def run_summary(run):
             "sampling",
             "benchmark_weights",
             "adapter_versions",
+            "result_kinds",
             "experiment",
             "plan_sha256",
             "case_sha256",

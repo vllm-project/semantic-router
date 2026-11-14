@@ -7,6 +7,7 @@ from cli.routing_preview import PROMPT_FIELDS, case_request_fields
 from . import VERSION
 from .accounting import effective_calls
 from .contracts import canonical, digest, protocol_canonical
+from .grading import BINARY_RESULT, frozen_result_kind
 
 REPLAYABLE = {"mmlu-pro", "gpqa-diamond", "arc-agi-2", "hle", "simpleqa-verified"}
 
@@ -53,6 +54,16 @@ class ReplayValidator:
             reasons.setdefault(code, {"code": code, "message": message})
 
         bm, pm = self.baseline["manifest"], preview["manifest"]
+        if any(
+            frozen_result_kind(manifest=manifest, benchmark=case["benchmark"])
+            != BINARY_RESULT
+            for manifest in (bm, pm)
+            for case in manifest["cases"]
+        ):
+            reject(
+                "unsupported_result_kind",
+                "Replay supports binary results only; weighted rubric diagnostics require a separate protocol.",
+            )
         if any(m.get("output_policy", "bounded") == "native" for m in (bm, pm)):
             reject(
                 "native_output_not_replayable",
@@ -118,6 +129,8 @@ class ReplayValidator:
                     "grader_protocol_mismatch",
                     "Frozen adapter versions or benchmark weights differ or are unavailable.",
                 )
+        if bm.get("result_kinds", {}) != pm.get("result_kinds", {}):
+            reject("grader_protocol_mismatch", "Frozen result kinds differ.")
         singles = [target for target in bm["targets"] if target["kind"] == "single"]
         by_model = {target["model"]: target for target in singles}
         if not singles or len(by_model) != len(singles):
