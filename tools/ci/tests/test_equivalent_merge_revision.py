@@ -332,6 +332,7 @@ class DiagnosticClient(status.DiagnosticClient):
     def __init__(self):
         super().__init__()
         self.checks.pop()
+        self.checks[0]["check_suite"]["id"] = 20
         self.commits = {
             status.MERGE: commit(status.BASE, status.HEAD),
             REPLACEMENT: commit(status.BASE, status.HEAD),
