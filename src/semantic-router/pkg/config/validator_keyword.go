@@ -24,6 +24,11 @@ func validateKeywordContracts(cfg *RouterConfig) (err error) {
 // the text is to each keyword, and fuzzy matching compares words by edit
 // distance.
 func ValidateKeywordRuleContract(rule KeywordRule) error {
+	if len(rule.Keywords) == 0 {
+		// An AND rule over no keyword matches every text by accident, while
+		// the catch-all is an explicit empty pattern: keywords: [""].
+		return fmt.Errorf("rule needs at least one keyword; an empty pattern is the catch-all")
+	}
 	measure, predicate := "count", rule.Count
 	switch {
 	case rule.Count != nil && rule.Density != nil:

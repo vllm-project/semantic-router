@@ -5,6 +5,30 @@ import (
 	"testing"
 )
 
+// A rule with no keyword cannot decide anything: an AND rule over an empty
+// list matches every text by accident. The catch-all is an explicit empty
+// pattern, which a maintained config and the e2e profiles use.
+func TestKeywordRuleNeedsAKeyword(t *testing.T) {
+	for name, rule := range map[string]KeywordRule{
+		"empty":      {Name: "k", Operator: "AND"},
+		"empty list": {Name: "k", Operator: "OR", Keywords: []string{}},
+	} {
+		err := ValidateKeywordRuleContract(rule)
+		if err == nil || !strings.Contains(err.Error(), "keyword") {
+			t.Errorf("%s: err = %v, want a rule needing a keyword", name, err)
+		}
+	}
+	for name, rule := range map[string]KeywordRule{
+		"catchall":       {Name: "k", Operator: "OR", Keywords: []string{""}},
+		"regex catchall": {Name: "k", Operator: "OR", Method: "regex", Keywords: []string{""}},
+		"one keyword":    {Name: "k", Operator: "OR", Keywords: []string{"urgent"}},
+	} {
+		if err := ValidateKeywordRuleContract(rule); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
 // A count or density counts the occurrences an OR rule's literal or regex
 // keywords have; every other combination is refused, and a rule without
 // either keeps its operator and method.
