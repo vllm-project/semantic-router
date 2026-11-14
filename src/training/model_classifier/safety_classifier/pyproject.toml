@@ -1,0 +1,20 @@
+[project]
+name = "vllm-sr-safety-classifier"
+version = "0.0.0"
+description = "Environment for the Vela Safety and Hazard training scripts under src/training/model_classifier/safety_classifier"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "accelerate>=1.10.1,<2",
+    "datasets>=4.0,<5",
+    "huggingface_hub>=0.34.4,<2",
+    "numpy>=2.2.6,<3",
+    "peft>=0.17.1,<1",
+    "safetensors>=0.6.2,<1",
+    "scikit-learn>=1.4,<2",
+    "tokenizers>=0.21,<1",
+    "torch>=2.2,<3",
+    "transformers>=4.55.2,<5",
+]
+
+[tool.uv]
+package = false
