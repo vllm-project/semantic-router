@@ -277,6 +277,8 @@ if [ "$SCENARIO" = "first-launch-setup-wait" ]; then
   open_dashboard_url() { return 0; }
   printf '[FIRST_LAUNCH]\n'
   launch_first_session
+  printf '[NEXT_STEPS]\n'
+  print_next_steps
   printf 'AUTO_LAUNCH_RAN=%s\n' "$AUTO_LAUNCH_RAN"
   serve_pid="$(cat "$SERVE_PID_FILE" 2>/dev/null)"
   if [ -n "$serve_pid" ] && kill -0 "$serve_pid" 2>/dev/null; then

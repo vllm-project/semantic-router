@@ -8,13 +8,17 @@ the listener from setup's port to another one, and a chat request routes
 through the Router on the new port. The Dashboard mounts no container socket,
 has no container CLI, and reports the Router waiting for setup, then running.
 After setup, the Dashboard still saves config changes: one the Router
-hot-reloads is accepted while the stack runs.
+hot-reloads is accepted while the stack runs. While setup waits, a second
+`vllm-sr serve` names the waiting serve and `vllm-sr stop` ends it.
 """
 
 import json
 import os
 import secrets
+import subprocess
+import time
 import unittest
+from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
@@ -153,6 +157,61 @@ class TestFirstRunSetup(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             self._stop_serve_process(serve_process)
         self.print_test_result(
             True, "setup activated; the CLI started the Router; a later save applied"
+        )
+
+    def _wait_for_serve_waiting(self, serve_process, timeout=60):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            self.assertIsNone(
+                serve_process.poll(), "serve exited before waiting for setup"
+            )
+            for heartbeat in Path(self.test_dir).rglob("*.serve-heartbeat.json"):
+                try:
+                    if json.loads(heartbeat.read_text()).get("state") == "waiting":
+                        return
+                except (OSError, ValueError):
+                    pass
+            time.sleep(0.2)
+        self.fail("serve never reported that it waits for setup")
+
+    def test_stop_ends_the_setup_wait_that_blocks_serve(self):
+        self.print_test_header(
+            "First-run setup wait",
+            "A second serve names the waiting serve; stop ends it",
+        )
+        serve_process = self._start_serve_background(env=os.environ.copy())
+        try:
+            self._wait_for_setup_mode(serve_process)
+            self._wait_for_serve_waiting(serve_process)
+
+            code, stdout, stderr = self.run_cli(
+                [
+                    "serve",
+                    "--gateway",
+                    self.SERVE_GATEWAY,
+                    "--image-pull-policy",
+                    "ifnotpresent",
+                ],
+                timeout=300,
+            )
+            output = " ".join((stdout + stderr).split())
+            self.assertNotEqual(code, 0, output)
+            self.assertIn("another lifecycle operation in progress", output)
+            self.assertIn(f"pid {serve_process.pid}", output)
+            self.assertIn("state waiting", output)
+            self.assertIn("Run `vllm-sr stop`", output)
+            self.assertIsNone(serve_process.poll(), "serve ended the waiting serve")
+
+            code, stdout, stderr = self.run_cli(["stop"], timeout=300)
+            self.assertEqual(code, 0, stdout + stderr)
+            try:
+                serve_process.communicate(timeout=60)
+            except subprocess.TimeoutExpired:
+                self.fail("vllm-sr stop did not end the serve waiting for setup")
+        finally:
+            self._stop_serve_process(serve_process)
+        self.print_test_result(
+            True, "serve named the waiting serve; stop ended the setup wait"
         )
 
 
