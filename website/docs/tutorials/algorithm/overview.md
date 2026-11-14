@@ -95,6 +95,9 @@ A selector that fails falls back to the first candidate.
 | `multi_factor` | supported | Balance quality, latency, cost, and load with optional SLO filters | Model metadata and live local metrics | [Multi Factor](./selection/multi-factor), [by latency](./selection/latency-aware) |
 | `systemone` | supported | Ask the decision model which candidate should answer | System One deployment with Choice support | [System One](./selection/systemone) |
 
+> [!NOTE]
+> **Migrating from v0.3 `session_aware`**: In v0.4, the legacy `session_aware` selection algorithm is retired (`algorithm.type=session_aware` is rejected by config validation). Session continuity and agent tool-loop stability are now decoupled from per-decision selection algorithms and managed globally via [Protection](../learning/protection). Decisions configure their base model selection method (e.g., `latency_aware`, `multi_factor`, or `hybrid`) and use `adaptations` for per-decision protection controls (`apply`, `observe`, or `bypass`). See [Migrating from v0.3 Session-Aware Algorithm](../learning/protection#migrating-from-v03-session-aware-algorithm).
+
 ### Executors
 
 Executors make additional model calls, in process. Each call runs the matched
