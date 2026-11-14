@@ -952,10 +952,16 @@ def test_listener_apis_are_named_by_the_api_registry():
                 "schema": "vllm-sr/4.0",
                 "models": ["decision-public"],
                 "max_deadline_ms": 120000,
+                "vsr": {"redact": False, "router_turns": True, "router_goal": "save"},
             },
         },
     )
     assert listener.systemone_models() == ["decision-public"]
+    profile = listener.apis["systemone"].vsr
+    assert (profile.redact, profile.router_turns, profile.guard) == (False, True, None)
+    for vsr in ({"router_goal": "cheap"}, {"pii": False}):
+        with pytest.raises(PydanticValidationError):
+            Listener(name="public", port=8000, apis={"systemone": {"vsr": vsr}})
     assert listener.apis["systemone"].schema_ == "vllm-sr/4.0"
     for apis, message in (
         (
@@ -973,6 +979,7 @@ def test_listener_apis_are_named_by_the_api_registry():
             "a listener serves api systemone in vllm-sr/5.0 or vllm-sr/4.0",
         ),
         ({"responses": {"max_deadline_ms": 5}}, "takes no max_deadline_ms"),
+        ({"messages": {"vsr": {"guard": True}}}, "takes no vsr"),
         ({}, "apis names no API"),
     ):
         with pytest.raises(PydanticValidationError, match=message):

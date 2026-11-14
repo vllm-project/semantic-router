@@ -36,9 +36,12 @@ import (
 // answer puts a rule close below its threshold (scan_window.reread_margin) is
 // read again in windows of that size: at once within half the margin, where
 // a diluted match lands, and after the windows still unread further below.
-// When the stage's deadline leaves only some windows read, on_unscanned
-// decides (best_effort: on the windows read, once they reach the rule's
-// min_coverage); when none was, the rule is unknown, which on_unknown decides.
+// The tail holds an injection at the very end behind up to a whole window of
+// earlier text, so a tail close below a threshold has the input's last half
+// window read again, at once. When the stage's deadline leaves only some
+// windows read, on_unscanned decides (best_effort: on the windows read, once
+// they reach the rule's min_coverage); when none was, the rule is unknown,
+// which on_unknown decides.
 
 // maxScanWindows bounds the windows of one input, and so the calls its scan
 // holds. An input that needs more windows of its deployment's size is read in
@@ -514,11 +517,18 @@ func (scan *guardScan) record(window int, response modelservice.Response, err er
 // read its windows in orders of their own, and in a bundle the call that reads
 // a window for all of them goes at the lowest of their ranks, so the window
 // may have been read long before its rank in this scan comes.
+//
+// The tail, the cut's window that ends where the input ends, holds what the
+// model reads last before it answers, where an injection works best, behind
+// up to a whole window of earlier text. A tail close below a threshold has
+// the input's last half window read again (endWindowLocked), at rank 1
+// wherever in the margin its answer lands: it is one window.
 func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Response, err error) []*systemOneCall {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
 	window := scan.windows[call.window]
-	if err != nil || scan.rereadMargin <= 0 || window.end-window.start <= scan.size {
+	end, tail := scan.endWindowLocked(window)
+	if err != nil || scan.rereadMargin <= 0 || (window.end-window.start <= scan.size && !tail) {
 		return nil
 	}
 	gap := math.Inf(1)
@@ -534,6 +544,9 @@ func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Re
 	if gap > scan.rereadMargin {
 		return nil
 	}
+	if window.end-window.start <= scan.size {
+		return []*systemOneCall{scan.addWindowLocked(end, 1)}
+	}
 	parts := scan.rereadPartsLocked(window)
 	if gap > scan.rereadMargin/2 {
 		scan.waiting = append(scan.waiting, waitingReread{parts: parts, gap: gap})
@@ -544,6 +557,21 @@ func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Re
 		calls[index] = scan.addWindowLocked(part, 1)
 	}
 	return calls
+}
+
+// endWindowLocked is the window that reads the input's last half window of the
+// configured size again, when window is the cut's tail and holds more than
+// that; false otherwise.
+func (scan *guardScan) endWindowLocked(window scanWindow) (scanWindow, bool) {
+	if window.first < 0 || window.end != len(scan.text) {
+		return scanWindow{}, false
+	}
+	start := snapForward(scan.text, runeStartAfter(scan.text, len(scan.text)-scan.size/2))
+	if start <= window.start {
+		return scanWindow{}, false
+	}
+	runes := window.runeStart + utf8.RuneCountInString(scan.text[window.start:start])
+	return scanWindow{start: start, end: len(scan.text), runeStart: runes, first: -1, last: -1}, true
 }
 
 // waitingReread is the parts of a window to read again once the windows

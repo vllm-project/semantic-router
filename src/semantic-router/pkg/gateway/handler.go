@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -125,6 +126,9 @@ const DefaultMaxRequestBodyBytes = 500 << 20
 // Handler serves inference traffic through the routing core.
 type Handler struct {
 	opts Options
+	// inFlight counts the requests being served, on every protocol, for a
+	// drain to wait on (Drain).
+	inFlight atomic.Int64
 }
 
 // NewHandler returns a Handler for opts.
@@ -139,6 +143,8 @@ func NewHandler(opts Options) (*Handler, error) {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.inFlight.Add(1)
+	defer h.inFlight.Add(-1)
 	if h.serveProbe(w, r) {
 		return
 	}

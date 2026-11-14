@@ -73,9 +73,13 @@ func (r *OpenAIRouter) prepareLooperResponseWithEngine(resp *looper.Response, re
 			ResponseID: responseObjectPublicID(reqCtx), PreviousResponseID: responseObjectPreviousID(reqCtx),
 		}
 		var mutation protocolcodec.StreamEventMutation
-		if streamContext.ResponseID != "" {
+		namespaces := requestToolNamespaces(reqCtx)
+		if streamContext.ResponseID != "" || len(namespaces) > 0 {
 			mutation = func(event *llmprotocol.Event) error {
-				event.ResponseID = streamContext.ResponseID
+				if streamContext.ResponseID != "" {
+					event.ResponseID = streamContext.ResponseID
+				}
+				event.ToolCall = namespaces.RestoreCall(event.ToolCall)
 				return nil
 			}
 		}

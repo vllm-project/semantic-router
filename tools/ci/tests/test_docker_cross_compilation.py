@@ -14,10 +14,12 @@ sys.path.insert(0, str(REPO_ROOT / "tools/ci"))
 from image_artifacts import DEFINITIONS, ROUTER_BUILDS, ROUTER_DOCKERFILE  # noqa: E402
 
 
-def router_build_command(dockerfile: str = ROUTER_DOCKERFILE) -> str:
-    """The router stage's final RUN command, with line continuations joined."""
+def router_build_command(
+    dockerfile: str = ROUTER_DOCKERFILE, stage_name: str = "router-build"
+) -> str:
+    """A Go stage's final RUN command, with line continuations joined."""
     text = (REPO_ROOT / dockerfile).read_text().replace("\\\n", " ")
-    stage = text.split(" AS router-build", 1)[1].split("\nFROM ", 1)[0]
+    stage = text.split(f" AS {stage_name}", 1)[1].split("\nFROM ", 1)[0]
     runs = re.findall(r"(?m)^RUN (.+)$", stage)
     return next(run for run in reversed(runs) if "go build" in run)
 
@@ -128,6 +130,47 @@ class DockerCrossCompilationTests(unittest.TestCase):
                         f"CC={linker} GOARCH={arch} CGO_ENABLED=1",
                     )
 
+    def test_dashboard_backend_cross_compiles_with_only_the_target_c_linker(
+        self,
+    ) -> None:
+        command = router_build_command(
+            "dashboard/backend/Dockerfile", "backend-builder"
+        )
+        for host, arch, linker in (
+            ("amd64", "arm64", "aarch64-linux-gnu-gcc"),
+            ("amd64", "amd64", ""),
+            ("arm64", "amd64", "x86_64-linux-gnu-gcc"),
+            ("arm64", "arm64", ""),
+        ):
+            with self.subTest(
+                host=host, arch=arch
+            ), tempfile.TemporaryDirectory() as tmp:
+                stubs = Path(tmp)
+                (stubs / "dpkg").write_text(f"#!/bin/sh\necho {host}\n")
+                (stubs / "go").write_text(
+                    '#!/bin/sh\necho "CC=${CC:-} GOARCH=$GOARCH CGO_ENABLED=$CGO_ENABLED"\n'
+                )
+                for stub in stubs.iterdir():
+                    stub.chmod(0o755)
+                environment = {
+                    key: value for key, value in os.environ.items() if key != "CC"
+                } | {
+                    "PATH": f"{stubs}:{os.environ['PATH']}",
+                    "TARGETARCH": arch,
+                    "TARGETOS": "linux",
+                }
+                result = subprocess.run(
+                    ["bash", "-e", "-c", command],
+                    env=environment,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(
+                    result.stdout.strip(),
+                    f"CC={linker} GOARCH={arch} CGO_ENABLED=1",
+                )
+
     def test_router_images_share_one_dockerfile_and_publish_their_platforms(
         self,
     ) -> None:
@@ -162,6 +205,18 @@ class DockerCrossCompilationTests(unittest.TestCase):
         self.assertIn("steps.definition.outputs.accelerator", builder)
         self.assertIn("image_artifacts.py promote", publisher)
         self.assertNotIn("docker/build-push-action", publisher)
+
+    def test_image_dockerfiles_keep_the_platform_buildkit_sets(self) -> None:
+        # A default on TARGETARCH replaces the value BuildKit sets per platform:
+        # the operator's ARG TARGETARCH=amd64 put an x86-64 manager binary in
+        # its arm64 image.
+        platform_default = re.compile(
+            r"(?m)^\s*ARG\s+(?:TARGET|BUILD)(?:PLATFORM|OS|ARCH|VARIANT)\s*="
+        )
+        for dockerfile in sorted({entry[1] for entry in DEFINITIONS.values()}):
+            with self.subTest(dockerfile=dockerfile):
+                text = (REPO_ROOT / dockerfile).read_text()
+                self.assertIsNone(platform_default.search(text))
 
 
 if __name__ == "__main__":

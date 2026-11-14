@@ -209,6 +209,9 @@ type RequestContext struct {
 	// serialization or dump of the context carries it; read it through
 	// requestDelegatedCredential.
 	delegatedCredential string
+	// callerCredential is the provider login the client sent, kept for a
+	// backend whose auth is credential: caller (see captureCallerCredential).
+	callerCredential    callerCredential
 	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
 	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
 	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
@@ -351,6 +354,13 @@ type RequestContext struct {
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
 	VSRSignalErrorMatches     map[string]bool
+	// VSRGuardOverload are the rules ("type:name") unread on an overloaded
+	// decision runtime that decide the request: alone they refuse it, or one
+	// would refuse it. It then gets a retryable error instead
+	// (global.model_catalog.on_signal_overload).
+	VSRGuardOverload []string
+	// guardOverloadAnswered is whether the request got that retryable error.
+	guardOverloadAnswered bool
 	// VSRScanCoverage is how much of their input the guard rules that read
 	// it in windows read, by "type:name".
 	VSRScanCoverage map[string]string

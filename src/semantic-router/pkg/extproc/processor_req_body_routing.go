@@ -525,6 +525,9 @@ func (r *OpenAIRouter) appendProviderCredential(
 	if state.profile.Delegated() {
 		return r.appendDelegatedCredential(state, providerAuth, model, backendName, ctx)
 	}
+	if state.profile.Caller() {
+		return r.appendCallerCredential(state, model, backendName, ctx)
+	}
 	if providerAuth.Strategy == "none" {
 		if r.CredentialResolver != nil {
 			state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)

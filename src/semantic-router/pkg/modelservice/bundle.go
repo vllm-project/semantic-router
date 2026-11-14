@@ -162,6 +162,16 @@ func bundleFrom(ctx context.Context) *Bundle {
 	return bundle
 }
 
+// Unbundled is ctx without its bundle: a call made with it goes out on its
+// own, as the probe of an overloaded decision runtime does, while its caller
+// stays a participant of the bundle.
+func Unbundled(ctx context.Context) context.Context {
+	if bundleFrom(ctx) == nil {
+		return ctx
+	}
+	return admission.WithWaiter(context.WithValue(ctx, bundleKey{}, (*Bundle)(nil)), nil)
+}
+
 // InBundle reports whether runtime calls made with ctx park in a bundle.
 func InBundle(ctx context.Context) bool {
 	return bundleFrom(ctx) != nil
@@ -280,6 +290,33 @@ func Await(ctx context.Context) func() {
 		return func() {}
 	}
 	return bundle.waiting(bundle.participantOf(ctx))
+}
+
+// Pause counts the caller of ctx as blocked in its bundle, but not as asked,
+// while it waits before asking again, as a call the decision runtime refused
+// as overloaded does: the bundle sends the stage's other work meanwhile, and
+// keeps the questions to the caller's deployments for the call it makes next,
+// so they travel together again. A caller that may ask any deployment counts
+// as asked as well, as it does while it waits for an admission slot. Call the
+// returned function when the wait ends.
+func Pause(ctx context.Context) func() {
+	bundle := bundleFrom(ctx)
+	if bundle == nil {
+		return func() {}
+	}
+	p := bundle.participantOf(ctx)
+	bundle.mu.Lock()
+	bundle.blockLocked(p, false, 1)
+	bundle.sendReadyLocked()
+	bundle.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			bundle.mu.Lock()
+			bundle.blockLocked(p, false, -1)
+			bundle.mu.Unlock()
+		})
+	}
 }
 
 // Fan runs work(i) for every i in [0, n) in its own goroutine, each a

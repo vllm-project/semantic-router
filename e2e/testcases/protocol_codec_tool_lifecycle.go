@@ -286,8 +286,13 @@ func decodeResponsesResponseID(body []byte, stream bool) (string, error) {
 type responsesFunctionCall struct {
 	CallID    string
 	Name      string
+	Namespace string
 	Arguments string
 }
+
+// mockLookupCall is the call the provider-mocker makes unless a request names
+// another tool.
+var mockLookupCall = responsesFunctionCall{CallID: "call_mock_lookup", Name: "lookup", Arguments: `{"query":"weather"}`}
 
 type responsesToolStreamEvent struct {
 	Type      string `json:"type"`
@@ -300,11 +305,13 @@ type responsesToolStreamEvent struct {
 		Type      string `json:"type"`
 		CallID    string `json:"call_id"`
 		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
 		Arguments string `json:"arguments"`
 	} `json:"item"`
 }
 
 type responsesToolStreamState struct {
+	want       responsesFunctionCall
 	call       responsesFunctionCall
 	itemID     string
 	deltas     strings.Builder
@@ -313,6 +320,12 @@ type responsesToolStreamState struct {
 }
 
 func decodeResponsesFunctionCallStream(body []byte) (responsesFunctionCall, error) {
+	return decodeResponsesFunctionCallStreamAs(body, mockLookupCall)
+}
+
+// decodeResponsesFunctionCallStreamAs reads the mock call from a Responses
+// stream, whose item events must all carry the tool and namespace of want.
+func decodeResponsesFunctionCallStreamAs(body []byte, want responsesFunctionCall) (responsesFunctionCall, error) {
 	stream := string(body)
 	requiredMarkers := []string{
 		"event: response.created",
@@ -334,7 +347,7 @@ func decodeResponsesFunctionCallStream(body []byte) (responsesFunctionCall, erro
 		return responsesFunctionCall{}, err
 	}
 
-	state := responsesToolStreamState{}
+	state := responsesToolStreamState{want: want}
 	for _, data := range protocolSSEDataFrames(body) {
 		if err := state.consume(data); err != nil {
 			return responsesFunctionCall{}, err
@@ -369,6 +382,7 @@ func (state *responsesToolStreamState) addCall(event responsesToolStreamEvent, d
 	state.itemID = event.Item.ID
 	state.call.CallID = event.Item.CallID
 	state.call.Name = event.Item.Name
+	state.call.Namespace = event.Item.Namespace
 	return nil
 }
 
@@ -383,7 +397,8 @@ func (state *responsesToolStreamState) finishArguments(event responsesToolStream
 }
 
 func (state *responsesToolStreamState) validateCompletedCall(event responsesToolStreamEvent, data string) error {
-	if event.Item.ID != state.itemID || event.Item.CallID != state.call.CallID || event.Item.Name != state.call.Name || event.Item.Arguments != state.call.Arguments {
+	if event.Item.ID != state.itemID || event.Item.CallID != state.call.CallID || event.Item.Name != state.call.Name ||
+		event.Item.Namespace != state.call.Namespace || event.Item.Arguments != state.call.Arguments {
 		return fmt.Errorf("Responses completed function item changed identity or arguments: %s", data)
 	}
 	return nil
@@ -391,8 +406,7 @@ func (state *responsesToolStreamState) validateCompletedCall(event responsesTool
 
 func (state *responsesToolStreamState) result(stream string) (responsesFunctionCall, error) {
 	call := state.call
-	if call.CallID != "call_mock_lookup" || call.Name != "lookup" ||
-		call.Arguments != `{"query":"weather"}` || state.deltaCount < 2 || state.doneCount != 1 {
+	if call != state.want || state.deltaCount < 2 || state.doneCount != 1 {
 		return responsesFunctionCall{}, fmt.Errorf("Responses tool stream lifecycle is incomplete: %s", truncateString(stream, 1200))
 	}
 	if state.deltas.String() != call.Arguments || !json.Valid([]byte(call.Arguments)) {
@@ -402,11 +416,16 @@ func (state *responsesToolStreamState) result(stream string) (responsesFunctionC
 }
 
 func decodeResponsesFunctionCall(body []byte) (responsesFunctionCall, error) {
+	return decodeResponsesFunctionCallAs(body, mockLookupCall)
+}
+
+func decodeResponsesFunctionCallAs(body []byte, want responsesFunctionCall) (responsesFunctionCall, error) {
 	var response struct {
 		Output []struct {
 			Type      string `json:"type"`
 			CallID    string `json:"call_id"`
 			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
 			Arguments string `json:"arguments"`
 		} `json:"output"`
 	}
@@ -414,9 +433,9 @@ func decodeResponsesFunctionCall(body []byte) (responsesFunctionCall, error) {
 		return responsesFunctionCall{}, fmt.Errorf("decode Responses tool call: %w", err)
 	}
 	for _, output := range response.Output {
-		if output.Type == "function_call" && output.CallID == "call_mock_lookup" && output.Name == "lookup" &&
-			output.Arguments == `{"query":"weather"}` && json.Valid([]byte(output.Arguments)) {
-			return responsesFunctionCall{CallID: output.CallID, Name: output.Name, Arguments: output.Arguments}, nil
+		call := responsesFunctionCall{CallID: output.CallID, Name: output.Name, Namespace: output.Namespace, Arguments: output.Arguments}
+		if output.Type == "function_call" && call == want && json.Valid([]byte(output.Arguments)) {
+			return call, nil
 		}
 	}
 	return responsesFunctionCall{}, fmt.Errorf("Responses tool call is missing or malformed: %s", truncateString(string(body), 800))

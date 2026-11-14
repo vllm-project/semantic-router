@@ -148,6 +148,10 @@ type ToolCall struct {
 	ID        string
 	Name      string
 	Arguments string
+	// Namespace is the Responses namespace the client knows the tool under, and
+	// Name is then the tool's name inside it. Backends never receive it: their
+	// requests carry the flat name of the tool instead.
+	Namespace string
 }
 
 type ToolResult struct {
@@ -179,6 +183,10 @@ type Tool struct {
 	// CustomFormat constrains a custom tool's input. Nil means unconstrained text.
 	CustomFormat *CustomToolFormat
 	Cache        *CacheDirective
+	// Namespace and LocalName record where a tool flattened from a Responses
+	// namespace came from. Name holds the flat name every backend receives.
+	Namespace string
+	LocalName string
 }
 
 type CustomToolFormat struct {
@@ -317,6 +325,10 @@ type Request struct {
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
 	// output, but targets that cannot carry it must reject it, not drop it.
 	PromptCacheKey string
+	// ToolNameOrigins is decode state that no wire carries. A request that
+	// flattened a Responses namespace keeps where each tool name came from, so
+	// retained history prepended later is checked against the same names.
+	ToolNameOrigins ToolNameOrigins
 }
 
 type StopReason string

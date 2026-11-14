@@ -136,7 +136,10 @@ var registry = []API{
 		},
 		ListenerDefault: SchemaVLLMSR50, UpstreamDefault: SchemaSystemOne02, Versioned: true,
 		ListenerSchemas: []string{SchemaVLLMSR50, SchemaVLLMSR40},
-		Settings:        []Setting{{Name: "max_deadline_ms", Summary: "the most a request's deadline may ask a directly called model to take"}},
+		Settings: []Setting{
+			{Name: "max_deadline_ms", Summary: "the most a request's deadline may ask a directly called model to take"},
+			{Name: "vsr", Summary: "what the vSR agent plugins pointed at the listener turn on, from its System One listing"},
+		},
 	},
 }
 
