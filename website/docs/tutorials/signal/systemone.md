@@ -131,6 +131,10 @@ condition with a `label` matches when that option or label does:
 | `set` | a counted label matches | the label's probability meets `predicate`; without one, the model selected the label |
 | `span` | a counted label matches | a span with the label has a probability that meets `predicate`; without one, the model found a span with the label |
 
+A `span` rule says where in the text each label is, so the
+[masking plugin](../plugin/masking#masking-your-own-rules) can hide what it
+finds: name it in the plugin's `rules` as `{type: systemone, name: <rule>}`.
+
 A `set` or `span` rule counts `labels`, or every label of the question
 without them, less `ignore_labels`. A condition may add its own `predicate`;
 for a condition with a `label`, it reads that label's value. The

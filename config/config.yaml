@@ -429,6 +429,13 @@ recipes:
           operator: OR
           keywords: ["payment_failed", "transaction_declined", "critical", "high", "TXN_DECLINE", "urgent", "immediate", "asap"]
           case_sensitive: false
+        # An OR rule of literal or regex keywords says where it matched, so a
+        # masking plugin can hide what it finds (static_business_route below).
+        - name: employee_id
+          description: An employee ID such as E-104233.
+          operator: OR
+          method: regex
+          keywords: ['\bE-\d{6}\b']
 
       domains:
         - name: business
@@ -1121,12 +1128,17 @@ recipes:
             configuration:
               enabled: true
               signal: business_contact_pii
+              # Rules that find text are masked as well, each under its own
+              # name; entity_types filters only the pii rule's labels.
+              rules:
+                - {type: keyword, name: employee_id}
               entity_types:
                 - EMAIL_ADDRESS
                 - PHONE_NUMBER
               placeholders:
                 EMAIL_ADDRESS: "[EMAIL_{index}]"
                 PHONE_NUMBER: "[PHONE_{index}]"
+                employee_id: "[EMPLOYEE_{index}]"
         retention:
           drop: false
           ttl_turns: 4
