@@ -90,7 +90,8 @@ class ArtifactContractTest(unittest.TestCase):
 class SourceLayoutTest(unittest.TestCase):
     def test_python_sources_parse_and_do_not_patch_import_paths(self) -> None:
         for path in ROOT.rglob("*.py"):
-            if "tests" in path.parts:
+            # uv sync creates .venv in this directory; those files are not project sources.
+            if "tests" in path.parts or ".venv" in path.parts:
                 continue
             with self.subTest(path=path.relative_to(ROOT)):
                 source = path.read_text(encoding="utf-8")
