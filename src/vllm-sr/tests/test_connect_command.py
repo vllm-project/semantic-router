@@ -566,6 +566,44 @@ def test_cli_writes_probes_and_undoes(tmp_path, gateway, monkeypatch):
     assert seen[-1][2] == "Bearer sk-test"
 
 
+def test_cli_leaves_the_login_to_claude_code_for_a_caller_gateway(
+    tmp_path, gateway, monkeypatch
+):
+    url, seen, _ = gateway
+    config = tmp_path / "config.yaml"
+    backend = {
+        "name": "anthropic",
+        "provider": "anthropic",
+        "endpoint": "https://api.anthropic.com",
+        "auth": {"credential": "caller"},
+    }
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {
+                    "models": [{"name": "claude-sonnet-5-5", "backend_refs": [backend]}]
+                }
+            }
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    asked = len(seen)
+    result = CliRunner().invoke(
+        main,
+        ["connect", "claude-code", "--config", str(config), "--base-url", url, "--yes"],
+    )
+    assert result.exit_code == 0, result.output
+    written = (tmp_path / "claude" / "settings.json").read_text()
+    # empty, so neither a placeholder nor a token the shell exports replaces the login
+    assert json.loads(written)["env"]["ANTHROPIC_AUTH_TOKEN"] == ""
+    assert "sk-secret" not in written
+    assert "Not probed" in result.output
+    assert len(seen) == asked
+
+
 def test_cli_fails_when_the_gateway_refuses(tmp_path, gateway, monkeypatch):
     url, _, _ = gateway
     monkeypatch.chdir(tmp_path)

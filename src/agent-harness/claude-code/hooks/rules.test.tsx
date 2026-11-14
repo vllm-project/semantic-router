@@ -144,6 +144,22 @@ test('the personal data check reads what the rules read, and a rule and a PII sp
   expect(reply.bodies?.some(body => String(body.state).includes('E-104233@corp.example'))).toBe(true)
 })
 
+test('where a rule and a PII span cover the same text, the rule names the tag', { options: REMOTE }, async ($, on) => {
+  const reply: Reply = {
+    listing: listingOf([], [{ ...EMPLOYEE, name: 'customer_account' }]),
+    rules: { answer: answerOf({ spans: () => [{ start: 4, end: 17, rule: 'customer_account' }] }) },
+    pii: [{ label: 'IBAN_CODE', start: 0, end: 0, text: 'ACCT-48392017', probability: 0.99 }],
+    bodies: [],
+  }
+  engine(on, reply)
+  fileHolds(on, 'Pay ACCT-48392017 now')
+  await $.session.start(START)
+
+  const ran = await read($)
+
+  expect((ran.result as { file: { content: string } }).file.content).toBe('Pay [vsr:customer_account] now')
+})
+
 test('a listing that is not one keeps the rules read before', () => {
   expect(rulesOf(null)).toBe(undefined)
   expect(rulesOf({ vsr: 'broken' })).toBe(undefined)

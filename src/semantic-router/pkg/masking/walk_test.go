@@ -645,6 +645,65 @@ func TestApply_SafeguardsStringLeavesMasked(t *testing.T) {
 	}
 }
 
+// A tool result that only begins with a bracket is text, not malformed JSON:
+// it is masked like any other text rather than refusing the request, and with
+// it every later turn of the session that carries it.
+func TestApply_BracketPrefixedTextToolResultMasked(t *testing.T) {
+	for _, text := range []string{
+		"[INFO] mailed alice@example.com",
+		"[2026-11-14 10:00:00] mailed alice@example.com",
+		"[1/3] mailed alice@example.com",
+		"[vsr:employee_id] mailed alice@example.com",
+		"[nullable] alice@example.com",
+		"{not json alice@example.com",
+	} {
+		t.Run(text, func(t *testing.T) {
+			request := toolResultRequest(text)
+			if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+				t.Fatalf("text tool result was refused: %v", err)
+			}
+			got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+			if want := strings.Replace(text, "alice@example.com", "[EMAIL_ADDRESS_0]", 1); got != want {
+				t.Fatalf("got %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestIsJSONShapedPayload(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want bool
+	}{
+		{`{"a":1}`, true},
+		{" {}", true},
+		{"[]", true},
+		{`["a"]`, true},
+		{`[{"a":1}]`, true},
+		{"[[1]]", true},
+		{"[1, 2]", true},
+		{"[-1.5e3]", true},
+		{"[true]", true},
+		{"[null ,1]", true},
+		{"[", true},
+		{"{", true},
+		{`{"a": alice`, true},
+		{"[INFO] ok", false},
+		{"[2026-11-14 10:00:00] ok", false},
+		{"[1/3] ok", false},
+		{"[vsr:employee_id]", false},
+		{"[EMAIL_ADDRESS_0]", false},
+		{"{not json", false},
+		{"[nullable] x", false},
+		{"plain", false},
+		{"42", false},
+	} {
+		if got := isJSONShapedPayload(tc.text); got != tc.want {
+			t.Errorf("isJSONShapedPayload(%q) = %v, want %v", tc.text, got, tc.want)
+		}
+	}
+}
+
 // A custom tool's result is free-form text even when it looks like JSON.
 func TestApply_CustomToolResultKeepsTextMasking(t *testing.T) {
 	request := &llmprotocol.Request{
