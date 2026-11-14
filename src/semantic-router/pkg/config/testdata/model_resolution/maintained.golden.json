@@ -784,6 +784,7 @@
   "e2e/profiles/looper/values.yaml": {},
   "e2e/profiles/masking/values.yaml": {
     "signals": {
+      "masking-rules/systemone.customer_account": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "masking/pii.personal_data": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },

@@ -385,6 +385,8 @@ def main() -> None:
                         [
                             "skopeo",
                             "copy",
+                            "--retry-times",
+                            "3",
                             "--all",
                             "--preserve-digests",
                             "--digestfile",
@@ -417,6 +419,8 @@ def acquire_published(directory: Path) -> None:
         [
             "skopeo",
             "copy",
+            "--retry-times",
+            "3",
             "--all",
             "--preserve-digests",
             "docker://" + record["ref"],

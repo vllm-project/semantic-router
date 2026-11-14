@@ -309,6 +309,22 @@ tool search on:
 - **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for
   `tools.defer_loading`.
 
+A `tool_addition` block, which Claude Code puts in a `role: "system"` message
+when a deferred tool becomes available mid-conversation, adds the tool it
+defines to the request's tools, after the declared ones and once per name, on
+every backend format. The system message keeps its other blocks, and a message
+that held nothing else is left out.
+
+### Auto mode's classifier context
+
+Claude Code in auto mode sends a top-level `safeguards` array for Anthropic's
+server-side classifier review. The Router carries it unchanged to a Messages
+backend. A Chat or Responses backend has no use for it, so the Router leaves it
+out and `x-vsr-warnings` reports a `dropped` diagnostic for `safeguards`. The
+array holds Claude Code's working directory, permission rules and git state, so
+on a decision with the `masking` plugin its string values are masked like a
+structured tool result's, and an array that will not decode refuses the request.
+
 ### Sampling controls a backend rejects
 
 Some backends reject a sampling control their wire format defines. A vLLM
@@ -437,7 +453,9 @@ tools or error translation.
 ## Validation and failure behavior
 
 - Public requests are decoded into the neutral contract even when client and
-  backend formats match. Unknown or unsupported request fields fail closed.
+  backend formats match. Unknown or unsupported request fields fail closed,
+  and the error names an unknown field, such as
+  `request JSON contains a non-canonical field: unknown field "new_field"`.
 - Chat requests accept and don't forward the fields that client libraries add
   to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
   which holds the reply fields its message type lacks, and `parsed` and
@@ -549,6 +567,13 @@ tools or error translation.
   Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
   not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
   response is not cached, stored, or kept as the replay response body.
+- A Responses reasoning item can carry different non-empty `encrypted_content`
+  strings in `response.output_item.done` and the corresponding output item in
+  `response.completed` or `response.incomplete`. The Router accepts this
+  difference while checking every other item field, output count, and output
+  order. A non-empty string becoming missing, null, or empty still fails with
+  `stream_terminal_output_mismatch`. The field remains reported as `dropped`
+  during protocol translation.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../api/headers).

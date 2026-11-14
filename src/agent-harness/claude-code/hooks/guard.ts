@@ -2,6 +2,8 @@ import type { EngineInterface, Hook, ToolCallResult } from 'claude-code'
 
 import type { Decision, Outcome, Risk } from '../types'
 import { ANSWER_MS, type Classified, classify, failureOf, isRecord, numberAt, type Reply } from './lib/classify'
+import { askCurrentRules } from './lib/profile'
+import { ruleFinds, type RulesAsked, uncheckedRules } from './lib/rules'
 import { budgetOf, type Settings } from './lib/settings'
 import { stamp } from './lib/env'
 import { alwaysHeld, firstOf, partsOf } from './lib/shell'
@@ -83,17 +85,21 @@ export async function guardCheck(
   settings: Settings,
 ) {
   const command = isRecord(e.input) && typeof e.input.command === 'string' ? e.input.command : undefined
-  if (!settings.apps.guard || e.isReadOnly || command === undefined || command.trim() === '') return next(e)
+  if (!settings.apps.guard || command === undefined || command.trim() === '') return next(e)
   const line = settings.thresholds.guard.review
+  const bound = settings.rules.guard
 
-  const parts = partsOf(command)
-  if (parts.length === 0) return next(e)
+  // A read-only command is the model's to skip, never the listener's rules: those read every command.
+  const parts = e.isReadOnly ? [] : partsOf(command)
+  if (parts.length === 0 && bound.length === 0) return next(e)
   const overLimit = Math.max(0, parts.length - MAX_PARTS)
 
-  // The runtime answers one request at a time, so the parts go one after another within one budget; once one
-  // reaches the line the command is held whatever the rest score, and the rest are not asked.
+  // The listener's rules read the whole command in one call, beside the model's questions and within the same wait.
   const budget = budgetOf(settings.waits.guard)
   const started = await $.clock.now()
+  const listened: Promise<RulesAsked> | undefined = bound.length > 0 ? askCurrentRules($, settings, 'guard', [command], budget) : undefined
+  // The runtime answers one request at a time, so the parts go one after another within one budget; once one
+  // reaches the line the command is held whatever the rest score, and the rest are not asked.
   const asked: { part: string; result: Classified<Guarded> }[] = []
   for (const part of parts.slice(0, MAX_PARTS)) {
     const left = budget - ((await $.clock.now()) - started)
@@ -104,9 +110,22 @@ export async function guardCheck(
     asked.push({ part, result })
     if (result.ok && result.value.review >= line) break
   }
+  const listener = listened === undefined ? undefined : await listened
   const latencyMs = (await $.clock.now()) - started
   const at = await stamp($)
   const id = e.tool_use_id ?? at
+  // A rule the listener matched holds the command; one it could not check holds it when required, and is recorded
+  // when advisory. Neither depends on what the model answered.
+  // The rules as the call left them: a change in the Dashboard was read again there.
+  const current = listener === undefined ? bound : settings.rules.guard
+  const listenerFound = listener === undefined ? undefined : ruleFinds(settings.rules, listener, 0)
+  const listenerRule = current.find(rule => listenerFound?.matches.includes(rule.name))
+  const listenerUnchecked = listener === undefined ? [] : uncheckedRules(settings.rules, current, listener, 0)
+  const requiredUnchecked = listenerUnchecked.find(one => one.rule.required)
+  const isListenerHeld = listenerRule !== undefined || requiredUnchecked !== undefined
+  for (const { rule, reason } of listenerUnchecked.filter(one => !one.rule.required)) {
+    await record($, settings.log, { kind: 'unavailable', app: 'guard', id: `${id}:rule:${rule.name}`, toolUseId: e.tool_use_id, at, subject: command, why: `listener rule ${rule.name} not checked: ${reason}` })
+  }
 
   const judged: Judged[] = []
   const failures: { part: string; why: string; offline?: true; cancelled?: true }[] = []
@@ -127,9 +146,9 @@ export async function guardCheck(
   // aside, as redact and shield do, and only the fixed rules and a score already over the line hold; a guard that
   // waits until done holds instead. Cancelled with the call (the user pressed Esc): nothing will run, so nothing is
   // held or recorded.
-  if (failures.length > 0 && failures.every(failure => failure.cancelled) && !ruled && !isRisky) return next(e)
+  if (failures.length > 0 && failures.every(failure => failure.cancelled) && !ruled && !isRisky && !isListenerHeld) return next(e)
   const isSteppingAside = failures.length > 0 && settings.waits.guard !== 'done'
-  if (isSteppingAside && !ruled && !isRisky && overLimit === 0) {
+  if (isSteppingAside && !ruled && !isRisky && !isListenerHeld && overLimit === 0) {
     const failure = failures.find(one => !one.cancelled) ?? failures[0]
     await record($, settings.log, {
       kind: 'unavailable',
@@ -149,8 +168,10 @@ export async function guardCheck(
   // With no part answered, the record names the first part not checked, at no score.
   const riskiest: Judged = ruled
     ? (judged.find(one => one.part === ruled.part) ?? { part: ruled.part, risk: ruled.risk, riskProbability: 1, review: 1 })
-    : (scored ?? { part: failures[0].part, risk: 'safe', riskProbability: 0, review: 0 })
-  const isHeld = ruled !== undefined || isRisky || unchecked > 0
+    : (scored ?? { part: failures[0]?.part ?? command, risk: listenerRule ? 'destructive' : 'safe', riskProbability: 0, review: 0 })
+  const isHeld = ruled !== undefined || isRisky || unchecked > 0 || isListenerHeld
+  // The listener's rule names what the record shows as always held: its description, else its name.
+  const listenerWords = listenerRule && (listenerRule.description.replace(/[.\s]+$/, '') || `listener rule ${listenerRule.name}`)
   await record($, settings.log, {
     kind: 'guard',
     id,
@@ -165,7 +186,8 @@ export async function guardCheck(
     threshold: line,
     latencyMs,
     ...(unchecked > 0 ? { unchecked } : {}),
-    ...(ruled ? { rule: ruled.rule } : {}),
+    ...(ruled ? { rule: ruled.rule } : listenerWords ? { rule: listenerWords } : {}),
+    ...(requiredUnchecked && !ruled && !listenerWords ? { ruleUnchecked: requiredUnchecked.rule.name } : {}),
   })
   const decided = await next(e)
   // The guard only tightens: a refusal from elsewhere stands.
@@ -173,6 +195,10 @@ export async function guardCheck(
   const steps = parts.length === 1 ? 'step' : 'steps'
   const reason = ruled
     ? `vSR guard: "${clip(oneLine(ruled.part), REASON_PART_WIDTH)}" ${ruled.rule}: always held, whatever the score. Confirm before it runs.`
+    : listenerWords
+    ? `vSR guard: "${clip(oneLine(command), REASON_PART_WIDTH)}" ${listenerWords}: a rule of the Router listener, always held. Confirm before it runs.`
+    : requiredUnchecked
+    ? `vSR guard: could not check the listener's required rule ${requiredUnchecked.rule.name} (${requiredUnchecked.reason}). Confirm before it runs.`
     : isRisky
     ? `vSR guard: "${clip(oneLine(riskiest.part), REASON_PART_WIDTH)}" ${RISK_WORDS[riskiest.risk]} (risk score ${fixed(riskiest.review)} ≥ ${fixed(line)}). Confirm before it runs.`
     : notChecked > 0

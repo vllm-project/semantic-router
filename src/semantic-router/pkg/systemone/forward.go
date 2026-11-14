@@ -23,5 +23,5 @@ type ForwardRequest struct { //nolint:gosec // G117: credentials are forwarded f
 
 func (f ForwardRequest) ValidOperation() bool {
 	return f.Method == http.MethodGet && f.Path == "/v1/systemone/models" ||
-		f.Method == http.MethodPost && (f.Path == "/v1/systemone" || f.Path == "/v1/systemone/batch" || f.Path == "/v1/decisions")
+		f.Method == http.MethodPost && (f.Path == "/v1/systemone" || f.Path == "/v1/systemone/batch" || f.Path == "/v1/decisions" || f.Path == RulesPath)
 }

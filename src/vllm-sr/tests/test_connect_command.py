@@ -566,6 +566,44 @@ def test_cli_writes_probes_and_undoes(tmp_path, gateway, monkeypatch):
     assert seen[-1][2] == "Bearer sk-test"
 
 
+def test_cli_leaves_the_login_to_claude_code_for_a_caller_gateway(
+    tmp_path, gateway, monkeypatch
+):
+    url, seen, _ = gateway
+    config = tmp_path / "config.yaml"
+    backend = {
+        "name": "anthropic",
+        "provider": "anthropic",
+        "endpoint": "https://api.anthropic.com",
+        "auth": {"credential": "caller"},
+    }
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {
+                    "models": [{"name": "claude-sonnet-5-5", "backend_refs": [backend]}]
+                }
+            }
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    asked = len(seen)
+    result = CliRunner().invoke(
+        main,
+        ["connect", "claude-code", "--config", str(config), "--base-url", url, "--yes"],
+    )
+    assert result.exit_code == 0, result.output
+    written = (tmp_path / "claude" / "settings.json").read_text()
+    # empty, so neither a placeholder nor a token the shell exports replaces the login
+    assert json.loads(written)["env"]["ANTHROPIC_AUTH_TOKEN"] == ""
+    assert "sk-secret" not in written
+    assert "Not probed" in result.output
+    assert len(seen) == asked
+
+
 def test_cli_fails_when_the_gateway_refuses(tmp_path, gateway, monkeypatch):
     url, _, _ = gateway
     monkeypatch.chdir(tmp_path)
@@ -1117,8 +1155,9 @@ def test_vsr_sets_up_claude_code_through_its_plugin_command_and_undoes_it(
 class FakeCodexPlugins:
     """`codex plugin` as connect runs it: what is installed, and what it ran."""
 
-    def __init__(self, installed):
+    def __init__(self, installed, unreachable=False):
         self.installed = installed
+        self.unreachable = unreachable
         self.ran = []
 
     def __call__(self, argv, **kw):
@@ -1131,6 +1170,8 @@ class FakeCodexPlugins:
             out = json.dumps({"installed": listed, "available": []})
         elif argv[1:3] == ["plugin", "add"]:
             self.installed = True
+        elif argv[2:4] == ["marketplace", "add"] and self.unreachable:
+            raise subprocess.CalledProcessError(1, argv)
         return subprocess.CompletedProcess(argv, 0, out, "")
 
 
@@ -1200,6 +1241,56 @@ def test_vsr_points_the_codex_plugin_at_the_listener_and_keeps_its_other_setting
         "guardReview": 0.8,
         "runtimeUrl": "http://127.0.0.1:8790/v1/decisions",
     }
+
+
+def test_a_codex_plugin_that_does_not_install_is_not_reported_as_set_up(
+    tmp_path, monkeypatch
+):
+    codex = FakeCodexPlugins(installed=False, unreachable=True)
+    _codex_env(tmp_path, monkeypatch, codex)
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    args = ["connect", "codex", "--base-url", "http://localhost:8899"]
+    result = CliRunner().invoke(main, [*args, "--vsr-source", "/gone", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert (
+        "vSR is not set up: codex plugin marketplace add /gone exited with status 1"
+        in result.output
+    )
+    assert "the Codex plugin asks" not in result.output
+    assert ["codex", "plugin", "add", "vsr@vllm-sr"] not in codex.ran
+
+
+def test_a_keyed_listener_names_its_key_variable_to_the_codex_plugin(
+    tmp_path, monkeypatch
+):
+    _codex_env(tmp_path, monkeypatch, FakeCodexPlugins(installed=True))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "listener-key")
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    api_keys: [listener-key]\n"
+        "    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--base-url", "http://localhost:8899", "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    held = (tmp_path / "vsr.json").read_text()
+    assert json.loads(held)["runtimeTokenEnv"] == "VLLM_SR_API_KEY"
+    assert "listener-key" not in held
+    assert (
+        "Codex and its vSR plugin read the key from $VLLM_SR_API_KEY" in result.output
+    )
+    # a listener without a key, later: the variable named for the first one goes
+    monkeypatch.delenv("VLLM_SR_API_KEY")
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--base-url", "http://localhost:8899", "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "runtimeTokenEnv" not in (tmp_path / "vsr.json").read_text()
 
 
 @pytest.mark.parametrize("harness", ["claude-code", "codex"])
@@ -1272,8 +1363,10 @@ def test_a_project_that_sets_the_api_key_gets_no_promise_that_it_is_off(
         ["connect", "claude-code", "--base-url", "http://localhost:8899", "--yes"],
     )
     assert result.exit_code == 0, result.output
-    assert "no longer goes to the gateway" not in result.output
-    assert "sets ANTHROPIC_API_KEY" in result.output
+    # The warning wraps at the output width, and the temp path's length moves the break.
+    output = " ".join(result.output.split())
+    assert "no longer goes to the gateway" not in output
+    assert "sets ANTHROPIC_API_KEY" in output
 
 
 def test_a_dry_run_launch_writes_no_settings_file(tmp_path, monkeypatch):

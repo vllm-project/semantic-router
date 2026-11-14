@@ -47,6 +47,17 @@ listeners:
           redact: true
           guard: true
           router_turns: false
+          # Rules of a recipe that guard and redact enforce besides their own
+          # checks. The plugins learn each rule's name and description and
+          # ask this listener to evaluate it (POST /v1/systemone/rules). A
+          # required rule that cannot be checked holds the command or
+          # withholds the output; an advisory one goes unchecked.
+          rules:
+            recipe: default
+            guard:
+              - {type: keyword, name: prod_database, enforce: required}
+            redact:
+              - {type: keyword, name: employee_id}
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:
@@ -429,6 +440,18 @@ recipes:
           operator: OR
           keywords: ["payment_failed", "transaction_declined", "critical", "high", "TXN_DECLINE", "urgent", "immediate", "asap"]
           case_sensitive: false
+        # An OR rule of literal or regex keywords says where it matched, so a
+        # masking plugin can hide what it finds (static_business_route below).
+        - name: employee_id
+          description: An employee ID such as E-104233.
+          operator: OR
+          method: regex
+          keywords: ['\bE-\d{6}\b']
+        - name: prod_database
+          description: Touches the production database.
+          operator: OR
+          method: regex
+          keywords: ['prod-db\.internal']
 
       domains:
         - name: business
@@ -1121,12 +1144,17 @@ recipes:
             configuration:
               enabled: true
               signal: business_contact_pii
+              # Rules that find text are masked as well, each under its own
+              # name; entity_types filters only the pii rule's labels.
+              rules:
+                - {type: keyword, name: employee_id}
               entity_types:
                 - EMAIL_ADDRESS
                 - PHONE_NUMBER
               placeholders:
                 EMAIL_ADDRESS: "[EMAIL_{index}]"
                 PHONE_NUMBER: "[PHONE_{index}]"
+                employee_id: "[EMPLOYEE_{index}]"
         retention:
           drop: false
           ttl_turns: 4

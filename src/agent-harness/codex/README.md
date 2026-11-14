@@ -9,7 +9,7 @@ plugin's apps work in Codex:
 | App | What it does in Codex |
 | --- | --- |
 | guard | Blocks a shell command the decision model scores at or over `guardReview` (0.90), and tells Codex why, so it asks you instead of running it. |
-| redact | Replaces personal data in a command's output with tags such as `[vsr:email]` before Codex reads it, and tells Codex the tags are vSR's. |
+| redact | Replaces personal data in a command's output with tags such as `[vsr:email]` before Codex reads it, and tells Codex the tags are vSR's and the values are hidden on purpose, not to be read another way. |
 | shield | Tells Codex to read an output that tries to give an AI agent instructions as data, when the injection score is at or over `shieldInject` (0.90). |
 
 ## Install
@@ -45,16 +45,30 @@ vSR reads `vsr.json` in the Codex home (`$CODEX_HOME`, by default `~/.codex`). E
 ```
 
 `VSR_RUNTIME_URL` and `VSR_RUNTIME_MODEL` override the file, and `VSR_RUNTIME_TOKEN` is sent as a
-bearer token; keep the token out of `vsr.json`. With Codex pointed at a Router through
+bearer token; keep the token out of `vsr.json`. `runtimeTokenEnv` names another variable to read the
+token from when `VSR_RUNTIME_TOKEN` is unset: `vllm-sr connect codex` writes it for a listener with
+`api_keys`, which checks the same key on System One. With Codex pointed at a Router through
 `vllm-sr connect codex`, set `runtimeUrl` to that listener's `/v1/decisions` and `runtimeModel` to the
 System One model it publishes, so one listener serves both the agent's calls and vSR's questions.
 
 That listener can also turn `guard`, `redact` and `shield` on or off for every plugin pointed at it,
-under `apis.systemone.vsr` in the Router's config or as checkboxes in the Dashboard (Config › Global
-Config › vSR agent plugins).
+under `apis.systemone.vsr` in the Router's config or as Default, On or Off in the Dashboard (Config ›
+Global Config › vSR agent plugins).
 vSR reads the listener's listing (`GET /v1/systemone/models`) at most once a minute and keeps the
-answer in `vsr-listener.json` in the Codex home. An app you name in `vsr.json` stays yours; the
+answer in `vsr-listener.json` in the Codex home. A rules answer for another revision, such as after
+a change in the Dashboard, makes it read the listing again and ask once more in the same call. An app you name in `vsr.json` stays yours; the
 listener sets the others.
+
+Rules the listener binds to guard and redact (`vsr.rules`) come with the same listing, by name and
+description only, and the listener evaluates them. Guard sends the whole command beside its own
+question: a rule that matches denies it with the rule's description, and the person can run it.
+Redact sends the Bash output whole and the decision model reads its first 16,000 characters, the
+same text, and what either finds is hidden together, a rule's find as `[vsr:<rule name>]`. A
+`required` rule the listener could not check denies the command or withholds the output; an
+advisory one adds a line saying it was not checked. The rules last read from a listener stay in
+`vsr-listener.json` (per listener and token), so an outage after that never drops a required rule.
+Before vSR has read a listener's listing once with this token it knows no rules, and when the
+listing does not answer, its checks step aside as they do for any outage.
 
 ## What you see
 

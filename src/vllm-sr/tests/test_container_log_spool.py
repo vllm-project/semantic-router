@@ -314,10 +314,12 @@ print(json.dumps({"umask": inherited, "directory_modes": directories}))
 
 
 def test_bounded_log_spool_forwards_term_and_cleans_private_directory(tmp_path):
+    # The signal can land while print("service-ready") still holds stdout's buffer, and
+    # a print from the handler then raises a reentrant call, so the handler uses os.write.
     service_script = """
-import signal, sys
+import os, signal, sys
 def stopped(signum, frame):
-    print("service-stopped", flush=True)
+    os.write(1, b"service-stopped\\n")
     sys.exit(0)
 signal.signal(signal.SIGTERM, stopped)
 print("service-ready", flush=True)

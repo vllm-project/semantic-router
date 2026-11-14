@@ -233,8 +233,17 @@ env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
   ANTHROPIC_DEFAULT_HAIKU_MODEL=vllm-sr/auto \
   ANTHROPIC_DEFAULT_SONNET_MODEL=vllm-sr/auto \
   ANTHROPIC_DEFAULT_OPUS_MODEL=vllm-sr/auto \
+  CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000 \
   claude
 ```
+
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS` is the smallest context window among the
+models the entrypoint reaches; without it Claude Code does not know
+`vllm-sr/auto` and says so at start. `vllm-sr connect claude-code --config
+<your config>` writes the same settings for such a configuration: it leaves
+`ANTHROPIC_AUTH_TOKEN` empty, so neither a gateway key nor one your shell
+exports replaces the login, and it does not probe the gateway, which answers
+only on that login.
 
 The Router then routes each call among Claude models on that login, and
 Insights shows the session's calls with the model each decision picked. A
@@ -366,8 +375,9 @@ the new listener), the command says why and what to run. `--launch` writes
 nothing, so it leaves vSR alone.
 
 The listener can also set which of vSR's apps run, for every plugin pointed at
-it, under `systemone.vsr`; the Dashboard shows the same fields as checkboxes under
-Config › Global Config › vSR agent plugins. Each field set there wins over the plugin's own option, so turning
+it, under `systemone.vsr`; the Dashboard shows each field as Default, On or Off
+under Config › Global Config › vSR agent plugins, where Default leaves the field
+out. Each field set there wins over the plugin's own option, so turning
 `redact` off here turns it off in every session that uses this listener, from
 its next prompt a minute or more later. A choice a person makes in Claude Code
 with `/vsr` stays theirs until `/vsr follow`:
@@ -377,6 +387,83 @@ with `/vsr` stays theirs until `/vsr follow`:
         models: [vela3-lite]
         vsr: {redact: true, guard: true, router: false}
 ```
+
+#### Rules of your own for guard and redact
+
+`vsr.rules` binds rules of one recipe to guard and redact. A rule is an
+ordinary signal of that recipe: guard takes any [keyword
+rule](../tutorials/signal/heuristic/keyword) and a [System
+One](../tutorials/signal/systemone) `noul` rule, or `choice` rule with
+`labels`; redact takes a rule that finds text, an `OR` keyword rule of literal
+or regex keywords without `fuzzy_match`, `count` or `density`, or a System One
+`span` rule. An entrypoint must reach the recipe, since the Router prepares the
+rules of a reachable recipe only.
+
+```yaml
+      systemone:
+        models: [vela3-lite]
+        vsr:
+          rules:
+            recipe: default
+            guard:
+              - {type: keyword, name: prod_database, enforce: required}
+              - {type: systemone, name: deletes_data}
+            redact:
+              - {type: keyword, name: employee_id, enforce: required}
+```
+
+In the Dashboard, Config › Global Config › vSR agent plugins › Rules of your
+own picks the recipe and lists its rules that fit each app, each Off, Advisory
+or Required. Once an app binds a rule, the rules left Off fold behind a
+"Show N more rules" button. Try it under each app sends a sample command or output through
+the Dashboard, which adds the listener's key on the server, and says which
+rules match or what they would hide, as the Router runs the saved rules.
+
+`enforce: required` makes a rule fail closed for the plugin that applies it:
+when the rule cannot be checked, the command waits for the person and the
+output is withheld. `advisory`, the default, lets an unchecked rule step aside
+as the plugins' own checks do. An app binds at most 16 rules, each name once.
+
+The listing (`GET /v1/systemone/models`) hands each rule's name, description
+and `required` to the plugins under `vsr.rules`, with a `revision` that changes
+with any rule's definition, binding or enforcement. A plugin that gets an
+answer for another revision, such as after a change in the Dashboard, reads the
+listing again and asks once more in the same call, so a change applies to a
+running session at once. A rule's pattern or
+question never leaves the Router. To evaluate them, a client sends the texts
+to the same listener, with the same key as any System One call:
+
+```bash
+curl -s http://localhost:8899/v1/systemone/rules \
+  -H 'Authorization: Bearer <listener key>' \
+  -d '{"app": "redact", "parts": [{"id": "out-1", "text": "Paid by E-104233"}]}'
+```
+
+```json
+{"revision": "3f9c0a1b2d4e", "parts": [{"id": "out-1", "coverage": "complete",
+  "matches": [], "spans": [{"start": 8, "end": 16, "rule": "employee_id"}], "unchecked": []}]}
+```
+
+Each part comes back with the guard rules it matches, or the redact spans in
+code points, overlapping spans of different rules merged into one under the
+rule that starts first, and the rules the Router could not check with a reason.
+`coverage` is `complete`, `partial` or `failed`. A request holds at most 16
+parts and 256 KiB of text; a listener evaluates 8 such requests at once and
+answers `429` with `Retry-After` beyond that, `404 rules_not_published` for an
+app it binds no rules to, and `401` without its key. Every call is logged with
+the rule names, counts and latency, never the text.
+
+The vSR plugins for Claude Code and Codex read these rules from the listing and
+call this endpoint themselves. Guard sends the whole command beside its own
+questions and holds it when a rule matches; redact sends the tool output as the
+tool gave it and puts `[vsr:<rule name>]` where a rule found text. A required
+rule that cannot be checked holds the command or withholds the output in both;
+the rules last read from a listener are kept, so an outage does not drop one
+once a plugin has read the listing. Before that first read a plugin knows no
+rules, and its checks step aside when the listener does not answer.
+Turning guard or redact off for a session turns their rules off too, so a
+protection nobody may turn off belongs in a decision or in masking at the
+gateway.
 
 A Router rule about what the agent reads, such as a prompt injection in a file
 or a web page, should read the tool results and leave the user turn out

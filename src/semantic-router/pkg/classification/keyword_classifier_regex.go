@@ -99,44 +99,45 @@ func matchesKeywordPattern(text string, rule preppedKeywordRule, index int, patt
 	if !rule.LiteralBoundaries[index] {
 		return pattern.MatchString(text)
 	}
-	_, found := nextLiteralMatch(text, 0, pattern)
+	_, _, found := nextLiteralMatch(text, 0, pattern)
 	return found
 }
 
-// countKeywordPattern counts a keyword's matches in text, one per place: a
-// pattern's non-overlapping matches, and a literal keyword's matches that are
-// words of their own.
-func countKeywordPattern(text string, rule preppedKeywordRule, index int, pattern *regexp.Regexp) int {
+// keywordPlaces lists a keyword's matches in text as byte ranges, one per
+// place: a pattern's non-overlapping matches, and a literal keyword's matches
+// that are words of their own.
+func keywordPlaces(text string, rule preppedKeywordRule, index int, pattern *regexp.Regexp) [][]int {
 	if !rule.LiteralBoundaries[index] {
-		return len(pattern.FindAllStringIndex(text, -1))
+		return pattern.FindAllStringIndex(text, -1)
 	}
-	count := 0
-	for offset := 0; ; count++ {
-		end, found := nextLiteralMatch(text, offset, pattern)
+	var places [][]int
+	for offset := 0; ; {
+		start, end, found := nextLiteralMatch(text, offset, pattern)
 		if !found {
-			return count
+			return places
 		}
+		places = append(places, []int{start, end})
 		offset = end
 	}
 }
 
 // nextLiteralMatch finds the first match of a literal keyword at or after
-// offset that is a word of its own, and returns where it ends.
-func nextLiteralMatch(text string, offset int, pattern *regexp.Regexp) (int, bool) {
+// offset that is a word of its own, and returns where it starts and ends.
+func nextLiteralMatch(text string, offset int, pattern *regexp.Regexp) (int, int, bool) {
 	for offset < len(text) {
 		match := pattern.FindStringIndex(text[offset:])
 		if match == nil {
-			return 0, false
+			return 0, 0, false
 		}
 		start, end := offset+match[0], offset+match[1]
 		if keywordBoundaryMatch(text, start, end) &&
 			(start == 0 || text[start-1] != '_') && (end == len(text) || text[end] != '_') {
-			return end, true
+			return start, end, true
 		}
 		_, size := utf8.DecodeRuneInString(text[start:])
 		offset = start + size
 	}
-	return 0, false
+	return 0, 0, false
 }
 
 // occurrences counts the places the rule's keywords occur in text and lists
@@ -145,7 +146,7 @@ func (r preppedKeywordRule) occurrences(text string) (int, []string) {
 	count := 0
 	var found []string
 	for index, pattern := range regexpsForRule(r) {
-		if occurrences := countKeywordPattern(text, r, index, pattern); occurrences > 0 {
+		if occurrences := len(keywordPlaces(text, r, index, pattern)); occurrences > 0 {
 			count += occurrences
 			found = append(found, r.OriginalKeywords[index])
 		}

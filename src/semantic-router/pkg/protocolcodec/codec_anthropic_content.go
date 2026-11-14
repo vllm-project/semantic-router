@@ -240,7 +240,7 @@ func anthropicResponseContentType(body json.RawMessage) (string, error) {
 }
 
 func validateAnthropicContentExtensions(block anthropicContentWire, providerOutput bool) error {
-	if len(block.Citations) > 0 {
+	if citations := bytes.TrimSpace(block.Citations); len(citations) > 0 && !bytes.Equal(citations, []byte("null")) {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_citations", "Anthropic citations are not supported by the neutral contract", nil)
 	}
 	if err := validateAnthropicToolCaller(block.Caller, providerOutput); err != nil {
@@ -587,6 +587,7 @@ func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWi
 		Model: request.Model, Stream: request.Stream, Temperature: request.Sampling.Temperature,
 		TopP: request.Sampling.TopP, TopK: request.Sampling.TopK, StopSequences: append([]string(nil), request.Sampling.Stop...),
 		ContextManagement: append(json.RawMessage(nil), request.ContextManagement...),
+		Safeguards:        append(json.RawMessage(nil), request.Safeguards...),
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if request.Sampling.MaxOutputTokens == nil {

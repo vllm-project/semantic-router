@@ -43,7 +43,7 @@ func requestAs(path string, perms ...string) *http.Request {
 	return request.WithContext(auth.WithAuthContext(request.Context(), auth.AuthContext{UserID: "user", Perms: granted}))
 }
 
-func TestConfigReadEndpointsHideListenerKeysFromCallersWhoCannotWriteConfig(t *testing.T) {
+func TestConfigReadEndpointsRequireSecretViewPermissionForListenerKeys(t *testing.T) {
 	configPath := writeKeyedListenerConfig(t)
 	cases := []struct {
 		name     string
@@ -52,8 +52,9 @@ func TestConfigReadEndpointsHideListenerKeysFromCallersWhoCannotWriteConfig(t *t
 		visible  bool
 	}{
 		{name: "read role", perms: []string{auth.PermConfigRead}},
-		{name: "write role", perms: []string{auth.PermConfigRead, auth.PermConfigWrite}, visible: true},
-		{name: "deploy-only grant", perms: []string{auth.PermConfigRead, auth.PermConfigDeploy}, visible: true},
+		{name: "write role", perms: []string{auth.PermConfigRead, auth.PermConfigWrite}},
+		{name: "deploy-only grant", perms: []string{auth.PermConfigRead, auth.PermConfigDeploy}},
+		{name: "secret viewer", perms: []string{auth.PermConfigRead, configSecretPermission}, visible: true},
 		{name: "no auth context"},
 		{name: "write role on readonly dashboard", readonly: true, perms: []string{auth.PermConfigRead, auth.PermConfigWrite}},
 	}

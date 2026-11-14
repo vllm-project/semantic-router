@@ -56,11 +56,13 @@ type maskingAgentLoop struct {
 	sendOutput   string
 }
 
+// The send tool's output opens like a log line: text that only begins with a
+// bracket is masked as text, not refused as JSON that does not decode.
 func defaultMaskingAgentLoop() maskingAgentLoop {
 	return maskingAgentLoop{
 		ticketOutput: fmt.Sprintf(`{"from":"%s EMAIL_ADDRESS %s","subject":"Refund"}`, maskingSpanMarker, maskingAgentTicketEmail),
 		sendArgs:     fmt.Sprintf(`{"to":"%s EMAIL_ADDRESS %s","body":"Refund approved"}`, maskingSpanMarker, maskingAgentTicketEmail),
-		sendOutput:   fmt.Sprintf("Sent. A copy went to %s EMAIL_ADDRESS %s", maskingSpanMarker, maskingAgentCopyEmail),
+		sendOutput:   fmt.Sprintf("[INFO] Sent. A copy went to %s EMAIL_ADDRESS %s", maskingSpanMarker, maskingAgentCopyEmail),
 	}
 }
 

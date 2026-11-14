@@ -3518,6 +3518,12 @@
         "signal": {
           "type": "string"
         },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/SignalRef"
+          },
+          "type": "array"
+        },
         "entity_types": {
           "items": {
             "type": "string"
@@ -6429,6 +6435,27 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "SignalRef": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "keyword",
+            "systemone"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "name"
+      ]
+    },
     "SkipProcessingConfig": {
       "properties": {
         "enabled": {
@@ -7005,10 +7032,66 @@
         },
         "check": {
           "type": "boolean"
+        },
+        "rules": {
+          "$ref": "#/$defs/VSRRules"
         }
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "VSRRule": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "keyword",
+            "systemone"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enforce": {
+          "type": "string",
+          "enum": [
+            "required",
+            "advisory"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "name"
+      ]
+    },
+    "VSRRules": {
+      "properties": {
+        "recipe": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guard": {
+          "items": {
+            "$ref": "#/$defs/VSRRule"
+          },
+          "type": "array"
+        },
+        "redact": {
+          "items": {
+            "$ref": "#/$defs/VSRRule"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "recipe"
+      ]
     },
     "ValkeyConfig": {
       "properties": {

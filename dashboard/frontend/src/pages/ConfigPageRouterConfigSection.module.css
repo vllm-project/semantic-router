@@ -504,32 +504,239 @@
   line-height: 1.5;
 }
 
-.vsrOption {
+/* vSR agent plugins: one card per listener, two groups of rows, each row a
+   label with its hint and a segmented Default / On / Off choice. */
+.vsrListener {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.vsrListener:last-child {
+  border-bottom: none;
+}
+
+.vsrListenerHead {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 0.75rem;
-  cursor: pointer;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.85rem;
 }
 
-.vsrOption input[type='checkbox'] {
-  margin: 0;
-  padding: 0;
-  accent-color: var(--color-primary);
-  cursor: pointer;
+.vsrListenerState {
+  color: var(--text-muted);
+  font-size: 0.74rem;
 }
 
-.vsrOption select {
+.vsrReset {
   margin-left: auto;
-  padding: 0.2rem 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.vsrMore {
+  justify-self: start;
+  padding: 0.3rem 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.vsrMore:hover {
+  color: var(--text-primary);
+}
+
+.vsrMore:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 1px;
+}
+
+.vsrReset:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.vsrGroups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr));
+  align-items: start;
+  gap: 0.85rem;
+}
+
+.vsrGroup {
+  display: grid;
+  align-content: start;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-panel);
+  overflow: hidden;
+}
+
+.vsrGroupHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-shell);
+}
+
+.vsrGroupTitle {
+  color: var(--text-primary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vsrGroupAgents {
+  color: var(--text-muted);
   font-size: 0.72rem;
 }
 
-.vsrDefault {
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 0.62rem;
-  letter-spacing: 0.04em;
+.vsrRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.vsrRow + .vsrRow {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.vsrRowText {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.vsrRowLabel {
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.vsrRowHint {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.vsrChoices {
+  display: inline-flex;
+  justify-self: end;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--surface-canvas);
+}
+
+.vsrChoices button {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.vsrChoices button:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.vsrChoices button[aria-pressed='true'] {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px #0005;
+}
+
+.vsrChoices button:focus-visible,
+.vsrReset:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 1px;
+}
+
+.vsrChoices button:disabled,
+.vsrReset:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.vsrSelect {
+  justify-self: end;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+/* One app's rules: its title, a row per rule that fits, and a Try it box. */
+.vsrRuleApp {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.7rem 0.9rem 0.8rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.vsrRuleApp .vsrRow {
+  padding: 0.5rem 0 0.5rem 0.75rem;
+}
+
+.vsrTry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.4rem 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.vsrTry > [role='status'] {
+  grid-column: 1 / -1;
+}
+
+.vsrTryText {
+  min-height: 2.4rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.76rem;
+  resize: vertical;
+}
+
+.vsrChoiceNote {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+}
+
+@media (max-width: 560px) {
+  .vsrRow {
+    grid-template-columns: 1fr;
+  }
+
+  .vsrChoices {
+    justify-self: start;
+  }
 }
 
 @media (max-width: 900px) {
