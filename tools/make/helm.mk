@@ -169,6 +169,11 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 		> "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
 	@"$(AGENT_PYTHON)" deploy/helm/check-model-runtime.py "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
 	@echo "Model deployment and recipe binding rendering verified"
+	@helm template extra-containers-release $(HELM_CHART_PATH) \
+		-f deploy/helm/testdata/extra-containers-values.yaml \
+		-s templates/deployment.yaml > "$(dir $(HELM_TEMPLATE_OUTPUT))extra-containers-template.yaml"
+	@"$(AGENT_PYTHON)" deploy/helm/check-extra-containers.py "$(dir $(HELM_TEMPLATE_OUTPUT))extra-containers-template.yaml"
+	@echo "Router extraContainers rendering verified"
 	@"$(AGENT_PYTHON)" deploy/helm/check-gateway-mode.py $(HELM_CHART_PATH)
 	@echo "Standalone and extproc gateway modes verified"
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_data_volume.py -v

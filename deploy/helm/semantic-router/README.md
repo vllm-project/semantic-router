@@ -226,6 +226,7 @@ the locked chart dependencies.
 | env[4].valueFrom.secretKeyRef.key | string | `"token"` |  |
 | env[4].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
 | env[4].valueFrom.secretKeyRef.optional | bool | `true` |  |
+| extraContainers | list | `[]` | Extra containers (for example sidecars) appended to the Router pod after the router container. They can mount any pod volume, including `extraVolumes`. |
 | extraVolumeMounts | list | `[]` | Extra Router mounts. A mount at `/app/models` or `/var/lib/vsr` replaces the chart's model or data volume mount. |
 | extraVolumes | list | `[]` | Volumes for custom mounts; provide a matching volume when replacing `/app/models` or `/var/lib/vsr`. |
 | fullnameOverride | string | `""` | Override the full name of the chart |
