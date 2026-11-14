@@ -852,6 +852,15 @@ class Graphs:
         output: torch.Tensor = entry["output"]
         return output
 
+    def admits(self, key: Hashable, tokens: int) -> bool:
+        """Whether ``run`` replays ``key`` or may still capture it: not failed, small enough, room left."""
+        return key in self.graphs or (
+            key not in self.failed
+            and tokens <= self.max_tokens
+            and len(self.graphs) < self.max_graphs
+            and not self.stats["full"]
+        )
+
     def eager(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor, padded: bool
     ) -> torch.Tensor:
