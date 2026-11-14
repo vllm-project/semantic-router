@@ -149,7 +149,7 @@ has one of four modes:
 | --- | --- | --- |
 | Static key | `auth.api_key_env` or `auth.api_key_file`, or a backend's `api_key` | the Router's own key |
 | Delegated | `credential: delegated` | the requesting user's credential |
-| Caller | `credential: caller`, on an Anthropic provider backend only | the login the client itself sent, see [below](#send-the-clients-own-login-to-anthropic) |
+| Caller | `credential: caller`, on an Anthropic or OpenAI provider backend only | the login the client itself sent, see [below](#send-the-clients-own-login-to-its-provider) |
 | None | neither | no credential |
 
 Whatever the mode, a call carries no other credential: a client's own
@@ -244,14 +244,14 @@ The principal is a property of the call:
 - **Policy stays upstream.** Caller attribution and any tenant, quota, budget
   or spend policy stay with the upstream.
 
-### Send the client's own login to Anthropic
+### Send the client's own login to its provider
 
-A coding agent signed in to its provider, such as Claude Code on a Claude
-subscription, sends the Router its own login. With `credential: caller` on an
-Anthropic backend, the Router routes the request and presents that login to
-Anthropic in the header the client sent it in, so the gateway holds no key and
-the plan behind that login pays for the calls. The Dashboard's Insights record
-every call as for any gateway traffic.
+A coding agent signed in to its provider sends the Router its own login:
+Claude Code its Claude subscription, Codex its ChatGPT login. With
+`credential: caller` on a backend of that provider, the Router routes the
+request and presents that login in the header the client sent it in, so the
+gateway holds no key and the plan behind that login pays for the calls. The
+Dashboard's Insights record every call as for any gateway traffic.
 
 ```yaml
 providers:
@@ -264,16 +264,30 @@ providers:
           provider: anthropic
           endpoint: https://api.anthropic.com
           auth: {credential: caller}
+    # or, for Codex on a ChatGPT login:
+    - name: gpt-6-luna
+      provider_model_id: gpt-6-luna
+      api_format: responses
+      backend_refs:
+        - name: chatgpt
+          provider: openai
+          endpoint: https://chatgpt.com/backend-api/codex
+          auth: {credential: caller}
 ```
 
-A login is a person's, so the configuration fails to load wherever it could
-reach someone else, or be used without the person's request:
+Codex sends a ChatGPT login to ChatGPT's Codex backend at
+`https://chatgpt.com/backend-api/codex`, and an OpenAI API key to
+`https://api.openai.com/v1`, so the endpoint follows how Codex signs in. A
+login is a person's, so the configuration fails to load wherever it could reach
+someone else, or be used without the person's request:
 
 - **One payer, one provider.** Once one backend takes the caller's login, every
-  backend does, so neither routing nor a fallback moves a request from the
-  person's plan to a key or another provider, and each is `anthropic`.
-- **The issuer only.** The endpoint is `https://api.anthropic.com`, or an
-  endpoint on this machine such as a test stub.
+  backend does and all name one provider, so neither routing nor a fallback
+  moves a request from the person's plan to a key or to another provider. A
+  pool serves Claude Code or Codex, not both.
+- **The issuer only.** The endpoint is `https://api.anthropic.com` for
+  `anthropic`, `https://chatgpt.com` or `https://api.openai.com` for `openai`,
+  or an endpoint on this machine such as a test stub.
 - **No listener keys.** A listener's `api_keys` read the `Authorization` header,
   which here carries the login.
 - **Only the client's request.** A call the Router makes on its own behalf, an
@@ -281,19 +295,24 @@ reach someone else, or be used without the person's request:
   `router_replay.shadow` copy and an automatic output render have no login and
   are refused, and so is `response_cache`, which would answer one person with
   another's result.
-- **The client's system prompt.** Anthropic refuses a request on a person's
-  login whose system prompt does not start with the client's own (measured:
-  429 for a block put first, 200 for the same block put last), so a decision
-  cannot use `system_prompt`.
+- **The client's system prompt.** Both providers refuse the system message a
+  decision's `system_prompt` puts before the client's own on a person's login
+  (measured: Anthropic answers 429 for a block put first and 200 for the same
+  block put last, ChatGPT's Codex backend 400 `System messages are not
+  allowed`), so a decision cannot use `system_prompt`.
 
-A request that reaches a caller backend without a login, or on another
-provider's API, is answered `401` with `caller_credential_missing`: a bearer
-that came in on Responses is not a Claude login and never reaches Anthropic.
-The Router keeps the login for the request only, in memory: it does not log
-it, and takes it out of an upstream error body or a stored response that
-echoes it. A caller backend's `401`, `403` or
-`429` speaks of one person's login or plan, so it never opens the circuit
-breaker other requests share.
+At dispatch a login reaches a backend only from a request on that provider's own
+API: Messages for Anthropic, Responses or Chat Completions for OpenAI. A request
+that reaches a caller backend without a login, or on another provider's API, is
+answered `401` with `caller_credential_missing`, so a Claude login never reaches
+OpenAI and a ChatGPT login never reaches Anthropic. A Responses backend is sent
+`store: false`: the Router keeps response state itself, and ChatGPT's Codex
+backend refuses a request without it. The Router keeps the login and the
+`chatgpt-account-id` beside it for the request only, in memory, and sends the
+account only to OpenAI: it does not log them, and takes both out of an upstream
+error body or a stored response that echoes them. A caller backend's `401`,
+`403` or `429` speaks of one person's login or plan, so it never opens the
+circuit breaker other requests share.
 
 A login is for its owner's own use, and the provider's terms for it apply to
 every call made with it. Anthropic documents Claude Code on a gateway with only
@@ -303,10 +322,13 @@ gateway forwards `Authorization` and the OAuth capability in `anthropic-beta`
 as a caller backend does. Its
 [credential policy](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)
 also forbids a third party to route requests through Free, Pro, Max or Ultra
-plan credentials on behalf of its users. Serve a caller backend on your own
-machine, or on your organization's gateway for its own members, to the
-unmodified Claude Code binary, and do not offer it to other people as a
-service.
+plan credentials on behalf of its users. OpenAI documents
+`requires_openai_auth = true` for Codex behind an LLM proxy, signed in with
+ChatGPT or an API key
+([Codex authentication](https://learn.chatgpt.com/docs/auth)). Serve a caller
+backend on your own machine, or on your organization's gateway for its own
+members, to the unmodified Claude Code or Codex, and do not offer it to other
+people as a service.
 
 ### Isolate sr-bench credentials
 

@@ -32,6 +32,13 @@ func (decoder *responsesStreamDecoder) decodeResponsesLifecycleEvent(
 		"response.reasoning_summary_part.added", "response.reasoning_summary_part.done",
 		"response.reasoning_summary_text.done", "response.reasoning_text.done":
 		return nil, nil, nil
+	case "response.metadata":
+		// ChatGPT's Codex backend reports moderation results mid-stream. The
+		// event carries no output, so it is reported and dropped.
+		var diagnostics llmprotocol.Diagnostics
+		appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1,
+			"stream.response.metadata", "provider moderation metadata has no protocol-neutral representation")
+		return nil, diagnostics, nil
 	case "response.function_call_arguments.done", "response.custom_tool_call_input.done":
 		if err := decoder.validateResponsesToolDone(wire); err != nil {
 			return nil, nil, err
