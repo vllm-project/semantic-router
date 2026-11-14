@@ -356,8 +356,8 @@ func (c *Client) readResponse(
 				Kind:      KindResponse,
 				Operation: operation.Name,
 				Attempt:   attempt,
-				Retryable: operation.RetrySafe && ctx.Err() == nil,
-				Cause:     readErr,
+				Retryable: operation.RetrySafe && ctx.Err() == nil && retryableStatus(response.StatusCode),
+				Cause:     fmt.Errorf("read error body of HTTP status %d: %w", response.StatusCode, readErr),
 			}
 		}
 		return Result{}, &Error{

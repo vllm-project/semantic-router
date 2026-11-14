@@ -261,6 +261,49 @@ func testRetrySafety(t *testing.T, retrySafe bool, wantAttempts int32, wantError
 	}
 }
 
+func TestDoKeepsStatusRetryPolicyWhenErrorBodyReadFails(t *testing.T) {
+	for _, test := range []struct {
+		status        int
+		wantStatus    string
+		wantAttempts  int
+		wantRetryable bool
+	}{
+		{status: http.StatusBadRequest, wantStatus: "HTTP status 400", wantAttempts: 1},
+		{status: http.StatusUnauthorized, wantStatus: "HTTP status 401", wantAttempts: 1},
+		{status: http.StatusForbidden, wantStatus: "HTTP status 403", wantAttempts: 1},
+		{status: http.StatusServiceUnavailable, wantStatus: "HTTP status 503", wantAttempts: 2, wantRetryable: true},
+	} {
+		t.Run(test.wantStatus, func(t *testing.T) {
+			var hits atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				hits.Add(1)
+				w.Header().Set("Content-Length", "32")
+				w.WriteHeader(test.status)
+				_, _ = w.Write([]byte("partial"))
+			}))
+			defer server.Close()
+			options := testOptions()
+			options.MaxRetries = 1
+			client := newTestClient(t, server, options)
+
+			_, err := client.Do(context.Background(), testOperation, nil)
+			connectorErr := assertConnectorError(t, err, KindResponse, test.wantAttempts, test.wantRetryable)
+			if !errors.Is(err, io.ErrUnexpectedEOF) {
+				t.Fatalf("error = %v, want io.ErrUnexpectedEOF", err)
+			}
+			if connectorErr.StatusCode != 0 {
+				t.Fatalf("status code = %d, want 0 for a response read failure", connectorErr.StatusCode)
+			}
+			if !strings.Contains(err.Error(), test.wantStatus) {
+				t.Fatalf("error = %v, want %q", err, test.wantStatus)
+			}
+			if got := int(hits.Load()); got != test.wantAttempts {
+				t.Fatalf("server hits = %d, want %d", got, test.wantAttempts)
+			}
+		})
+	}
+}
+
 func TestDoAuthorizesEveryAttempt(t *testing.T) {
 	var attempts atomic.Int32
 	var authorizations atomic.Int32
