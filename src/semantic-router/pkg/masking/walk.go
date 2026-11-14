@@ -55,6 +55,19 @@ func Apply(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, e
 			return Result{}, err
 		}
 	}
+	// Auto mode's classifier context carries paths and git state from the
+	// client's machine to an Anthropic backend: its string leaves are masked
+	// like a structured tool result's, or the request is refused.
+	if len(request.Safeguards) > 0 {
+		masked, changed, err := maskJSONDocument(string(request.Safeguards), a, scan, &result)
+		if err != nil {
+			return Result{}, fmt.Errorf("masking: safeguards: %w", err)
+		}
+		if changed {
+			result.Changed = true
+			request.Safeguards = json.RawMessage(masked)
+		}
+	}
 	result.EntityTypes = dedupSortedEntityTypes(result.EntityTypes)
 	return result, nil
 }
