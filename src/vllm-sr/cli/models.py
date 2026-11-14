@@ -101,6 +101,45 @@ class ListenerIdentity(BaseModel):
     )
 
 
+class VSRProfile(BaseModel):
+    """What the vSR agent plugins pointed at a listener do: each application on or off and the router's goal.
+    A field left out keeps the plugin's own option."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    router: Optional[bool] = Field(
+        default=None, description="Pick the model and effort of subagents."
+    )
+    router_turns: Optional[bool] = Field(
+        default=None,
+        description="Also pick the model and effort of the person's own turns.",
+    )
+    router_goal: Optional[Literal["quality", "balanced", "save"]] = Field(
+        default=None,
+        description="How far the router may go down: quality never below the session's model, balanced "
+        "when the decision is sure, save whenever it answers clearly enough.",
+    )
+    escalate: Optional[bool] = Field(
+        default=None,
+        description="Raise the next turn's model or effort after a pushback.",
+    )
+    redact: Optional[bool] = Field(
+        default=None,
+        description="Hide personal data in what a tool returns before the agent reads it.",
+    )
+    shield: Optional[bool] = Field(
+        default=None,
+        description="Mark text in a tool's output that gives the agent orders.",
+    )
+    guard: Optional[bool] = Field(
+        default=None,
+        description="Hold a destructive command for the person to approve.",
+    )
+    check: Optional[bool] = Field(
+        default=None, description="Compare the agent's answer with what it read."
+    )
+
+
 class ListenerAPI(BaseModel):
     """One API a listener serves: its schema (only for a versioned API, systemone), the models it accepts
     (omitted: every model of its kind) and the API's own settings."""
@@ -126,6 +165,12 @@ class ListenerAPI(BaseModel):
         description="systemone: the longest this listener waits for a model it "
         "calls directly, however long a request's options.deadline_ms asks "
         "for. Omitted, 600000 (10 minutes).",
+    )
+    vsr: Optional[VSRProfile] = Field(
+        default=None,
+        description="systemone: what the vSR agent plugins pointed at this "
+        "listener turn on. The listing (GET /v1/systemone/models) hands it to "
+        "them, and each field set here wins over the plugin's own option.",
     )
 
     @field_validator("models")
@@ -230,13 +275,13 @@ class Listener(BaseModel):
                     raise ValueError(
                         f"apis.{key}.schema: a listener serves api {name} in {' or '.join(schemas)}, not {entry.schema_!r}"
                     )
-            if (
-                entry.max_deadline_ms is not None
-                and "max_deadline_ms" not in API_SETTINGS.get(name, ())
-            ):
-                raise ValueError(
-                    f"apis.{key}.max_deadline_ms: the {name} API takes no max_deadline_ms setting"
-                )
+            for setting in ("max_deadline_ms", "vsr"):
+                if getattr(
+                    entry, setting
+                ) is not None and setting not in API_SETTINGS.get(name, ()):
+                    raise ValueError(
+                        f"apis.{key}.{setting}: the {name} API takes no {setting} setting"
+                    )
             named[name] = key
             resolved[name] = entry
         return resolved

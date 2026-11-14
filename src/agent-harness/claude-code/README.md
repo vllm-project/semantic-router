@@ -257,6 +257,28 @@ The logo, the vLLM Semantic Router V, sits at the top of the `/vsr` pane: a pict
 and iTerm2 3.5 or later, and drawn in characters elsewhere (smooth wedge characters in terminals that draw them, such as VS Code
 1.108 or later and GNOME Terminal; plain blocks in the rest).
 
+### Set from the Router
+
+A Router listener can set the apps for every plugin pointed at it, in its config or as checkboxes in the
+Dashboard (Config › Global Config › vSR agent plugins):
+
+```yaml
+listeners:
+  - name: http-8899
+    port: 8899
+    apis:
+      systemone:
+        vsr: {redact: false, router_turns: true, router_goal: save}
+```
+
+With a `remote` runtime, vSR reads this profile from the listener's listing
+(`GET /v1/systemone/models`) when a session starts and again at a prompt a minute or more later, so
+a change in the Dashboard reaches a running session. Each field the profile sets (`router`,
+`router_turns`, `router_goal`, `escalate`, `redact`, `shield`, `guard`, `check`) wins over the
+option of the same name here, and a toast says what it changed. What you change yourself in Claude
+Code, with `/vsr`, the pane or the `/config` menu, stays yours; `/vsr follow` hands those options
+back to the listener.
+
 ## Troubleshooting
 
 - **The tally says `model offline`.** The runtime is not answering at the URL `/vsr` shows. Run

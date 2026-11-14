@@ -3358,6 +3358,9 @@
         "max_deadline_ms": {
           "type": "integer",
           "minimum": 1
+        },
+        "vsr": {
+          "$ref": "#/$defs/VSRProfile"
         }
       },
       "additionalProperties": false,
@@ -6967,6 +6970,41 @@
         },
         "timeout_ms": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "VSRProfile": {
+      "properties": {
+        "router": {
+          "type": "boolean"
+        },
+        "router_turns": {
+          "type": "boolean"
+        },
+        "router_goal": {
+          "type": "string",
+          "enum": [
+            "quality",
+            "balanced",
+            "save"
+          ]
+        },
+        "escalate": {
+          "type": "boolean"
+        },
+        "redact": {
+          "type": "boolean"
+        },
+        "shield": {
+          "type": "boolean"
+        },
+        "guard": {
+          "type": "boolean"
+        },
+        "check": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,

@@ -1,4 +1,4 @@
-import type { ConfigValue, EngineInterface, On } from 'claude-code'
+import type { ConfigValue, EngineInterface, On, PluginOptions } from 'claude-code'
 
 import type { Decision } from '../types'
 import { readOffline } from './lib/classify'
@@ -8,6 +8,7 @@ import { band, type Controls, controls, dashboard, type Elements, overview, rowV
 import { type Answer, giveLabel, labelsFile, readLabels } from './lib/labels'
 import { markCalibrated, readCalibration } from './lib/log'
 import { BLOCKS_LOGO, loadLogo, type Logo, NO_LOGO, wordmark } from './lib/logo'
+import { follow, pin, unpinAll } from './lib/profile'
 import { choiceOf, type Display, type Settings, WAIT_APPS, WAIT_CHOICES, type WaitApp, type WaitChoice } from './lib/settings'
 import { readDecisions } from './lib/state'
 import { stamp } from './lib/env'
@@ -107,14 +108,18 @@ export async function setOption($: EngineInterface, field: string, value: Config
   } catch (error) {
     why = String(error instanceof Error ? error.message : error)
   }
-  if (why === undefined) return true
+  if (why === undefined) {
+    // The person's own choice: the listener's profile leaves it alone from now on.
+    await pin($, field)
+    return true
+  }
   $.ui.toast(`vSR: could not change ${field}: ${why}`)
   return false
 }
 
 const waitWords = (choice: WaitChoice) => (choice === 'done' ? 'waits until done' : `waits ${choice} s`)
 
-const USAGE = `vSR: /vsr opens the pane; /vsr <app> on|off (${APP_NAMES.join(', ')}); /vsr turns [on|off]; /vsr <${WAIT_APPS.join('|')}> wait ${WAIT_CHOICES.join('|')}.`
+const USAGE = `vSR: /vsr opens the pane; /vsr <app> on|off (${APP_NAMES.join(', ')}); /vsr turns [on|off]; /vsr <${WAIT_APPS.join('|')}> wait ${WAIT_CHOICES.join('|')}; /vsr follow.`
 
 // `/vsr <app> on|off` and `/vsr <app> wait <choice>`: the option it changes and the words that say so, or undefined.
 function changeOf(words: readonly string[]): { field: string; value: ConfigValue; said: string } | undefined {
@@ -130,19 +135,27 @@ function changeOf(words: readonly string[]): { field: string; value: ConfigValue
 }
 
 // `/vsr turns on|off`. On, it also hands back turns paused by a /model pick; it needs the router app on.
-async function turnsCommand($: EngineInterface, settings: Settings, isOn: boolean) {
+// A change the person makes: saved like one made in /config, pinned, and applied over the listener's profile now,
+// since an option that already holds the value saves nothing and reloads nothing.
+async function change($: EngineInterface, settings: Settings, options: PluginOptions, field: string, value: ConfigValue) {
+  if (!(await setOption($, field, value))) return false
+  await follow($, settings, options)
+  return true
+}
+
+async function turnsCommand($: EngineInterface, settings: Settings, options: PluginOptions, isOn: boolean) {
   if (isOn && !settings.apps.router) return 'vSR: turn on the router first: /vsr router on.'
-  if (settings.routerTurns !== isOn && !(await setOption($, 'routerTurns', isOn))) return 'vSR: turns not changed.'
+  if (settings.routerTurns !== isOn && !(await change($, settings, options, 'routerTurns', isOn))) return 'vSR: turns not changed.'
   if (isOn) await resumeTurns($, settings)
   return isOn ? 'vSR: the router picks the model of your turns from now on.' : 'vSR: your turns run on the model you picked.'
 }
 
 // What the pane's controls do: each press changes one option.
-function controlsFor($: EngineInterface, settings: Settings): Controls {
+function controlsFor($: EngineInterface, settings: Settings, options: PluginOptions): Controls {
   return {
-    toggle: app => void setOption($, app, !settings.apps[app]),
+    toggle: app => void change($, settings, options, app, !settings.apps[app]),
     wait: (app: WaitApp, choice: WaitChoice) => {
-      if (choice !== choiceOf(settings.waits[app])) void setOption($, `${app}Wait`, choice)
+      if (choice !== choiceOf(settings.waits[app])) void change($, settings, options, `${app}Wait`, choice)
     },
   }
 }
@@ -157,7 +170,7 @@ function offlineOf(settings: Settings) {
   return { notChecking: on.filter(app => !isHolding(app)), holding: on.filter(isHolding) }
 }
 
-export function registerView(on: On, settings: Settings) {
+export function registerView(on: On, settings: Settings, options: PluginOptions) {
   // Blocks until the session start loads the logo; a reload starts over here.
   logo = settings.logo === 'off' ? NO_LOGO : BLOCKS_LOGO
 
@@ -173,14 +186,29 @@ export function registerView(on: On, settings: Settings) {
       await $.ui.open({ id: PANE, title: PANE_TITLE })
       return { text: 'vSR pane opened.' }
     }
+    if (words.length === 1 && words[0] === 'follow') {
+      await unpinAll($)
+      const changed = await follow($, settings, options)
+      return { text: `vSR: follows the listener's profile${changed.length === 0 ? '' : `: ${changed.join(', ')}`}.` }
+    }
     if (words.length === 1 && words[0] === 'turns') {
       return { text: `vSR: your turns ${turnsWords({ settings, turns: await readTurns($) }) ?? 'run on the model you picked: the router app is off · /vsr router on'}.` }
     }
-    if (words.length === 2 && words[0] === 'turns' && (words[1] === 'on' || words[1] === 'off')) return { text: await turnsCommand($, settings, words[1] === 'on') }
-    const change = changeOf(words)
-    if (change === undefined) return { text: USAGE }
-    return { text: (await setOption($, change.field, change.value)) ? `vSR: ${change.said}.` : `vSR: ${change.said.split(' ')[0]} not changed.` }
+    if (words.length === 2 && words[0] === 'turns' && (words[1] === 'on' || words[1] === 'off')) return { text: await turnsCommand($, settings, options, words[1] === 'on') }
+    const asked = changeOf(words)
+    if (asked === undefined) return { text: USAGE }
+    return { text: (await change($, settings, options, asked.field, asked.value)) ? `vSR: ${asked.said}.` : `vSR: ${asked.said.split(' ')[0]} not changed.` }
   })
+
+  // A vSR row the person changes in the /config menu is theirs too.
+  on('config.set', async ($, e, next) => {
+    const done = await next(e)
+    if (e.origin?.kind === 'composer' && e.key.startsWith('vsr.') && done.deny === undefined) {
+      await pin($, e.key.slice('vsr.'.length))
+      await follow($, settings, options)
+    }
+    return done
+  }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
     const all = await readDecisions($)
@@ -221,7 +249,7 @@ export function registerView(on: On, settings: Settings) {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elements = $.ui.resolve(e)
-    const act = controlsFor($, settings)
+    const act = controlsFor($, settings, options)
     const list = await readDecisions($)
     const given = await readLabels($)
     const about = {

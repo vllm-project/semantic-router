@@ -342,6 +342,19 @@ is given (Claude Code cannot clear a stored token, and the plugin would send it 
 the new listener), the command says why and what to run. `--launch` writes
 nothing, so it leaves vSR alone.
 
+The listener can also set which of vSR's apps run, for every plugin pointed at
+it, under `systemone.vsr`; the Dashboard shows the same fields as checkboxes under
+Config › Global Config › vSR agent plugins. Each field set there wins over the plugin's own option, so turning
+`redact` off here turns it off in every session that uses this listener, from
+its next prompt a minute or more later. A choice a person makes in Claude Code
+with `/vsr` stays theirs until `/vsr follow`:
+
+```yaml
+      systemone:
+        models: [vela3-lite]
+        vsr: {redact: true, guard: true, router: false}
+```
+
 A Router rule about what the agent reads, such as a prompt injection in a file
 or a web page, should read the tool results and leave the user turn out
 (`input: {tool_results: true, request: false}`). Claude Code's user turn carries
