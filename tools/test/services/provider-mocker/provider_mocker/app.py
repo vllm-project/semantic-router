@@ -15,6 +15,7 @@ from . import (
     systemone,
 )
 from .cache import SessionCacheTracker
+from .fault_schedule import FaultScheduleTracker
 from .provider_boundary import RequestStore
 from .settings import Settings
 from .shadow_control import ShadowControl
@@ -28,6 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     instance.state.request_store = RequestStore()
     instance.state.cache_tracker = SessionCacheTracker()
     instance.state.shadow_control = ShadowControl() if settings.shadow_control else None
+    instance.state.fault_tracker = FaultScheduleTracker(settings.fault_schedule)
     instance.state.dispatch_counts = {}
     for router in (
         provider_boundary.router,
@@ -44,6 +46,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         instance.include_router(shadow_router)
     if settings.scenario == "looper":
         instance.include_router(looper.router)
+
+    @instance.post("/debug/fault-schedule")
+    async def set_debug_fault_schedule(request: Request):
+        body = await request.json()
+        instance.state.fault_tracker.set_schedule(body)
+        return {"status": "ok", "stats": instance.state.fault_tracker.get_stats()}
+
+    @instance.get("/debug/fault-schedule")
+    async def get_debug_fault_schedule():
+        return {"status": "ok", "stats": instance.state.fault_tracker.get_stats()}
+
+    @instance.post("/debug/fault-schedule/reset")
+    async def reset_debug_fault_schedule():
+        instance.state.fault_tracker.reset()
+        return {"status": "ok"}
 
     if settings.scenario == "cli":
 

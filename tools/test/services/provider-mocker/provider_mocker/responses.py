@@ -1,8 +1,17 @@
 """Native Responses API HTTP route."""
 
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from __future__ import annotations
 
+import asyncio
+from typing import Any
+
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+
+from .fault_schedule import (
+    apply_response_fault,
+    request_fault,
+)
 from .provider_boundary import SESSION_HEADER, parse_provider_request
 from .responses_wire import (
     build_responses_custom_tool_response,
@@ -23,8 +32,8 @@ from .settings import apply_fixture_delay
 router = APIRouter()
 
 
-@router.post("/v1/responses")
-async def responses(request: Request):
+@router.post("/v1/responses", response_model=None)
+async def responses(request: Request) -> Response | dict[str, Any]:
     raw_body = await request.body()
     body, error_response = await parse_provider_request(request, "openai_responses")
     if error_response is not None:
@@ -35,6 +44,41 @@ async def responses(request: Request):
     request.app.state.request_store.record(
         session_id, body, request.headers, raw_body, request.url.path
     )
+
+    execution = request_fault(request)
+    fault = execution.fault if execution is not None else None
+    if fault is not None:
+        if fault.delay and fault.delay > 0:
+            await asyncio.sleep(fault.delay)
+        if fault.status is not None:
+            return apply_response_fault(
+                response=JSONResponse(
+                    status_code=fault.status,
+                    content={
+                        "error": {
+                            "message": f"fault schedule injected {fault.status}",
+                            "type": "fault_schedule_injected",
+                            "param": None,
+                            "code": f"fault_{fault.status}",
+                        }
+                    },
+                ),
+                fault=fault,
+                execution=execution,
+                provider_model=body.get("model"),
+            )
+
+    return apply_response_fault(
+        response=_responses_reply(body),
+        fault=fault,
+        execution=execution,
+        provider_model=body.get("model"),
+    )
+
+
+def _responses_reply(body: dict[str, Any]) -> Response | dict[str, Any]:
+    is_complete = not response_input_contains(body, "__mock_incomplete_stream__")
+
     if response_input_contains(body, "__mock_provider_error__"):
         return JSONResponse(
             status_code=429,
@@ -52,9 +96,12 @@ async def responses(request: Request):
     ):
         if body.get("stream"):
             return StreamingResponse(
-                generate_responses_custom_tool_stream(body),
+                generate_responses_custom_tool_stream(body, complete=is_complete),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
         return build_responses_custom_tool_response(body)
     if response_has_tool_result(body):
@@ -62,17 +109,23 @@ async def responses(request: Request):
     elif response_input_contains(body, "__mock_tool_call__") and body.get("tools"):
         if body.get("stream"):
             return StreamingResponse(
-                generate_responses_tool_stream(body),
+                generate_responses_tool_stream(body, complete=is_complete),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
         return build_responses_tool_response(body)
     if response_requests_image_generation(body):
         if body.get("stream"):
             return StreamingResponse(
-                generate_responses_image_generation_stream(body),
+                generate_responses_image_generation_stream(body, complete=is_complete),
                 media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
             )
         return build_responses_image_generation_response(body)
     response, item_id = build_responses_response(body)
@@ -82,14 +135,20 @@ async def responses(request: Request):
         return StreamingResponse(
             generate_responses_midstream_error(response, item_id),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
         )
     return StreamingResponse(
         generate_responses_stream(
             response,
             item_id,
-            complete=not response_input_contains(body, "__mock_incomplete_stream__"),
+            complete=is_complete,
         ),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
     )
