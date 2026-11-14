@@ -137,7 +137,8 @@ providers: the Responses request has no field for a named mode, so behind a
 provider with any other transport the Router removes the client's reasoning
 fields, sends no control, and the backend runs the model's default mode
 whatever `use_reasoning` says. A pass-through Model keeps the client's
-reasoning fields as sent.
+reasoning fields as sent, and the routing log, metrics and trace report no
+effort for it: its `routing_decision` log line says `reasoning_projected: false`.
 
 On an `api_format: anthropic` backend, `enabled` thinking needs a
 `budget_tokens` value. When the client sent none, an `enabled` mode reaches the
