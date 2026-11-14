@@ -10,6 +10,7 @@ import (
 
 	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/websearch"
 )
 
 const fetchRawTimeout = 15 * time.Second
@@ -73,7 +74,7 @@ func FetchRawHandler() http.HandlerFunc {
 			return
 		}
 
-		httpReq.Header.Set("User-Agent", getRandomUserAgent())
+		httpReq.Header.Set("User-Agent", websearch.RandomUserAgent())
 		httpReq.Header.Set("Accept", "text/plain, application/x-yaml, application/json, */*")
 
 		if dashboardauth.RejectRevokedMutation(w, r) {
