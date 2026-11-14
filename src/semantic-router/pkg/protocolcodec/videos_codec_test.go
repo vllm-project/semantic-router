@@ -2,6 +2,7 @@ package protocolcodec
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -140,7 +141,8 @@ func TestVideosCodecDeletedResponseOmitsStatus(t *testing.T) {
 
 func asProtocolError(err error, target **llmprotocol.ProtocolError) bool {
 	for err != nil {
-		if protocolErr, ok := err.(*llmprotocol.ProtocolError); ok {
+		var protocolErr *llmprotocol.ProtocolError
+		if errors.As(err, &protocolErr) {
 			*target = protocolErr
 			return true
 		}

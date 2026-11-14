@@ -1,6 +1,9 @@
 package llmprotocol
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func TestVideoGenerationCapabilityAndValidation(t *testing.T) {
 	set, err := ParseCapabilities([]string{"video_generation"})
@@ -21,7 +24,8 @@ func TestVideoGenerationCapabilityAndValidation(t *testing.T) {
 		{name: "missing id", video: &GeneratedVideo{Status: VideoGenerationQueued}, code: "video_id_required"},
 	} {
 		err := ValidateGeneratedVideo(test.video, DefaultPolicy().Limits)
-		protocolErr, ok := err.(*ProtocolError)
+		var protocolErr *ProtocolError
+		ok := errors.As(err, &protocolErr)
 		if !ok || protocolErr.Code != test.code {
 			t.Fatalf("%s: error = %v, want %s", test.name, err, test.code)
 		}
