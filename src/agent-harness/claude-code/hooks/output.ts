@@ -332,11 +332,15 @@ export async function inspectOutput($: EngineInterface, e: ToolCallInput, ran: T
   }
 
   const isHidden = redacted !== undefined && Object.keys(redacted.counts).length > 0
-  // The fewest characters either question read: past them the output went to Claude unchecked.
+  // The most either question left unread of the text it read: past it the output went to Claude unchecked. Redact read
+  // the output before its tags went in and shield after, so each is measured against its own text.
   const length = fields.join('\n').length
-  const reads = [redacted?.pii, shielded?.injection].flatMap(one => (one?.ok ? [one.value] : []))
-  const short = reads.reduce<Pieces<unknown> | undefined>((least, one) => (least === undefined || one.read < least.read ? one : least), undefined)
-  const unread = short === undefined ? 0 : length - short.read
+  const reads = [
+    ...(redacted?.pii.ok ? [{ ...redacted.pii.value, of: redacted.length }] : []),
+    ...(shielded?.injection.ok ? [{ ...shielded.injection.value, of: length }] : []),
+  ]
+  const short = reads.reduce<(Pieces<unknown> & { of: number }) | undefined>((most, one) => (most === undefined || one.of - one.read > most.of - most.read ? one : most), undefined)
+  const unread = short === undefined ? 0 : Math.max(0, short.of - short.read)
   if (isHidden) {
     const checkedOn = remoteHostOf(settings.runtime.url)
     await record($, settings.log, {
@@ -370,7 +374,7 @@ export async function inspectOutput($: EngineInterface, e: ToolCallInput, ran: T
       ...call,
       subject: source,
       why: short.stopped ?? 'stopped early',
-      read: { chars: short.read, of: length },
+      read: { chars: short.read, of: short.of },
     })
   }
   if (isHidden) return output.rewritten(fields, [...notes, hiddenNote(redacted.counts)])
