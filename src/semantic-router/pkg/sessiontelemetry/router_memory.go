@@ -98,6 +98,9 @@ type SessionUsageParams struct {
 	EstimatedCacheSavings       float64
 	CacheAccountingSource       string
 	Timestamp                   time.Time
+	// Reservation, when set, is the ReserveSessionTokens id this usage settles.
+	// It is closed under the same lock that records the usage.
+	Reservation uint64
 }
 
 type routerSessionState struct {
@@ -136,6 +139,11 @@ type routerSessionState struct {
 	recentOutcomes    []TurnOutcome
 	outcomeWindowSize int
 	outcomeWindowTTL  time.Duration
+
+	// Open token reservations by id, and their sum. Local only: never in the
+	// snapshot or the shared store.
+	reservations   map[uint64]int64
+	reservedTokens int64
 }
 
 type routerSessionMemoryStore struct {
@@ -222,7 +230,11 @@ func RecordSessionDecision(p SessionDecisionParams) {
 // observed response model. Once RecordSessionDecision establishes ownership,
 // responses must not change it: they can complete out of order.
 func RecordSessionUsage(p SessionUsageParams) {
-	if p.SessionID == "" || p.Model == "" {
+	if p.SessionID == "" {
+		return
+	}
+	if p.Model == "" {
+		ReleaseSessionTokens(p.SessionID, p.Reservation)
 		return
 	}
 	s := globalRouterSessionMemory
@@ -240,6 +252,7 @@ func RecordSessionUsage(p SessionUsageParams) {
 		st.currentModel = p.Model
 	}
 	st.lastSeen = now
+	st.closeReservation(p.Reservation)
 	usage := modelpricing.Normalize(modelpricing.Usage{
 		PromptTokens:       p.PromptTokens,
 		CachedInputTokens:  p.CachedPromptTokens,
@@ -367,12 +380,17 @@ func (s *routerSessionMemoryStore) evictExpiredLocked(now time.Time) {
 
 // evictOldestLocked evicts the oldest session among a bounded random sample
 // (approximate LRU — see evictionSampleSize). It is a best-effort safety valve
-// for the size cap when TTL eviction did not free room. Callers must hold s.mu.
+// for the size cap when TTL eviction did not free room. Sessions with open
+// token reservations are skipped, so the map passes the cap only by sessions
+// holding one. Callers must hold s.mu.
 func (s *routerSessionMemoryStore) evictOldestLocked() {
 	var oldestKey string
 	var oldestSeen time.Time
 	sampled := 0
 	for k, v := range s.sessions {
+		if len(v.reservations) > 0 {
+			continue
+		}
 		if sampled == 0 || v.lastSeen.Before(oldestSeen) {
 			oldestKey, oldestSeen = k, v.lastSeen
 		}
