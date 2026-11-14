@@ -1,0 +1,1 @@
+global.services.router_replay: removed_field: global.services.router_replay.enabled, capture_request_body and capture_personal_data are removed; run `vllm-sr config migrate` (the configuration of a router_replay plugin in global.plugins)

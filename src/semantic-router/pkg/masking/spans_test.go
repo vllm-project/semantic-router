@@ -197,22 +197,6 @@ func TestMaskText_InvertedSpanErrors(t *testing.T) {
 	}
 }
 
-// Case: Below threshold.
-func TestMaskText_BelowThresholdNotMasked(t *testing.T) {
-	text := "call John Smith now"
-	start, end := byteRange(t, text, "John Smith")
-	spans := []Span{{EntityType: "PERSON", Start: start, End: end, Confidence: 0.5}}
-	cfg := &config.MaskingPluginConfig{Threshold: 0.85}
-
-	got, _, err := MaskText(text, spans, nil, NewAllocator(cfg))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != text {
-		t.Fatalf("expected unmasked text %q, got %q", text, got)
-	}
-}
-
 // Case: Type not included.
 func TestMaskText_TypeNotIncludedNotMasked(t *testing.T) {
 	text := "call John Smith now"
@@ -347,5 +331,90 @@ func TestAllocator_AcrossCallsNoIndexReuse(t *testing.T) {
 	}
 	if want := "[EMAIL_ADDRESS_1]"; secondGot != want {
 		t.Fatalf("got %q, want %q", secondGot, want)
+	}
+}
+
+// Case: a placeholder already in the text is not masked again, while a real
+// value next to it still is, for the default shape, a vSR mark and a
+// configured template.
+func TestMaskText_ExistingPlaceholderNotMaskedAgain(t *testing.T) {
+	cases := []struct {
+		name, text, inside, want string
+		cfg                      *config.MaskingPluginConfig
+	}{
+		{"default shape", "Hi [PERSON_2], Bob called", "PERSON_2", "Hi [PERSON_2], [PERSON_0] called", defaultCfg()},
+		{"vSR mark", `"customer": "[vsr:name]", Bob called`, "vsr:name", `"customer": "[vsr:name]", [PERSON_0] called`, defaultCfg()},
+		{"vSR rule mark", `"payer": "[vsr:employee_id]", Bob called`, "vsr:employee_id", `"payer": "[vsr:employee_id]", [PERSON_0] called`, defaultCfg()},
+		{
+			"configured template", "Hi <<name 3>>, Bob called", "name 3", "Hi <<name 3>>, <<name 0>> called",
+			&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "<<name {index}>>"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			inStart, inEnd := byteRange(t, tc.text, tc.inside)
+			bobStart, bobEnd := byteRange(t, tc.text, "Bob")
+			spans := []Span{
+				{EntityType: "PERSON", Start: inStart, End: inEnd, Confidence: 0.9},
+				{EntityType: "PERSON", Start: bobStart, End: bobEnd, Confidence: 0.9},
+			}
+			got, _, err := MaskText(tc.text, spans, nil, NewAllocator(tc.cfg))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// Case: the exemption never lets real personal data through. A span that
+// reaches past a placeholder is masked, and a template without a letter
+// besides {index} exempts nothing, since its pattern would also match the
+// digits inside a phone number.
+func TestMaskText_PlaceholderExemptionDoesNotSkipRealValues(t *testing.T) {
+	text := `mail "[PERSON_0]"@example.com today`
+	start, end := byteRange(t, text, `"[PERSON_0]"@example.com`)
+	got, _, err := MaskText(text, []Span{{EntityType: "EMAIL_ADDRESS", Start: start, End: end, Confidence: 0.9}}, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "mail [EMAIL_ADDRESS_0] today"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+
+	text = "call 415-555-0134 now"
+	start, end = byteRange(t, text, "415-555-0134")
+	cfg := &config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "{index}", "PHONE_NUMBER": "#{index}"}}
+	got, _, err = MaskText(text, []Span{{EntityType: "PHONE_NUMBER", Start: start, End: end, Confidence: 0.9}}, nil, NewAllocator(cfg))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "call #0 now"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Case: a rule's span is left alone only inside the rule's own placeholder.
+// Wrapped in any other placeholder shape, which a client can type, what the
+// rule found is still masked, and a digit-led rule name keeps its own
+// placeholder stable too.
+func TestMaskText_RuleSpanExemptOnlyInItsOwnPlaceholder(t *testing.T) {
+	cfg := &config.MaskingPluginConfig{Rules: []config.SignalRef{{Type: "keyword", Name: "employee_id"}, {Type: "keyword", Name: "9digits"}}}
+	for _, tc := range []struct{ text, inside, entity, want string }{
+		{"wrapped [X_104233] here", "104233", "employee_id", "wrapped [X_[EMPLOYEE_ID_0]] here"},
+		{"wrapped [PERSON_104233] here", "104233", "employee_id", "wrapped [PERSON_[EMPLOYEE_ID_0]] here"},
+		{"echoed [EMPLOYEE_ID_3] here", "3", "employee_id", "echoed [EMPLOYEE_ID_3] here"},
+		{"echoed [9DIGITS_12] here", "12", "9digits", "echoed [9DIGITS_12] here"},
+	} {
+		start, end := byteRange(t, tc.text, tc.inside)
+		got, _, err := MaskText(tc.text, []Span{{EntityType: tc.entity, Start: start, End: end, Confidence: 1}}, nil, NewAllocator(cfg))
+		if err != nil {
+			t.Fatalf("%q: %v", tc.text, err)
+		}
+		if got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.text, got, tc.want)
+		}
 	}
 }

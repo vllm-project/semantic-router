@@ -1,8 +1,12 @@
 """Shared logic for CUDA and ROCm accelerators (both use the torch.cuda device API).
 
-The released runtime runs the backbone under BF16 autocast and takes the
-gated-delta and causal-convolution kernels from FLA and causal-conv1d when
-they are installed, else the torch references. The same order applies here.
+The released GPU runtimes run the backbone under BF16 autocast and prefer
+installed FLA and causal-conv1d kernels over torch references. This base class
+registers that order; each accelerator can restrict selection by exactness.
+CUDA marks causal-conv1d approximate, so exact-only/non-consenting models use
+torch reference even when the package is installed. Decision 1.0 Qwen and BF16
+Decision 3.0 then differ from their released CUDA convolution path; see
+``docs/records/cuda-causal-conv1d-exactness.md`` for scope and evidence.
 """
 
 from __future__ import annotations
@@ -23,6 +27,16 @@ from .kernels import Kernel, KernelSet, reference_kernels, varlen_attention_ref
 _DEVICE_LOCKS: dict[int, Any] = {}
 _LOCKS = threading.Lock()
 
+# Cached but unused device memory that device work on an integrated GPU hands back
+# once it grows past this: a long forward's peak otherwise stays cached, and there
+# that cache is host RAM nothing else on the machine can use. A discrete GPU keeps
+# its cache, so the next long forward does not pay to allocate it again.
+RELEASE_IDLE_BYTES = 2 << 30
+# Per device, what the last release left idle (blocks the cache cannot free,
+# such as graph pools), so that slack does not trigger a release on every call.
+_IDLE_FLOOR: dict[int, int] = {}
+_INTEGRATED: dict[int, bool] = {}
+
 # Errors after which the process's device context stays unusable.
 DEVICE_FAULT_MARKERS = (
     "CUDA error",
@@ -30,6 +44,219 @@ DEVICE_FAULT_MARKERS = (
     "device-side assert",
     "illegal memory access",
 )
+
+
+_CGROUP_ROOT = "/sys/fs/cgroup"
+_PROC_SELF_CGROUP = "/proc/self/cgroup"
+_MEMINFO = "/proc/meminfo"
+# cgroup v1 reports a huge value when no limit is set.
+_V1_UNLIMITED = 1 << 60
+
+
+def _host_mem_available_bytes(meminfo_path: str | None = None) -> int | None:
+    """Reclaimable system memory in bytes (``MemAvailable``), None when unreadable."""
+    path = meminfo_path if meminfo_path is not None else _MEMINFO
+    try:
+        with open(path, encoding="utf-8") as stream:
+            for line in stream:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _cgroup_rel_paths(
+    proc_path: str | None = None,
+) -> tuple[str | None, str | None]:
+    """This process's cgroup paths: (v2 path, v1 memory path), None when unresolvable."""
+    path = proc_path if proc_path is not None else _PROC_SELF_CGROUP
+    try:
+        with open(path, encoding="utf-8") as stream:
+            lines = stream.read().splitlines()
+    except OSError:
+        return None, None
+    v2: str | None = None
+    v1: str | None = None
+    for line in lines:
+        try:
+            hid, controllers, cgroup = line.split(":", 2)
+        except ValueError:
+            continue
+        if not cgroup.startswith("/"):
+            continue
+        if hid == "0" and controllers == "":
+            v2 = cgroup
+        elif "memory" in controllers.split(","):
+            v1 = cgroup
+    return v2, v1
+
+
+def _ancestor_dirs(root: str, rel: str | None) -> list[str]:
+    """``root`` joined with ``rel`` and each parent down to ``root``."""
+    base = root.rstrip("/") or "/"
+    if not rel or rel == "/":
+        return [base]
+    if ".." in rel.split("/"):
+        return [base]
+    parts = [part for part in rel.split("/") if part not in ("", ".")]
+    if not parts:
+        return [base]
+    dirs = [base + "/" + "/".join(parts[:index]) for index in range(len(parts), 0, -1)]
+    dirs.append(base)
+    return dirs
+
+
+def _inactive_file_bytes(prefix: str, key: str) -> int:
+    """Reclaimable file cache in bytes under ``prefix/memory.stat`` for ``key``."""
+    try:
+        with open(prefix + "/memory.stat", encoding="utf-8") as stream:
+            for line in stream:
+                name, _, value = line.partition(" ")
+                if name != key or not value.strip():
+                    continue
+                try:
+                    return max(0, int(value))
+                except ValueError:
+                    return 0
+    except OSError:
+        return 0
+    return 0
+
+
+def _v2_remaining(directory: str) -> int | None:
+    """Remaining bytes under a v2 limit (``memory.max`` minus ``memory.current``)."""
+    prefix = directory.rstrip("/") or "/"
+    try:
+        with open(prefix + "/memory.max", encoding="utf-8") as stream:
+            value = stream.read().strip()
+    except OSError:
+        return None
+    if value == "max" or not value:
+        return None
+    try:
+        limit = int(value)
+    except ValueError:
+        return None
+    if limit <= 0:
+        return 0
+    try:
+        with open(prefix + "/memory.current", encoding="utf-8") as stream:
+            current = int(stream.read().strip())
+    except (OSError, ValueError):
+        current = 0
+    # Inactive file cache is the reclaimable working-set component (what the
+    # kubelet uses); active file may be mapped weights still in use, so it
+    # stays counted.
+    current = max(0, current - _inactive_file_bytes(prefix, "inactive_file"))
+    return max(0, limit - max(0, current))
+
+
+def _v1_remaining(directory: str) -> int | None:
+    """Remaining bytes under a v1 limit (``limit_in_bytes`` minus ``usage``)."""
+    prefix = directory.rstrip("/") or "/"
+    try:
+        with open(prefix + "/memory.limit_in_bytes", encoding="utf-8") as stream:
+            limit = int(stream.read().strip())
+    except (OSError, ValueError):
+        return None
+    if limit >= _V1_UNLIMITED:
+        return None
+    if limit <= 0:
+        return 0
+    try:
+        with open(prefix + "/memory.usage_in_bytes", encoding="utf-8") as stream:
+            current = int(stream.read().strip())
+    except (OSError, ValueError):
+        current = 0
+    # Inactive file cache is the reclaimable working-set component (what the
+    # kubelet uses); active file may be mapped weights still in use, so it
+    # stays counted.
+    current = max(0, current - _inactive_file_bytes(prefix, "total_inactive_file"))
+    return max(0, limit - max(0, current))
+
+
+def _cgroup_limit_bytes(
+    cgroup_root: str | None = None, proc_path: str | None = None
+) -> int | None:
+    """Remaining bytes under this container's memory limit, None when unlimited.
+
+    ``memory.max`` is the total, not the free bytes, so each level contributes
+    its limit minus its current usage. Nested limits all apply, so this is the
+    minimum over the process's cgroup and its ancestors (v2 and v1). Falls
+    back to the root files when the process's cgroup is unresolvable.
+    """
+    root = cgroup_root if cgroup_root is not None else _CGROUP_ROOT
+    proc = proc_path if proc_path is not None else _PROC_SELF_CGROUP
+    try:
+        v2_rel, v1_rel = _cgroup_rel_paths(proc)
+    except OSError:
+        v2_rel, v1_rel = None, None
+    remaining: list[int] = []
+    if v2_rel is not None:
+        for directory in _ancestor_dirs(root, v2_rel):
+            try:
+                value = _v2_remaining(directory)
+            except OSError:
+                continue
+            if value is not None:
+                remaining.append(value)
+    else:
+        try:
+            value = _v2_remaining(root)
+        except OSError:
+            value = None
+        if value is not None:
+            remaining.append(value)
+    v1_base = root.rstrip("/") + "/memory"
+    if v1_rel is not None:
+        for directory in _ancestor_dirs(v1_base, v1_rel):
+            try:
+                value = _v1_remaining(directory)
+            except OSError:
+                continue
+            if value is not None:
+                remaining.append(value)
+    else:
+        try:
+            value = _v1_remaining(v1_base)
+        except OSError:
+            value = None
+        if value is not None:
+            remaining.append(value)
+    if not remaining:
+        return None
+    return min(remaining)
+
+
+def _integrated_free_bytes(
+    total: int | None,
+    cgroup_root: str | None = None,
+    proc_path: str | None = None,
+    meminfo_path: str | None = None,
+) -> int | None:
+    """Usable bytes on an integrated GPU, which shares memory with the CPU.
+
+    ``torch.cuda.mem_get_info`` stays low there while reclaimable page cache
+    shows as used, so this reads the host's ``MemAvailable`` instead, capped
+    by the container's remaining (limit minus usage where present) and by the
+    device size. ``MemAvailable`` already excludes unreclaimable memory.
+    """
+    if meminfo_path is not None:
+        available = _host_mem_available_bytes(meminfo_path)
+    else:
+        available = _host_mem_available_bytes()
+    if available is None:
+        return None
+    if cgroup_root is not None or proc_path is not None:
+        limit = _cgroup_limit_bytes(cgroup_root, proc_path)
+    else:
+        limit = _cgroup_limit_bytes()
+    if limit is not None:
+        available = min(available, limit)
+    if total is not None:
+        available = min(available, total)
+    return available
 
 
 def device_lock(index: int) -> Any:
@@ -45,6 +272,41 @@ def _current_device(target: torch.device) -> AbstractContextManager[Any]:
     if target.type != "cuda" or not torch.cuda.is_available():
         return nullcontext()
     return torch.cuda.device(target)
+
+
+def _idle_bytes(index: int) -> int:
+    stats = torch.cuda.memory_stats(index)
+    return stats["reserved_bytes.all.current"] - stats["allocated_bytes.all.current"]
+
+
+def _integrated(index: int) -> bool:
+    integrated = _INTEGRATED.get(index)
+    if integrated is None:
+        properties = torch.cuda.get_device_properties(index)
+        integrated = _INTEGRATED[index] = bool(
+            getattr(properties, "is_integrated", False)
+        )
+    return integrated
+
+
+def _release_idle_cache(target: torch.device) -> None:
+    """On an integrated GPU, return the allocator's unused blocks once they exceed
+    ``RELEASE_IDLE_BYTES`` over the last release.
+
+    Runs under the device lock, so no graph capture on the device is in flight.
+    A failure here never replaces the device work's own result or error.
+    """
+    if target.type != "cuda" or not torch.cuda.is_available():
+        return
+    index = target.index or 0
+    try:
+        if not _integrated(index):
+            return
+        if _idle_bytes(index) > _IDLE_FLOOR.get(index, 0) + RELEASE_IDLE_BYTES:
+            torch.cuda.empty_cache()
+            _IDLE_FLOOR[index] = _idle_bytes(index)
+    except Exception:
+        pass
 
 
 def _optional(module: str, attribute: str) -> Any:
@@ -103,6 +365,14 @@ class GPUAccelerator(Accelerator):
                 free, total = torch.cuda.mem_get_info(index)
             except RuntimeError:
                 free, total = None, properties.total_memory
+            # An integrated GPU shares memory with the CPU, where mem_get_info
+            # stays low while reclaimable page cache shows as used; the
+            # placement check below then reads host MemAvailable instead.
+            # getattr guards older PyTorch without the is_integrated flag.
+            if getattr(properties, "is_integrated", False):
+                integrated = _integrated_free_bytes(properties.total_memory)
+                if integrated is not None:
+                    free = integrated
             devices.append(
                 DeviceInfo(
                     accelerator=self.name,
@@ -188,9 +458,15 @@ class GPUAccelerator(Accelerator):
         Triton kernels (FLA's among them) launch on the thread's current
         device, so the work makes the model's GPU current: otherwise a model on
         any GPU but the first faults reading its own memory from GPU 0.
+        On an integrated GPU the work's idle cache is released afterwards
+        (``_release_idle_cache``).
         """
-        with device_lock(device.index or 0), _current_device(self.torch_device(device)):
-            return work()
+        target = self.torch_device(device)
+        with device_lock(device.index or 0), _current_device(target):
+            try:
+                return work()
+            finally:
+                _release_idle_cache(target)
 
     def device_fault(self, error: BaseException) -> bool:
         """Device errors poison the context; running out of memory fails only the batch."""

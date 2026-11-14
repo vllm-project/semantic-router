@@ -59,6 +59,7 @@ func TestRedactResponseBodyRemovesRecordFreeTextAndPrivacySurfaces(t *testing.T)
 		"request_body":"private-canary",
 		"response_body":"private-canary",
 		"prompt":"private-canary",
+		"prompt_original_sha256":"private-canary",
 		"tool_definitions":"private-canary",
 		"pii_entities":["private-canary"],
 		"hallucination_spans":["private-canary"],
@@ -225,5 +226,17 @@ func TestRedactResponseBodyRemovesCapturedToolResults(t *testing.T) {
 	step := payload.Data[0].ToolTrace.Steps[0]
 	if !step.ContentRedacted || step.Status != RedactedToolResultStatusFailed || step.Output != "" {
 		t.Fatalf("captured tool result step = %+v, want redacted with its status", step)
+	}
+}
+
+func TestRedactResponseBodyRemovesTrajectoryRouteReasonsAndAgent(t *testing.T) {
+	body := []byte(`{"object":"router_replay.trajectory","messages":[],"routes":[{"record_id":"replay-1","selected_model":"model-a","selection_reasoning":"private-canary","session_reason":"private-canary","agent":"private-canary"}]}`)
+
+	redacted, changed, err := RedactResponseBody(body)
+	if err != nil || !changed {
+		t.Fatalf("RedactResponseBody() changed = %v, err = %v", changed, err)
+	}
+	if bytes.Contains(redacted, []byte("private-canary")) || !bytes.Contains(redacted, []byte(`"selected_model":"model-a"`)) {
+		t.Fatalf("trajectory route kept private fields or lost routing metadata: %s", redacted)
 	}
 }

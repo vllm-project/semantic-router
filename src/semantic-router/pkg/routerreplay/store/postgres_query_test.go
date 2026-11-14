@@ -15,7 +15,7 @@ func TestPostgresReplayWhereParameters(t *testing.T) {
 	if !reflect.DeepEqual(args, []interface{}{filters.Recipe, filters.Decision, filters.SessionID, filters.Model, filters.Search}) {
 		t.Fatalf("unexpected args: %#v", args)
 	}
-	for _, expression := range []string{"COALESCE(recipe, '') = $1", "decision = $2", "session_id = $3", "selected_model = $4 OR original_model = $4", "lower($5)", "from_cache = TRUE"} {
+	for _, expression := range []string{"COALESCE(recipe, '') = $1", "decision = $2", "session_id = $3", "selected_model = $4 OR original_model = $4", "strpos(lower(COALESCE(session_id, '')), lower($5))", "from_cache = TRUE"} {
 		if !strings.Contains(where, expression) {
 			t.Fatalf("missing %s in %s", expression, where)
 		}

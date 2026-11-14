@@ -3,7 +3,10 @@ package gateway
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 func TestNativeSystemOneBypassesChatPipeline(t *testing.T) {
@@ -42,5 +45,35 @@ func TestEngineFrontendRejectsChatButKeepsNative(t *testing.T) {
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", nil))
 	if response.Code != http.StatusAccepted {
 		t.Fatal("native surface stopped with routing")
+	}
+}
+
+func TestListingKeepsTheCatalogCodexAskedFor(t *testing.T) {
+	systemOne := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"models":[{"name":"vela3-lite"}]}`))
+	})
+	for path, want := range map[string]string{
+		"/v1/models?client_version=0.166.0": `{"data":[],"models":[],"object":"list"}`,
+		"/v1/models":                        `{"data":[],"models":[{"name":"vela3-lite"}],"object":"list"}`,
+	} {
+		body := `{"data":[],"object":"list"}`
+		if strings.Contains(path, "client_version") {
+			body = `{"data":[],"models":[],"object":"list"}`
+		}
+		p := &fakeProcessor{effects: map[routing.Phase][]*routing.Effect{
+			routing.PhaseRequestHeaders: {{Immediate: &routing.ImmediateResponse{Status: 200, Body: []byte(body)}}},
+		}}
+		handler, err := NewHandler(Options{Serving: Static(Serving{
+			Engine: routing.NewEngine(p, routing.DefaultOptions), Upstream: &fakeUpstream{},
+			SystemOne: systemOne, ListsLLM: true, ListsSystemOne: true,
+		})})
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if got := strings.TrimSpace(response.Body.String()); got != want {
+			t.Fatalf("%s = %s, want %s", path, got, want)
+		}
 	}
 }

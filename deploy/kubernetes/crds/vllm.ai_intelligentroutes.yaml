@@ -25,10 +25,6 @@ spec:
       jsonPath: .status.statistics.keywords
       name: Keywords
       type: integer
-    - description: Number of embedding signals
-      jsonPath: .status.statistics.embeddings
-      name: Embeddings
-      type: integer
     - description: Number of domain signals
       jsonPath: .status.statistics.domains
       name: Domains
@@ -170,26 +166,17 @@ spec:
                               as a raw JSON object
                             x-kubernetes-preserve-unknown-fields: true
                           type:
-                            description: |-
-                              Type is the plugin type. response_cache is canonical; semantic-cache,
-                              semantic_cache, and response-cache are deprecated aliases.
+                            description: Type is the plugin type.
                             enum:
-                            - context_compression
+                            - context
                             - fast_response
-                            - hallucination
                             - header_mutation
                             - masking
-                            - memory
                             - prompt_cache
-                            - rag
                             - request_params
-                            - response-cache
                             - response_cache
-                            - response_jailbreak
+                            - response_guard
                             - router_replay
-                            - semantic-cache
-                            - semantic_cache
-                            - shadow_dispatch
                             - system_prompt
                             - tools
                             type: string
@@ -288,16 +275,13 @@ spec:
                                 minLength: 1
                                 type: string
                               type:
-                                description: Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation/event)
+                                description: Type defines the type of signal (keyword/domain/fact_check/context/conversation)
                                 enum:
                                 - keyword
-                                - embedding
                                 - domain
                                 - fact_check
                                 - context
-                                - structure
                                 - conversation
-                                - event
                                 type: string
                             required:
                             - name
@@ -340,10 +324,7 @@ spec:
                 description: Signals defines signal extraction rules for routing decisions
                 properties:
                   contextRules:
-                    description: |-
-                      FactCheckRules defines fact-check rules for signal classification
-                      Similar to KeywordRules and EmbeddingRules, but based on ML model classification
-                      Each rule has a name that can be referenced in decision conditions
+                    description: ContextRules match the request's token count.
                     items:
                       description: ContextRule defines a rule for context-based (token
                         count) classification
@@ -426,7 +407,11 @@ spec:
                     maxItems: 100
                     type: array
                   domains:
-                    description: Domains defines MMLU domain categories for classification
+                    description: |-
+                      Domains match the request's subject area. A domain's name is one of
+                      the domain labels (biology, business, chemistry, computer science,
+                      economics, engineering, health, history, law, math, other, philosophy,
+                      physics, psychology).
                     items:
                       description: DomainSignal defines a domain category for classification
                       properties:
@@ -445,152 +430,9 @@ spec:
                       type: object
                     maxItems: 14
                     type: array
-                  embeddings:
-                    description: Embeddings defines embedding-based signal extraction
-                      rules
-                    items:
-                      description: EmbeddingSignal defines an embedding-based signal
-                        extraction rule
-                      properties:
-                        aggregationMethod:
-                          default: max
-                          description: AggregationMethod defines how to aggregate
-                            multiple candidate similarities
-                          enum:
-                          - mean
-                          - max
-                          - any
-                          type: string
-                        candidates:
-                          description: Candidates is the list of candidate phrases
-                            for semantic matching
-                          items:
-                            type: string
-                          maxItems: 1000
-                          type: array
-                        imageCandidates:
-                          description: ImageCandidates contains local image paths
-                            or inline base64 images in the positive bank.
-                          items:
-                            type: string
-                          maxItems: 1000
-                          type: array
-                        name:
-                          description: Name is the unique identifier for this signal
-                          maxLength: 100
-                          minLength: 1
-                          type: string
-                        negativeCandidates:
-                          description: NegativeCandidates contains text anchors subtracted
-                            from the positive score.
-                          items:
-                            type: string
-                          maxItems: 1000
-                          type: array
-                        negativeImageCandidates:
-                          description: NegativeImageCandidates contains image anchors
-                            subtracted from the positive score.
-                          items:
-                            type: string
-                          maxItems: 1000
-                          type: array
-                        prototypeScoring:
-                          description: |-
-                            PrototypeScoring overrides the family's prototype construction and scoring.
-                            An omitted object inherits the family; an empty object uses core defaults.
-                          properties:
-                            bestWeight:
-                              description: BestWeight weights the best similarity
-                                against top-M support.
-                              type: number
-                            clusterSimilarityThreshold:
-                              description: ClusterSimilarityThreshold controls membership
-                                in prototype clusters.
-                              type: number
-                            enabled:
-                              description: Enabled controls clustering and the representative
-                                cap, not aggregation.
-                              type: boolean
-                            marginThreshold:
-                              description: MarginThreshold controls the winner-versus-runner-up
-                                score margin.
-                              type: number
-                            maxPrototypes:
-                              description: MaxPrototypes caps representatives when
-                                clustering is enabled.
-                              type: integer
-                            topM:
-                              description: TopM is the number of top similarities
-                                used for support.
-                              type: integer
-                          type: object
-                        queryModality:
-                          description: |-
-                            QueryModality declares which modality of the incoming request payload
-                            the query embedding is computed from. Candidates are encoded according to their declared text or image field;
-                            the rule cosine-matches the text-anchor set against a query embedding
-                            produced from the declared modality, all in the shared multimodal
-                            embedding space.
-
-                            "text"  (default, backward-compatible): query embedded from request text.
-                            "image": query embedded from an image attachment (base64 data URI or
-                                     path). Requires the multi-modal embedding model to be loaded
-                                     via global.model_catalog.embeddings.semantic with
-                                     embedding_config.model_type=multimodal.
-                            "audio": query embedded from an audio attachment. Same requirement.
-
-                            Omitting this field is equivalent to "text" so existing rules behave
-                            identically.
-                          enum:
-                          - text
-                          - image
-                          - audio
-                          type: string
-                        threshold:
-                          description: Threshold accepts a cosine score, or positive-minus-negative
-                            margin when negatives are configured.
-                          maximum: 2
-                          minimum: -2
-                          type: number
-                      required:
-                      - name
-                      - threshold
-                      type: object
-                    maxItems: 100
-                    type: array
-                  events:
-                    description: Events defines structured event metadata routing
-                      signals.
-                    items:
-                      description: |-
-                        EventSignal defines a structured event metadata routing signal.
-                        It detects event types, severities, action codes, and temporal urgency
-                        from incident, audit, alert, or workflow payloads in the request.
-                      properties:
-                        actionCodes:
-                          items:
-                            type: string
-                          type: array
-                        description:
-                          type: string
-                        eventTypes:
-                          items:
-                            type: string
-                          type: array
-                        name:
-                          type: string
-                        severities:
-                          items:
-                            type: string
-                          type: array
-                        temporal:
-                          type: boolean
-                      required:
-                      - name
-                      type: object
-                    maxItems: 100
-                    type: array
                   factCheckRules:
+                    description: FactCheckRules match a request whose answer needs
+                      fact checking.
                     items:
                       description: |-
                         FactCheckRule defines a rule for fact-check signal classification
@@ -623,6 +465,38 @@ spec:
                           description: CaseSensitive specifies whether keyword matching
                             is case-sensitive
                           type: boolean
+                        count:
+                          description: Count makes an OR rule match on the number
+                            of its keyword occurrences
+                          properties:
+                            gt:
+                              type: number
+                            gte:
+                              type: number
+                            lt:
+                              type: number
+                            lte:
+                              type: number
+                          type: object
+                        density:
+                          description: |-
+                            Density makes an OR rule match on its keyword occurrences per 1,000
+                            characters; set Count or Density, not both
+                          properties:
+                            gt:
+                              type: number
+                            gte:
+                              type: number
+                            lt:
+                              type: number
+                            lte:
+                              type: number
+                          type: object
+                        description:
+                          description: Description provides a human-readable explanation
+                            of the rule
+                          maxLength: 500
+                          type: string
                         keywords:
                           description: Keywords is the list of keywords to match
                           items:
@@ -630,6 +504,13 @@ spec:
                           maxItems: 100
                           minItems: 1
                           type: array
+                        method:
+                          description: |-
+                            Method regex matches each keyword as a regular expression; by default
+                            a keyword matches literally, as a word of its own
+                          enum:
+                          - regex
+                          type: string
                         name:
                           description: Name is the unique identifier for this rule
                             (also used as category name)
@@ -647,60 +528,6 @@ spec:
                       - keywords
                       - name
                       - operator
-                      type: object
-                    maxItems: 100
-                    type: array
-                  structure:
-                    description: Structure defines request-shape routing signals.
-                    items:
-                      properties:
-                        description:
-                          type: string
-                        feature:
-                          properties:
-                            source:
-                              properties:
-                                caseSensitive:
-                                  type: boolean
-                                keywords:
-                                  items:
-                                    type: string
-                                  type: array
-                                pattern:
-                                  type: string
-                                sequences:
-                                  items:
-                                    items:
-                                      type: string
-                                    type: array
-                                  type: array
-                                type:
-                                  type: string
-                              required:
-                              - type
-                              type: object
-                            type:
-                              type: string
-                          required:
-                          - source
-                          - type
-                          type: object
-                        name:
-                          type: string
-                        predicate:
-                          properties:
-                            gt:
-                              type: number
-                            gte:
-                              type: number
-                            lt:
-                              type: number
-                            lte:
-                              type: number
-                          type: object
-                      required:
-                      - feature
-                      - name
                       type: object
                     maxItems: 100
                     type: array
@@ -786,10 +613,6 @@ spec:
                     description: Domains indicates the number of domain signals
                     format: int32
                     type: integer
-                  embeddings:
-                    description: Embeddings indicates the number of embedding signals
-                    format: int32
-                    type: integer
                   keywords:
                     description: Keywords indicates the number of keyword signals
                     format: int32
@@ -797,7 +620,6 @@ spec:
                 required:
                 - decisions
                 - domains
-                - embeddings
                 - keywords
                 type: object
             type: object

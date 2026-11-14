@@ -6,12 +6,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
@@ -21,62 +22,80 @@ const (
 	maskingMaskedText = "email me at [EMAIL_ADDRESS_0] please"
 )
 
+// maskingRule is the pii rule the test decisions' masking plugin names.
+const maskingRule = "support_masking"
+
 // stubPIIDetector reports every occurrence of each value as an EMAIL_ADDRESS
-// span, so the dispatch path is tested without loading a PII model.
+// span of the pii rule, so the dispatch path is tested without loading a PII
+// model.
 type stubPIIDetector struct {
 	values  []string
 	partial bool
 	err     error
 	calls   int
+	rules   []string
+	// found is what each other rule finds, by name, each under its name.
+	found map[string][]string
 }
 
-func (s *stubPIIDetector) ClassifyPIIWithDetailsAndThreshold(
-	_ context.Context, text string, _ float32,
-) ([]classification.PIIDetection, error) {
+func (s *stubPIIDetector) RuleSpans(_ context.Context, signalType, rule, text string) ([]modelservice.Span, error) {
 	s.calls++
+	s.rules = append(s.rules, rule)
 	if s.err != nil {
 		return nil, s.err
 	}
-	var detections []classification.PIIDetection
-	for _, value := range s.values {
+	label, values := "EMAIL_ADDRESS", s.values
+	if signalType != config.SignalTypePII {
+		label, values = rule, s.found[rule]
+	}
+	var detections []modelservice.Span
+	for _, value := range values {
 		for offset := 0; ; {
 			index := strings.Index(text[offset:], value)
 			if index < 0 {
 				break
 			}
 			start := offset + index
-			detections = append(detections, classification.PIIDetection{
-				EntityType: "EMAIL_ADDRESS", Start: start, End: start + len(value), Text: value, Confidence: 1,
+			point := utf8.RuneCountInString(text[:start])
+			detections = append(detections, modelservice.Span{
+				Label: label, Start: point, End: point + utf8.RuneCountInString(value), Text: value, Probability: 1,
 			})
 			offset = start + len(value)
 		}
 	}
 	if s.partial {
-		// The real classifier returns the spans it saw plus this error when
-		// the provider truncated its input.
-		return detections, classification.ErrTokenSpansTruncated
+		// The signal reports an answer that read only part of the text as
+		// an error.
+		return nil, errors.New("pii rule read only part of the text")
 	}
 	return detections, nil
 }
 
-func useMaskingDetector(t *testing.T, detector piiDetector) {
+func useMaskingDetector(t *testing.T, detector ruleSpans) {
 	t.Helper()
-	previous := maskingDetectorFor
-	maskingDetectorFor = func(*OpenAIRouter, *RequestContext) (piiDetector, float32, bool) {
-		return detector, 0, true
+	previous := maskingSpansFor
+	maskingSpansFor = func(*OpenAIRouter, *RequestContext) (ruleSpans, bool) {
+		return detector, true
 	}
-	t.Cleanup(func() { maskingDetectorFor = previous })
+	t.Cleanup(func() { maskingSpansFor = previous })
 }
 
 func maskingDecision(enabled bool) *config.Decision {
 	return &config.Decision{Plugins: []config.DecisionPlugin{{
 		Type:          config.DecisionPluginMasking,
-		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": enabled}),
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": enabled, "signal": maskingRule}),
 	}}}
 }
 
 func newMaskingContext(
 	t *testing.T, router *OpenAIRouter, target llmprotocol.WireFormat, decision *config.Decision,
+) *RequestContext {
+	t.Helper()
+	return newMaskingContextOf(t, router, target, decision, maskingChatBody)
+}
+
+func newMaskingContextOf(
+	t *testing.T, router *OpenAIRouter, target llmprotocol.WireFormat, decision *config.Decision, body string,
 ) *RequestContext {
 	t.Helper()
 	ctx := &RequestContext{
@@ -86,7 +105,7 @@ func newMaskingContext(
 		TraceContext:        t.Context(),
 		VSRSelectedDecision: decision,
 	}
-	request, immediate := router.prepareProtocolRequest([]byte(maskingChatBody), ctx)
+	request, immediate := router.prepareProtocolRequest([]byte(body), ctx)
 	if immediate != nil || request == nil {
 		t.Fatalf("request was rejected: request=%+v immediate=%+v", request, immediate)
 	}
@@ -148,6 +167,41 @@ func TestMaskingDispatchSameFormatSendsNoRawValue(t *testing.T) {
 	}
 	if _, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIChatV1, body); err != nil {
 		t.Fatalf("dispatched bytes are not a valid Chat request: %v\n%s", err, body)
+	}
+}
+
+// Masking reads the request as it is sent, after every other rewrite, so
+// personal data a RAG source injected after routing is masked too, whether
+// the documents arrive as a tool result or in the system prompt.
+func TestMaskingCoversPersonalDataInjectedByRAG(t *testing.T) {
+	const document = "Account owner: carol@example.com, plan premium."
+	for _, mode := range []string{"tool_role", "system_prompt"} {
+		t.Run(mode, func(t *testing.T) {
+			router := &OpenAIRouter{}
+			detector := &stubPIIDetector{values: []string{maskingRawEmail, "carol@example.com"}}
+			useMaskingDetector(t, detector)
+			ctx := newMaskingContext(t, router, llmprotocol.OpenAIChatV1, maskingDecision(true))
+			plugin := &config.ContextPluginConfig{Enabled: true, Injection: &config.ContextInjectionConfig{Mode: mode}}
+			if err := router.injectContext(ctx, plugin, config.ContextSourceRAG, document); err != nil {
+				t.Fatalf("inject: %v", err)
+			}
+
+			body, err := finalizeMaskingDispatch(router, ctx)
+			if err != nil {
+				t.Fatalf("finalize: %v", err)
+			}
+			if bytes.Contains(body, []byte("carol@example.com")) || bytes.Contains(body, []byte(maskingRawEmail)) {
+				t.Fatalf("dispatched bytes contain personal data:\n%s", body)
+			}
+			if !bytes.Contains(body, []byte("Account owner: [EMAIL_ADDRESS_")) {
+				t.Fatalf("the retrieved document was not masked:\n%s", body)
+			}
+			for _, rule := range detector.rules {
+				if rule != maskingRule {
+					t.Fatalf("masking asked pii rule %q, want the one the plugin names (%s)", rule, maskingRule)
+				}
+			}
+		})
 	}
 }
 
@@ -338,5 +392,61 @@ func TestMaskingExternalGatewayPathCarriesNoDecision(t *testing.T) {
 	}
 	if detector.calls != 0 {
 		t.Fatalf("masking scanned on a path with no decision: calls=%d", detector.calls)
+	}
+}
+
+// A masking plugin's rules are masked under their own names beside the pii
+// rule's labels, and entity_types, a list of pii labels, does not drop them.
+// Without a signal, only the rules are asked.
+func TestMaskingRulesMaskUnderTheirNames(t *testing.T) {
+	const body = `{"model":"m","max_tokens":64,"messages":[{"role":"user","content":"E-104233 wrote from alice@example.com"}]}`
+	employee := []map[string]interface{}{{"type": config.SignalTypeKeyword, "name": "employee_id"}}
+	for _, tc := range []struct {
+		name    string
+		plugin  map[string]interface{}
+		want    string
+		asked   []string
+		keepRaw string
+	}{
+		{
+			name: "beside the pii rule",
+			plugin: map[string]interface{}{
+				"enabled": true, "signal": maskingRule, "rules": employee, "entity_types": []string{"EMAIL_ADDRESS"},
+				"placeholders": map[string]string{"employee_id": "[EMPLOYEE_{index}]"},
+			},
+			want:  "[EMPLOYEE_0] wrote from [EMAIL_ADDRESS_0]",
+			asked: []string{maskingRule, "employee_id"},
+		},
+		{
+			name:    "without a signal",
+			plugin:  map[string]interface{}{"enabled": true, "rules": employee},
+			want:    "[EMPLOYEE_ID_0] wrote from alice@example.com",
+			asked:   []string{"employee_id"},
+			keepRaw: maskingRawEmail,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := &OpenAIRouter{}
+			detector := &stubPIIDetector{values: []string{maskingRawEmail}, found: map[string][]string{"employee_id": {"E-104233"}}}
+			useMaskingDetector(t, detector)
+			decision := &config.Decision{Plugins: []config.DecisionPlugin{{
+				Type: config.DecisionPluginMasking, Configuration: config.MustStructuredPayload(tc.plugin),
+			}}}
+			ctx := newMaskingContextOf(t, router, llmprotocol.OpenAIChatV1, decision, body)
+
+			dispatched, err := finalizeMaskingDispatch(router, ctx)
+			if err != nil {
+				t.Fatalf("finalize: %v", err)
+			}
+			if !bytes.Contains(dispatched, []byte(tc.want)) || bytes.Contains(dispatched, []byte("E-104233")) {
+				t.Fatalf("dispatched bytes do not read %q:\n%s", tc.want, dispatched)
+			}
+			if tc.keepRaw != "" && !bytes.Contains(dispatched, []byte(tc.keepRaw)) {
+				t.Fatalf("masking hid %q, which no listed rule finds:\n%s", tc.keepRaw, dispatched)
+			}
+			if strings.Join(detector.rules, ",") != strings.Join(tc.asked, ",") {
+				t.Fatalf("masking asked %v, want %v", detector.rules, tc.asked)
+			}
+		})
 	}
 }

@@ -26,6 +26,9 @@ var responsesDefaultCases = []struct {
 	{"usage.output_tokens_details.tool_output_tokens", "0", []string{`null`, `1`, `0.0`, `0e0`, `1e-400`}},
 }
 
+// The vLLM Responses transfer and per-turn fields are known members, so their
+// values stay validated for every backend: a non-default value fails the reply
+// and the default replays byte for byte.
 func TestResponsesProviderDefaultBoundaries(t *testing.T) {
 	base := responsesDefaultsFixture(t)
 	for _, test := range responsesDefaultCases {
@@ -33,38 +36,26 @@ func TestResponsesProviderDefaultBoundaries(t *testing.T) {
 			for _, value := range append([]string{test.value}, test.invalid...) {
 				t.Run(value, func(t *testing.T) {
 					body := setResponsesDefault(t, base, test.path, value)
-					for _, vendor := range []llmprotocol.ResponseVendor{"", llmprotocol.ResponseVendorOpenAICompatGateway} {
-						policy := llmprotocol.DefaultPolicy()
-						policy.ResponseVendor = vendor
-						response, envelope, diagnostics, err := (OpenAIResponsesCodec{}).DecodeResponse(body, policy)
-						if value != test.value && vendor == "" {
-							if err == nil {
-								t.Fatal("strict decoder accepted a non-default extension")
-							}
-							continue
+					policy := llmprotocol.DefaultPolicy()
+					response, envelope, _, err := (OpenAIResponsesCodec{}).DecodeResponse(body, policy)
+					if value != test.value {
+						if err == nil {
+							t.Fatal("decoder accepted a non-default extension")
 						}
-						if err != nil {
-							t.Fatalf("vendor=%q: %v", vendor, err)
-						}
-						if response.Usage.InputTotal.Value == nil || *response.Usage.InputTotal.Value != 2 || response.Usage.OutputTotal.Value == nil || *response.Usage.OutputTotal.Value != 1 || response.Usage.Total.Value == nil || *response.Usage.Total.Value != 3 {
-							t.Fatalf("usage changed: %+v", response.Usage)
-						}
-						encoded, _, err := (OpenAIResponsesCodec{}).EncodeResponse(response, envelope, policy)
-						if err != nil {
-							t.Fatal(err)
-						}
-						if vendor == "" {
-							if !bytes.Equal(body, encoded) {
-								t.Fatal("strict same-format source replay changed")
-							}
-						} else {
-							if bytes.Contains(encoded, []byte(`"`+lastResponsesPathPart(test.path)+`"`)) {
-								t.Fatal("compat retained extension")
-							}
-							if !DiagnosticsDroppedVendorExtensions(diagnostics) || !responsesDefaultDiagnostic(diagnostics, test.path) {
-								t.Fatalf("missing compat diagnostic: %+v", diagnostics)
-							}
-						}
+						return
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					if response.Usage.InputTotal.Value == nil || *response.Usage.InputTotal.Value != 2 || response.Usage.OutputTotal.Value == nil || *response.Usage.OutputTotal.Value != 1 || response.Usage.Total.Value == nil || *response.Usage.Total.Value != 3 {
+						t.Fatalf("usage changed: %+v", response.Usage)
+					}
+					encoded, _, err := (OpenAIResponsesCodec{}).EncodeResponse(response, envelope, policy)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !bytes.Equal(body, encoded) {
+						t.Fatal("same-format source replay changed")
 					}
 				})
 			}
@@ -85,33 +76,12 @@ func TestResponsesProviderDefaultsStreamResources(t *testing.T) {
 		} {
 			t.Run(phase+"/"+field.path, func(t *testing.T) {
 				payload := patchResponsesDefaultStream(t, phase, field.path, field.value)
-				for _, vendor := range []llmprotocol.ResponseVendor{"", llmprotocol.ResponseVendorOpenAICompatGateway} {
-					policy := llmprotocol.DefaultPolicy()
-					policy.ResponseVendor = vendor
-					engine, err := NewEngine(NewBuiltinRegistry(), policy)
-					if err != nil {
-						t.Fatal(err)
-					}
-					stream, err := engine.NewStream(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIChatV1, llmprotocol.StreamContext{Context: t.Context(), PublicModel: "public-model"})
-					if err != nil {
-						t.Fatal(err)
-					}
-					_, _, diagnostics, err := stream.Push(payload)
-					if vendor == "" {
-						if err == nil {
-							t.Fatal("stream accepted non-default extension")
-						}
-						continue
-					}
-					if err != nil {
-						t.Fatal(err)
-					}
-					if _, _, _, err := stream.Finalize(nil); err != nil {
-						t.Fatal(err)
-					}
-					if !DiagnosticsDroppedVendorExtensions(diagnostics) {
-						t.Fatal("missing stream vendor diagnostic")
-					}
+				stream, err := NewBuiltinEngine().NewStream(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIChatV1, llmprotocol.StreamContext{Context: t.Context(), PublicModel: "public-model"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, _, _, err := stream.Push(payload); err == nil {
+					t.Fatal("stream accepted non-default extension")
 				}
 			})
 		}
@@ -160,18 +130,4 @@ func patchResponsesDefaultStream(t *testing.T, phase, path, value string) []byte
 		lines[index] = "data: " + string(setResponsesDefault(t, []byte(strings.TrimPrefix(line, "data: ")), "response."+path, value))
 	}
 	return []byte(strings.Join(lines, "\n"))
-}
-
-func lastResponsesPathPart(path string) string {
-	parts := strings.Split(path, ".")
-	return parts[len(parts)-1]
-}
-
-func responsesDefaultDiagnostic(diagnostics llmprotocol.Diagnostics, field string) bool {
-	for _, diagnostic := range diagnostics {
-		if diagnostic.Field == field && diagnostic.Action == llmprotocol.DiagnosticDropped {
-			return true
-		}
-	}
-	return false
 }

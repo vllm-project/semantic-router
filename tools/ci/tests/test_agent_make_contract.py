@@ -70,7 +70,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             "vllm-sr-test-integration:", 1
         )[0]
         # The whole directory runs, so no CLI test file can be left out of CI.
-        self.assertIn("-m pytest -q src/vllm-sr/tests\n", unit)
+        self.assertIn("-m pytest -q -n auto --dist loadfile src/vllm-sr/tests\n", unit)
         self.assertIn("run_cli_tests.py --verbose", unit)
 
     def test_router_image_platform_selects_the_runtime_accelerator(self) -> None:
@@ -138,11 +138,13 @@ class HarnessMakeContractTests(unittest.TestCase):
             "docs-generated-check",
             "docs-crd-check",
             "decision-runtime-catalog-check",
+            "systemone-schemas-check",
         ):
             self.assertIn(dependency, check)
         generate = target_block("generated-contract-generate", docs_make)
         self.assertIn("config-schema-generate", generate)
         self.assertIn("decision-runtime-catalog-generate", generate)
+        self.assertIn("systemone-schemas-generate", generate)
         self.assertLess(
             generate.index("api-docs-generate"), generate.index("agent-skill-sync")
         )
@@ -164,6 +166,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             "api-docs-check",
             "docs-crd-check",
             "decision-runtime-catalog-check",
+            "systemone-schemas-check",
         ):
             self.assertIn(target, commands)
         self.assertTrue(
@@ -195,7 +198,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             "src/model-runtime/vllm_srun/registry/tables/omni.py",
             "src/model-runtime/vllm_srun/registry/releases.generated.json",
             "src/model-runtime/vllm_srun/families/vela2/request.py",
-            "src/semantic-router/pkg/modelservice/decision_catalog.generated.json",
+            "src/semantic-router/pkg/config/decision_catalog.generated.json",
             "src/model-runtime/vllm_srun/registry/tables/common.py",
             "src/model-runtime/vllm_srun/systemone.py",
             "src/model-runtime/vllm_srun/families/decision1/family.py",
@@ -450,6 +453,31 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertIn("dashboard-test-backend: vllm-sr-install-cli", backend)
         self.assertIn("go test -json -count=1 ./...", backend)
         self.assertNotIn("VLLM_SR_EVALUATION_TEST_PYTHON", backend)
+
+    def test_dashboard_backend_tests_retry_once_under_ci(self) -> None:
+        backend = target_block("dashboard-test-backend", DASHBOARD_MAKE)
+        # The suite's timing-sensitive MCP lifecycle tests flake under a loaded
+        # runner (#5205); one extra attempt lets such a run self-heal.
+        self.assertIn(
+            'if [ -n "$$CI" ]',
+            backend,
+            "'dashboard-test-backend' must gate its retry on $$CI (#5205); "
+            "without the gate every local failure pays the retry delay.",
+        )
+        self.assertIn(
+            "for attempt in 1 2",
+            backend,
+            "'dashboard-test-backend' must bound the retry to one extra "
+            "attempt (#5205); an unbounded loop would retry a "
+            "deterministic failure into a pass.",
+        )
+        self.assertIn(
+            "backend-attempt-$$attempt.jsonl",
+            backend,
+            "'dashboard-test-backend' must keep each failed attempt's "
+            "evidence (#5205); overwriting it would erase the flake the "
+            "retry survived.",
+        )
 
     def test_precommit_toolchain_path_selects_an_isolated_python(self) -> None:
         dockerfile = (REPO_ROOT / "tools/docker/Dockerfile.precommit").read_text()

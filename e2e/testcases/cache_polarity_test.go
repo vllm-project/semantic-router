@@ -121,16 +121,16 @@ func TestCachePolarityRetainsContradictionAndParaphraseAssertions(t *testing.T) 
 				case 1:
 					// The first request populates an empty cache.
 				case 2, 3, 4:
-					w.Header().Set("x-vsr-cache-hit", "true")
-					w.Header().Set("x-vsr-cache-similarity", "1.0")
+					w.Header().Set("x-vsr-response-path", "cache")
+					w.Header().Set("x-vsr-trace", "cache_similarity=1.0")
 				case 5:
 					question = tc.Contradiction
-					w.Header().Set("x-vsr-cache-hit", "false")
-					w.Header().Set("x-vsr-cache-similarity", "0.95")
+					w.Header().Set("x-vsr-response-path", "upstream")
+					w.Header().Set("x-vsr-trace", "cache_similarity=0.95")
 				case 6:
 					question = tc.Paraphrase
-					w.Header().Set("x-vsr-cache-hit", "true")
-					w.Header().Set("x-vsr-cache-similarity", "0.94")
+					w.Header().Set("x-vsr-response-path", "cache")
+					w.Header().Set("x-vsr-trace", "cache_similarity=0.94")
 				default:
 					t.Errorf("unexpected extra request %d", index)
 				}

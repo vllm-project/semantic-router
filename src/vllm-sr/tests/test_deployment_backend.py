@@ -295,25 +295,34 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "listeners": [{"port": 8899}],
                     "providers": {"models": [{"name": "provider-model"}]},
-                    "routing": {"decisions": [{"name": "default"}]},
-                    "recipes": [{"name": "custom-recipe"}],
+                    "recipes": [
+                        {"name": "default", "decisions": [{"name": "default"}]},
+                        {"name": "custom-recipe"},
+                    ],
                     "global": {
                         "services": {"management_api": {"auth": {"mode": "bearer"}}}
                     },
+                    "entrypoints": [
+                        {
+                            "model_names": ["vllm-sr/auto"],
+                            "recipe": "default",
+                            "default": True,
+                        }
+                    ],
                 }
             )
         )
 
         values = translate_config_to_helm_values(str(config))
         override = values["configOverride"]
-        assert override["version"] == "v0.3"
+        assert override["version"] == "v0.5"
         assert override["listeners"] == [{"port": 8899}]
         assert override["providers"]["models"] == [{"name": "provider-model"}]
-        assert override["routing"]["decisions"] == [{"name": "default"}]
-        assert override["recipes"] == [{"name": "custom-recipe"}]
+        assert override["recipes"][0]["decisions"] == [{"name": "default"}]
+        assert override["recipes"][1] == {"name": "custom-recipe"}
         assert (
             override["global"]["services"]["management_api"]["auth"]["mode"] == "bearer"
         )
@@ -372,7 +381,7 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "providers": {"models": [model]},
                 }
             ),
@@ -392,7 +401,7 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "listeners": [
                         {
                             "name": "public",
@@ -453,7 +462,7 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "providers": {"models": [credential_config]},
                 }
             ),
@@ -474,7 +483,7 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "listeners": [
                         {
                             "name": "public",
@@ -507,7 +516,7 @@ class TestConfigTranslator:
     ):
         config = tmp_path / "config.yaml"
         config.write_text(
-            yaml.safe_dump({"version": "v0.3", "api_key": credential}),
+            yaml.safe_dump({"version": "v0.5", "api_key": credential}),
             encoding="utf-8",
         )
 

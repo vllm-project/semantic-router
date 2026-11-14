@@ -35,7 +35,9 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 		return r.createErrorResponse(503, "protocol runtime unavailable")
 	}
 	source, target := responseWireFormats(ctx)
-	translated, err := engine.TranslateTransportError(source, target, body, nil)
+	// An upstream may echo the caller's login in its error.
+	body = redactCallerCredential(ctx, body)
+	translated, err := engine.TranslateTransportError(source, target, body, normalizeUpstreamContextLength(ctx.UpstreamStatusCode))
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "invalid_upstream_error")
 		logging.ComponentErrorEvent("extproc", "neutral_transport_error_decode_failed", map[string]interface{}{
@@ -51,13 +53,12 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 		}
 		translated.Body = encoded
 	}
-	diagnosticsBeforeBody := len(ctx.ProtocolDiagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, translated.Diagnostics...)
 	response := buildResponseBodyContinueResponse(nil, nil)
 	setResponseBodyMutation(response, translated.Body)
 	setResponseContentType(response, "application/json")
-	if warning, ok := recordBufferedProtocolDiagnostics(ctx, diagnosticsBeforeBody); ok {
-		setResponseBodyHeaderOverwrite(response, headers.VSRProtocolWarnings, warning)
+	if warnings, ok := bufferedWarnings(ctx); ok {
+		setResponseBodyHeaderOverwrite(response, headers.VSRWarnings, warnings)
 	}
 	r.attachRouterReplayResponse(ctx, translated.Body, true)
 	return response

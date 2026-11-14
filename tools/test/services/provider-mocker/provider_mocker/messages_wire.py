@@ -4,6 +4,8 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
+from .mock_tools import mock_tool_name
+
 
 def contains_text(value: Any, marker: str) -> bool:
     if isinstance(value, str):
@@ -43,7 +45,7 @@ def build_message(body: dict) -> dict:
             {
                 "type": "tool_use",
                 "id": "call_mock_lookup",
-                "name": "lookup",
+                "name": mock_tool_name(body["messages"]),
                 "input": {"query": "weather"},
                 "caller": {"type": "direct"},
             }
@@ -107,6 +109,17 @@ def build_message(body: dict) -> dict:
                 "cache_missed_input_tokens": 4,
             }
         }
+    if contains_text(body["messages"], "__mock_gateway_fields__"):
+        # A gateway in front of the provider adds fields no Messages schema
+        # declares: a cost in exponent form inside usage and its own trace ID.
+        # The stream carries both in message_start and the cost in
+        # message_delta usage.
+        response["usage"] = {
+            **response["usage"],
+            "speed": "standard",
+            "total_cost": 3e-05,
+        }
+        response["gateway_trace_id"] = "trace-provider-mocker"
     return response
 
 

@@ -9,52 +9,47 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
+// The vLLM Responses transfer and per-turn fields at their defaults are known
+// members: a same-format reply and its cache entry keep them byte for byte.
 func TestExtProcResponsesProviderDefaults(t *testing.T) {
-	for _, vendor := range []llmprotocol.ResponseVendor{"", llmprotocol.ResponseVendorOpenAICompatGateway} {
-		newContext := func() *RequestContext {
-			return &RequestContext{SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIResponsesV1, ResponseVendor: vendor, RequestModel: "public-model", TraceContext: t.Context()}
-		}
-		t.Run(string(vendor)+"/buffered", func(t *testing.T) {
-			router := &OpenAIRouter{}
-			ctx := newContext()
-			body := extProcResponsesDefaults(t, extProcResponseFixture(llmprotocol.OpenAIResponsesV1), vendor != "")
-			reply := router.handleNonStreamingResponseBody(body, ctx, 0)
-			if reply.GetImmediateResponse() != nil || reply.GetResponseBody() == nil {
-				t.Fatalf("response rejected: %+v", reply)
-			}
-			if mutation := reply.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
-				t.Fatalf("same-format forwarding changed: %+v", mutation)
-			}
-			assertResponsesDefaultsUsage(t, ctx)
-			cached := router.cacheableClientResponse(body, false, *ctx.SemanticResponse, ctx)
-			if vendor == "" && !bytes.Equal(cached, body) {
-				t.Fatal("strict default response changed on cache write")
-			}
-			if vendor != "" && bytes.Contains(cached, []byte("kv_transfer_params")) {
-				t.Fatal("vendor extension retained in cache")
-			}
-			hit := newContext()
-			hit.ResponseVendor = ""
-			if _, err := router.decodeCachedClientResponse(cached, hit); err != nil {
-				t.Fatalf("strict cache read: %v", err)
-			}
-		})
-		t.Run(string(vendor)+"/stream", func(t *testing.T) {
-			ctx := newContext()
-			body := extProcResponsesDefaults(t, extProcStreamFixture(llmprotocol.OpenAIResponsesV1), vendor != "")
-			reply := (&OpenAIRouter{}).handleSemanticStreamingResponseBody(body, true, ctx)
-			if ctx.StreamingAborted || !ctx.StreamingComplete || reply.GetResponseBody() == nil {
-				t.Fatalf("aborted=%t complete=%t reply=%+v", ctx.StreamingAborted, ctx.StreamingComplete, reply)
-			}
-			if mutation := reply.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
-				t.Fatalf("same-format stream forwarding changed: %+v", mutation)
-			}
-			assertResponsesDefaultsUsage(t, ctx)
-		})
+	newContext := func() *RequestContext {
+		return &RequestContext{SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIResponsesV1, RequestModel: "public-model", TraceContext: t.Context()}
 	}
+	t.Run("buffered", func(t *testing.T) {
+		router := &OpenAIRouter{}
+		ctx := newContext()
+		body := extProcResponsesDefaults(t, extProcResponseFixture(llmprotocol.OpenAIResponsesV1))
+		reply := router.handleNonStreamingResponseBody(body, ctx, 0, false)
+		if reply.GetImmediateResponse() != nil || reply.GetResponseBody() == nil {
+			t.Fatalf("response rejected: %+v", reply)
+		}
+		if mutation := reply.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
+			t.Fatalf("same-format forwarding changed: %+v", mutation)
+		}
+		assertResponsesDefaultsUsage(t, ctx)
+		cached := router.cacheableClientResponse(body, false, *ctx.SemanticResponse, ctx)
+		if !bytes.Equal(cached, body) {
+			t.Fatal("default response changed on cache write")
+		}
+		if _, err := router.decodeCachedClientResponse(cached, newContext()); err != nil {
+			t.Fatalf("cache read: %v", err)
+		}
+	})
+	t.Run("stream", func(t *testing.T) {
+		ctx := newContext()
+		body := extProcResponsesDefaults(t, extProcStreamFixture(llmprotocol.OpenAIResponsesV1))
+		reply := (&OpenAIRouter{}).handleSemanticStreamingResponseBody(body, true, ctx)
+		if ctx.StreamingAborted || !ctx.StreamingComplete || reply.GetResponseBody() == nil {
+			t.Fatalf("aborted=%t complete=%t reply=%+v", ctx.StreamingAborted, ctx.StreamingComplete, reply)
+		}
+		if mutation := reply.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
+			t.Fatalf("same-format stream forwarding changed: %+v", mutation)
+		}
+		assertResponsesDefaultsUsage(t, ctx)
+	})
 }
 
-func extProcResponsesDefaults(t *testing.T, body []byte, populated bool) []byte {
+func extProcResponsesDefaults(t *testing.T, body []byte) []byte {
 	t.Helper()
 	decorate := func(raw []byte) []byte {
 		var object map[string]any
@@ -71,9 +66,6 @@ func extProcResponsesDefaults(t *testing.T, body []byte, populated bool) []byte 
 		}
 		for _, field := range []string{"kv_transfer_params", "ec_transfer_params", "input_messages", "output_messages"} {
 			resource[field] = nil
-		}
-		if populated {
-			resource["kv_transfer_params"] = map[string]any{"remote_engine_id": "engine"}
 		}
 		if usage, ok := resource["usage"].(map[string]any); ok {
 			usage["input_tokens_details"] = map[string]any{"cached_tokens": 0, "input_tokens_per_turn": []any{}, "cached_tokens_per_turn": []any{}}

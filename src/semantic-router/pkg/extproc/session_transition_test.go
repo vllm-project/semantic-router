@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -63,33 +64,42 @@ func TestPopulateSessionTransitionFieldsUsesNeutralMessages(t *testing.T) {
 		t.Fatalf("neutral session state = %+v", ctx)
 	}
 	// No AuthzUserID header, so extractUserID returns "" and the session
-	// falls to the message-structure fingerprint, not the userID+message
+	// falls to the conversation-start fingerprint, not the userID+message
 	// hash — both are SessionProvenanceMessageHash regardless.
 	if ctx.SessionProvenance != SessionProvenanceMessageHash {
 		t.Fatalf("provenance = %q, want %q", ctx.SessionProvenance, SessionProvenanceMessageHash)
 	}
 }
 
+// A request pins its session with x-vsr-session-id, else with the first
+// client header session_id_headers accepts; the Anthropic metadata user id
+// is derived only when no header pins one.
 func TestSessionIdentityPriority(t *testing.T) {
 	request := &llmprotocol.Request{Generation: 1, Metadata: map[string]string{"user_id": "semantic-user"}}
-	ctx := &RequestContext{
-		Headers:         map[string]string{headers.XClaudeCodeSessionID: "client-session"},
-		SemanticRequest: request,
-	}
-	if got := deriveSessionIDFromAnthropicSignals(ctx); got != "client-session" {
-		t.Fatalf("transport session = %q", got)
-	}
-	delete(ctx.Headers, headers.XClaudeCodeSessionID)
+	ctx := &RequestContext{Headers: map[string]string{}, SemanticRequest: request}
 	if got := deriveSessionIDFromAnthropicSignals(ctx); got != "ant-md-semantic-user" {
 		t.Fatalf("semantic metadata session = %q", got)
 	}
-	ctx.Headers[headers.XSessionID] = "pinned"
-	populateSessionTransitionFields(ctx)
-	if ctx.SessionID != "pinned" {
-		t.Fatalf("pinned session = %q", ctx.SessionID)
+	for _, step := range []struct{ header, value string }{
+		{headers.XClaudeCodeSessionID, "claude-session"},
+		{headers.XSessionID, "client-session"},
+		{headers.VSRSessionID, "pinned"},
+	} {
+		ctx.Headers[step.header] = step.value
+		populateSessionTransitionFields(ctx)
+		if ctx.SessionID != step.value || ctx.SessionIDHeader != step.header || ctx.SessionProvenance != SessionProvenanceHeader {
+			t.Fatalf("with %s: session %q from %q (%s), want %q from it", step.header, ctx.SessionID, ctx.SessionIDHeader, ctx.SessionProvenance, step.value)
+		}
 	}
-	if ctx.SessionProvenance != SessionProvenanceHeader {
-		t.Fatalf("provenance = %q, want %q", ctx.SessionProvenance, SessionProvenanceHeader)
+}
+
+func TestOperatorsChooseTheAcceptedSessionHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		Headers:          map[string]string{headers.XClaudeCodeSessionID: "claude-session", "x-tenant-thread": "thread-7"},
+		sessionIDHeaders: config.RouterHeadersConfig{SessionIDHeaders: []string{"x-tenant-thread"}}.SessionIDHeaderNames(),
+	}
+	if sid, header := pinnedSessionID(ctx); sid != "thread-7" || header != "x-tenant-thread" {
+		t.Fatalf("pinned session = %q from %q, want the configured header's", sid, header)
 	}
 }
 
@@ -122,11 +132,12 @@ func TestEmptyNeutralThreadUsesRequestFallback(t *testing.T) {
 
 func TestPopulateSessionTransitionFieldsAnthropicProvenance(t *testing.T) {
 	ctx := &RequestContext{
-		Headers: map[string]string{headers.XClaudeCodeSessionID: "client-session"},
+		Headers:         map[string]string{},
+		SemanticRequest: &llmprotocol.Request{Generation: 1, Metadata: map[string]string{"user_id": "claude-user"}},
 	}
 	populateSessionTransitionFields(ctx)
-	if ctx.SessionID != "client-session" {
-		t.Fatalf("session id = %q, want the raw Claude Code session id", ctx.SessionID)
+	if ctx.SessionID != "ant-md-claude-user" {
+		t.Fatalf("session id = %q, want the Anthropic metadata user id", ctx.SessionID)
 	}
 	if ctx.SessionProvenance != SessionProvenanceAnthropicPromptCache {
 		t.Fatalf("provenance = %q, want %q", ctx.SessionProvenance, SessionProvenanceAnthropicPromptCache)

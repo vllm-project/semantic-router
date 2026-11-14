@@ -44,10 +44,10 @@ func referenceConfigRepoRoot(t testingT) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../"))
 }
 
-func assertPluginConfigCoverage(t testingT, plugins []map[string]interface{}, typ reflect.Type, pluginType string) {
+func assertPluginConfigCoverage(t testingT, plugins []map[string]interface{}, typ reflect.Type, pluginType string, skip ...string) {
 	t.Helper()
 	configs := collectChildMapsFromSlice(t, plugins, "configuration", "plugins("+pluginType+")")
-	assertSliceUnionCoversStructFields(t, configs, typ, "routing.decisions[].plugins[type="+pluginType+"].configuration")
+	assertSliceUnionCoversStructFields(t, configs, typ, "recipes[default].decisions[].plugins[type="+pluginType+"].configuration", skip...)
 }
 
 func collectRuleCoverage(t testingT, rule map[string]interface{}, operators map[string]bool, signalTypes map[string]bool) {

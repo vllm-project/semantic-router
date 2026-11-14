@@ -7,7 +7,7 @@ import (
 )
 
 func TestRecipePoliciesAreDiscoverable(t *testing.T) {
-	for _, path := range []string{"routing.candidate_requirements", "recipes.routing.candidate_requirements"} {
+	for _, path := range []string{"recipes.candidate_requirements"} {
 		representation, err := Render(ViewOptions{View: ViewSection, Path: path, Expanded: true})
 		if err != nil {
 			t.Fatalf("%s: %v", path, err)
@@ -38,14 +38,21 @@ func TestReplayCaptureDefaultsAndOverridesAreDiscoverable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, representation := range map[string]Representation{"global": global, "decision plugin": plugin} {
-		for _, field := range []string{"enabled", "capture_request_body", "capture_response_body", "capture_personal_data", "capture_tool_results", "max_records", "max_body_bytes", "max_tool_trace_bytes", "max_tool_trace_steps"} {
-			if !strings.Contains(string(representation.Body), `"`+field+`"`) {
-				t.Errorf("%s replay schema omits %s", name, field)
-			}
+	capture := []string{"enabled", "prompt_capture", "capture_request_body", "capture_response_body", "capture_personal_data", "capture_tool_results", "max_records", "max_body_bytes", "max_tool_trace_bytes", "max_tool_trace_total_bytes", "max_tool_trace_steps"}
+	for _, field := range capture {
+		if !strings.Contains(string(plugin.Body), `"`+field+`"`) {
+			t.Errorf("decision plugin replay schema omits %s", field)
+		}
+		if strings.Contains(string(global.Body), `"`+field+`"`) {
+			t.Errorf("the global replay store still declares %s, which the router_replay plugin sets", field)
 		}
 	}
-	for _, path := range []string{"routing.data_policy", "recipes.routing.data_policy"} {
+	for _, field := range []string{"store_backend", "ttl_seconds", "async_writes"} {
+		if !strings.Contains(string(global.Body), `"`+field+`"`) {
+			t.Errorf("global replay store schema omits %s", field)
+		}
+	}
+	for _, path := range []string{"routing.data_policy", "recipes.data_policy"} {
 		if _, err := Render(ViewOptions{View: ViewSection, Path: path}); err == nil {
 			t.Errorf("removed policy remains discoverable: %s", path)
 		}

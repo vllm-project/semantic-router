@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -64,15 +65,16 @@ type anthropicTransportErrorWire struct {
 
 func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire anthropicResponseWire
-	canonicalBody, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateAnthropicResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
+	unknownFields = append(unknownFields, anthropicContentUnknownFields(wire.Content, policy)...)
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, vendorExtensions)
+	appendUnknownFieldDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, unknownFields)
 	stopSequenceDiagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
@@ -84,7 +86,26 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	appendAnthropicResponseUsage(&response, wire.Usage, policy, &diagnostics)
-	return response, responseEnvelope(llmprotocol.AnthropicMessagesV1, canonicalBody, response.Generation, response.SourceStopReason, policy), diagnostics, nil
+	return response, responseEnvelope(llmprotocol.AnthropicMessagesV1, body, response.Generation, response.SourceStopReason, policy), diagnostics, nil
+}
+
+// anthropicContentUnknownFields reports the members of reply content blocks
+// that their wire contract does not declare. The blocks are raw values decoded
+// one by one, so the resource-level strip cannot see inside them.
+func anthropicContentUnknownFields(raw json.RawMessage, policy llmprotocol.Policy) []string {
+	if !dropUnknownUpstreamFields(policy) || !jsonFieldPresent(raw) {
+		return nil
+	}
+	var blocks []json.RawMessage
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return nil
+	}
+	dropped := make(map[string]struct{})
+	for _, block := range blocks {
+		_, fields := stripUnknownUpstreamFields(block, reflect.TypeOf(anthropicContentWire{}))
+		addUnknownFieldPaths(dropped, "content[]", fields)
+	}
+	return sortedUnknownFieldPaths(dropped)
 }
 
 func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {
@@ -216,6 +237,18 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	for _, item := range response.Output {
 		contents = append(contents, item.Content...)
 	}
+	if truncated := llmprotocol.TruncatedToolCall(response, policy.Limits.JSONDepth); truncated != nil {
+		// tool_use.input is an object, so a call the output limit cut carries
+		// the members the model completed before the cut.
+		call := *truncated
+		call.Arguments, _ = llmprotocol.TruncatedJSONObject(truncated.Arguments, policy.Limits.JSONDepth)
+		contents[len(contents)-1].ToolCall = &call
+		diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{{
+			Source: envelope.Format, Target: llmprotocol.AnthropicMessagesV1,
+			Field: "content.tool_use.input", Action: llmprotocol.DiagnosticApproximated,
+			Reason: "a tool call cut by the output limit carries the members completed before the cut",
+		}}, policy.Limits.Diagnostics)
+	}
 	contentDiagnostics, err := anthropicContentDiagnostics(contents, envelope.Format, policy)
 	diagnostics = appendDiagnostics(diagnostics, contentDiagnostics, policy.Limits.Diagnostics)
 	if err != nil {
@@ -225,7 +258,7 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	if err != nil {
 		return nil, diagnostics, err
 	}
-	stop := encodeAnthropicStop(response.StopReason)
+	stop := encodeAnthropicStop(response.StopReason, responsesOutputHasToolCall(response.Output))
 	wire := anthropicResponseWire{ID: response.ID, Type: "message", Role: "assistant", Model: response.Model, Content: content, StopReason: &stop, Usage: encodeAnthropicUsage(response.Usage)}
 	if response.StopReason == llmprotocol.StopSequence {
 		wire.StopSequence = &response.MatchedStopSequence
@@ -323,7 +356,13 @@ func decodeAnthropicStop(reason string) llmprotocol.StopReason {
 	}
 }
 
-func encodeAnthropicStop(reason llmprotocol.StopReason) string {
+// A Messages turn that carries tool_use blocks stops with tool_use, which is
+// what Messages clients run calls on. A Chat backend ends a forced named tool
+// call with "stop", the end of the turn.
+func encodeAnthropicStop(reason llmprotocol.StopReason, toolUse bool) string {
+	if reason == llmprotocol.StopEndTurn && toolUse {
+		return "tool_use"
+	}
 	switch reason {
 	case llmprotocol.StopMaxTokens:
 		return "max_tokens"
@@ -358,12 +397,12 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 		return decodeSnowflakeTransportError(body, policy, llmprotocol.AnthropicMessagesV1)
 	}
 	var wire anthropicTransportErrorWire
-	_, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
 	if err != nil {
 		return llmprotocol.TransportError{}, nil, err
 	}
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, vendorExtensions)
+	appendUnknownFieldDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, unknownFields)
 	if wire.Type != "error" {
 		return llmprotocol.TransportError{}, nil, invalidProviderResponse(
 			"invalid_upstream_error_envelope",

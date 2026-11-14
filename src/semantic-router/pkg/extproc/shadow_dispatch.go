@@ -20,12 +20,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-// Shadow dispatch sends a bounded, sampled copy of the approved request to a
-// secondary configured model. It runs strictly after the primary dispatch
+// Shadow dispatch, router_replay's shadow, sends a bounded, sampled copy of the
+// approved request to a secondary configured model and appends its outcome to
+// the primary's replay record. It runs strictly after the primary dispatch
 // response has been built, never blocks the request path beyond a
 // non-blocking slot check, and records a deterministic outcome for replay.
 // This file owns the request-path hook, the bounded lanes, and outcome
@@ -56,6 +58,9 @@ const (
 	shadowReasonRedirectRejected     = "redirect_rejected"
 	shadowReasonResponseTooLarge     = "response_too_large"
 	shadowReasonMalformedResponse    = "malformed_response"
+
+	// shadowReasonBackendLacksCapability shares the plugin gate's typed reason.
+	shadowReasonBackendLacksCapability = string(pluginruntime.SkipBackendLacksCapability)
 
 	// shadowDispatchDrainTimeout is how long Close lets in-flight shadows
 	// finish before cancelling them. Their primary requests already completed
@@ -96,7 +101,7 @@ type shadowRequestEncoder func(request llmprotocol.Request, target *shadowTarget
 // shadowJob is everything a shadow call needs, captured synchronously so the
 // worker never reads mutable request state after the primary path moves on.
 type shadowJob struct {
-	cfg             config.ShadowDispatchPluginConfig
+	cfg             config.RouterReplayShadowConfig
 	routerConfig    *config.RouterConfig
 	engine          *protocolcodec.Engine
 	encode          shadowRequestEncoder
@@ -112,6 +117,10 @@ type shadowJob struct {
 	recorder        *routerreplay.Recorder
 	enqueuedAt      time.Time
 	deadline        time.Time
+	// keepsExcerpt is whether the request's prompt_capture keeps generated
+	// text, as only raw does: under none and verified, an outcome stores no
+	// excerpt of the shadow's answer.
+	keepsExcerpt bool
 }
 
 type shadowResult struct {
@@ -201,34 +210,47 @@ func (d *shadowDispatcher) waitIdle(timeout time.Duration) bool {
 
 // dispatchShadowIfConfigured is the single request-path hook. It runs after
 // finalizeProviderDispatchResponse so the shadow starts from the same approved
-// neutral request the primary was rendered from. Nothing here can fail the
-// request.
+// neutral request the primary was rendered from. The shadow belongs to the
+// decision's router_replay policy, so it runs only while the decision records
+// replays. Nothing here can fail the request.
 func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch *providerDispatch) {
 	if r == nil || r.ShadowDispatcher == nil || ctx == nil || dispatch == nil {
 		return
 	}
-	pluginCfg := ctx.ShadowDispatchPluginConfig
-	if pluginCfg == nil || !pluginCfg.Enabled {
+	replay := ctx.RouterReplayPluginConfig
+	if replay == nil || replay.Shadow == nil {
 		return
 	}
 	engine, err := r.protocolEngine()
 	if err != nil {
 		engine = nil
 	}
-	cfg := pluginCfg.WithDefaults()
+	cfg := replay.Shadow.WithDefaults()
 	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
-		routerConfig: r.Config,
-		engine:       engine,
-		encode:       r.shadowRequestEncoder(ctx, dispatch, engine),
-		extraHeaders: r.shadowExtraHeaders(ctx, dispatch, &cfg),
+		routerConfig:         r.Config,
+		engine:               engine,
+		encode:               r.shadowRequestEncoder(ctx, dispatch, engine),
+		extraHeaders:         r.shadowExtraHeaders(ctx, dispatch, &cfg),
+		modelLacksCapability: r.shadowModelLacksCapability(ctx, cfg.Model),
 	})
 }
 
 type shadowSubmitDeps struct {
-	routerConfig *config.RouterConfig
-	engine       *protocolcodec.Engine
-	encode       shadowRequestEncoder
-	extraHeaders map[string]string
+	routerConfig         *config.RouterConfig
+	engine               *protocolcodec.Engine
+	encode               shadowRequestEncoder
+	extraHeaders         map[string]string
+	modelLacksCapability bool // the shadow model's card omits a task capability the request needs
+}
+
+// shadowModelLacksCapability reports whether the shadow model's declared capabilities
+// leave out a task capability the request needs, so the media never reaches it.
+func (r *OpenAIRouter) shadowModelLacksCapability(ctx *RequestContext, model string) bool {
+	if ctx.SemanticRequest == nil {
+		return false
+	}
+	declared, annotated := r.declaredModelCapabilities(model)
+	return !pluginruntime.CoversRequest(llmprotocol.RequiredCapabilities(*ctx.SemanticRequest), declared, annotated)
 }
 
 // shadowRequestEncoder mirrors the primary pipeline for the shadow model:
@@ -253,7 +275,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if decisionName != "" && target.format != llmprotocol.OpenAIChatV1 {
 			r.applySemanticReasoningMode(&request, target.logicalModel, target.format, useReasoning, decision)
 		}
-		projected, err := r.projectAnthropicRequestForBackend(request, target.logicalModel, target.format)
+		projected, err := r.projectRequestForBackend(request, target.logicalModel, target.format)
 		if err != nil {
 			return nil, err
 		}
@@ -305,7 +327,7 @@ func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
 }
 
 // shadowExtraHeaders carries the span context to the shadow backend, the W3C
-// traceparent and tracestate headers only, plus the decision header mutations
+// traceparent and tracestate headers only, plus the header_mutation headers
 // the plugin explicitly allowlists in forward_headers. Baggage is never
 // propagated: with tracing enabled the request phase extracts client baggage
 // into the trace context, so injecting through the global propagator would
@@ -318,7 +340,7 @@ func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
 func (r *OpenAIRouter) shadowExtraHeaders(
 	ctx *RequestContext,
 	dispatch *providerDispatch,
-	cfg *config.ShadowDispatchPluginConfig,
+	cfg *config.RouterReplayShadowConfig,
 ) map[string]string {
 	extra := make(map[string]string)
 	if ctx.TraceContext != nil {
@@ -326,14 +348,11 @@ func (r *OpenAIRouter) shadowExtraHeaders(
 			extra[pair[0]] = pair[1]
 		}
 	}
-	if ctx.VSRSelectedDecision == nil {
-		return extra
-	}
 	var primaryAuthHeader string
 	if dispatch != nil {
 		primaryAuthHeader = shadowProfileAuthHeader(dispatch.profile)
 	}
-	setHeaders, _ := r.buildHeaderMutations(ctx.VSRSelectedDecision)
+	setHeaders, _ := r.buildHeaderMutations(ctx)
 	for _, option := range setHeaders {
 		header := option.GetHeader()
 		if header == nil || strings.HasPrefix(header.GetKey(), ":") {
@@ -343,7 +362,7 @@ func (r *OpenAIRouter) shadowExtraHeaders(
 		if reason := shadowMutationDropReason(name, primaryAuthHeader, cfg); reason != "" {
 			logging.ComponentDebugEvent("extproc", "shadow_header_mutation_dropped", map[string]interface{}{
 				"request_id": ctx.RequestID,
-				"decision":   ctx.VSRSelectedDecision.Name,
+				"decision":   ctx.VSRSelectedDecisionName,
 				"header":     name,
 				"reason":     reason,
 			})
@@ -356,7 +375,7 @@ func (r *OpenAIRouter) shadowExtraHeaders(
 
 // shadowMutationDropReason explains why a decision header mutation stays on
 // the primary path, or returns "" when the shadow copy may carry it.
-func shadowMutationDropReason(name, primaryAuthHeader string, cfg *config.ShadowDispatchPluginConfig) string {
+func shadowMutationDropReason(name, primaryAuthHeader string, cfg *config.RouterReplayShadowConfig) string {
 	if shadowHeaderIsSensitive(name, primaryAuthHeader) {
 		return "credential"
 	}
@@ -369,7 +388,7 @@ func shadowMutationDropReason(name, primaryAuthHeader string, cfg *config.Shadow
 func (d *shadowDispatcher) submit(
 	ctx *RequestContext,
 	dispatch *providerDispatch,
-	cfg config.ShadowDispatchPluginConfig,
+	cfg config.RouterReplayShadowConfig,
 	deps shadowSubmitDeps,
 ) {
 	decision := dispatch.decisionName
@@ -398,6 +417,9 @@ func (d *shadowDispatcher) submit(
 	case ctx.SemanticRequest == nil || deps.routerConfig == nil || deps.engine == nil || deps.encode == nil:
 		dropEarly(shadowReasonRequestUnavailable)
 		return
+	case deps.modelLacksCapability:
+		dropEarly(shadowReasonBackendLacksCapability)
+		return
 	}
 	rate := cfg.EffectiveSampleRate()
 	if rate <= 0 || d.sampler() >= rate {
@@ -408,6 +430,7 @@ func (d *shadowDispatcher) submit(
 	now := d.now()
 	job := &shadowJob{
 		cfg:             cfg,
+		keepsExcerpt:    ctx.RouterReplayPluginConfig.CapturesRawContent(),
 		routerConfig:    deps.routerConfig,
 		engine:          deps.engine,
 		encode:          deps.encode,
@@ -435,7 +458,7 @@ func shadowRequestID(primary string) string {
 	return primary + "-shadow-" + hex.EncodeToString(buf[:])
 }
 
-func (d *shadowDispatcher) laneFor(key string, cfg config.ShadowDispatchPluginConfig) *shadowLane {
+func (d *shadowDispatcher) laneFor(key string, cfg config.RouterReplayShadowConfig) *shadowLane {
 	lane := d.lanes[key]
 	if lane == nil || cap(lane.slots) != cfg.MaxConcurrency || lane.maxQueue != cfg.MaxQueueDepth {
 		lane = &shadowLane{
@@ -615,7 +638,7 @@ func shadowOutcomeMetadata(job *shadowJob, result shadowResult, latency time.Dur
 	metadata["response_chars"] = strconv.Itoa(utf8.RuneCountInString(result.text))
 	sum := sha256.Sum256([]byte(result.text))
 	metadata["response_sha256"] = hex.EncodeToString(sum[:])
-	if job.cfg.CaptureResponseBody {
+	if job.cfg.CaptureResponseBody && job.keepsExcerpt {
 		if len(result.text) > job.cfg.MaxCaptureBytes {
 			metadata["response_excerpt_truncated"] = "true"
 		}

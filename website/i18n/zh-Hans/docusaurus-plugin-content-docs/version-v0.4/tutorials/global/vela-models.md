@@ -106,7 +106,7 @@ global:
           overflow: reject
 ```
 
-其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`；Embedding 使用 `mmbert` adapter 和 `embedding.v1`；Reranker 使用 `vela_reranker` 和 `relevance_scores.v1`。Adapter 名表示推理架构，与发布名称独立。完整契约见[进程内推理](/docs/installation/runtime/in-process)。
+其他分类器使用相同的 deployment 与 consumer binding 结构。PII 返回 `token_spans.v1`；Embedding 使用 `mmbert` adapter 和 `embedding.v1`；Reranker 使用 `vela_reranker` 和 `relevance_scores.v1`。Adapter 名表示推理架构，与发布名称独立。完整契约见[进程内推理](/docs/v0.4/installation/runtime/in-process)。
 
 Hazard 使用独立分类契约 `label_scores.v1`，并通过 SHA-256 固定 `operating_point.json`。该策略绑定权重、tokenizer、执行设置、重叠窗口和十二个阈值。Decision 选择标签，不覆盖这些阈值；参考配置包含完整示例。
 
@@ -152,7 +152,7 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 
 使用 entrypoint 声明的公共模型名。请求前检查 `/ready`，并查看响应中的信号值与求值轨迹。
 
-重排发生在路由后的 vectorstore RAG 插件中。按[神经重排](/docs/tutorials/plugin/rag#neural-reranking)绑定 `rag.reranker` 并启用 `rerank`，通过已入库文档和真实聊天请求验证。请求 trace 记录候选数、reranker 身份、相关性分数和重排时延；routing Preview 不执行 RAG 插件。
+重排发生在路由后的 vectorstore RAG 插件中。按[神经重排](/docs/v0.4/tutorials/plugin/rag#neural-reranking)绑定 `rag.reranker` 并启用 `rerank`，通过已入库文档和真实聊天请求验证。请求 trace 记录候选数、reranker 身份、相关性分数和重排时延；routing Preview 不执行 RAG 插件。
 
 ## 保留旧部署 {#preserve-an-earlier-deployment}
 

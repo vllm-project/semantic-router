@@ -432,6 +432,37 @@ func TestApply_SameValueAcrossBlocksSharesPlaceholder(t *testing.T) {
 	}
 }
 
+// Case: JSON members are masked in key order, so the same tool call
+// arguments and tool result always get the same placeholders.
+func TestApply_JSONMembersGetDeterministicPlaceholders(t *testing.T) {
+	names := map[string]bool{"Alice": true, "Bob": true, "Carol": true, "Dave": true}
+	scan := func(text string) ([]Span, error) {
+		if !names[text] {
+			return nil, nil
+		}
+		return []Span{{EntityType: "PERSON", Start: 0, End: len(text), Confidence: 1.0}}, nil
+	}
+	const document = `{"from":"Alice","to":"Bob","cc":"Carol","bcc":"Dave"}`
+	const want = `{"bcc":"[PERSON_0]","cc":"[PERSON_1]","from":"[PERSON_2]","to":"[PERSON_3]"}`
+	for run := 0; run < 50; run++ {
+		call := &llmprotocol.ToolCall{ID: "call_1", Name: "send_email", Arguments: document}
+		result := &llmprotocol.ToolResult{CallID: "call_1", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: document}}}
+		request := &llmprotocol.Request{
+			Messages: []llmprotocol.Message{
+				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: call}}},
+				{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: result}}},
+			},
+		}
+
+		if _, err := Apply(request, NewAllocator(defaultCfg()), scan); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if call.Arguments != want || result.Content[0].Text != want {
+			t.Fatalf("run %d: arguments %s, tool result %s, want %s", run, call.Arguments, result.Content[0].Text, want)
+		}
+	}
+}
+
 // Case: Result hygiene — the Result never carries a raw value or placeholder.
 func TestApply_ResultHygiene(t *testing.T) {
 	request := &llmprotocol.Request{
@@ -597,6 +628,79 @@ func TestApply_PlainTextToolResultStillMasked(t *testing.T) {
 	got := request.Messages[0].Content[0].ToolResult.Content[0].Text
 	if want := "lookup found [EMAIL_ADDRESS_0]"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Auto mode's classifier context reaches an Anthropic backend, so a value in
+// it is masked like one in a structured tool result.
+func TestApply_SafeguardsStringLeavesMasked(t *testing.T) {
+	request := &llmprotocol.Request{Safeguards: json.RawMessage(`[{"type":"auto_mode","classifier_context":{"live_cwd":"/home/alice@example.com/repo","v":1}}]`)}
+	result, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := string(request.Safeguards)
+	if !result.Changed || strings.Contains(got, "alice@example.com") || !strings.Contains(got, "/home/[EMAIL_ADDRESS_0]/repo") {
+		t.Fatalf("safeguards = %s, want the address masked", got)
+	}
+}
+
+// A tool result that only begins with a bracket is text, not malformed JSON:
+// it is masked like any other text rather than refusing the request, and with
+// it every later turn of the session that carries it.
+func TestApply_BracketPrefixedTextToolResultMasked(t *testing.T) {
+	for _, text := range []string{
+		"[INFO] mailed alice@example.com",
+		"[2026-11-14 10:00:00] mailed alice@example.com",
+		"[1/3] mailed alice@example.com",
+		"[vsr:employee_id] mailed alice@example.com",
+		"[nullable] alice@example.com",
+		"{not json alice@example.com",
+	} {
+		t.Run(text, func(t *testing.T) {
+			request := toolResultRequest(text)
+			if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+				t.Fatalf("text tool result was refused: %v", err)
+			}
+			got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+			if want := strings.Replace(text, "alice@example.com", "[EMAIL_ADDRESS_0]", 1); got != want {
+				t.Fatalf("got %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestIsJSONShapedPayload(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want bool
+	}{
+		{`{"a":1}`, true},
+		{" {}", true},
+		{"[]", true},
+		{`["a"]`, true},
+		{`[{"a":1}]`, true},
+		{"[[1]]", true},
+		{"[1, 2]", true},
+		{"[-1.5e3]", true},
+		{"[true]", true},
+		{"[null ,1]", true},
+		{"[", true},
+		{"{", true},
+		{`{"a": alice`, true},
+		{"[INFO] ok", false},
+		{"[2026-11-14 10:00:00] ok", false},
+		{"[1/3] ok", false},
+		{"[vsr:employee_id]", false},
+		{"[EMAIL_ADDRESS_0]", false},
+		{"{not json", false},
+		{"[nullable] x", false},
+		{"plain", false},
+		{"42", false},
+	} {
+		if got := isJSONShapedPayload(tc.text); got != tc.want {
+			t.Errorf("isJSONShapedPayload(%q) = %v, want %v", tc.text, got, tc.want)
+		}
 	}
 }
 
@@ -781,5 +885,52 @@ func TestApply_ToolResultSiblingMembersStayStructured(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// Case: an agent's later request. The tool result still holds the real name,
+// and the agent's own tool call echoes the placeholder it got for that name
+// one turn earlier. A detector that also reads the placeholder's inner text
+// as a name must not turn the echo into a nested placeholder, or the agent
+// sees its own earlier output change and its edits stop matching the file.
+func TestApply_EchoedPlaceholderInLaterTurnUnchanged(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+					CallID:  "call_1",
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "customer: Minji Kim"}},
+				}},
+			}},
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+					ID: "call_2", Name: "Write", Arguments: `{"content":"Hi [PERSON_0],"}`,
+				}},
+			}},
+		},
+	}
+	scan := func(text string) ([]Span, error) {
+		var spans []Span
+		for _, value := range []string{"Minji Kim", "PERSON_0"} {
+			if idx := strings.Index(text, value); idx >= 0 {
+				spans = append(spans, Span{EntityType: "PERSON", Start: idx, End: idx + len(value), Confidence: 1.0})
+			}
+		}
+		return spans, nil
+	}
+
+	result, err := Apply(request, NewAllocator(defaultCfg()), scan)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// only the real name counts as masked, not the echo left as it was
+	if result.MaskedCount != 1 {
+		t.Fatalf("MaskedCount: got %d, want 1", result.MaskedCount)
+	}
+	if got, want := request.Messages[0].Content[0].ToolResult.Content[0].Text, "customer: [PERSON_0]"; got != want {
+		t.Fatalf("tool result: got %q, want %q", got, want)
+	}
+	if got, want := request.Messages[1].Content[0].ToolCall.Arguments, `{"content":"Hi [PERSON_0],"}`; got != want {
+		t.Fatalf("tool call arguments: got %q, want %q", got, want)
 	}
 }

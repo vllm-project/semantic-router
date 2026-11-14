@@ -27,13 +27,7 @@ func ConfigHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 			http.Error(w, "Failed to read config", http.StatusInternalServerError)
 			return
 		}
-		if !callerCanWriteConfig(r, readonlyMode) {
-			for i := range configData.Listeners {
-				configData.Listeners[i].APIKeys = nil
-			}
-		}
-
-		if err := writeYAMLTaggedJSON(w, configData); err != nil {
+		if err := writeConfigViewJSON(w, r, configData); err != nil {
 			log.Printf("Error encoding config to JSON: %v", err)
 		}
 	}
@@ -58,10 +52,10 @@ func ConfigYAMLHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 			http.Error(w, "Failed to read config", http.StatusInternalServerError)
 			return
 		}
-		if !callerCanWriteConfig(r, readonlyMode) {
-			data, err = withoutListenerAPIKeys(data)
+		if !callerCanViewConfigSecrets(r) {
+			data, err = redactConfigYAML(data)
 			if err != nil {
-				log.Printf("Failed to redact listener API keys: %v", err)
+				log.Printf("Failed to redact configuration credentials: %v", err)
 				http.Error(w, "Failed to read config", http.StatusInternalServerError)
 				return
 			}
@@ -126,11 +120,17 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
+		yamlData, err = restoreConfigSecrets(existingData, yamlData)
+		if err != nil {
+			http.Error(w, "Invalid redacted configuration credentials", http.StatusBadRequest)
+			return
+		}
 		parsedConfig, err := routerconfig.ParseYAMLBytes(yamlData)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
+		warnings := savedConfigWarnings(parsedConfig)
 
 		// Explicitly validate vLLM endpoints (Parse doesn't validate endpoints by default)
 		if len(parsedConfig.VLLMEndpoints) > 0 {
@@ -165,7 +165,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 		if configActivationDeferred() {
-			writeDeferredConfigResponse(w)
+			writeDeferredConfigResponse(w, warnings)
 			return
 		}
 
@@ -177,12 +177,10 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 		})
 
 		if restartMessage != "" {
-			writeRestartRequiredResponse(w, "", restartMessage)
+			writeRestartRequiredResponse(w, "", restartMessage, warnings)
 			return
 		}
-		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
-			log.Printf("Error encoding response: %v", err)
-		}
+		writeConfigSavedResponse(w, warnings)
 	}
 }
 
@@ -201,13 +199,15 @@ func RouterDefaultsHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		if err := writeYAMLTaggedJSON(w, defaults); err != nil {
+		if err := writeConfigViewJSON(w, r, defaults); err != nil {
 			log.Printf("Error encoding global defaults to JSON: %v", err)
 		}
 	}
 }
 
-// UpdateRouterDefaultsHandler updates the canonical global override block in config.yaml.
+// UpdateRouterDefaultsHandler updates the canonical global override block in
+// config.yaml. The body is a JSON merge patch of that block: a null value
+// removes its key.
 func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost && r.Method != http.MethodPut {
@@ -253,10 +253,17 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
-		if _, err := routerconfig.ParseYAMLBytes(yamlData); err != nil {
+		yamlData, err = restoreConfigSecrets(existingData, yamlData)
+		if err != nil {
+			http.Error(w, "Invalid redacted configuration credentials", http.StatusBadRequest)
+			return
+		}
+		parsedConfig, err := routerconfig.ParseYAMLBytes(yamlData)
+		if err != nil {
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
+		warnings := savedConfigWarnings(parsedConfig)
 
 		if auth.RejectRevokedMutation(w, r) {
 			return
@@ -278,16 +285,14 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 		if configActivationDeferred() {
-			writeDeferredConfigResponse(w)
+			writeDeferredConfigResponse(w, warnings)
 			return
 		}
 
 		if restartMessage != "" {
-			writeRestartRequiredResponse(w, "", restartMessage)
+			writeRestartRequiredResponse(w, "", restartMessage, warnings)
 			return
 		}
-		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
-			log.Printf("Error encoding response: %v", err)
-		}
+		writeConfigSavedResponse(w, warnings)
 	}
 }

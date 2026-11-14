@@ -144,12 +144,12 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 	frame []byte,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var wire anthropicEventWire
-	_, vendorExtensions, err := decodeProviderWireVendorAware(data, &wire, decoder.policy)
+	_, unknownFields, err := decodeProviderWireTolerant(data, &wire, decoder.policy)
 	if err != nil {
 		return nil, nil, err
 	}
-	var vendorDiagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&vendorDiagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1, vendorExtensions)
+	var unknownFieldDiagnostics llmprotocol.Diagnostics
+	decoder.appendStreamUnknownFields(&unknownFieldDiagnostics, llmprotocol.AnthropicMessagesV1, unknownFields)
 	if wire.Type == "" {
 		wire.Type = eventType
 	}
@@ -165,7 +165,7 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 		}
 	}
 	events, diagnostics, err := decoder.decodeEvent(wire, frame)
-	diagnostics = appendDiagnostics(vendorDiagnostics, diagnostics, decoder.policy.Limits.Diagnostics)
+	diagnostics = appendDiagnostics(unknownFieldDiagnostics, diagnostics, decoder.policy.Limits.Diagnostics)
 	if err != nil {
 		return events, diagnostics, err
 	}
@@ -756,15 +756,19 @@ func (encoder *anthropicStreamEncoder) completeAnthropicItem(
 			return nil, nil, err
 		}
 		frames = append(frames, started...)
-		delta := anthropicEventWire{
-			Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
-			Delta: &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments},
+		// A call cut right after its name has no arguments, and Messages has
+		// no empty input_json_delta, so the block stops after it starts.
+		if event.ToolCall.Arguments != "" {
+			delta := anthropicEventWire{
+				Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
+				Delta: &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments},
+			}
+			deltaFrames, _, err := encodeAnthropicWireFrame(delta)
+			if err != nil {
+				return nil, nil, err
+			}
+			frames = append(frames, deltaFrames...)
 		}
-		deltaFrames, _, err := encodeAnthropicWireFrame(delta)
-		if err != nil {
-			return nil, nil, err
-		}
-		frames = append(frames, deltaFrames...)
 		keys = append(keys, key)
 	}
 	if len(keys) == 0 {
@@ -813,7 +817,11 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 	if event.Usage == nil {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "terminal usage is invalid", nil)
 	}
-	stop := encodeAnthropicStop(event.StopReason)
+	toolUse := false
+	for _, kind := range encoder.blocks {
+		toolUse = toolUse || kind == llmprotocol.ContentToolCall
+	}
+	stop := encodeAnthropicStop(event.StopReason, toolUse)
 	deltaWire := &anthropicDeltaWire{Type: "message_delta", StopReason: &stop}
 	if event.StopReason == llmprotocol.StopSequence {
 		deltaWire.StopSequence = &event.MatchedStopSequence

@@ -6,9 +6,9 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -26,43 +26,43 @@ func (e *maskingDispatchError) Error() string { return "PII masking failed: " + 
 
 func (e *maskingDispatchError) Unwrap() error { return e.cause }
 
-// piiDetector is the one classifier method masking needs.
-type piiDetector interface {
-	ClassifyPIIWithDetailsAndThreshold(ctx context.Context, text string, threshold float32) ([]classification.PIIDetection, error)
+// ruleSpans is the one signal method masking needs: what a pii rule, or a
+// rule that finds text, finds in a text.
+type ruleSpans interface {
+	RuleSpans(ctx context.Context, signalType, rule, text string) ([]modelservice.Span, error)
 }
 
-// maskingDetectorFor resolves the request's PII detector and the model's own
-// threshold. It is a variable so tests can supply spans without a model.
-var maskingDetectorFor = func(r *OpenAIRouter, ctx *RequestContext) (piiDetector, float32, bool) {
+// maskingSpansFor resolves the signal layer of the request's recipe. It is a
+// variable so tests can supply spans without a model.
+var maskingSpansFor = func(r *OpenAIRouter, ctx *RequestContext) (ruleSpans, bool) {
 	classifier := r.classifierForRequest(ctx)
-	if classifier == nil || !classifier.IsPIIEnabled() {
-		return nil, 0, false
-	}
-	return classifier, classifier.Config.PIIModel.Threshold, true
+	return classifier, classifier != nil
 }
 
-// applyMaskingBeforeDispatch masks the neutral request in place when the
-// selected decision enables the masking plugin.
+// applyMaskingBeforeDispatch masks the neutral request in place when its
+// recipe's plugins enable masking: every text position of the request as it
+// is sent, after every other rewrite, including content added after routing
+// such as retrieved documents and memory.
 func (r *OpenAIRouter) applyMaskingBeforeDispatch(ctx *RequestContext) error {
-	if ctx == nil || ctx.SemanticRequest == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil || ctx.SemanticRequest == nil {
 		return nil
 	}
-	cfg := ctx.VSRSelectedDecision.GetMaskingConfig()
+	cfg := requestMasking(ctx)
 	if cfg == nil || !cfg.Enabled {
 		return nil
 	}
-	detector, modelThreshold, ok := maskingDetectorFor(r, ctx)
+	finder, ok := maskingSpansFor(r, ctx)
 	if !ok {
 		// Fail closed: a masking-enabled route must never dispatch content it
 		// could not scan (D4).
-		return &maskingDispatchError{cause: errors.New("PII classifier is unavailable")}
+		return &maskingDispatchError{cause: errors.New("the recipe's signals are unavailable")}
 	}
 	if ctx.Masking == nil {
 		// Once per request, never per dispatch: a later dispatch continues the
 		// index sequence instead of reusing _0 for a different value (D5).
 		ctx.Masking = masking.NewAllocator(cfg)
 	}
-	scan := spanScannerFor(ctx.embeddingContext(), detector, maskingScanThreshold(cfg, modelThreshold))
+	scan := spanScannerFor(ctx.embeddingContext(), finder, cfg)
 	result, err := masking.Apply(ctx.SemanticRequest, ctx.Masking, scan)
 	if err != nil {
 		return &maskingDispatchError{cause: err}
@@ -97,33 +97,36 @@ func recordMaskingObservability(ctx *RequestContext, result masking.Result) {
 	ctx.TraceContext = spanCtx
 }
 
-// maskingScanThreshold uses the plugin threshold, falling back to the PII
-// model's own when the plugin leaves it at zero.
-func maskingScanThreshold(cfg *config.MaskingPluginConfig, modelThreshold float32) float32 {
-	if cfg.Threshold > 0 {
-		return cfg.Threshold
+// spanScannerFor adapts the pii rule and the rules masking names to
+// masking.ScanFunc: their spans together, a pii span under its label and a
+// rule's under the rule's name. The spans are code points into text;
+// masking.Span offsets are bytes (D2).
+func spanScannerFor(requestCtx context.Context, finder ruleSpans, cfg *config.MaskingPluginConfig) masking.ScanFunc {
+	refs := cfg.Rules
+	if cfg.Signal != "" {
+		refs = append([]config.SignalRef{{Type: config.SignalTypePII, Name: cfg.Signal}}, refs...)
 	}
-	return modelThreshold
-}
-
-// spanScannerFor adapts the classifier to masking.ScanFunc. Detection offsets
-// are bytes, which is what masking.Span expects (D2).
-func spanScannerFor(requestCtx context.Context, detector piiDetector, threshold float32) masking.ScanFunc {
 	return func(text string) ([]masking.Span, error) {
-		detections, err := detector.ClassifyPIIWithDetailsAndThreshold(requestCtx, text, threshold)
-		if err != nil {
-			// Includes ErrTokenSpansTruncated, whose spans cover only the prefix
-			// the model saw; the unscanned rest must not be dispatched (D4).
-			return nil, err
+		var detections []modelservice.Span
+		for _, ref := range refs {
+			found, err := finder.RuleSpans(requestCtx, ref.Type, ref.Name, text)
+			if err != nil {
+				// Includes a scan that read only part of the text, whose
+				// spans cover only that part; the unscanned rest must not be
+				// dispatched (D4).
+				return nil, err
+			}
+			detections = append(detections, found...)
 		}
+		offsets := modelservice.ByteOffsets(text)
 		spans := make([]masking.Span, len(detections))
 		for i, detection := range detections {
 			spans[i] = masking.Span{
-				EntityType: detection.EntityType,
-				Start:      detection.Start,
-				End:        detection.End,
+				EntityType: detection.Label,
+				Start:      offsets(detection.Start),
+				End:        offsets(detection.End),
 				Text:       detection.Text,
-				Confidence: detection.Confidence,
+				Confidence: float32(detection.Probability),
 			}
 		}
 		return spans, nil

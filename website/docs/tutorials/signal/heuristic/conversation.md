@@ -4,7 +4,7 @@
 
 `conversation` routes on chat structure and protocol facts, such as message
 count, developer instructions, available tools, explicit tool-use constraints,
-or an active tool loop. Define these rules under `routing.signals.conversation`.
+or an active tool loop. Define these rules under `recipes[].signals.conversation`.
 
 This family is heuristic: it inspects the request's `messages[]` and `tools[]` arrays without any model inference.
 
@@ -31,35 +31,34 @@ Use `conversation` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    conversation:
-      - name: multi_turn_user
-        description: At least two user messages.
-        feature:
-          type: count
-          source:
-            type: message
-            role: user
-        predicate:
-          gte: 2
-
-      - name: has_developer_message
-        description: Request includes a developer message.
-        feature:
-          type: exists
-          source:
-            type: message
-            role: developer
-
-      - name: tool_heavy
-        description: Three or more tool definitions.
-        feature:
-          type: count
-          source:
-            type: tool_definition
-        predicate:
-          gte: 3
+recipes:
+  - name: default
+    signals:
+      conversation:
+        - name: multi_turn_user
+          description: At least two user messages.
+          feature:
+            type: count
+            source:
+              type: message
+              role: user
+          predicate:
+            gte: 2
+        - name: has_developer_message
+          description: Request includes a developer message.
+          feature:
+            type: exists
+            source:
+              type: message
+              role: developer
+        - name: tool_heavy
+          description: Three or more tool definitions.
+          feature:
+            type: count
+            source:
+              type: tool_definition
+          predicate:
+            gte: 3
 ```
 
 ## Feature Types
@@ -79,27 +78,30 @@ routing:
 | `tool_choice_none` | — | Returns 1 when the request protocol explicitly forbids tool calls. |
 | `assistant_tool_call` | — | Counts `tool_calls` across all assistant messages. |
 | `assistant_tool_cycle` | — | Counts `tool` role messages (completed tool results). |
-| `active_tool_loop` | — | Returns 1 when the request tail is actively continuing a tool loop: the last assistant message requests a tool, the last message is a tool result, or the latest user turn directly follows a tool result. Older unmatched or completed calls do not keep later turns in the tool loop. |
+| `active_tool_loop` | — | Returns 1 when the request tail is actively continuing a tool loop: the last assistant message requests a tool, the last message is a tool result, or the latest user turn directly follows a tool result. A system message inside the conversation, which Claude Code inserts after a tool result or the user's message, is passed over. Older unmatched or completed calls do not keep later turns in the tool loop. |
 | `flow_tool_state` | — | Returns 1 only when the request ends with a Router Flow tool result carrying resumable workflow state. Historical Flow tool results do not match. |
-| `image_content` | — | Counts image content parts independently of whether the image can be decoded by a local embedding model. |
+
+To route on images in the request, use an [`input_modality`](./input-modality)
+rule with `modality: image`.
 
 ## Decision Usage
 
 ```yaml
-routing:
-  decisions:
-    - name: agentic_routing
-      description: Send tool-heavy chats to an agent-capable model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: conversation
-            name: tool_heavy
-          - type: conversation
-            name: multi_turn_user
-      modelRefs:
-        - model: gpt-4o
+recipes:
+  - name: default
+    decisions:
+      - name: agentic_routing
+        description: Send tool-heavy chats to an agent-capable model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: conversation
+              name: tool_heavy
+            - type: conversation
+              name: multi_turn_user
+        modelRefs:
+          - model: gpt-4o
 ```
 
 ## Dependencies and Limitations

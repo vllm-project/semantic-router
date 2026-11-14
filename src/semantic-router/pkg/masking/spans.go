@@ -2,9 +2,12 @@ package masking
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -31,6 +34,9 @@ type Allocator struct {
 	cfg       *config.MaskingPluginConfig
 	assigned  map[string]string // entityType + "\x00" + value -> placeholder
 	nextIndex map[string]int
+	existing  *regexp.Regexp // text already shaped like one of this config's placeholders
+	// own is, by rule name, text shaped like that rule's own placeholder.
+	own map[string]*regexp.Regexp
 }
 
 // NewAllocator constructs an Allocator bound to one decision's masking
@@ -38,11 +44,93 @@ type Allocator struct {
 // (D5) so the value-to-placeholder map and the per-type counters accumulate
 // across every MaskText call for that request.
 func NewAllocator(cfg *config.MaskingPluginConfig) *Allocator {
+	own := make(map[string]*regexp.Regexp)
+	if cfg != nil {
+		for _, rule := range cfg.RuleNames() {
+			own[rule] = regexp.MustCompile(templatePattern(cfg.EffectivePlaceholder(rule)))
+		}
+	}
 	return &Allocator{
 		cfg:       cfg,
 		assigned:  make(map[string]string),
 		nextIndex: make(map[string]int),
+		existing:  placeholderPattern(cfg),
+		own:       own,
 	}
+}
+
+// templatePattern matches what a placeholder template produces, any index.
+func templatePattern(template string) string {
+	return strings.ReplaceAll(regexp.QuoteMeta(template), regexp.QuoteMeta(config.MaskingPlaceholderIndexToken), `\d+`)
+}
+
+// placeholderPattern matches the placeholders cfg can produce: the default
+// [TYPE_n] shape and every configured template with {index} as digits. A
+// template with no letter besides {index}, such as "{index}" or "#{index}",
+// is left out: its pattern would also match digits inside a real phone
+// number or address. It also matches the [vsr:<tag>] marks the vSR plugins
+// leave where they hid a value from a tool's output, a tag of their own or the
+// name of a listener rule, which reach the Router when a plugin and the
+// gateway run together.
+func placeholderPattern(cfg *config.MaskingPluginConfig) *regexp.Regexp {
+	alternatives := []string{`\[[A-Z][A-Z0-9_]*_\d+\]`, `\[vsr:[A-Za-z0-9_.-]+\]`}
+	if cfg != nil {
+		entityTypes := make([]string, 0, len(cfg.Placeholders))
+		for entityType := range cfg.Placeholders {
+			entityTypes = append(entityTypes, entityType)
+		}
+		sort.Strings(entityTypes)
+		for _, entityType := range entityTypes {
+			template := cfg.Placeholders[entityType]
+			if strings.IndexFunc(strings.ReplaceAll(template, config.MaskingPlaceholderIndexToken, ""), unicode.IsLetter) >= 0 {
+				alternatives = append(alternatives, templatePattern(template))
+			}
+		}
+	}
+	return regexp.MustCompile(strings.Join(alternatives, "|"))
+}
+
+// maskable is the set of spans MaskText splices into placeholders: the
+// configured entity types, without spans inside a placeholder, merged.
+func (a *Allocator) maskable(text string, spans []Span) []Span {
+	return MergeSpans(a.dropPlaceholderSpans(text, a.filter(spans)))
+}
+
+// dropPlaceholderSpans drops spans that lie inside a placeholder already in
+// the text. Agents echo placeholders back in later turns (a reply that starts
+// "Hi [NAME_2],"), and a detector reading NAME_2 as a name would otherwise
+// mask it again into [[NAME_5]], so the model sees its own earlier output
+// change under it. A span that reaches past a placeholder, such as an email
+// address whose local part is one, is still masked. A rule's span is dropped
+// only inside the rule's own placeholder: any text shaped like a placeholder
+// would otherwise let a client wrap a value a rule finds, [X_104233], and
+// send it unmasked.
+func (a *Allocator) dropPlaceholderSpans(text string, spans []Span) []Span {
+	found := map[*regexp.Regexp][][]int{}
+	inside := func(pattern *regexp.Regexp, span Span) bool {
+		places, seen := found[pattern]
+		if !seen {
+			places = pattern.FindAllStringIndex(text, -1)
+			found[pattern] = places
+		}
+		for _, loc := range places {
+			if loc[0] <= span.Start && span.End <= loc[1] {
+				return true
+			}
+		}
+		return false
+	}
+	kept := make([]Span, 0, len(spans))
+	for _, span := range spans {
+		pattern := a.existing
+		if own, ok := a.own[span.EntityType]; ok {
+			pattern = own
+		}
+		if !inside(pattern, span) {
+			kept = append(kept, span)
+		}
+	}
+	return kept
 }
 
 // Placeholder returns the placeholder for one (entityType, value) pair,
@@ -65,25 +153,23 @@ func (a *Allocator) Placeholder(entityType, value string) string {
 }
 
 // filter drops spans whose entity type is excluded by cfg.EntityTypes (an
-// include list; empty means every type is masked) or whose confidence is
-// below cfg.Threshold (requirement 8).
+// include list of pii labels; empty means every type is masked). A span of
+// one of cfg.Rules is always kept. The pii rule the plugin names already
+// dropped the spans below its threshold.
 func (a *Allocator) filter(spans []Span) []Span {
 	if len(spans) == 0 {
 		return spans
 	}
 	var allowed map[string]bool
 	if len(a.cfg.EntityTypes) > 0 {
-		allowed = make(map[string]bool, len(a.cfg.EntityTypes))
-		for _, entityType := range a.cfg.EntityTypes {
+		allowed = make(map[string]bool, len(a.cfg.EntityTypes)+len(a.cfg.Rules))
+		for _, entityType := range append(slices.Clone(a.cfg.EntityTypes), a.cfg.RuleNames()...) {
 			allowed[entityType] = true
 		}
 	}
 	filtered := make([]Span, 0, len(spans))
 	for _, span := range spans {
 		if allowed != nil && !allowed[span.EntityType] {
-			continue
-		}
-		if span.Confidence < a.cfg.Threshold {
 			continue
 		}
 		filtered = append(filtered, span)
@@ -159,7 +245,7 @@ func MaskText(text string, spans []Span, citations []llmprotocol.Citation, a *Al
 			return "", nil, fmt.Errorf("masking: span [%d,%d) outside text of %d bytes", span.Start, span.End, len(text))
 		}
 	}
-	merged := MergeSpans(a.filter(spans))
+	merged := a.maskable(text, spans)
 	if len(merged) == 0 {
 		return text, citations, nil
 	}

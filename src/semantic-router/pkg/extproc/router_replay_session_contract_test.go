@@ -100,7 +100,9 @@ func TestReplaySessionProtectionActualAndObservedRouting(t *testing.T) {
 }
 
 func TestReplayTrajectorySeparatesRecipeSessionsAndKeepsEachHop(t *testing.T) {
-	r := &OpenAIRouter{ReplayStoreShared: true, ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0))}
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
+	r := &OpenAIRouter{ReplayStoreShared: true, ReplayRecorder: recorder}
 	now := time.Now()
 	for index, recipe := range []string{"", "first", "other", "first"} {
 		record := routerreplay.RoutingRecord{

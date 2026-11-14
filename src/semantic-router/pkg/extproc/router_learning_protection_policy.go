@@ -28,6 +28,7 @@ type routerLearningProtectionDiagnostics struct {
 	switchMargin    float64
 	stabilityWeight float64
 	rescue          bool
+	release         *protectionReleaseVerdict
 }
 
 type routerLearningIdentityDiagnostics struct {
@@ -61,16 +62,19 @@ func newProtectionPolicy(
 	policy.Action = action
 	policy.Reason = reason
 	policy.Scope = scope
+	sessionID, sessionHeader := protectionSessionID(ctx, cfg)
+	conversationID, conversationDerived := protectionConversationID(ctx, cfg, sessionID)
 	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
 		nil,
 		newRouterLearningIdentityDiagnostics(routerLearningIdentity{
-			scope:              scope,
-			sessionHeader:      cfg.HeaderName("session"),
-			conversationHeader: cfg.HeaderName("conversation"),
-			agentHeader:        cfg.HeaderName("agent"),
-			sessionID:          strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session"))),
-			conversationID:     strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))),
-			agentID:            strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("agent"))),
+			scope:               scope,
+			sessionHeader:       sessionHeader,
+			conversationHeader:  cfg.HeaderName("conversation"),
+			agentHeader:         cfg.HeaderName("agent"),
+			sessionID:           sessionID,
+			conversationID:      conversationID,
+			conversationDerived: conversationDerived,
+			agentID:             strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("agent"))),
 		}),
 	)
 	return policy
@@ -276,6 +280,9 @@ func (d *routerLearningProtectionDiagnostics) toPolicyMap() map[string]interface
 	if d.rescue {
 		setLearningPolicyValue(out, learningPolicyFieldRescue, map[string]interface{}{"active": true})
 	}
+	if d.release != nil {
+		setLearningPolicyValue(out, learningPolicyFieldRelease, d.release.toPolicyMap())
+	}
 	if len(out) == 0 {
 		return nil
 	}
@@ -292,6 +299,9 @@ func newRouterLearningIdentityDiagnostics(identity routerLearningIdentity) route
 		session:       newRouterLearningIdentityPart(identity.sessionHeader, identity.sessionID, true),
 		conversation:  newRouterLearningIdentityPart(identity.conversationHeader, identity.conversationID, conversationRequired),
 		memoryKeyHash: shortLearningIdentityHash(identity.memoryKey),
+	}
+	if identity.conversationDerived {
+		diagnostics.conversation.source = string(SessionProvenanceMessageHash)
 	}
 	if identity.agentHeader != "" {
 		diagnostics.agent = newRouterLearningIdentityPart(identity.agentHeader, identity.agentID, false)

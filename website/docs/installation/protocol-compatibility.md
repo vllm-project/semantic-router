@@ -6,7 +6,7 @@ description: Match client-facing inference APIs to supported backend model proto
 # Protocol Compatibility Matrix
 
 Semantic Router supports three inference wire formats on both sides of the
-data plane. A client request is decoded into a protocol-neutral form, routing
+data plane, and the Images API for image generation. A client request is decoded into a protocol-neutral form, routing
 policy selects a model, and that model's `api_format` selects the backend codec.
 The response is translated back to the client's original format.
 
@@ -32,6 +32,7 @@ start with [Connect an agent harness](agent-harness).
 | OpenAI Chat Completions | `POST /v1/chat/completions` | Supported | Supported | Available on the public inference listener. |
 | OpenAI Responses | `POST /v1/responses` | Supported | Supported | Requires `global.services.response_api` and its store to be available. Router-owned object operations are not forwarded to a model backend. |
 | Anthropic Messages | `POST /v1/messages` | Supported | Supported | Send the Anthropic request shape and an appropriate `anthropic-version` header. Client authentication remains deployment-specific. |
+| OpenAI Images | `POST /v1/images/generations` | Supported | Not supported | Answered only by a decision whose `output` is an image. See [Images API](../api/router#images-api). |
 
 The public listener also serves `GET /v1/models` and Anthropic's
 `POST /v1/messages/count_tokens`, which coding agents use to size a file before
@@ -39,14 +40,18 @@ reading it. See the
 [Router API](../api/router) for the complete method and path inventory,
 Responses object operations, and request examples.
 
-System One is a separate typed API, available in either startup mode when
-`listeners[].systemone.models` publishes a concrete model. It uses
-`POST /v1/systemone` (alias `/v1/decisions`) and
-`GET /v1/systemone/models`. Router mode can also publish an explicit native
-recipe through an `api: systemone` entrypoint and matching listener grant.
-These typed requests do not use the Chat protocol-translation matrix or the
-Chat model allowlist. See the
-[System One quickstart](../model-runtime/quickstart.md).
+System One is a separate typed API:
+
+- **Endpoints:** `POST /v1/systemone` (alias `/v1/decisions`) and
+  `GET /v1/systemone/models`.
+- **Availability.** It's available in either startup mode when
+  `listeners[].apis.systemone.models` publishes a concrete model. Router mode can
+  also publish an explicit native recipe through an `api: systemone`
+  entrypoint and a matching listener grant.
+- **Not translated.** These typed requests don't use the Chat
+  protocol-translation matrix or the Chat model allowlist.
+
+See the [System One quickstart](../model-runtime/get-started/quickstart.md).
 
 ## Backend model protocols
 
@@ -58,6 +63,7 @@ contract implemented by that model endpoint, not the provider brand.
 | `openai` | OpenAI Chat Completions | `/v1/chat/completions` | Default when `api_format` is omitted. `backend_refs[].chat_path` can override the Chat path. |
 | `responses` | OpenAI Responses | `/v1/responses` | The backend itself must implement the Responses wire contract; enabling the Router's Responses service does not add that API to a backend. |
 | `anthropic` | Anthropic Messages | `/v1/messages` | Configure provider authentication and required version headers on the backend ref. vLLM serves this API from 0.11.1, so a vLLM backend keeps `provider: vllm`, which sends the bearer token vLLM checks for `--api-key`. |
+| `images` | OpenAI Images | `/v1/images/generations` | Generates images only, for a decision whose [output](../tutorials/decision/output) is an image; it never streams. |
 
 These fields are easy to confuse:
 
@@ -66,19 +72,36 @@ These fields are easy to confuse:
 - backend-ref `provider` supplies provider-specific authentication and path
   defaults. It does not prove that the endpoint implements an API format.
 
-For every backend format, `base_url` names the complete upstream API root. Its
-path is retained and the protocol operation suffix is appended exactly once;
-the protocol's default `/v1` base path is used only when the URL has no path.
-`chat_path` applies only to Chat Completions.
+For every backend format, a full URL in `endpoint` names the complete upstream
+API root. Its path is retained and the protocol operation suffix is appended
+exactly once; the protocol's default `/v1` base path is used only when the URL
+has no path. `chat_path` applies only to Chat Completions.
 
-### Gateways that add response fields
+With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
+verifies both the server certificate chain and its DNS hostname:
 
-The Router decodes backend replies strictly. A reply that carries a field its
-`api_format` does not define fails as an invalid response, so a client sees a
-502 for a buffered reply or an error event for a stream. Some relay gateways
-add their own fields to every reply, such as usage metering or a cost inside
-`usage`. Set `compat_gateway: true` on the backend ref that points at such a
-gateway:
+- **One hostname per pool.** The supported Envoy runtime shares its TLS
+  context within a cluster, so an HTTPS replica pool must keep one hostname
+  and one `tls` block. Use separate model aliases for different HTTPS hosts.
+- **No IP literals.** IP-literal HTTPS targets are rejected, instead of
+  silently weakening hostname verification.
+- **A CA bundle.** A backend's `tls.ca_file`, else
+  `providers.defaults.tls.ca_file`, names the bundle its certificate must
+  chain to; see [Trust a private CA](backend-target-compatibility#trust-a-private-ca).
+  Without either, a custom Envoy image used with `vllm-sr serve` must provide
+  the system CA bundle at `/etc/ssl/certs/ca-certificates.crt`. Startup
+  validation fails when that trust store is missing, rather than silently
+  disabling verification.
+
+### Response fields the Router does not model
+
+Providers and gateways add fields of their own to replies: a gateway's cost or
+trace ID, provider metadata, or a field a provider ships before the Router
+models it. Any backend can send them, and no setting is needed. These two
+backends, one serving the Anthropic Messages format through a gateway and one
+serving Chat Completions through a relay, need nothing beyond their addresses,
+even when every reply carries a field such as `"total_cost": 3e-05` inside
+`usage`:
 
 ```yaml
 providers:
@@ -88,35 +111,63 @@ providers:
       api_format: anthropic
       backend_refs:
         - name: gateway
-          provider: anthropic
-          base_url: https://gateway.example.com/anthropic
+          provider: anthropic-compatible
+          endpoint: https://gateway.example.com/anthropic
+    - name: gpt-via-relay
+      provider_model_id: example-gpt
+      api_format: openai
+      backend_refs:
+        - name: relay
+          provider: openai-compatible
+          endpoint: https://relay.example.com/v1
+```
+
+- A reply, a stream event, or an error body that carries a field its
+  `api_format` does not define still succeeds. A client that uses the
+  backend's format receives the reply unchanged, field included. A client of
+  another format receives the translated reply without the field.
+- Each such field is reported as a `dropped` diagnostic. It is counted in
+  `llm_translation_lossy_total` and logged at debug level, and buffered
+  replies list it in `x-vsr-warnings`.
+- Fields the Router models are still validated: their types and values, the
+  usage totals, the rule that a streamed usage counter never decreases, and
+  the rule that no counter is negative. A field the Router does not model
+  never counts toward usage, and the response cache stores the reply without
+  it.
+- When a Chat Completions reply names its usage counters `input_tokens` and
+  `output_tokens`, as some relays in front of Anthropic models do, the Router
+  reads them as `prompt_tokens` and `completion_tokens`.
+- Error bodies in a provider's own shape are decoded by the backend's
+  `provider`: `cloudflare-workers-ai`, `openrouter`, and `snowflake-cortex`.
+- A Chat reply that carries `fusion`, `flow`, or `reasoning_mom_responses` is
+  refused. These names belong to the Router's own Looper output, so a client
+  must not receive a backend's value under them.
+
+This applies to the first attempt and to native fallback, and to buffered,
+streamed, and gzip-compressed replies.
+
+The backend-ref setting `compat_gateway`, also spelled
+`openai_compat_gateway`, no longer exists. A configuration that still sets
+it:
+
+```yaml
+providers:
+  models:
+    - name: claude-via-gateway
+      provider_model_id: example-claude
+      api_format: anthropic
+      backend_refs:
+        - name: gateway
+          provider: anthropic-compatible
+          endpoint: https://gateway.example.com/anthropic
           compat_gateway: true
 ```
 
-The Router then drops each field the backend's wire format does not define and
-reports it as a dropped-field diagnostic. Usage, accounting, the response
-cache and Router Replay keep the canonical counters. The opt-in applies to the
-first attempt and to native fallback, for buffered and streamed replies. When
-the model's `api_format` is `openai`, a gateway's Anthropic-style
-`input_tokens` and `output_tokens` usage names are also read as
-`prompt_tokens` and `completion_tokens`. Leave the field unset for backends
-that serve the canonical contract.
+fails to load with this message. Delete the field:
 
-Startup rejects `compat_gateway` where it would have no effect: on
-`azure-openai`, `cloudflare-workers-ai` and `snowflake-cortex` backends, which
-keep their own response contracts, and on `systemone` models. Weighted backend
-refs of one model must agree on it. `openai_compat_gateway` is the deprecated
-spelling and still works.
-
-With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
-verifies both the server
-certificate chain and its DNS hostname. An HTTPS replica pool must keep one
-hostname because the supported Envoy runtime shares its TLS context within a
-cluster; use separate model aliases for different HTTPS hosts. IP-literal HTTPS
-targets are rejected instead of silently weakening hostname verification. A
-custom Envoy image used with `vllm-sr serve` must provide the system CA bundle at
-`/etc/ssl/certs/ca-certificates.crt`; startup validation fails rather than
-silently disabling verification when that trust store is unavailable.
+```text
+providers.models[claude-via-gateway].backend_refs[0]: compat_gateway was removed; gateway response fields are accepted by default, so delete it
+```
 
 ## Client-to-backend matrix
 
@@ -148,7 +199,7 @@ instead of being silently dropped.
 | Text verbosity (`low`, `medium`, `high`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
-| Reasoning content and effort | Supported, except signed thinking blocks | Supported, except signed thinking blocks | Supported |
+| Reasoning content and effort | Supported, signed thinking blocks only with an opt-in | Supported, signed thinking blocks only with an opt-in | Supported |
 | Reasoning summary requests (`reasoning.summary`) | Not forwarded; reported as `dropped` | Supported; reported as `dropped` if the provider uses `chat_template_kwargs` for reasoning controls | Not forwarded; reported as `dropped` |
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
@@ -160,69 +211,204 @@ instead of being silently dropped.
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
 | `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
 | `min_p`, repetition penalty, and cache salt | Supported extensions | Not supported | Not supported |
+| Token logit bias (`logit_bias`) | Supported | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
+| Deferred tool loading (`tools[].defer_loading`) | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full |
 
 This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
 
-When translating Chat history to an Anthropic Messages backend, empty text
-blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
-behaves like `content: null`. Empty tool results keep their call IDs and use
-`content: []`; an empty system prompt is omitted. Non-empty text, including
-whitespace, is preserved. A conversation message containing only empty text
-is rejected, as is an empty text block carrying a cache directive, because
-removing either would discard a conversation turn or cache boundary.
+### Images and empty text
 
-For an Anthropic Messages client using a Chat Completions or Responses backend,
-`thinking.type: adaptive` uses the backend model's default reasoning behavior;
-`output_config.effort` is retained. `thinking.display: omitted` removes reasoning
-from the translated response, including streaming output. `summarized` and
-`updates` (which Claude Code sends) reach only Messages backends and are rejected
-for these backends. Explicit `thinking.type: disabled` requires a configured
-reasoning family and an effective backend reasoning-off control. Unsupported
-controls fail with a typed
-request error. A `context_management` edit of `clear_thinking_20251015` with
-`keep: all` has no effect and is omitted for these backends; edits that would
-change history are rejected. Anthropic `cache_control` boundaries are omitted
-when the selected backend uses Responses, which cannot represent them. The
-prompt and tool result still dispatch, and `x-vsr-protocol-warnings` reports a
-`dropped` diagnostic for `cache_control`. A `system` message inside `messages`,
-such as the environment section and the file change notices Claude Code
-inserts during a session, reaches these backends as a system message in the
-same place. Many open-model chat templates accept a system message only first:
-Qwen3.5 and later reject the request, and gpt-oss drops the text. For backends
-served with such a template, add `messages[].role` to
-`global.router.allow_lossy_translation`, described under
-[Validation and failure behavior](#validation-and-failure-behavior). The text
-then joins the user turn right before it, or becomes a user turn of its own
-after a tool result, and `x-vsr-protocol-warnings` reports an `approximated`
-diagnostic for `messages[].role`. Messages backends receive the message in
-place either way.
+Responses requires a detail level on every input image. An image that arrives
+without one, as every Messages image and tool-result image does, reaches a
+Responses backend with `detail: auto`, the Responses default.
 
-Reasoning content translated out of an Anthropic backend fails when the backend
-attaches a reasoning signature, which its thinking responses carry by default.
-A Chat Completions or Responses client then receives a typed
-`unsupported_capability` failure on buffered requests; on streaming requests the
-failure arrives mid-stream, after the response headers and any earlier deltas,
-because the signature reaches the encoder only with the reasoning delta.
-Same-format traffic, including Messages clients reading an Anthropic backend, is
-unaffected.
+Messages has no image detail level and no document file name. Toward an
+`anthropic` backend, an image `detail` other than `auto` and a file `filename`
+are omitted, and `x-vsr-warnings` reports each as `dropped`.
 
-A Responses client can still use `previous_response_id` with a Chat
-Completions or Messages backend. The Router retrieves and materializes the
-retained history, removes Router-owned object controls, and then encodes the
-stateless request in the selected backend format.
+When Chat history is translated to an Anthropic Messages backend, empty text
+blocks are omitted:
 
-Responses custom tools use `type: custom` with a flattened `format` object.
-Their `custom_tool_call` and `custom_tool_call_output` items retain free-form
-input, tool results, and call IDs through Chat or Responses backends, including
-buffered and streaming responses. A Messages backend rejects them with
-`unsupported_capability`. Responses `text.verbosity` maps to the Chat
-`verbosity` field. Messages has no equivalent, so the Router drops this output
-detail hint and reports `text.verbosity` in `x-vsr-protocol-warnings`.
+| Chat input | Sent to Messages as |
+| --- | --- |
+| An assistant's `content: ""` beside `tool_calls` | `content: null` |
+| An empty tool result | Its call ID, with `content: []` |
+| An empty system prompt | Nothing; it's omitted |
+| Non-empty text, including whitespace | The same text |
+| A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
+
+### Anthropic Messages clients on other backends
+
+For an Anthropic Messages client using a Chat Completions or Responses
+backend:
+
+| Messages control | What happens |
+| --- | --- |
+| `thinking.type: adaptive` | The backend model's default reasoning behavior applies; `output_config.effort` is kept. |
+| `thinking.display: omitted` | Reasoning is removed from the translated response, including streaming output. |
+| `thinking.display: summarized` or `updates` (Claude Code sends these) | Rejected: they reach only Messages backends. |
+| `thinking.type: disabled` | Needs a configured reasoning family and an effective backend reasoning-off control. |
+| A `context_management` edit `clear_thinking_20251015` with `keep: all` | Omitted, since it has no effect. Edits that would change history are rejected. |
+| `cache_control` boundaries, toward a Responses backend | Omitted, since Responses can't represent them. The prompt and tool result still dispatch, and `x-vsr-warnings` reports a `dropped` diagnostic for `cache_control`. |
+
+Other unsupported controls fail with a typed request error.
+
+A `system` message inside `messages`, such as the environment section and the
+file-change notices Claude Code inserts during a session, reaches these
+backends as a system message in the same place. Many open-model chat
+templates accept a system message only first: Qwen3.5 and later reject the
+request, and gpt-oss drops the text.
+
+For backends served with such a template, add `messages[].role` to
+`global.router.allow_lossy_translation` (see
+[Validation and failure behavior](#validation-and-failure-behavior)):
+
+- The text joins the user turn right before it, or becomes a user turn of its
+  own after a tool result.
+- `x-vsr-warnings` reports an `approximated` diagnostic for
+  `messages[].role`.
+- Messages backends receive the message in place either way.
+
+### Files a model can't read
+
+A model whose declared capabilities leave out `file_input` can't receive a
+file, so a request that holds one fails with `unsupported_capability`. That
+matters for coding agents: an agent that reads a PDF returns it as a document
+in a tool result, and every later call of the session resends it.
+
+Listing `content.file` in `global.router.allow_lossy_translation` changes
+that:
+
+- **Each file becomes a note.** Such a model receives a short note saying the
+  file wasn't sent, so the agent can read it another way.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for
+  `content.file`.
+- **Capable models are unaffected.** A model that declares `file_input`, or
+  declares no capabilities, still receives the file.
+
+### Deferred tool loading
+
+`tools[].defer_loading` asks the provider's tool search to load a tool on
+demand. The Messages format carries it, but the Router's protocol-neutral
+request has no field for it, so the Router rejects it at ingress with
+`unsupported_tools_defer_loading` whatever the backend format, Messages
+included. Claude Code sets it on its first call, retries without it, and then
+sends every tool definition on every call.
+
+Listing `tools.defer_loading` in `global.router.allow_lossy_translation` keeps
+tool search on:
+
+- **Tools in full.** The Router sends each deferred tool in full.
+- **References by name.** A `tool_reference` block in a tool result reaches the
+  backend as the tool's name.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for
+  `tools.defer_loading`.
+
+A `tool_addition` block, which Claude Code puts in a `role: "system"` message
+when a deferred tool becomes available mid-conversation, adds the tool it
+defines to the request's tools, after the declared ones and once per name, on
+every backend format. The system message keeps its other blocks, and a message
+that held nothing else is left out.
+
+### Auto mode's classifier context
+
+Claude Code in auto mode sends a top-level `safeguards` array for Anthropic's
+server-side classifier review. The Router carries it unchanged to a Messages
+backend. A Chat or Responses backend has no use for it, so the Router leaves it
+out and `x-vsr-warnings` reports a `dropped` diagnostic for `safeguards`. The
+array holds Claude Code's working directory, permission rules and git state, so
+on a decision with the `masking` plugin its string values are masked like a
+structured tool result's, and an array that will not decode refuses the request.
+
+### Sampling controls a backend rejects
+
+Some backends reject a sampling control their wire format defines. A vLLM
+backend that runs speculative decoding, for example, answers any request that
+carries `min_p` or `logit_bias` with HTTP 400. List such controls in the
+model's `unsupported_capabilities`:
+
+```yaml
+providers:
+  models:
+    - name: qwen3-mtp
+      api_format: chat_completions
+      unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
+      backend_refs:
+        - name: mtp-pool
+          endpoint: mtp-server:8000
+          provider: vllm
+```
+
+- **Left out for that model.** A request sent to the model, as the decision's
+  choice or as a fallback candidate, reaches it without the listed fields.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for each field
+  left out, `min_p` or `logit_bias`.
+- **Other models are unaffected.** Another model of the same decision still
+  receives the fields.
+
+The list accepts `sampling_min_p` and `sampling_logit_bias`; any other name
+fails at load. The gateway spreads a model's requests across its
+`backend_refs`, so list a control when any of them rejects it. To remove a
+control for every model a decision routes to, list it in the decision's
+[`request_params`](../tutorials/plugin/request-params) `blocked_params`
+instead.
+
+### Signed reasoning from Anthropic backends
+
+Reasoning content translated out of an Anthropic backend fails when the
+backend attaches a reasoning signature, which its thinking responses carry by
+default. Same-format traffic, including Messages clients reading an Anthropic
+backend, is unaffected. A Chat Completions or Responses client receives a
+typed `unsupported_capability` failure:
+
+- **Buffered requests** get the failure as the response.
+- **Streaming requests** get it mid-stream, after the response headers and any
+  earlier deltas, because the signature reaches the encoder only with the
+  reasoning delta.
+
+Listing `reasoning.signature` in `global.router.allow_lossy_translation` lets
+these responses through: the Router drops the signature, keeps the reasoning
+text and reports the loss as `approximated`. The signature can't come back on
+later turns, so use this only with backends that don't need it, such as vLLM.
+
+### Stored completions
+
+A Chat Completions client asks the provider to keep the completion with
+`store: true`. A Messages backend keeps no completions:
+
+- **`store: false`** asks for nothing such a backend doesn't already do, so
+  the request reaches it without the member.
+- **`store: true`** fails with `unsupported_capability` (`request_storage`),
+  because the backend can't keep the completion.
+
+Listing `store` in `global.router.allow_lossy_translation` sends such a
+request without `store` and reports a `dropped` diagnostic for `store` in
+`x-vsr-warnings`. Chat Completions and Responses backends still receive
+`store` as the client sent it.
+
+### Responses state, custom tools and verbosity
+
+- **Stored state.** A Responses client can still use `previous_response_id`
+  with a Chat Completions or Messages backend. The Router retrieves and
+  materializes the retained history, removes Router-owned object controls,
+  then encodes the stateless request in the selected backend format. The
+  developer and system items of the stored input come back as instructions in
+  turn order: after the current request's top-level `instructions` and before
+  the developer and system items of its own input. The earlier request's
+  top-level `instructions` are not carried over.
+- **Custom tools.** Responses custom tools use `type: custom` with a flattened
+  `format` object. Their `custom_tool_call` and `custom_tool_call_output`
+  items keep free-form input, tool results and call IDs through Chat or
+  Responses backends, buffered and streaming. A Messages backend rejects them
+  with `unsupported_capability`.
+- **Verbosity.** Responses `text.verbosity` maps to the Chat `verbosity`
+  field. Messages has no equivalent, so the Router drops this hint and reports
+  `text.verbosity` in `x-vsr-warnings`.
 
 ## Configure a backend format
 
@@ -237,34 +423,58 @@ providers:
       api_format: anthropic
       backend_refs:
         - name: anthropic-primary
-          base_url: https://api.anthropic.com
+          endpoint: https://api.anthropic.com
           provider: anthropic
-          api_key_env: ANTHROPIC_API_KEY
-          extra_headers:
+          auth: {api_key_env: ANTHROPIC_API_KEY}
+          headers:
             anthropic-version: "2023-06-01"
           weight: 100
 ```
 
-`api_format` chooses only the backend codec. It does not imply Anthropic,
-OpenAI, or any other runtime Provider. Router-owned listeners require a
-physical model to declare `backend_refs[].provider`; metadata-only
-`listeners: []` configurations leave transport and credentials to the external
-gateway. The local `vllm-sr serve` workflow owns backend transport through its
-standalone frontend or generated Envoy configuration, so it does not accept a
-backendless physical model; use the external-gateway deployment profile for
-that topology.
+`api_format` chooses only the backend codec; it doesn't imply Anthropic,
+OpenAI or any other runtime provider. Who supplies transport and credentials
+depends on the deployment:
 
-Test the backend directly with its native path and a minimal request first.
-Then send the same semantic request through the Router using the client API that
-your agent harness or other API client needs. A successful health check does not validate request
-schema, streaming, tools, or error translation.
+| Deployment | Transport and credentials |
+| --- | --- |
+| Router-owned listeners | Each physical model must declare `backend_refs[].provider`. |
+| Metadata-only, `listeners: []` | Left to the external gateway. |
+| Local `vllm-sr serve` | Owned by its standalone frontend or generated Envoy configuration, so a backendless physical model isn't accepted. Use the external-gateway deployment profile for that topology. |
+
+To check a new backend:
+
+1. Test the backend directly, with its native path and a minimal request.
+2. Send the same request through the Router, using the client API your agent
+   harness or other client needs.
+
+A successful health check doesn't validate the request schema, streaming,
+tools or error translation.
 
 ## Validation and failure behavior
 
 - Public requests are decoded into the neutral contract even when client and
-  backend formats match. Unknown or unsupported request fields fail closed.
+  backend formats match. Unknown or unsupported request fields fail closed,
+  and the error names an unknown field, such as
+  `request JSON contains a non-canonical field: unknown field "new_field"`.
+- Chat requests accept and don't forward the fields that client libraries add
+  to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
+  which holds the reply fields its message type lacks, and `parsed` and
+  `tool_calls[].function.parsed_arguments`, the openai SDK's own parse
+  results. One that carries a value is reported as `dropped`. Like the other
+  Responses input items, a reasoning item may carry `status`, which the openai
+  SDK's stream helper sets.
+- Backend replies are decoded into the same contract. A reply field that its
+  `api_format` does not define is dropped and reported instead of failing the
+  reply; see
+  [Response fields the Router does not model](#response-fields-the-router-does-not-model).
 - Cross-protocol requests preserve shared semantics. Target-specific features
-  that cannot be represented return a typed protocol error.
+  that cannot be represented return a typed protocol error. A
+  `lossy_translation` error for a loss an operator may accept, such as
+  `tool_result.is_error`, names the `global.router.allow_lossy_translation`
+  setting that accepts it, and so does the `unsupported_tools_defer_loading`
+  error. The `unsupported_capability` errors for files,
+  signed reasoning and stored completions don't; their sections above name
+  the setting.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
   Responses requests. By default the Router rejects this translation with
   `lossy_translation`, while a false or absent flag remains supported and
@@ -281,9 +491,13 @@ schema, streaming, tools, or error translation.
 
   The Router then omits the flag, leaves the tool-result content unchanged,
   and reports the loss as `approximated` with field `tool_result.is_error` in
-  `x-vsr-protocol-warnings` and in `llm_translation_lossy_total`. The list
-  also accepts `messages[].role` for system messages inside the conversation,
-  described above, and every other lossy translation still fails closed.
+  `x-vsr-warnings` and in `llm_translation_lossy_total`. The list
+  also accepts `messages[].role` for system messages inside the conversation
+  and `content.file` for files a model cannot read and `tools.defer_loading`
+  for deferred tool loading, all described above,
+  `reasoning.signature` (see the signed thinking note above), `store` (see
+  stored completions above), and every other lossy translation still fails
+  closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
@@ -297,17 +511,72 @@ schema, streaming, tools, or error translation.
   `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
-- When an OpenAI-compatible Chat provider reports an error inside a successful
-  stream with an integer HTTP status as its `code`, as vLLM does, streamed
-  clients receive the provider's message. Responses and Anthropic Messages
-  clients get the Router's error frame, with the status as a string `code` for
-  Responses and the mapped error type for Messages. Chat clients get the stream
-  as the Router passes it up to the error event, then the Router's error frame
-  with a string `code` and no `[DONE]`, however the stream is split into body
-  chunks, as long as each frame is within the Router's SSE frame limit.
-- `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
-  `x-vsr-protocol-warnings` expose translation details when applicable. See
-  [VSR routing headers](../troubleshooting/vsr-headers).
+- vLLM's serving metadata never fails a reply, whatever its value:
+  `prompt_logprobs`, `prompt_text`, `prompt_routed_experts`,
+  `kv_transfer_params`, `ec_transfer_params` and `metrics` at the top level of
+  a reply or stream chunk, and `routed_experts` and `weight_versions` in its
+  choices. Chat clients receive them unchanged; a value other than null or
+  empty is reported as `dropped`. In a vLLM-Omni stream, a chunk whose
+  `modality` is not `text` fails with `unsupported_upstream_audio` (or
+  `unsupported_upstream_modality`), because its `delta.content` carries
+  encoded media, not answer text.
+- A Chat provider ends a forced named tool call with `finish_reason: "stop"`.
+  Anthropic Messages clients receive `stop_reason: "tool_use"` for a turn that
+  ends that way and carries `tool_use` blocks. A turn that ends at the output
+  limit, on a stop sequence, or on a refusal keeps that reason.
+- When the output limit cuts a buffered reply inside a tool call, the client
+  gets the reply with the limit stop: `finish_reason: "length"` for Chat, an
+  incomplete response with reason `max_output_tokens` for Responses, and
+  `stop_reason: "max_tokens"` for Anthropic Messages. Chat and Responses
+  clients get the call's arguments as the backend sent them. Because
+  `tool_use.input` must be an object, Messages clients get the members the
+  model completed before the cut, and the Router reports an `approximated`
+  diagnostic for `content.tool_use.input`. Only the reply's last call can be
+  cut. Arguments that don't start a JSON object, or a cut call that more
+  output follows, still fail the reply.
+- A Chat stream chunk can carry several `tool_calls` entries with the same
+  `index`, as vLLM's last chunk does when its tool parser flushes the rest of
+  a call. They continue one call in order, as OpenAI's SDKs join them.
+  Entries with the same index that name different calls fail with
+  `duplicate_stream_tool_index`.
+- An Anthropic `model_context_window_exceeded` stop reaches Chat clients as
+  `finish_reason: "length"` and Responses clients as an incomplete response
+  with reason `max_output_tokens`, as vLLM reports output that reaches
+  `max_model_len`. The Router reports an `approximated` diagnostic for
+  `response.stop_reason`. A `pause_turn` stop still fails for these clients.
+- When an OpenAI-compatible Chat provider reports an error inside a
+  successful stream, with an integer HTTP status as its `code` as vLLM does,
+  streamed clients receive the provider's message:
+  - **Responses and Anthropic Messages clients** get the Router's error frame,
+    with the status as a string `code` for Responses and the mapped error type
+    for Messages.
+  - **Chat clients** get the stream as the Router passes it, up to the error
+    event, then the Router's error frame with a string `code` and no
+    `[DONE]`. That holds however the stream is split into body chunks, as long
+    as each frame is within the Router's SSE frame limit.
+- A Chat or Responses request that omits its output limit:
+  - reaches `openai` and `responses` backends without one, so the backend's
+    remaining context bounds the output;
+  - reaches an `anthropic` backend with `max_tokens: 4096`, because Messages
+    requires a limit, and reports `max_tokens` as `generated`. Thinking counts
+    toward that limit, and a positive integer in the decision's
+    `request_params.default_max_tokens` replaces the 4096.
+- When the output limit ends a streamed tool call inside its arguments, or
+  right after its name with none, the Router passes the partial call on with
+  the limit stop, as the providers do: `max_tokens` for Messages, `length` for
+  Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
+  not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
+  response is not cached, stored, or kept as the replay response body.
+- A Responses reasoning item can carry different non-empty `encrypted_content`
+  strings in `response.output_item.done` and the corresponding output item in
+  `response.completed` or `response.incomplete`. The Router accepts this
+  difference while checking every other item field, output count, and output
+  order. A non-empty string becoming missing, null, or empty still fails with
+  `stream_terminal_output_mismatch`. The field remains reported as `dropped`
+  during protocol translation.
+- `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
+  `x-vsr-trace` expose translation details when applicable. See
+  [VSR routing headers](../api/headers).
   Diagnostics discovered after streaming headers have been sent are recorded
   in translation-warning metrics and structured debug logs; they cannot be
   added to the already-sent response header.
@@ -330,33 +599,122 @@ The Router handles them as follows:
 | `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
 | `input[].internal_chat_message_metadata_passthrough` | Accepted and not forwarded. Codex CLI 0.163 attaches it to every input message to record which instructions the message carries; it is client metadata, not model input. |
 | `text.verbosity` | Forwarded to `responses` backends, mapped to `verbosity` for `openai` Chat backends, and reported as `dropped` for `anthropic` Messages backends. The only accepted values are `low`, `medium`, and `high`. |
+| Omitted `max_output_tokens` | Codex CLI sends no output limit, so a route to an `anthropic` backend gets `max_tokens: 4096` as described above. A reasoning model can spend all of it before it answers, which Codex CLI reports as `Incomplete response returned, reason: max_output_tokens`. Set a positive integer `request_params.default_max_tokens` on the decisions that send Codex CLI to an `anthropic` backend. |
 
 Each accepted but unforwarded field appears as a `dropped` entry in
-`x-vsr-protocol-warnings`.
+`x-vsr-warnings`.
 
-In Responses output, `usage.input_tokens_details.cache_write_tokens` is omitted
-when the backend does not report a cache-write count. Reported zero and positive
-counts are preserved. This avoids emitting `null`, which Codex CLI 0.163.0
-rejects, without treating unknown usage as a measured zero.
+In Responses output, `usage.input_tokens_details.cached_tokens` is always an
+integer, as the Responses schema requires: a backend that reports no cache-read
+count, such as vLLM's Chat server without `--enable-prompt-tokens-details`,
+gives `0`, which is also what vLLM's own Responses server sends.
+`cache_write_tokens` is omitted when the backend does not report a cache-write
+count. Reported zero and positive counts are preserved. Codex CLI fails a turn
+on a `null` count (0.163.0 for `cache_write_tokens`, 0.166.0 for
+`cached_tokens`) and on a details object without `cached_tokens`.
 
 Codex sends each step of its history as separate items: reasoning, the
-assistant message and every call. Toward Chat and Messages backends the Router
-joins adjacent items in that order into one assistant turn, as those formats
-represent a step. Sent one message per item, a backend such as vLLM renders
-each item as its own turn, and the model, seeing turns that end in text with
-no call, can end its own turn the same way, which ends the Codex run.
+assistant message and every call. Toward Chat and Messages backends, the
+Router joins adjacent items in that order into one assistant turn, as those
+formats represent a step.
 
-Codex can also request reasoning summaries. The Router forwards
-`reasoning.summary` to a Responses backend. A Chat Completions or Messages
-backend cannot request a summary, so the Router accepts the turn and reports
-the dropped setting in `x-vsr-protocol-warnings`. Multi-agent namespace tools
-and hosted web search remain unsupported; disable those in the Codex
-`config.toml` that points at the Router. These settings were checked with
-Codex CLI 0.156.1:
+Sent one message per item, a backend such as vLLM would render each item as its
+own turn. The model, seeing turns that end in text with no call, could then end
+its own turn the same way, which ends the Codex run.
+
+- **Reasoning summaries.** The Router forwards `reasoning.summary` to a
+  Responses backend. A Chat Completions or Messages backend can't request a
+  summary, so the Router accepts the turn and reports the dropped setting in
+  `x-vsr-warnings`.
+- **Unsupported:** hosted web search. Disable it in the Codex `config.toml`
+  that points at the Router:
 
 ```toml
 web_search = "disabled"
-
-[features]
-multi_agent = false
 ```
+
+Point Codex at the Router through a model provider of your own, not
+`openai_base_url`:
+
+- **Why.** The built-in `openai` provider opens a Responses WebSocket first,
+  which the Router doesn't serve. Codex CLI 0.163.0 retries it for about six
+  seconds at the start of every run before it sends the first turn over HTTP,
+  and tries again before later turns. A provider defined in `config.toml` uses
+  HTTP from the start, since `supports_websockets` defaults to `false`.
+- **The model.** Set `model` to a Router entrypoint as well, such as
+  `vllm-sr/auto`; a name that matches no entrypoint is sent to a backend model
+  of that name.
+- **The catalog.** On a ChatGPT login (`requires_openai_auth = true`, see
+  [Agent Harness](agent-harness#codex-on-its-own-chatgpt-login)), Codex also
+  asks for its own model catalog with `GET /v1/models?client_version=…`. The
+  Router answers that request with an empty `models` catalog beside the model
+  list, so Codex keeps its default model metadata instead of logging that it
+  cannot read the list.
+
+```toml
+model = "vllm-sr/auto"
+model_provider = "vllm-sr"
+
+[model_providers.vllm-sr]
+name = "vLLM Semantic Router"
+base_url = "http://localhost:8899/v1"
+wire_api = "responses"
+```
+
+### Namespace tools: multi-agent and MCP
+
+Codex groups tools into Responses `namespace` tools: `multi_agent_v1` holds
+`spawn_agent` and the other multi-agent tools when `multi_agent` is on, and each
+MCP server's tools arrive in a namespace named `mcp__<server>` by default. The
+Router accepts them, so `multi_agent` no longer needs to be disabled. This was
+checked with Codex CLI 0.166.0 on Chat, Responses and Messages backends.
+
+- Every backend, a Responses backend included, receives each namespaced tool as
+  one tool named `<namespace>__<name>`, for example `mcp__echo__echo` or
+  `multi_agent_v1__spawn_agent`. The namespace's description precedes the
+  tool's own.
+- A flat name keeps to 64 characters of letters, digits, `_` and `-`. A longer
+  name, or one with other characters, is shortened and made unique with a hash
+  of the namespace and name; a call in a later turn maps to the same name.
+- A request in which two different tools would get the same flat name fails
+  with `tool_namespace_collision`, whether the tools are declared or called in
+  the input history or in history retained behind `previous_response_id`. For
+  example, `mcp__a` with `b__c` and `mcp__a__b` with `c` both flatten to
+  `mcp__a__b__c`. A namespace inside a namespace, a hosted tool inside a
+  namespace, and a named `tool_choice` that selects a namespaced tool by its
+  own name are rejected.
+- The model's calls reach Codex with `namespace` and the tool's own `name`,
+  buffered and streamed. Calls in the input history, including history
+  retained behind `previous_response_id`, are sent to the backend under the
+  flat name.
+- A custom tool inside a namespace follows the custom-tool rules above, so it
+  cannot reach a Messages backend.
+- Tool filters, conversation signals and Router Replay see the flat name.
+
+A multi-agent child is a separate Codex request. Codex CLI 0.166.0 sends it with
+the parent's `session-id`, its own `thread-id`, `x-codex-parent-thread-id`
+naming the parent, and `x-openai-subagent: collab_spawn`. Its tools keep the
+MCP namespaces but not `multi_agent_v1`.
+
+`spawn_agent` can start a child on another model. Codex checks the model name
+against its own model catalog before it sends the child's request, and the
+Router answers a name its entrypoints do not publish with `model_not_found`.
+Publish the name in an entrypoint's `model_names`:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto, vllm-sr/cheap]
+    recipe: default
+```
+
+Then give Codex a catalog that lists every name it may use, with
+`model_catalog_json` in `config.toml`. Codex also decides the request shape from
+the catalog entry, so base each entry on an entry the Router accepts.
+`codex debug models --bundled` prints the bundled catalog. In Codex CLI 0.166.0,
+copy its `gpt-5.5` entry, set `slug` and `display_name` to the Router model name,
+and set `supports_search_tool` to `false`, because Codex otherwise replaces the
+namespaces with a `tool_search` tool, which the Router does not support. For a
+Messages backend, also set `apply_patch_tool_type` to `null`, because Codex
+otherwise sends `apply_patch` as a custom tool. The `gpt-6` entries send tools
+in an `additional_tools` input item with `reasoning.context`, which the Router
+rejects.

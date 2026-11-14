@@ -97,11 +97,11 @@
             "action": "dropped"
           },
           {
-            "field": "output.caller",
+            "field": "output.async",
             "action": "dropped"
           },
           {
-            "field": "output.namespace",
+            "field": "output.caller",
             "action": "dropped"
           },
           {

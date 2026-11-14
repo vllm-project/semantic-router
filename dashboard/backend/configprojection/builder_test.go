@@ -7,7 +7,7 @@ import (
 )
 
 const testCanonicalYAML = `
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -26,25 +26,24 @@ providers:
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 1
-routing:
-  modelCards:
-    - name: test-model
-  signals:
-    domains:
-      - name: business
-        description: Business and management related queries
-  decisions:
-    - name: default-business
-      description: Route business requests to the default model
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business and management related queries
+    decisions:
+      - name: default-business
+        description: Route business requests to the default model
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
 `
 
 func TestBuildSnapshotExtractsEntities(t *testing.T) {
@@ -77,9 +76,6 @@ func TestBuildSnapshotExtractsEntities(t *testing.T) {
 	if len(models.ProviderModels) != 1 || models.ProviderModels[0].Name != "test-model" {
 		t.Fatalf("unexpected provider models: %+v", models.ProviderModels)
 	}
-	if len(models.ModelCards) != 1 || models.ModelCards[0].Name != "test-model" {
-		t.Fatalf("unexpected model cards: %+v", models.ModelCards)
-	}
 
 	if !strings.Contains(string(snapshot.Signals), "business") {
 		t.Fatalf("expected business domain in signals JSON, got %s", snapshot.Signals)
@@ -94,9 +90,22 @@ func TestBuildSnapshotRejectsInvalidYAML(t *testing.T) {
 	t.Parallel()
 
 	_, err := BuildSnapshot(RefreshInput{
-		YAMLBytes: []byte("routing: ["),
+		YAMLBytes: []byte("recipes: ["),
 	})
 	if err == nil {
 		t.Fatal("expected invalid YAML to fail")
+	}
+}
+
+func TestBuildSnapshotDoesNotResolveProcessEnvironment(t *testing.T) {
+	const secret = "projection-env-secret-fixture"
+	t.Setenv("PROJECTION_TEST_SECRET", secret)
+	input := strings.Replace(testCanonicalYAML, "Business and management related queries", "${PROJECTION_TEST_SECRET}", 1)
+	snapshot, err := BuildSnapshot(RefreshInput{YAMLBytes: []byte(input)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(snapshot.Signals), secret) || !strings.Contains(string(snapshot.Signals), "${PROJECTION_TEST_SECRET}") {
+		t.Fatal("historical projection expanded a process environment reference")
 	}
 }

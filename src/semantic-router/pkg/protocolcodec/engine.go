@@ -142,6 +142,8 @@ func (engine *Engine) EncodeResponse(format llmprotocol.WireFormat, response llm
 		return ResponseResult{Response: response, Envelope: envelope}, err
 	}
 	diagnostics := projectReasoningContinuity(envelope.Format, format, pair.buffered.Capabilities(), &response)
+	diagnostics = appendDiagnostics(diagnostics,
+		projectReasoningSignature(engine.policy, envelope.Format, format, pair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(format, pair.buffered.Capabilities(), llmprotocol.RequiredResponseCapabilities(response)); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -223,6 +225,9 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 	}
 	diagnostics = appendDiagnostics(diagnostics,
 		projectReasoningContinuity(source, target, targetPair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
+	diagnostics = appendDiagnostics(diagnostics,
+		projectReasoningSignature(engine.policy, source, target, targetPair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
+	diagnostics = appendDiagnostics(diagnostics, projectToolCallNamespaces(source, target, &response), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredResponseCapabilities(response)); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -570,11 +575,9 @@ func validatePolicy(policy llmprotocol.Policy) error {
 	if policy.SourcePreservation != llmprotocol.SourceDisabled && policy.SourcePreservation != llmprotocol.SourceBoundedSameFormat {
 		return fmt.Errorf("source-preservation policy is invalid")
 	}
-	if policy.ResponseVendor != "" && policy.ResponseVendor != llmprotocol.ResponseVendorAzure &&
-		policy.ResponseVendor != llmprotocol.ResponseVendorCloudflare &&
+	if policy.ResponseVendor != "" && policy.ResponseVendor != llmprotocol.ResponseVendorCloudflare &&
 		policy.ResponseVendor != llmprotocol.ResponseVendorSnowflake &&
-		policy.ResponseVendor != llmprotocol.ResponseVendorOpenAICompatGateway &&
-		policy.ResponseVendor != llmprotocol.ResponseVendorAnthropicCompatGateway {
+		policy.ResponseVendor != llmprotocol.ResponseVendorOpenRouter {
 		return fmt.Errorf("response-vendor policy is invalid")
 	}
 	if !positiveProtocolLimits(policy.Limits) {
@@ -593,7 +596,7 @@ func positiveProtocolLimits(limits llmprotocol.Limits) bool {
 		limits.ToolDescriptionBytes, limits.IdentifierBytes, limits.SchemaBytes,
 		limits.MetadataBytes, limits.MetadataEntries, limits.MetadataKeyBytes,
 		limits.MetadataValueBytes, limits.ToolArgumentsBytes, limits.ReasoningEffortBytes,
-		limits.StopSequences, limits.StopBytes, limits.TextBytes,
+		limits.StopSequences, limits.StopBytes, limits.LogitBiasEntries, limits.TextBytes,
 		limits.MediaReferenceBytes, limits.MediaDataBytes, limits.SSEFrameBytes,
 		limits.UnfinishedArguments, limits.Events, limits.Diagnostics,
 	}

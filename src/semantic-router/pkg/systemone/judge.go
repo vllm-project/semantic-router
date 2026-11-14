@@ -11,7 +11,7 @@ import (
 // JudgeRequest builds the exact label-free Chat request used by a native judge.
 // Offline experiments use the same builder so prompt bytes, schema, candidate
 // order and generation limits cannot drift from the serving implementation.
-func JudgeRequest(request *NativeRequest, stage config.CascadeStage, candidates []Candidate) (json.RawMessage, error) {
+func JudgeRequest(request *NativeRequest, stage config.EscalateStage, candidates []Candidate) (json.RawMessage, error) {
 	if request == nil || !json.Valid(request.Body) || len(candidates) == 0 || stage.Generation == nil || stage.Generation.MaxOutputTokens <= 0 {
 		return nil, errors.New("judge requires valid candidates and an explicit output limit")
 	}
@@ -40,7 +40,7 @@ func JudgeRequest(request *NativeRequest, stage config.CascadeStage, candidates 
 	})
 }
 
-func invokeJudge(ctx context.Context, request *NativeRequest, stage config.CascadeStage, candidates []Candidate, invoke Invoke) (Candidate, error) {
+func invokeJudge(ctx context.Context, request *NativeRequest, stage config.EscalateStage, candidates []Candidate, invoke Invoke) (Candidate, error) {
 	input, err := JudgeRequest(request, stage, candidates)
 	if err != nil {
 		return Candidate{}, err
@@ -72,7 +72,7 @@ func invokeJudge(ctx context.Context, request *NativeRequest, stage config.Casca
 		if candidate.Stage == selected {
 			// Stage records the review that produced this outcome; the selected
 			// model and every native probability remain the original candidate's.
-			candidate.Stage = stage.Name
+			candidate.Stage = stage.StageName()
 			candidate.Invocation = append(json.RawMessage(nil), body...)
 			return candidate, nil
 		}

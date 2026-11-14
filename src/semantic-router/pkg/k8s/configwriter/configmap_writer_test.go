@@ -34,14 +34,14 @@ func newConfigMap(namespace, name string, data map[string]string, owners []metav
 func TestConfigMapWriterWrite(t *testing.T) {
 	target := ConfigMapTarget{Namespace: "vllm-semantic-router-system", Name: "semantic-router-config", Key: "config.yaml"}
 	existing := newConfigMap(target.Namespace, target.Name, map[string]string{
-		"config.yaml":   "version: v0.3\n",
+		"config.yaml":   "version: v0.5\n",
 		"tools_db.json": "{}",
 	}, nil)
 
 	clientset := fakeclientset.NewSimpleClientset(existing)
 	writer := NewConfigMapWriter(clientset)
 
-	if err := writer.Write(context.Background(), target, []byte("version: v0.3\nlisteners: []\n")); err != nil {
+	if err := writer.Write(context.Background(), target, []byte("version: v0.5\nlisteners: []\n")); err != nil {
 		t.Fatalf("Write() error = %v, want nil", err)
 	}
 
@@ -49,7 +49,7 @@ func TestConfigMapWriterWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get updated ConfigMap: %v", err)
 	}
-	if updated.Data["config.yaml"] != "version: v0.3\nlisteners: []\n" {
+	if updated.Data["config.yaml"] != "version: v0.5\nlisteners: []\n" {
 		t.Errorf("config.yaml = %q, want the written document", updated.Data["config.yaml"])
 	}
 	// A key this package does not own must survive the write untouched.
@@ -66,12 +66,12 @@ func TestConfigMapWriterRefusesControllerOwnedConfigMap(t *testing.T) {
 		Name:       "prod",
 		Controller: boolPtr(true),
 	}}
-	existing := newConfigMap(target.Namespace, target.Name, map[string]string{"config.yaml": "version: v0.3\n"}, owners)
+	existing := newConfigMap(target.Namespace, target.Name, map[string]string{"config.yaml": "version: v0.5\n"}, owners)
 
 	clientset := fakeclientset.NewSimpleClientset(existing)
 	writer := NewConfigMapWriter(clientset)
 
-	err := writer.Write(context.Background(), target, []byte("version: v0.3\nlisteners: []\n"))
+	err := writer.Write(context.Background(), target, []byte("version: v0.5\nlisteners: []\n"))
 	if !errors.Is(err, ErrConfigMapControllerOwned) {
 		t.Fatalf("Write() error = %v, want ErrConfigMapControllerOwned", err)
 	}
@@ -80,7 +80,7 @@ func TestConfigMapWriterRefusesControllerOwnedConfigMap(t *testing.T) {
 	if getErr != nil {
 		t.Fatalf("get ConfigMap: %v", getErr)
 	}
-	if unchanged.Data["config.yaml"] != "version: v0.3\n" {
+	if unchanged.Data["config.yaml"] != "version: v0.5\n" {
 		t.Errorf("controller-owned ConfigMap was modified: %q", unchanged.Data["config.yaml"])
 	}
 }
@@ -110,7 +110,7 @@ func TestConfigMapWriterMissingConfigMap(t *testing.T) {
 	clientset := fakeclientset.NewSimpleClientset()
 	writer := NewConfigMapWriter(clientset)
 
-	err := writer.Write(context.Background(), target, []byte("version: v0.3\n"))
+	err := writer.Write(context.Background(), target, []byte("version: v0.5\n"))
 	if err == nil {
 		t.Fatal("Write() = nil, want a not-found error")
 	}
@@ -144,7 +144,7 @@ func TestConfigMapWriterRetriesOnConflict(t *testing.T) {
 
 func TestConfigMapWriterRead(t *testing.T) {
 	target := ConfigMapTarget{Namespace: "ns", Name: "config", Key: "config.yaml"}
-	existing := newConfigMap(target.Namespace, target.Name, map[string]string{"config.yaml": "version: v0.3\n"}, nil)
+	existing := newConfigMap(target.Namespace, target.Name, map[string]string{"config.yaml": "version: v0.5\n"}, nil)
 	clientset := fakeclientset.NewSimpleClientset(existing)
 	writer := NewConfigMapWriter(clientset)
 
@@ -155,7 +155,7 @@ func TestConfigMapWriterRead(t *testing.T) {
 	if !found {
 		t.Fatal("Read() found = false, want true")
 	}
-	if string(data) != "version: v0.3\n" {
+	if string(data) != "version: v0.5\n" {
 		t.Errorf("Read() data = %q, want the stored document", data)
 	}
 }

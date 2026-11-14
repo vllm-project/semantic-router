@@ -14,7 +14,7 @@ function responseOutcomes(record: InsightsRecord, signal: string) {
   return (record.outcomes ?? []).filter(
     (outcome) =>
       outcome.source === 'router' &&
-      outcome.metadata?.direction === 'response' &&
+      outcome.metadata?.stage === 'response' &&
       outcome.metadata?.signal === signal,
   )
 }
@@ -24,6 +24,13 @@ const verdictLabels: Record<string, string> = {
   not_detected: 'Not detected',
   unavailable: 'Unavailable',
   not_applicable: 'Not applicable',
+}
+
+// How a streamed answer reached the client: held until the guard read it, or
+// as it streamed, before the guard read it.
+const streamLabels: Record<string, string> = {
+  buffered: 'Stream held for the guard',
+  unbuffered: 'Streamed before the check',
 }
 
 function outcomeEvidence(outcomes: InsightsOutcome[]) {
@@ -49,10 +56,13 @@ function outcomeEvidence(outcomes: InsightsOutcome[]) {
               ? `Score: ${finite(outcome.score) ? outcome.score.toFixed(4) : outcome.score === undefined ? '0.0000' : 'Not recorded'}${outcome.metadata.score_kind ? ` (${outcome.metadata.score_kind})` : ''}`
               : 'Score unavailable'}
           </span>
-          {outcome.metadata?.enforcement === 'not_enforced_streaming' ? (
-            <span className={styles.costSubtle}>Not enforced for streaming</span>
-          ) : outcome.metadata?.action ? (
+          {outcome.metadata?.action ? (
             <span className={styles.costSubtle}>Action: {outcome.metadata.action}</span>
+          ) : null}
+          {outcome.metadata?.stream ? (
+            <span className={styles.costSubtle}>
+              {streamLabels[outcome.metadata.stream] ?? outcome.metadata.stream}
+            </span>
           ) : null}
         </div>
       ))}
@@ -63,14 +73,11 @@ function outcomeEvidence(outcomes: InsightsOutcome[]) {
 function guardrails(record: InsightsRecord) {
   const responses = responseOutcomes(record, 'jailbreak')
   const requestObserved = record.jailbreak_detected || record.jailbreak_score_available
-  const responseObserved =
-    record.response_jailbreak_detected || record.response_jailbreak_score_available
   if (
     !record.guardrails_enabled &&
     !record.jailbreak_enabled &&
     !record.pii_enabled &&
     !requestObserved &&
-    !responseObserved &&
     !record.pii_detected &&
     !responses.length
   )
@@ -92,21 +99,6 @@ function guardrails(record: InsightsRecord) {
           <span>Response jailbreak</span>
           {outcomeEvidence(responses)}
         </div>
-      ) : responseObserved ? (
-        <span
-          className={record.response_jailbreak_detected ? styles.alertDanger : styles.costSubtle}
-        >
-          Response jailbreak:{' '}
-          {record.response_jailbreak_detected
-            ? record.response_jailbreak_type || 'detected'
-            : 'Not detected'}{' '}
-          (
-          {riskScore(
-            record.response_jailbreak_confidence,
-            record.response_jailbreak_score_available,
-          )}
-          )
-        </span>
       ) : null}
       {record.pii_detected ? (
         <span className={record.pii_blocked ? styles.alertDanger : styles.alertWarn}>
@@ -120,7 +112,6 @@ function guardrails(record: InsightsRecord) {
       !record.jailbreak_enabled &&
       !record.pii_enabled &&
       !requestObserved &&
-      !responseObserved &&
       !record.pii_detected &&
       !responses.length ? (
         <span>Enabled; no detection result recorded</span>

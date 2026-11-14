@@ -265,7 +265,7 @@ func resolveModelVerificationTarget(config *routerconfig.RouterConfig, model str
 		providerModel: config.ResolveExternalModelID(model, endpoint.Name),
 		backend:       endpoint.Name,
 		provider:      strings.TrimSpace(endpoint.Type),
-		dialect:       strings.ToLower(strings.TrimSpace(params.APIFormat)),
+		dialect:       modelVerificationDialect(params.APIFormat),
 		apiKey:        strings.TrimSpace(endpoint.APIKey),
 	}
 	if target.providerModel == "" {
@@ -307,6 +307,17 @@ func resolveModelVerificationTarget(config *routerconfig.RouterConfig, model str
 	}
 	target.secrets = modelVerificationCredentialSecrets(target)
 	return target, nil
+}
+
+// modelVerificationDialect is the wire dialect a model's api_format names: its
+// canonical API (the configuration keeps canonical names, so anthropic reads
+// as messages), with Anthropic Messages as "anthropic".
+func modelVerificationDialect(apiFormat string) string {
+	dialect := routerconfig.CanonicalAPIFormat(strings.ToLower(strings.TrimSpace(apiFormat)))
+	if dialect == routerconfig.APIFormatMessages {
+		return routerconfig.APIFormatAnthropic
+	}
+	return dialect
 }
 
 func legacyModelVerificationURL(endpoint routerconfig.VLLMEndpoint, dialect string) (string, error) {

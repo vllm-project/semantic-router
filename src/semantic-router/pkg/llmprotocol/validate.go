@@ -51,6 +51,12 @@ func ValidateRequest(request Request, limits Limits) error {
 			return NewError(ErrorInvalidRequest, "context_management_limit", "context management exceeds the configured limit", nil)
 		}
 	}
+	if len(request.Safeguards) > 0 {
+		value := bytes.TrimSpace(request.Safeguards)
+		if !json.Valid(value) || len(value) == 0 || value[0] != '[' {
+			return NewError(ErrorInvalidRequest, "invalid_safeguards", "safeguards must be a JSON array", nil)
+		}
+	}
 	return validateReasoning(request, limits)
 }
 
@@ -271,6 +277,9 @@ func validateRequestTools(tools []Tool, limits Limits) (map[string]struct{}, int
 }
 
 func validateRequestTool(tool Tool, limits Limits) error {
+	if exceeds(tool.Namespace, limits.ToolNameBytes) || exceeds(tool.LocalName, limits.ToolNameBytes) {
+		return NewError(ErrorInvalidRequest, "tool_text_limit", "tool namespace or name exceeds the configured limit", nil)
+	}
 	if tool.Kind == ToolKindCustom {
 		return validateCustomTool(tool, limits)
 	}
@@ -403,6 +412,9 @@ func validateSchemaObject(schema json.RawMessage, label string, limits Limits) e
 
 func validateSampling(sampling Sampling, limits Limits) error {
 	if err := validateSamplingScalars(sampling); err != nil {
+		return err
+	}
+	if err := validateLogitBias(sampling.LogitBias, limits); err != nil {
 		return err
 	}
 	return validateStopSequences(sampling.Stop, limits)
@@ -639,6 +651,12 @@ func contentKindIsOneOf(kind ContentKind, candidates ...ContentKind) bool {
 }
 
 func validateContent(content Content, blocks *int, limits Limits, depth int) error {
+	return validateContentBlock(content, blocks, limits, depth, false)
+}
+
+// validateContentBlock is validateContent; a truncatable tool call may be the
+// call an output limit cut short.
+func validateContentBlock(content Content, blocks *int, limits Limits, depth int, truncatable bool) error {
 	if limits.ToolResultDepth <= 0 || depth > limits.ToolResultDepth {
 		return NewError(ErrorInvalidRequest, "tool_result_depth", "nested tool result depth exceeded", nil)
 	}
@@ -657,7 +675,7 @@ func validateContent(content Content, blocks *int, limits Limits, depth int) err
 	case ContentImage, ContentAudio, ContentVideo, ContentFile:
 		return validateMediaContent(content, limits)
 	case ContentToolCall:
-		return validateToolCallContent(content, limits)
+		return validateToolCallContent(content, limits, truncatable)
 	case ContentToolResult:
 		return validateToolResultContent(content, blocks, limits, depth)
 	case ContentGeneratedImage:
@@ -774,18 +792,22 @@ func validateMediaSource(content Content) error {
 	return nil
 }
 
-func validateToolCallContent(content Content, limits Limits) error {
+// validateToolCallContent checks a tool call. A truncatable call may be the
+// function call an output limit cut short, whose arguments are the start of a
+// JSON object rather than a whole one.
+func validateToolCallContent(content Content, limits Limits, truncatable bool) error {
 	call := content.ToolCall
 	if call == nil || strings.TrimSpace(call.ID) == "" ||
 		strings.TrimSpace(call.Name) == "" || call.Kind != "" && call.Kind != ToolKindCustom {
 		return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call requires an ID, name, and JSON arguments", nil)
 	}
 	if call.Kind == "" {
-		if err := ValidateJSONObject([]byte(call.Arguments), limits.JSONDepth); err != nil {
+		err := ValidateJSONObject([]byte(call.Arguments), limits.JSONDepth)
+		if err != nil && (!truncatable || !truncatedArguments(call.Arguments, limits.JSONDepth)) {
 			return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call arguments must be one strict JSON object", err)
 		}
 	}
-	if exceeds(call.ID, limits.IdentifierBytes) || exceeds(call.Name, limits.ToolNameBytes) {
+	if exceeds(call.ID, limits.IdentifierBytes) || exceeds(call.Name, limits.ToolNameBytes) || exceeds(call.Namespace, limits.ToolNameBytes) {
 		return NewError(ErrorInvalidRequest, "tool_call_limit", "tool call ID or name exceeds the configured limit", nil)
 	}
 	if limits.ToolArgumentsBytes > 0 && len(call.Arguments) > limits.ToolArgumentsBytes {

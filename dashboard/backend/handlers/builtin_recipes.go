@@ -220,10 +220,9 @@ func BuiltinRecipeComposeHandler(runner BuiltinRecipeRunner, configPath string, 
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-store")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(config)
+		if err := writeConfigViewPayloadJSON(w, r, config); err != nil {
+			writeBuiltinRecipeError(w, http.StatusServiceUnavailable, "builtin_recipes_unavailable", "The composed recipe configuration could not be prepared.")
+		}
 	}
 }
 

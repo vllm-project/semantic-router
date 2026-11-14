@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -37,6 +38,9 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 	}
 	if hasParticipantNames(request) {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "messages[].name", "Responses has no participant names")
+	}
+	if len(request.Safeguards) > 0 {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "safeguards", "only Anthropic reviews auto mode's classifier context")
 	}
 	if len(request.ContextManagement) > 0 {
 		if err := appendLossy(&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIResponsesV1,
@@ -326,7 +330,7 @@ func (state *responsesMessageEncodingState) appendToolCall(call *llmprotocol.Too
 	}
 	item := responsesItemWire{
 		Type: "function_call", ID: state.itemID("function_call"),
-		CallID: call.ID, Name: call.Name, Arguments: call.Arguments,
+		CallID: call.ID, Name: call.Name, Namespace: call.Namespace, Arguments: call.Arguments,
 	}
 	if call.Kind == llmprotocol.ToolKindCustom {
 		item.Type, item.Input = "custom_tool_call", call.Arguments
@@ -409,6 +413,9 @@ func decodeResponsesReasoning(
 	policy llmprotocol.Policy,
 	providerOutput bool,
 ) ([]llmprotocol.Content, error) {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, nil
+	}
 	var summaries []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
@@ -456,7 +463,12 @@ func encodeResponsesContent(contents []llmprotocol.Content, direction string) (j
 			if content.Data != "" {
 				imageURL = "data:" + content.MediaType + ";base64," + content.Data
 			}
-			parts = append(parts, responsesContentWire{Type: "input_image", ImageURL: imageURL, FileID: content.FileID, Detail: content.Detail})
+			// detail is required on input_image, and auto is the documented default.
+			detail := content.Detail
+			if detail == "" {
+				detail = "auto"
+			}
+			parts = append(parts, responsesContentWire{Type: "input_image", ImageURL: imageURL, FileID: content.FileID, Detail: detail})
 		case llmprotocol.ContentFile:
 			if direction != "input" {
 				return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "file_content_position", "Responses output messages cannot contain input files", nil)

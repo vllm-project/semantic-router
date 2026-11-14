@@ -18,8 +18,7 @@ const (
 // pluginRequirements lists what each gated plugin acts on. A plugin missing
 // here is not gated and keeps running on configuration alone.
 var pluginRequirements = map[string]llmprotocol.CapabilitySet{
-	config.DecisionPluginRAG:    llmprotocol.Capabilities(llmprotocol.CapabilityText),
-	config.DecisionPluginMemory: llmprotocol.Capabilities(llmprotocol.CapabilityText),
+	config.DecisionPluginContext: llmprotocol.Capabilities(llmprotocol.CapabilityText),
 }
 
 // Applicable reports whether a plugin runs: what it needs must be within the
@@ -34,8 +33,14 @@ func Applicable(pluginType string, request, backend llmprotocol.CapabilitySet, b
 	if !request.Contains(required) {
 		return false, SkipRequestDoesNotRequire
 	}
-	if backendDeclared && !backend.Contains(required.TaskCapabilities()) {
+	if !CoversRequest(required, backend, backendDeclared) {
 		return false, SkipBackendLacksCapability
 	}
 	return true, ""
+}
+
+// CoversRequest reports whether a backend's declared capabilities cover the task
+// capabilities a request needs. Text is assumed, and an undeclared backend is not gated.
+func CoversRequest(request, backend llmprotocol.CapabilitySet, backendDeclared bool) bool {
+	return !backendDeclared || backend.Contains(request.TaskCapabilities())
 }

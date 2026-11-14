@@ -133,22 +133,36 @@ func explicitAnthropicReasoningDisabled(ctx *RequestContext, dispatch *providerD
 		dispatch.targetFormat != llmprotocol.AnthropicMessagesV1
 }
 
-func preserveExplicitAnthropicReasoning(request *llmprotocol.Request, target llmprotocol.WireFormat) bool {
+// preserveExplicitAnthropicReasoningOff keeps an Anthropic client's explicit
+// thinking-off on a Chat or Responses backend, as the Chat path does. Adaptive
+// thinking leaves the choice to the decision on every backend format.
+func preserveExplicitAnthropicReasoningOff(request *llmprotocol.Request, target llmprotocol.WireFormat) bool {
 	return request != nil && request.Trusted.SourceFormat == llmprotocol.AnthropicMessagesV1 &&
 		target != llmprotocol.AnthropicMessagesV1 &&
-		(request.ReasoningMode == llmprotocol.ReasoningModeAdaptive || request.ReasoningMode == llmprotocol.ReasoningModeDisabled)
+		request.ReasoningMode == llmprotocol.ReasoningModeDisabled
+}
+
+// requestToolNamespaces reads the tools this request dispatched, whose flat names
+// are the only ones a backend can answer with.
+func requestToolNamespaces(ctx *RequestContext) llmprotocol.ToolNamespaces {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return nil
+	}
+	return llmprotocol.RequestToolNamespaces(ctx.SemanticRequest.Tools)
 }
 
 func clientResponseMutation(ctx *RequestContext, backend llmprotocol.WireFormat) protocolcodec.ResponseMutation {
 	responseID := responseObjectPublicID(ctx)
 	omitReasoning := omitCrossFormatReasoning(ctx, backend)
-	if responseID == "" && !omitReasoning {
+	namespaces := requestToolNamespaces(ctx)
+	if responseID == "" && !omitReasoning && len(namespaces) == 0 {
 		return nil
 	}
 	return func(response *llmprotocol.Response) error {
 		if responseID != "" {
 			response.ID = responseID
 		}
+		namespaces.RestoreResponse(response)
 		if omitReasoning {
 			omitResponseReasoning(response)
 		}
@@ -159,7 +173,8 @@ func clientResponseMutation(ctx *RequestContext, backend llmprotocol.WireFormat)
 func clientStreamMutation(ctx *RequestContext, backend llmprotocol.WireFormat) protocolcodec.StreamEventMutation {
 	responseID := responseObjectPublicID(ctx)
 	omitReasoning := omitCrossFormatReasoning(ctx, backend)
-	if responseID == "" && !omitReasoning {
+	namespaces := requestToolNamespaces(ctx)
+	if responseID == "" && !omitReasoning && len(namespaces) == 0 {
 		return nil
 	}
 	hiddenItems := make(map[int]struct{})
@@ -167,6 +182,7 @@ func clientStreamMutation(ctx *RequestContext, backend llmprotocol.WireFormat) p
 		if responseID != "" {
 			event.ResponseID = responseID
 		}
+		event.ToolCall = namespaces.RestoreCall(event.ToolCall)
 		if !omitReasoning {
 			return nil
 		}

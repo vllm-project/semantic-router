@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"unicode/utf8"
 
@@ -213,7 +215,10 @@ func outcome(value any, err error) string {
 		if !errors.As(err, &protocolErr) {
 			return "unexpected error type: " + err.Error()
 		}
-		return "error " + protocolErr.Code + ": " + protocolErr.Message
+		// Which unknown field is named depends on the order each pass walks a
+		// body with several, so only the error itself is compared.
+		message, _, _ := strings.Cut(protocolErr.Message, ": unknown field ")
+		return "error " + protocolErr.Code + ": " + message
 	}
 	encoded, marshalErr := json.Marshal(value)
 	if marshalErr != nil {
@@ -383,17 +388,46 @@ func withReplaced(root any, path []any, value any) []byte {
 	return encoded
 }
 
-func TestSinglePassWireValidationMatchesTwoPass(t *testing.T) {
-	checked := 0
-	for _, seed := range differentialSeedBodies(t) {
-		checkSinglePassMatchesTwoPass(t, seed)
-		checked++
-		for _, mutant := range mutateWireBody(seed) {
-			checkSinglePassMatchesTwoPass(t, mutant)
-			checked++
+// differentialBodies is every seed and its mutants, each distinct body once.
+func differentialBodies(seeds [][]byte) [][]byte {
+	seen := make(map[string]struct{})
+	var bodies [][]byte
+	add := func(body []byte) {
+		if _, duplicate := seen[string(body)]; !duplicate {
+			seen[string(body)] = struct{}{}
+			bodies = append(bodies, body)
 		}
 	}
-	t.Logf("compared %d bodies", checked)
+	for _, seed := range seeds {
+		add(seed)
+		for _, mutant := range mutateWireBody(seed) {
+			add(mutant)
+		}
+	}
+	return bodies
+}
+
+// compareInParallel splits the bodies into one parallel subtest per CPU; each
+// comparison is independent, so the order they run in does not matter.
+func compareInParallel(t *testing.T, bodies [][]byte, check func(*testing.T, []byte)) {
+	var compared atomic.Int64
+	// Parallel subtests run after this function returns; the count is
+	// reported once they have all finished.
+	t.Cleanup(func() { t.Logf("compared %d of %d bodies", compared.Load(), len(bodies)) })
+	shards := runtime.GOMAXPROCS(0)
+	for shard := 0; shard < shards; shard++ {
+		t.Run(fmt.Sprintf("shard-%d", shard), func(t *testing.T) {
+			t.Parallel()
+			for index := shard; index < len(bodies); index += shards {
+				check(t, bodies[index])
+				compared.Add(1)
+			}
+		})
+	}
+}
+
+func TestSinglePassWireValidationMatchesTwoPass(t *testing.T) {
+	compareInParallel(t, differentialBodies(differentialSeedBodies(t)), checkSinglePassMatchesTwoPass)
 }
 
 func FuzzSinglePassWireValidationMatchesTwoPass(f *testing.F) {
@@ -429,15 +463,12 @@ func twoPassDecodeProviderJSONCanonical(body []byte, target any, policy llmproto
 		}
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
 	}
-	if policy.ResponseVendor == llmprotocol.ResponseVendorOpenAICompatGateway {
-		body = translateGatewayUsageCounters(body)
-	}
 	canonical := body
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	var dropped []string
 	if rejectUnknownFields(body, policy) {
-		if providerVendorExtensionsAllowed(policy) {
-			canonical, dropped = stripProviderVendorExtensions(body, reflect.TypeOf(target))
+		if dropUnknownUpstreamFields(policy) {
+			canonical, dropped = stripUnknownUpstreamFields(body, reflect.TypeOf(target))
 		}
 		if err := validateExactJSONFieldNames(canonical, reflect.TypeOf(target)); err != nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
@@ -466,12 +497,9 @@ var differentialProviderTargets = []wireTarget{
 }
 
 func differentialProviderPolicies() []llmprotocol.Policy {
-	policies := []llmprotocol.Policy{llmprotocol.DefaultPolicy(), shallowPolicy()}
+	policies := []llmprotocol.Policy{llmprotocol.DefaultPolicy(), shallowPolicy(), conformancePolicy()}
 	for _, vendor := range []llmprotocol.ResponseVendor{
-		llmprotocol.ResponseVendorAzure,
 		llmprotocol.ResponseVendorCloudflare,
-		llmprotocol.ResponseVendorOpenAICompatGateway,
-		llmprotocol.ResponseVendorAnthropicCompatGateway,
 		llmprotocol.ResponseVendorSnowflake,
 	} {
 		policy := llmprotocol.DefaultPolicy()
@@ -488,12 +516,12 @@ func checkSinglePassProviderMatchesTwoPass(t *testing.T, body []byte) {
 			want := target.newValue()
 			wantCanonical, wantDropped, wantErr := twoPassDecodeProviderJSONCanonical(body, want, policy, target.requireObject)
 			got := target.newValue()
-			gotCanonical, gotDropped, gotErr := decodeProviderJSONCanonical(body, got, policy, target.requireObject)
+			gotCanonical, gotDropped, gotErr := decodeProviderJSONCanonical(body, got, policy, target.requireObject, nil)
 			wantOutcome := fmt.Sprintf("%s canonical=%q dropped=%q", outcome(want, wantErr), wantCanonical, wantDropped)
 			gotOutcome := fmt.Sprintf("%s canonical=%q dropped=%q", outcome(got, gotErr), gotCanonical, gotDropped)
 			if wantOutcome != gotOutcome {
-				t.Fatalf("%s (vendor %q, depth %d) diverged for %q\ntwo-pass:    %s\nsingle-pass: %s",
-					target.name, policy.ResponseVendor, policy.Limits.JSONDepth, body, wantOutcome, gotOutcome)
+				t.Fatalf("%s (vendor %q, conformance %t, depth %d) diverged for %q\ntwo-pass:    %s\nsingle-pass: %s",
+					target.name, policy.ResponseVendor, policy.RejectUnknownUpstreamFields, policy.Limits.JSONDepth, body, wantOutcome, gotOutcome)
 			}
 		}
 	}
@@ -556,16 +584,7 @@ func differentialProviderSeedBodies(t testing.TB) [][]byte {
 }
 
 func TestSinglePassProviderValidationMatchesTwoPass(t *testing.T) {
-	checked := 0
-	for _, seed := range differentialProviderSeedBodies(t) {
-		checkSinglePassProviderMatchesTwoPass(t, seed)
-		checked++
-		for _, mutant := range mutateWireBody(seed) {
-			checkSinglePassProviderMatchesTwoPass(t, mutant)
-			checked++
-		}
-	}
-	t.Logf("compared %d bodies", checked)
+	compareInParallel(t, differentialBodies(differentialProviderSeedBodies(t)), checkSinglePassProviderMatchesTwoPass)
 }
 
 func FuzzSinglePassProviderValidationMatchesTwoPass(f *testing.F) {

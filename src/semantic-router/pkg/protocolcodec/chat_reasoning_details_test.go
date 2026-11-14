@@ -56,7 +56,6 @@ func TestChatReasoningDetailsSurviveResponseAndMutatedFollowUp(t *testing.T) {
 
 func TestChatReasoningDetailsKeepUnknownFieldsAndVariantsClosed(t *testing.T) {
 	for name, details := range map[string]string{
-		"unknown_field":   `[{"type":"reasoning.text","text":"ok","unknown":true}]`,
 		"case_alias":      `[{"Type":"reasoning.text","text":"ok"}]`,
 		"wrong_scalar":    `[{"type":"reasoning.text","text":true}]`,
 		"mixed_variant":   `[{"type":"reasoning.text","text":"ok","data":"encrypted"}]`,
@@ -83,6 +82,26 @@ func TestChatReasoningDetailsKeepUnknownFieldsAndVariantsClosed(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
+}
+
+// An unknown member inside a known variant is dropped from a reply and a
+// stream, while a request that carries it still fails closed.
+func TestChatReasoningDetailsDropUnknownMembersFromReplies(t *testing.T) {
+	details := `[{"type":"reasoning.text","text":"ok","unknown":true}]`
+	message := `{"role":"assistant","content":"answer","reasoning_details":` + details + `}`
+	reply := []byte(`{"id":"r","model":"m","choices":[{"index":0,"message":` + message + `,"finish_reason":"stop"}]}`)
+	engine := NewBuiltinEngine()
+	_, _, diagnostics, err := engine.DecodeResponse(llmprotocol.OpenAIChatV1, reply)
+	require.NoError(t, err)
+	require.True(t, hasDiagnostic(diagnostics, "choices[].message.reasoning_details[].unknown", llmprotocol.DiagnosticDropped), "%+v", diagnostics)
+	stream, err := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, llmprotocol.StreamContext{Context: t.Context()})
+	require.NoError(t, err)
+	_, _, _, err = stream.Push([]byte(`data: {"id":"r","model":"m","choices":[{"index":0,"delta":{"reasoning_details":` + details + `},"finish_reason":null}]}` + "\n\n"))
+	require.NoError(t, err)
+	_, _, _, err = engine.DecodeRequestForMutation(llmprotocol.OpenAIChatV1, []byte(`{"model":"m","messages":[`+message+`]}`))
+	require.Error(t, err)
+	_, _, _, err = conformanceEngine().DecodeResponse(llmprotocol.OpenAIChatV1, reply)
+	require.Error(t, err)
 }
 
 func TestChatReasoningDetailsEmptyArraysAndAnonymousBlocks(t *testing.T) {

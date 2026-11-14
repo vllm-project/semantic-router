@@ -28,11 +28,8 @@ async function mockDecisionModelManager(
   })
   const global = {
     model_catalog: {
-      system: (options.defaultModel
-        ? {}
-        : { decision_model: { deployment: 'primary' }, pii_classifier: 'models/custom-pii' }) as {
+      system: (options.defaultModel ? {} : { decision_model: { deployment: 'primary' } }) as {
         decision_model?: { deployment: string }
-        pii_classifier?: string
       },
       deployments: (options.defaultModel
         ? {}
@@ -48,15 +45,18 @@ async function mockDecisionModelManager(
   let observed = options.defaultModel ? 'vela3-fast' : 'Vela-2.0-4B'
   let observedDeployment = 'primary'
   const config = {
-    version: 'v0.3',
+    version: 'v0.5',
     global,
     providers: { models: [] },
-    routing: {
-      signals: options.defaultModel
-        ? {}
-        : { decision: [{ name: 'task', question: { type: 'noul' } }] },
-      decisions: [],
-    },
+    recipes: [
+      {
+        name: 'default',
+        signals: options.defaultModel
+          ? {}
+          : { systemone: [{ name: 'task', question: { type: 'noul' } }] },
+        decisions: [],
+      },
+    ],
   }
   let pending = false
   let revision = 'active-config'
@@ -141,14 +141,14 @@ async function mockDecisionModelManager(
               {
                 task_id: 'pii_spans',
                 consumer: 'pii',
-                recipe: '',
+                recipe: 'default',
                 deployment: 'pii-specialist',
                 model: 'models/custom-pii',
-                source: 'module',
+                source: 'global',
                 ready: true,
-                editable: false,
-                path: [],
-                binding: { deployment: 'pii-specialist', contract: 'token_spans.v1' },
+                editable: true,
+                path: ['recipes', '0', 'model_bindings', 'pii'],
+                binding: 'pii-specialist',
               },
             ],
       }),
@@ -612,7 +612,7 @@ test.describe('System One model management and monitoring', () => {
     const bindings = page.getByRole('region', { name: 'Task bindings' })
     await expect(bindings).toContainText('PII extraction')
     await expect(bindings).toContainText('models/custom-pii')
-    await expect(bindings).toContainText('Specialist binding')
+    await expect(bindings).toContainText('Global binding')
     await page.getByRole('link', { name: 'Decision Monitoring', exact: true }).click()
     const deployments = page.getByRole('region', { name: 'Model runtime deployments' })
     await deployments.getByText('Deployment details', { exact: true }).click()
@@ -633,10 +633,7 @@ test.describe('System One model management and monitoring', () => {
         ...fixture.config,
         global: {
           model_catalog: {
-            system: {
-              decision_model: { deployment: 'vela-2-0-9b' },
-              pii_classifier: 'models/custom-pii',
-            },
+            system: { decision_model: { deployment: 'vela-2-0-9b' } },
             deployments: {
               primary: {
                 provider: 'model_runtime',
@@ -739,10 +736,10 @@ async function mockDecisionRuntimeCatalog(
 ) {
   const fixture = await mockDecisionModelManager(page, options)
   const config = {
-    ...fixture.config,
+    version: 'v0.5',
     global: {
       model_catalog: {
-        system: { decision_model: { deployment: 'primary' }, pii_classifier: 'models/custom-pii' },
+        system: { decision_model: { deployment: 'primary' } },
         deployments: {
           primary: { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-4B', device: 'rocm:0' },
           existing: {
@@ -760,46 +757,53 @@ async function mockDecisionRuntimeCatalog(
       },
       services: { opaque_secret: 'test-preserved-secret' },
     },
-    providers: { models: [{ name: 'answer', api_key: 'test-provider-secret' }] },
-    routing: {
-      signals: {
-        decision: options.noConsumers
-          ? []
-          : [{ name: 'task', question: { type: 'noul', instructions: 'Is this coding?' } }],
-      },
-      decisions: [],
-      replay: { opaque_future_flag: true },
+    providers: {
+      models: [
+        {
+          name: 'answer',
+          backend_refs: [
+            { name: 'primary', endpoint: 'answer.example.com', api_key: 'test-provider-secret' },
+          ],
+        },
+      ],
     },
     recipes: [
       {
-        name: 'research',
-        routing: {
-          model_bindings: {
-            complexity: { deployment: 'existing', contract: 'decision.v1' },
-            model_selection: { deployment: 'existing', contract: 'decision.v1' },
-          } as Record<string, { deployment: string; contract: string }>,
-          signals: {
-            complexity: options.noConsumers ? [] : [{ name: 'difficulty', threshold: 0.5 }],
-          },
-          decisions: options.noConsumers
+        name: 'default',
+        signals: {
+          systemone: options.noConsumers
             ? []
-            : [
-                {
-                  name: 'pick',
-                  algorithm: {
-                    type: 'decision',
-                    decision: {
-                      instructions: 'Which model?',
-                      candidates: { answer: 'General model' },
-                    },
-                  },
-                  modelRefs: [{ model: 'answer' }],
-                },
-              ],
+            : [{ name: 'task', question: { type: 'noul', instructions: 'Is this coding?' } }],
         },
+        decisions: [],
+      },
+      {
+        name: 'research',
+        model_bindings: { complexity: 'existing' } as Record<string, string>,
+        signals: {
+          complexity: options.noConsumers ? [] : [{ name: 'difficulty' }],
+        },
+        decisions: options.noConsumers
+          ? []
+          : [
+              {
+                name: 'pick',
+                algorithm: {
+                  type: 'systemone',
+                  systemone: {
+                    instructions: 'Which model?',
+                    candidates: { answer: 'General model' },
+                  },
+                },
+                modelRefs: [{ model: 'answer' }],
+              },
+            ],
       },
     ],
-    entrypoints: [{ model_names: ['research'], recipe: 'research' }],
+    entrypoints: [
+      { model_names: ['vllm-sr/auto'], recipe: 'default', default: true },
+      { model_names: ['research'], recipe: 'research' },
+    ],
   }
   const requests: (typeof config)[] = []
   let ready = false
@@ -838,26 +842,41 @@ async function mockDecisionRuntimeCatalog(
         })),
       }),
     )
-    const bindings = options.noConsumers
-      ? []
-      : ['complexity', 'model_selection'].map((task_id) => {
-          const binding = config.recipes[0]?.routing.model_bindings[task_id] ?? {
-            deployment: 'primary',
-            contract: 'decision.v1',
-          }
-          return {
-            task_id,
-            consumer: task_id === 'complexity' ? 'difficulty' : 'pick',
-            recipe: 'research',
-            deployment: binding.deployment,
-            model: config.global.model_catalog.deployments[binding.deployment]?.artifact,
-            source: 'recipe',
-            ready: binding.deployment === 'primary' || ready,
-            editable: true,
-            path: ['recipes', '0', 'routing', 'model_bindings', task_id],
-            binding,
-          }
-        })
+    // The Router lists a recipe's complexity rules once, under their signal
+    // type, and a selector with no path, since its decision writes it.
+    const index = config.recipes.findIndex((recipe) => recipe.name === 'research')
+    const bound = (config.recipes[index] as { model_bindings?: Record<string, string> } | undefined)
+      ?.model_bindings?.complexity
+    const deployment = bound ?? 'primary'
+    const bindings =
+      options.noConsumers || index < 0
+        ? []
+        : [
+            {
+              task_id: 'complexity',
+              consumer: 'complexity',
+              recipe: 'research',
+              deployment,
+              model: config.global.model_catalog.deployments[deployment]?.artifact,
+              source: bound ? 'recipe' : 'default',
+              ready: deployment === 'primary' || ready,
+              editable: true,
+              path: ['recipes', String(index), 'model_bindings', 'complexity'],
+              binding: deployment,
+            },
+            {
+              task_id: 'selector',
+              consumer: 'selector.pick',
+              recipe: 'research',
+              deployment: 'primary',
+              model: config.global.model_catalog.deployments.primary.artifact,
+              source: 'default',
+              ready: true,
+              editable: false,
+              path: null,
+              binding: 'primary',
+            },
+          ]
     return route.fulfill({
       json: {
         default_deployment: config.global.model_catalog.system.decision_model.deployment,
@@ -908,16 +927,16 @@ test.describe('Decision model catalog and deployment bindings', () => {
     await page.goto('/decision-model')
     await expect(page.getByRole('radio', { name: /Vela 2.0 4B/ })).toBeChecked()
     const pagination = page.getByRole('navigation', { name: 'Decision model pagination' })
-    await expect(pagination).toContainText('of 17')
+    await expect(pagination).toContainText('of 26')
     const names = new Set<string>()
-    for (let index = 0; index < 3; index++) {
+    for (let index = 0; index < 5; index++) {
       for (const value of await page
         .getByRole('radio')
         .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value)))
         names.add(value)
-      if (index < 2) await pagination.getByRole('button', { name: 'Next', exact: true }).click()
+      if (index < 4) await pagination.getByRole('button', { name: 'Next', exact: true }).click()
     }
-    expect(names.size).toBe(17)
+    expect(names.size).toBe(26)
     expect(names.has('Decision-2.0-Kai-0.6B')).toBe(true)
     expect(names.has('Decision-1.0-Lex-0.6B')).toBe(true)
     await page.getByRole('button', { name: 'Decision 1.0', exact: true }).click()
@@ -930,9 +949,12 @@ test.describe('Decision model catalog and deployment bindings', () => {
     await page.getByRole('button', { name: 'All families', exact: true }).click()
     await page.getByRole('combobox', { name: 'Question capability' }).click()
     await page.getByRole('option', { name: 'span', exact: true }).click()
-    await expect(page.getByRole('radio')).toHaveCount(4)
-    for (const radio of await page.getByRole('radio').all())
-      await expect(radio).toHaveValue(/^Vela-/)
+    await expect(page.getByRole('radio')).toHaveCount(5)
+    expect(
+      await page
+        .getByRole('radio')
+        .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value)),
+    ).toEqual(['vela3-fast', 'Vela-2.0-0.3B', 'Vela-2.0-0.8B', 'Vela-2.0-4B', 'Vela-2.0-9B'])
     await page.screenshot({
       path: testInfo.outputPath('decision-catalog-desktop.png'),
       fullPage: true,
@@ -952,7 +974,7 @@ test.describe('Decision model catalog and deployment bindings', () => {
     await page.goto('/decision-model')
     const row = page.getByRole('row').filter({ hasText: 'Task difficulty' })
     await expect(row).toContainText('team/custom-decision-model')
-    await expect(row).toContainText('research · difficulty')
+    await expect(row).toContainText('research · complexity')
     await row.getByRole('button', { name: 'Change' }).click()
     await row.getByRole('combobox', { name: 'Model for Task difficulty' }).click()
     await expect(page.getByRole('option', { name: /team\/custom-decision-model/ })).toBeVisible()
@@ -983,10 +1005,7 @@ test.describe('Decision model catalog and deployment bindings', () => {
         ...previous.global,
         model_catalog: {
           ...previous.global.model_catalog,
-          system: {
-            decision_model: { deployment: 'decision-2-0-kai-0-6b' },
-            pii_classifier: 'models/custom-pii',
-          },
+          system: { decision_model: { deployment: 'decision-2-0-kai-0-6b' } },
           deployments: {
             ...previous.global.model_catalog.deployments,
             'decision-2-0-kai-0-6b': {
@@ -1021,7 +1040,7 @@ test.describe('Decision model catalog and deployment bindings', () => {
     await expect(
       page.getByRole('status').filter({ hasText: 'Configuration saved. Restart' }),
     ).toBeVisible()
-    expect(fixture.runtimeRequests[0].routing.signals.decision).toEqual([])
+    expect(fixture.runtimeRequests[0].recipes[0].signals.systemone).toEqual([])
     await expect(page.getByRole('region', { name: 'Task bindings' })).toContainText(
       'No active task bindings',
     )
@@ -1032,14 +1051,14 @@ test.describe('Decision model catalog and deployment bindings', () => {
     ).toHaveAttribute('href', '/decision-model/playground')
   })
 
-  test('binds a decision selector task while preserving the default and exposes deferred activation honestly', async ({
+  test('binds the complexity task in its recipe while preserving the default and exposes deferred activation honestly', async ({
     page,
   }) => {
     const fixture = await mockDecisionRuntimeCatalog(page, { applyStatus: 'restart_required' })
     await page.goto('/decision-model')
-    const row = page.getByRole('row').filter({ hasText: 'Choose a candidate model' })
+    const row = page.getByRole('row').filter({ hasText: 'Task difficulty' })
     await row.getByRole('button', { name: 'Change' }).click()
-    await row.getByRole('combobox', { name: 'Model for Choose a candidate model' }).click()
+    await row.getByRole('combobox', { name: 'Model for Task difficulty' }).click()
     await page.getByRole('option', { name: /Decision-1.0-Lex-0.6B/ }).click()
     const previous = structuredClone(fixture.config)
     await row.getByRole('button', { name: 'Apply', exact: true }).click()
@@ -1047,10 +1066,7 @@ test.describe('Decision model catalog and deployment bindings', () => {
       page.getByRole('status').filter({ hasText: 'Configuration saved. Restart' }),
     ).toBeVisible()
     expect(fixture.runtimeRequests).toHaveLength(1)
-    previous.recipes[0].routing.model_bindings.model_selection = {
-      deployment: 'lex',
-      contract: 'decision.v1',
-    }
+    Object.assign(previous.recipes[1], { model_bindings: { complexity: 'lex' } })
     expect(fixture.runtimeRequests[0]).toEqual(previous)
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await expect(row).toContainText('vllm-sr/Decision-1.0-Lex-0.6B')

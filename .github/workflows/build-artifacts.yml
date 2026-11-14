@@ -15,6 +15,10 @@ on:
       tag:
         type: string
         default: ''
+      date:
+        description: The run's publication date (YYYYMMDD); empty uses the day of the build.
+        type: string
+        default: ''
       multiarch:
         type: boolean
         default: false
@@ -34,7 +38,11 @@ jobs:
         image: ${{ fromJSON(inputs.images) }}
     steps:
       - uses: actions/checkout@v4
+      # The accelerator images need the space the cleanup frees; the others
+      # fit in the 88 GB a hosted runner starts with.
       - uses: ./.github/actions/free-disk-space
+        with:
+          min-free-gb: ${{ contains(fromJSON('["vllm-sr-cuda", "vllm-sr-rocm"]'), matrix.image) && '0' || '40' }}
       - uses: docker/setup-qemu-action@v3
         if: inputs.multiarch
         with:
@@ -50,6 +58,7 @@ jobs:
           IMAGE: ${{ matrix.image }}
           MULTIARCH: ${{ inputs.multiarch }}
           MODE: ${{ inputs.mode }}
+          CI_RUN_DATE: ${{ inputs.date }}
         run: |
           args=()
           if [[ "$MULTIARCH" == true ]]; then args+=(--multiarch); fi
@@ -66,6 +75,9 @@ jobs:
           IS_NIGHTLY: ${{ inputs.mode == 'nightly' }}
           NIGHTLY_DATE: ${{ steps.definition.outputs.date }}
         run: bash tools/ci/docker-build-args.sh
+      # No layer cache. In sampled Main and Nightly builds the Actions cache
+      # never made a build faster, while its export took 20 to 74 minutes of
+      # each ROCm build.
       - name: Build immutable candidate
         uses: docker/build-push-action@v6
         with:
@@ -78,8 +90,6 @@ jobs:
           build-args: ${{ steps.build-args.outputs.args }}
           labels: ${{ steps.definition.outputs.labels }}
           provenance: false
-          cache-from: type=gha,scope=${{ matrix.image }}-candidate
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-candidate,ignore-error=true
       - name: Seal candidate identity
         env:
           IMAGE: ${{ matrix.image }}

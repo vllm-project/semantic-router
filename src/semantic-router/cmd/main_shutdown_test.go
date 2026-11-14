@@ -11,15 +11,21 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
 func TestRunRouterProcessShutsDownManagementServerWhenStartupIsCancelled(t *testing.T) {
 	apiPort := freePort(t)
 	routerPort := freePort(t)
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	configYAML := fmt.Sprintf(`version: v0.3
+	configYAML := fmt.Sprintf(`version: v0.5
 global:
   services:
     management_api:
@@ -58,6 +64,49 @@ global:
 	requireListenerReleased(t, "management", fmt.Sprintf("127.0.0.1:%d", apiPort))
 }
 
+// A management API that cannot bind stops the start with its cause, returned
+// to the caller and recorded in the startup status, instead of exiting the
+// process.
+func TestRunRouterProcessReturnsTheManagementAPIBindFailure(t *testing.T) {
+	taken, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer taken.Close()
+	apiPort := taken.Addr().(*net.TCPAddr).Port
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	configYAML := fmt.Sprintf(`version: v0.5
+global:
+  services:
+    management_api:
+      bind_address: 127.0.0.1
+      port: %d
+      remote_exposure: false
+      auth:
+        mode: disabled
+`, apiPort)
+	if err = os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VLLM_SR_RUNTIME_STATUS_DIR", dir)
+
+	err = runRouterProcess(context.Background(), runtimeOptions{
+		configPath: configPath,
+		port:       freePort(t),
+		apiPort:    apiPort,
+		apiBind:    "127.0.0.1",
+		enableAPI:  true,
+	})
+	if err == nil || !strings.HasPrefix(err.Error(), "start management API: ") || !errors.Is(err, syscall.EADDRINUSE) {
+		t.Fatalf("runRouterProcess() error = %v, want the management API's bind failure", err)
+	}
+	state, loadErr := startupstatus.Load(filepath.Join(dir, "router-runtime.json"))
+	if loadErr != nil || state.Phase != "error" || state.Message != err.Error() {
+		t.Fatalf("startup status = %+v (%v), want the bind failure", state, loadErr)
+	}
+}
+
 func TestRunRouterProcessLoadedShutdownIsBoundedAndReleasesListener(t *testing.T) {
 	routerPort := freePort(t)
 	metricsPort := freePort(t)
@@ -89,7 +138,9 @@ func TestRunRouterProcessLoadedShutdownIsBoundedAndReleasesListener(t *testing.T
 		if err != nil {
 			t.Fatalf("runRouterProcess() error = %v", err)
 		}
-	case <-time.After(time.Second):
+	// Well under processShutdownTimeout, so a shutdown that waits it out
+	// fails, with room for a loaded runner.
+	case <-time.After(processShutdownTimeout(config.GatewayExtProc, nil) / 3):
 		t.Fatal("loaded Router shutdown exceeded its bound")
 	}
 
@@ -419,9 +470,20 @@ func waitForTestError(t *testing.T, result <-chan error, failure string) error {
 	}
 }
 
+// readinessWait bounds how long a test waits for a listener to come up. It is
+// not what the tests check, so it leaves room for a loaded CI runner.
+const readinessWait = time.Minute
+
+// goroutineDump is every goroutine's stack, so a wait that runs out shows
+// where the Router was blocked.
+func goroutineDump() string {
+	buf := make([]byte, 1<<20)
+	return string(buf[:runtime.Stack(buf, true)])
+}
+
 func waitForProcessListener(t *testing.T, done <-chan error, address string) {
 	t.Helper()
-	startupDeadline := time.Now().Add(5 * time.Second)
+	startupDeadline := time.Now().Add(readinessWait)
 	for {
 		select {
 		case err := <-done:
@@ -434,7 +496,7 @@ func waitForProcessListener(t *testing.T, done <-chan error, address string) {
 			return
 		}
 		if time.Now().After(startupDeadline) {
-			t.Fatal("ExtProc listener did not become ready")
+			t.Fatalf("ExtProc listener did not become ready within %s; goroutines:\n%s", readinessWait, goroutineDump())
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

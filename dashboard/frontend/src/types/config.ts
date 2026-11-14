@@ -1,11 +1,8 @@
 /**
  * Configuration types for vLLM Semantic Router Dashboard
  *
- * Public config uses the canonical v0.3 layout:
- *   version / listeners / providers / routing / global
- *
- * Some interfaces below are dashboard view-model adapters that flatten
- * routing-owned data for editing and legacy read-only fallback handling.
+ * Public config uses the canonical v0.5 layout:
+ *   version / listeners / providers / global / recipes / entrypoints
  */
 
 // =============================================================================
@@ -15,12 +12,12 @@
 export interface ProviderEndpoint {
   name: string
   weight: number
-  endpoint: string // e.g., "host.docker.internal:8000" or "api.openai.com"
+  endpoint: string // e.g., "host.docker.internal:8000" or "https://api.openai.com/v1"
   protocol: 'http' | 'https'
-  base_url?: string
   provider?: string
   api_key?: string
-  api_key_env?: string
+  auth?: { header?: string; prefix?: string; api_key_env?: string }
+  headers?: Record<string, string>
 }
 
 export interface ProviderModel {
@@ -31,7 +28,11 @@ export interface ProviderModel {
   backend_refs?: ProviderEndpoint[]
   endpoints?: ProviderEndpoint[]
   access_key?: string
-  api_format?: 'openai' | 'responses' | 'anthropic' | 'systemone'
+  // An API name; openai and anthropic are accepted as aliases of
+  // chat_completions and messages, which the Dashboard writes.
+  api_format?: APIName | APIAlias
+  // The version of that API the backends speak, one of its schema IDs.
+  schema?: string
   external_model_ids?: Record<string, string>
   pricing?: {
     currency?: string
@@ -65,11 +66,6 @@ export interface ProviderModel {
   }
 }
 
-export interface ProviderDefaults {
-  model?: string
-  reasoning_effort?: string
-}
-
 export interface ReasoningFamily {
   type:
     | 'reasoning_effort'
@@ -90,90 +86,9 @@ export interface ReasoningConfig extends Partial<ReasoningFamily> {
   family?: string
 }
 
-export interface Providers {
-  models: ProviderModel[]
-  defaults?: ProviderDefaults
-}
-
 // =============================================================================
 // SIGNALS - Classification signals for routing
 // =============================================================================
-
-export interface KeywordSignal {
-  name: string
-  operator: 'AND' | 'OR'
-  keywords: string[]
-  case_sensitive: boolean
-}
-
-export interface EmbeddingSignal {
-  name: string
-  threshold: number
-  candidates: string[]
-  aggregation_method: 'max' | 'avg' | 'min'
-}
-
-export interface DomainSignal {
-  name: string
-  description: string
-  mmlu_categories?: string[]
-}
-
-export interface FactCheckSignal {
-  name: string
-  description: string
-}
-
-export interface HallucinationSignal {
-  name: string
-  description?: string
-}
-
-export interface UserFeedbackSignal {
-  name: string
-  description: string
-}
-
-export interface ReaskSignal {
-  name: string
-  description?: string
-  threshold?: number
-  lookback_turns?: number
-}
-
-export interface PreferenceSignal {
-  name: string
-  description: string
-  examples?: string[]
-  threshold?: number
-}
-
-export interface LanguageSignal {
-  name: string
-  description?: string
-}
-
-export interface ContextSignal {
-  name: string
-  /** Inclusive lower bound. Defaults to 0 when omitted. */
-  min_tokens?: string
-  /** Inclusive upper bound. Omit for an open-ended band (no upper limit). */
-  max_tokens?: string
-  description?: string
-}
-
-export interface StructureSource {
-  type: string
-  pattern?: string
-  keywords?: string[]
-  case_sensitive?: boolean
-  sequences?: string[][]
-}
-
-export interface StructureFeature {
-  type: string
-  source: StructureSource
-}
 
 export interface NumericPredicate {
   gt?: number
@@ -182,289 +97,115 @@ export interface NumericPredicate {
   lte?: number
 }
 
-export interface StructureSignal {
-  name: string
-  description?: string
-  feature: StructureFeature
-  predicate?: NumericPredicate
-}
-
-export interface ConversationSignal {
-  name: string
-  description?: string
-  feature: {
-    type: 'count' | 'exists'
-    source: {
-      type: string
-      role?: string
-    }
-  }
-  predicate?: NumericPredicate
-}
-
-export interface MetadataSignal {
-  name: string
-  description?: string
-  key: string
-  predicate: {
-    equals?: string
-    in?: string[]
-    exists?: boolean
-  }
-}
-
-export interface ClassifierSignal {
-  name: string
-  description?: string
-  type: 'local' | 'llm' | 'sequence_classifier'
-  model?: string
-  model_path?: string
-  labels: string[]
-  instructions?: string
-  disable_rationale?: boolean
-  use_cpu?: boolean
-}
-
-export interface InputModalitySignal {
-  name: string
-  description?: string
-  modality: 'text' | 'image' | 'audio' | 'video'
-}
-
-// TopicContinuitySignal is context-policy evidence, not a decision condition.
-// Every field except name is optional; the Router applies documented defaults.
-export interface TopicContinuitySignal {
-  name: string
-  description?: string
-  include_assistant?: boolean
-  thresholds?: {
-    continuation?: number
-    change?: number
-  }
-  limits?: {
-    max_prior_turns?: number
-    max_turn_bytes?: number
-    max_input_bytes?: number
-  }
-}
-
-export interface DecisionModelChoice {
+export interface SystemOneOption {
   key: string
   description?: string
 }
 
-export interface DecisionModelSignal {
+export interface SystemOneInput {
+  history?: boolean
+  previous_turns?: number
+  answer?: boolean
+  context?: boolean
+  tool_results?: boolean
+  image?: boolean
+  audio?: boolean
+  video?: boolean
+  // false leaves the current user turn out: the rule reads only the history or tool results it names
+  request?: boolean
+}
+
+export interface SystemOneSignal {
   name: string
   description?: string
   deployment: string
   question: {
     type: 'choice' | 'noul' | 'score' | 'set' | 'span'
     instructions: string
-    choices?: DecisionModelChoice[]
+    choices?: SystemOneOption[]
     levels?: string[]
-    labels?: DecisionModelChoice[]
+    labels?: SystemOneOption[]
     threshold?: number
     head?: 'router' | 'broad'
   }
+  labels?: string[]
+  ignore_labels?: string[]
   predicate?: NumericPredicate
+  stage?: 'request' | 'response'
+  input?: SystemOneInput
+  coverage?: 'truncate' | 'full'
+  on_unscanned?: 'best_effort' | 'match' | 'no_match' | 'unknown'
   timeout_ms?: number
-}
-
-export interface ComplexityCandidates {
-  candidates: string[]
-}
-
-export interface RuleComposer {
-  operator: 'AND' | 'OR' | 'NOT'
-  conditions: Array<{
-    type: string
-    name: string
-  }>
-}
-
-export interface ComplexitySignal {
-  name: string
-  threshold: number
-  hard: ComplexityCandidates
-  easy: ComplexityCandidates
-  description?: string
-  composer?: RuleComposer
-}
-
-export interface ModalitySignal {
-  name: string
-  description?: string
-}
-
-export interface Subject {
-  kind: 'User' | 'Group'
-  name: string
-}
-
-export interface RoleBindingSignal {
-  name: string
-  role: string
-  subjects: Subject[]
-  description?: string
-}
-
-export interface JailbreakSignal {
-  name: string
-  threshold: number
-  method?: string // "classifier" (default) or "contrastive"
-  include_history?: boolean
-  direction?: 'request' | 'response' // "request" (default) scores the prompt, "response" the model's output
-  jailbreak_patterns?: string[] // Known jailbreak prompts (contrastive KB)
-  benign_patterns?: string[] // Known benign prompts (contrastive KB)
-  description?: string
 }
 
 export interface SafetySignal {
   name: string
   description?: string
-  model?: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  /** Harm categories the rule matches; without labels it asks whether the content is harmful. */
   labels?: string[]
-  unsafe_labels?: string[]
-  threshold: number
-  hazard?: {
-    model?: string
-    labels: string[]
-    categories: string[]
-    threshold: number
-  }
-}
-
-export interface PIISignal {
-  name: string
-  threshold: number
-  source?: 'tool_result'
-  pii_types_allowed?: string[]
-  include_history?: boolean
-  description?: string
-}
-
-export interface Signals {
-  keywords?: KeywordSignal[]
-  embeddings?: EmbeddingSignal[]
-  domains?: DomainSignal[]
-  fact_check?: FactCheckSignal[]
-  user_feedbacks?: UserFeedbackSignal[]
-  reasks?: ReaskSignal[]
-  preferences?: PreferenceSignal[]
-  language?: LanguageSignal[]
-  context?: ContextSignal[]
-  structure?: StructureSignal[]
-  complexity?: ComplexitySignal[]
-  modality?: ModalitySignal[]
-  role_bindings?: RoleBindingSignal[]
-  jailbreak?: JailbreakSignal[]
-  safety?: SafetySignal[]
-  hallucination?: HallucinationSignal[]
-  pii?: PIISignal[]
-  conversation?: ConversationSignal[]
-  metadata?: MetadataSignal[]
-  classifiers?: ClassifierSignal[]
-  input_modality?: InputModalitySignal[]
-  decision?: DecisionModelSignal[]
-  topic_continuity?: TopicContinuitySignal[]
-}
-
-// =============================================================================
-// DECISIONS - Routing logic
-// =============================================================================
-
-export type DecisionConditionType =
-  | 'keyword'
-  | 'domain'
-  | 'preference'
-  | 'user_feedback'
-  | 'reask'
-  | 'embedding'
-  | 'fact_check'
-  | 'language'
-  | 'context'
-  | 'structure'
-  | 'complexity'
-  | 'modality'
-  | 'authz'
-  | 'jailbreak'
-  | 'safety'
-  | 'pii'
-  | 'kb'
-  | 'conversation'
-  | 'event'
-  | 'metadata'
-  | 'classifier'
-  | 'input_modality'
-  | 'decision'
-  | 'projection'
-export interface DecisionCondition {
-  type: DecisionConditionType
-  name: string
-  label?: string
   predicate?: NumericPredicate
-  on_error?: 'no_match' | 'match'
-}
-
-export interface DecisionRules {
-  operator: 'AND' | 'OR' | 'NOT'
-  conditions: DecisionCondition[]
-  on_unknown?: 'no_match' | 'match' | 'fail_request'
-}
-
-export interface ModelRef {
-  model: string
-  use_reasoning: boolean
-  reasoning_description?: string
-  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
-  reasoning_effort?: string
-  lora_name?: string
-  weight?: number
-}
-
-export interface PluginConfig {
-  type:
-    | 'response_cache'
-    | 'memory'
-    | 'system_prompt'
-    | 'header_mutation'
-    | 'hallucination'
-    | 'router_replay'
-    | 'rag'
-    | 'fast_response'
-    | 'tools'
-    | 'request_params'
-    | 'response_jailbreak'
-    | 'context_compression'
-    | 'prompt_cache'
-    | 'shadow_dispatch'
-    | 'masking'
-  configuration: Record<string, unknown>
-}
-
-export interface Decision {
-  name: string
-  description?: string
-  priority: number
-  rules: DecisionRules
-  modelRefs: ModelRef[]
-  plugins?: PluginConfig[]
-  algorithm?: {
-    type: string
-    on_error?: string
-    prompt?: {
-      model: string
-      instructions: string
-      timeout_seconds?: number
-    }
-    [key: string]: unknown
-  }
-  annotations?: Record<string, unknown>
+  stage?: 'request' | 'response'
+  timeout_ms?: number
 }
 
 // =============================================================================
 // LISTENERS - Network configuration
 // =============================================================================
+
+export type APIName = 'chat_completions' | 'responses' | 'messages' | 'images' | 'systemone'
+export type APIAlias = 'openai' | 'anthropic'
+
+// One API a listener serves: its schema (systemone only), the models it
+// accepts and its settings.
+export interface ListenerAPI {
+  schema?: 'vllm-sr/5.0' | 'vllm-sr/4.0'
+  models?: string[]
+  max_deadline_ms?: number
+  // systemone only: what the vSR agent plugins pointed at the listener do.
+  vsr?: VSRProfile
+}
+
+// The vSR agent plugins' profile a systemone listener serves. A field left
+// out keeps the plugin's own option.
+export interface VSRProfile {
+  // Hide personal data in tool output before the agent reads it.
+  redact?: boolean
+  // Mark text in tool output that gives the agent orders.
+  shield?: boolean
+  // Hold a destructive command for the person to approve.
+  guard?: boolean
+  // Compare the agent's answer with what it read.
+  check?: boolean
+  // Raise the next turn's model or effort after a pushback.
+  escalate?: boolean
+  // Pick the model and effort of subagents.
+  router?: boolean
+  // Also pick the model and effort of the person's own turns.
+  router_turns?: boolean
+  // How far the router may go down: quality never below the session's model,
+  // balanced when the decision is sure, save whenever it answers clearly enough.
+  router_goal?: 'quality' | 'balanced' | 'save'
+  // Recipe rules guard and redact enforce besides their own checks.
+  rules?: VSRRules
+}
+
+// One rule of the bound recipe an app enforces.
+export interface VSRRule {
+  type: 'keyword' | 'systemone'
+  name: string
+  // required: a command waits for the person and an output is withheld when
+  // the rule cannot be checked; advisory (the default): it goes unchecked.
+  enforce?: 'required' | 'advisory'
+}
+
+// Rules of one recipe the vSR agent plugins enforce, evaluated by the Router.
+export interface VSRRules {
+  recipe: string
+  guard?: VSRRule[]
+  redact?: VSRRule[]
+}
 
 export interface ListenerTLS {
   cert_file: string
@@ -482,217 +223,9 @@ export interface Listener {
   port: number
   timeout?: string
   api_keys?: string[]
-  models?: string[]
+  // The APIs the listener serves, by API name (or alias); omitted, the four
+  // LLM APIs and not systemone.
+  apis?: Partial<Record<APIName | APIAlias, ListenerAPI>>
   tls?: ListenerTLS
   identity?: ListenerIdentity
-}
-
-// =============================================================================
-// COMPLETE CONFIG - Python CLI format
-// =============================================================================
-
-export interface PythonCLIConfig {
-  version: string
-  listeners: Listener[]
-  signals?: Signals
-  decisions: Decision[]
-  providers: Providers
-}
-
-// =============================================================================
-// LEGACY CONFIG - Go router format (for backward compatibility)
-// =============================================================================
-
-export interface LegacyVLLMEndpoint {
-  name: string
-  address: string
-  port: number
-  weight: number
-  health_check_path?: string
-}
-
-export interface LegacyModelConfig {
-  model_id: string
-  threshold: number
-  use_cpu: boolean
-  category_mapping_path?: string
-  pii_mapping_path?: string
-  jailbreak_mapping_path?: string
-}
-
-export interface LegacyCategory {
-  name: string
-  description?: string
-  system_prompt?: string
-  mmlu_categories?: string[]
-}
-
-export interface LegacyConfig {
-  vllm_endpoints?: LegacyVLLMEndpoint[]
-  model_config?: Record<string, unknown>
-  categories?: LegacyCategory[]
-  classifier?: {
-    category_model?: LegacyModelConfig
-    pii_model?: LegacyModelConfig
-  }
-  prompt_guard?: LegacyModelConfig & { enabled: boolean }
-  response_cache?: {
-    enabled: boolean
-    backend_type?: string
-    similarity_threshold: number
-    max_entries: number
-    ttl_seconds: number
-    eviction_policy?: string
-  }
-  /** @deprecated Use response_cache. */
-  semantic_cache?: {
-    enabled: boolean
-    backend_type?: string
-    similarity_threshold?: number
-    max_entries?: number
-    ttl_seconds?: number
-  }
-  tools?: {
-    enabled: boolean
-    top_k: number
-    similarity_threshold: number
-    tools_db_path: string
-    fallback_to_empty: boolean
-  }
-  default_model?: string
-  reasoning_families?: Record<string, ReasoningFamily>
-  default_reasoning_effort?: string
-  observability?: {
-    tracing?: TracingConfig
-    metrics?: { enabled: boolean }
-  }
-  api?: APIConfig
-}
-
-export interface TracingConfig {
-  enabled: boolean
-  provider: string
-  exporter: {
-    type: string
-    endpoint?: string
-    insecure?: boolean
-  }
-  sampling: {
-    type: string
-    rate?: number
-  }
-  resource: {
-    service_name: string
-    service_version: string
-    deployment_environment: string
-  }
-}
-
-export interface APIConfig {
-  batch_classification?: {
-    max_batch_size: number
-    concurrency_threshold: number
-    max_concurrency: number
-    metrics?: {
-      enabled: boolean
-      detailed_goroutine_tracking?: boolean
-      high_resolution_timing?: boolean
-      sample_rate?: number
-    }
-  }
-}
-
-// =============================================================================
-// UNIFIED CONFIG - Supports both formats
-// =============================================================================
-
-export type ConfigFormat = 'python-cli' | 'legacy'
-
-type UnknownConfigRecord = Record<string, unknown>
-
-export interface UnifiedConfig extends Partial<PythonCLIConfig>, Partial<LegacyConfig> {
-  // Both formats can have these at root level
-  version?: string
-  default_model?: string
-  default_reasoning_effort?: string
-  reasoning_families?: Record<string, ReasoningFamily>
-  observability?: {
-    tracing?: TracingConfig
-    metrics?: { enabled: boolean }
-  }
-  api?: APIConfig
-  tools?: {
-    enabled: boolean
-    top_k: number
-    similarity_threshold: number
-    tools_db_path: string
-    fallback_to_empty: boolean
-  }
-}
-
-// =============================================================================
-// FORMAT DETECTION
-// =============================================================================
-
-/**
- * Detect the config format based on key indicators
- */
-const asUnknownConfigRecord = (value: unknown): UnknownConfigRecord | null =>
-  value && typeof value === 'object' ? (value as UnknownConfigRecord) : null
-
-export function detectConfigFormat(config: unknown): ConfigFormat {
-  const root = asUnknownConfigRecord(config)
-  // Python CLI format has providers.models
-  const providers = asUnknownConfigRecord(root?.providers)
-  if (providers?.models) {
-    return 'python-cli'
-  }
-  // Legacy format has vllm_endpoints or model_config at root
-  if (root?.vllm_endpoints || root?.model_config) {
-    return 'legacy'
-  }
-  // Default to python-cli as that's the future
-  return 'python-cli'
-}
-
-/**
- * Check if config has decisions, regardless of format.
- * After deploy, the Router flattens Python CLI format to legacy struct fields
- * (vllm_endpoints, model_config, keyword_rules, etc.) but preserves the `decisions` array.
- * This helper detects that hybrid state so the UI can still render decisions.
- */
-export function hasDecisions(config: unknown): boolean {
-  const root = asUnknownConfigRecord(config)
-  return Array.isArray(root?.decisions) && root.decisions.length > 0
-}
-
-/**
- * Check if config has flat signal fields (keyword_rules, embedding_rules, etc.)
- * that result from deploy flattening. These map to the nested signals.* structure.
- */
-export function hasFlatSignals(config: unknown): boolean {
-  const root = asUnknownConfigRecord(config)
-  return !!(
-    (Array.isArray(root?.keyword_rules) && root.keyword_rules.length > 0) ||
-    (Array.isArray(root?.embedding_rules) && root.embedding_rules.length > 0) ||
-    (Array.isArray(root?.categories) && root.categories.length > 0) ||
-    (Array.isArray(root?.fact_check_rules) && root.fact_check_rules.length > 0) ||
-    (Array.isArray(root?.user_feedback_rules) && root.user_feedback_rules.length > 0) ||
-    (Array.isArray(root?.reask_rules) && root.reask_rules.length > 0) ||
-    (Array.isArray(root?.preference_rules) && root.preference_rules.length > 0) ||
-    (Array.isArray(root?.language_rules) && root.language_rules.length > 0) ||
-    (Array.isArray(root?.context_rules) && root.context_rules.length > 0) ||
-    (Array.isArray(root?.structure_rules) && root.structure_rules.length > 0) ||
-    (Array.isArray(root?.complexity_rules) && root.complexity_rules.length > 0) ||
-    (Array.isArray(root?.jailbreak) && root.jailbreak.length > 0) ||
-    (Array.isArray(root?.hallucination) && root.hallucination.length > 0) ||
-    (Array.isArray(root?.pii) && root.pii.length > 0)
-  )
-}
-
-/**
- * Check if config is in Python CLI format
- */
-export function isPythonCLIFormat(config: unknown): config is PythonCLIConfig {
-  return detectConfigFormat(config) === 'python-cli'
 }

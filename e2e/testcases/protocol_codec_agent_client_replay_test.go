@@ -199,3 +199,91 @@ func TestLinkAgentClientToolCallShapes(t *testing.T) {
 		t.Fatal("a result that answers another call was relinked")
 	}
 }
+
+func TestNamespacedAgentClientCaptureNamesBothSidesOfTheCall(t *testing.T) {
+	captures, err := loadAgentClientCaptures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var replay agentClientReplay
+	for _, capture := range captures {
+		if capture.ToolCall != nil {
+			replay = agentClientReplay{capture: capture, protocol: agentClientProtocols[capture.Path], model: "profile-model"}
+		}
+	}
+	if replay.capture.ToolCall == nil {
+		t.Fatal("no agent-client capture declares a namespaced tool call")
+	}
+	if len(replay.capture.Backends) != 3 {
+		t.Fatalf("namespaced capture replays against %v, want every backend", replay.capture.Backends)
+	}
+	marker := replay.toolMarker()
+	if !strings.HasSuffix(marker, "\n"+agentClientToolMarker) || !strings.Contains(marker, "__mock_tool_name:mcp__echo__echo:__") {
+		t.Fatalf("tool marker %q does not ask for the flat tool", marker)
+	}
+	client := replay.clientCall()
+	if client.Name != "echo" || client.Namespace != "mcp__echo" || client.CallID != mockLookupCall.CallID {
+		t.Fatalf("client call = %+v", client)
+	}
+	if backend := replay.backendCall(client); backend.Name != "mcp__echo__echo" || backend.Namespace != "" {
+		t.Fatalf("backend call = %+v", backend)
+	}
+	turn, err := replay.resultTurn(true, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls, _ := agentResponsesToolRefs(turn)
+	if len(calls) != 1 || calls[0].fields["namespace"] != "mcp__echo" || calls[0].fields["name"] != "echo" {
+		t.Fatalf("follow-up call lost its namespace: %+v", calls)
+	}
+}
+
+func TestDecodeAgentClientCaptureRejectsAToolCallOutsideResponses(t *testing.T) {
+	capture := `{"client":"c","version":"1","path":"/v1/chat/completions","backends":{"openai.chat.v1":[]},"turns":[{},{}],` +
+		`"tool_call":{"namespace":"ns","name":"tool","backend_name":"ns__tool"}}`
+	if _, err := decodeAgentClientCapture("chat.json", []byte(capture)); err == nil {
+		t.Fatal("a Chat capture with a namespaced tool call was accepted")
+	}
+}
+
+func TestResponsesNamespacedCallDecoding(t *testing.T) {
+	want := responsesFunctionCall{CallID: "call_mock_lookup", Name: "echo", Namespace: "mcp__echo", Arguments: `{"query":"weather"}`}
+	buffered := `{"output":[{"type":"function_call","call_id":"call_mock_lookup","name":"echo","namespace":"mcp__echo","arguments":"{\"query\":\"weather\"}"}]}`
+	if call, err := decodeResponsesFunctionCallAs([]byte(buffered), want); err != nil || call != want {
+		t.Fatalf("decode = %+v, %v", call, err)
+	}
+	flat := strings.Replace(buffered, `"name":"echo","namespace":"mcp__echo"`, `"name":"mcp__echo__echo"`, 1)
+	if _, err := decodeResponsesFunctionCallAs([]byte(flat), want); err == nil {
+		t.Fatal("a call without its namespace was accepted")
+	}
+	if _, err := decodeResponsesFunctionCall([]byte(buffered)); err == nil {
+		t.Fatal("a namespaced call matched the default lookup call")
+	}
+}
+
+func TestRejectProviderNamespaces(t *testing.T) {
+	for body, wantErr := range map[string]bool{
+		`{"tools":[{"type":"function","name":"mcp__echo__echo"}],"input":[{"type":"function_call","name":"mcp__echo__echo"}]}`: false,
+		// A tool's own namespace argument, in its schema or a call's input.
+		`{"tools":[{"type":"function","function":{"name":"get_pods","parameters":{"properties":{"namespace":{"type":"string"}}}}}]}`:           false,
+		`{"tools":[{"type":"function","name":"get_pods","parameters":{"properties":{"namespace":{"type":"string"}}}}]}`:                        false,
+		`{"tools":[{"name":"get_pods","input_schema":{"properties":{"namespace":{"type":"string"}}}}]}`:                                        false,
+		`{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"get_pods","input":{"namespace":"default"}}]}]}`: false,
+		// A Responses namespace left on a tool or call in each format.
+		`{"tools":[{"type":"namespace","name":"mcp__echo","tools":[]}]}`:                                                           true,
+		`{"tools":[{"type":"function","function":{"name":"echo","namespace":"mcp__echo"}}]}`:                                       true,
+		`{"tools":[{"name":"echo","namespace":"mcp__echo","input_schema":{}}]}`:                                                    true,
+		`{"input":[{"type":"function_call","name":"echo","namespace":"mcp__echo"}]}`:                                               true,
+		`{"input":[{"type":"custom_tool_call","name":"echo","namespace":"mcp__echo"}]}`:                                            true,
+		`{"messages":[{"role":"assistant","tool_calls":[{"id":"call_1","function":{"name":"echo","namespace":"mcp__echo"}}]}]}`:    true,
+		`{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"echo","namespace":"mcp__echo"}]}]}`: true,
+	} {
+		var decoded map[string]any
+		if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+			t.Fatal(err)
+		}
+		if err := rejectProviderNamespaces(decoded); (err != nil) != wantErr {
+			t.Errorf("%s: error = %v, want error %t", body, err, wantErr)
+		}
+	}
+}

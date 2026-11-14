@@ -21,8 +21,8 @@ func TestMaintainedPrivacyRecipeParsesAndDecompilesWithoutError(t *testing.T) {
 		t.Fatalf("DecompileRouting error: %v", err)
 	}
 
-	if !strings.Contains(dslText, "SIGNAL decision confidential") {
-		t.Error("decompiled DSL missing the confidential decision question")
+	if !strings.Contains(dslText, "SIGNAL systemone confidential") {
+		t.Error("decompiled DSL missing the confidential systemone question")
 	}
 	if !strings.Contains(dslText, "PLUGIN tools") {
 		t.Error("decompiled DSL missing tools plugin directives")
@@ -43,7 +43,7 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Compile errors: %v", errs)
 	}
 
-	if len(cfg.DecisionRules) == 0 {
+	if len(cfg.SystemOneRules) == 0 {
 		t.Error("expected decision questions from privacy recipe")
 	}
 
@@ -70,9 +70,9 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 		t.Fatalf("Round-trip compile errors: %v", errs2)
 	}
 
-	if len(cfg2.DecisionRules) != len(cfg.DecisionRules) {
+	if len(cfg2.SystemOneRules) != len(cfg.SystemOneRules) {
 		t.Errorf("round-trip decision questions: %d → %d",
-			len(cfg.DecisionRules), len(cfg2.DecisionRules))
+			len(cfg.SystemOneRules), len(cfg2.SystemOneRules))
 	}
 	if len(cfg2.Decisions) != len(cfg.Decisions) {
 		t.Errorf("round-trip Decisions: %d → %d",
@@ -88,8 +88,8 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 		switch {
 		case (left == nil) != (right == nil):
 			t.Errorf("round-trip decision %q tools plugin presence mismatch", dec.Name)
-		case left != nil && right != nil && left.EffectiveMode() != right.EffectiveMode():
-			t.Errorf("round-trip decision %q tools mode: %q → %q", dec.Name, left.EffectiveMode(), right.EffectiveMode())
+		case left != nil && right != nil && left.Policy.EffectiveMode() != right.Policy.EffectiveMode():
+			t.Errorf("round-trip decision %q tools mode: %q → %q", dec.Name, left.Policy.EffectiveMode(), right.Policy.EffectiveMode())
 		}
 	}
 }

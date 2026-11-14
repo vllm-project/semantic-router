@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -49,6 +50,7 @@ type anthropicRequestWire struct {
 	OutputConfig      *anthropicOutputConfigWire `json:"output_config,omitempty"`
 	ServiceTier       json.RawMessage            `json:"service_tier,omitempty"`
 	ContextManagement json.RawMessage            `json:"context_management,omitempty"`
+	Safeguards        json.RawMessage            `json:"safeguards,omitempty"`
 }
 
 type anthropicMessageWire struct {
@@ -161,10 +163,11 @@ func (AnthropicMessagesCodec) DecodeRequest(body []byte, policy llmprotocol.Poli
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	request := decodeAnthropicBaseRequest(wire)
-	if err := decodeAnthropicRequestFields(wire, &request, policy); err != nil {
+	var diagnostics llmprotocol.Diagnostics
+	if err := decodeAnthropicRequestFields(wire, &request, policy, &diagnostics); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.AnthropicMessagesV1, body, request.Generation, policy), nil, nil
+	return request, requestEnvelope(llmprotocol.AnthropicMessagesV1, body, request.Generation, policy), diagnostics, nil
 }
 
 func validateAnthropicRequestWire(wire anthropicRequestWire) error {
@@ -205,7 +208,12 @@ func validateAnthropicRequestWire(wire anthropicRequestWire) error {
 	return nil
 }
 
-func decodeAnthropicRequestFields(wire anthropicRequestWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeAnthropicRequestFields(
+	wire anthropicRequestWire,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	if err := decodeAnthropicOutputConfig(wire.OutputConfig, request); err != nil {
 		return err
 	}
@@ -218,11 +226,19 @@ func decodeAnthropicRequestFields(wire anthropicRequestWire, request *llmprotoco
 	if err := decodeAnthropicSystem(wire.System, request, policy); err != nil {
 		return err
 	}
-	if err := decodeAnthropicMessages(wire.Messages, request, policy); err != nil {
+	added, err := decodeAnthropicMessages(wire.Messages, request, policy, diagnostics)
+	if err != nil {
 		return err
 	}
-	if err := decodeAnthropicTools(wire.Tools, request, policy); err != nil {
+	if err := decodeAnthropicTools(wire.Tools, request, policy, diagnostics); err != nil {
 		return err
+	}
+	// A tool a system message added mid-conversation joins the declared ones:
+	// every backend takes it there, and the model can call it as before.
+	for _, tool := range added {
+		if !slices.ContainsFunc(request.Tools, func(declared llmprotocol.Tool) bool { return declared.Name == tool.Name }) {
+			request.Tools = append(request.Tools, tool)
+		}
 	}
 	return decodeAnthropicToolChoice(wire.ToolChoice, request)
 }
@@ -275,6 +291,7 @@ func decodeAnthropicBaseRequest(wire anthropicRequestWire) llmprotocol.Request {
 		},
 		Trusted:           llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.AnthropicMessagesV1},
 		ContextManagement: append(json.RawMessage(nil), wire.ContextManagement...),
+		Safeguards:        append(json.RawMessage(nil), wire.Safeguards...),
 	}
 	if wire.Metadata != nil && wire.Metadata.UserID != "" {
 		request.EndUserID = wire.Metadata.UserID
@@ -348,18 +365,101 @@ func decodeAnthropicSystem(raw json.RawMessage, request *llmprotocol.Request, po
 	return nil
 }
 
-func decodeAnthropicMessages(messages []anthropicMessageWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+// decodeAnthropicMessages decodes messages and returns the tools that
+// tool_addition blocks in system messages added mid-conversation.
+func decodeAnthropicMessages(
+	messages []anthropicMessageWire,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) ([]llmprotocol.Tool, error) {
+	var added []llmprotocol.Tool
 	for _, messageWire := range messages {
-		message, err := decodeAnthropicMessage(messageWire, policy)
+		rest, tools, err := takeAnthropicToolAdditions(messageWire, policy, diagnostics)
 		if err != nil {
-			return err
+			return nil, err
+		}
+		added = append(added, tools...)
+		if rest == nil {
+			continue
+		}
+		message, err := decodeAnthropicMessage(*rest, policy)
+		if err != nil {
+			return nil, err
 		}
 		request.Messages = append(request.Messages, message...)
 	}
-	return nil
+	return added, nil
 }
 
-func decodeAnthropicTools(raw json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+// anthropicToolAdditionWire is the block Claude Code sends in a system message
+// when a deferred tool becomes available.
+type anthropicToolAdditionWire struct {
+	Type string `json:"type"`
+	Tool struct {
+		Type       string          `json:"type"`
+		Definition json.RawMessage `json:"definition"`
+	} `json:"tool"`
+	CacheControl *anthropicCacheControlWire `json:"cache_control,omitempty"`
+}
+
+// takeAnthropicToolAdditions takes the tool_addition blocks out of a system
+// message: the message without them (nil when nothing else is left) and the
+// tools they define.
+func takeAnthropicToolAdditions(
+	wire anthropicMessageWire,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) (*anthropicMessageWire, []llmprotocol.Tool, error) {
+	var blocks []json.RawMessage
+	if wire.Role != "system" || json.Unmarshal(wire.Content, &blocks) != nil {
+		return &wire, nil, nil
+	}
+	var tools []llmprotocol.Tool
+	rest := make([]json.RawMessage, 0, len(blocks))
+	for _, block := range blocks {
+		if typeName, _ := anthropicContentDiscriminator(block); typeName != "tool_addition" {
+			rest = append(rest, block)
+			continue
+		}
+		var addition anthropicToolAdditionWire
+		if err := decodeWireValue(block, &addition, policy); err != nil {
+			return nil, nil, err
+		}
+		if addition.Tool.Type != "tool_definition" {
+			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool_addition", "Anthropic tool_addition must carry a tool_definition", nil)
+		}
+		tool, err := decodeAnthropicTool(addition.Tool.Definition, policy, diagnostics)
+		if err != nil {
+			return nil, nil, err
+		}
+		// The block's cache breakpoint moves with the tool, so the request keeps
+		// as many breakpoints as it was sent with.
+		if tool.Cache == nil {
+			tool.Cache = decodeAnthropicCacheControl(addition.CacheControl)
+		}
+		tools = append(tools, tool)
+	}
+	if len(tools) == 0 {
+		return &wire, nil, nil
+	}
+	if len(rest) == 0 && wire.OutputConfig == nil {
+		return nil, tools, nil
+	}
+	content, err := json.Marshal(rest)
+	if err != nil {
+		return nil, nil, err
+	}
+	wire.Content = content
+	return &wire, tools, nil
+}
+
+func decodeAnthropicTools(
+	raw json.RawMessage,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil
 	}
@@ -368,35 +468,45 @@ func decodeAnthropicTools(raw json.RawMessage, request *llmprotocol.Request, pol
 		return err
 	}
 	for _, toolBody := range toolBodies {
-		var discriminator struct {
-			Type string `json:"type"`
-		}
-		if err := json.Unmarshal(toolBody, &discriminator); err != nil {
-			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Anthropic tool is invalid", err)
-		}
-		if discriminator.Type != "" && discriminator.Type != "custom" {
-			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only custom tools enter the model protocol", nil)
-		}
-		var toolWire anthropicToolWire
-		if err := decodeWireValue(toolBody, &toolWire, policy); err != nil {
+		tool, err := decodeAnthropicTool(toolBody, policy, diagnostics)
+		if err != nil {
 			return err
 		}
-		if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-			"tools.allowed_callers":       toolWire.AllowedCallers,
-			"tools.defer_loading":         toolWire.DeferLoading,
-			"tools.eager_input_streaming": toolWire.EagerInputStreaming,
-			"tools.input_examples":        toolWire.InputExamples,
-		}); err != nil {
-			return err
-		}
-		schema := toolWire.InputSchema
-		if len(schema) == 0 {
-			schema = json.RawMessage(`{"type":"object"}`)
-		}
-		request.Tools = append(request.Tools, llmprotocol.Tool{Name: toolWire.Name, Description: toolWire.Description, InputSchema: schema, Strict: toolWire.Strict})
-		request.Tools[len(request.Tools)-1].Cache = decodeAnthropicCacheControl(toolWire.CacheControl)
+		request.Tools = append(request.Tools, tool)
 	}
 	return nil
+}
+
+func decodeAnthropicTool(toolBody json.RawMessage, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) (llmprotocol.Tool, error) {
+	var discriminator struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(toolBody, &discriminator); err != nil {
+		return llmprotocol.Tool{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Anthropic tool is invalid", err)
+	}
+	if discriminator.Type != "" && discriminator.Type != "custom" {
+		return llmprotocol.Tool{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only custom tools enter the model protocol", nil)
+	}
+	var toolWire anthropicToolWire
+	if err := decodeWireValue(toolBody, &toolWire, policy); err != nil {
+		return llmprotocol.Tool{}, err
+	}
+	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
+		"tools.allowed_callers":       toolWire.AllowedCallers,
+		"tools.defer_loading":         optInDeferLoading(toolWire.DeferLoading, policy, llmprotocol.AnthropicMessagesV1, diagnostics),
+		"tools.eager_input_streaming": toolWire.EagerInputStreaming,
+		"tools.input_examples":        toolWire.InputExamples,
+	}); err != nil {
+		return llmprotocol.Tool{}, err
+	}
+	schema := toolWire.InputSchema
+	if len(schema) == 0 {
+		schema = json.RawMessage(`{"type":"object"}`)
+	}
+	return llmprotocol.Tool{
+		Name: toolWire.Name, Description: toolWire.Description, InputSchema: schema, Strict: toolWire.Strict,
+		Cache: decodeAnthropicCacheControl(toolWire.CacheControl),
+	}, nil
 }
 
 func decodeAnthropicToolChoice(choice *anthropicToolChoiceWire, request *llmprotocol.Request) error {
@@ -472,11 +582,14 @@ func decodeAnthropicMessage(wire anthropicMessageWire, policy llmprotocol.Policy
 	}
 	result := make([]llmprotocol.Message, 0, 3)
 	ordinary := make([]llmprotocol.Content, 0, len(contents))
+	withToolResults := role == llmprotocol.RoleUser && slices.ContainsFunc(contents, func(content llmprotocol.Content) bool {
+		return content.Kind == llmprotocol.ContentToolResult
+	})
 	flush := func() {
 		if len(ordinary) == 0 {
 			return
 		}
-		result = append(result, llmprotocol.Message{Role: role, Content: ordinary})
+		result = append(result, llmprotocol.Message{Role: role, Content: ordinary, WithToolResults: withToolResults})
 		ordinary = nil
 	}
 	for _, content := range contents {

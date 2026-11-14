@@ -33,6 +33,7 @@
 {{- end }}
 {{- $customModelsMount := false -}}
 {{- $customConfigMount := false -}}
+{{- $customDataMount := eq (include "semantic-router.customDataMount" .) "true" -}}
 {{- range .Values.extraVolumeMounts -}}
 {{- if eq (.mountPath | default "") "/app/models" -}}
 {{- $customModelsMount = true -}}
@@ -94,6 +95,9 @@ spec:
       serviceAccountName: {{ include "semantic-router.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if not (kindIs "invalid" .Values.terminationGracePeriodSeconds) }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- end }}
       # Models are now automatically downloaded by the router at startup
       # No initContainer is needed - the router uses its built-in Go-based
       # modeldownload package to download models from HuggingFace based on
@@ -117,6 +121,10 @@ spec:
           {{- end }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
+        {{- with .Values.lifecycle }}
+        lifecycle:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         ports:
         {{- if $standalone }}
         {{- range $listeners }}
@@ -193,6 +201,10 @@ spec:
         {{- if not $customModelsMount }}
         - name: models-volume
           mountPath: /app/models
+        {{- end }}
+        {{- if not $customDataMount }}
+        - name: router-data
+          mountPath: /var/lib/vsr
         {{- end }}
         {{- if and $standalone $tlsSecret }}
         # A Secret volume rather than a subPath mount: Kubernetes replaces its
@@ -275,6 +287,16 @@ spec:
           claimName: {{ include "semantic-router.pvcName" . }}
       {{- else }}
       - name: models-volume
+        emptyDir: {}
+      {{- end }}
+      {{- end }}
+      {{- if not $customDataMount }}
+      {{- if .Values.data.persistence.enabled }}
+      - name: router-data
+        persistentVolumeClaim:
+          claimName: {{ include "semantic-router.dataPvcName" . }}
+      {{- else }}
+      - name: router-data
         emptyDir: {}
       {{- end }}
       {{- end }}

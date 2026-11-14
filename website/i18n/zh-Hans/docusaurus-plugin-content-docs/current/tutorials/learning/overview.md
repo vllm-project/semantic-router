@@ -16,7 +16,7 @@ translation:
 
 - `global.router.learning.adaptation`：在线模型选择学习。
 - `global.router.learning.protection`：会话和对话稳定性。
-- `routing.decisions[].adaptations`：按决策的应用、观察或绕过控制。
+- `recipes[].decisions[].adaptations`：按决策的应用、观察或绕过控制。
 - 路由回放：可选诊断和结果，用于离线配方学习；持久化需要耐用的回放后端。
 
 当决策应保持语义，但重复请求应考虑当前模型、工具循环状态、前缀缓存证据、交接成本、切换历史或运行时结果时，使用路由学习。
@@ -54,7 +54,7 @@ translation:
 
 使用 `vllm-sr recipe builtin init` 初始化内置配方时，会开启 conversation protection，并关闭在线 adaptation；基础配置中已有的设置优先。显式的 `false`、自定义身份请求头和调优参数都会保留。这些默认值作用于整份配置，decision 级别的 `bypass` 仍然有效。
 
-客户端需要提供稳定的 session 和 conversation 标识，防护才能保持模型。缺少标识时，路由不会获得会话防护，并会记录诊断。详见[会话标识](../../api/session-identification)。
+客户端需要提供稳定的 session 标识，防护才能保持模型；在 `scope: conversation` 下，没有 conversation 标识的请求会按对话开头命名并分别保持。缺少 session 标识时，路由不会获得会话防护，并会记录诊断。详见[会话标识](../../api/session-identification)。
 
 参考配置 `config/config.yaml` 启用了两个组件。若还需要开启在线 adaptation，并在多个副本间共享防护状态，可以配置：
 
@@ -122,13 +122,10 @@ base selector
 
 ## 请求头与回放 {#header-and-replay}
 
-`x-vsr-learning-*` 请求头族有意保持紧凑：
+`x-vsr-trace` 的 `learning` 成员有意保持紧凑：每个方法带有它的 `action`、`scope` 和 `reason`。
 
 ```http
-x-vsr-learning-methods: adaptation,protection
-x-vsr-learning-actions: adaptation=propose_switch,protection=allow_switch
-x-vsr-learning-scopes: protection=conversation
-x-vsr-learning-reasons: adaptation=sampled_win,protection=switch_allowed
+x-vsr-trace: learning=(adaptation;action=propose_switch;reason=sampled_win protection;action=allow_switch;scope=conversation;reason=switch_allowed)
 ```
 
 启用路由回放时，基础模型、提案模型、最终模型、缓存热度、切换成本、候选分数、采样值和哈希身份诊断等详细字段会存储在那里，并以 `x-vsr-replay-id` 为键。

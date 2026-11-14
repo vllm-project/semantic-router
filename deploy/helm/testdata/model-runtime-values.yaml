@@ -1,23 +1,18 @@
 # Rendering fixture: model paths identify maintained artifacts, not installed weights.
 configOverride:
-  version: v0.3
+  version: v0.5
   listeners:
     - name: http-8899
       address: 0.0.0.0
       port: 8899
   providers: {}
-  routing:
-    model_bindings:
-      domain_classifier:
-        deployment: local-domain
-        contract: label_distribution.v1
   recipes:
+    - name: default
+      model_bindings:
+        domain: local-domain
     - name: private
-      routing:
-        model_bindings:
-          pii_classifier:
-            deployment: local-pii
-            contract: token_spans.v1
+      model_bindings:
+        pii: local-pii
   global:
     model_catalog:
       deployments:
@@ -48,3 +43,7 @@ configOverride:
           max_queue: 4
           queue_timeout_ms: 500
           on_overflow: shed
+  entrypoints:
+    - model_names: [vllm-sr/auto]
+      recipe: default
+      default: true

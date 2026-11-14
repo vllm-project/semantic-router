@@ -20,9 +20,7 @@ from vllm_srun.testing.fixtures import write_fixture
 from .conftest import QUESTIONS, STATE
 
 DECISION2_GPU = DtypePolicy(approximate_kernels=True)
-DECISION3 = DtypePolicy(
-    autocast=None, bf16_resident=False, gpu_weights="bfloat16", cpu_weights="bfloat16"
-)
+DECISION3 = DtypePolicy(autocast=None, bf16_resident=False, gpu_weights="bfloat16")
 TASK_HEADS = DtypePolicy(
     weights="float32", autocast=None, head="float32", bf16_resident=False
 )
@@ -44,7 +42,7 @@ def spec(policy, variants=None):
         (DECISION2_GPU, True, "bfloat16"),
         (DECISION2_GPU, False, "float32"),
         (DECISION3, True, "bfloat16"),
-        (DECISION3, False, "bfloat16"),
+        (DECISION3, False, "float32"),
         (TASK_HEADS, True, "float32"),
         (TASK_HEADS, False, "float32"),
     ],
@@ -79,6 +77,26 @@ def test_another_dtype_holds_every_weight_in_it_with_the_reference_kernels():
     assert dtypes.apply(spec(DECISION3), "float32", True).dtype == DtypePolicy(
         autocast=None, bf16_resident=False
     )
+
+
+def test_decision3_runs_bf16_on_a_gpu_and_fp32_on_a_cpu(d3_text_package, tmp_path):
+    from vllm_srun.families.decision3.family import Decision3Family
+    from vllm_srun.plugins.base import PackageRef
+    from vllm_srun.testing.decision3 import write_quantized_fixture
+
+    family = Decision3Family()
+
+    def policy(package):
+        return family.describe(family.verify(PackageRef(package))).dtype
+
+    released = policy(d3_text_package)
+    assert released == DECISION3
+    assert dtypes.resolve("bfloat16", released, True) == "auto"
+    assert dtypes.resolve("float32", released, False) == "auto"
+    assert dtypes.resolve("bfloat16", released, False) == "bfloat16"
+    # A quantized package's format holds BF16 activations on a CPU too.
+    int4 = policy(write_quantized_fixture(d3_text_package, tmp_path / "int4"))
+    assert dtypes.published(int4, True) == dtypes.published(int4, False) == "bfloat16"
 
 
 def serve(package, **args):
@@ -436,7 +454,7 @@ def test_system_one_refuses_a_question_over_the_process_max_model_len(
     )
     runtime.start(background=False)
     try:
-        client = TestClient(create_app(runtime))
+        client = TestClient(create_app(runtime, systemone_schema="vllm-sr/4.0"))
         question = {"q": QUESTIONS["reasoning"]}
         response = client.post(
             "/v1/systemone", json={"state": LONG_STATE, "questions": question}

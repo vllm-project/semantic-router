@@ -12,10 +12,10 @@ import (
 )
 
 type responsesResponseWire struct {
-	KVTransferParams  json.RawMessage     `json:"kv_transfer_params,omitempty" response_extension:"true"`
-	ECTransferParams  json.RawMessage     `json:"ec_transfer_params,omitempty" response_extension:"true"`
-	InputMessages     json.RawMessage     `json:"input_messages,omitempty" response_extension:"true"`
-	OutputMessages    json.RawMessage     `json:"output_messages,omitempty" response_extension:"true"`
+	KVTransferParams  json.RawMessage     `json:"kv_transfer_params,omitempty"`
+	ECTransferParams  json.RawMessage     `json:"ec_transfer_params,omitempty"`
+	InputMessages     json.RawMessage     `json:"input_messages,omitempty"`
+	OutputMessages    json.RawMessage     `json:"output_messages,omitempty"`
 	ID                string              `json:"id"`
 	Object            string              `json:"object,omitempty"`
 	CreatedAt         float64             `json:"created_at"`
@@ -87,8 +87,8 @@ type responsesUsageWire struct {
 }
 
 type responsesInputUsageDetails struct {
-	InputTokensPerTurn  json.RawMessage `json:"input_tokens_per_turn,omitempty" response_extension:"true"`
-	CachedTokensPerTurn json.RawMessage `json:"cached_tokens_per_turn,omitempty" response_extension:"true"`
+	InputTokensPerTurn  json.RawMessage `json:"input_tokens_per_turn,omitempty"`
+	CachedTokensPerTurn json.RawMessage `json:"cached_tokens_per_turn,omitempty"`
 	CachedTokens        *int64          `json:"cached_tokens"`
 	CacheWriteTokens    *int64          `json:"cache_write_tokens,omitempty"`
 	CreatedCacheTokens  *int64          `json:"created_cache_tokens,omitempty"`
@@ -96,9 +96,9 @@ type responsesInputUsageDetails struct {
 }
 
 type responsesOutputUsageDetails struct {
-	OutputTokensPerTurn     json.RawMessage `json:"output_tokens_per_turn,omitempty" response_extension:"true"`
-	ToolOutputTokensPerTurn json.RawMessage `json:"tool_output_tokens_per_turn,omitempty" response_extension:"true"`
-	ToolOutputTokens        json.RawMessage `json:"tool_output_tokens,omitempty" response_extension:"true"`
+	OutputTokensPerTurn     json.RawMessage `json:"output_tokens_per_turn,omitempty"`
+	ToolOutputTokensPerTurn json.RawMessage `json:"tool_output_tokens_per_turn,omitempty"`
+	ToolOutputTokens        json.RawMessage `json:"tool_output_tokens,omitempty"`
 	ReasoningTokens         int64           `json:"reasoning_tokens"`
 }
 
@@ -124,26 +124,22 @@ func responsesErrorCode(protocolError *llmprotocol.ProtocolError) string {
 
 func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire responsesResponseWire
-	canonicalBody, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateResponsesResponseResource(wire, false); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	nestedVendorExtensions, err := responsesOutputVendorExtensions(wire.Output, policy)
-	if err != nil {
-		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
-	}
-	vendorExtensions = append(vendorExtensions, nestedVendorExtensions...)
+	unknownFields = append(unknownFields, responsesOutputUnknownFields(wire.Output, policy)...)
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, vendorExtensions)
+	appendUnknownFieldDiagnostics(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, unknownFields)
 	diagnostics = appendDiagnostics(diagnostics, responsesResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeResponsesResponseResource(wire, policy, &diagnostics)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, canonicalBody, response.Generation, wire.Status, policy), diagnostics, nil
+	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, body, response.Generation, wire.Status, policy), diagnostics, nil
 }
 
 func responsesResponseMetadataDiagnostics(wire responsesResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {
@@ -293,17 +289,26 @@ func decodeResponsesOutput(
 	return output, nil
 }
 
+const responsesItemMetadataReason = "response item metadata has no protocol-neutral representation"
+
+// responsesItemMetadataFields names the output item metadata that the neutral
+// contract cannot carry. Buffered and streamed replies drop the same set.
+func responsesItemMetadataFields(item responsesItemWire) map[string]bool {
+	return map[string]bool{
+		"output.async":             len(item.Async) > 0,
+		"output.caller":            len(item.Caller) > 0,
+		"output.encrypted_content": len(item.EncryptedContent) > 0,
+		"output.phase":             len(item.Phase) > 0,
+		"output.status":            item.Status != "" && item.Type != "image_generation_call",
+	}
+}
+
 func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) (llmprotocol.OutputItem, error) {
 	if err := validateResponsesOutputItemStatus(item); err != nil {
 		return llmprotocol.OutputItem{}, err
 	}
-	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
-		"output.caller":            len(item.Caller) > 0,
-		"output.encrypted_content": len(item.EncryptedContent) > 0,
-		"output.namespace":         item.Namespace != "",
-		"output.phase":             len(item.Phase) > 0,
-		"output.status":            item.Status != "" && item.Type != "image_generation_call",
-	}, "response item metadata has no protocol-neutral representation")
+	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1,
+		responsesItemMetadataFields(item), responsesItemMetadataReason)
 	id := item.ID
 	if id == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
 		id = llmprotocol.StableID("response-output", fmt.Sprint(index), item.Type, item.CallID)
@@ -313,9 +318,9 @@ func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprot
 	case "message":
 		return decodeResponsesMessageOutput(output, item, policy, diagnostics)
 	case "function_call":
-		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}}}
+		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments, Namespace: item.Namespace}}}
 	case "custom_tool_call":
-		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input}}}
+		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input, Namespace: item.Namespace}}}
 	case "reasoning":
 		return decodeResponsesReasoningOutput(output, item, policy)
 	case "image_generation_call":
@@ -402,14 +407,11 @@ func decodeResponsesUsage(wire responsesUsageWire) (llmprotocol.Usage, error) {
 	if wire.OutputTokensDetails != nil {
 		reasoning = wire.OutputTokensDetails.ReasoningTokens
 	}
-	other := int64(-1)
-	if reasoning >= 0 && wire.OutputTokens >= reasoning {
-		other = wire.OutputTokens - reasoning
-	}
+	outputReasoning, outputOther := splitOutputUsage(wire.OutputTokens, reasoning, llmprotocol.UsageAuthoritative)
 	usage := llmprotocol.Usage{
 		State:         llmprotocol.UsageAvailable,
 		InputUncached: unknownCount(), InputCacheRead: unknownCount(), InputCacheWrite: unknownCount(),
-		OutputReasoning: authoritative(reasoning), OutputOther: authoritative(other),
+		OutputReasoning: outputReasoning, OutputOther: outputOther,
 		InputTotal: authoritative(wire.InputTokens), OutputTotal: authoritative(wire.OutputTokens), Total: authoritative(wire.TotalTokens),
 	}
 	if wire.InputTokensDetails != nil {
@@ -506,17 +508,19 @@ func applyResponsesStopReason(
 	diagnostics *llmprotocol.Diagnostics,
 ) error {
 	switch stopReason {
-	case llmprotocol.StopMaxTokens, llmprotocol.StopContentFilter:
+	case llmprotocol.StopMaxTokens, llmprotocol.StopContextWindow, llmprotocol.StopContentFilter:
 		wire.Status = "incomplete"
 		reason := "max_output_tokens"
 		if stopReason == llmprotocol.StopContentFilter {
 			reason = "content_filter"
+		} else if stopReason == llmprotocol.StopContextWindow {
+			appendContextWindowProjection(diagnostics, policy, source, llmprotocol.OpenAIResponsesV1)
 		}
 		wire.IncompleteDetails = &struct {
 			Reason string `json:"reason"`
 		}{Reason: reason}
 		return nil
-	case llmprotocol.StopPaused, llmprotocol.StopContextWindow, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
+	case llmprotocol.StopPaused, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
 		return appendLossy(diagnostics, policy, source, llmprotocol.OpenAIResponsesV1, "response.stop_reason", "Responses cannot represent the source terminal reason")
 	default:
 		return nil
@@ -552,8 +556,11 @@ func encodeResponsesUsage(usage llmprotocol.Usage) *responsesUsageWire {
 		InputTokens:  tokenValue(usage.InputTotal),
 		OutputTokens: tokenValue(usage.OutputTotal),
 		TotalTokens:  tokenValue(usage.Total),
+		// The Responses schema requires an integer cached_tokens, and Codex CLI
+		// fails the turn without one. An unreported cache read is sent as 0, as
+		// vLLM's own Responses server does; an unreported cache write is omitted.
 		InputTokensDetails: &responsesInputUsageDetails{
-			CachedTokens: usage.InputCacheRead.Value, CacheWriteTokens: usage.InputCacheWrite.Value,
+			CachedTokens: llmprotocol.Int64(tokenValue(usage.InputCacheRead)), CacheWriteTokens: usage.InputCacheWrite.Value,
 		},
 		OutputTokensDetails: &responsesOutputUsageDetails{ReasoningTokens: tokenValue(usage.OutputReasoning)},
 	}
@@ -567,6 +574,9 @@ func (OpenAIResponsesCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	if policy.ResponseVendor == llmprotocol.ResponseVendorOpenRouter {
+		return decodeOpenRouterTransportError(body, policy, llmprotocol.OpenAIResponsesV1)
+	}
 	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIResponsesV1)
 }
 
