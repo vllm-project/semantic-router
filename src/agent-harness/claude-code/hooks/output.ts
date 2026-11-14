@@ -3,7 +3,7 @@ import type { EngineInterface, ToolCallInput, ToolCallResult } from 'claude-code
 
 import type { Tag } from '../types'
 import { type Classified, classify, isRecord, failureOf, probabilityOf, type Reply } from './lib/classify'
-import { addCounts, type Found, hide, PII_QUESTIONS, parsePii, piiIn, secretsIn, type Span, tagText } from './lib/redact'
+import { addCounts, type Found, hide, type Kind, kindOf, kindOfCommand, PII_QUESTIONS, parsePii, piiIn, secretsIn, type Span, tagText } from './lib/redact'
 import { budgetOf, remoteHostOf, type Settings } from './lib/settings'
 import { record } from './lib/state'
 import { stamp } from './lib/env'
@@ -180,10 +180,17 @@ function hideSpans(fields: string[], found: readonly Found[]) {
 
 type Call = { toolUseId: string; at: string; tool: string; source: string }
 
+// How the secret rules read a call's output: a file by its name, a command's by the files it names.
+function kindOfCall(e: ToolCallInput): Kind {
+  const input: Record<string, unknown> = { ...e }
+  if (typeof input.file_path === 'string') return kindOf(input.file_path)
+  return typeof input.command === 'string' ? kindOfCommand(input.command) : 'unknown'
+}
+
 // Redact's half: the fields with secrets and the PII read in time hidden, what was hidden, and the reading it took.
 // A failure is recorded by the caller, which knows whether it withholds the output.
-async function redactOutput($: EngineInterface, settings: Settings, fields: string[]) {
-  const secrets = fields.map(field => hide(field, secretsIn(field)))
+async function redactOutput($: EngineInterface, settings: Settings, fields: string[], kind: Kind) {
+  const secrets = fields.map(field => hide(field, secretsIn(field, kind)))
   const joined = secrets.map(one => one.text).join('\n')
   const pii = await readInPieces($, settings, budgetOf(settings.waits.redact), joined, piece => piece, PII_QUESTIONS, parsePii)
   const spans = pii.ok ? spansOf(pii.value, settings.thresholds.redact.pii) : []
@@ -236,7 +243,7 @@ export async function inspectOutput($: EngineInterface, e: ToolCallInput, ran: T
   const call: Call = { toolUseId: e.tool_use_id ?? at, at, tool, source }
   // One question after the other, each in its own wait: the runtime answers one request at a time, so two read at
   // once each took the other's turns for its own pace and both ran out of time (a live 12,000-character read).
-  const redacted = isRedactable ? await redactOutput($, settings, output.fields) : undefined
+  const redacted = isRedactable ? await redactOutput($, settings, output.fields, kindOfCall(e)) : undefined
   // Redact's question ran out of time: the model is still busy with it, so shield's would wait its own time for
   // nothing. Shield steps aside with it (one card says both), unless it waits until done.
   const isRedactSlow = redacted !== undefined && !redacted.pii.ok && !redacted.pii.offline && !redacted.pii.cancelled
