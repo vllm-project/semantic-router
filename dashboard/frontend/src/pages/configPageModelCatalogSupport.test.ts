@@ -69,6 +69,7 @@ describe('effective model API format', () => {
       'responses',
       'messages',
       'images',
+      'videos',
       'systemone',
     ])
   })

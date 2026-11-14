@@ -20,7 +20,7 @@ func Warnings(cfg *RouterConfig) []ConfigWarning {
 	if cfg == nil || cfg.RoutingScope != "" {
 		return nil
 	}
-	return slices.Concat(cfg.FormWarnings, modelResolutionWarnings(cfg))
+	return slices.Concat(cfg.FormWarnings, modelResolutionWarnings(cfg), videoGenerationWarnings(cfg))
 }
 
 // logConfigWarnings logs each warning that has no event of its own when the

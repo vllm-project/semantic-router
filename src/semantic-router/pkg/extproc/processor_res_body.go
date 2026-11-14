@@ -15,6 +15,11 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	if skipResponse := r.handleSkipProcessingResponseBody(v.ResponseBody.Body, ctx); skipResponse != nil {
 		return skipResponse, nil
 	}
+	// Content bytes are never a neutral artifact, and a failed content call
+	// carries the provider's own error: either way there is nothing to decode.
+	if isVideoContentRequest(ctx) {
+		return buildResponseBodyContinueResponse(nil, nil), nil
+	}
 
 	completionLatency := time.Since(ctx.StartTime)
 	if !ctx.IsStreamingResponse || v.ResponseBody.GetEndOfStream() {

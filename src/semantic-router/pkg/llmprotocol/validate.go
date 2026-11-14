@@ -616,7 +616,7 @@ func MarkDeferredToolLinks(request *Request) {
 func validateRoleContent(role Role, content Content) error {
 	switch role {
 	case RoleSystem, RoleDeveloper:
-		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentGeneratedImage) {
+		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentGeneratedImage, ContentGeneratedVideo) {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "system and developer messages cannot contain tool control blocks", nil)
 		}
 	case RoleAssistant:
@@ -628,7 +628,7 @@ func validateRoleContent(role Role, content Content) error {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "tool messages may contain only tool results", nil)
 		}
 	case RoleUser:
-		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentRefusal, ContentGeneratedImage) {
+		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentRefusal, ContentGeneratedImage, ContentGeneratedVideo) {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "user messages contain assistant-only content", nil)
 		}
 	}
@@ -674,6 +674,8 @@ func validateContentBlock(content Content, blocks *int, limits Limits, depth int
 		return validateToolResultContent(content, blocks, limits, depth)
 	case ContentGeneratedImage:
 		return validateGeneratedImageContent(content, limits)
+	case ContentGeneratedVideo:
+		return validateGeneratedVideoContent(content, limits)
 	default:
 		return NewError(ErrorInvalidRequest, "unknown_content_kind", "content kind is unsupported", nil)
 	}
@@ -715,7 +717,7 @@ func validateTextContent(content Content, limits Limits) error {
 }
 
 func hasNonTextFields(content Content) bool {
-	return content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil || content.URL != "" || content.Data != "" ||
+	return content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil || content.GeneratedVideo != nil || content.URL != "" || content.Data != "" ||
 		content.FileID != "" || content.Filename != "" || content.MediaType != "" || content.Detail != "" ||
 		(content.Kind != ContentReasoning && (content.Signature != "" || content.Reasoning != ""))
 }
@@ -724,7 +726,7 @@ func validateMediaContent(content Content, limits Limits) error {
 	if err := validateMediaBounds(content, limits); err != nil {
 		return err
 	}
-	if content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil || content.Text != "" ||
+	if content.ToolCall != nil || content.ToolResult != nil || content.GeneratedImage != nil || content.GeneratedVideo != nil || content.Text != "" ||
 		content.Signature != "" || len(content.Citations) != 0 {
 		return NewError(ErrorInvalidRequest, "invalid_content", "media content contains fields from another content kind", nil)
 	}
@@ -833,7 +835,7 @@ func validateToolResultContent(content Content, blocks *int, limits Limits, dept
 func hasToolControlForeignFields(content Content) bool {
 	return content.Text != "" || content.URL != "" || content.Data != "" || len(content.Citations) != 0 ||
 		content.FileID != "" || content.MediaType != "" || content.Filename != "" ||
-		content.Detail != "" || content.Signature != "" || content.GeneratedImage != nil
+		content.Detail != "" || content.Signature != "" || content.GeneratedImage != nil || content.GeneratedVideo != nil
 }
 
 func validateNestedToolResult(contents []Content, blocks *int, limits Limits, depth int) error {

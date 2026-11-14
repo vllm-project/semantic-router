@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -59,12 +60,16 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	// provider may require canonical re-encoding after its decorations are
 	// dropped, so do not commit the provider's original byte count.
 	if outcome.isSuccessful && ctx != nil && !ctx.IsStreamingResponse &&
-		ctx.SourceFormat == llmprotocol.OpenAIChatV1 && ctx.TargetFormat == llmprotocol.OpenAIChatV1 {
+		(ctx.SourceFormat == llmprotocol.OpenAIChatV1 && ctx.TargetFormat == llmprotocol.OpenAIChatV1 ||
+			ctx.SourceFormat == llmprotocol.OpenAIVideosV1 && !ctx.videosContent) {
 		headerMutation = mergeHeaderMutations(headerMutation,
 			&ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}})
 	}
 	response = buildResponseHeadersContinueResponse(headerMutation, outcome.bodyStreamed)
 	holdStreamForResponseGuard(ctx, response)
+	if outcome.isSuccessful && isVideoContentRequest(ctx) {
+		response.ModeOverride = &http_ext.ProcessingMode{ResponseBodyMode: http_ext.ProcessingMode_STREAMED}
+	}
 	return response, nil
 }
 

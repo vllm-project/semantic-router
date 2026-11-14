@@ -77,7 +77,7 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	}
 	if model.APIFormat != "" && catalogProtocolForAPIFormat(model.APIFormat) == "" {
 		return fmt.Errorf(
-			"providers.models[%d].api_format %q is unsupported; use chat_completions, responses, messages, images or systemone (openai and anthropic are aliases of chat_completions and messages)",
+			"providers.models[%d].api_format %q is unsupported; use chat_completions, responses, messages, images, videos or systemone (openai and anthropic are aliases of chat_completions and messages)",
 			modelIndex, model.APIFormat,
 		)
 	}
@@ -252,6 +252,8 @@ func catalogProtocolForAPIFormat(apiFormat string) string {
 		return "openai/chat-completions@1"
 	case APIFormatImages:
 		return "openai/images@1"
+	case APIFormatVideos:
+		return "openai/videos@1"
 	default:
 		return ""
 	}

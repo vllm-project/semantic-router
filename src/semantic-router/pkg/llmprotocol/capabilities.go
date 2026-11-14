@@ -51,6 +51,9 @@ const (
 	// including its request options, output item, and progress events. It is not
 	// interchangeable with generic image input or output support.
 	CapabilityImageGeneration
+	// CapabilityVideoGeneration covers the hosted video-generation operation.
+	// It is not interchangeable with generic video input or output support.
+	CapabilityVideoGeneration
 	CapabilitySamplingMinP
 	CapabilityRepetitionPenalty
 	CapabilityCacheIsolation
@@ -89,6 +92,7 @@ func (set CapabilitySet) Empty() bool { return set.bits == 0 }
 // (tools/streaming/reasoning/caching) is protocol concern rather than a task
 // modality, so model capability declarations are compared against this mask.
 var taskCapabilityMask = CapabilityImageInput | CapabilityImageOutput | CapabilityImageGeneration |
+	CapabilityVideoGeneration |
 	CapabilityAudioInput | CapabilityAudioOutput |
 	CapabilityVideoInput | CapabilityVideoOutput |
 	CapabilityFileInput | CapabilityFileOutput
@@ -146,6 +150,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningDisplay, "reasoning_display"},
 		{CapabilityMatchedStopSequence, "matched_stop_sequence"},
 		{CapabilityImageGeneration, "image_generation"},
+		{CapabilityVideoGeneration, "video_generation"},
 		{CapabilityCustomTools, "custom_tools"},
 		{CapabilityTextVerbosity, "text_verbosity"},
 		{CapabilityReasoningContinuity, "reasoning_continuity"},
@@ -167,6 +172,9 @@ func RequiredCapabilities(request Request) CapabilitySet {
 	if request.ImageGeneration != nil && request.ToolChoice.Mode != ToolChoiceNone ||
 		request.ToolChoice.Mode == ToolChoiceImageGeneration {
 		required.bits |= CapabilityImageGeneration
+	}
+	if request.VideoGeneration != nil {
+		required.bits |= CapabilityVideoGeneration
 	}
 	required.bits |= toolCapabilities(request.Tools)
 	required.bits |= instructionCapabilities(request.Instructions)
@@ -347,6 +355,9 @@ func RequiredEventCapabilities(event Event) CapabilitySet {
 		event.Content != nil && event.Content.Kind == ContentGeneratedImage {
 		required.bits |= CapabilityImageGeneration
 	}
+	if event.Content != nil && (event.Content.Kind == ContentGeneratedVideo || event.Content.GeneratedVideo != nil) {
+		required.bits |= CapabilityVideoGeneration
+	}
 	if event.ToolCall != nil && event.ToolCall.Kind == ToolKindCustom {
 		required.bits |= CapabilityCustomTools
 	}
@@ -374,6 +385,8 @@ func capabilityForRequestContent(content Content) Capability {
 		return reasoningContentCapabilities(content.Signature) | cache
 	case ContentGeneratedImage:
 		return CapabilityImageGeneration | cache
+	case ContentGeneratedVideo:
+		return CapabilityVideoGeneration | cache
 	default:
 		return 0
 	}
@@ -396,6 +409,8 @@ func capabilityForResponseContent(content Content) Capability {
 		return reasoningContentCapabilities(content.Signature)
 	case ContentGeneratedImage:
 		return CapabilityImageGeneration
+	case ContentGeneratedVideo:
+		return CapabilityVideoGeneration
 	default:
 		return 0
 	}
@@ -496,6 +511,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_display":     CapabilityReasoningDisplay,
 		"matched_stop_sequence": CapabilityMatchedStopSequence,
 		"image_generation":      CapabilityImageGeneration,
+		"video_generation":      CapabilityVideoGeneration,
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
 		"reasoning_continuity":  CapabilityReasoningContinuity,

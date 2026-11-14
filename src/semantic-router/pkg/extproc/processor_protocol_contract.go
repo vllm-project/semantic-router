@@ -400,6 +400,8 @@ func requestWireProtocol(format llmprotocol.WireFormat) string {
 		return "anthropic/messages@1"
 	case llmprotocol.OpenAIImagesV1:
 		return "openai/images@1"
+	case llmprotocol.OpenAIVideosV1:
+		return "openai/videos@1"
 	default:
 		return "openai/chat-completions@1"
 	}

@@ -20,6 +20,7 @@ describe('model form backend targets', () => {
       | 'responses'
       | 'messages'
       | 'images'
+      | 'videos'
       | 'systemone'
       | 'openai'
       | 'anthropic'
@@ -30,6 +31,7 @@ describe('model form backend targets', () => {
       { name: 'responses', api_format: 'responses' },
       { name: 'messages', api_format: 'anthropic' },
       { name: 'painter', api_format: 'images' },
+      { name: 'filmmaker', api_format: 'videos' },
       { name: 'decision', api_format: 'systemone' },
     ] satisfies ProviderModel[]
     expect(models.map((model) => model.api_format)).toEqual([
@@ -37,6 +39,7 @@ describe('model form backend targets', () => {
       'responses',
       'anthropic',
       'images',
+      'videos',
       'systemone',
     ])
   })

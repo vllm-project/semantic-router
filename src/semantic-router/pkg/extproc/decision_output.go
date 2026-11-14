@@ -30,6 +30,12 @@ func (r *OpenAIRouter) applyDecisionOutput(ctx *RequestContext) error {
 	if ctx.SourceFormat == llmprotocol.OpenAIImagesV1 {
 		return r.applyImagesEntryDecision(ctx, decision, request)
 	}
+	if ctx.SourceFormat == llmprotocol.OpenAIVideosV1 {
+		return r.applyVideosEntryDecision(ctx, decision, request)
+	}
+	if decision.Output.GeneratesVideos() {
+		return r.refuseUncarriableVideoDecision(ctx, decision)
+	}
 	if !decision.Output.GeneratesImages() {
 		return nil
 	}
@@ -46,6 +52,44 @@ func (r *OpenAIRouter) applyDecisionOutput(ctx *RequestContext) error {
 			fmt.Sprintf("the matched route answers with a generated image, which the %s API cannot return; call the Responses API or the Images API", clientAPIName(client)))
 	}
 	if selection.ApplyDecisionOutput(request, decision) {
+		request.Generation++
+	}
+	return nil
+}
+
+// refuseUncarriableVideoDecision refuses a video decision reached by a client
+// whose API cannot return a video job, so the answer never becomes a 502 at the
+// response stage.
+func (r *OpenAIRouter) refuseUncarriableVideoDecision(ctx *RequestContext, decision *config.Decision) error {
+	client := ctx.SourceFormat
+	if client == "" {
+		client = llmprotocol.OpenAIChatV1
+	}
+	if supported, ok := r.codecCapabilitiesForFormat(client); ok && supported.Supports(llmprotocol.CapabilityVideoGeneration) {
+		return nil
+	}
+	return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+		fmt.Sprintf("the matched route answers with a video job, which the %s API cannot return; call the Videos API", clientAPIName(client)))
+}
+
+// applyVideosEntryDecision admits a Videos API create only to a decision that
+// produces a video job. The job is the only answer the create call returns, so
+// the video_generation operation is forced rather than inferred by a model.
+func (r *OpenAIRouter) applyVideosEntryDecision(ctx *RequestContext, decision *config.Decision, request *llmprotocol.Request) error {
+	if !decision.Output.GeneratesVideos() {
+		return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			"the Videos API needs a decision that answers with a generated video")
+	}
+	client := ctx.SourceFormat
+	if client == "" {
+		client = llmprotocol.OpenAIVideosV1
+	}
+	if supported, ok := r.codecCapabilitiesForFormat(client); !ok || !supported.Supports(llmprotocol.CapabilityVideoGeneration) {
+		return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			fmt.Sprintf("the Videos API cannot return a video job on the %s protocol", clientAPIName(client)))
+	}
+	if request.VideoGeneration == nil {
+		request.VideoGeneration = &llmprotocol.VideoGenerationOptions{}
 		request.Generation++
 	}
 	return nil
@@ -101,6 +145,26 @@ func (r *OpenAIRouter) imagesEntryRejection(ctx *RequestContext) *ext_proc.Proce
 	}
 	logRoutingFailure(ctx, "decision_output_refused", routingFailureImageRouteRequired.code, errors.New(reason))
 	return r.routingFailureResponse(ctx, routingFailureImageRouteRequired)
+}
+
+// videosEntryRejection refuses a Videos API create that reached no decision
+// producing a video job.
+func (r *OpenAIRouter) videosEntryRejection(ctx *RequestContext) *ext_proc.ProcessingResponse {
+	if ctx == nil || ctx.SourceFormat != llmprotocol.OpenAIVideosV1 || !ctx.videosCreate {
+		return nil
+	}
+	decision := ctx.VSRSelectedDecision
+	if decision != nil && decision.Output.GeneratesVideos() {
+		return nil
+	}
+	reason := "the request matched no decision"
+	if decision != nil {
+		reason = fmt.Sprintf("decision %q answers in %s", decision.Name, decision.Output)
+	} else if ctx.Routing.SelectedRecipe() == nil {
+		reason = fmt.Sprintf("model %q is not a recipe entrypoint", ctx.RequestModel)
+	}
+	logRoutingFailure(ctx, "decision_output_refused", "unsupported_capability", errors.New(reason))
+	return r.routingFailureResponse(ctx, routingFailureVideoRouteRequired)
 }
 
 // refuseDecisionOutput logs which decision a request reached and returns the

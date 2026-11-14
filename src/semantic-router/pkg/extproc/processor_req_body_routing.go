@@ -299,6 +299,8 @@ func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 		return llmprotocol.OpenAIResponsesV1, nil
 	case config.APIFormatImages, "openai.images", string(llmprotocol.OpenAIImagesV1):
 		return llmprotocol.OpenAIImagesV1, nil
+	case config.APIFormatVideos, "openai.videos", string(llmprotocol.OpenAIVideosV1):
+		return llmprotocol.OpenAIVideosV1, nil
 	default:
 		return "", fmt.Errorf("unsupported API format %q", apiFormat)
 	}
