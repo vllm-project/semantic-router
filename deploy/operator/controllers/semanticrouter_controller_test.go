@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -676,6 +677,149 @@ func TestUpdateStatusClearsStaleProgressingOnDeploymentNotFound(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestUpdateStatusAvailableFollowsMinimumReadyReplicas(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+	key := types.NamespacedName{Name: "test", Namespace: "default"}
+
+	type step struct {
+		replicas, ready int32
+		status          metav1.ConditionStatus
+		reason          string
+	}
+	rollingUpdate := func(maxUnavailable intstr.IntOrString) appsv1.DeploymentStrategy {
+		return appsv1.DeploymentStrategy{
+			Type:          appsv1.RollingUpdateDeploymentStrategyType,
+			RollingUpdate: &appsv1.RollingUpdateDeployment{MaxUnavailable: &maxUnavailable},
+		}
+	}
+	tests := []struct {
+		name     string
+		desired  int32
+		strategy appsv1.DeploymentStrategy
+		steps    []step
+	}{
+		{
+			// Default strategy, 3 replicas: maxUnavailable 25% rounds down to 0.
+			name:    "capacity_drop_clears_all_replicas_ready",
+			desired: 3,
+			steps: []step{
+				{replicas: 3, ready: 3, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+				{replicas: 3, ready: 1, status: metav1.ConditionFalse, reason: "MinimumReplicasUnavailable"},
+				{replicas: 3, ready: 3, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+			},
+		},
+		{
+			// maxSurge adds a fourth pod while the desired three stay ready.
+			name:    "surge_rollout_keeps_available",
+			desired: 3,
+			steps: []step{
+				{replicas: 3, ready: 3, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+				{replicas: 4, ready: 3, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+				{replicas: 4, ready: 4, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+				{replicas: 3, ready: 3, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+			},
+		},
+		{
+			// Default 25% of 4 allows one unavailable replica during a rollout.
+			name:    "rollout_within_max_unavailable_keeps_available",
+			desired: 4,
+			steps: []step{
+				{replicas: 4, ready: 4, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+				{replicas: 5, ready: 3, status: metav1.ConditionTrue, reason: "MinimumReplicasAvailable"},
+				{replicas: 5, ready: 2, status: metav1.ConditionFalse, reason: "MinimumReplicasUnavailable"},
+			},
+		},
+		{
+			name:     "explicit_max_unavailable_zero",
+			desired:  4,
+			strategy: rollingUpdate(intstr.FromInt32(0)),
+			steps: []step{
+				{replicas: 4, ready: 4, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+				{replicas: 4, ready: 3, status: metav1.ConditionFalse, reason: "MinimumReplicasUnavailable"},
+			},
+		},
+		{
+			name:     "recreate_has_no_unavailable_budget",
+			desired:  3,
+			strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
+			steps: []step{
+				{replicas: 3, ready: 3, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+				{replicas: 3, ready: 2, status: metav1.ConditionFalse, reason: "MinimumReplicasUnavailable"},
+			},
+		},
+		{
+			// A stale "No replicas are ready" must not outlive recovery to the floor.
+			name:    "zero_to_minimum_sets_available",
+			desired: 4,
+			steps: []step{
+				{replicas: 4, ready: 0, status: metav1.ConditionFalse, reason: "Pending"},
+				{replicas: 4, ready: 3, status: metav1.ConditionTrue, reason: "MinimumReplicasAvailable"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desired := tt.desired
+			sr := &vllmv1alpha1.SemanticRouter{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"}}
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+				Spec:       appsv1.DeploymentSpec{Replicas: &desired, Strategy: tt.strategy},
+			}
+			cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, deployment).WithStatusSubresource(sr, deployment).Build()
+			r := &SemanticRouterReconciler{Client: cl, Scheme: s}
+
+			for i, st := range tt.steps {
+				current := &appsv1.Deployment{}
+				if err := cl.Get(context.Background(), key, current); err != nil {
+					t.Fatalf("step %d: get Deployment: %v", i, err)
+				}
+				patched := current.DeepCopy()
+				patched.Status.Replicas = st.replicas
+				patched.Status.ReadyReplicas = st.ready
+				if err := cl.Status().Patch(context.Background(), patched, client.MergeFrom(current)); err != nil {
+					t.Fatalf("step %d: patch Deployment status: %v", i, err)
+				}
+
+				got := &vllmv1alpha1.SemanticRouter{}
+				if err := cl.Get(context.Background(), key, got); err != nil {
+					t.Fatalf("step %d: get SemanticRouter: %v", i, err)
+				}
+				if err := r.updateStatus(context.Background(), got, got.DeepCopy()); err != nil {
+					t.Fatalf("step %d: updateStatus: %v", i, err)
+				}
+				if err := cl.Get(context.Background(), key, got); err != nil {
+					t.Fatalf("step %d: get SemanticRouter: %v", i, err)
+				}
+
+				available := meta.FindStatusCondition(got.Status.Conditions, typeAvailableSemanticRouter)
+				if available == nil || available.Status != st.status || available.Reason != st.reason {
+					t.Fatalf("step %d (%d/%d ready, desired %d): Available=%+v, want %s/%s",
+						i, st.ready, st.replicas, desired, available, st.status, st.reason)
+				}
+				if st.ready < desired && available.Message == "All replicas are ready" {
+					t.Errorf("step %d: Available still claims all replicas ready at %d/%d", i, st.ready, desired)
+				}
+				if got.Status.ReadyReplicas != st.ready || got.Status.Replicas != st.replicas {
+					t.Errorf("step %d: status replicas=%d ready=%d, want %d/%d",
+						i, got.Status.Replicas, got.Status.ReadyReplicas, st.replicas, st.ready)
+				}
+				// Partial readiness keeps reporting Progressing with the pod count.
+				progressing := meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter)
+				if st.ready > 0 && st.ready < st.replicas {
+					if got.Status.Phase != "Progressing" || progressing == nil || progressing.Status != metav1.ConditionTrue {
+						t.Errorf("step %d: phase=%q Progressing=%+v, want Progressing=True", i, got.Status.Phase, progressing)
+					}
+				} else if progressing != nil {
+					t.Errorf("step %d: unexpected Progressing condition %+v", i, progressing)
+				}
+			}
+		})
+	}
 }
 
 func TestUpdateStatusPreservesReconcileDerivedFields(t *testing.T) {
