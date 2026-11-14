@@ -250,7 +250,7 @@ A coding agent signed in to its provider, such as Claude Code on a Claude
 subscription, sends the Router its own login. With `credential: caller` on an
 Anthropic backend, the Router routes the request and presents that login to
 Anthropic in the header the client sent it in, so the gateway holds no key and
-each person's own plan pays for their calls. The Dashboard's Insights record
+the plan behind that login pays for the calls. The Dashboard's Insights record
 every call as for any gateway traffic.
 
 ```yaml
@@ -293,8 +293,20 @@ The Router keeps the login for the request only, in memory: it does not log
 it, and takes it out of an upstream error body or a stored response that
 echoes it. A caller backend's `401`, `403` or
 `429` speaks of one person's login or plan, so it never opens the circuit
-breaker other requests share. The provider's terms for that login apply to
-every call made with it.
+breaker other requests share.
+
+A login is for its owner's own use, and the provider's terms for it apply to
+every call made with it. Anthropic documents Claude Code on a gateway with only
+`ANTHROPIC_BASE_URL` set: the saved Claude login stays the credential, and the
+gateway forwards `Authorization` and the OAuth capability in `anthropic-beta`
+([Subscriptions and gateways](https://code.claude.com/docs/en/llm-gateway#subscriptions-and-gateways)),
+as a caller backend does. Its
+[credential policy](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)
+also forbids a third party to route requests through Free, Pro, Max or Ultra
+plan credentials on behalf of its users. Serve a caller backend on your own
+machine, or on your organization's gateway for its own members, to the
+unmodified Claude Code binary, and do not offer it to other people as a
+service.
 
 ### Isolate sr-bench credentials
 
