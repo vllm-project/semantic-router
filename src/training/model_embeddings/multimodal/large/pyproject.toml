@@ -2,7 +2,7 @@
 name = "multimodal-large"
 version = "0.0.0"
 description = "Environment for the large multimodal embedding trainer under src/training/model_embeddings/multimodal/large"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
     "accelerate>=0.34.0,<2",
@@ -10,8 +10,7 @@ dependencies = [
     "datasets==2.21.0",
     "librosa>=0.10.0,<1",
     "numpy>=1.26.0,<3",
-    # Pillow 11 and 12 are already released; the small area stops before 13.
-    "pillow>=10.0.0,<13",
+    "pillow>=10.0.0,<14",
     "pyyaml>=6.0,<7",
     "sentence-transformers>=5.1.0,<6",
     # Declared for the text-encoder tokenizer stack; the modules do not import it directly.

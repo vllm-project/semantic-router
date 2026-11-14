@@ -2,7 +2,7 @@
 name = "modality-routing-classifier"
 version = "0.0.0"
 description = "Environment for the modality routing classifier under src/training/model_classifier/modality_routing_classifier"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
     "accelerate>=0.28.0,<2",

@@ -16,7 +16,7 @@ translation:
 - Git
 - GNU Make
 - Docker 或 Podman
-- Python 3.10 或更高版本，用于 CLI、测试、训练和模拟器工具
+- Python 3.10 或更高版本，用于 CLI、测试和模拟器工具；`src/training/` 下的训练项目需要 Python 3.11 或更高版本
 
 仓库引导目标会创建 Python 环境，并安装校验工具链：
 

@@ -2,7 +2,7 @@
 name = "kv-mapper"
 version = "0.0.0"
 description = "Environment for the KV mapper under src/training/kv_mapper"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
     "numpy>=1.26.0,<3",
