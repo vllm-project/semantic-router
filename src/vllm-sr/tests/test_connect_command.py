@@ -1272,8 +1272,10 @@ def test_a_project_that_sets_the_api_key_gets_no_promise_that_it_is_off(
         ["connect", "claude-code", "--base-url", "http://localhost:8899", "--yes"],
     )
     assert result.exit_code == 0, result.output
-    assert "no longer goes to the gateway" not in result.output
-    assert "sets ANTHROPIC_API_KEY" in result.output
+    # The warning wraps at the output width, and the temp path's length moves the break.
+    output = " ".join(result.output.split())
+    assert "no longer goes to the gateway" not in output
+    assert "sets ANTHROPIC_API_KEY" in output
 
 
 def test_a_dry_run_launch_writes_no_settings_file(tmp_path, monkeypatch):
