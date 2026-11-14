@@ -93,25 +93,28 @@ type RequestContext struct {
 	CacheExactFingerprint         string
 	CacheCompatibilityFingerprint string
 	CacheIdentity                 cache.CacheIdentity
-	CacheSelectedModel            string
-	CacheSemanticSafe             bool
-	CacheReadBypass               bool
-	CacheWriteBypass              bool
-	CacheMaxAgeSeconds            *int
-	CacheWriteTTLSeconds          *int
-	ContextCompressionApplied     bool
-	ContextCompressionBefore      int
-	ContextCompressionAfter       int
-	ContextCompressionMessages    int
-	ContextCompressionFormat      string
-	ContextCompressionOmitted     int
-	ContextCompressionSkipReason  string
-	StartTime                     time.Time
-	ProcessingStartTime           time.Time
-	RoutingLatency                time.Duration
-	RequestCost                   float64
-	RequestCostCurrency           string
-	RequestCostPriced             bool
+	// CacheLease is the lookup's singleflight lease; Process releases it when
+	// the request ends, unless a store completed its key first.
+	CacheLease                   cache.SingleflightLease
+	CacheSelectedModel           string
+	CacheSemanticSafe            bool
+	CacheReadBypass              bool
+	CacheWriteBypass             bool
+	CacheMaxAgeSeconds           *int
+	CacheWriteTTLSeconds         *int
+	ContextCompressionApplied    bool
+	ContextCompressionBefore     int
+	ContextCompressionAfter      int
+	ContextCompressionMessages   int
+	ContextCompressionFormat     string
+	ContextCompressionOmitted    int
+	ContextCompressionSkipReason string
+	StartTime                    time.Time
+	ProcessingStartTime          time.Time
+	RoutingLatency               time.Duration
+	RequestCost                  float64
+	RequestCostCurrency          string
+	RequestCostPriced            bool
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type

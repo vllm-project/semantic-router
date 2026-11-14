@@ -216,6 +216,17 @@ func (s *ResponseCacheService) LookupExactCoalesced(
 	}
 }
 
+// ReleaseLease completes a lookup lease whose request will not store, so
+// followers proceed to the upstream instead of waiting out the lease. It is
+// safe to call for every lease: a follower's or a hit's lease holds no key,
+// and a key the store already completed is no longer inflight.
+func (s *ResponseCacheService) ReleaseLease(lease SingleflightLease) {
+	if s == nil || !lease.Leader || lease.Key == "" {
+		return
+	}
+	s.completeSingleflight(lease.Key)
+}
+
 func (s *ResponseCacheService) StoreExact(ctx context.Context, write CacheWrite) error {
 	if s == nil || s.store == nil {
 		return nil

@@ -30,6 +30,9 @@ func (r *OpenAIRouter) performExactCacheLookup(
 		MaxAge:   maxAge,
 	})
 	ctx.CacheIdentity = lease.Identity
+	// The leader's lease rides the request: its store completes the key, and
+	// a response that will not store releases it when it ends.
+	ctx.CacheLease = lease
 	lookupDuration := time.Since(start)
 	lookupTime := lookupDuration.Milliseconds()
 	return r.finishExactCacheLookup(ctx, categoryName, result, err, lookupDuration, lookupTime)
