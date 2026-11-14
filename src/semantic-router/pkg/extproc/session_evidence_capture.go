@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
@@ -19,8 +20,10 @@ func classifyTurnOutcome(ctx *RequestContext, usage responseUsageMetrics) sessio
 	if status := ctx.UpstreamStatusCode; status == 429 || status >= 500 {
 		return sessiontelemetry.TurnProviderError
 	}
-	// TODO(ayrnb): classify failed tool results as TurnToolError once the
-	// signal layer exposes a tool success/failure flag.
+	captureStructuredToolResultFailure(ctx)
+	if ctx.ToolResultFailed {
+		return sessiontelemetry.TurnToolError
+	}
 	if usage.invalid {
 		return sessiontelemetry.TurnMissing
 	}
@@ -33,6 +36,48 @@ func classifyTurnOutcome(ctx *RequestContext, usage responseUsageMetrics) sessio
 		return sessiontelemetry.TurnMissing
 	}
 	return sessiontelemetry.TurnProgress
+}
+
+func captureStructuredToolResultFailure(ctx *RequestContext) {
+	if ctx == nil || ctx.ToolResultFailed {
+		return
+	}
+	ctx.ToolResultFailed = structuredToolResultFailed(ctx.SemanticRequest)
+}
+
+func structuredToolResultFailed(request *llmprotocol.Request) bool {
+	if request == nil {
+		return false
+	}
+	for _, message := range currentTurnMessages(request.Messages) {
+		for _, content := range message.Content {
+			if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
+				continue
+			}
+			if content.ToolResult.IsError != nil && *content.ToolResult.IsError {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func currentTurnMessages(messages []llmprotocol.Message) []llmprotocol.Message {
+	start := 0
+	for index, message := range messages {
+		if llmprotocol.StartsConversationTurn(message) {
+			start = index
+		}
+	}
+	return messages[start:]
+}
+
+func attachSemanticRequest(ctx *RequestContext, request *llmprotocol.Request) {
+	if ctx == nil {
+		return
+	}
+	ctx.SemanticRequest = request
+	captureStructuredToolResultFailure(ctx)
 }
 
 // recordSessionTurnOutcome captures one terminal outcome, independently of billing.
