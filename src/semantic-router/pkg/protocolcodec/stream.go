@@ -59,8 +59,9 @@ func (indexes *streamWireIndexes) translate(event llmprotocol.Event) int {
 // request-scoped, retains at most one bounded unfinished event, and accepts LF,
 // CRLF, or CR line endings without assuming network read boundaries.
 type sseFramer struct {
-	buffer []byte
-	limit  int
+	buffer  []byte
+	limit   int
+	scanner sseFrameScanner
 }
 
 func newSSEFramer(limit int) sseFramer { return sseFramer{limit: limit} }
@@ -71,18 +72,27 @@ func (framer *sseFramer) Push(chunk []byte) ([][]byte, error) {
 	}
 	framer.buffer = append(framer.buffer, chunk...)
 	frames := make([][]byte, 0, 1)
-	for {
-		end, complete := completeSSEFrame(framer.buffer)
+	consumed := 0
+	defer func() {
+		// Compact only the unfinished tail, once per Push, including on error.
+		// Scanner offsets are relative to that tail, not the consumed frames.
+		if consumed > 0 {
+			framer.buffer = append(framer.buffer[:0], framer.buffer[consumed:]...)
+		}
+	}()
+	for consumed < len(framer.buffer) {
+		end, complete := framer.scanner.complete(framer.buffer[consumed:])
 		if !complete {
 			break
 		}
 		if end > framer.limit {
 			return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "sse_frame_limit", "SSE frame is too large", nil)
 		}
-		frames = append(frames, append([]byte(nil), framer.buffer[:end]...))
-		framer.buffer = append(framer.buffer[:0], framer.buffer[end:]...)
+		frames = append(frames, append([]byte(nil), framer.buffer[consumed:consumed+end]...))
+		consumed += end
+		framer.scanner = sseFrameScanner{}
 	}
-	if len(framer.buffer) > framer.limit {
+	if len(framer.buffer)-consumed > framer.limit {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "sse_frame_limit", "unfinished SSE frame is too large", nil)
 	}
 	return frames, nil
@@ -91,6 +101,7 @@ func (framer *sseFramer) Push(chunk []byte) ([][]byte, error) {
 func (framer *sseFramer) Finalize() ([][]byte, error) {
 	if len(bytes.TrimSpace(framer.buffer)) == 0 {
 		framer.buffer = nil
+		framer.scanner = sseFrameScanner{}
 		return nil, nil
 	}
 	if len(framer.buffer) > framer.limit {
@@ -98,13 +109,24 @@ func (framer *sseFramer) Finalize() ([][]byte, error) {
 	}
 	frame := append([]byte(nil), framer.buffer...)
 	framer.buffer = nil
+	framer.scanner = sseFrameScanner{}
 	return [][]byte{frame}, nil
 }
 
 func completeSSEFrame(payload []byte) (int, bool) {
-	lineStart := 0
-	for index := 0; index < len(payload); {
-		lineEnd := index
+	var scanner sseFrameScanner
+	return scanner.complete(payload)
+}
+
+// sseFrameScanner resumes within one unfinished frame. Only a trailing CR on
+// a nonempty line needs revisiting, to decide whether the next byte forms CRLF.
+type sseFrameScanner struct {
+	index     int
+	lineStart int
+}
+
+func (scanner *sseFrameScanner) complete(payload []byte) (int, bool) {
+	for index := scanner.index; index < len(payload); {
 		terminator := 0
 		switch payload[index] {
 		case '\n':
@@ -113,17 +135,24 @@ func completeSSEFrame(payload []byte) (int, bool) {
 			terminator = 1
 			if index+1 < len(payload) && payload[index+1] == '\n' {
 				terminator = 2
+			} else if index+1 == len(payload) && index != scanner.lineStart {
+				scanner.index = index
+				return 0, false
 			}
 		default:
 			index++
 			continue
 		}
-		if lineEnd == lineStart {
+		if index == scanner.lineStart {
+			// A CR ending an empty line completes the frame immediately, as
+			// before, even if an LF arrives in the next transport chunk.
+			scanner.index = index
 			return index + terminator, true
 		}
 		index += terminator
-		lineStart = index
+		scanner.lineStart = index
 	}
+	scanner.index = len(payload)
 	return 0, false
 }
 
