@@ -23,6 +23,12 @@ func TestExtProcResponsesReasoningParts(t *testing.T) {
 				SourceFormat: client, TargetFormat: llmprotocol.OpenAIResponsesV1,
 				RequestModel: "provider-model", TraceContext: t.Context(),
 			}
+			if client == llmprotocol.OpenAIResponsesV1 {
+				_, immediate := router.prepareProtocolRequest([]byte(`{"model":"provider-model","input":"test","stream":true,"store":false}`), ctx)
+				if immediate != nil || ctx.ResponseObjectState == nil || ctx.ResponseObjectState.GeneratedResponseID == "" {
+					t.Fatalf("Responses ingress did not prepare a public response ID: %+v", immediate)
+				}
+			}
 			var clientWire bytes.Buffer
 			for offset := 0; offset < len(payload); offset += chunkSize {
 				end := min(offset+chunkSize, len(payload))
@@ -41,8 +47,11 @@ func TestExtProcResponsesReasoningParts(t *testing.T) {
 				ctx.SemanticResponse.Usage.Total.Value == nil || *ctx.SemanticResponse.Usage.Total.Value != 5 {
 				t.Fatalf("stream did not complete with usage: %+v", ctx.SemanticResponse)
 			}
-			if client == llmprotocol.OpenAIResponsesV1 && !bytes.Equal(clientWire.Bytes(), payload) {
-				t.Fatal("same-format replay changed provider bytes")
+			if bytes.Contains(clientWire.Bytes(), []byte("encrypted_content")) {
+				t.Fatalf("ciphertext was included in the translated response: %s", clientWire.Bytes())
+			}
+			if client == llmprotocol.OpenAIResponsesV1 && ctx.SemanticResponse.ID != ctx.ResponseObjectState.GeneratedResponseID {
+				t.Fatal("Responses stream lost the public response ID")
 			}
 			assertResponsesReasoningClientContent(t, client, clientWire.Bytes())
 		})

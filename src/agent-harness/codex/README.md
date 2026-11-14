@@ -9,7 +9,7 @@ plugin's apps work in Codex:
 | App | What it does in Codex |
 | --- | --- |
 | guard | Blocks a shell command the decision model scores at or over `guardReview` (0.90), and tells Codex why, so it asks you instead of running it. |
-| redact | Replaces personal data in a command's output with tags such as `[vsr:email]` before Codex reads it, and tells Codex the tags are vSR's. |
+| redact | Replaces personal data in a command's output with tags such as `[vsr:email]` before Codex reads it, and tells Codex the tags are vSR's and the values are hidden on purpose, not to be read another way. |
 | shield | Tells Codex to read an output that tries to give an AI agent instructions as data, when the injection score is at or over `shieldInject` (0.90). |
 
 ## Install
@@ -45,7 +45,9 @@ vSR reads `vsr.json` in the Codex home (`$CODEX_HOME`, by default `~/.codex`). E
 ```
 
 `VSR_RUNTIME_URL` and `VSR_RUNTIME_MODEL` override the file, and `VSR_RUNTIME_TOKEN` is sent as a
-bearer token; keep the token out of `vsr.json`. With Codex pointed at a Router through
+bearer token; keep the token out of `vsr.json`. `runtimeTokenEnv` names another variable to read the
+token from when `VSR_RUNTIME_TOKEN` is unset: `vllm-sr connect codex` writes it for a listener with
+`api_keys`, which checks the same key on System One. With Codex pointed at a Router through
 `vllm-sr connect codex`, set `runtimeUrl` to that listener's `/v1/decisions` and `runtimeModel` to the
 System One model it publishes, so one listener serves both the agent's calls and vSR's questions.
 

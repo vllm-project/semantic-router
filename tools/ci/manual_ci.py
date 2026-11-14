@@ -28,6 +28,7 @@ SCOPES = frozenset(
 SHA = re.compile(r"[0-9a-f]{40}")
 PINNED_REVISION_COUNT = 3
 MERGE_PARENT_COUNT = 2
+MERGE_EVIDENCE_UNAVAILABLE = "planned_merge_unavailable"
 NO_AUTHORIZATION = {"authorized": False, "scopes": [], "full": False}
 PAGE_SIZE = 100
 AUTHORIZATION_LIMIT = 65536
@@ -39,6 +40,7 @@ RETRY_DELAYS = (5, 15, 45)
 RETRY_BUDGET_SECONDS = 120
 GH_TIMEOUT_SECONDS = 60
 HTTP_SERVER_ERROR = 500
+HTTP_NOT_FOUND = 404
 
 
 def http_error_status(stderr: str | bytes) -> int | None:
@@ -265,6 +267,79 @@ def source_identity(client, repo: str, number: int) -> dict:
     return result
 
 
+def merge_revision_matches(
+    client,
+    repo: str,
+    source: str,
+    base: str,
+    head: str,
+    *,
+    equivalent_source: str | None = None,
+) -> bool:
+    """Verify planned parents and, when required, the replacement merge's tree."""
+    revisions = (source, base, head)
+    if equivalent_source is not None:
+        revisions += (equivalent_source,)
+    if any(
+        not isinstance(value, str) or not SHA.fullmatch(value) for value in revisions
+    ):
+        return False
+    try:
+        commit = client.request(f"repos/{repo}/git/commits/{source}")
+    except ManualCIError as error:
+        if error.http_status != HTTP_NOT_FOUND:
+            raise
+        raise ManualCIError(
+            "The original planned merge commit is unavailable; its qualification source cannot be verified.",
+            reason=MERGE_EVIDENCE_UNAVAILABLE,
+            http_status=HTTP_NOT_FOUND,
+        ) from None
+    parents = commit.get("parents") if isinstance(commit, dict) else None
+    if not (
+        isinstance(parents, list)
+        and len(parents) == MERGE_PARENT_COUNT
+        and all(isinstance(parent, dict) for parent in parents)
+        and [parent.get("sha") for parent in parents] == [base, head]
+    ):
+        return False
+    if equivalent_source is None:
+        return True
+    replacement = client.request(f"repos/{repo}/git/commits/{equivalent_source}")
+    trees = (
+        commit.get("tree"),
+        replacement.get("tree") if isinstance(replacement, dict) else None,
+    )
+    tree_shas = [tree.get("sha") if isinstance(tree, dict) else None for tree in trees]
+    return (
+        all(isinstance(value, str) and SHA.fullmatch(value) for value in tree_shas)
+        and tree_shas[0] == tree_shas[1]
+    )
+
+
+def merge_source_matches(
+    client, repo: str, source: str, base: str, identity: dict
+) -> bool:
+    """Accept a verified equivalent merge or the existing ancestor-base policy."""
+    if any(
+        not isinstance(value, str) or not SHA.fullmatch(value)
+        for value in (source, base)
+    ):
+        return False
+    if source == identity["source_sha"] and base == identity["base_sha"]:
+        return True
+    same_base = base == identity["base_sha"]
+    if not merge_revision_matches(
+        client,
+        repo,
+        source,
+        base,
+        identity["head_sha"],
+        equivalent_source=identity["source_sha"] if same_base else None,
+    ):
+        return False
+    return same_base or main_contains(client, repo, base)
+
+
 def trusted_queue_pull(pull: dict, repo: str) -> bool:
     """Queue admission already required the original PR's qualification/reviews."""
     author, head, base = (
@@ -347,18 +422,8 @@ def plan_for_run(client, repo: str, run: dict, identity: dict) -> dict | None:
         ).hexdigest()
         if plan.get("plan_sha256") != digest:
             continue
-        if (
-            plan.get("source_sha") == identity["source_sha"]
-            and plan.get("base_sha") == identity["base_sha"]
-        ):
-            return plan
-        base_sha = plan.get("base_sha")
-        if (
-            run.get("head_sha") == identity["head_sha"]
-            and isinstance(base_sha, str)
-            and SHA.fullmatch(base_sha)
-            and base_sha != identity["base_sha"]
-            and main_contains(client, repo, base_sha)
+        if run.get("head_sha") == identity["head_sha"] and merge_source_matches(
+            client, repo, plan.get("source_sha"), plan.get("base_sha"), identity
         ):
             return plan
     return None
@@ -572,22 +637,7 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
         or not SHA.fullmatch(base)
     ):
         return dict(NO_AUTHORIZATION)
-    if source == identity["source_sha"] and base == identity["base_sha"]:
-        pass
-    elif base != identity["base_sha"]:
-        commit = client.request(f"repos/{repo}/git/commits/{source}")
-        parents = commit.get("parents") if isinstance(commit, dict) else None
-        if (
-            not isinstance(parents, list)
-            or len(parents) != MERGE_PARENT_COUNT
-            or any(not isinstance(parent, dict) for parent in parents)
-            or parents[1].get("sha") != head_sha
-            or parents[0].get("sha") != base
-        ):
-            return dict(NO_AUTHORIZATION)
-        if not main_contains(client, repo, base):
-            return dict(NO_AUTHORIZATION)
-    else:
+    if not merge_source_matches(client, repo, source, base, identity):
         return dict(NO_AUTHORIZATION)
     run_id = int(os.environ["GITHUB_RUN_ID"])
     run = client.request(f"repos/{repo}/actions/runs/{run_id}")
@@ -641,7 +691,11 @@ def rerun(client, record: dict, *, wait_seconds: int = 900) -> None:
                 reason="expired",
             )
         run = client.request(f"repos/{repo}/actions/runs/{run_id}")
-        if not matching_authorization(client, repo, number, run, identity, record):
+        if not matching_authorization(
+            client, repo, number, run, identity, record
+        ) or not merge_source_matches(
+            client, repo, record.get("source_sha"), record.get("base_sha"), identity
+        ):
             raise ManualCIError(
                 "The PR revision or authorization changed; post a new /ci run request.",
                 reason="expired",

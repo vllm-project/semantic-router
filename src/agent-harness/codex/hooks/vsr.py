@@ -37,6 +37,9 @@ DEFAULTS = {
     "shieldInject": 0.9,
     "redactPii": 0.7,
     "timeoutSeconds": 3.0,
+    # The variable that holds the listener's key, as `vllm-sr connect codex` names it for a
+    # listener with api_keys; the key itself never sits in vsr.json.
+    "runtimeTokenEnv": "",
 }
 # The apps a Router listener's vsr profile (listeners[].apis.systemone.vsr, set in its config
 # or the Dashboard) can turn on or off here, and how long its answer is kept in the Codex home.
@@ -67,7 +70,9 @@ def settings() -> dict:
     ):
         if os.environ.get(env):
             found[name] = os.environ[env]
-    found["runtimeToken"] = os.environ.get("VSR_RUNTIME_TOKEN", "")
+    found["runtimeToken"] = os.environ.get("VSR_RUNTIME_TOKEN") or os.environ.get(
+        str(found["runtimeTokenEnv"] or ""), ""
+    )
     for app, on in listener_profile(found, home).items():
         found[app] = saved.get(app, on)
     return found
@@ -257,6 +262,8 @@ def output(event: dict, opts: dict) -> dict:
         return {}
     read, rest = text[:MAX_CHARS], text[MAX_CHARS:]
     lines, notes, rewritten = [], [], None
+    # Whether any question read the output: past MAX_CHARS it then went to Codex unchecked.
+    checked = False
     # Both questions go out at once, so the output waits for the slower one, not for the two.
     with ThreadPoolExecutor(max_workers=2) as pool:
         asked = {
@@ -270,6 +277,7 @@ def output(event: dict, opts: dict) -> dict:
     if opts["redact"]:
         try:
             answer = asked["redact"].result()
+            checked = True
             hidden, counts = hide(
                 read, (answer.get("spans") or {}).get("pii") or [], opts["redactPii"]
             )
@@ -284,13 +292,16 @@ def output(event: dict, opts: dict) -> dict:
                 notes.append(
                     f"vSR redact hid {total} {'value' if total == 1 else 'values'} in this output and put "
                     f"{tags} in {'its' if total == 1 else 'their'} place. The tags are vSR's, not part of "
-                    "the source, which still holds the real values."
+                    "the source, which still holds the real values. They are hidden from you on purpose: "
+                    "do not try to read them another way, such as re-reading, encoding or decoding the "
+                    "output. If the task needs one, tell the person it was hidden."
                 )
         except Exception as error:
             lines.append(f"{MARK} redact skipped · {failed(error)} · {source}")
     if opts["shield"]:
         try:
             score = asked["shield"].result().get("score")
+            checked = True
             if score is not None and score >= opts["shieldInject"]:
                 lines.append(
                     f"{MARK} shielded · {source} tried to give Codex instructions · "
@@ -304,7 +315,7 @@ def output(event: dict, opts: dict) -> dict:
                 )
         except Exception as error:
             lines.append(f"{MARK} shield skipped · {failed(error)} · {source}")
-    if rest and (rewritten is not None or notes):
+    if rest and checked:
         lines.append(
             f"{MARK} read the first {MAX_CHARS:,} of {len(text):,} characters; the rest went unchecked"
         )

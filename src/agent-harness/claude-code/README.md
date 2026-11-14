@@ -214,7 +214,10 @@ default) on a `Read` or a fetched page; when redact ran out of time the model is
 steps aside with it and one `SKIPPED` row says both (unless shield waits `until done`). On CPU redact reads about the first 8,000 characters of an output in 3 s, and says so
 when an output was longer. With `until done` it reads the whole output (up to 128,000 characters
 and 60 s), and an output it cannot finish is withheld from Claude instead of passed on unchecked. The output of a
-command that failed is hidden in too: Claude reads the error with the values replaced. If Claude then
+command that failed is hidden in too: Claude reads the error with the values replaced. Each rewritten output
+comes with a note that the tags are vSR's and the source still holds the real values, so Claude does not
+report them as the file's content, and that they are hidden on purpose, so Claude does not set out to read
+them another way, such as by encoding the output. If Claude then
 tries to write a file with a redact tag such as `[vsr:email]` in place of a real value, vSR refuses the
 write and tells Claude to change only the lines it needs.
 
