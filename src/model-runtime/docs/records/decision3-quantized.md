@@ -282,3 +282,51 @@ later ones (graphs, FlashInfer): 3 and 5 of 150 train requests did. Processes
 that time their own tiles answered 144 of 150 alike; with an autotune cache
 (`--autotune-cache`) the first process records each shape's tiles there and
 later ones load them untimed, and three processes answered all 150 alike.
+
+## Long rows without the key mask
+
+With approximate kernels on CUDA, a noncausal forward whose rows are unpadded
+and hold more than `MAX_GRAPH_TOKENS` (4,096) tokens in all passes no key mask
+to the full-attention layers (`ALL_KEYS`, #5900): SDPA then takes flash
+attention with GQA in the kernel, where the mask kept the memory-efficient
+kernel on keys and values repeated to every head. Graph-captured shapes,
+padded batches, exact kernels only and BF16 packages keep the mask.
+
+One NVIDIA GB10 (compute capability 12.1; PyTorch 2.10.0+cu130), each package
+loaded once at `--dtype auto` and every request answered with the mask and
+without it in the same process. The weights are those of the revisions above.
+The requests are one question each, so one unpadded row: the 34 test requests
+of more than about 4,000 tokens, and test requests of under 2,000 tokens with
+the states of other test requests put before their own until they reach 8K,
+16K, 32K and 64K tokens (40, 30, 15 and 6 of them). Two of these were refused
+as malformed (an empty option name) and are left out.
+
+| Rows | Requests | Tokens | NVFP4 largest probability change | NVFP4 changes over 0.05 | AWQ int4 largest probability change |
+| --- | --- | --- | --- | --- | --- |
+| Test requests | 34 | 4,057 to 23,572 | 0.201 | 3 | 0.015 |
+| 8K | 40 | 8,248 to 15,115 | 0.114 | 4 | 0.007 |
+| 16K | 28 | 16,416 to 28,561 | 0.307 | 9 | 0.027 |
+| 32K | 15 | 32,709 to 38,675 | 0.260 | 3 | 0.007 |
+| 64K | 6 | 65,417 to 68,403 | 0.054 | 1 | 0.002 |
+
+No answer's top choice (or Noul side) changed in either package. Each of the
+20 NVFP4 requests over 0.05, answered twice more with the mask and twice
+without, gave the same probabilities every time within a setting, so the
+changes come from the kernel and not from run-to-run variation. NVFP4
+quantizes the activations of every projection to FP4, which carries the
+attention's rounding difference into the layers after it; the AWQ package
+keeps its activations in BF16.
+
+Median of six answers of one request, three per setting in two alternating
+runs:
+
+| Tokens | NVFP4 with the mask | NVFP4 without | AWQ int4 with the mask | AWQ int4 without |
+| --- | --- | --- | --- | --- |
+| 4,908 | 2.16 s | 1.89 s | 4.03 s | 3.76 s |
+| 8,964 | 5.08 s | 4.23 s | 7.76 s | 6.93 s |
+| 17,088 | 12.05 s | 8.83 s | 16.58 s | 13.43 s |
+| 33,671 | 33.81 s | 20.08 s | 42.24 s | 28.85 s |
+| 65,745 | 100.82 s | 49.07 s | 116.88 s | 65.34 s |
+
+Device memory peaked at 31.7 GB (NVFP4) and 31.0 GB (AWQ) over these
+requests.
