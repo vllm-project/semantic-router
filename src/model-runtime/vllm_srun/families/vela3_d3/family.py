@@ -34,6 +34,7 @@ from ..decision3.package import is_state_once
 from ..vela3_shared import PRESETS
 from . import package as pkg
 from .gates import Gates
+from .labeldef import LabelDefiner, lm_head_spec, writer_of
 from .model import GatedDecisions, TurboDecisions, Vela3D3Model
 from .span_policy import Policy
 from .span_read import SpanReader
@@ -209,7 +210,11 @@ class Vela3D3Family(ModelFamily):
         return replace(
             spec,
             name=package.model_name,
-            backbone=replace(spec.backbone, gated=gated),
+            backbone=replace(
+                spec.backbone,
+                gated=gated,
+                lm_head=lm_head_spec(details.root, details.vela3, spec.backbone.config),
+            ),
         )
 
     def load(
@@ -220,6 +225,9 @@ class Vela3D3Family(ModelFamily):
         model = Decision3Family(self.options).load_as(
             base, spec, engine_model, _model_class(base)
         )
+        definer = _definer(details, model)
+        # Writing a definition decodes with the base while the request plans.
+        model.plans_run_forwards = definer is not None
         heads = {
             route: _head(details.root / file, engine_model.device)
             for route, file in details.span.heads.items()
@@ -229,7 +237,9 @@ class Vela3D3Family(ModelFamily):
                 details.vela3, details.router_questions, details.adapters
             ),
             Spans(
-                policy=Policy(details.span, _names_only),
+                policy=Policy(
+                    details.span, _names_only if definer is None else definer.define
+                ),
                 renderer=Renderer(model.tokenizer, model.codes),
                 reader=SpanReader(engine_model, heads),
             ),
@@ -264,12 +274,25 @@ def _head(path: Path, device: torch.device) -> SpanHead:
 
 
 def _names_only(names: list[str], only: set[str]) -> dict[str, str]:
-    """No definition writer yet: labels without a description run by name.
-
-    The packages' writers (vela3-mini's base, vela3-flash's grafted head) take
-    this place in #5703.
-    """
+    """No definition writer (``names``): labels without a description run by name."""
     return {}
+
+
+def _definer(details: pkg.Vela3D3Package, model: Vela3D3Model) -> LabelDefiner | None:
+    """The package's definition writer; None for ``names`` and a base with no head."""
+    definitions = details.vela3.get("definitions") or {}
+    cache = definitions.get("cache_file") if isinstance(definitions, dict) else None
+    return writer_of(
+        (
+            str(definitions.get("writer") or "names")
+            if isinstance(definitions, dict)
+            else "names"
+        ),
+        model.engine_model,
+        model.tokenizer,
+        model.pad_id,
+        details.root / cache if isinstance(cache, str) else None,
+    )
 
 
 def _model_class(base: VerifiedPackage) -> type[Vela3D3Model]:

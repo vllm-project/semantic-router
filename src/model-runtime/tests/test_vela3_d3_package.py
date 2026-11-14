@@ -248,6 +248,30 @@ def test_a_pinned_download_needs_no_sha256sums(written, tmp_path, monkeypatch) -
     assert family(root).verify(ref).model_sha256 == entry.model_sha256
 
 
+def test_describe_ties_the_head_for_base_and_names_the_grafted_file(
+    written, tmp_path
+) -> None:
+    verified = family(written).verify(PackageRef(written))
+    assert family(written).describe(verified).backbone.lm_head is None
+    base = copy(written, tmp_path, "base-writer")
+    edit_config(base, lambda config: config["definitions"].update(writer="base"))
+    spec = family(base).describe(family(base).verify(PackageRef(base)))
+    assert spec.backbone.lm_head is not None and spec.backbone.lm_head.tied
+    grafted = copy(written, tmp_path, "grafted-writer")
+    (grafted / "labeldef_lm_head.safetensors").write_bytes(b"head")
+
+    def select(config: dict) -> None:
+        config["definitions"].update(
+            writer="grafted_head", lm_head_file="labeldef_lm_head.safetensors"
+        )
+
+    edit_config(grafted, select)
+    spec = family(grafted).describe(family(grafted).verify(PackageRef(grafted)))
+    head = spec.backbone.lm_head
+    assert head is not None and not head.tied
+    assert head.weight_file == grafted / "labeldef_lm_head.safetensors"
+
+
 def test_an_unpinned_package_needs_sha256sums(written, tmp_path) -> None:
     root = copy(written, tmp_path)
     (root / "SHA256SUMS").unlink()

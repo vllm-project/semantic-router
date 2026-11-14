@@ -1104,8 +1104,20 @@ trained question and label set, as on the vela3 family; the card lists the
 presets the package's span schemas hold. Span answers follow the contract (`spans`, `thresholds`, a Noul of
 the most probable word); the decoder is the package's (its unit class starts
 its compatibility block at U+F900, unlike the word splitter's). Open labels
-without a description run by name: the packages' label-definition writers
-(vela3-mini's base, vela3-flash's grafted head) are not run
+without a description are defined before the span pass when
+`definitions.writer` is `base` (vela3-mini: the tied input embedding is the
+LM head) or `grafted_head` (vela3-flash: `labeldef_lm_head.safetensors`, cast
+to the embedding dtype). The native engine generates each definition with
+every adapter off and causal attention: a user turn, thinking off, the label
+set as context for at most 60 labels, greedy, at most 40 new tokens. The
+family keeps the first line and caches it per label set (per label above 60),
+after the definitions already in `label_definitions.json`. Rows are
+right-padded in batches of at most 64. A row's positions are its attention-mask
+cumsum, with padding at position 0, and the next token is read at the last
+position; that is what makes one definition differ from generating that label
+alone. `names` (vela3-lite and vela3-turbo)
+still runs those labels by name. Image inputs on span questions and a separate
+`labeldef_writer` model are not run
 ([record](records/vela3-d3-parity.md)).
 
 ## 9. Scheduler and planner
