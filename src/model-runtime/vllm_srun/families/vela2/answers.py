@@ -22,7 +22,7 @@ from ...systemone import canonical, choice_confidence, score_confidence
 from .calibration import Calibration, sigmoid, softmax
 from .raw import RawRow
 from .request import Question, State
-from .words import decode_spans, trim
+from .words import decode_spans, trim, without_separators
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -154,8 +154,9 @@ class Answerer:
             start, end = entry["start"], entry["end"]
             if question.span_range is not None:
                 start, end = trim(text, max(start, low), min(end, high))
-                if end <= start:
-                    continue
+            start, end = without_separators(text, start, end)
+            if end <= start:
+                continue
             spans.append(
                 {
                     "label": alias.get(entry["label"], entry["label"]),

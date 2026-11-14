@@ -52,6 +52,13 @@ EDGE = frozenset(
     "\"'\u201c\u201d\u2018\u2019\u00ab\u00bb\u2039\u203a"
 )
 URL_TRAIL = frozenset(".,;:!?)")
+# The tokenizers join one punctuation mark to the letters after it (",mina" in
+# "Park,mina@example.com"), so the mark's word reads the label of the value
+# after it and the decoder opens that value's span on it. The runtime's answers
+# drop these marks at a span's edges, and the decoder keeps them, as released.
+# ':', '.' and '/' stay: an IPv6 address, an abbreviation or a URL can begin or
+# end with one.
+SEPARATOR = frozenset(",;=|")
 
 
 @dataclass(frozen=True)
@@ -140,6 +147,15 @@ def _word_units(
         & (first < bounds[np.maximum(unit, 0), 1] if len(bounds) else False)
     )
     return np.where(inside, unit, -1)
+
+
+def without_separators(text: str, start: int, end: int) -> tuple[int, int]:
+    """``[start, end)`` without the separators and whitespace at its edges."""
+    while start < end and (text[start] in SEPARATOR or text[start].isspace()):
+        start += 1
+    while end > start and (text[end - 1] in SEPARATOR or text[end - 1].isspace()):
+        end -= 1
+    return start, end
 
 
 def trim(text: str, start: int, end: int, *, url_tails: bool = True) -> tuple[int, int]:
