@@ -1,11 +1,11 @@
 import type { Listener, ListenerAPI, VSRProfile } from '../types/config'
 import type { ConfigData } from './configPageSupport'
 
-export type VSRSwitch = Exclude<keyof VSRProfile, 'router_goal'>
+export type VSRSwitch = Exclude<keyof VSRProfile, 'router_goal' | 'rules'>
 export type VSRGoal = NonNullable<VSRProfile['router_goal']>
 
 // What the vSR agent plugins do when the listener leaves a field out.
-export const VSR_PLUGIN_DEFAULTS: Required<VSRProfile> = {
+export const VSR_PLUGIN_DEFAULTS: Required<Omit<VSRProfile, 'rules'>> = {
   redact: true,
   shield: true,
   guard: true,

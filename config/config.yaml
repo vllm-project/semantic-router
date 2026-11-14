@@ -47,6 +47,17 @@ listeners:
           redact: true
           guard: true
           router_turns: false
+          # Rules of a recipe that guard and redact enforce besides their own
+          # checks. The plugins learn each rule's name and description and
+          # ask this listener to evaluate it (POST /v1/systemone/rules). A
+          # required rule that cannot be checked holds the command or
+          # withholds the output; an advisory one goes unchecked.
+          rules:
+            recipe: default
+            guard:
+              - {type: keyword, name: prod_database, enforce: required}
+            redact:
+              - {type: keyword, name: employee_id}
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:
@@ -436,6 +447,11 @@ recipes:
           operator: OR
           method: regex
           keywords: ['\bE-\d{6}\b']
+        - name: prod_database
+          description: Touches the production database.
+          operator: OR
+          method: regex
+          keywords: ['prod-db\.internal']
 
       domains:
         - name: business

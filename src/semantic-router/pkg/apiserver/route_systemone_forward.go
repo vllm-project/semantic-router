@@ -67,7 +67,9 @@ func (s *ClassificationAPIServer) handleSystemOneForward(w http.ResponseWriter, 
 	if forwarded.BackendRequest {
 		request.Header.Set(headers.VSRSystemOneBackend, "1")
 	}
-	systemone.Handler(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name))(w, request)
+	// The router of the retained generation evaluates the listener's rules.
+	rules, _ := router.(systemone.ListenerRules)
+	systemone.HandlerWithRules(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name), rules)(w, request)
 }
 
 // retainedSystemOneInvoker uses only services from the caller's acquired

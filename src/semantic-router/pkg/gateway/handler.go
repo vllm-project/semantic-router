@@ -216,7 +216,7 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 // isSystemOnePath reports whether a path is one of the System One API's.
 func isSystemOnePath(path string) bool {
 	switch path {
-	case "/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models":
+	case "/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models", "/v1/systemone/rules":
 		return true
 	}
 	return false
