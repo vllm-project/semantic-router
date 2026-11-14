@@ -116,4 +116,4 @@ kubectl get events -n <namespace> --sort-by=.lastTimestamp
 
 - [容器连通性](./container-connectivity)
 - [安全加固](../installation/security-hardening)
-- [快速开始](/docs/v0.4/installation)
+- [快速开始](/zh-hans/docs/v0.4/installation)

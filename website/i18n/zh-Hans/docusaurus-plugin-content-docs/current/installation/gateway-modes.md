@@ -235,4 +235,4 @@ Kubernetes 使用 pod 分配后的设备序号，通过 canonical replicas 请�
 不接受物理主机 `--device-ids`。模型运行时的引擎参数与 Kubernetes 部署的 `--profile` 相互独立。
 `--revision` 可填分支、tag 或 commit，启动前只解析一次并记录不可变 SHA；内置模型
 省略时使用发布 pin。监听地址、端口和公开模型授权始终通过 config 控制。
-完整参数以 [CLI 参考](/docs/api/cli) 为准。
+完整参数以 [CLI 参考](/zh-hans/docs/api/cli) 为准。

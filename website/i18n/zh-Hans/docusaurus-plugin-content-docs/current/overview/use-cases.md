@@ -29,7 +29,7 @@ import TabItem from '@theme/TabItem'
 | 选定的调用需要校验。 | 运行已配置的、有界的逐级升级、评审组或多模型工作流。 | 决定如何在整个任务中使用返回的回答。 |
 | 敏感工作需要经过批准的执行路径。 | 对本地或远程后端应用明确的资格与数据处理策略。 | 在工具、任务存储和其他服务中执行同样的边界。 |
 
-从 [agent harness 指南](../installation/agent-harness)和 [Agent Routing 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md)开始。
+从 [agent harness 指南](/zh-hans/docs/installation/agent-harness)和 [Agent Routing 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md)开始。
 
 ## 部署环境 {#deployment-environments}
 

@@ -29,7 +29,7 @@ import ThemedImage from '@theme/ThemedImage';
 
 - **为每次调用路由：** 这次用快速的本地模型，下次用专项模型、更长的上下文或第二意见。
 - **用一个模型做判断：** 决策模型回答策略针对每个请求提出的问题。
-- **直接提供判断：** 应用也可以通过 [System One](system-one/overview) API 直接向决策模型提问。
+- **直接提供判断：** 应用也可以通过 [System One](/zh-hans/docs/system-one/overview) API 直接向决策模型提问。
 
 ## 为什么需要路由？ {#why-route}
 
@@ -53,16 +53,16 @@ import ThemedImage from '@theme/ThemedImage';
 | **模型运行时** | Router 自己的决策模型和嵌入模型 |
 | **推理平台** | 对话后端，以及它们的放置、批处理和容量 |
 
-Router 默认直接提供自己的 listener；基于 Envoy 的网关是可选的。模块边界见[组件架构](overview/component-architecture)。
+Router 默认直接提供自己的 listener；基于 Envoy 的网关是可选的。模块边界见[组件架构](/zh-hans/docs/overview/component-architecture)。
 
 ## 从这里开始 {#start-here}
 
-- 完成[快速开始](installation/installation.md)。
-- [连接 agent harness](installation/agent-harness)。
-- 浏览[使用场景](overview/use-cases)。
-- 阅读[系统概览](overview/semantic-router-overview)和[路由流水线](overview/signal-driven-decisions)。
-- 用[入口与配方](tutorials/global/entrypoints-and-recipes)构建虚拟模型。
-- 比较[部署选项](installation/deployment-options)。
+- 完成[快速开始](/zh-hans/docs/installation)。
+- [连接 agent harness](/zh-hans/docs/installation/agent-harness)。
+- 浏览[使用场景](/zh-hans/docs/overview/use-cases)。
+- 阅读[系统概览](/zh-hans/docs/overview/semantic-router-overview)和[路由流水线](/zh-hans/docs/overview/signal-driven-decisions)。
+- 用[入口与配方](/zh-hans/docs/tutorials/global/entrypoints-and-recipes)构建虚拟模型。
+- 比较[部署选项](/zh-hans/docs/installation/deployment-options)。
 
 ## 项目 {#project}
 
