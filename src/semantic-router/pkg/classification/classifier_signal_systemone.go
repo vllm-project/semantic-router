@@ -483,19 +483,25 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 	request.MaxTokens = c.Config.ModelDeployments[deployment].ScanBudget()
 	request.Questions = callQuestions(rules)
 	remote := c.Config.IsSystemOneDeployment(deployment)
-	callCtx, cancel := systemOneCallContext(ctx, rules, remote, c.Config.ModelDeployments[deployment].CallTimeout())
-	defer cancel()
 	started := time.Now()
-	var response modelservice.Response
-	var err error
-	if remote {
-		response, err = askSystemOneDeployment(callCtx, c.systemOne(), deployment, request)
-	} else if card, ok := c.decisionTaskCard(deployment); ok {
-		response, err = modelservice.ExecuteQuestions(callCtx, c.decider(), deployment, card, request)
-	} else if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
-		err = modelservice.ErrUnavailable
-	} else {
-		response, err = c.decider().Decide(callCtx, deployment, request)
+	// Each attempt has the rules' timeout of its own: a request that waits
+	// for capacity (on_signal_overload) waits within the stage's deadline.
+	response, waited, err := c.askUntilCapacity(ctx, deployment, func(asking context.Context) (modelservice.Response, error) {
+		callCtx, cancel := systemOneCallContext(asking, rules, remote, c.Config.ModelDeployments[deployment].CallTimeout())
+		defer cancel()
+		if remote {
+			return askSystemOneDeployment(callCtx, c.systemOne(), deployment, request)
+		}
+		if card, ok := c.decisionTaskCard(deployment); ok {
+			return modelservice.ExecuteQuestions(callCtx, c.decider(), deployment, card, request)
+		}
+		if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
+			return modelservice.Response{}, modelservice.ErrUnavailable
+		}
+		return c.decider().Decide(callCtx, deployment, request)
+	})
+	if waited && call.scan != nil {
+		call.scan.markWaited(err == nil)
 	}
 	if err != nil && !answersGivenUp(ctx) && !call.reread {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))

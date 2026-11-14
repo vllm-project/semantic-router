@@ -269,6 +269,16 @@ domains:
       - python3 -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
     verifications: []
 
+  codex-plugin:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - .agents/plugins/**
+      - src/agent-harness/codex/**
+    checks:
+      - python3 -m unittest discover -s src/agent-harness/codex/hooks
+    verifications: []
+
   vela-omni-artifacts:
     owner: model-runtime
     paths:
@@ -445,6 +455,19 @@ domains:
       - config/recipes/built-in/**
       - e2e/config/config.memory-user.yaml
       - src/semantic-router/pkg/configschema/router-config-v0.5.schema.json
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
+
+  # The CLI unit suite checks the Dashboard image's build and entrypoint
+  # (src/vllm-sr/tests/test_dashboard_dockerfile_surface.py). Not part of
+  # vllm-sr-cli, whose match publishes the CLI on main.
+  cli-checked-dashboard-image:
+    owner: vllm-sr-cli
+    paths:
+      - dashboard/backend/Dockerfile
+      - dashboard/backend/entrypoint.sh
+      - dashboard/backend/entrypoint_permissions.py
+      - dashboard/backend/handlers/logs.go
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 

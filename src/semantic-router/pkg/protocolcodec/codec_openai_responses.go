@@ -258,6 +258,7 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	request := decodeResponsesBaseRequest(wire, conversationID)
+	sourceGeneration := request.Generation
 	if err := decodeResponsesReasoningRequest(wire.Reasoning, &request); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
@@ -267,13 +268,19 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err := decodeResponsesInput(wire.Input, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	if err := decodeResponsesTools(wire.Tools, &request, policy); err != nil {
+	if err := decodeResponsesTools(wire.Tools, &request, policy, &diagnostics); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := decodeResponsesRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, request.Generation, policy), diagnostics, nil
+	// Only a request that flattened a namespace keeps its tool name origins.
+	if !request.ToolNameOrigins.Flattened() {
+		request.ToolNameOrigins = nil
+	}
+	// Flattening a namespace advances request.Generation, which retires the replay
+	// claim on source bytes that still carry the namespace.
+	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy), diagnostics, nil
 }
 
 // decodeResponsesDroppedFields accepts include and client_metadata without
@@ -373,7 +380,12 @@ func decodeResponsesInstructions(raw json.RawMessage, request *llmprotocol.Reque
 	return nil
 }
 
-func decodeResponsesTools(raw json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeResponsesTools(
+	raw json.RawMessage,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil
 	}
@@ -382,14 +394,19 @@ func decodeResponsesTools(raw json.RawMessage, request *llmprotocol.Request, pol
 		return err
 	}
 	for _, toolBody := range toolBodies {
-		if err := decodeResponsesTool(toolBody, request, policy); err != nil {
+		if err := decodeResponsesTool(toolBody, request, policy, diagnostics); err != nil {
 			return err
 		}
 	}
-	return nil
+	return claimResponsesToolNames(request)
 }
 
-func decodeResponsesTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeResponsesTool(
+	body json.RawMessage,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	toolType, err := responsesToolDiscriminator(body)
 	if err != nil {
 		return err
@@ -401,22 +418,30 @@ func decodeResponsesTool(body json.RawMessage, request *llmprotocol.Request, pol
 		return decodeResponsesImageGenerationTool(body, request, policy)
 	}
 	if toolType == "custom" {
-		return decodeResponsesCustomTool(body, request, policy)
+		return decodeResponsesCustomTool(body, request, policy, diagnostics)
+	}
+	if toolType == "namespace" {
+		return decodeResponsesNamespaceTool(body, request, policy, diagnostics)
 	}
 	if toolType != "function" {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function tools enter the model protocol", nil)
 	}
-	return decodeResponsesFunctionTool(body, request, policy)
+	return decodeResponsesFunctionTool(body, request, policy, diagnostics)
 }
 
-func decodeResponsesCustomTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy) error {
+func decodeResponsesCustomTool(
+	body json.RawMessage,
+	request *llmprotocol.Request,
+	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
+) error {
 	var wire responsesToolWire
 	if err := decodeWireValue(body, &wire, policy); err != nil {
 		return err
 	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"tools.allowed_callers": wire.AllowedCallers,
-		"tools.defer_loading":   wire.DeferLoading,
+		"tools.defer_loading":   optInDeferLoading(wire.DeferLoading, policy, llmprotocol.OpenAIResponsesV1, diagnostics),
 	}); err != nil {
 		return err
 	}
@@ -469,6 +494,7 @@ func decodeResponsesFunctionTool(
 	body json.RawMessage,
 	request *llmprotocol.Request,
 	policy llmprotocol.Policy,
+	diagnostics *llmprotocol.Diagnostics,
 ) error {
 	var tool responsesToolWire
 	if err := decodeWireValue(body, &tool, policy); err != nil {
@@ -476,7 +502,7 @@ func decodeResponsesFunctionTool(
 	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"tools.allowed_callers": tool.AllowedCallers,
-		"tools.defer_loading":   tool.DeferLoading,
+		"tools.defer_loading":   optInDeferLoading(tool.DeferLoading, policy, llmprotocol.OpenAIResponsesV1, diagnostics),
 		"tools.output_schema":   tool.OutputSchema,
 	}); err != nil {
 		return err
@@ -503,6 +529,8 @@ func validateResponsesToolVariant(body json.RawMessage, toolType string) error {
 		names = []string{"name", "description", "parameters", "strict", "allowed_callers", "defer_loading", "output_schema"}
 	case "custom":
 		names = []string{"name", "description", "format", "allowed_callers", "defer_loading"}
+	case "namespace":
+		names = []string{"name", "description"}
 	case "image_generation":
 		names = []string{
 			"model", "quality", "size", "output_format", "output_compression", "moderation",

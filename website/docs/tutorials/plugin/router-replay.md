@@ -42,13 +42,12 @@ global:
     - type: router_replay
       configuration:
         enabled: true
+        prompt_capture: none
         capture_request_body: true
         capture_response_body: true
-        capture_personal_data: false
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
-        max_tool_trace_bytes: 0
         max_tool_trace_steps: 100
 ```
 
@@ -59,27 +58,66 @@ field. Storage, retention and asynchronous writes are global service settings.
 
 | Capture setting | Default |
 | --- | --- |
-| Request and response bodies | captured |
-| Personal data | captured |
+| `prompt_capture` | `none`: routing data only |
+| Request and response bodies | captured, under `raw` |
 | Tool results | redacted |
 | `max_records` | 10,000 |
 | `max_body_bytes` | 4,096 bytes per body |
-| `max_tool_trace_bytes` | no per-field limit |
+| `max_prompt_bytes` | unset: the prompt keeps `max_tool_trace_bytes`'s bound when that is set, else 65,536 bytes (64 KiB), under `raw` and `verified` |
+| `max_tool_trace_bytes` | unset: 65,536 bytes (64 KiB) per tool text field, raw copies included, under `raw` |
+| `max_tool_trace_total_bytes` | unset: 262,144 bytes (256 KiB) of trace steps per record, while `max_tool_trace_bytes` is unset too |
 | `max_tool_trace_steps` | 100 |
+
+### Choose what a record keeps
+
+`prompt_capture` decides what a record keeps besides routing data: the
+decision, model, signals, scores, timing, token usage and ids.
+
+| Mode | A record keeps | Reads the prompt for personal data |
+| --- | --- | --- |
+| `none` (the default) | Routing data only | No |
+| `raw` | The request and response text the capture switches allow, as it came | No |
+| `verified` | The prompt alone, once the recipe's `pii` rules read it whole and find no personal data | Yes, on the decision model |
+
+- **`none`** keeps no request or response text, whatever
+  `capture_request_body`, `capture_response_body`, `capture_tool_results` and
+  the shadow's `capture_response_body` say, and reads nothing for personal
+  data, so Replay adds no work for the decision model.
+- **`raw`** keeps what the capture switches allow without checking it, so
+  records can hold secrets and personal data. Restrict who reads them with
+  `replay.read` and `replay.detail`, and choose a retention. A record keeps
+  the prompt up to [its limit](#bound-the-prompt), 64 KiB unless
+  `max_prompt_bytes` or `max_tool_trace_bytes` is set. The request's tool
+  trace also keeps each user turn, within [the trace's limits](#bound-the-trace):
+  64 KiB per field and 256 KiB of steps per record unless you set them.
+- **`verified`** is described in
+  [Keep personal data out of Replay](#keep-personal-data-out-of-replay).
+
+`capture_personal_data` is the deprecated form of this setting. The Router
+loads it as `prompt_capture`, with a `renamed_field` warning, and
+`vllm-sr config migrate` rewrites it:
+
+| Written before | Loads as |
+| --- | --- |
+| `capture_personal_data: false` | `prompt_capture: verified` |
+| `capture_personal_data: true` | `prompt_capture: raw` |
+| Neither field | `prompt_capture: none`: records keep routing data only. Set `prompt_capture: raw` to keep the text such a configuration kept before. |
 
 ### Limit capture on a decision
 
-Add this fragment to the decision's `plugins` to record bounded excerpts:
+Add this fragment to the decision's `plugins` to record bounded request
+excerpts and no response text:
 
 ```yaml
 plugins:
   - type: router_replay
     configuration:
       enabled: true
+      prompt_capture: raw
       capture_request_body: true
       capture_response_body: false
-      capture_personal_data: false
       max_body_bytes: 4096
+      max_tool_trace_bytes: 4096
       max_tool_trace_steps: 100
 ```
 
@@ -89,12 +127,23 @@ How the limits count:
   characters, so they can be slightly shorter than the limit.
 - **A truncated raw body** may no longer be complete JSON; check its
   truncation flag.
+- **The prompt** has a limit of its own, `max_prompt_bytes`, and keeps
+  `max_tool_trace_bytes`'s bound where no layer sets it; see
+  [Bound the prompt](#bound-the-prompt). In the fragment above it keeps 4,096
+  bytes, from `max_tool_trace_bytes`. A cut prompt has
+  `prompt_truncated: true`, with the whole prompt's size in
+  `prompt_original_bytes` and its SHA-256 in `prompt_original_sha256`, so the
+  record still identifies it.
 - **Tool traces** have their own limits, separate from the request and
   response bodies. `max_tool_trace_bytes` bounds each structured text field:
-  the prompt, tool definitions, and each trace step's text, arguments and
-  output. A cut step has `truncated: true`.
+  tool definitions, and each trace step's text, arguments and output.
+  `max_tool_trace_total_bytes` bounds all of a record's steps together. A cut
+  step has `truncated: true`. Set as in the fragment above,
+  `max_tool_trace_bytes` keeps the steps' raw copies whole and the trace
+  without a total; see [Bound the trace](#bound-the-trace).
 
-What the body switches cover:
+What the body switches cover, under `raw` and `verified` (under `none` a
+record keeps no text at all):
 
 - **`capture_request_body: false`** keeps all request text out of the record:
   the body, the prompt, tool definitions, and each request step of the tool
@@ -114,8 +163,12 @@ How the layers combine:
   `router_replay` plugin in `global.plugins`, or leaving that plugin out. A
   recipe or decision can still opt in.
 - **Omitted fields inherit** from the layer below. An explicit `false` is an
-  override, and `max_tool_trace_bytes: 0` or `max_tool_trace_steps: 0`
-  removes that limit.
+  override, and `max_prompt_bytes: 0`, `max_tool_trace_bytes: 0`,
+  `max_tool_trace_total_bytes: 0` or `max_tool_trace_steps: 0` removes that
+  limit. Where no layer sets `max_prompt_bytes`, the prompt's limit falls back
+  as [Bound the prompt](#bound-the-prompt) describes, and where none sets
+  `max_tool_trace_bytes`, the trace's defaults apply as
+  [Bound the trace](#bound-the-trace) describes.
 - **Before a decision is selected,** a rejected request uses its recipe's
   capture defaults; a decision's override applies once it is selected.
 
@@ -124,18 +177,100 @@ records.
 
 :::note Zero values
 Explicit `max_body_bytes: 0` falls back to 4,096 bytes, and `max_records: 0`
-to 200 records for the memory store. These zeros override an inherited value,
+to 200 records for the memory store. `max_prompt_bytes: 0`, like the tool-trace
+limits, removes the limit instead. These zeros override an inherited value,
 so omit a field to inherit it.
+:::
+
+### Bound the prompt
+
+Under `raw` and `verified` a record keeps the prompt up to a limit, the first
+of these that applies:
+
+1. **`max_prompt_bytes`** from the most specific layer that sets it: the
+   decision, then its recipe, then `global.plugins`. An explicit value wins
+   over the fallbacks below, even over a `max_tool_trace_bytes` set on a more
+   specific layer, and `0` keeps the whole prompt.
+2. **`max_tool_trace_bytes`**, as the layers resolve it, when no layer sets
+   `max_prompt_bytes` and it is above `0`. It bounded the prompt before
+   `max_prompt_bytes` existed, so such a configuration keeps its bound.
+3. **65,536 bytes (64 KiB)** otherwise.
+
+To bound the prompt apart from tool traces, set both:
+
+```yaml
+max_tool_trace_bytes: 262144 # tool definitions and trace steps
+max_prompt_bytes: 65536 # the prompt; 0 keeps it whole
+```
+
+:::note Upgrading
+`max_prompt_bytes` is new. Where no layer sets it:
+
+- **A configuration with `max_tool_trace_bytes` above `0`** keeps the prompt
+  bound it had.
+- **A `raw` or `verified` configuration with neither limit**, or with
+  `max_tool_trace_bytes: 0`, keeps the first 64 KiB of a longer prompt, where
+  it kept the whole prompt. Set `max_prompt_bytes: 0` to keep whole prompts.
+- **Under `none`** a record keeps no prompt, as before.
+
+A shadow's `capture_response_body: true` now keeps its excerpt of the shadow's
+answer under `raw` only; under `verified` the outcome keeps the answer's sizes
+and SHA-256 alone. See [Replay and audit capture](#replay-and-audit-capture).
+:::
+
+### Bound the trace
+
+Under `raw` the request trace keeps each user turn, tool call and tool result
+as a step, up to `max_tool_trace_steps` of them, beside the answer's steps.
+Where no layer sets `max_tool_trace_bytes`, two defaults bound it:
+
+- **65,536 bytes (64 KiB) per text field:** the tool definitions, each step's
+  text, arguments and output, and the step's raw copies of its arguments and
+  output (`raw_arguments`, `raw_output`). A cut step has `truncated: true`, and
+  `raw_truncated: true` when its raw copies were cut too.
+- **262,144 bytes (256 KiB) of steps per record**, raw copies included
+  (`max_tool_trace_total_bytes`). Over it the oldest steps are dropped first,
+  as `max_tool_trace_steps` drops them, and the trace has
+  `steps_truncated: true` with the number dropped in `dropped_step_count`. The
+  newest step is always kept.
+
+A record then keeps at most about 64 KiB of prompt, 64 KiB of tool
+definitions, 320 KiB of trace (one step's five fields, should a single step
+outgrow the total) and 4 KiB per body: under 0.5 MiB, so 10,000 records in the
+memory store stay under 5 GiB.
+
+A `max_tool_trace_bytes` set on any layer, `0` included, keeps the trace as it
+was before these defaults: that limit on each step's text, arguments and
+output, raw copies whole for readers that replay a call byte for byte, and no
+total unless `max_tool_trace_total_bytes` is set too.
+`max_tool_trace_total_bytes` set on any layer applies either way, and `0` keeps
+every step. The prompt follows only a `max_tool_trace_bytes` a layer sets,
+never these defaults.
+
+:::note Upgrading
+These defaults are new:
+
+- **A configuration that sets `max_tool_trace_bytes`**, `0` included, keeps its
+  traces as before.
+- **A `raw` configuration that sets neither limit** keeps each tool text field
+  to 64 KiB, raw copies included, and a record's steps to 256 KiB, where it kept
+  them whole. Set `max_tool_trace_bytes: 0` to keep whole traces.
+- **Under `verified` and `none`** a record's trace keeps no text, as before, so
+  nothing changes.
+
+`vllm-sr config migrate` writes no limit: a configuration that relies on whole
+traces sets `max_tool_trace_bytes: 0` itself.
 :::
 
 ### Keep personal data out of Replay
 
-Set `capture_personal_data: false` globally or on a decision's
-`router_replay` plugin:
+Set `prompt_capture: verified` globally or on a decision's `router_replay`
+plugin to keep each request's prompt only when it has no personal data:
 
-- **Kept:** routing evidence, the model, signals and the detected PII types.
-- **Omitted for requests with personal data:** request and response bodies,
-  prompts, tool definitions and tool traces.
+- **Kept:** routing evidence, the model, signals and the detected PII types,
+  and the prompt once it is found clean, up to [its limit](#bound-the-prompt).
+- **Omitted:** request and response bodies, tool definitions and tool traces,
+  and the prompt of a request with personal data.
 - **Requests never wait for the check.** Unless a routing decision already
   read the prompt with a PII signal, the record is first written without it.
   The recipe's configured PII rules then read the latest user message alone,
@@ -148,9 +283,11 @@ Set `capture_personal_data: false` globally or on a decision's
   during routing.
 
 When PII evidence is unavailable, the `pii` rule's model gives no answer, or
-the recipe has no `pii` rule, capture omits content conservatively. A PII signal is
-optional; configuring one allows content capture for requests it identifies as
-free of personal data. For example:
+the recipe has no `pii` rule, capture omits the prompt conservatively. A PII
+signal is optional; configuring one allows the prompt of requests it identifies
+as free of personal data. These reads run on the decision model beside the
+guard, so `verified` costs decision-model time that `none` and `raw` don't.
+For example:
 
 ```yaml
 recipes:
@@ -165,14 +302,15 @@ recipes:
 By default a record keeps each client tool result's call ID and whether it
 succeeded or failed, but not its output, and a captured request body has its
 tool results removed. This applies whether or not a PII signal reads tool
-results. To debug an agent's tool loop, set `capture_tool_results: true`
-globally or on a decision's `router_replay` plugin:
+results. To debug an agent's tool loop, set `capture_tool_results: true` with
+`prompt_capture: raw` globally or on a decision's `router_replay` plugin:
 
 ```yaml
 plugins:
   - type: router_replay
     configuration:
       enabled: true
+      prompt_capture: raw
       capture_request_body: true
       capture_tool_results: true
       max_tool_trace_bytes: 16384
@@ -189,16 +327,19 @@ With it on:
   are request text.
 
 :::tip Set a limit
-With the default of `0`, results are stored whole. A large tool output makes
+Where no layer sets `max_tool_trace_bytes`, each result keeps 64 KiB and a
+record's steps 256 KiB in all ([Bound the trace](#bound-the-trace)). With
+`max_tool_trace_bytes: 0`, results are stored whole. A large tool output makes
 the record larger, and a store can reject a record above its size limit.
 :::
 
 Tool results are raw client data, so:
 
-- **`capture_tool_results: true` requires `capture_personal_data: true`.**
-  The Router refuses to load a configuration where the global defaults, or any
-  decision's effective `router_replay` settings, combine
-  `capture_tool_results: true` with `capture_personal_data: false`.
+- **`capture_tool_results: true` stores results only under
+  `prompt_capture: raw`.** The Router refuses to load a configuration where
+  the global defaults, or any decision's effective `router_replay` settings,
+  combine `capture_tool_results: true` with `prompt_capture: verified`; under
+  `none` it stores nothing.
 - **A masking route** never records its request trace or body.
 - **Principals without `replay.detail`** still receive tool results redacted.
 
@@ -288,7 +429,7 @@ plugins:
 | `timeout_seconds` | `30` | Deadline for queue wait plus execution, shared by all retries. |
 | `max_response_bytes` | `1048576` | Largest shadow response body that is read. Larger bodies fail with `response_too_large`. |
 | `max_retries` | `0` | Extra attempts on transport errors or retryable statuses. Capped at `3`. |
-| `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome. Off by default; only sizes, tokens, and a SHA-256 are kept. |
+| `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome, under `prompt_capture: raw` only. Off by default; only sizes, tokens, and a SHA-256 are kept. |
 | `max_capture_bytes` | `4096` | Excerpt bound when capture is on. |
 | `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. This setting applies only to the shadow HTTP client; it does not configure primary backend transport. |
 | `forward_headers` | `[]` | Decision `header_mutation` names the shadow copy may carry, matched case-insensitively. Nothing else a decision sets for the primary backend is forwarded, so a custom credential such as `X-Internal-Token` stays on the primary path. Known credential carriers (`Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the `x-user-*-key` headers) are rejected at config load and dropped at run time even if listed. |
@@ -348,7 +489,10 @@ replay record. Outcomes are append-only:
 
 Replay redaction applies to shadow outcomes as it does to the rest of the
 record: viewers without content rights see the routing and timing fields, but
-not `target_ref`, `reason` or `metadata`. Keep `capture_response_body` off
+not `target_ref`, `reason` or `metadata`. The shadow's `capture_response_body`
+is its own, and keeps its excerpt only under `raw`, which alone keeps the
+primary's answer: generated text can repeat the prompt, and `verified` checks
+the prompt only. Under `none` and `verified` no record keeps one. Keep it off
 unless the replay store and its readers are cleared for prompt-level content.
 See the fragment:
 [`config/fragments/plugin/router-replay/shadow.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/shadow.yaml).
@@ -399,8 +543,9 @@ about that decision. To balance it:
   exclusion.
 
 The export needs `replay.read`, and reads the same records the list API does.
-Body capture must be on for the decisions being compared, because an
-observation with no captured request is excluded as `request_body_missing`.
+The decisions being compared need `prompt_capture: raw` with request body
+capture on, because an observation with no captured request is excluded as
+`request_body_missing`.
 
 ### Hand the comparison to a judge
 
@@ -496,6 +641,21 @@ Keep datasets out of this repository.
 
 Open **Insights** in the Dashboard, or use the
 [Replay API](../../api/router#router-replay) to filter records and inspect a session.
+The search finds a record by its request id, its recipe or its session id, so
+the session id an agent harness sends, such as Claude Code's
+`x-claude-code-session-id`, finds every call of that session. A record's header
+says where the request sits in its session, and the session routing history
+opens with a summary: the agents that called, the models that answered and how
+often, how many times the model switched, how the calls ended, and the time from
+the first call's start to the last one's end. Below it each call is one row, the
+request on the page marked and a model switch highlighted. Subagents are named
+`subagent 1`, `subagent 2` and so on in order of their first call, with the
+short hash of the agent identity header in the row's title, and the main
+conversation is `main`. The hash is recorded only when `identity.headers.agent`
+names that header (see [Session identification](../../api/session-identification));
+without it, every call shows `main`. A Codex root thread, whose agent and session
+ids are equal, is `main`. A viewer without `replay.detail` gets no hash, as with
+the rest of the redacted session policy, so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 

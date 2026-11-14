@@ -34,7 +34,9 @@ type serverLifecycle struct {
 	watchMu     sync.Mutex
 	watchCancel context.CancelFunc
 	watchDone   chan struct{}
-	reloads     sync.WaitGroup
+	// stopped is closed once shutdown begins (shuttingDown).
+	stopped chan struct{}
+	reloads sync.WaitGroup
 }
 
 func (l *serverLifecycle) startWatcher(parent context.Context) (context.Context, func()) {
@@ -65,7 +67,30 @@ func (l *serverLifecycle) beginShutdown() {
 	if l.watchCancel != nil {
 		l.watchCancel()
 	}
+	stopped := l.stoppedLocked()
+	select {
+	case <-stopped:
+	default:
+		close(stopped)
+	}
 	l.watchMu.Unlock()
+}
+
+// shuttingDown is closed once shutdown begins.
+func (l *serverLifecycle) shuttingDown() <-chan struct{} {
+	l.watchMu.Lock()
+	defer l.watchMu.Unlock()
+	return l.stoppedLocked()
+}
+
+func (l *serverLifecycle) stoppedLocked() chan struct{} {
+	if l.stopped == nil {
+		l.stopped = make(chan struct{})
+		if l.stopping.Load() {
+			close(l.stopped)
+		}
+	}
+	return l.stopped
 }
 
 func (l *serverLifecycle) startReload() (func(), bool) {

@@ -167,8 +167,8 @@ func newEffectiveBackendSemantics(
 }
 
 func effectiveBackendCredential(instance modelcatalog.ProviderInstance) effectiveCredentialIdentity {
-	if instance.AuthCredential == CredentialDelegated {
-		return effectiveCredentialIdentity{source: CredentialDelegated}
+	if instance.AuthCredential == CredentialDelegated || instance.AuthCredential == CredentialCaller {
+		return effectiveCredentialIdentity{source: instance.AuthCredential}
 	}
 	credentials := instance.Credentials
 	if credentials.APIKey != "" {

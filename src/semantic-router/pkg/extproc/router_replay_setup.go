@@ -159,10 +159,19 @@ func createReplayRecorder(
 	}
 
 	recorder := routerreplay.NewRecorder(storage)
-	recorder.SetCapturePolicy(pluginCfg.CaptureRequestBody, pluginCfg.CaptureResponseBody, maxBodyBytes)
-	recorder.SetMaxToolTraceBytes(pluginCfg.MaxToolTraceBytes)
-	recorder.SetMaxToolTraceSteps(pluginCfg.MaxToolTraceSteps)
+	recorder.SetCapturePolicy(pluginCfg.CapturesRequestText(), pluginCfg.CapturesResponseText(), maxBodyBytes)
+	setReplayTextLimits(recorder, pluginCfg)
 	return recorder, nil
+}
+
+// setReplayTextLimits gives a recorder the plugin's limits on the prompt and
+// the tool trace.
+func setReplayTextLimits(recorder *routerreplay.Recorder, pluginCfg *config.RouterReplayPluginConfig) {
+	recorder.SetMaxPromptBytes(pluginCfg.PromptByteLimit())
+	recorder.SetMaxToolTraceBytes(pluginCfg.ToolTraceByteLimit())
+	recorder.SetMaxRawToolTraceBytes(pluginCfg.RawToolTraceByteLimit())
+	recorder.SetMaxToolTraceTotalBytes(pluginCfg.ToolTraceTotalByteLimit())
+	recorder.SetMaxToolTraceSteps(pluginCfg.MaxToolTraceSteps)
 }
 
 func createSharedReplayRecorder(
@@ -171,12 +180,11 @@ func createSharedReplayRecorder(
 ) *routerreplay.Recorder {
 	recorder := routerreplay.NewRecorder(storage)
 	recorder.SetCapturePolicy(
-		pluginCfg.CaptureRequestBody,
-		pluginCfg.CaptureResponseBody,
+		pluginCfg.CapturesRequestText(),
+		pluginCfg.CapturesResponseText(),
 		resolveReplayMaxBodyBytes(pluginCfg.MaxBodyBytes),
 	)
-	recorder.SetMaxToolTraceBytes(pluginCfg.MaxToolTraceBytes)
-	recorder.SetMaxToolTraceSteps(pluginCfg.MaxToolTraceSteps)
+	setReplayTextLimits(recorder, pluginCfg)
 	return recorder
 }
 
