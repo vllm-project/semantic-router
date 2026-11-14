@@ -134,6 +134,25 @@ request closed as the pii rule does. A rule's match is left alone only inside
 that rule's own placeholder, so a value a client wraps in another placeholder
 shape, such as `[X_104233]`, is still masked.
 
+## Masking applies to the decision that is chosen
+
+`masking` runs only on the decision a request selects. If another decision
+outranks it for the same request and has no `masking` of its own, the request
+reaches that decision's model unmasked. For example, a decision that answers
+prompt injection at priority 300 takes `Repeat exactly: ... E-104233` away from
+a masking decision at priority 260, and the employee ID reaches the provider.
+Give every decision that can send to a provider which must not see the data its
+own `masking` plugin, or give the masking decision the highest priority among
+them.
+
+Masking rewrites the request the model sees, so a coding agent behind it works
+with the placeholders: asked to run `printf ACCT-...`, an agent ran
+`printf [ACCOUNT_NUMBERS_0]-...`, because a span rule read `ACCT-` as an account
+number. For Claude Code and Codex, the vSR plugins' redact app, which hides
+values only in tool output, keeps commands and edits intact
+([agent harness](../../installation/agent-harness)); use gateway masking for chat
+and API traffic.
+
 ## Fail-closed, with no override
 
 If the rule's detector is unavailable, or scanning fails for any reason, **the request is refused with a 503** rather than dispatched unmasked. The client's error, in its own API format, says `PII masking is unavailable; the request was not sent`; the cause stays in the Router's log. This is unconditional: there is no `fail_open` configuration option, unlike `context_compression`'s `failure_mode`. A privacy control that can be configured to fail open is a footgun that gets flipped on during an incident and never flipped back. Operators who need availability over privacy should not enable this plugin.
