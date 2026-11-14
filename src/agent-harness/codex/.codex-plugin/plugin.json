@@ -1,0 +1,15 @@
+{
+  "name": "vsr",
+  "version": "0.1.0",
+  "description": "vLLM Semantic Router's decision model beside Codex: guard holds risky shell commands, redact hides personal data in command output, and shield flags output that tries to give the agent orders.",
+  "keywords": ["vllm-sr", "system-one", "guard", "redact", "shield"],
+  "hooks": "./hooks.json",
+  "interface": {
+    "displayName": "vSR",
+    "shortDescription": "System One beside Codex: guard, redact and shield",
+    "developerName": "vLLM Semantic Router",
+    "category": "Security",
+    "websiteUrl": "https://github.com/vllm-project/semantic-router",
+    "logo": "./.codex-plugin/icon.png"
+  }
+}
