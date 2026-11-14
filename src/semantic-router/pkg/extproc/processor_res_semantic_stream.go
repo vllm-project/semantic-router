@@ -568,8 +568,9 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 	ctx.InflightToken = 0
 
 	usage := r.takeNeutralResponseUsage(ctx)
-	// Decoded stream events carry the client-facing model, not the provider's.
-	observeUpstreamResponse(ctx, "", usage)
+	// The buffered path records the response's model; the stream reconstructs
+	// the same answer, so the span names the model it observed too.
+	observeUpstreamResponse(ctx, ctx.SemanticStreamState.model, usage)
 	r.reportSemanticStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
