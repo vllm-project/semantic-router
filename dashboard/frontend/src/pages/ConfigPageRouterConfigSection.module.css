@@ -659,6 +659,52 @@
   opacity: 0.6;
 }
 
+.vsrSelect {
+  justify-self: end;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+/* One app's rules: its title, a row per rule that fits, and a Try it box. */
+.vsrRuleApp {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.7rem 0.9rem 0.8rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.vsrRuleApp .vsrRow {
+  padding: 0.5rem 0 0.5rem 0.75rem;
+}
+
+.vsrTry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.4rem 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.vsrTry > [role='status'] {
+  grid-column: 1 / -1;
+}
+
+.vsrTryText {
+  min-height: 2.4rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.76rem;
+  resize: vertical;
+}
+
 .vsrChoiceNote {
   color: var(--text-muted);
   font-size: 0.66rem;
