@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -26,8 +27,15 @@ import (
 // in, the first found taken.
 var callerCredentialHeaders = []string{headers.Authorization, headers.XAPIKey}
 
+// callerCredentialFormats are the client APIs whose login each caller
+// provider issued. A login reaches only the provider of the API the client
+// spoke, so a bearer that came in on Responses never reaches Anthropic.
+var callerCredentialFormats = map[string][]llmprotocol.WireFormat{
+	"anthropic": {llmprotocol.AnthropicMessagesV1},
+}
+
 const (
-	callerCredentialMessage = "Authentication failed. The selected upstream takes the client's own provider login, which the request does not carry."
+	callerCredentialMessage = "Authentication failed. The selected upstream takes the client's own login for its provider, which the request does not carry."
 	callerCredentialCode    = "caller_credential_missing" // #nosec G101 -- error code, not a credential
 )
 
@@ -60,6 +68,19 @@ func (r *OpenAIRouter) captureCallerCredential(ctx *RequestContext) {
 	}
 }
 
+// callerCredentialFor returns the client's login for a caller backend when
+// the client spoke the API of the backend's provider, and whether it did.
+func callerCredentialFor(ctx *RequestContext, profile *config.ProviderProfile) (callerCredential, bool) {
+	if ctx == nil || ctx.callerCredential.value == "" || profile == nil {
+		return callerCredential{}, false
+	}
+	formats := callerCredentialFormats[strings.ToLower(strings.TrimSpace(profile.Type))]
+	if !slices.Contains(formats, ctx.SourceFormat) {
+		return callerCredential{}, false
+	}
+	return ctx.callerCredential, true
+}
+
 // redactCallerCredential takes the client's login out of a body the Router
 // passes on or keeps, in case an upstream echoed it: the token itself, with
 // or without its scheme.
@@ -80,10 +101,10 @@ func (r *OpenAIRouter) appendCallerCredential(state *routeHeaderState, model, ba
 	if r.CredentialResolver != nil {
 		state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	}
-	credential := ctx.callerCredential
-	if credential.value == "" {
+	credential, ok := callerCredentialFor(ctx, state.profile)
+	if !ok {
 		logging.ComponentWarnEvent("extproc", "caller_credential_missing", map[string]interface{}{
-			"request_id": ctx.RequestID, "model": model, "backend": backendName,
+			"request_id": ctx.RequestID, "model": model, "backend": backendName, "client_api": ctx.SourceFormat,
 		})
 		return r.callerCredentialMissing(ctx)
 	}
@@ -99,11 +120,11 @@ func (r *OpenAIRouter) appendCallerCredential(state *routeHeaderState, model, ba
 
 // callerCredentialAuthorizer presents the client's login on a fallback
 // attempt to a caller backend, as primary dispatch does.
-func callerCredentialAuthorizer(ctx *RequestContext) (func(*http.Request), error) {
-	if ctx == nil || ctx.callerCredential.value == "" {
+func callerCredentialAuthorizer(ctx *RequestContext, profile *config.ProviderProfile) (func(*http.Request), error) {
+	credential, ok := callerCredentialFor(ctx, profile)
+	if !ok {
 		return nil, errCallerCredentialMissing
 	}
-	credential := ctx.callerCredential
 	return func(request *http.Request) {
 		for _, name := range config.CredentialCarrierHeaders() {
 			if !strings.EqualFold(name, credential.header) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
@@ -44,7 +45,7 @@ func TestCallerDispatchSendsTheClientsLoginInTheHeaderItCameIn(t *testing.T) {
 	router := callerCredentialTestRouter(t)
 	profile := delegatedCredentialProfile(t, router, callerTestEndpoint)
 	for header, value := range map[string]string{"authorization": "Bearer sk-ant-oat01-login", "x-api-key": "sk-ant-api03-key"} {
-		ctx := &RequestContext{Headers: map[string]string{header: value, headers.UserAnthropicKey: "per-user-key"}}
+		ctx := &RequestContext{Headers: map[string]string{header: value, headers.UserAnthropicKey: "per-user-key"}, SourceFormat: llmprotocol.AnthropicMessagesV1}
 		router.captureCallerCredential(ctx)
 		state := &routeHeaderState{profile: profile}
 		if response := router.appendProviderCredential(state, "claude-sonnet", callerTestEndpoint, ctx); response != nil {
@@ -60,6 +61,26 @@ func TestCallerDispatchSendsTheClientsLoginInTheHeaderItCameIn(t *testing.T) {
 				t.Fatalf("%s: remove headers = %v, want %s", header, state.removeHeaders, want)
 			}
 		}
+	}
+}
+
+func TestALoginReachesOnlyTheProviderOfTheAPIItCameIn(t *testing.T) {
+	router := callerCredentialTestRouter(t)
+	profile := delegatedCredentialProfile(t, router, callerTestEndpoint)
+	// Codex on a ChatGPT login speaks Responses: its bearer is OpenAI's, so an
+	// Anthropic caller backend must not receive it.
+	ctx := &RequestContext{Headers: map[string]string{"authorization": "Bearer chatgpt-login"}, SourceFormat: llmprotocol.OpenAIResponsesV1}
+	router.captureCallerCredential(ctx)
+	state := &routeHeaderState{profile: profile}
+	response := router.appendProviderCredential(state, "claude-sonnet", callerTestEndpoint, ctx)
+	if response == nil || response.GetImmediateResponse() == nil || int(response.GetImmediateResponse().GetStatus().GetCode()) != http.StatusUnauthorized {
+		t.Fatalf("a login on another provider's API was not answered 401: %#v", response)
+	}
+	if len(state.setHeaders) != 0 {
+		t.Fatalf("Anthropic got another provider's login: %#v", state.setHeaders)
+	}
+	if _, err := router.fallbackProviderAuthorizer(ctx, profile, "claude-sonnet"); !errors.Is(err, errCallerCredentialMissing) {
+		t.Fatalf("fallback authorizer error = %v", err)
 	}
 }
 
@@ -95,7 +116,7 @@ func TestAHopNeverCarriesTheCallersLogin(t *testing.T) {
 
 func TestCallerFallbackPresentsTheSameLogin(t *testing.T) {
 	router := callerCredentialTestRouter(t)
-	ctx := &RequestContext{Headers: map[string]string{"authorization": "Bearer sk-ant-oat01-login", "anthropic-beta": "claude-code-20250219,oauth-2025-04-20"}}
+	ctx := &RequestContext{Headers: map[string]string{"authorization": "Bearer sk-ant-oat01-login", "anthropic-beta": "claude-code-20250219,oauth-2025-04-20"}, SourceFormat: llmprotocol.AnthropicMessagesV1}
 	router.captureCallerCredential(ctx)
 	authorize, err := router.fallbackProviderAuthorizer(ctx, delegatedCredentialProfile(t, router, callerTestEndpoint), "claude-sonnet")
 	if err != nil {
