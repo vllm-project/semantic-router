@@ -304,11 +304,12 @@ export async function inspectOutput($: EngineInterface, e: ToolCallInput, ran: T
 }
 
 // Said to Claude with each output redact rewrote. Without it Claude reads the tags as the source's own text and tells the
-// person the file holds them.
+// person the file holds them; told only that the source holds the values, an agent sets out to read them another way.
 function hiddenNote(counts: Partial<Record<Tag, number>>) {
   const count = Object.values(counts).reduce((sum, n) => sum + (n ?? 0), 0)
   const tags = (Object.keys(counts) as Tag[]).map(tagText).join(', ')
-  return `vSR redact hid ${count} ${count === 1 ? 'value' : 'values'} in this output and put ${tags} in ${count === 1 ? 'its' : 'their'} place. The tags are vSR's, not part of the source, which still holds the real ${count === 1 ? 'value' : 'values'}.`
+  const real = count === 1 ? 'value' : 'values'
+  return `vSR redact hid ${count} ${real} in this output and put ${tags} in ${count === 1 ? 'its' : 'their'} place. The tags are vSR's, not part of the source, which still holds the real ${real}. They are hidden from you on purpose: do not try to read them another way, such as re-reading, encoding or decoding the output. If the task needs one, tell the person it was hidden.`
 }
 
 async function fileText($: EngineInterface, path: string) {

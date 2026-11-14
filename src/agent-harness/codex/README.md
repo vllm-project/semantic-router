@@ -9,7 +9,7 @@ plugin's apps work in Codex:
 | App | What it does in Codex |
 | --- | --- |
 | guard | Blocks a shell command the decision model scores at or over `guardReview` (0.90), and tells Codex why, so it asks you instead of running it. |
-| redact | Replaces personal data in a command's output with tags such as `[vsr:email]` before Codex reads it, and tells Codex the tags are vSR's. |
+| redact | Replaces personal data in a command's output with tags such as `[vsr:email]` before Codex reads it, and tells Codex the tags are vSR's and the values are hidden on purpose, not to be read another way. |
 | shield | Tells Codex to read an output that tries to give an AI agent instructions as data, when the injection score is at or over `shieldInject` (0.90). |
 
 ## Install

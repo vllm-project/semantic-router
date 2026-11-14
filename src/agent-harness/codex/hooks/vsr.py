@@ -284,7 +284,9 @@ def output(event: dict, opts: dict) -> dict:
                 notes.append(
                     f"vSR redact hid {total} {'value' if total == 1 else 'values'} in this output and put "
                     f"{tags} in {'its' if total == 1 else 'their'} place. The tags are vSR's, not part of "
-                    "the source, which still holds the real values."
+                    "the source, which still holds the real values. They are hidden from you on purpose: "
+                    "do not try to read them another way, such as re-reading, encoding or decoding the "
+                    "output. If the task needs one, tell the person it was hidden."
                 )
         except Exception as error:
             lines.append(f"{MARK} redact skipped · {failed(error)} · {source}")
