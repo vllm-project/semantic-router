@@ -68,6 +68,12 @@ def test_every_router_image_comes_from_one_stage_graph() -> None:
     assert "ARG ACCELERATOR=cpu" in router_dockerfile()
 
 
+def test_causal_conv1d_compiles_its_gpu_targets_in_parallel() -> None:
+    # Compiled one after another, one source's four GPU targets took 515 of
+    # the stage's 571 seconds on four cores.
+    assert "-parallel-jobs=$(nproc)" in stages()["causal-conv1d-rocm"][1]
+
+
 def test_router_images_carry_no_native_model_bindings() -> None:
     text = router_dockerfile()
 
