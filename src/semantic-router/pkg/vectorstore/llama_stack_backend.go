@@ -112,6 +112,9 @@ func NewLlamaStackBackend(cfg LlamaStackBackendConfig) (*LlamaStackBackend, erro
 				MaxIdleConnsPerHost: 10,
 				IdleConnTimeout:     90 * time.Second,
 			},
+			// The endpoint is configured by the operator: a redirect would
+			// replay the auth token to another origin.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 		storeIDs: make(map[string]string),
 	}, nil
