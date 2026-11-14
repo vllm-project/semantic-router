@@ -254,9 +254,10 @@ diagnosing Mergify. A run that remains **Queued** with zero jobs has not reached
 the CI planner or a runner; `/ci run` and queue retries cannot qualify that
 revision while its workflow has not started.
 
-For a fork PR, check **Files changed** for GitHub's **Awaiting approval**
-control. A maintainer may need to inspect the diff and approve the workflow
-run separately from approving the code review. If there is no approval hold,
+For a fork PR, **Action required** on the Actions run can indicate an approval
+hold. Check **Files changed** for GitHub's **Awaiting approval** control. A
+maintainer may need to inspect the diff and approve the workflow run separately
+from approving the code review. If there is no approval hold,
 compare other workflow runs created at the same time, including unrelated
 issues or PRs, and check [GitHub Status][github-status]. A cluster of unstarted
 runs across event types points to Actions admission rather than this PR's CI
