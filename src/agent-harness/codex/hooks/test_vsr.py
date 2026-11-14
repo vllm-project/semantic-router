@@ -162,6 +162,7 @@ class HooksTest(unittest.TestCase):
             reply["reason"],
         )
         self.assertIn("The tags are vSR's, not part of the source", reply["reason"])
+        self.assertIn("do not try to read them another way", reply["reason"])
         self.assertEqual(
             reply["systemMessage"],
             "▚▞ vSR redacted · 2 items hidden: email, name · the output of head -2 customers.csv",
