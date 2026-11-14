@@ -2,7 +2,7 @@
 name = "hallucination-detection-classifier"
 version = "0.0.0"
 description = "Environment for the hallucination detection classifier under src/training/model_classifier/hallucination_detection_classifier"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
     "datasets>=2.14.0,<6",

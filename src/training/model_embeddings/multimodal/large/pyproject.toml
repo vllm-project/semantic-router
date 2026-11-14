@@ -2,7 +2,7 @@
 name = "multimodal-large"
 version = "0.0.0"
 description = "Environment for the large multimodal embedding trainer under src/training/model_embeddings/multimodal/large"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
     "accelerate>=0.34.0,<2",
