@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -39,11 +40,125 @@ func replayDecision(values map[string]interface{}) *config.Decision {
 	return &config.Decision{Name: "ordinary", Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginRouterReplay, Configuration: config.MustStructuredPayload(values)}}}
 }
 
+// Each prompt capture mode keeps its own part of a request and its answer,
+// whatever the capture switches allow, and every mode keeps the routing data.
+func TestReplayPromptCaptureModesKeepTheirRecords(t *testing.T) {
+	const prompt = "Summarize the meeting agenda."
+	for _, test := range []struct {
+		name, mode              string
+		read, detected          bool
+		prompted, bodies, trace bool
+	}{
+		{"none", config.PromptCaptureNone, true, false, false, false, false},
+		{"raw", config.PromptCaptureRaw, false, false, true, true, true},
+		{"raw with personal data", config.PromptCaptureRaw, true, true, true, true, true},
+		{"verified clean", config.PromptCaptureVerified, true, false, true, false, false},
+		{"verified with personal data", config.PromptCaptureVerified, true, true, false, false, false},
+		{"verified unread", config.PromptCaptureVerified, false, false, false, false, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{
+				"enabled": true, "prompt_capture": test.mode, "capture_request_body": true, "capture_response_body": true,
+			}))
+			router := replayRuntimeRouter(t, cfg)
+			ctx := replayPolicyRequest(t)
+			ctx.PIIContentVerified, ctx.PIIDetected = test.read, test.detected
+			ctx.PIIEvidence = []classification.PrivacyEvidence{classification.NewPrivacyEvidence("request", prompt, test.read, !test.detected)}
+			ctx.RouterReplayPluginConfig = cfg.EffectiveRouterReplayConfig(nil)
+			router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
+			router.attachRouterReplayResponse(ctx, []byte(`{"text":"Meeting agenda."}`), true)
+			record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+			if !ok {
+				t.Fatal("missing record")
+			}
+			if record.Decision != "ordinary" || record.SelectedModel != "model" || record.RequestID != ctx.RequestID ||
+				record.PIIDetected != test.detected || record.LifecycleState != routerreplay.LifecycleCompleted {
+				t.Fatalf("lost routing data: %+v", record)
+			}
+			if kept := record.Prompt != ""; kept != test.prompted || (kept && record.Prompt != prompt) {
+				t.Fatalf("prompt %q, want kept=%v", record.Prompt, test.prompted)
+			}
+			if (record.RequestBody != "") != test.bodies || (record.ResponseBody != "") != test.bodies {
+				t.Fatalf("request body %q, response body %q, want kept=%v", record.RequestBody, record.ResponseBody, test.bodies)
+			}
+			if (record.ToolTrace != nil) != test.trace {
+				t.Fatalf("tool trace %+v, want kept=%v", record.ToolTrace, test.trace)
+			}
+			if ctx.SemanticRequest.Messages[0].Content[0].Text != prompt {
+				t.Fatal("capture changed the provider request")
+			}
+		})
+	}
+}
+
+// none and raw capture never read a prompt for personal data, even where
+// another policy of the same configuration keeps prompts only once verified
+// and so makes the pii rules ready for it. A verified request still is read.
+func TestReplayNoneAndRawCaptureStartNoPromptRead(t *testing.T) {
+	const prompt = "Summarize the meeting agenda."
+	for _, test := range []struct {
+		mode string
+		read bool
+	}{
+		{config.PromptCaptureNone, false},
+		{config.PromptCaptureRaw, false},
+		{config.PromptCaptureVerified, true},
+	} {
+		t.Run(test.mode, func(t *testing.T) {
+			cfg := &config.RouterConfig{
+				RouterReplay:       config.RouterReplayConfig{StoreBackend: "memory"},
+				IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}}},
+			}
+			withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureVerified}))
+			if !cfg.ReplayNeedsPIIEvidence() {
+				t.Fatal("the global verified capture must make the pii rules ready")
+			}
+			router := replayRuntimeRouter(t, cfg)
+			router.Classifier = &classification.Classifier{Config: cfg}
+			var asked, read atomic.Int32
+			done := make(chan struct{}, 1)
+			savedEvidence, savedReadable := replayPromptEvidence, replayPromptReadable
+			t.Cleanup(func() { replayPromptEvidence, replayPromptReadable = savedEvidence, savedReadable })
+			replayPromptReadable = func(*classification.Classifier, string, time.Duration, bool) bool {
+				asked.Add(1)
+				return true
+			}
+			replayPromptEvidence = func(_ *classification.Classifier, _ context.Context, text string) classification.PrivacyEvidence {
+				read.Add(1)
+				done <- struct{}{}
+				return classification.NewPrivacyEvidence("request", text, true, true)
+			}
+			ctx := replayPolicyRequest(t)
+			ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
+			own := replayDecision(map[string]interface{}{"enabled": true, "prompt_capture": test.mode})
+			router.applyDecisionResultToContext(&decision.DecisionResult{Decision: own}, ctx)
+			router.startRouterReplay(ctx, "public-entry", "model", own.Name)
+			if test.read {
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+					t.Fatal("the verified prompt was never read")
+				}
+			}
+			deadline := time.Now().Add(5 * time.Second)
+			for len(replayPromptCheckSlots) > 0 && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			if want := map[bool]int32{true: 1, false: 0}[test.read]; asked.Load() != want || read.Load() != want {
+				t.Fatalf("prompt reads asked %d, run %d; want %d", asked.Load(), read.Load(), want)
+			}
+			record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+			if want := map[string]string{config.PromptCaptureNone: "", config.PromptCaptureRaw: prompt, config.PromptCaptureVerified: prompt}[test.mode]; !ok || record.Prompt != want {
+				t.Fatalf("prompt %q, want %q", record.Prompt, want)
+			}
+		})
+	}
+}
+
 func TestReplayGlobalRuntimeCapturesBeforeDecisionAndDirectRequests(t *testing.T) {
-	no := false
 	for _, enabled := range []bool{false, true} {
 		for _, direct := range []bool{false, true} {
-			cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": enabled, "capture_personal_data": no}))
+			cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": enabled, "prompt_capture": config.PromptCaptureVerified}))
 			router := replayRuntimeRouter(t, cfg)
 			ctx := replayPolicyRequest(t)
 			if direct {
@@ -74,8 +189,7 @@ func TestReplayGlobalRuntimeCapturesBeforeDecisionAndDirectRequests(t *testing.T
 }
 
 func TestReplaySelectedDecisionReplacesCachedGlobalPolicy(t *testing.T) {
-	no := false
-	cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": no}))
+	cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureVerified}))
 	router := replayRuntimeRouter(t, cfg)
 	ctx := replayPolicyRequest(t)
 	ctx.RouterReplayPluginConfig = cfg.EffectiveRouterReplayConfig(nil)
@@ -91,7 +205,7 @@ func TestReplaySelectedDecisionReplacesCachedGlobalPolicy(t *testing.T) {
 	// A failed earlier persistence attempt can leave capture state without an ID.
 	// The next capture resolves the selected policy rather than keeping that state.
 	ctx.RouterReplayContentOmitted = true
-	allow := replayDecision(map[string]interface{}{"enabled": true, "capture_personal_data": true})
+	allow := replayDecision(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureRaw})
 	router.applyDecisionResultToContext(&decision.DecisionResult{Decision: allow}, ctx)
 	router.startRouterReplay(ctx, "public-entry", "model", allow.Name)
 	record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
@@ -100,84 +214,123 @@ func TestReplaySelectedDecisionReplacesCachedGlobalPolicy(t *testing.T) {
 	}
 }
 
-func TestReplayPersonalDataPolicyKeepsMetadataAndLifecycle(t *testing.T) {
-	for _, test := range []struct {
-		name                              string
-		capture, verified, detected, keep bool
-	}{
-		{"PII", false, true, true, false},
-		{"verified clean", false, true, false, true},
-		{"unavailable", false, false, false, false},
-		{"default capture", true, false, true, true},
+// Verified capture is what capture_personal_data: false did, under either
+// spelling: the record is written first, without the prompt, and the prompt
+// is attached only once a read after routing finds it clean.
+func TestReplayChecksAWithheldPromptAfterRoutingAndAttachesItOnlyWhenClean(t *testing.T) {
+	const prompt = "Summarize the meeting agenda."
+	for _, verified := range []map[string]interface{}{
+		{"enabled": true, "prompt_capture": config.PromptCaptureVerified},
+		{"enabled": true, "capture_personal_data": false},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": test.capture}))
+		for _, clean := range []bool{true, false} {
+			cfg := &config.RouterConfig{
+				RouterReplay:       config.RouterReplayConfig{StoreBackend: "memory"},
+				IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}}},
+			}
+			withGlobalPlugins(t, cfg, replayTestPlugin(verified))
 			router := replayRuntimeRouter(t, cfg)
+			router.Classifier = &classification.Classifier{Config: cfg}
+			release, read := make(chan struct{}), make(chan string, 1)
+			saved := replayPromptEvidence
+			replayPromptEvidence = func(_ *classification.Classifier, _ context.Context, text string) classification.PrivacyEvidence {
+				<-release
+				read <- text
+				return classification.NewPrivacyEvidence("request", text, true, clean)
+			}
 			ctx := replayPolicyRequest(t)
-			ctx.PIIContentVerified, ctx.PIIDetected = test.verified, test.detected
-			ctx.PIIEvidence = []classification.PrivacyEvidence{classification.NewPrivacyEvidence("request", "Summarize the meeting agenda.", test.verified, !test.detected)}
-			ctx.RouterReplayPluginConfig = cfg.EffectiveRouterReplayConfig(nil)
+			ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
 			router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
-			router.attachRouterReplayResponse(ctx, []byte(`{"text":"Meeting agenda."}`), true)
 			record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
-			if !ok {
-				t.Fatal("missing metadata record")
+			if !ok || record.Prompt != "" || !ctx.RouterReplayContentOmitted {
+				t.Fatalf("%v clean=%v: the record must be written before its check, prompt withheld: %+v", verified, clean, record)
 			}
-			kept := record.RequestBody != "" || record.Prompt != "" || record.ResponseBody != ""
-			if kept != test.keep {
-				t.Fatalf("content kept=%v want=%v", kept, test.keep)
+			close(release)
+			if got := <-read; got != prompt {
+				t.Fatalf("checked %q, want the exact prompt", got)
 			}
-			if record.Decision != "ordinary" || record.PIIDetected != test.detected || record.LifecycleState != routerreplay.LifecycleCompleted {
-				t.Fatalf("lost routing metadata: %+v", record)
+			deadline := time.Now().Add(5 * time.Second)
+			for len(replayPromptCheckSlots) > 0 && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
 			}
-			if ctx.SemanticRequest.Messages[0].Content[0].Text != "Summarize the meeting agenda." {
-				t.Fatal("capture changed provider request")
+			replayPromptEvidence = saved
+			record, _ = router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+			if want := map[bool]string{true: prompt, false: ""}[clean]; record.Prompt != want {
+				t.Fatalf("%v clean=%v: prompt=%q want=%q", verified, clean, record.Prompt, want)
 			}
-		})
+			if record.RequestBody != "" || record.ToolDefinitions != "" {
+				t.Fatalf("%v clean=%v: a prompt check must not restore other content: %+v", verified, clean, record)
+			}
+		}
 	}
 }
 
-func TestReplayChecksAWithheldPromptAfterRoutingAndAttachesItOnlyWhenClean(t *testing.T) {
+// No check starts that could not read the prompt whole in its time: it would
+// end incomplete_read and withhold the prompt anyway. Whether it could is the
+// classifier's call, told whether the request's own guard scans ran out of
+// time on its input; scans that a match ended early did not. A check that
+// can finish still runs, and still withholds a prompt with personal data.
+func TestReplayStartsNoCheckThatCouldNotReadThePromptInTime(t *testing.T) {
 	const prompt = "Summarize the meeting agenda."
-	for _, clean := range []bool{true, false} {
-		no := false
-		cfg := &config.RouterConfig{
-			RouterReplay:       config.RouterReplayConfig{StoreBackend: "memory"},
-			IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}}},
-		}
-		withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": no}))
-		router := replayRuntimeRouter(t, cfg)
-		router.Classifier = &classification.Classifier{Config: cfg}
-		release, read := make(chan struct{}), make(chan string, 1)
-		saved := replayPromptEvidence
-		replayPromptEvidence = func(_ *classification.Classifier, _ context.Context, text string) classification.PrivacyEvidence {
-			<-release
-			read <- text
-			return classification.NewPrivacyEvidence("request", text, true, clean)
-		}
-		ctx := replayPolicyRequest(t)
-		ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
-		router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
-		record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
-		if !ok || record.Prompt != "" || !ctx.RouterReplayContentOmitted {
-			t.Fatalf("clean=%v: the record must be written before its check, prompt withheld: %+v", clean, record)
-		}
-		close(release)
-		if got := <-read; got != prompt {
-			t.Fatalf("checked %q, want the exact prompt", got)
-		}
-		deadline := time.Now().Add(5 * time.Second)
-		for len(replayPromptCheckSlots) > 0 && time.Now().Before(deadline) {
-			time.Sleep(time.Millisecond)
-		}
-		replayPromptEvidence = saved
-		record, _ = router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
-		if want := map[bool]string{true: prompt, false: ""}[clean]; record.Prompt != want {
-			t.Fatalf("clean=%v: prompt=%q want=%q", clean, record.Prompt, want)
-		}
-		if record.RequestBody != "" || record.ToolDefinitions != "" {
-			t.Fatalf("clean=%v: a prompt check must not restore other content: %+v", clean, record)
-		}
+	for _, test := range []struct {
+		name                          string
+		coverage                      map[string]string
+		matched                       []string
+		readable, guardShort, checked bool
+	}{
+		{"readable in time", nil, nil, true, false, true},
+		{"too long for its time", nil, nil, false, false, false},
+		{"guard scan cut by its deadline", map[string]string{"jailbreak:prompt_attack": "partial 43/97"}, nil, false, true, false},
+		{"guard scan ended by a match", map[string]string{"jailbreak:prompt_attack": "partial 2/97"}, []string{"prompt_attack"}, true, false, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := &config.RouterConfig{
+				RouterReplay:       config.RouterReplayConfig{StoreBackend: "memory"},
+				IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}}},
+			}
+			withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureVerified}))
+			router := replayRuntimeRouter(t, cfg)
+			router.Classifier = &classification.Classifier{Config: cfg}
+			read := make(chan string, 1)
+			savedEvidence, savedReadable := replayPromptEvidence, replayPromptReadable
+			t.Cleanup(func() { replayPromptEvidence, replayPromptReadable = savedEvidence, savedReadable })
+			var guardShort bool
+			replayPromptReadable = func(_ *classification.Classifier, text string, within time.Duration, short bool) bool {
+				if text != prompt || within != replayPromptCheckTimeout {
+					t.Errorf("asked whether %q is readable in %v", text, within)
+				}
+				guardShort = short
+				return test.readable
+			}
+			replayPromptEvidence = func(_ *classification.Classifier, _ context.Context, text string) classification.PrivacyEvidence {
+				read <- text
+				return classification.NewPrivacyEvidence("request", text, true, false)
+			}
+			ctx := replayPolicyRequest(t)
+			ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
+			ctx.VSRScanCoverage, ctx.VSRMatchedJailbreak = test.coverage, test.matched
+			router.startRouterReplay(ctx, "public-entry", "model", "ordinary")
+			if guardShort != test.guardShort {
+				t.Fatalf("told the guard scan ran out of time: %v, want %v", guardShort, test.guardShort)
+			}
+			select {
+			case <-read:
+				if !test.checked {
+					t.Fatal("a check started that could not read the prompt in time")
+				}
+			case <-time.After(map[bool]time.Duration{true: 5 * time.Second, false: 50 * time.Millisecond}[test.checked]):
+				if test.checked {
+					t.Fatal("no check started for a prompt it could read in time")
+				}
+			}
+			deadline := time.Now().Add(5 * time.Second)
+			for len(replayPromptCheckSlots) > 0 && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			if record, _ := router.ReplayRecorder.GetRecord(ctx.RouterReplayID); record.Prompt != "" {
+				t.Fatalf("the prompt was attached: %q", record.Prompt)
+			}
+		})
 	}
 }
 
@@ -197,13 +350,18 @@ func TestReplayRuntimeUsesGlobalMemoryCapacity(t *testing.T) {
 
 func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
 	for _, test := range []struct {
-		name               string
-		personal, response bool
-	}{{"omit", false, true}, {"allow", true, true}, {"response body off", true, false}} {
-		capture := test.personal && test.response
+		name, mode string
+		response   bool
+	}{
+		{"none", config.PromptCaptureNone, true},
+		{"verified", config.PromptCaptureVerified, true},
+		{"raw", config.PromptCaptureRaw, true},
+		{"response body off", config.PromptCaptureRaw, false},
+	} {
+		capture := test.mode == config.PromptCaptureRaw && test.response
 		t.Run(test.name, func(t *testing.T) {
 			cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{
-				"enabled": true, "capture_personal_data": test.personal, "capture_response_body": test.response,
+				"enabled": true, "prompt_capture": test.mode, "capture_response_body": test.response,
 			}))
 			router := replayRuntimeRouter(t, cfg)
 			ctx := replayPolicyRequest(t)
@@ -232,8 +390,7 @@ func TestReplayOmittedContentDropsResponseDetectorExcerpts(t *testing.T) {
 }
 
 func TestReplayDirectStartResolvesGlobalPolicyWithoutDecisionPreparation(t *testing.T) {
-	no := false
-	router := replayRuntimeRouter(t, withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": no})))
+	router := replayRuntimeRouter(t, withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureVerified})))
 	ctx := replayPolicyRequest(t)
 	ctx.Routing.SelectPassthrough()
 	router.startRouterReplay(ctx, "backend", "backend", "")
@@ -260,12 +417,12 @@ func TestReplayQueriesIncludeGlobalAndDecisionMemoryStores(t *testing.T) {
 
 func TestReplayRequestPolicyDoesNotBorrowAnotherFallbackCapture(t *testing.T) {
 	no := false
-	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_response_body": no}))
+	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureRaw, "capture_response_body": no}))
 	router := replayRuntimeRouter(t, cfg)
 	global := replayPolicyRequest(t)
 	router.startRouterReplay(global, "direct", "direct", "")
 	selected := replayPolicyRequest(t)
-	d := replayDecision(map[string]interface{}{"enabled": true, "capture_response_body": true})
+	d := replayDecision(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureRaw, "capture_response_body": true})
 	router.applyDecisionResultToContext(&decision.DecisionResult{Decision: d}, selected)
 	router.startRouterReplay(selected, "public", "backend", d.Name)
 	body := []byte(`{"text":"Synthetic response"}`)
@@ -282,8 +439,7 @@ func TestReplayRequestPolicyDoesNotBorrowAnotherFallbackCapture(t *testing.T) {
 }
 
 func TestReplayCleanPromptDoesNotAuthorizeResponseToolsOrDifferentInput(t *testing.T) {
-	no := false
-	cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": true, "capture_personal_data": no}))
+	cfg := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureVerified}))
 	router := replayRuntimeRouter(t, cfg)
 	for _, exact := range []bool{false, true} {
 		ctx := replayPolicyRequest(t)

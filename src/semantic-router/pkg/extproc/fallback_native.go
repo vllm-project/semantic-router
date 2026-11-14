@@ -66,21 +66,22 @@ func (f *sessionFallback) Next(callCtx context.Context, outcome routing.Outcome)
 		return routing.FallbackStep{}, errSessionEnded
 	}
 	r, ctx := f.session.router, f.session.ctx
+	failed := f.current
 	orch := r.fallbackOrchestratorForContext(ctx)
 	if !nativeFallbackApplies(orch, ctx) {
-		return f.end(), nil
+		return f.endAfter(failed, outcome), nil
 	}
 	record := f.record(orch)
 	evaluation := orch.EvaluateAttempt(callCtx, record, f.failedAttempt(outcome), fallbackCommitState(ctx))
 	if !evaluation.CanFallback || totalTimeoutSpent(orch, ctx, record) {
-		return f.end(), nil
+		return f.endAfter(failed, outcome), nil
 	}
 	for {
 		index, err := orch.SelectNextCandidateIndex(record, len(ctx.VSREligibleModelRefs),
 			func(i int) string { return candidateModelIdentity(ctx.VSREligibleModelRefs[i]) },
 			func(model string) (string, error) { return r.fallbackBackendName(ctx, model), nil })
 		if err != nil {
-			return f.end(), nil
+			return f.endAfter(failed, outcome), nil
 		}
 		step, prepared, err := f.prepare(callCtx, orch, &ctx.VSREligibleModelRefs[index])
 		if err == nil {
@@ -93,9 +94,27 @@ func (f *sessionFallback) Next(callCtx context.Context, outcome routing.Outcome)
 			if record.FinalStatus == "" {
 				record.FinalStatus = fallbackHaltStatus(err)
 			}
-			return f.refusal(f.end())
+			return f.refusal(f.endAfter(failed, outcome))
 		}
 	}
+}
+
+// endAfter ends the chain after the call outcome describes. When a candidate
+// made that call, the client gets the candidate's outcome, not the primary's:
+// see failedAttemptResponse. The primary's own failure goes on as it is.
+func (f *sessionFallback) endAfter(failed *fallbackCandidate, outcome routing.Outcome) routing.FallbackStep {
+	step := f.end()
+	if failed == nil {
+		return step
+	}
+	r, ctx := f.session.router, f.session.ctx
+	answer := r.failedAttemptResponse(ctx, failedOutcomeAttempt(failed, outcome))
+	appendConfigVersionToImmediateResponse(answer, ctx)
+	appendRoutedResponseHeaders(answer, ctx)
+	if effect, err := routingEffect(answer); err == nil {
+		step.Immediate = routing.RenderImmediate(effect.Immediate, routing.DefaultLimits)
+	}
+	return step
 }
 
 // refusal answers a chain that ended at a candidate refused for want of the
@@ -257,6 +276,13 @@ func (f *sessionFallback) failedAttempt(outcome routing.Outcome) fallback.Attemp
 		Discarded:  true,
 	}
 	body := failedReplyBody(outcome)
+	if !outcome.Local {
+		format, _ := responseWireFormats(f.session.ctx)
+		if f.current != nil {
+			format = f.current.dispatch.targetFormat
+		}
+		f.session.router.noteLengthRefusal(f.session.ctx, &attempt, format, body)
+	}
 	if f.current != nil {
 		attempt.ErrorMessage = string(body)
 		return attempt

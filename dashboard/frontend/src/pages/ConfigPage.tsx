@@ -271,6 +271,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       refreshConfig={async () => {
         await fetchConfig()
       }}
+      saveConfig={saveConfig}
     />
   )
 

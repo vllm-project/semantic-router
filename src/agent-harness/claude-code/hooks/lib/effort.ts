@@ -25,7 +25,7 @@ export function pickEffort(model: Model, steps: Steps | null, { low, high, minCo
 }
 
 // What a request runs at: the picked effort, or for a route with a floor the effort the subagent would have had when that is higher.
-export function effortFor(picked: Picked, floor: boolean, current: string): { effort: string; from: EffortFrom } {
-  const isAbove = EFFORTS.indexOf(current as Effort) > EFFORTS.indexOf(picked.effort)
+export function effortFor(picked: Picked, floor: boolean, current: Effort): { effort: Effort; from: EffortFrom } {
+  const isAbove = EFFORTS.indexOf(current) > EFFORTS.indexOf(picked.effort)
   return floor && isAbove ? { effort: current, from: 'floor' } : picked
 }

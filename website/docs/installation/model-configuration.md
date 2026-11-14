@@ -295,6 +295,133 @@ Envoy cannot apply an idle timeout, a first-byte timeout, a back-off, or a
 `retry_after_max` fails validation unless the Router serves with
 `--gateway standalone`.
 
+## Check prompts against the context window
+
+The Router checks a request against the models' `context_window_size` twice:
+from the moment it arrives, against every model the request can reach, and
+after the decision, against the decision's candidates. It counts the prompt
+itself, beside the signals, with each model's own tokenizer, and asks no
+backend to count:
+
+```yaml
+providers:
+  models:
+    - name: deepseek-v4.1-flash
+      context_window_size: 1048576
+      tokenizer: deepseek-ai/DeepSeek-V4.1-Flash   # optional @revision
+      backend_refs:
+        - name: primary
+          provider: vllm
+          endpoint: deepseek.example:8000
+          protocol: http
+global:
+  router:
+    context_window:
+      margin: 0.03
+      proxy_margin: 0.30
+      proxy_tokenizer: o200k_base
+```
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| `providers.models[].tokenizer` | the model's Hugging Face repo, else none: the proxy counts | The model's own tokenizer: a Hugging Face repo id, `org/name` or `org/name@revision`; a built-in encoding (`o200k_base`, `cl100k_base`); or a local `tokenizer.json` or the directory that holds one (a path that is absolute or starts with `./` or `../`). |
+| `global.router.context_window.margin` | `0.03` | The band around a window, as a fraction of it, for a count with the model's own tokenizer. |
+| `global.router.context_window.proxy_margin` | `0.30` | The band for a count with the proxy tokenizer. |
+| `global.router.context_window.proxy_tokenizer` | `o200k_base` | Counts the prompts of models without a tokenizer, or whose tokenizer has not loaded. |
+
+- **Tokenizers.** Most models need no `tokenizer`. A model whose catalog card
+  publishes open weights on Hugging Face (`distribution.source`), or that a
+  self-hosted engine such as vLLM or SGLang serves under its repo id
+  (`provider_model_id: Qwen/Qwen3-8B`), counts with that repo's tokenizer.
+  Name one only for another model, or to pin a revision. The Router
+  downloads only the repo's `tokenizer.json`, with the Hugging Face CLI and
+  settings of its other model downloads (`HF_ENDPOINT`, `HF_TOKEN` for a
+  gated repo, `HF_HOME`, the revision), into the same models directory:
+  `models/tokenizers/<org>/<name>`, or `models/tokenizers/<org>/<name>@<revision>`.
+  It downloads in the background when it starts, and neither startup nor a
+  request waits; with `HF_HUB_OFFLINE=1` it downloads nothing. The Router
+  carries `o200k_base` and `cl100k_base`, and reads byte-level BPE
+  `tokenizer.json` files, the kind DeepSeek, Qwen, GLM, MiniMax and gpt-oss
+  publish.
+- **Until a tokenizer loads.** While a model's tokenizer downloads, or when
+  it cannot load (no Hugging Face access, a gated repo without `HF_TOKEN`, a
+  SentencePiece tokenizer), the proxy tokenizer counts for it, with its wider
+  band. The log says `tokenizer_pending`, `tokenizer_download_failed` or
+  `tokenizer_unavailable`, and `llm_context_window_tokenizer_loaded` is `0`
+  for that tokenizer; it is `1` once the tokenizer has loaded, which the log
+  says as `tokenizer_loaded`.
+- **The byte bound.** A byte-level tokenizer never produces more tokens than
+  a prompt has UTF-8 bytes. A request whose bytes, plus a reserve for the
+  chat template and message framing, fit the widest window it can reach is
+  never counted.
+- **The count.** A longer request is counted from the moment it arrives,
+  beside the signals, the guard included: neither waits for the other. It is
+  counted once per tokenizer, in parallel parts, and the count serves the
+  check after the decision too. It covers the text, tool calls and results,
+  tool definitions and the output schema, plus a few tokens per message for
+  the chat template. A 4 MB prompt takes about 50 ms on one core. Requests
+  that carry images, audio, video or files are not counted.
+- **The bands.** A count with the model's own tokenizer at or below the
+  window less `margin` fits, and at or above the window plus `margin` does
+  not. A proxy count can be well off the model's own count: `o200k_base`
+  counts Chinese text up to a quarter higher than some models' tokenizers,
+  and English and code a little lower. So a proxy count uses `proxy_margin`,
+  and refuses a prompt only at or above the window plus 30%. When the counts
+  rule out every model the request can reach, the Router cancels the signals
+  still running, so that the guard stops reading the request, and answers
+  `400` with `context_length_exceeded` at once. The message names the widest
+  window and the estimated count; see
+  [Routing errors](../api/router#routing-errors). A count in between goes on
+  to the backend, which decides; its refusal reaches the client as
+  `context_length_exceeded`, and a fallback goes on only to candidates with
+  wider windows. When a decision of the recipe compresses context, the
+  refusal waits for the check after the decision. When one replaces the
+  client's system prompt or drops its tools (a tool policy of `none`), the
+  request is refused only if it is still beyond the band without them.
+- **What decided.** Each model's check is logged once per request as
+  `context_window_checked`, with the kind of count (`exact` or `proxy`), its
+  band and the verdict (`fits`, `in_band` or `exceeds`), and counted in
+  `llm_context_window_checks_total`; refusals are counted in
+  `llm_context_window_refusals_total`, and `llm_context_window_margin` shows
+  both bands. `context_window_counted` logs how long the count took and how
+  long the request waited for it after its signals, which
+  `llm_context_window_wait_seconds` records: about zero.
+- **Without a count.** A request with media is never refused for its length.
+  Its token estimate still steers it away from a candidate whose window looks
+  too small, and when it rules out every candidate, the widest ones stay.
+
+The token estimate learns a bytes-per-token ratio from the prompt usage
+backends report. That ratio places a request in a recipe's
+[context bands](../tutorials/signal/heuristic/context), and nothing else: it
+never refuses a request.
+
+### Tokenizers without Hugging Face access
+
+A Router without Hugging Face access reads tokenizers from its models
+directory, as it does its other models. Fill the directory where there is
+access, then ship it:
+
+1. Download each tokenizer to where the Router looks for it, or run the
+   Router once with `--download-only`, which fetches the tokenizers along
+   with the other models:
+
+   ```bash
+   hf download deepseek-ai/DeepSeek-V4.1-Flash --include tokenizer.json \
+     --local-dir models/tokenizers/deepseek-ai/DeepSeek-V4.1-Flash
+   hf download Qwen/Qwen3-8B --include tokenizer.json --revision <commit> \
+     --local-dir models/tokenizers/Qwen/Qwen3-8B@<commit>
+   ```
+
+2. Ship `models/` as the Router's model volume (`/app/models` in the image),
+   and set `HF_HUB_OFFLINE=1`.
+3. Keep the configuration as it is: the repo ids, named or inferred, find the
+   files. A tokenizer kept elsewhere can be named by its path instead, as
+   `tokenizer: /opt/tokenizers/glm/tokenizer.json`.
+4. Check the Router's log when it starts: `tokenizer_loaded` names each
+   tokenizer and its vocabulary size, and `tokenizer_pending` names one whose
+   file is missing, whose models then count with the proxy and its wider
+   band.
+
 ## Fall back to another model
 
 When a model fails, the Router can send the request to the decision's next
@@ -368,6 +495,20 @@ layer first:
   client that sets `include_usage` still gets the usage chunk last. In
   standalone mode the candidate streams, and a Chat Completions backend is
   asked for its usage as the first attempt's is.
+- **The answer.** A chain that ends without a success answers with its last
+  attempt. A candidate's error keeps its status and reaches the client in the
+  client's protocol, so a candidate's `400` stays a `400`, and a refusal of a
+  prompt over its window becomes `context_length_exceeded`. When no backend
+  answered the last attempt, the client gets `503` with
+  `upstream_unavailable`, or `504` with `upstream_timeout`, and none of the
+  transport's detail.
+- **Long prompts.** A candidate whose window the Router's
+  [count](#check-prompts-against-the-context-window) exceeds beyond its band
+  is never tried. After a backend refuses the prompt for its length, the chain
+  goes on only to candidates with wider windows. Both are logged as
+  `fallback_candidate_skipped`. Behind Envoy the first model's error body is
+  not seen, so its `400` or `413` counts as a refusal for length when the
+  count was in the band of that model's window.
 
 Both gateway modes run the same policy, with one deliberate difference:
 standalone mode also falls back when no backend answered at all, such as a
@@ -430,8 +571,8 @@ that a call the Router builds must not copy from the client:
   `x-api-key`, `api-key`, `ocp-apim-subscription-key`, the per-user key
   headers (`x-user-*-key`), and any backend's auth header;
 - the Router's own `x-vsr-*` headers, Envoy's `x-envoy-*` controls, and the
-  authenticator's identity headers (`x-authz-*`), which the Router keeps from
-  every upstream.
+  identity headers (`x-authz-*` and the names `global.services.authz.identity`
+  sets), which the Router keeps from every upstream.
 
 A remote deployment takes the same setting for the calls the Router makes to
 it; see

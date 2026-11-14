@@ -79,7 +79,7 @@ func replayConversationReply(t *testing.T, router *OpenAIRouter, ctx *RequestCon
 
 func recordReplayConversation(t *testing.T, plugin map[string]interface{}, streaming bool) routerreplay.RoutingRecord {
 	t.Helper()
-	plugin["enabled"], plugin["capture_tool_results"] = true, true
+	plugin["enabled"], plugin["prompt_capture"], plugin["capture_tool_results"] = true, config.PromptCaptureRaw, true
 	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(plugin))
 	router := replayRuntimeRouter(t, cfg)
 	ctx := replayConversationRequest(streaming)
@@ -179,7 +179,12 @@ func TestReplayFallbackExecutionKeepsProviderRepliesOnlyWhenCaptured(t *testing.
 		router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
 			return []byte(`{"error":"cannot answer ` + echo + `"}`), http.StatusServiceUnavailable, nil
 		}
-		require.Nil(t, router.handleUpstreamTransportError([]byte("overloaded: "+echo), ctx).GetImmediateResponse())
+		// The chain answers with its last attempt, a reply the Router cannot
+		// read as an error and so does not repeat to the client.
+		answer := router.handleUpstreamTransportError([]byte("overloaded: "+echo), ctx).GetImmediateResponse()
+		require.NotNil(t, answer)
+		require.EqualValues(t, http.StatusServiceUnavailable, answer.GetStatus().GetCode())
+		require.NotContains(t, string(answer.GetBody()), echo)
 
 		record, ok := recorder.GetRecord(recordID)
 		require.True(t, ok)

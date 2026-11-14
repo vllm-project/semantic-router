@@ -152,6 +152,9 @@ type TrajectoryResponse struct {
 	Routes      []TrajectoryRoute   `json:"routes"`
 }
 
+// TrajectoryRoute is one routed call of a session. Agent is the short hash of
+// the agent identity header a harness sent with a subagent's call, empty for
+// the main conversation.
 type TrajectoryRoute struct {
 	ConversationID       string    `json:"conversation_id,omitempty"`
 	RecordID             string    `json:"record_id"`
@@ -165,6 +168,7 @@ type TrajectoryRoute struct {
 	SessionPolicyApplied bool      `json:"session_policy_applied"`
 	SessionAction        string    `json:"session_action,omitempty"`
 	SessionReason        string    `json:"session_reason,omitempty"`
+	Agent                string    `json:"agent,omitempty"`
 	LifecycleState       string    `json:"lifecycle_state"`
 	ResponseStatus       int       `json:"response_status,omitempty"`
 	DurationMS           int64     `json:"duration_ms"`

@@ -559,6 +559,7 @@ func (state *streamState) recordToolDelta(event llmprotocol.Event) (llmprotocol.
 	}
 	state.toolCalls[event.ItemIndex] = call
 	event.ToolCall.Kind, event.ToolCall.KindKnown, event.ToolCall.ID, event.ToolCall.Name = call.Kind, call.KindKnown, call.ID, call.Name
+	event.ToolCall.Namespace = call.Namespace
 	current := state.toolArguments[event.ItemIndex]
 	if call.Kind == "" && bytes.Equal(bytes.TrimSpace(current), []byte("{}")) && event.ToolCall.Arguments != "" {
 		current = nil

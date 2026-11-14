@@ -208,7 +208,7 @@ note on each:
 | A `structure` rule on `text_bytes` | A `keywords` regex rule whose match count is the request's UTF-8 byte length, with the same `count` predicate | With `compress.signals` on, add `keyword` to its `skip_signals` to count the original text |
 | An image route on a model with `api_format: openai` | The model's `api_format: images` (`responses` when it also answers in text) | Check that its backend serves `POST /v1/images/generations` |
 | A route that answers with text and an image over two models | Nothing: no decision of this release executes it, so its requests go to the other decisions | Models on `api_format: responses` that answer in text and generate images, with `output: {kind: [text, image], action: generate}` |
-| `recipes[].data_policy` | The recipe's `router_replay` plugin: `enabled: false` for `replay: false`, `capture_personal_data: false` for `replay_personal_data: false` | Nothing |
+| `recipes[].data_policy` | The recipe's `router_replay` plugin: `enabled: false` for `replay: false`, `prompt_capture: verified` for `replay_personal_data: false` | Nothing |
 | An enabled RAG source on `backend: mcp` | Nothing: the Router has no MCP tool invoker, so those requests retrieve nothing | Serve the retrieval over HTTP, and add the `{type: rag, backend: external_api, …}` source its note gives |
 | A deployment's `operating_point` | Nothing: nothing read it, and the model runtime applies the one its package declares | Nothing |
 

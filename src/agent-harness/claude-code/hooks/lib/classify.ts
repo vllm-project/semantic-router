@@ -145,18 +145,31 @@ async function markReachable($: EngineInterface) {
 const baseOf = (url: string) => url.replace(/\/v1\/decisions\/?$/, '').replace(/\/$/, '')
 export const healthUrlOf = (url: string) => `${baseOf(url)}/health`
 export const modelsUrlOf = (url: string) => `${baseOf(url)}/v1/models`
+// A System One API's listing: its models, and the listener's vsr profile beside them.
+export const listingUrlOf = (url: string) => `${baseOf(url)}/v1/systemone/models`
+// The models a listing names, each as `{ id, question_types }`: the System One API's vllm-sr/4.0 schema and vllm-srun
+// list them under `data`; the vllm-sr/5.0 schema, a Router listener's default, lists them under `models`, each with
+// its name, its question types as `features` and the 4.0 entry as its `card`.
+function listedModels(listing: unknown): Record<string, unknown>[] {
+  if (!isRecord(listing)) return []
+  if (Array.isArray(listing.data)) return listing.data.filter(isRecord)
+  if (!Array.isArray(listing.models)) return []
+  return listing.models
+    .filter(isRecord)
+    .map(model => (isRecord(model.card) ? model.card : { id: model.name, question_types: model.features }))
+}
+
 // The runtime's model and the question types it answers, from a System One API's model list or the one model
 // vllm-srun lists; undefined when neither names it with its types.
 export async function modelOf($: EngineInterface, runtime: Runtime): Promise<{ id: string; types: string[] } | undefined> {
-  for (const url of [`${baseOf(runtime.url)}/v1/systemone/models`, modelsUrlOf(runtime.url)]) {
+  for (const url of [listingUrlOf(runtime.url), modelsUrlOf(runtime.url)]) {
     const text = await $.http.fetch(url, { headers: headersOf(runtime) }).then(r => (r.ok ? r.text : ''), () => '')
-    let data: unknown
+    let models: Record<string, unknown>[]
     try {
-      data = (JSON.parse(text) as { data?: unknown }).data
+      models = listedModels(JSON.parse(text))
     } catch {
       continue
     }
-    const models = Array.isArray(data) ? data.filter(isRecord) : []
     const model = runtime.model === '' ? models[0] : models.find(one => one.id === runtime.model)
     if (model !== undefined && typeof model.id === 'string' && Array.isArray(model.question_types)) {
       return { id: model.id, types: model.question_types.filter(type => typeof type === 'string') }
@@ -164,12 +177,12 @@ export async function modelOf($: EngineInterface, runtime: Runtime): Promise<{ i
   }
   return undefined
 }
-// A `/v1/models` answer that lists at least one model, as the setup script's health check requires.
+// A `/v1/models` answer that lists at least one model, in either listing form, as the setup script's health check
+// requires.
 const listsModels = (response: { ok: boolean; text: string }) => {
   if (!response.ok) return false
   try {
-    const data = (JSON.parse(response.text) as { data?: unknown }).data
-    return Array.isArray(data) && data.length > 0
+    return listedModels(JSON.parse(response.text)).length > 0
   } catch {
     return false
   }

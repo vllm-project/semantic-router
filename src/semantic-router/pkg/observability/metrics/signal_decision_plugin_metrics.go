@@ -70,6 +70,31 @@ var (
 		[]string{"signal"},
 	)
 
+	// SignalOverloadWaitsTotal counts the request-stage calls that the
+	// decision runtime refused as overloaded and that the Router asked again
+	// while the request waited for capacity
+	// (global.model_catalog.on_signal_overload), by how the last one ended:
+	// ok when capacity freed, overloaded when the wait ran out, or the reason
+	// of another failure.
+	SignalOverloadWaitsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_signal_overload_waits_total",
+			Help: "Request-stage calls the decision runtime refused as overloaded and the Router asked again, by outcome: ok, overloaded or another failure's reason",
+		},
+		[]string{"deployment", "outcome"},
+	)
+
+	// SignalOverloadRetryableTotal counts the requests answered a retryable
+	// error (429, or 529 for Anthropic Messages) instead of a refusal or a
+	// forward that rules unread on an overloaded decision runtime decide.
+	SignalOverloadRetryableTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_signal_overload_retryable_total",
+			Help: "Requests answered a retryable error instead of a refusal or a forward decided by rules unread on an overloaded decision runtime",
+		},
+		[]string{"format"},
+	)
+
 	// DecisionEvaluationTotal tracks the total number of decision evaluations
 	DecisionEvaluationTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
@@ -202,6 +227,24 @@ func RecordSignalScanDecided(signal string) {
 		signal = consts.UnknownLabel
 	}
 	SignalScanDecidedTotal.WithLabelValues(signal).Inc()
+}
+
+// RecordSignalOverloadWait records a call asked again while its request
+// waited for capacity, by how the last one ended.
+func RecordSignalOverloadWait(deployment, outcome string) {
+	if deployment == "" {
+		deployment = consts.UnknownLabel
+	}
+	SignalOverloadWaitsTotal.WithLabelValues(deployment, outcome).Inc()
+}
+
+// RecordSignalOverloadRetryable records a request answered a retryable
+// error instead of a refusal or a forward, by its client's wire format.
+func RecordSignalOverloadRetryable(format string) {
+	if format == "" {
+		format = consts.UnknownLabel
+	}
+	SignalOverloadRetryableTotal.WithLabelValues(format).Inc()
 }
 
 // RecordDecisionEvaluation records a decision evaluation event

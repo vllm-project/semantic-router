@@ -180,6 +180,9 @@ func decodeResponsesInputItem(
 	if err := validateResponsesInputItemMetadata(item); err != nil {
 		return err
 	}
+	if err := flattenResponsesHistoryCall(&item, request, policy); err != nil {
+		return err
+	}
 	return decodeResponsesInputItemKind(item, index, request, policy)
 }
 
@@ -191,7 +194,7 @@ func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	}); err != nil {
 		return err
 	}
-	if item.Namespace != "" {
+	if item.Namespace != "" && item.Type != "function_call" && item.Type != "custom_tool_call" {
 		return rejectUnsupportedRequestField("input.namespace", json.RawMessage(`true`))
 	}
 	return nil
