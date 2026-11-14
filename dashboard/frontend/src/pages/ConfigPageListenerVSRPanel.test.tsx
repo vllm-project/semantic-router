@@ -127,6 +127,16 @@ describe('vSR agent plugin profile on a System One listener', () => {
     expect(next.listeners?.[0].apis?.chat_completions).toEqual({ models: ['auto'] })
   })
 
+  it('"Clear" keeps the listener\'s rules, and a switch change carries them over', () => {
+    const rules = { recipe: 'default', guard: [{ type: 'keyword' as const, name: 'prod_database', enforce: 'required' as const }] }
+    const { onChange, button, field } = controls({ guard: true, rules })
+    ;(button('Clear')?.props.onClick as () => void)()
+    expect(onChange.mock.calls[0][0]).toEqual({ rules })
+    ;(field('Guard risky commands')?.props.onChange as (event: unknown) => void)({ target: { checked: false } })
+    expect(onChange.mock.calls[1][0]).toEqual({ guard: false, rules })
+    expect(controls({ rules }).button('Clear')).toBeUndefined()
+  })
+
   it('shows no vSR block for a listener without systemone', () => {
     const render = (listeners: Listener[]) =>
       renderToStaticMarkup(

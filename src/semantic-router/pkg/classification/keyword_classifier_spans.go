@@ -5,6 +5,7 @@ import (
 	"sort"
 	"unicode/utf8"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification/lexical"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
@@ -14,17 +15,9 @@ import (
 // rule that finds text (config.KeywordRuleFindsText) has places. A match of
 // no text, such as a pattern of only `^`, covers nothing and is left out.
 func (c *KeywordClassifier) RuleSpans(name, text string) ([]modelservice.Span, error) {
-	var rule *keywordRule
-	if c != nil {
-		for i := range c.rules {
-			if c.rules[i].name == name {
-				rule = &c.rules[i]
-				break
-			}
-		}
-	}
-	if rule == nil {
-		return nil, fmt.Errorf("keyword rule %q is not declared in this recipe", name)
+	rule, err := c.ruleNamed(name)
+	if err != nil {
+		return nil, err
 	}
 	if rule.regex == nil || rule.measure != nil || rule.regex.Operator != "OR" || rule.regex.FuzzyMatch {
 		return nil, fmt.Errorf("keyword rule %q does not locate its matches", name)
@@ -55,4 +48,26 @@ func (c *KeywordClassifier) RuleSpans(name, text string) ([]modelservice.Span, e
 		})
 	}
 	return spans, nil
+}
+
+// MatchRule reports whether the named rule matches text, as a decision
+// condition on it reads the text.
+func (c *KeywordClassifier) MatchRule(name, text string) (bool, error) {
+	rule, err := c.ruleNamed(name)
+	if err != nil {
+		return false, err
+	}
+	match, err := c.matchRule(text, lexical.NewText(text), *rule)
+	return match.matched, err
+}
+
+func (c *KeywordClassifier) ruleNamed(name string) (*keywordRule, error) {
+	if c != nil {
+		for i := range c.rules {
+			if c.rules[i].name == name {
+				return &c.rules[i], nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("keyword rule %q is not declared in this recipe", name)
 }

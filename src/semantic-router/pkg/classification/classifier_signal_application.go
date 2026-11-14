@@ -324,6 +324,37 @@ func (c *Classifier) RuleSpans(ctx context.Context, signalType, name, text strin
 	return nil, fmt.Errorf("a %s rule does not find text", signalType)
 }
 
+// RuleMatches reports whether a rule that says yes or no matches text: a
+// keyword rule as a decision condition reads it, or a systemone noul or
+// choice rule asked of its deployment on its own and read whole. An error
+// means it could not tell.
+func (c *Classifier) RuleMatches(ctx context.Context, signalType, name, text string) (bool, error) {
+	switch signalType {
+	case config.SignalTypeKeyword:
+		return c.keywordClassifier.MatchRule(name, text)
+	case config.SignalTypeSystemOne:
+		index := slices.IndexFunc(c.Config.SystemOneRules, func(rule config.SystemOneRule) bool { return rule.Name == name })
+		if index < 0 {
+			return false, fmt.Errorf("systemone rule %q is not declared in this recipe", name)
+		}
+		// The plugins act on the whole command, so the rule reads all of it.
+		rule := c.Config.SystemOneRules[index]
+		rule.Coverage = config.SystemOneCoverageFull
+		deployment := c.Config.SystemOneRuleDeployment(rule)
+		if newGuardScan(deployment, modelservice.Request{State: text}, c.scanWindowBudget(deployment)) != nil {
+			return false, fmt.Errorf("systemone rule %q: the text is longer than one window of %s", name, deployment)
+		}
+		answer, err := c.askedAnswer(ctx, systemOneAsked(rule), deployment, text)
+		if err != nil {
+			return false, err
+		}
+		// A choice rule's answer also names the options that matched; only
+		// the rule's own name is the rule matching (applyChoiceAnswer).
+		return slices.Contains(applySystemOneAnswer(newResponseSignalResults(), config.SignalTypeSystemOne, rule, answer), rule.Name), nil
+	}
+	return false, fmt.Errorf("a %s rule does not say whether a text matches", signalType)
+}
+
 // askedSpans asks one rule that finds text about text, in windows when it is
 // longer than one, and requires every part of it to be read whole.
 func (c *Classifier) askedSpans(ctx context.Context, asked askedRule, text string) ([]modelservice.Span, error) {
@@ -331,6 +362,16 @@ func (c *Classifier) askedSpans(ctx context.Context, asked askedRule, text strin
 	if scan := newGuardScan(deployment, modelservice.Request{State: text}, c.scanWindowBudget(deployment)); scan != nil {
 		return c.scanSpans(ctx, text, asked, scan)
 	}
+	answer, err := c.askedAnswer(ctx, asked, deployment, text)
+	if err != nil {
+		return nil, err
+	}
+	return spansInText(asked, text, matchedSpans(asked.rule, answer))
+}
+
+// askedAnswer asks one rule about text in one call to its deployment and
+// returns the answer only when the text was read whole.
+func (c *Classifier) askedAnswer(ctx context.Context, asked askedRule, deployment, text string) (modelservice.Answer, error) {
 	call := &systemOneCall{deployment: deployment, request: modelservice.Request{State: text}, rules: []askedRule{asked}}
 	var answer modelservice.Answer
 	var answered bool
@@ -341,15 +382,15 @@ func (c *Classifier) askedSpans(ctx context.Context, asked askedRule, text strin
 	})
 	switch {
 	case askErr != nil:
-		return nil, askErr
+		return answer, askErr
 	case !answered:
-		return nil, fmt.Errorf("%s rule %q: %w: missing answer", asked.signalType, asked.rule.Name, modelservice.ErrUnavailable)
+		return answer, fmt.Errorf("%s rule %q: %w: missing answer", asked.signalType, asked.rule.Name, modelservice.ErrUnavailable)
 	case answer.Error != "":
-		return nil, fmt.Errorf("%s rule %q: %w: %s", asked.signalType, asked.rule.Name, modelservice.ErrUnavailable, answer.Error)
+		return answer, fmt.Errorf("%s rule %q: %w: %s", asked.signalType, asked.rule.Name, modelservice.ErrUnavailable, answer.Error)
 	case answer.InputCoverage != "complete":
-		return nil, fmt.Errorf("%s rule %q read only part of the text", asked.signalType, asked.rule.Name)
+		return answer, fmt.Errorf("%s rule %q read only part of the text", asked.signalType, asked.rule.Name)
 	}
-	return spansInText(asked, text, matchedSpans(asked.rule, answer))
+	return answer, nil
 }
 
 // scanSpans is askedSpans of a text longer than one window: every window

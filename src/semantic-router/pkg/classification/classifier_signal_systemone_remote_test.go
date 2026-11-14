@@ -192,3 +192,31 @@ func TestSystemOneSpanRuleSpansReadTheWholeText(t *testing.T) {
 		}
 	}
 }
+
+// A guard rule the plugins ask reads the whole command, and matches only by
+// its own name: a choice answer that names one of its options without the
+// rule matching is no match.
+func TestSystemOneGuardRuleMatchesReadTheWholeText(t *testing.T) {
+	remote := newFakeSystemOne()
+	remote.answers["systemone:deletes_data"] = modelservice.Answer{Type: "noul", Noul: 0.9, InputCoverage: "complete"}
+	remote.answers["systemone:support_team"] = modelservice.Answer{Type: "choice", Choice: "engineering", Probabilities: map[string]float64{"billing": 0.1, "engineering": 0.9}, InputCoverage: "complete"}
+	classifier := systemOneTestClassifier(newLocalDecider(), remote, 0, 0)
+	classifier.Config.SystemOneRules = append(classifier.Config.SystemOneRules, config.SystemOneRule{
+		Name: "deletes_data", Deployment: "hosted-d3", Question: config.SystemOneQuestion{Type: "noul", Instructions: "Does this delete data?"},
+	})
+	matched, err := classifier.RuleMatches(t.Context(), config.SignalTypeSystemOne, "deletes_data", "rm -rf /srv/data")
+	if err != nil || !matched {
+		t.Fatalf("matched = %v, %v; want the noul rule to match", matched, err)
+	}
+	if question := remote.asked[len(remote.asked)-1].Questions[0]; question.Truncate {
+		t.Fatalf("guard asked %+v, want the whole command", question)
+	}
+	// support_team has no labels: its answer names an option, never the rule.
+	if matched, err := classifier.RuleMatches(t.Context(), config.SignalTypeSystemOne, "support_team", "fix the login"); err != nil || matched {
+		t.Fatalf("a choice rule without labels matched = %v, %v", matched, err)
+	}
+	delete(remote.answers, "systemone:deletes_data")
+	if _, err := classifier.RuleMatches(t.Context(), config.SignalTypeSystemOne, "deletes_data", "rm -rf /srv/data"); err == nil {
+		t.Fatal("a missing answer read as no match")
+	}
+}

@@ -53,12 +53,13 @@ export function ListenerVSRControls({ vsr, disabled, onChange }: ListenerVSRCont
           ))}
         </select>
       </label>
-      {vsr ? (
+      {Object.keys(vsr ?? {}).some((key) => key !== 'rules') ? (
         <button
           type="button"
           className={styles.editButton}
           disabled={disabled}
-          onClick={() => onChange(undefined)}
+          // Clear leaves the switches to the plugins; the listener's rules stay.
+          onClick={() => onChange(vsr?.rules ? { rules: vsr.rules } : undefined)}
         >
           Clear
         </button>
