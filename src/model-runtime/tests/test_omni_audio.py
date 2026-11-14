@@ -151,6 +151,53 @@ def test_validation_follows_the_bundle_contract():
         )
 
 
+STANDARD_RATES = (
+    8000, 11025, 16000, 22050, 32000, 37800, 44100, 48000,
+    88200, 96000, 176400, 192000, 384000,
+)  # fmt: skip
+
+
+def test_kernel_shape_is_the_shape_of_the_kernel_resample_builds():
+    for source, target in [(44100, 16000), (22050, 48000), (8000, 16000)]:
+        divisor = math.gcd(source, target)
+        kernel, _ = audio._kernel(source // divisor, target // divisor)
+        assert audio.kernel_shape(source, target) == kernel.shape
+    # Coprime with 16,000: nothing reduces, so the kernel is 8,015 x 16,000 float64 (0.96 GiB).
+    assert audio.kernel_shape(8001, 16000) == (8015, 16000)
+
+
+def test_validation_refuses_a_rate_whose_kernel_would_not_fit():
+    """Every standard rate reduces to a small kernel; a rate coprime with 16 or 48 kHz does not reduce."""
+    for rate in STANDARD_RATES:
+        audio.validate(audio.PCM(np.zeros((1, 10), dtype=np.float32), rate), (), 384000)
+        assert all(
+            math.prod(audio.kernel_shape(rate, target)) < 300_000
+            for target in (audio.WHISPER_RATE, audio.CLAP_RATE)
+        )
+    for rate in (8001, 22051, 44101):
+        assert math.prod(audio.kernel_shape(rate, 16000)) > audio.MAX_KERNEL_ELEMENTS
+        with pytest.raises(audio.AudioError, match="sampling rate"):
+            audio.validate(
+                audio.PCM(np.zeros((1, 10), dtype=np.float32), rate), (), 384000
+            )
+
+
+def test_an_unservable_rate_is_an_invalid_input_not_a_crash():
+    from vllm_srun.errors import INVALID_INPUT
+    from vllm_srun.families.multimodal_embedding.processors import AudioProcessor
+
+    config = audio_config()
+    processor = AudioProcessor(
+        (),
+        384000,
+        audio.Spectrum.from_config(config["whisper"], clap=False),
+        audio.Spectrum.from_config(config["clap"], clap=True),
+    )
+    tone = (np.sin(np.linspace(0, 60 * math.pi, 800)) * 12000).astype("<i2").tobytes()
+    assert processor.features(wav_bytes(tone, 1, 8001, 2), "wav") == INVALID_INPUT
+    assert not isinstance(processor.features(wav_bytes(tone, 1, 8000, 2), "wav"), str)
+
+
 @pytest.mark.parametrize(
     ("source", "target"),
     [(44100, 48000), (48000, 16000), (16000, 48000), (22050, 16000)],
