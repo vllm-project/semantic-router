@@ -289,17 +289,22 @@ def codex(
     )
     plan = [shlex.join(argv) for argv in install]
     if options:
+        # the listener checks its key on System One too: the plugin reads it from the
+        # variable named here, so the key itself stays out of vsr.json; without a key
+        # none is named, so a variable an earlier listener's key sits in is not sent
+        options = {**options, "runtimeTokenEnv": key_env}
+    if options:
         # the vSR plugin's own settings: connect owns the runtime keys, the rest stays
         changes.append(hc.Change(home / "vsr.json", "json", options))
     if not _run("codex", changes, home, "", doc, dry_run, yes, notes, plan):
         return
-    if options:
-        _vsr_step(lambda: [_must(argv, env) for argv in install], plan)
+    if options and _vsr_step(lambda: [_must(argv, env) for argv in install], plan):
         success(
             f"vSR: the Codex plugin asks {options['runtimeModel']} at {options['runtimeUrl']}."
         )
     if from_env:
-        echo(f"Codex reads the key from ${api_key_env}; keep it set when you start it.")
+        reader = "Codex and its vSR plugin read" if options else "Codex reads"
+        echo(f"{reader} the key from ${api_key_env}; keep it set when you start it.")
 
     for found in hc.codex_model_overrides(Path.cwd()):
         warning(
@@ -464,15 +469,17 @@ def _installs(harness_cli: str, source: str) -> list[list[str]]:
     ]
 
 
-def _vsr_step(step, plan: list[str]) -> None:
-    """Run a vSR step after the gateway settings are written; a failure leaves those
-    in place and says what to run by hand."""
+def _vsr_step(step, plan: list[str]) -> bool:
+    """Run a vSR step after the gateway settings are written, and whether it ran; a
+    failure leaves those in place and says what to run by hand."""
     try:
         step()
     except click.ClickException as exc:
         warning(f"vSR is not set up: {exc.message}")
         for line in plan:
             echo(f"  {line}")
+        return False
+    return True
 
 
 def _vsr_codex_installed(env: dict[str, str]) -> bool:
@@ -565,6 +572,10 @@ def _setup_vsr_claude(env, plugin_id, install, options, token, manifest_dir, bef
 def _must(argv: list[str], env: dict[str, str], stdin: str | None = None) -> None:
     try:
         subprocess.run(argv, env=env, input=stdin, text=True, check=True, timeout=120)
+    except subprocess.CalledProcessError as exc:
+        raise click.ClickException(
+            f"{shlex.join(argv)} exited with status {exc.returncode}"
+        ) from exc
     except (OSError, subprocess.SubprocessError) as exc:
         raise click.ClickException(f"{shlex.join(argv)} failed: {exc}") from exc
 

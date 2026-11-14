@@ -27,6 +27,8 @@ class Runtime:
         # The listener's vsr profile its listing answers, and how often the listing was asked for.
         self.vsr: dict | None = None
         self.listings = 0
+        # The Authorization header of every request, the listing's included.
+        self.auth: list[str | None] = []
         runtime = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -35,6 +37,7 @@ class Runtime:
 
             def do_GET(self):
                 runtime.listings += 1
+                runtime.auth.append(self.headers.get("Authorization"))
                 listing = (
                     {"models": []}
                     if runtime.vsr is None
@@ -49,6 +52,7 @@ class Runtime:
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers["content-length"])))
                 runtime.seen.append(body)
+                runtime.auth.append(self.headers.get("Authorization"))
                 questions = body["questions"]
                 if "review" in questions:
                     reply = {
@@ -240,6 +244,28 @@ class HooksTest(unittest.TestCase):
         reply = run("post", bash("cat x", CSV), self.env)
         self.assertNotIn("decision", reply)
         self.assertIn("redact skipped", reply["systemMessage"])
+
+    def test_an_output_longer_than_is_read_says_the_rest_went_unchecked_with_nothing_found(
+        self,
+    ):
+        reply = run("post", bash("cat big.log", "x" * (vsr.MAX_CHARS + 500)), self.env)
+        self.assertNotIn("decision", reply)
+        self.assertEqual(
+            reply["systemMessage"],
+            f"▚▞ vSR read the first {vsr.MAX_CHARS:,} of {vsr.MAX_CHARS + 500:,} characters;"
+            " the rest went unchecked",
+        )
+
+    def test_the_key_vsr_json_names_goes_to_the_listener_and_the_decision_model(self):
+        home = Path(self.id().replace(".", "_"))
+        home.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / "vsr.json").write_text(
+            json.dumps({"runtimeUrl": self.runtime.url, "runtimeTokenEnv": "LAB_KEY"})
+        )
+        env = {"CODEX_HOME": str(home), "VSR_RUNTIME_URL": "", "LAB_KEY": "secret"}
+        run("pre", bash("git status"), env)
+        self.assertEqual(self.runtime.auth, ["Bearer secret", "Bearer secret"])
 
     def test_other_tools_and_empty_outputs_are_left_alone(self):
         self.assertEqual(
