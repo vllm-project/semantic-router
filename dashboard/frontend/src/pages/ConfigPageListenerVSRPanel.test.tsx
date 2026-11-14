@@ -7,7 +7,11 @@ import ConfigPageListenerVSRPanel, { ListenerVSRControls } from './ConfigPageLis
 import { withListenerVSR } from './configPageListenerVSRSupport'
 import type { ConfigData } from './configPageSupport'
 
-type Element = ReactElement<{ children?: unknown; onChange?: unknown; onClick?: unknown }>
+type Element = ReactElement<{
+  children?: unknown
+  label?: string
+  choices?: Array<{ text: string; pressed: boolean; pick: () => void }>
+}>
 
 const flatten = (node: unknown): Element[] => {
   if (Array.isArray(node)) return node.flatMap(flatten)
@@ -16,23 +20,38 @@ const flatten = (node: unknown): Element[] => {
   return [element, ...flatten(element.props.children)]
 }
 
-const text = (node: unknown): string => {
-  if (typeof node === 'string') return node
-  if (Array.isArray(node)) return node.map(text).join('')
-  return isValidElement(node) ? text((node as Element).props.children) : ''
-}
+type Button = ReactElement<{ children?: unknown; disabled?: boolean; onClick?: () => void }>
 
-// The controls a person sees, with the profile they would write on a change.
-function controls(vsr: VSRProfile | undefined) {
+// The buttons one row draws, rendered from its Choices element as React would.
+const buttonsOf = (choices: Element) =>
+  flatten((choices.type as (props: unknown) => unknown)(choices.props)).filter(
+    (element) => element.type === 'button',
+  ) as Button[]
+
+const text = (node: unknown): string =>
+  typeof node === 'string'
+    ? node
+    : Array.isArray(node)
+      ? node.map(text).join('')
+      : isValidElement(node)
+        ? text((node as Element).props.children)
+        : ''
+
+// The choices a person sees on one row, and the profile a click on one writes.
+function controls(vsr: VSRProfile | undefined, disabled = false) {
   const onChange = vi.fn<(next: VSRProfile | undefined) => void>()
-  const tree = flatten(ListenerVSRControls({ vsr, disabled: false, onChange }))
-  const field = (label: string) => {
-    const owner = tree.find((element) => element.type === 'label' && text(element).includes(label))
-    return flatten(owner?.props.children).find((element) => element.type !== 'span')
+  const tree = flatten(ListenerVSRControls({ vsr, disabled, onChange }))
+  const row = (label: string) => {
+    const element = tree.find((one) => one.props.label === label && one.props.choices)
+    const buttons = element ? buttonsOf(element) : []
+    const named = (name: string) => buttons.find((button) => text(button.props.children).startsWith(name))
+    return {
+      buttons,
+      pressed: element?.props.choices?.find((choice) => choice.pressed)?.text,
+      pick: (name: string) => named(name)?.props.onClick?.(),
+    }
   }
-  const button = (label: string) =>
-    tree.find((element) => element.type === 'button' && text(element) === label)
-  return { onChange, field, button }
+  return { onChange, row }
 }
 
 const agentListener: Listener = {
@@ -58,11 +77,10 @@ const config: ConfigData = { version: 'v0.5', listeners: [agentListener, chatLis
 const writtenSystemOne = (next: ConfigData) => next.listeners?.[0].apis?.systemone
 
 describe('vSR agent plugin profile on a System One listener', () => {
-  it('writes a toggled checkbox to apis.systemone.vsr and keeps everything else', () => {
-    const { onChange, field } = controls(agentListener.apis?.systemone?.vsr)
-    const guard = field('Guard risky commands')
-    expect(guard?.props).toMatchObject({ checked: true })
-    ;(guard?.props.onChange as (event: unknown) => void)({ target: { checked: false } })
+  it('On or Off writes that field to apis.systemone.vsr and keeps everything else', () => {
+    const { onChange, row } = controls(agentListener.apis?.systemone?.vsr)
+    expect(row('Guard risky commands').pressed).toBe('On')
+    row('Guard risky commands').pick('Off')
     const next = withListenerVSR(config, 0, onChange.mock.calls[0][0])
 
     expect(writtenSystemOne(next)).toEqual({
@@ -79,62 +97,58 @@ describe('vSR agent plugin profile on a System One listener', () => {
     expect(next.version).toBe('v0.5')
   })
 
-  it('shows an unset field at the plugin default and writes it explicitly on change', () => {
-    const { onChange, field } = controls({ guard: true })
-    expect(field('Route your own turns')?.props).toMatchObject({ checked: false })
-    expect(field('Hide personal data (PII)')?.props).toMatchObject({ checked: true })
-    expect(field('Router goal')?.props).toMatchObject({ value: 'balanced' })
-    ;(field('Route your own turns')?.props.onChange as (event: unknown) => void)({
-      target: { checked: true },
-    })
-    ;(field('Router goal')?.props.onChange as (event: unknown) => void)({
-      target: { value: 'save' },
-    })
+  it('an unset field has Default pressed and writes only itself on a pick', () => {
+    const { onChange, row } = controls({ guard: true })
+    expect(row('Route your own turns').pressed).toBe('Default')
+    expect(row('Router goal').pressed).toBe('Default')
+    row('Route your own turns').pick('On')
+    row('Router goal').pick('Save')
 
     expect(onChange.mock.calls[0][0]).toEqual({ guard: true, router_turns: true })
     expect(onChange.mock.calls[1][0]).toEqual({ guard: true, router_goal: 'save' })
   })
 
-  it('a change on a listener without vsr writes exactly that one field', () => {
-    const bare = withListenerVSR(config, 0, undefined)
-    const { onChange, field } = controls(undefined)
-    expect(field('Route subagents')?.props).toMatchObject({ checked: true })
-    ;(field('Route subagents')?.props.onChange as (event: unknown) => void)({
-      target: { checked: false },
-    })
-    ;(field('Router goal')?.props.onChange as (event: unknown) => void)({
-      target: { value: 'save' },
-    })
+  it('Default takes a field back out, and the last one takes vsr out of systemone', () => {
+    const { onChange, row } = controls({ guard: false, router_goal: 'save' })
+    row('Router goal').pick('Default')
+    expect(onChange.mock.calls[0][0]).toEqual({ guard: false })
 
-    expect(writtenSystemOne(withListenerVSR(bare, 0, onChange.mock.calls[0][0]))).toEqual({
+    const last = controls({ guard: false })
+    last.row('Guard risky commands').pick('Default')
+    expect(last.onChange.mock.calls[0][0]).toBeUndefined()
+    expect(writtenSystemOne(withListenerVSR(config, 0, undefined))).toEqual({
       schema: 'vllm-sr/5.0',
       max_deadline_ms: 5000,
-      vsr: { router: false },
     })
-    const next = withListenerVSR(bare, 0, onChange.mock.calls[1][0])
-    expect(writtenSystemOne(next)?.vsr).toEqual({ router_goal: 'save' })
-    expect(next.listeners?.[0].apis?.chat_completions).toEqual({ models: ['auto'] })
+  })
+
+  it('every button of a row is disabled while the panel saves', () => {
+    const { row } = controls({ guard: true }, true)
+    expect(row('Router goal').buttons.map((button) => button.props.disabled)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ])
+  })
+
+  it('a pick on a listener without vsr writes exactly that one field', () => {
+    const bare = withListenerVSR(config, 0, undefined)
+    const { onChange, row } = controls(undefined)
+    row('Route subagents').pick('Off')
+    const next = withListenerVSR(bare, 0, onChange.mock.calls[0][0])
+
+    expect(writtenSystemOne(next)?.vsr).toEqual({ router: false })
     expect(next.listeners?.[1]).toBe(chatListener)
   })
 
-  it('"Clear" removes vsr and keeps the rest of the systemone entry', () => {
-    const { onChange, button } = controls({ guard: true })
-    expect(controls(undefined).button('Clear')).toBeUndefined()
-    ;(button('Clear')?.props.onClick as () => void)()
-    const next = withListenerVSR(config, 0, onChange.mock.calls[0][0])
-
-    expect(writtenSystemOne(next)).toEqual({ schema: 'vllm-sr/5.0', max_deadline_ms: 5000 })
-    expect(next.listeners?.[0].apis?.chat_completions).toEqual({ models: ['auto'] })
-  })
-
-  it('"Clear" keeps the listener\'s rules, and a switch change carries them over', () => {
+  it('a pick and a Default keep the listener\'s rules', () => {
     const rules = { recipe: 'default', guard: [{ type: 'keyword' as const, name: 'prod_database', enforce: 'required' as const }] }
-    const { onChange, button, field } = controls({ guard: true, rules })
-    ;(button('Clear')?.props.onClick as () => void)()
-    expect(onChange.mock.calls[0][0]).toEqual({ rules })
-    ;(field('Guard risky commands')?.props.onChange as (event: unknown) => void)({ target: { checked: false } })
-    expect(onChange.mock.calls[1][0]).toEqual({ guard: false, rules })
-    expect(controls({ rules }).button('Clear')).toBeUndefined()
+    const { onChange, row } = controls({ guard: true, rules })
+    row('Guard risky commands').pick('Off')
+    expect(onChange.mock.calls[0][0]).toEqual({ guard: false, rules })
+    row('Guard risky commands').pick('Default')
+    expect(onChange.mock.calls[1][0]).toEqual({ rules })
   })
 
   it('shows no vSR block for a listener without systemone', () => {
@@ -154,7 +168,7 @@ describe('vSR agent plugin profile on a System One listener', () => {
     expect(markup).not.toContain('chat-only')
   })
 
-  it('shows the plugin defaults, marked as defaults, when the listener has no profile', () => {
+  it('says how many fields the listener sets, and offers a reset only when it sets one', () => {
     const render = (next: ConfigData) =>
       renderToStaticMarkup(
         createElement(ConfigPageListenerVSRPanel, {
@@ -166,13 +180,13 @@ describe('vSR agent plugin profile on a System One listener', () => {
     const count = (markup: string, part: string) => markup.split(part).length - 1
 
     const bare = render(withListenerVSR(config, 0, undefined))
-    expect(count(bare, 'type="checkbox"')).toBe(7)
-    expect(count(bare, 'checked=""')).toBe(5)
-    expect(count(bare, '>default<')).toBe(8)
-    expect(bare).not.toContain('Clear')
+    expect(count(bare, 'aria-pressed="true">Default')).toBe(8)
+    expect(bare).toContain('All plugin defaults')
+    expect(bare).not.toContain('Reset to plugin defaults')
 
     const profiled = render(config)
-    expect(count(profiled, '>default<')).toBe(7)
-    expect(profiled).toContain('Clear')
+    expect(count(profiled, 'aria-pressed="true">Default')).toBe(7)
+    expect(profiled).toContain('1 set here')
+    expect(profiled).toContain('Reset to plugin defaults')
   })
 })
