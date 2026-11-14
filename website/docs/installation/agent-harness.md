@@ -391,7 +391,8 @@ rules of a reachable recipe only.
 
 In the Dashboard, Config › Global Config › vSR agent plugins › Rules of your
 own picks the recipe and lists its rules that fit each app, each Off, Advisory
-or Required. Try it under each app sends a sample command or output through
+or Required. Once an app binds a rule, the rules left Off fold behind a
+"Show N more rules" button. Try it under each app sends a sample command or output through
 the Dashboard, which adds the listener's key on the server, and says which
 rules match or what they would hide, as the Router runs the saved rules.
 

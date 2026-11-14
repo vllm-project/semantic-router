@@ -7,6 +7,7 @@ import {
   describeTry,
   type VSRRuleApp,
   type VSRRuleBinding,
+  type VSRRuleChoice,
   vsrRuleBinding,
   vsrRuleBlocked,
   vsrRuleChoices,
@@ -91,20 +92,15 @@ export function ListenerVSRRules({ config, listener, vsr, disabled, onChange }: 
                 {choices.length === 0 ? (
                   <span className={styles.vsrRowHint}>{`No rule of ${recipe} fits ${app}.`}</span>
                 ) : (
-                  choices.map((choice) => (
-                    <Row key={`${choice.type}:${choice.name}`} label={choice.name} hint={choice.description || `${choice.type} rule`}>
-                      <Choices
-                        label={`${title}: ${choice.name}`}
-                        disabled={disabled}
-                        choices={BINDINGS.map(({ binding, text }) => ({
-                          text,
-                          pressed: vsrRuleBinding(vsr, app, choice) === binding,
-                          pick: () => onChange(withVSRRule(vsr, recipe, app, choice, binding)),
-                          blocked: binding === 'off' ? undefined : vsrRuleBlocked(vsr, app, choice),
-                        }))}
-                      />
-                    </Row>
-                  ))
+                  <RuleAppChoices
+                    app={app}
+                    title={title}
+                    recipe={recipe}
+                    choices={choices}
+                    vsr={vsr}
+                    disabled={disabled}
+                    onChange={onChange}
+                  />
                 )}
                 <TryRules listener={listener.name} app={app} placeholder={sample} />
               </div>
@@ -112,6 +108,54 @@ export function ListenerVSRRules({ config, listener, vsr, disabled, onChange }: 
           })
         : null}
     </section>
+  )
+}
+
+// One app's choices. Once a rule is bound, the rules left Off fold behind one
+// button, so a recipe with many rules keeps the panel short.
+function RuleAppChoices({
+  app,
+  title,
+  recipe,
+  choices,
+  vsr,
+  disabled,
+  onChange,
+}: {
+  app: VSRRuleApp
+  title: string
+  recipe: string
+  choices: VSRRuleChoice[]
+  vsr: VSRProfile | undefined
+  disabled: boolean
+  onChange: (vsr: VSRProfile | undefined) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const bound = choices.filter((choice) => vsrRuleBinding(vsr, app, choice) !== 'off')
+  const folded = bound.length > 0 && !open ? choices.length - bound.length : 0
+  const shown = folded > 0 ? bound : choices
+  return (
+    <>
+      {shown.map((choice) => (
+        <Row key={`${choice.type}:${choice.name}`} label={choice.name} hint={choice.description || `${choice.type} rule`}>
+          <Choices
+            label={`${title}: ${choice.name}`}
+            disabled={disabled}
+            choices={BINDINGS.map(({ binding, text }) => ({
+              text,
+              pressed: vsrRuleBinding(vsr, app, choice) === binding,
+              pick: () => onChange(withVSRRule(vsr, recipe, app, choice, binding)),
+              blocked: binding === 'off' ? undefined : vsrRuleBlocked(vsr, app, choice),
+            }))}
+          />
+        </Row>
+      ))}
+      {folded > 0 || (open && bound.length > 0 && bound.length < choices.length) ? (
+        <button type="button" className={styles.vsrMore} onClick={() => setOpen(!open)}>
+          {folded > 0 ? `Show ${folded} more ${folded === 1 ? 'rule' : 'rules'} of ${recipe}` : 'Show only the bound rules'}
+        </button>
+      ) : null}
+    </>
   )
 }
 
