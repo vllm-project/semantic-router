@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from cli.commands.recipe_learning_artifacts import find_recipe_decision
 from cli.commands.recipe_learning_metrics import numeric, optional_numeric_or_none
 
 _SUPPORT_REPLAY_LIMIT = 10
@@ -387,3 +388,51 @@ def stable_finding_id(
         f"{finding_type}|{decision}|{evidence_key}".encode()
     ).hexdigest()[:12]
     return f"rlf_{digest}"
+
+
+def build_run_findings(
+    runs_payload: dict[str, Any], recipe: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
+    """Default-model findings from run-level outcomes.
+
+    A finding is raised only for a confident recommendation that differs from the
+    decision's current first modelRef (or for every confident one without a recipe).
+    """
+    findings: list[dict[str, Any]] = []
+    for payload in (runs_payload.get("per_decision") or {}).values():
+        decision, recipe_name = payload["decision"], payload["recipe"]
+        current = current_default_model(recipe, decision, recipe_name)
+        for rec in payload.get("recommendations") or []:
+            model = rec.get("model")
+            if not rec.get("confident") or not model or model == current:
+                continue
+            findings.append(
+                finding(
+                    "default_model",
+                    "medium",
+                    decision,
+                    f"Run outcomes favour {model} as this decision's default at "
+                    f"{rec['value_per_success']} per successful run.",
+                    {
+                        "recipe": recipe_name,
+                        "value_per_success": rec["value_per_success"],
+                        "recommended_model": model,
+                        "current_default": current,
+                        "models": payload.get("models", {}),
+                    },
+                    f"Make {model} the first modelRef of this decision and keep collecting run outcomes.",
+                )
+            )
+    return findings
+
+
+def current_default_model(
+    recipe: dict[str, Any] | None, decision: str, recipe_name: str = ""
+) -> str:
+    if not isinstance(recipe, dict):
+        return ""
+    item = find_recipe_decision(recipe, decision, recipe_name) or {}
+    refs = item.get("modelRefs") or []
+    if refs and isinstance(refs[0], dict):
+        return str(refs[0].get("model") or "")
+    return ""
