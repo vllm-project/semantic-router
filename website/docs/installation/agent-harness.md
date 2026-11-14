@@ -402,7 +402,10 @@ as the plugins' own checks do. An app binds at most 16 rules, each name once.
 
 The listing (`GET /v1/systemone/models`) hands each rule's name, description
 and `required` to the plugins under `vsr.rules`, with a `revision` that changes
-with any rule's definition, binding or enforcement. A rule's pattern or
+with any rule's definition, binding or enforcement. A plugin that gets an
+answer for another revision, such as after a change in the Dashboard, reads the
+listing again and asks once more in the same call, so a change applies to a
+running session at once. A rule's pattern or
 question never leaves the Router. To evaluate them, a client sends the texts
 to the same listener, with the same key as any System One call:
 

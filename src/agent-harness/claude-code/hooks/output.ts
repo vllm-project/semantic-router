@@ -3,9 +3,9 @@ import type { EngineInterface, ToolCallInput, ToolCallResult } from 'claude-code
 
 import type { Tag } from '../types'
 import { type Classified, classify, isRecord, failureOf, probabilityOf, type Reply } from './lib/classify'
-import { followSoon } from './lib/profile'
+import { askCurrentRules } from './lib/profile'
 import { addCounts, type Found, hide, PII_QUESTIONS, parsePii, piiIn, secretsIn, type Span, tagText } from './lib/redact'
-import { askRules, ruleFinds, type RuleView, uncheckedRules } from './lib/rules'
+import { ruleFinds, type RuleView, uncheckedRules } from './lib/rules'
 import { budgetOf, remoteHostOf, type Settings } from './lib/settings'
 import { record } from './lib/state'
 import { stamp } from './lib/env'
@@ -215,11 +215,10 @@ async function listenerFound($: EngineInterface, settings: Settings, fields: str
   if (fields.reduce((sum, field) => sum + utf8Bytes(field), 0) > MAX_RULES_BYTES) {
     return { ...none, unchecked: bound.map(rule => ({ rule, reason: `the output is past the ${MAX_RULES_BYTES >> 10} KiB one rules call reads` })) }
   }
-  const asked = await askRules($, settings.runtime, 'redact', bound, fields, budgetMs)
-  if (asked.ok && asked.revision !== settings.rules.revision) followSoon()
+  const asked = await askCurrentRules($, settings, 'redact', fields, budgetMs)
   const unchecked = new Map<string, { rule: RuleView; reason: string }>()
   const found = fields.map((_, at) => {
-    for (const one of uncheckedRules(settings.rules, bound, asked, at)) unchecked.set(one.rule.name, one)
+    for (const one of uncheckedRules(settings.rules, settings.rules.redact, asked, at)) unchecked.set(one.rule.name, one)
     return (ruleFinds(settings.rules, asked, at)?.found ?? []).map(({ from, to, rule }) => ({ from, to, tag: rule }))
   })
   return { found, unchecked: [...unchecked.values()] }

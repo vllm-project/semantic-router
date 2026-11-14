@@ -35,7 +35,7 @@ export type RulesFound = { matches: string[]; found: { from: number; to: number;
 
 export type RulesAsked =
   | { ok: true; revision: string; parts: RulesFound[]; latencyMs: number }
-  | { ok: false; why: string; latencyMs: number; cancelled?: true }
+  | { ok: false; why: string; latencyMs: number; cancelled?: true; unreadable?: true }
 
 // UTF-16 offsets of a text's code points, one past the end included.
 function utf16Offsets(text: string): number[] {
@@ -88,6 +88,7 @@ export async function askRules(
 ): Promise<RulesAsked> {
   const started = await $.clock.now()
   const failed = async (why: string, cancelled = false) => ({ ok: false as const, why, latencyMs: (await $.clock.now()) - started, ...(cancelled ? { cancelled: true as const } : {}) })
+  const unreadable = async () => ({ ...(await failed('the listener gave an answer vSR could not read')), unreadable: true as const })
   const parts = texts.map((text, at) => ({ id: `p${at}`, text }))
   let response
   try {
@@ -105,11 +106,11 @@ export async function askRules(
     const answered = isRecord(body) && Array.isArray(body.parts) ? body.parts : []
     const read = parts.map((part, at) => partOf(part.text, answered[at], part.id, names))
     if (!isRecord(body) || typeof body.revision !== 'string' || answered.length !== parts.length || read.some(one => one === undefined)) {
-      return failed('the listener gave an answer vSR could not read')
+      return unreadable()
     }
     return { ok: true, revision: body.revision, parts: read as RulesFound[], latencyMs: (await $.clock.now()) - started }
   } catch {
-    return failed('the listener gave an answer vSR could not read')
+    return unreadable()
   }
 }
 

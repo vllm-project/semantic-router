@@ -127,7 +127,7 @@ def rules_of(listing: object) -> dict | None:
     }
 
 
-def listener_profile(opts: dict, home: Path) -> tuple[dict, dict]:
+def listener_profile(opts: dict, home: Path, timeout: float = 1.5) -> tuple[dict, dict]:
     """The apps the listener's System One listing turns on or off, asked at most once a minute
     (Codex runs this file once per tool call, so the answer waits in the Codex home), and the
     rules it binds. A listing that does not answer, or whose rules cannot be read, keeps the
@@ -156,7 +156,7 @@ def listener_profile(opts: dict, home: Path) -> tuple[dict, dict]:
     profile = {}
     try:
         with urllib.request.urlopen(
-            urllib.request.Request(url, headers=headers), timeout=1.5
+            urllib.request.Request(url, headers=headers), timeout=timeout
         ) as response:
             listing = json.loads(response.read())
         vsr = listing.get("vsr") or {}
@@ -196,7 +196,9 @@ def hash32(text: str) -> str:
     return f"{value:x}"
 
 
-def ask_rules(app: str, texts: list[str], opts: dict) -> dict:
+def ask_rules(
+    app: str, texts: list[str], opts: dict, timeout: float | None = None
+) -> dict:
     """One call to the listener's rules for one app about each text. Raises when it cannot be
     read; the answer's parts carry the guard rules matched, the redact spans in code points,
     and the rules left unchecked."""
@@ -211,7 +213,8 @@ def ask_rules(app: str, texts: list[str], opts: dict) -> dict:
         headers,
     )
     with urllib.request.urlopen(
-        request, timeout=float(opts["timeoutSeconds"])
+        request,
+        timeout=float(opts["timeoutSeconds"]) if timeout is None else timeout,
     ) as response:
         reply = json.loads(response.read())
     answered = reply.get("parts")
@@ -290,10 +293,30 @@ def rules_found(opts: dict, asked: dict | Exception | None, part: int) -> dict:
 
 
 def asked_rules(app: str, texts: list[str], opts: dict) -> dict | Exception:
-    try:
-        return ask_rules(app, texts, opts)
-    except Exception as error:  # the caller holds or withholds for a required rule
-        return error
+    """The listener's rules for one app about each text. An answer for rules of another
+    revision, or one naming a rule this session has not read, means the rules changed in the
+    Dashboard: the listing is read again and the rules asked once more, so the change applies
+    to this call instead of leaving every rule unchecked."""
+    deadline = time.monotonic() + float(opts["timeoutSeconds"])
+    asked: dict | Exception = TimeoutError("timed out")
+    for attempt in range(2):
+        try:
+            asked = ask_rules(app, texts, opts, max(0.0, deadline - time.monotonic()))
+            if asked["revision"] == opts["rules"]["revision"]:
+                return asked
+        except ValueError as error:  # an answer this session cannot read yet
+            asked = error
+        except Exception as error:  # the caller holds or withholds for a required rule
+            return error
+        left = deadline - time.monotonic()
+        if attempt or left <= 0:
+            return asked
+        revision = opts["rules"]["revision"]
+        read_listing_again(opts)
+        _, opts["rules"] = listener_profile(opts, Path(opts["home"]), min(1.5, left))
+        if opts["rules"]["revision"] == revision or not opts["rules"][app]:
+            return asked
+    return asked
 
 
 def ask(app: str, given: object, opts: dict) -> dict:
@@ -359,7 +382,10 @@ def guard(event: dict, opts: dict) -> dict:
         rules = pool.submit(asked_rules, "guard", [command], opts) if bound else None
     listened = rules.result() if rules else None
     matched = set(rules_found(opts, listened, 0).get("matches") or [])
-    ruled = next((rule for rule in bound if rule["name"] in matched), None)
+    # The rules as the call left them: a change in the Dashboard was read again there.
+    ruled = next(
+        (rule for rule in opts["rules"]["guard"] if rule["name"] in matched), None
+    )
     if ruled:
         words = ruled["description"].rstrip(". ") or f"listener rule {ruled['name']}"
         return held_by(
