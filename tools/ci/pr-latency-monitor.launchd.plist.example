@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.vllm.semantic-router.pr-latency-monitor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>REPLACE_WITH_ABSOLUTE_PYTHON_PATH</string>
+    <string>REPLACE_WITH_ABSOLUTE_CHECKOUT_PATH/tools/ci/pr_latency_monitor.py</string>
+    <string>--state-file</string>
+    <string>REPLACE_WITH_ABSOLUTE_PRIVATE_PATH/pr-latency-state.json</string>
+    <string>--webhook-file</string>
+    <string>REPLACE_WITH_ABSOLUTE_PRIVATE_PATH/slack-webhook</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>REPLACE_WITH_ABSOLUTE_PRIVATE_PATH/pr-latency-monitor.log</string>
+  <key>StandardErrorPath</key>
+  <string>REPLACE_WITH_ABSOLUTE_PRIVATE_PATH/pr-latency-monitor.err</string>
+</dict>
+</plist>
