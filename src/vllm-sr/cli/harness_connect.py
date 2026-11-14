@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import subprocess
 import tempfile
@@ -21,6 +22,9 @@ PROVIDER = "vllm-sr"
 MANIFEST = ".vllm-sr-connect.json"
 MAX_OUTPUT_TOKENS = "32000"
 TOKEN_KEY = "ANTHROPIC_AUTH_TOKEN"
+# Claude Code sends a shell's ANTHROPIC_API_KEY as x-api-key beside the gateway's
+# token unless the settings set it empty, which they win over (2.1.323)
+API_KEY = "ANTHROPIC_API_KEY"
 NO_KEY = "vllm-sr-no-key"
 # Claude Code settings the command may own outside "env"
 TOP_LEVEL_KEYS = ("statusLine",)
@@ -32,7 +36,8 @@ class Change:
     """One file and what the command sets in it.
 
     kind is json-env (keys of the "env" object of a JSON settings file, and
-    TOP_LEVEL_KEYS at its top level) or file (the whole file, held as the one
+    TOP_LEVEL_KEYS at its top level), json (top-level keys of a JSON file whose
+    other keys are not the command's) or file (the whole file, held as the one
     value under "file").
     """
 
@@ -48,6 +53,14 @@ class Change:
         values = self.values if values is None else values
         if self.kind == "json-env":
             return set_json_env(self.old_text(), values)
+        if self.kind == "json":
+            held = _settings(self.old_text())
+            for key, value in values.items():
+                if value is None:
+                    held.pop(key, None)
+                else:
+                    held[key] = value
+            return json.dumps(held, indent=2) + "\n" if held else ""
         return values.get("file", self.old_text()) or ""
 
     def raw(self, text: str) -> dict[str, Any]:
@@ -59,20 +72,51 @@ class Change:
                 key: (settings if key in TOP_LEVEL_KEYS else env).get(key)
                 for key in self.values
             }
+        if self.kind == "json":
+            held = _settings(text)
+            return {key: held.get(key) for key in self.values}
         return {"file": text or None}
 
     def shown(self, text: str, key_label: str) -> str:
         """The part of text the command owns, for display, with no key in it."""
         if self.kind == "file":
-            return text
+            return hide_secrets(text)
+        if self.kind == "json":
+            held = {k: v for k, v in self.raw(text).items() if v is not None}
+            return json.dumps(held, indent=2) + "\n" if held else ""
         held = {k: v for k, v in self.raw(text).items() if v is not None}
         if held.get(TOKEN_KEY):
             written = held[TOKEN_KEY] == self.values[TOKEN_KEY]
             held[TOKEN_KEY] = key_label if written else "<hidden>"
+        if held.get(API_KEY):
+            held[API_KEY] = "<hidden>"
         shown = {k: held.pop(k) for k in TOP_LEVEL_KEYS if k in held}
         if held:
             shown["env"] = held
         return json.dumps(shown, indent=2) + "\n" if shown else ""
+
+
+# A setting whose name says it holds a credential, and an `env_key`, which only names
+# the variable that does.
+SECRET_NAME = re.compile(
+    r"token|secret|password|passwd|api[_-]?key|authorization|credential", re.I
+)
+SETTING_LINE = re.compile(r'(\s*"?([\w.-]+)"?\s*[=:]\s*)(.*?)(,?\s*)$')
+
+
+def hide_secrets(text: str) -> str:
+    """A whole file as shown: a line that sets a credential, or a bearer header,
+    keeps its name and loses its value."""
+    lines = []
+    for line in text.splitlines(keepends=True):
+        found = SETTING_LINE.match(line)
+        shown = line
+        if found and not found.group(2).lower().endswith("env_key"):
+            name, value = found.group(2), found.group(3)
+            if SECRET_NAME.search(name) or "bearer " in value.lower():
+                shown = f'{found.group(1)}"<hidden>"{found.group(4)}'
+        lines.append(shown)
+    return "".join(lines)
 
 
 # --- Claude Code -----------------------------------------------------------------
@@ -90,12 +134,31 @@ def claude_env(gateway: str, model: str, token: str) -> dict[str, str]:
     return {
         "ANTHROPIC_BASE_URL": gateway.rstrip("/"),
         TOKEN_KEY: token,
+        API_KEY: "",
         "ANTHROPIC_MODEL": model,
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
         "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
         "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": MAX_OUTPUT_TOKENS,
     }
+
+
+def claude_overrides(cwd: Path, keys, user: Path) -> list[tuple[Path, list[str]]]:
+    """The project settings in cwd that set any of keys in their env: Claude Code
+    reads them only where it starts, and they win over the user's settings. Started
+    in the home directory, ./.claude/settings.json is the user's own file."""
+    found = []
+    for name in ("settings.json", "settings.local.json"):
+        path = cwd / ".claude" / name
+        if path.resolve() == user.resolve():
+            continue
+        try:
+            env = _settings(path.read_text(encoding="utf-8")).get("env") or {}
+        except (OSError, ValueError):
+            continue
+        if held := [key for key in keys if key in env]:
+            found.append((path, held))
+    return found
 
 
 def _settings(text: str) -> dict:
@@ -219,6 +282,31 @@ def codex_home(env: dict[str, str]) -> Path:
     return Path(env.get("CODEX_HOME") or str(Path.home() / ".codex"))
 
 
+def codex_settings(
+    gateway: str, model: str, key_env: str | None, context_window: int | None
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The top-level settings, then the provider's. key_env is left out for a
+    listener without keys: Codex refuses to start while the variable a provider
+    names is unset."""
+    top = {
+        "model": model,
+        "model_context_window": context_window,
+        "model_provider": PROVIDER,
+        # the Router does not serve hosted web search
+        "web_search": "disabled",
+    }
+    provider = {
+        "name": "vLLM Semantic Router",
+        "base_url": gateway.rstrip("/") + "/v1",
+        "wire_api": "responses",
+        "env_key": key_env,
+    }
+    return (
+        {k: v for k, v in top.items() if v},
+        {k: v for k, v in provider.items() if v},
+    )
+
+
 def codex_change(
     home: Path,
     profile: str,
@@ -228,23 +316,47 @@ def codex_change(
     context_window: int | None = None,
 ) -> Change:
     """The profile file. Codex layers it over config.toml with --profile, and it
-    holds the provider too, so config.toml is not touched. key_env is left out
-    for a listener without keys: Codex refuses to start while the variable a
-    provider names is unset."""
-    text = (
-        f"model = {json.dumps(model)}\n"
-        + (f"model_context_window = {context_window}\n" if context_window else "")
-        + f'model_provider = "{PROVIDER}"\n'
-        # the Router does not serve hosted web search
-        'web_search = "disabled"\n'
-        "\n"
-        f"[model_providers.{PROVIDER}]\n"
-        'name = "vLLM Semantic Router"\n'
-        f"base_url = {json.dumps(gateway.rstrip('/') + '/v1')}\n"
-        'wire_api = "responses"\n'
-        + (f"env_key = {json.dumps(key_env)}\n" if key_env else "")
-    )
+    holds the provider too, so config.toml is not touched."""
+    top, provider = codex_settings(gateway, model, key_env, context_window)
+    lines = [f"{k} = {json.dumps(v)}" for k, v in top.items()]
+    lines += ["", f"[model_providers.{PROVIDER}]"]
+    lines += [f"{k} = {json.dumps(v)}" for k, v in provider.items()]
+    text = "\n".join(lines) + "\n"
     return Change(home / f"{profile}.config.toml", "file", {"file": text})
+
+
+def codex_launch_args(
+    gateway: str, model: str, key_env: str | None, context_window: int | None
+) -> list[str]:
+    """The same settings as command-line overrides, which win over every
+    configuration file, a trusted project's included (0.166)."""
+    top, provider = codex_settings(gateway, model, key_env, context_window)
+    pairs = [*top.items()]
+    pairs += [(f"model_providers.{PROVIDER}.{k}", v) for k, v in provider.items()]
+    return [arg for k, v in pairs for arg in ("-c", f"{k}={json.dumps(v)}")]
+
+
+def codex_model_overrides(cwd: Path) -> list[Path]:
+    """The project configurations from the repository's top down to cwd that set
+    model: once Codex trusts the project, it asks for that model instead of the
+    profile's (0.166). Outside a repository Codex reads only cwd's."""
+    top = _git(cwd, "rev-parse", "--show-toplevel").stdout.strip()
+    here = cwd.resolve()
+    dirs = [here, *here.parents] if top else [here]
+    stop = Path(top).resolve() if top else here
+    found = []
+    for directory in dirs:
+        path = directory / ".codex" / "config.toml"
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        # a top-level key comes before the first table header
+        if re.search(r"^\s*model\s*=", ("\n" + text).split("\n[", 1)[0], re.M):
+            found.append(path)
+        if directory == stop:
+            break
+    return found
 
 
 # --- writing and undo --------------------------------------------------------------
@@ -303,6 +415,42 @@ def apply_changes(changes: list[Change], manifest_dir: Path) -> Path:
         write_private(change.path, new, always=change.kind == "json-env")
     write_private(manifest_path, json.dumps(record, indent=2) + "\n", always=True)
     return manifest_path
+
+
+def record_plugin(
+    manifest_dir: Path, plugin_id: str, before: dict, written: dict
+) -> None:
+    """Record a plugin's options as set through its harness's command: a second run
+    keeps each option's first "before", as files do."""
+    manifest_path = manifest_dir / MANIFEST
+    record = (
+        json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest_path.exists()
+        else {"files": []}
+    )
+    keys = record.setdefault("plugins", {}).setdefault(plugin_id, {})
+    for key, value in written.items():
+        keys.setdefault(key, {"before": before.get(key)})["written"] = value
+    write_private(manifest_path, json.dumps(record, indent=2) + "\n", always=True)
+
+
+def plugin_undo(manifest_dir: Path, inputs) -> list[tuple[str, dict]]:
+    """For each recorded plugin, the options to set back: those still as written,
+    each to its value before. `inputs(plugin_id)` reads what a plugin holds now."""
+    manifest_path = manifest_dir / MANIFEST
+    if not manifest_path.exists():
+        return []
+    plugins = json.loads(manifest_path.read_text(encoding="utf-8")).get("plugins", {})
+    undo = []
+    for plugin_id, keys in plugins.items():
+        now = inputs(plugin_id)
+        back = {
+            key: entry["before"]
+            for key, entry in keys.items()
+            if now.get(key) == entry["written"] and entry["before"] is not None
+        }
+        undo.append((plugin_id, back))
+    return undo
 
 
 def undo_changes(manifest_dir: Path) -> list[str]:
