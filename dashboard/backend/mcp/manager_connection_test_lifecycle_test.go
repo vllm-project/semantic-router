@@ -8,13 +8,24 @@ import (
 	"time"
 )
 
+func validConnectionTestConfig(id string) *ServerConfig {
+	return &ServerConfig{
+		ID:        id,
+		Name:      id,
+		Transport: TransportStreamableHTTP,
+		Connection: ConnectionConfig{
+			URL: "http://127.0.0.1:1/mcp",
+		},
+	}
+}
+
 func TestManagerRejectsConnectionTestsAfterClose(t *testing.T) {
 	manager, err := NewManager(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	manager.Close()
-	if testErr := manager.TestConnection(context.Background(), &ServerConfig{ID: "closed"}); !errors.Is(testErr, errManagerClosed) {
+	if testErr := manager.TestConnection(context.Background(), validConnectionTestConfig("closed")); !errors.Is(testErr, errManagerClosed) {
 		t.Fatalf("TestConnection() error = %v, want %v", testErr, errManagerClosed)
 	}
 }
@@ -47,7 +58,7 @@ func TestManagerCloseWaitsForConnectionTests(t *testing.T) {
 	}
 	done := make(chan error, 2)
 	for range 2 {
-		go func() { done <- manager.TestConnection(ctx, &ServerConfig{ID: "same-server"}) }()
+		go func() { done <- manager.TestConnection(ctx, validConnectionTestConfig("same-server")) }()
 	}
 	for range 2 {
 		select {
@@ -97,7 +108,7 @@ func TestManagerConnectionTestPreservesPublishedClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := &ServerConfig{ID: "same-server"}
+	config := validConnectionTestConfig("same-server")
 	published, err := NewClient(config)
 	if err != nil {
 		t.Fatal(err)
