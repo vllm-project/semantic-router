@@ -120,8 +120,8 @@ var registry = []API{
 	},
 	{
 		Name: SystemOne, Summary: "System One decisions", Kind: KindDecision,
-		Paths:   []string{"/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models"},
-		Pattern: `^/v1/(systemone(/batch|/models)?|decisions)$`,
+		Paths:   []string{"/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models", "/v1/systemone/rules"},
+		Pattern: `^/v1/(systemone(/batch|/models|/rules)?|decisions)$`,
 		Schemas: []Schema{
 			{ID: SchemaVLLMSR50, SystemOne: systemonecodec.SchemaVLLMSR50},
 			{ID: SchemaVLLMSR40, SystemOne: systemonecodec.SchemaID(SchemaVLLMSR40)},
@@ -129,7 +129,10 @@ var registry = []API{
 		},
 		ListenerDefault: SchemaVLLMSR50, UpstreamDefault: SchemaSystemOne02, Versioned: true,
 		ListenerSchemas: []string{SchemaVLLMSR50, SchemaVLLMSR40},
-		Settings:        []Setting{{Name: "max_deadline_ms", Summary: "the most a request's deadline may ask a directly called model to take"}},
+		Settings: []Setting{
+			{Name: "max_deadline_ms", Summary: "the most a request's deadline may ask a directly called model to take"},
+			{Name: "vsr", Summary: "what the vSR agent plugins pointed at the listener turn on, from its System One listing"},
+		},
 	},
 }
 

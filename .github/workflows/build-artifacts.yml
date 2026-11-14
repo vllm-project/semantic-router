@@ -38,7 +38,11 @@ jobs:
         image: ${{ fromJSON(inputs.images) }}
     steps:
       - uses: actions/checkout@v4
+      # The accelerator images need the space the cleanup frees; the others
+      # fit in the 88 GB a hosted runner starts with.
       - uses: ./.github/actions/free-disk-space
+        with:
+          min-free-gb: ${{ contains(fromJSON('["vllm-sr-cuda", "vllm-sr-rocm"]'), matrix.image) && '0' || '40' }}
       - uses: docker/setup-qemu-action@v3
         if: inputs.multiarch
         with:

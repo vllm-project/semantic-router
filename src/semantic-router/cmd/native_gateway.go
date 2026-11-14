@@ -26,10 +26,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
-// nativeDrainTimeout bounds how long in-flight native requests and streams may
-// finish once shutdown starts.
-const nativeDrainTimeout = 25 * time.Second
-
 // startNativeGateway serves every configured listener through the routing core
 // in process, with no ext_proc listener, until ctx ends or a listener fails.
 // A non-empty bindAddress replaces every listener's configured address.
@@ -73,11 +69,7 @@ func startNativeGateway(ctx context.Context, server *extproc.Server, writer star
 	case err = <-served:
 	}
 	ready.Store(false)
-	drainCtx, cancel := context.WithTimeout(context.Background(), nativeDrainTimeout)
-	defer cancel()
-	for _, l := range listeners {
-		err = errors.Join(err, l.server.Shutdown(drainCtx))
-	}
+	err = errors.Join(err, drainNative(server.CurrentConfig().DrainTimeout(), listeners))
 	if err != nil {
 		return recordStartupError(writer, "serve the standalone listeners", err)
 	}
@@ -87,7 +79,60 @@ func startNativeGateway(ctx context.Context, server *extproc.Server, writer star
 type nativeListener struct {
 	name     string
 	server   *http.Server
+	handler  *gateway.Handler
 	listener net.Listener
+}
+
+// drainNative stops every listener accepting and lets the requests in flight
+// on them finish, for at most timeout; those still in flight then are cut
+// when the process exits.
+func drainNative(timeout time.Duration, listeners []*nativeListener) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	started, inFlight := time.Now(), 0
+	for _, l := range listeners {
+		inFlight += l.handler.InFlight()
+	}
+	logging.ComponentEvent("gateway", "standalone_drain_started", map[string]interface{}{
+		"drain_timeout_seconds": int(timeout / time.Second), "in_flight": inFlight,
+	})
+	type drained struct {
+		left int
+		err  error
+	}
+	results := make(chan drained, len(listeners))
+	for _, l := range listeners {
+		go func(l *nativeListener) {
+			// Shutdown waits for HTTP/1.1 and TLS requests only; Drain waits
+			// for those of every protocol.
+			err := l.server.Shutdown(ctx)
+			if errors.Is(err, context.DeadlineExceeded) {
+				err = nil
+			} else if err != nil {
+				err = fmt.Errorf("listener %s: %w", l.name, err)
+			}
+			results <- drained{left: l.handler.Drain(ctx), err: err}
+		}(l)
+	}
+	var (
+		left int
+		err  error
+	)
+	for range listeners {
+		result := <-results
+		left += result.left
+		err = errors.Join(err, result.err)
+	}
+	if left > 0 {
+		logging.ComponentWarnEvent("gateway", "standalone_drain_incomplete", map[string]interface{}{
+			"drain_timeout_seconds": int(timeout / time.Second), "in_flight": left,
+		})
+	} else {
+		logging.ComponentEvent("gateway", "standalone_drain_completed", map[string]interface{}{
+			"duration_ms": time.Since(started).Milliseconds(),
+		})
+	}
+	return err
 }
 
 // listenNative binds every listener of cfg, on bindAddress when it is set; a
@@ -125,7 +170,7 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 			closeBound()
 			return nil, fmt.Errorf("listener %s: %w", spec.Name, err)
 		}
-		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), listener: ln})
+		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), handler: handler, listener: ln})
 		logging.ComponentEvent("router", "standalone_listener_started", map[string]interface{}{
 			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.APIKeys) > 0,
 			"apis": spec.ServedAPIs(), "tls": serverOpts.TLS != nil,
@@ -213,11 +258,12 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		return result.Status, result.Body, err
 	}
 	var nativeRouter systemone.Router
+	var rules systemone.ListenerRules
 	if lease.Router != nil {
-		nativeRouter = lease.Router
+		nativeRouter, rules = lease.Router, lease.Router
 	}
 	serving := gateway.Serving{
-		SystemOne:       systemone.ForClients(cfg, systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models))),
+		SystemOne:       systemone.ForClients(cfg, systemone.HandlerWithRules(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models), rules)),
 		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
 		IdentityHeaders: []string{

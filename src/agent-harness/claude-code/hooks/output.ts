@@ -3,7 +3,9 @@ import type { EngineInterface, ToolCallInput, ToolCallResult } from 'claude-code
 
 import type { Tag } from '../types'
 import { type Classified, classify, isRecord, failureOf, probabilityOf, type Reply } from './lib/classify'
+import { followSoon } from './lib/profile'
 import { addCounts, type Found, hide, PII_QUESTIONS, parsePii, piiIn, secretsIn, type Span, tagText } from './lib/redact'
+import { askRules, ruleFinds, type RuleView, uncheckedRules } from './lib/rules'
 import { budgetOf, remoteHostOf, type Settings } from './lib/settings'
 import { record } from './lib/state'
 import { stamp } from './lib/env'
@@ -160,10 +162,22 @@ async function shortPath($: EngineInterface, path: string) {
   return cwd !== undefined && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path
 }
 
-export async function sourceOf($: EngineInterface, e: ToolCallInput) {
+// A command as the session sees it: the paths under its working directory written from there, so a clipped line keeps
+// the file names. A path is only shortened where it starts a word, so /srv/repo/x stays whole under /repo.
+async function shortCommand($: EngineInterface, command: string) {
+  const cwd = await sessionCwd($)
+  if (cwd === undefined || cwd === '/') return command
+  const escaped = cwd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return command.replace(new RegExp(`(^|[\\s'"=:(])${escaped}/`, 'g'), '$1')
+}
+
+// What a call read from: a file as the session names it, else its command or URL. A card shows the command with
+// shortened paths; check reads it as it ran (shortened: false), since after a cd a short path names another file.
+export async function sourceOf($: EngineInterface, e: ToolCallInput, shortened = true) {
   const input: Record<string, unknown> = { ...e }
   if (typeof input.file_path === 'string') return shortPath($, input.file_path)
-  const named = typeof input.command === 'string' ? input.command : typeof input.url === 'string' ? input.url : String(e.tool)
+  const command = typeof input.command === 'string' ? (shortened ? await shortCommand($, input.command) : input.command) : undefined
+  const named = command ?? (typeof input.url === 'string' ? input.url : String(e.tool))
   return clip(oneLine(named), SOURCE_WIDTH)
 }
 
@@ -180,16 +194,61 @@ function hideSpans(fields: string[], found: readonly Found[]) {
 
 type Call = { toolUseId: string; at: string; tool: string; source: string }
 
-// Redact's half: the fields with secrets and the PII read in time hidden, what was hidden, and the reading it took.
-// A failure is recorded by the caller, which knows whether it withholds the output.
+// The most text one rules call holds (the listener's limit, in UTF-8 bytes).
+const MAX_RULES_BYTES = 256 << 10
+
+const utf8Bytes = (text: string) => {
+  let bytes = 0
+  for (const char of text) {
+    const point = char.codePointAt(0) ?? 0
+    bytes += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4
+  }
+  return bytes
+}
+
+// What the listener's redact rules found in each field, and the rules left unchecked: every one when the output is past
+// what one call holds.
+async function listenerFound($: EngineInterface, settings: Settings, fields: string[], budgetMs: number) {
+  const bound = settings.rules.redact
+  const none = { found: fields.map((): Found[] => []), unchecked: [] as { rule: RuleView; reason: string }[] }
+  if (bound.length === 0) return none
+  if (fields.reduce((sum, field) => sum + utf8Bytes(field), 0) > MAX_RULES_BYTES) {
+    return { ...none, unchecked: bound.map(rule => ({ rule, reason: `the output is past the ${MAX_RULES_BYTES >> 10} KiB one rules call reads` })) }
+  }
+  const asked = await askRules($, settings.runtime, 'redact', bound, fields, budgetMs)
+  if (asked.ok && asked.revision !== settings.rules.revision) followSoon()
+  const unchecked = new Map<string, { rule: RuleView; reason: string }>()
+  const found = fields.map((_, at) => {
+    for (const one of uncheckedRules(settings.rules, bound, asked, at)) unchecked.set(one.rule.name, one)
+    return (ruleFinds(settings.rules, asked, at)?.found ?? []).map(({ from, to, rule }) => ({ from, to, tag: rule }))
+  })
+  return { found, unchecked: [...unchecked.values()] }
+}
+
+// Redact's half: the fields with secrets, the listener's rules' finds and the PII read in time hidden, what was
+// hidden, and the reading it took. The rules and the PII question read the same text, the fields with only the
+// secrets hidden, so neither hides part of a value the other would have found whole, and their finds are hidden at
+// once. A failure is recorded by the caller, which knows whether it withholds the output.
 async function redactOutput($: EngineInterface, settings: Settings, fields: string[]) {
+  const budget = budgetOf(settings.waits.redact)
+  const started = await $.clock.now()
   const secrets = fields.map(field => hide(field, secretsIn(field)))
-  const joined = secrets.map(one => one.text).join('\n')
-  const pii = await readInPieces($, settings, budgetOf(settings.waits.redact), joined, piece => piece, PII_QUESTIONS, parsePii)
+  const texts = secrets.map(one => one.text)
+  const listened = await listenerFound($, settings, texts, budget)
+  const joined = texts.join('\n')
+  const left = budget - ((await $.clock.now()) - started)
+  const pii = await readInPieces($, settings, left, joined, piece => piece, PII_QUESTIONS, parsePii)
   const spans = pii.ok ? spansOf(pii.value, settings.thresholds.redact.pii) : []
-  const hidden = pii.ok ? hideSpans(secrets.map(one => one.text), spans) : secrets.map(one => ({ text: one.text, counts: {} }))
+  // The rules' finds, at their places in the joined text: field i starts after the fields before it and a newline each.
+  let start = 0
+  const ruled = texts.flatMap((text, at) => {
+    const shifted = (listened.found[at] ?? []).map(one => ({ ...one, from: one.from + start, to: one.to + start }))
+    start += text.length + 1
+    return shifted
+  })
+  const hidden = hideSpans(texts, [...spans, ...ruled])
   const counts: Partial<Record<Tag, number>> = addCounts(...secrets.map(one => one.counts), ...hidden.map(one => one.counts))
-  return { fields: hidden.map(one => one.text), counts, spans, pii, length: joined.length }
+  return { fields: hidden.map(one => one.text), counts, spans, pii, length: joined.length, unchecked: listened.unchecked }
 }
 
 // Shield's half: the injection score read in time, and the note for Claude when it is over the line.
@@ -212,6 +271,16 @@ function shortfallOf(asked: Classified<Pieces<unknown>>, length: number) {
   if (!asked.ok) return asked.cancelled ? undefined : asked.why
   if (asked.value.read >= length) return undefined
   return `it read ${asked.value.read.toLocaleString('en-US')} of ${length.toLocaleString('en-US')} characters: ${asked.value.stopped ?? 'stopped early'}`
+}
+
+// A required rule of the listener gives Claude nothing it could not check, whatever the wait: the output is refused,
+// and the pane says so. The rule is the listener's, so the advice is not the person's wait setting.
+async function withholdForRule($: EngineInterface, settings: Settings, call: Call, rule: RuleView, why: string): Promise<ToolCallResult> {
+  const subject = `listener rule ${rule.name} not checked: ${why}`
+  await record($, settings.log, { kind: 'unavailable', app: 'redact', id: `${call.toolUseId}:rule-withheld`, ...call, subject: call.source, why: subject, withheld: true })
+  return {
+    deny: `vSR redact: could not check ${call.source} against the listener's required rule ${rule.name} (${why}), so this output is withheld. The rule is set on the Router listener; ask the person who runs it.`,
+  }
 }
 
 // An app that waits until done gives Claude nothing it could not check: the output is refused, and the pane says so.
@@ -242,6 +311,11 @@ export async function inspectOutput($: EngineInterface, e: ToolCallInput, ran: T
   const isRedactSlow = redacted !== undefined && !redacted.pii.ok && !redacted.pii.offline && !redacted.pii.cancelled
   const isShieldSkipped = isShieldable && isRedactSlow && settings.waits.shield !== 'done'
   if (redacted !== undefined) {
+    const required = redacted.unchecked.find(one => one.rule.required)
+    if (required !== undefined) return withholdForRule($, settings, call, required.rule, required.reason)
+    for (const { rule, reason } of redacted.unchecked) {
+      await record($, settings.log, { kind: 'unavailable', app: 'redact', id: `${call.toolUseId}:rule:${rule.name}`, ...call, subject: source, why: `listener rule ${rule.name} not checked: ${reason}` })
+    }
     const short = shortfallOf(redacted.pii, redacted.length)
     if (short !== undefined && settings.waits.redact === 'done') return withhold($, settings, call, 'redact', short)
     if (!redacted.pii.ok) {
@@ -258,11 +332,15 @@ export async function inspectOutput($: EngineInterface, e: ToolCallInput, ran: T
   }
 
   const isHidden = redacted !== undefined && Object.keys(redacted.counts).length > 0
-  // The fewest characters either question read: past them the output went to Claude unchecked.
+  // The most either question left unread of the text it read: past it the output went to Claude unchecked. Redact read
+  // the output before its tags went in and shield after, so each is measured against its own text.
   const length = fields.join('\n').length
-  const reads = [redacted?.pii, shielded?.injection].flatMap(one => (one?.ok ? [one.value] : []))
-  const short = reads.reduce<Pieces<unknown> | undefined>((least, one) => (least === undefined || one.read < least.read ? one : least), undefined)
-  const unread = short === undefined ? 0 : length - short.read
+  const reads = [
+    ...(redacted?.pii.ok ? [{ ...redacted.pii.value, of: redacted.length }] : []),
+    ...(shielded?.injection.ok ? [{ ...shielded.injection.value, of: length }] : []),
+  ]
+  const short = reads.reduce<(Pieces<unknown> & { of: number }) | undefined>((most, one) => (most === undefined || one.of - one.read > most.of - most.read ? one : most), undefined)
+  const unread = short === undefined ? 0 : Math.max(0, short.of - short.read)
   if (isHidden) {
     const checkedOn = remoteHostOf(settings.runtime.url)
     await record($, settings.log, {
@@ -296,11 +374,20 @@ export async function inspectOutput($: EngineInterface, e: ToolCallInput, ran: T
       ...call,
       subject: source,
       why: short.stopped ?? 'stopped early',
-      read: { chars: short.read, of: length },
+      read: { chars: short.read, of: short.of },
     })
   }
-  if (isHidden) return output.rewritten(fields, notes)
+  if (isHidden) return output.rewritten(fields, [...notes, hiddenNote(redacted.counts)])
   return notes.length > 0 ? { ...ran, context: [...(ran.context ?? []), ...notes] } : ran
+}
+
+// Said to Claude with each output redact rewrote. Without it Claude reads the tags as the source's own text and tells the
+// person the file holds them; told only that the source holds the values, an agent sets out to read them another way.
+function hiddenNote(counts: Partial<Record<Tag, number>>) {
+  const count = Object.values(counts).reduce<number>((sum, n) => sum + (n ?? 0), 0)
+  const tags = (Object.keys(counts) as Tag[]).map(tagText).join(', ')
+  const real = count === 1 ? 'value' : 'values'
+  return `vSR redact hid ${count} ${real} in this output and put ${tags} in ${count === 1 ? 'its' : 'their'} place. The tags are vSR's, not part of the source, which still holds the real ${real}. They are hidden from you on purpose: do not try to read them another way, such as re-reading, encoding or decoding the output. If the task needs one, tell the person it was hidden.`
 }
 
 async function fileText($: EngineInterface, path: string) {

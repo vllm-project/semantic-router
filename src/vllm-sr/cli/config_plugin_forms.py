@@ -99,7 +99,7 @@ def _plugin_form(plugin: dict[str, Any]) -> tuple[str, str, str] | None:
                 "masking.threshold was removed",
                 "masking.signal naming a pii rule, whose predicate applies",
             )
-        if not configuration.get("signal"):
+        if not configuration.get("signal") and not configuration.get("rules"):
             return (
                 "removed_field",
                 "masking without a signal was removed",

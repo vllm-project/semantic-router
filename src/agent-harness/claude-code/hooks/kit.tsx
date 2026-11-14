@@ -72,12 +72,22 @@ export type Reply = {
   headers?: (Record<string, string> | undefined)[]
   // Collects the URL of every request.
   urls?: string[]
-  // Collects every toast's text.
+  // The session's id while a test changes it, as /clear does.
+  sessionId?: { now: string }
+  // Collects every toast's text, and every status line entry.
   toasts?: string[]
+  statuses?: (string | undefined)[]
   // What `$.fs.write` last wrote, by path.
   files?: Record<string, string>
   // What `$.store` holds at the start, and the environment.
   store?: Record<string, unknown>
+  // What the listener's System One listing answers (GET /v1/systemone/models), when set.
+  listing?: object
+  // How many times the listing was asked for.
+  listings?: number
+  // What the listener's rules endpoint (POST /v1/systemone/rules) answers for a request, or 'fails' when it cannot be
+  // reached; every request it got is kept in `asked`.
+  rules?: { answer: ((request: { app: string; parts: { id: string; text: string }[] }) => object) | 'fails'; asked?: { app: string; parts: { id: string; text: string }[] }[] }
   env?: Record<string, string>
 }
 
@@ -137,7 +147,7 @@ export function engine(on: On, reply: Reply) {
   const clock = mock.clock(on)
   mock.store(on, reply.store)
   mock.env(on, reply.env ?? { HOME })
-  on('session.id', () => ({ value: SESSION }))
+  on('session.id', () => ({ value: reply.sessionId?.now ?? SESSION }))
   on('fs.write', (_, e) => {
     if (reply.files) reply.files[e.path] = e.text
     return { value: undefined }
@@ -149,6 +159,10 @@ export function engine(on: On, reply: Reply) {
     return { value: undefined }
   })
   on('command.register', () => ({ value: { command: 'vsr' } }))
+  on('ui.status', (_, e) => {
+    reply.statuses?.push(e.text)
+    return { value: undefined }
+  })
   on('ui.open', (_, e) => {
     reply.opened?.push(e.id)
     return { value: { isPlaced: true } }
@@ -168,6 +182,15 @@ export function engine(on: On, reply: Reply) {
   on('tool.check', () => reply.bottom ?? BOTTOM)
   on('http.fetch', (_, e) => {
     reply.urls?.push(e.url)
+    if (e.url.endsWith('/v1/systemone/models') && reply.listing !== undefined) {
+      reply.listings = (reply.listings ?? 0) + 1
+      return answered(reply.listing)
+    }
+    if (e.url.endsWith('/v1/systemone/rules') && reply.rules !== undefined) {
+      const request = JSON.parse(e.init?.body ?? '{}')
+      reply.rules.asked?.push(request)
+      return reply.rules.answer === 'fails' ? REFUSED : answered(reply.rules.answer(request))
+    }
     reply.headers?.push(e.init?.headers)
     if (e.url.endsWith('/health')) return reply.offline || reply.fails ? REFUSED : answered({ status: 'ok' })
     if (reply.hangs) return new Promise(() => {})

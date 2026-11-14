@@ -317,7 +317,9 @@ func TestShadowDispatchCapturesBoundedExcerpt(t *testing.T) {
 	cfg.CaptureResponseBody = true
 	cfg.MaxCaptureBytes = 6
 
-	run := runShadowRequest(t, router, primaryModel, cfg, nil)
+	run := runShadowRequest(t, router, primaryModel, cfg, func(ctx *RequestContext) {
+		ctx.RouterReplayPluginConfig.PromptCapture = config.PromptCaptureRaw
+	})
 	waitForShadow(t, router)
 
 	outcome := singleShadowOutcome(t, run)
@@ -326,6 +328,40 @@ func TestShadowDispatchCapturesBoundedExcerpt(t *testing.T) {
 	}
 	if outcome.Metadata["response_excerpt_truncated"] != "true" {
 		t.Fatal("expected excerpt truncation marker")
+	}
+}
+
+// Only raw capture keeps generated text, so the shadow's own
+// capture_response_body stores an excerpt of its answer under raw alone:
+// under none and verified the outcome keeps its sizes and hash only.
+func TestShadowDispatchKeepsAnExcerptOnlyUnderRawCapture(t *testing.T) {
+	for _, test := range []struct {
+		mode    string
+		excerpt bool
+	}{
+		{config.PromptCaptureNone, false},
+		{config.PromptCaptureVerified, false},
+		{config.PromptCaptureRaw, true},
+	} {
+		t.Run(test.mode, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			router, primaryModel := newShadowTestRouter(t, backend)
+			cfg := shadowTestPluginConfig()
+			cfg.CaptureResponseBody = true
+
+			run := runShadowRequest(t, router, primaryModel, cfg, func(ctx *RequestContext) {
+				ctx.RouterReplayPluginConfig.PromptCapture = test.mode
+			})
+			waitForShadow(t, router)
+
+			outcome := singleShadowOutcome(t, run)
+			if _, kept := outcome.Metadata["response_excerpt"]; kept != test.excerpt {
+				t.Fatalf("excerpt kept %v, want %v: %v", kept, test.excerpt, outcome.Metadata)
+			}
+			if outcome.Metadata["response_sha256"] == "" || outcome.Metadata["response_bytes"] == "" {
+				t.Fatalf("the outcome lost its sizes or hash: %v", outcome.Metadata)
+			}
+		})
 	}
 }
 

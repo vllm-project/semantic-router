@@ -1126,6 +1126,11 @@
         },
         "context_window": {
           "$ref": "#/$defs/ContextWindowConfig"
+        },
+        "drain_timeout_seconds": {
+          "type": "integer",
+          "maximum": 86400,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -3353,6 +3358,9 @@
         "max_deadline_ms": {
           "type": "integer",
           "minimum": 1
+        },
+        "vsr": {
+          "$ref": "#/$defs/VSRProfile"
         }
       },
       "additionalProperties": false,
@@ -3509,6 +3517,12 @@
         },
         "signal": {
           "type": "string"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/SignalRef"
+          },
+          "type": "array"
         },
         "entity_types": {
           "items": {
@@ -6062,11 +6076,17 @@
     },
     "RouterReplayPluginConfig": {
       "properties": {
-        "capture_personal_data": {
-          "type": "boolean"
-        },
         "enabled": {
           "type": "boolean"
+        },
+        "prompt_capture": {
+          "type": "string",
+          "enum": [
+            "none",
+            "raw",
+            "verified"
+          ],
+          "description": "What a record keeps besides routing data: none (the default) keeps no request or response text; raw keeps the text the capture switches allow, unverified; verified keeps the prompt alone, once the pii rules read it whole and find it clean."
         },
         "max_records": {
           "type": "integer"
@@ -6083,14 +6103,27 @@
         "max_body_bytes": {
           "type": "integer"
         },
+        "max_prompt_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
         "max_tool_trace_bytes": {
           "type": "integer"
+        },
+        "max_tool_trace_total_bytes": {
+          "type": "integer",
+          "minimum": 0
         },
         "max_tool_trace_steps": {
           "type": "integer"
         },
         "shadow": {
           "$ref": "#/$defs/RouterReplayShadowConfig"
+        },
+        "capture_personal_data": {
+          "type": "boolean",
+          "description": "Deprecated: write prompt_capture. false loads as prompt_capture: verified and true as prompt_capture: raw.",
+          "deprecated": true
         }
       },
       "additionalProperties": false,
@@ -6401,6 +6434,27 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "SignalRef": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "keyword",
+            "systemone"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "name"
+      ]
     },
     "SkipProcessingConfig": {
       "properties": {
@@ -6947,6 +7001,97 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "VSRProfile": {
+      "properties": {
+        "router": {
+          "type": "boolean"
+        },
+        "router_turns": {
+          "type": "boolean"
+        },
+        "router_goal": {
+          "type": "string",
+          "enum": [
+            "quality",
+            "balanced",
+            "save"
+          ]
+        },
+        "escalate": {
+          "type": "boolean"
+        },
+        "redact": {
+          "type": "boolean"
+        },
+        "shield": {
+          "type": "boolean"
+        },
+        "guard": {
+          "type": "boolean"
+        },
+        "check": {
+          "type": "boolean"
+        },
+        "rules": {
+          "$ref": "#/$defs/VSRRules"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "VSRRule": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "keyword",
+            "systemone"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enforce": {
+          "type": "string",
+          "enum": [
+            "required",
+            "advisory"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "name"
+      ]
+    },
+    "VSRRules": {
+      "properties": {
+        "recipe": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guard": {
+          "items": {
+            "$ref": "#/$defs/VSRRule"
+          },
+          "type": "array"
+        },
+        "redact": {
+          "items": {
+            "$ref": "#/$defs/VSRRule"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "recipe"
+      ]
     },
     "ValkeyConfig": {
       "properties": {

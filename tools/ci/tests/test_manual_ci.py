@@ -294,7 +294,7 @@ class ManualCITests(unittest.TestCase):
         with self.assertRaisesRegex(manual_ci.ManualCIError, "unedited"):
             self.authorize()
 
-    def test_wrong_issue_or_changed_source_cannot_authorize(self):
+    def test_wrong_issue_or_nonequivalent_source_cannot_authorize(self):
         self.github.comment["issue_url"] = (
             f"https://api.github.com/repos/{REPO}/issues/43"
         )
@@ -304,6 +304,7 @@ class ManualCITests(unittest.TestCase):
             f"https://api.github.com/repos/{REPO}/issues/42"
         )
         self.github.pull["merge_commit_sha"] = "e" * 40
+        self.github.commits[MERGE] = {"parents": [{"sha": BASE}, {"sha": "f" * 40}]}
         with self.assertRaisesRegex(manual_ci.ManualCIError, "No current PR CI plan"):
             self.authorize()
 
@@ -475,22 +476,26 @@ class ManualCITests(unittest.TestCase):
         self.github.permission = "read"
         self.assertEqual(self.resolve(), manual_ci.NO_AUTHORIZATION)
 
-    def test_new_head_base_or_merge_invalidates_authorization(self):
+    def test_new_head_or_unrelated_base_invalidates_authorization(self):
         self.github.add_authorization(self.authorize())
         original = copy.deepcopy(self.github.pull)
-        for field in ("head", "base", "merge_commit_sha"):
+        for field in ("head", "base"):
             self.github.pull = copy.deepcopy(original)
             self.github.base_ref["object"]["sha"] = BASE
-            self.github.merge_parents = [{"sha": BASE}, {"sha": HEAD}]
-            if field == "merge_commit_sha":
-                self.github.pull[field] = "f" * 40
+            self.github.pull["merge_commit_sha"] = "e" * 40
+            self.github.commits[MERGE] = {"parents": [{"sha": BASE}, {"sha": HEAD}]}
+            self.github.merge_ancestor = BASE
+            self.github.pull[field]["sha"] = "f" * 40
+            if field == "base":
+                self.github.base_ref["object"]["sha"] = "f" * 40
+                self.github.merge_ancestor = "d" * 40
+                self.github.commits["e" * 40] = {
+                    "parents": [{"sha": "f" * 40}, {"sha": HEAD}]
+                }
             else:
-                self.github.pull[field]["sha"] = "f" * 40
-                if field == "base":
-                    self.github.base_ref["object"]["sha"] = "f" * 40
-                    self.github.merge_parents[0]["sha"] = "f" * 40
-                else:
-                    self.github.merge_parents[1]["sha"] = "f" * 40
+                self.github.commits["e" * 40] = {
+                    "parents": [{"sha": BASE}, {"sha": "f" * 40}]
+                }
             self.assertEqual(self.resolve(), manual_ci.NO_AUTHORIZATION)
 
     def test_stale_pr_base_metadata_does_not_reject_the_actual_merge_revision(self):

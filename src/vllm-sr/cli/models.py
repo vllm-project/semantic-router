@@ -101,6 +101,85 @@ class ListenerIdentity(BaseModel):
     )
 
 
+class VSRRule(BaseModel):
+    """One rule of the bound recipe an app enforces: a keyword or systemone rule, required or advisory."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["keyword", "systemone"] = Field(
+        description="The signal type of the rule."
+    )
+    name: str = Field(min_length=1, description="The rule's name in the recipe.")
+    enforce: Optional[Literal["required", "advisory"]] = Field(
+        default=None,
+        description="required: a command waits for the person and an output is withheld when the rule "
+        "cannot be checked. advisory (the default): the rule then goes unchecked.",
+    )
+
+
+class VSRRules(BaseModel):
+    """Rules of one recipe that guard and redact enforce besides their own checks. The plugins learn
+    each rule's name and description; the Router evaluates it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    recipe: str = Field(
+        min_length=1,
+        description="The recipe whose rules these are; an entrypoint must reach it.",
+    )
+    guard: Optional[List[VSRRule]] = Field(
+        default=None,
+        description="Rules that say whether a shell command is held.",
+    )
+    redact: Optional[List[VSRRule]] = Field(
+        default=None,
+        description="Rules whose matches are hidden in a tool's output.",
+    )
+
+
+class VSRProfile(BaseModel):
+    """What the vSR agent plugins pointed at a listener do: each application on or off and the router's goal.
+    A field left out keeps the plugin's own option."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    router: Optional[bool] = Field(
+        default=None, description="Pick the model and effort of subagents."
+    )
+    router_turns: Optional[bool] = Field(
+        default=None,
+        description="Also pick the model and effort of the person's own turns.",
+    )
+    router_goal: Optional[Literal["quality", "balanced", "save"]] = Field(
+        default=None,
+        description="How far the router may go down: quality never below the session's model, balanced "
+        "when the decision is sure, save whenever it answers clearly enough.",
+    )
+    escalate: Optional[bool] = Field(
+        default=None,
+        description="Raise the next turn's model or effort after a pushback.",
+    )
+    redact: Optional[bool] = Field(
+        default=None,
+        description="Hide personal data in what a tool returns before the agent reads it.",
+    )
+    shield: Optional[bool] = Field(
+        default=None,
+        description="Mark text in a tool's output that gives the agent orders.",
+    )
+    guard: Optional[bool] = Field(
+        default=None,
+        description="Hold a destructive command for the person to approve.",
+    )
+    check: Optional[bool] = Field(
+        default=None, description="Compare the agent's answer with what it read."
+    )
+    rules: Optional[VSRRules] = Field(
+        default=None,
+        description="Recipe rules guard and redact enforce besides their own checks.",
+    )
+
+
 class ListenerAPI(BaseModel):
     """One API a listener serves: its schema (only for a versioned API, systemone), the models it accepts
     (omitted: every model of its kind) and the API's own settings."""
@@ -126,6 +205,12 @@ class ListenerAPI(BaseModel):
         description="systemone: the longest this listener waits for a model it "
         "calls directly, however long a request's options.deadline_ms asks "
         "for. Omitted, 600000 (10 minutes).",
+    )
+    vsr: Optional[VSRProfile] = Field(
+        default=None,
+        description="systemone: what the vSR agent plugins pointed at this "
+        "listener turn on. The listing (GET /v1/systemone/models) hands it to "
+        "them, and each field set here wins over the plugin's own option.",
     )
 
     @field_validator("models")
@@ -230,13 +315,13 @@ class Listener(BaseModel):
                     raise ValueError(
                         f"apis.{key}.schema: a listener serves api {name} in {' or '.join(schemas)}, not {entry.schema_!r}"
                     )
-            if (
-                entry.max_deadline_ms is not None
-                and "max_deadline_ms" not in API_SETTINGS.get(name, ())
-            ):
-                raise ValueError(
-                    f"apis.{key}.max_deadline_ms: the {name} API takes no max_deadline_ms setting"
-                )
+            for setting in ("max_deadline_ms", "vsr"):
+                if getattr(
+                    entry, setting
+                ) is not None and setting not in API_SETTINGS.get(name, ()):
+                    raise ValueError(
+                        f"apis.{key}.{setting}: the {name} API takes no {setting} setting"
+                    )
             named[name] = key
             resolved[name] = entry
         return resolved
@@ -1179,18 +1264,30 @@ class RouterReplayPluginConfig(BaseModel):
 
     Omitted fields inherit the shared service policy. Explicit false and zero
     remain present so a decision can disable capture or remove a trace limit.
+    prompt_capture is what a record keeps besides routing data: none (the
+    default), raw or verified. capture_personal_data is its deprecated form,
+    which the Router loads as prompt_capture with a warning: false as verified
+    and true as raw. max_prompt_bytes bounds the prompt a record keeps under
+    raw and verified, and 0 keeps the whole prompt; where no layer sets it, the
+    prompt keeps max_tool_trace_bytes's bound when that is above 0, else 65536.
+    Where no layer sets max_tool_trace_bytes, each tool text field keeps 65536
+    bytes, raw copies included, and max_tool_trace_total_bytes, the steps' text
+    in all, defaults to 262144; 0 removes either limit.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: Optional[StrictBool] = None
+    prompt_capture: Optional[Literal["none", "raw", "verified"]] = None
     capture_request_body: Optional[StrictBool] = None
     capture_response_body: Optional[StrictBool] = None
     capture_personal_data: Optional[StrictBool] = None
     capture_tool_results: Optional[StrictBool] = None
     max_records: Optional[int] = Field(default=None, ge=0)
     max_body_bytes: Optional[int] = Field(default=None, ge=0)
+    max_prompt_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
+    max_tool_trace_total_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
     shadow: Optional["RouterReplayShadowConfig"] = None
 

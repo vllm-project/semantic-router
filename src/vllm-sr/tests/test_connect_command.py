@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+import yaml
 from click.testing import CliRunner
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -650,12 +651,12 @@ def test_cli_context_window_reaches_both_harnesses(tmp_path, gateway, monkeypatc
     monkeypatch.setattr("shutil.which", lambda _: None)
     args = ["--base-url", url, "--yes"]
     result = CliRunner().invoke(main, ["connect", "claude-code", *args])
-    assert "assumes 200,000 tokens" in result.output
+    assert "assumes a window of its own" in result.output
     result = CliRunner().invoke(
         main, ["connect", "claude-code", *args, "--context-window", "131072"]
     )
     assert result.exit_code == 0, result.output
-    assert "assumes 200,000 tokens" not in result.output
+    assert "assumes a window of its own" not in result.output
     env = json.loads((tmp_path / "settings.json").read_text())["env"]
     # Claude Code neither warns about vllm-sr/auto nor assumes its own window
     assert env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "131072"
@@ -795,3 +796,650 @@ def test_cli_status_line_is_written_and_taken_back(tmp_path, gateway, monkeypatc
     assert result.exit_code == 0, result.output
     assert json.loads((tmp_path / "settings.json").read_text()) == {"statusLine": own}
     assert not script.exists()
+
+
+ROUTER = """\
+version: v0.5
+listeners:
+  - {name: http, address: 127.0.0.1, port: 8899}
+providers:
+  defaults: {model: small}
+  models:
+    - {name: small, api_format: chat_completions, context_window_size: 32768}
+    - {name: big, api_format: messages, context_window_size: 131072}
+    - {name: card, catalog: qwen/qwen3.8-27b, api_format: messages}
+    - {name: painter, api_format: images, context_window_size: 77}
+recipes:
+  - name: default
+    decisions:
+      - {name: hard, modelRefs: [{model: big}, {model: card}]}
+      - {name: draw, modelRefs: [{model: painter}]}
+"""
+
+
+def test_the_entrypoint_reaches_its_recipes_models_and_the_default():
+    doc = yaml.safe_load(ROUTER)
+    # vllm-sr/auto is the Router's own name for the default recipe; an image model
+    # never answers a harness's turn
+    assert rc.entrypoint_models(doc, "vllm-sr/auto") == ["big", "card", "small"]
+    assert rc.entrypoint_models(doc, "big") == ["big"]
+    assert rc.entrypoint_models(doc, "elsewhere") is None
+    windows = rc.context_windows(doc, ["big", "card", "small"])
+    # a catalog-backed model without a window of its own takes its card's
+    assert windows["big"] == 131072 and windows["card"] > 0
+    # a chat entrypoint that maps the default recipe takes the name away
+    doc["entrypoints"] = [{"model_names": ["team/auto"], "recipe": "default"}]
+    assert rc.entrypoint_models(doc, "vllm-sr/auto") is None
+    assert rc.entrypoint_models(doc, "team/auto") == ["big", "card", "small"]
+
+
+def test_a_model_a_decision_iterates_over_counts_toward_the_window():
+    doc = yaml.safe_load(ROUTER)
+    doc["providers"]["models"].append({"name": "tiny", "context_window_size": 4096})
+    hard = doc["recipes"][0]["decisions"][0]
+    hard["candidateIterations"] = [{"variable": "m", "models": [{"model": "tiny"}]}]
+    assert "tiny" in rc.entrypoint_models(doc, "vllm-sr/auto")
+
+
+def test_cli_reads_the_context_window_from_the_configuration(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    (tmp_path / "config.yaml").write_text(ROUTER)
+    result = CliRunner().invoke(main, ["connect", "codex", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "model_context_window = 32768" in result.output
+    assert (
+        "Context window: 32,768 tokens, the smallest of the 3 models" in result.output
+    )
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--dry-run"])
+    assert '"CLAUDE_CODE_MAX_CONTEXT_TOKENS": "32768"' in result.output
+    # the flag wins
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--dry-run", "--context-window", "8000"]
+    )
+    assert "model_context_window = 8000" in result.output
+    assert "Context window:" not in result.output
+    # a model without a window is named, and nothing is guessed
+    (tmp_path / "config.yaml").write_text(
+        ROUTER.replace(", context_window_size: 32768", "")
+    )
+    result = CliRunner().invoke(main, ["connect", "codex", "--dry-run"])
+    assert "model_context_window" not in result.output
+    assert "not set: small, which vllm-sr/auto can reach, states no" in result.output
+
+
+def test_a_shell_api_key_stays_off_the_gateway_and_is_never_shown(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-shell")
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    (tmp_path / "settings.json").write_text(
+        '{"env": {"ANTHROPIC_API_KEY": "sk-ant-saved"}}'
+    )
+    result = CliRunner().invoke(
+        main, ["connect", "claude-code", "--base-url", url, "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "sk-ant-" not in result.output
+    assert '"ANTHROPIC_API_KEY": "<hidden>"' in result.output
+    assert "ANTHROPIC_API_KEY your shell exports no longer goes to the gateway" in (
+        result.output
+    )
+    env = json.loads((tmp_path / "settings.json").read_text())["env"]
+    assert env["ANTHROPIC_API_KEY"] == ""
+    CliRunner().invoke(main, ["connect", "claude-code", "--undo"])
+    env = json.loads((tmp_path / "settings.json").read_text())["env"]
+    assert env == {"ANTHROPIC_API_KEY": "sk-ant-saved"}
+
+
+def test_settings_that_win_over_what_connect_wrote_are_named(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    project = tmp_path / "project"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "settings.json").write_text(
+        '{"env": {"ANTHROPIC_BASE_URL": "https://elsewhere", "OTHER": "1"}}'
+    )
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    result = CliRunner().invoke(
+        main, ["connect", "claude-code", "--base-url", url, "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "settings.json sets ANTHROPIC_BASE_URL: Claude Code started in" in (
+        " ".join(result.output.split())
+    )
+
+    # Codex reads a trusted project's configuration from the repository's top down
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    (project / "sub").mkdir()
+    (project / ".codex").mkdir()
+    (project / ".codex" / "config.toml").write_text('model = "gpt-x"\n')
+    monkeypatch.chdir(project / "sub")
+    result = CliRunner().invoke(main, ["connect", "codex", "--base-url", url, "--yes"])
+    assert result.exit_code == 0, result.output
+    assert f"{project / '.codex' / 'config.toml'} sets model" in " ".join(
+        result.output.split()
+    )
+    # a key of the same name inside a table is not the model
+    (project / ".codex" / "config.toml").write_text('[tui]\nmodel = "x"\n')
+    assert hc.codex_model_overrides(project / "sub") == []
+
+
+@pytest.fixture
+def harness_bin(tmp_path, monkeypatch):
+    """A claude and a codex on PATH that record their arguments, the settings file
+    they were given, and the key in their environment, then exit 3."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "ran.json"
+    for name in ("claude", "codex"):
+        script = bin_dir / name
+        script.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, sys\n"
+            "args = sys.argv[1:]\n"
+            "given = args[args.index('--settings') + 1] if '--settings' in args else None\n"
+            f"json.dump({{'args': args, 'settings': open(given).read() if given else None,"
+            f" 'key': os.environ.get('VLLM_SR_API_KEY')}}, open({str(record)!r}, 'w'))\n"
+            "sys.exit(3)\n"
+        )
+        script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+    return record
+
+
+def test_launch_starts_the_harness_through_the_gateway_and_writes_nothing(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    launch = ["--base-url", url, "--context-window", "65536", "--launch", "--"]
+    result = CliRunner().invoke(
+        main, ["connect", "claude-code", *launch, "--resume", "x"]
+    )
+    assert result.exit_code == 3, result.output
+    assert "Streamed tool loop: ok" in result.output
+    ran = json.loads(harness_bin.read_text())
+    assert ran["args"][-2:] == ["--resume", "x"]
+    settings = json.loads(ran["settings"])["env"]
+    assert settings["ANTHROPIC_BASE_URL"] == url
+    assert settings["ANTHROPIC_AUTH_TOKEN"] == "sk-secret"
+    assert settings["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "65536"
+    # the key never reaches the command line, and its file is gone afterwards
+    assert "sk-secret" not in " ".join(ran["args"]) + result.output
+    assert not Path(ran["args"][ran["args"].index("--settings") + 1]).exists()
+
+    result = CliRunner().invoke(main, ["connect", "codex", *launch, "exec", "hi"])
+    assert result.exit_code == 3, result.output
+    ran = json.loads(harness_bin.read_text())
+    assert ran["args"][-2:] == ["exec", "hi"]
+    overrides = dict(arg.split("=", 1) for arg in ran["args"][1:-2:2] if "=" in arg)
+    assert overrides["model_providers.vllm-sr.base_url"] == json.dumps(url + "/v1")
+    assert overrides["model_providers.vllm-sr.env_key"] == '"VLLM_SR_API_KEY"'
+    assert overrides["model_context_window"] == "65536"
+    assert ran["key"] == "sk-secret" and "sk-secret" not in " ".join(ran["args"])
+    assert not home.exists()
+
+
+def test_launch_starts_nothing_when_the_gateway_fails(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home"))
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--base-url", url + "/nope", "--launch"]
+    )
+    assert result.exit_code == 1
+    assert "codex was not started" in result.output
+    assert not harness_bin.exists()
+    result = CliRunner().invoke(main, ["connect", "codex", "--launch", "--undo"])
+    assert result.exit_code == 2 and "does not take --undo" in result.output
+    result = CliRunner().invoke(main, ["connect", "codex", "--", "exec"])
+    assert result.exit_code == 2 and "only with --launch" in result.output
+
+
+class FakeClaudePlugins:
+    """`claude plugin` as the commands --vsr runs see it: the vSR plugin's options,
+    with the token kept apart as Claude Code's credential store keeps it."""
+
+    def __init__(self, installed):
+        self.installed = installed
+        # what `configure --json` gives before any option is set: an unset string empty
+        self.inputs = {
+            "runtime": "local-cpu",
+            "runtimeUrl": "",
+            "runtimeModel": "",
+            "router": "true",
+            "guard": "true",
+        }
+        self.configured = set()
+        self.schema = {
+            "runtimeUrl": {"default": "http://127.0.0.1:8790/v1/decisions"},
+            "router": {"default": True},
+        }
+        self.token = None
+        self.ran = []
+        self.unreadable = False
+
+    def __call__(self, argv, **kw):
+        self.ran.append(argv)
+        out = ""
+        if argv[1:3] == ["plugin", "list"]:
+            out = json.dumps(
+                [{"id": "vsr@vllm-sr", "enabled": True}] if self.installed else []
+            )
+        elif argv[1:3] == ["plugin", "install"]:
+            self.installed = True
+        elif argv[-1] == "--json" and self.unreadable:
+            return subprocess.CompletedProcess(argv, 1, "", "error")
+        elif argv[-1] == "--json":
+            inputs = {**self.inputs, "runtimeToken": ""}
+            configured = sorted(self.configured)
+            found = {"inputs": inputs, "configured": configured, "schema": self.schema}
+            out = json.dumps(found)
+        elif argv[-1] == "--values-stdin":
+            given = json.loads(kw["input"])
+            self.token = given.pop("runtimeToken", self.token)
+            self.inputs.update(given)
+            self.configured |= set(given) | ({"runtimeToken"} if self.token else set())
+        return subprocess.CompletedProcess(argv, 0, out, "")
+
+
+@pytest.mark.parametrize("installed", [False, True])
+def test_vsr_sets_up_claude_code_through_its_plugin_command_and_undoes_it(
+    tmp_path, monkeypatch, installed
+):
+    url = "http://localhost:8899"
+    command = importlib.import_module("cli.commands.connect")
+    monkeypatch.setattr(command, "_probe", lambda *args: None)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setattr(command.shutil, "which", lambda name: f"/bin/{name}")
+    claude = FakeClaudePlugins(installed)
+    monkeypatch.setattr(command.subprocess, "run", claude)
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n"
+        "        models: [vela3-lite, second]\n"
+    )
+    args = ["connect", "claude-code", "--vsr", "--base-url", url]
+
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "claude plugin install vsr@vllm-sr" in result.output or installed
+    assert '"runtimeModel": "vela3-lite"' in result.output
+    assert '"runtimeToken": "<$VLLM_SR_API_KEY>"' in result.output
+    assert "sk-secret" not in result.output
+    assert not any("--values-stdin" in argv for argv in claude.ran)
+
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    installs = [argv for argv in claude.ran if argv[2] in ("marketplace", "install")]
+    assert installs == (
+        [] if installed else command._installs("claude", command.VSR_SOURCE)
+    )
+    # the gateway routes, so the plugin's router steps aside; the token goes to the credential store
+    assert claude.inputs == {
+        "runtime": "remote",
+        "runtimeUrl": url + "/v1/decisions",
+        "runtimeModel": "vela3-lite",
+        "router": "false",
+        "guard": "true",
+    }
+    assert claude.token == "sk-secret"
+    assert "sk-secret" not in (tmp_path / "settings.json").read_text().replace(
+        json.loads((tmp_path / "settings.json").read_text())["env"][
+            "ANTHROPIC_AUTH_TOKEN"
+        ],
+        "",
+    )
+
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--undo"])
+    assert result.exit_code == 0, result.output
+    assert claude.inputs["runtime"] == "local-cpu" and claude.inputs["router"] == "true"
+    assert claude.inputs["runtimeUrl"] == "http://127.0.0.1:8790/v1/decisions"
+
+
+class FakeCodexPlugins:
+    """`codex plugin` as connect runs it: what is installed, and what it ran."""
+
+    def __init__(self, installed, unreachable=False):
+        self.installed = installed
+        self.unreachable = unreachable
+        self.ran = []
+
+    def __call__(self, argv, **kw):
+        self.ran.append(argv)
+        out = ""
+        if argv[1:3] == ["plugin", "list"]:
+            listed = (
+                [{"pluginId": "vsr@vllm-sr", "enabled": True}] if self.installed else []
+            )
+            out = json.dumps({"installed": listed, "available": []})
+        elif argv[1:3] == ["plugin", "add"]:
+            self.installed = True
+        elif argv[2:4] == ["marketplace", "add"] and self.unreachable:
+            raise subprocess.CalledProcessError(1, argv)
+        return subprocess.CompletedProcess(argv, 0, out, "")
+
+
+def _codex_env(tmp_path, monkeypatch, codex):
+    command = importlib.import_module("cli.commands.connect")
+    monkeypatch.setattr(command, "_probe", lambda *args: None)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    monkeypatch.setattr(command.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(command.subprocess, "run", codex)
+
+
+def test_connect_installs_the_codex_plugin_from_its_source_unless_it_is_there(
+    tmp_path, monkeypatch
+):
+    codex = FakeCodexPlugins(installed=False)
+    _codex_env(tmp_path, monkeypatch, codex)
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    args = ["connect", "codex", "--base-url", "http://localhost:8899"]
+    result = CliRunner().invoke(main, [*args, "--vsr-source", "/src/sr", "--yes"])
+    assert result.exit_code == 0, result.output
+    installs = [argv for argv in codex.ran if argv[2] in ("marketplace", "add")]
+    assert installs == [
+        ["codex", "plugin", "marketplace", "add", "/src/sr"],
+        ["codex", "plugin", "add", "vsr@vllm-sr"],
+    ]
+    codex.ran.clear()
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    assert [argv for argv in codex.ran if argv[2] in ("marketplace", "add")] == []
+    # --no-vsr leaves vSR alone
+    codex.ran.clear()
+    (tmp_path / "vsr.json").unlink()
+    assert CliRunner().invoke(main, [*args, "--no-vsr", "--yes"]).exit_code == 0
+    assert not any(argv[0] == "codex" for argv in codex.ran)
+    assert not (tmp_path / "vsr.json").exists()
+
+
+def test_vsr_points_the_codex_plugin_at_the_listener_and_keeps_its_other_settings(
+    tmp_path, monkeypatch
+):
+    url = "http://localhost:8899"
+    _codex_env(tmp_path, monkeypatch, FakeCodexPlugins(installed=True))
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    held = tmp_path / "vsr.json"
+    held.write_text(
+        json.dumps(
+            {"guardReview": 0.8, "runtimeUrl": "http://127.0.0.1:8790/v1/decisions"}
+        )
+    )
+    args = ["connect", "codex", "--vsr", "--base-url", url]
+
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    assert "the Codex plugin asks vela3-lite" in result.output
+    assert json.loads(held.read_text()) == {
+        "guardReview": 0.8,
+        "runtimeUrl": url + "/v1/decisions",
+        "runtimeModel": "vela3-lite",
+    }
+    result = CliRunner().invoke(main, ["connect", "codex", "--undo"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(held.read_text()) == {
+        "guardReview": 0.8,
+        "runtimeUrl": "http://127.0.0.1:8790/v1/decisions",
+    }
+
+
+def test_a_codex_plugin_that_does_not_install_is_not_reported_as_set_up(
+    tmp_path, monkeypatch
+):
+    codex = FakeCodexPlugins(installed=False, unreachable=True)
+    _codex_env(tmp_path, monkeypatch, codex)
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    args = ["connect", "codex", "--base-url", "http://localhost:8899"]
+    result = CliRunner().invoke(main, [*args, "--vsr-source", "/gone", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert (
+        "vSR is not set up: codex plugin marketplace add /gone exited with status 1"
+        in result.output
+    )
+    assert "the Codex plugin asks" not in result.output
+    assert ["codex", "plugin", "add", "vsr@vllm-sr"] not in codex.ran
+
+
+def test_a_keyed_listener_names_its_key_variable_to_the_codex_plugin(
+    tmp_path, monkeypatch
+):
+    _codex_env(tmp_path, monkeypatch, FakeCodexPlugins(installed=True))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "listener-key")
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    api_keys: [listener-key]\n"
+        "    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--base-url", "http://localhost:8899", "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    held = (tmp_path / "vsr.json").read_text()
+    assert json.loads(held)["runtimeTokenEnv"] == "VLLM_SR_API_KEY"
+    assert "listener-key" not in held
+    assert (
+        "Codex and its vSR plugin read the key from $VLLM_SR_API_KEY" in result.output
+    )
+    # a listener without a key, later: the variable named for the first one goes
+    monkeypatch.delenv("VLLM_SR_API_KEY")
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--base-url", "http://localhost:8899", "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "runtimeTokenEnv" not in (tmp_path / "vsr.json").read_text()
+
+
+@pytest.mark.parametrize("harness", ["claude-code", "codex"])
+def test_vsr_without_a_model_and_with_launch(tmp_path, monkeypatch, harness):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    args = ["connect", harness, "--vsr"]
+    result = CliRunner().invoke(
+        main, [*args, "--base-url", "http://localhost:8899", "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "publishes no model" in result.output
+
+
+def test_without_claude_on_path_the_gateway_is_set_up_and_vsr_is_left_out(
+    tmp_path, monkeypatch
+):
+    command = importlib.import_module("cli.commands.connect")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(command.shutil, "which", lambda _: None)
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    monkeypatch.setattr(command, "_probe", lambda *args: None)
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--yes"])
+    # the gateway settings are written, and vSR says why it is left out
+    assert result.exit_code == 0, result.output
+    assert "vSR is not set up: claude is not on PATH" in result.output
+    assert (tmp_path / "settings.json").exists()
+
+
+def test_a_credential_in_a_file_connect_owns_is_never_shown(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    (tmp_path / "vllm-sr.config.toml").write_text(
+        'model = "vllm-sr/auto"\n'
+        'experimental_bearer_token = "sk-live-123"\n'
+        "[model_providers.vllm-sr]\n"
+        'http_headers = { "X-Team" = "Bearer sk-live-456" }\n'
+        'env_key = "VLLM_SR_API_KEY"\n'
+    )
+    result = CliRunner().invoke(
+        main, ["connect", "codex", "--base-url", "http://localhost:8899", "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "sk-live" not in result.output
+    assert 'experimental_bearer_token = "<hidden>"' in result.output
+    # an env_key only names the variable, and stays readable
+    assert 'env_key = "VLLM_SR_API_KEY"' in result.output
+
+
+def test_a_project_that_sets_the_api_key_gets_no_promise_that_it_is_off(
+    tmp_path, monkeypatch
+):
+    command = importlib.import_module("cli.commands.connect")
+    monkeypatch.setattr(command, "_probe", lambda *args: None)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "home"))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-shell")
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(
+        json.dumps({"env": {"ANTHROPIC_API_KEY": "sk-ant-project"}})
+    )
+    result = CliRunner().invoke(
+        main,
+        ["connect", "claude-code", "--base-url", "http://localhost:8899", "--yes"],
+    )
+    assert result.exit_code == 0, result.output
+    # The warning wraps at the output width, and the temp path's length moves the break.
+    output = " ".join(result.output.split())
+    assert "no longer goes to the gateway" not in output
+    assert "sets ANTHROPIC_API_KEY" in output
+
+
+def test_a_dry_run_launch_writes_no_settings_file(tmp_path, monkeypatch):
+    command = importlib.import_module("cli.commands.connect")
+    written = []
+    monkeypatch.setattr(command.hc, "write_private", lambda *args: written.append(args))
+    monkeypatch.setattr(command.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        [
+            "connect",
+            "claude-code",
+            "--base-url",
+            "http://localhost:8899",
+            "--launch",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "--settings" in result.output and written == []
+
+
+def _vsr_claude_env(tmp_path, monkeypatch, claude):
+    command = importlib.import_module("cli.commands.connect")
+    monkeypatch.setattr(command, "_probe", lambda *args: None)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr(command.shutil, "which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(command.subprocess, "run", claude)
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n"
+        "        models: [vela3-lite]\n"
+    )
+    return ["connect", "claude-code", "--vsr", "--base-url", "http://localhost:8899"]
+
+
+def test_a_stored_token_is_not_sent_to_another_listener(tmp_path, monkeypatch):
+    claude = FakeClaudePlugins(installed=True)
+    claude.token, claude.configured = "sk-old", {"runtimeToken"}
+    monkeypatch.delenv("VLLM_SR_API_KEY", raising=False)
+    args = _vsr_claude_env(tmp_path, monkeypatch, claude)
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    assert "holds a runtime token from before" in result.output
+    assert not any(argv[-1] == "--values-stdin" for argv in claude.ran)
+    assert claude.inputs["runtimeUrl"] == ""
+
+
+def test_a_plugin_whose_options_cannot_be_read_is_left_alone(tmp_path, monkeypatch):
+    claude = FakeClaudePlugins(installed=True)
+    claude.unreadable = True
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    args = _vsr_claude_env(tmp_path, monkeypatch, claude)
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0 and "gave no options" in result.output
+    assert not any(argv[-1] == "--values-stdin" for argv in claude.ran)
+
+
+def test_undo_that_cannot_read_the_plugin_undoes_nothing(tmp_path, monkeypatch):
+    claude = FakeClaudePlugins(installed=True)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    args = _vsr_claude_env(tmp_path, monkeypatch, claude)
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    written = (tmp_path / "settings.json").read_text()
+    claude.unreadable = True
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--undo"])
+    assert result.exit_code == 1
+    assert (tmp_path / "settings.json").read_text() == written
+    assert (tmp_path / ".vllm-sr-connect.json").exists()
+
+
+def test_undo_restores_the_runtime_keys_of_vsr_json_and_keeps_later_edits(
+    tmp_path, monkeypatch
+):
+    _codex_env(tmp_path, monkeypatch, FakeCodexPlugins(installed=True))
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n"
+        "        models: [vela3-lite]\n"
+    )
+    held = tmp_path / "vsr.json"
+    held.write_text(json.dumps({"guardReview": 0.8}))
+    args = ["connect", "codex", "--vsr", "--base-url", "http://localhost:8899"]
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    held.write_text(json.dumps({**json.loads(held.read_text()), "guardReview": 0.95}))
+    result = CliRunner().invoke(main, ["connect", "codex", "--undo"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(held.read_text()) == {"guardReview": 0.95}
+
+
+def test_vsr_asks_the_listener_the_gateway_url_names():
+    doc = {
+        "listeners": [
+            {"port": 8899, "apis": {"systemone": {"models": ["first"]}}},
+            {"port": 9900, "apis": {"systemone": {"models": ["second"]}}},
+        ]
+    }
+    assert rc.system_one_models(doc) == ["first"]
+    assert rc.system_one_models(doc, 9900) == ["second"]
+    assert rc.system_one_models(doc, 7000) == []
+
+
+def test_started_in_the_home_directory_the_user_settings_are_not_their_own_override(
+    tmp_path, monkeypatch
+):
+    command = importlib.import_module("cli.commands.connect")
+    monkeypatch.setattr(command, "_probe", lambda *args: None)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / ".claude"))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    args = ["connect", "claude-code", "--base-url", "http://localhost:8899", "--yes"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    assert "takes those over" not in result.output

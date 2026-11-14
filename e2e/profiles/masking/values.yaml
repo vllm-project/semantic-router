@@ -34,6 +34,8 @@ config:
       default: true
     - model_names: ["vllm-sr/masking"]
       recipe: masking
+    - model_names: ["vllm-sr/masking-rules"]
+      recipe: masking-rules
     - model_names: ["vllm-sr/agent-session"]
       recipe: agent-session
   recipes:
@@ -79,6 +81,38 @@ config:
                 signal: personal_data
                 entity_types: []
                 placeholders: {}
+    # Masks what the recipe's own rules find, with no pii rule: a regex
+    # keyword rule, and a span rule asked of the System One fixture.
+    - name: masking-rules
+      signals:
+        keywords:
+          - name: employee_id
+            description: An employee ID such as E-104233.
+            operator: OR
+            method: regex
+            keywords: ['\bE-\d{6}\b']
+        systemone:
+          - name: customer_account
+            description: A customer's account number.
+            deployment: fake-systemone
+            question:
+              type: span
+              instructions: Which spans are named entities of these types?
+              labels: [{key: account}]
+      decisions:
+        - name: mask_rules
+          priority: 100
+          rules: {operator: AND, conditions: []}
+          modelRefs: [{model: openai/mock-model, use_reasoning: false}]
+          plugins:
+            - type: masking
+              configuration:
+                enabled: true
+                rules:
+                  - {type: keyword, name: employee_id}
+                  - {type: systemone, name: customer_account}
+                placeholders:
+                  employee_id: "[EMPLOYEE_{index}]"
     # Two decisions that allow the same two models in opposite order, so a
     # fresh decision on the second turn picks the other model and only
     # session protection keeps the first one.

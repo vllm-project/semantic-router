@@ -135,6 +135,35 @@ func TestPublicDiscoveryAndListenerSelectionFailClosed(t *testing.T) {
 	}
 }
 
+// Both listener schemas hand the listener's vsr profile to the plugins that
+// read the listing, and a listener without one lists none.
+func TestTheListingCarriesTheListenersVSRProfile(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/vela3-lite"}}
+	off, on := false, true
+	profile := &config.VSRProfile{Redact: &off, RouterTurns: &on, RouterGoal: "save"}
+	for _, schema := range []string{"vllm-sr/5.0", "vllm-sr/4.0"} {
+		for _, vsr := range []*config.VSRProfile{profile, nil} {
+			listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: schema, Models: []string{"vllm-sr/vela3-lite"}, VSR: vsr}}}
+			response := httptest.NewRecorder()
+			Handler(cfg, listener, nil)(response, httptest.NewRequest(http.MethodGet, "/v1/systemone/models", nil))
+			var listed struct {
+				VSR map[string]any `json:"vsr"`
+			}
+			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &listed) != nil {
+				t.Fatalf("%s: %d %s", schema, response.Code, response.Body.String())
+			}
+			want := `{"redact":false,"router_goal":"save","router_turns":true}`
+			if vsr == nil {
+				want = "null"
+			}
+			if got, _ := json.Marshal(listed.VSR); string(got) != want {
+				t.Fatalf("%s lists vsr %s, want %s: %s", schema, got, want, response.Body.String())
+			}
+		}
+	}
+}
+
 // The listing gives the question types of each model it lists, where a
 // systemone deployment that names this API reads them (GET <endpoint>/models).
 func TestPublicDiscoveryListsTheQuestionTypesARemoteDeploymentReads(t *testing.T) {

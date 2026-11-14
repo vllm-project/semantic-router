@@ -42,6 +42,11 @@ MESSAGES = {
         "wait for its Plan job, then request CI again."
     ),
     "plan": "The current PR's CI plan is not ready. Wait for its Plan job, then post a new `/ci run` comment.",
+    "planned_merge_unavailable": (
+        "The original planned merge commit is unavailable, so its qualification "
+        "source cannot be verified. CI remains blocked. Retain the Plan and run "
+        "evidence and ask a committer to investigate before requesting CI again."
+    ),
     "busy": "Automatic CI is still running. After it finishes, rerun this command handler or post a new `/ci run` comment.",
     "trigger-failed": (
         "I could not confirm that the CI rerun was started. Check the PR CI run "

@@ -117,7 +117,9 @@ func (o *Orchestrator) EvaluateAttempt(
 	// (e.g. retryable failures, connection drops, timeouts, 5xx), NOT on client errors (4xx) or client cancellation.
 	isClientCancellation := (ctx != nil && ctx.Err() != nil) || errors.Is(attempt.Error, context.Canceled)
 	isClientError := attempt.StatusCode >= 400 && attempt.StatusCode < 500 && !slices.Contains(o.policy.RetryableStatusCodes, attempt.StatusCode)
-	if !isClientCancellation && !isClientError {
+	isPerUserRefusal := o.policy.perUserCredentials &&
+		(attempt.StatusCode == 401 || attempt.StatusCode == 403 || attempt.StatusCode == 429)
+	if !isClientCancellation && !isClientError && !isPerUserRefusal {
 		o.circuitBreaker.RecordFailure(attempt.Backend)
 	}
 	CorrelateExecution(exec)

@@ -233,6 +233,19 @@ Valid scopes accumulate for the same revision; partial authorization does not
 waive the remaining checks. A new head revision requires fresh
 authorization.
 
+GitHub may regenerate a synthetic merge commit without changing its base and
+PR head. The existing Plan and authorization remain usable when the original
+merge's ordered parents can be verified against those inputs and both merge
+commits have the same verifiable tree. A different merge SHA alone does not
+require another push. The existing ancestor-base policy also allows main to
+advance while the planned base remains in its history; that path does not require
+equal trees across different bases.
+
+If the original planned merge commit is no longer readable, CI stays blocked
+with **CI source evidence unavailable**. Diagnostics identify this boundary as
+`planned_merge_unavailable`. Retain the Plan and run evidence for investigation;
+an unavailable object does not prove that qualification succeeded.
+
 The command handler reacts with 👀 when it receives a request and 🚀 after it
 successfully triggers the PR workflow. The rocket means CI was started, not that
 tests passed; **PR Gate** reports the final result. Rejected requests receive 😕

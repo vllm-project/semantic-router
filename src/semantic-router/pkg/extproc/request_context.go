@@ -205,6 +205,9 @@ type RequestContext struct {
 	// serialization or dump of the context carries it; read it through
 	// requestDelegatedCredential.
 	delegatedCredential string
+	// callerCredential is the provider login the client sent, kept for a
+	// backend whose auth is credential: caller (see captureCallerCredential).
+	callerCredential    callerCredential
 	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
 	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
 	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown

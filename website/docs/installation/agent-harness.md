@@ -89,8 +89,8 @@ adds guard, shield, redact and check to it without a gateway. Route Claude Code
 or Codex CLI through the Router when your own models or provider keys should
 answer: the Router then chooses the model for every call, the main
 conversation included, while vSR keeps judging tool output and shell commands
-inside Claude Code. Codex reaches the Router the same way; vSR's checks are not
-available for Codex yet.
+inside Claude Code. Codex reaches the Router the same way; its vSR plugin requires a checkout
+with Codex plugin support (PR #6413).
 
 The two harnesses need different Router-wide settings: the losses the Router
 accepts, the headers that identify a session and a subagent, and defaults for
@@ -121,15 +121,23 @@ The command shows the changes and asks before writing them:
   file holds the key when one is set, so only you can read it afterwards. In a
   git repository, `--scope project` adds the file and the command's undo record
   to `.git/info/exclude` when git would otherwise track them, and refuses to
-  write a key into either one once git already tracks it.
+  write a key into either one once git already tracks it. `ANTHROPIC_API_KEY`
+  is set empty: otherwise Claude Code also sends a key your shell exports, as
+  `x-api-key` beside the gateway's token.
 - Codex: the `~/.codex/vllm-sr.config.toml` profile, which holds a `vllm-sr`
   provider, selects it and turns off hosted web search, which the Router does
   not serve. `~/.codex/config.toml` is not touched.
 
-Claude Code does not know `vllm-sr/auto` either: it assumes a 200,000-token
-window and says so at start. `--context-window` with the smallest window of the
-models the gateway can pick sets `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, which gives
-Claude Code the real window and silences that notice.
+Neither harness knows `vllm-sr/auto`, so the command gives them its context
+window: the smallest `context_window_size` of the models the entrypoint can
+reach in the configuration, which are the models its recipe's decisions name
+and `providers.defaults.model` (a catalog-backed model without one takes its
+card's limit). Image and System One models are left out. It says where the
+number came from and writes it as `CLAUDE_CODE_MAX_CONTEXT_TOKENS` for Claude
+Code and `model_context_window` for Codex. When a model states no window, the
+command names it and sets none: Claude Code then assumes a window of its own
+(1,000,000 tokens in 2.1.323) and says so at start, and Codex falls back to
+default model metadata. `--context-window` sets the window either way.
 
 It then reports three checks, each on its own line:
 
@@ -147,6 +155,17 @@ while the plugin's router app is on, and when the listener also serves System
 One it prints the setting that points vSR at it. `--dry-run` prints the plan
 and writes nothing.
 
+After writing, the command names any settings that win over what it wrote,
+and how to stop them. For Claude Code that is a `.claude/settings.json` or
+`.claude/settings.local.json` in the current directory that sets one of its
+`env` keys: Claude Code reads project settings only in the directory it starts
+in, and they win over the user's. Variables your shell exports do not win over
+the settings' `env`. For Codex it is a `.codex/config.toml` from the
+repository's top down to the current directory that sets `model`: once Codex
+trusts the project, it asks for that model instead of the profile's.
+`OPENAI_BASE_URL` does not change the `vllm-sr` provider. These were measured
+with Claude Code 2.1.323 and Codex CLI 0.166.0.
+
 `--status-line` also sets Claude Code's status line to show which models
 answered this session, the last first, such as `vllm-sr ⇢ qwen36 (4) ·
 qwen38-27b (2)`. Claude Code asks for `vllm-sr/auto`, so its own model display
@@ -157,6 +176,23 @@ sits beside the settings as `vllm-sr-status-line.py`, and `--undo` puts back
 the status line you had before.
 `--undo` puts back what each key, or the Codex profile, held before the first
 run, leaves alone what changed since, and keeps everything else in the files.
+
+### Try it without writing anything
+
+```bash
+vllm-sr connect claude-code --config claude-code.yaml --launch
+vllm-sr connect codex --config codex.yaml --launch -- exec "fix the failing test"
+```
+
+`--launch` runs the same checks and the same probe, then starts the harness
+through the gateway for that one session and exits with its status. Nothing is
+written: Claude Code gets the settings with `--settings` from a temporary file
+only you can read, which holds the key and is removed when Claude Code exits,
+and Codex gets them as `-c` overrides and reads the key from `VLLM_SR_API_KEY`,
+so it never appears on the command line. Both win over the user's and the
+project's settings, so the overrides above do not apply. Arguments after `--`
+go to the harness, and a gateway that fails the probe means the harness is not
+started.
 
 ### Router settings for Claude Code
 
@@ -181,6 +217,29 @@ Claude Code goes on without tool search. Toward an `openai` backend, also list
 `tool_result.is_error`, `messages[].role` and `content.file`, as
 [protocol compatibility](protocol-compatibility#validation-and-failure-behavior)
 describes. An `anthropic` backend receives those as sent.
+
+### Claude Code on its own Claude login
+
+Claude Code signed in to a Claude subscription can use the gateway without an
+API key: give every backend `auth: {credential: caller}`
+([Security Hardening](security-hardening#send-the-clients-own-login-to-anthropic)),
+and point Claude Code at the listener without a gateway token, so it sends its
+own login:
+
+```bash
+env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN \
+  ANTHROPIC_BASE_URL=http://localhost:8899 \
+  ANTHROPIC_MODEL=vllm-sr/auto \
+  ANTHROPIC_DEFAULT_HAIKU_MODEL=vllm-sr/auto \
+  ANTHROPIC_DEFAULT_SONNET_MODEL=vllm-sr/auto \
+  ANTHROPIC_DEFAULT_OPUS_MODEL=vllm-sr/auto \
+  claude
+```
+
+The Router then routes each call among Claude models on that login, and
+Insights shows the session's calls with the model each decision picked. A
+model's `pricing` is the API's list price, not the plan's, so leave it out or
+read the cost as an API-price estimate.
 
 ### Router settings for Codex CLI
 
@@ -255,14 +314,120 @@ and score risky commands far below the line guard holds at, so publish
 vela3-lite for vSR.
 
 ```bash
-echo '{"runtime": "remote", "runtimeModel": "vela3-lite",
-  "runtimeUrl": "http://localhost:8899/v1/decisions"}' \
-  | claude plugin configure vsr@vllm-sr --values-stdin
+vllm-sr connect claude-code --config router.yaml
+vllm-sr connect codex --config router.yaml --vsr-source /path/to/semantic-router
 ```
 
-System One checks the listener's API keys too. On a listener with keys, add
-`"runtimeToken"` with the key, which `vllm-sr connect` fills in from
-`$VLLM_SR_API_KEY` in the command it prints.
+When the listener publishes a System One model, one command configures the
+gateway (System Two) and vSR (System One); `--no-vsr` leaves vSR out. The
+plugin installs from `--vsr-source`, this repository on GitHub by default, in
+the agent's own CLI (`claude plugin` or `codex plugin`), and only when it is
+missing. For Claude Code the command then sets the plugin's options through
+`claude plugin configure`: a remote runtime, the gateway's `/v1/decisions`, the
+first published System One model, and `router: false` so the gateway chooses the
+models. When the API key variable is set it also passes `runtimeToken`, which
+Claude Code keeps in its credential store, not in `settings.json`; the preview
+names the variable and never shows the key. For Codex it writes
+`runtimeUrl` and `runtimeModel` to `$CODEX_HOME/vsr.json` (default
+`~/.codex/vsr.json`), keeping its other settings. Until the Codex plugin from
+PR #6413 is on main, point `--vsr-source` at a checkout that has it.
+
+Both harnesses preview everything with `--dry-run`, the plugin commands
+included, which run only when writing. `--undo` sets back the plugin options the
+command changed (an option that was never set returns to its default) but leaves
+the plugin installed and the token in place. The gateway settings are written
+even when vSR cannot be: without the agent's CLI on `PATH`, when the plugin's
+options cannot be read, or when the plugin holds a token from before and no key
+is given (Claude Code cannot clear a stored token, and the plugin would send it to
+the new listener), the command says why and what to run. `--launch` writes
+nothing, so it leaves vSR alone.
+
+The listener can also set which of vSR's apps run, for every plugin pointed at
+it, under `systemone.vsr`; the Dashboard shows each field as Default, On or Off
+under Config › Global Config › vSR agent plugins, where Default leaves the field
+out. Each field set there wins over the plugin's own option, so turning
+`redact` off here turns it off in every session that uses this listener, from
+its next prompt a minute or more later. A choice a person makes in Claude Code
+with `/vsr` stays theirs until `/vsr follow`:
+
+```yaml
+      systemone:
+        models: [vela3-lite]
+        vsr: {redact: true, guard: true, router: false}
+```
+
+#### Rules of your own for guard and redact
+
+`vsr.rules` binds rules of one recipe to guard and redact. A rule is an
+ordinary signal of that recipe: guard takes any [keyword
+rule](../tutorials/signal/heuristic/keyword) and a [System
+One](../tutorials/signal/systemone) `noul` rule, or `choice` rule with
+`labels`; redact takes a rule that finds text, an `OR` keyword rule of literal
+or regex keywords without `fuzzy_match`, `count` or `density`, or a System One
+`span` rule. An entrypoint must reach the recipe, since the Router prepares the
+rules of a reachable recipe only.
+
+```yaml
+      systemone:
+        models: [vela3-lite]
+        vsr:
+          rules:
+            recipe: default
+            guard:
+              - {type: keyword, name: prod_database, enforce: required}
+              - {type: systemone, name: deletes_data}
+            redact:
+              - {type: keyword, name: employee_id, enforce: required}
+```
+
+In the Dashboard, Config › Global Config › vSR agent plugins › Rules of your
+own picks the recipe and lists its rules that fit each app, each Off, Advisory
+or Required. Try it under each app sends a sample command or output through
+the Dashboard, which adds the listener's key on the server, and says which
+rules match or what they would hide, as the Router runs the saved rules.
+
+`enforce: required` makes a rule fail closed for the plugin that applies it:
+when the rule cannot be checked, the command waits for the person and the
+output is withheld. `advisory`, the default, lets an unchecked rule step aside
+as the plugins' own checks do. An app binds at most 16 rules, each name once.
+
+The listing (`GET /v1/systemone/models`) hands each rule's name, description
+and `required` to the plugins under `vsr.rules`, with a `revision` that changes
+with any rule's definition, binding or enforcement. A rule's pattern or
+question never leaves the Router. To evaluate them, a client sends the texts
+to the same listener, with the same key as any System One call:
+
+```bash
+curl -s http://localhost:8899/v1/systemone/rules \
+  -H 'Authorization: Bearer <listener key>' \
+  -d '{"app": "redact", "parts": [{"id": "out-1", "text": "Paid by E-104233"}]}'
+```
+
+```json
+{"revision": "3f9c0a1b2d4e", "parts": [{"id": "out-1", "coverage": "complete",
+  "matches": [], "spans": [{"start": 8, "end": 16, "rule": "employee_id"}], "unchecked": []}]}
+```
+
+Each part comes back with the guard rules it matches, or the redact spans in
+code points, overlapping spans of different rules merged into one under the
+rule that starts first, and the rules the Router could not check with a reason.
+`coverage` is `complete`, `partial` or `failed`. A request holds at most 16
+parts and 256 KiB of text; a listener evaluates 8 such requests at once and
+answers `429` with `Retry-After` beyond that, `404 rules_not_published` for an
+app it binds no rules to, and `401` without its key. Every call is logged with
+the rule names, counts and latency, never the text.
+
+The vSR plugins for Claude Code and Codex read these rules from the listing and
+call this endpoint themselves. Guard sends the whole command beside its own
+questions and holds it when a rule matches; redact sends the tool output as the
+tool gave it and puts `[vsr:<rule name>]` where a rule found text. A required
+rule that cannot be checked holds the command or withholds the output in both;
+the rules last read from a listener are kept, so an outage does not drop one
+once a plugin has read the listing. Before that first read a plugin knows no
+rules, and its checks step aside when the listener does not answer.
+Turning guard or redact off for a session turns their rules off too, so a
+protection nobody may turn off belongs in a decision or in masking at the
+gateway.
 
 A Router rule about what the agent reads, such as a prompt injection in a file
 or a web page, should read the tool results and leave the user turn out
@@ -270,7 +435,9 @@ or a web page, should read the tool results and leave the user turn out
 its own instructions and reminders, and a rule that reads it also judges those.
 
 Turn the plugin's router app off (`/vsr router off`) so the plugin and the
-Router do not both choose a subagent's model. Its escalate app still asks Claude
+Router do not both choose a subagent's model, and with it the plugin's routing
+of your own turns (`routerTurns`), which is for Claude Code talking to Anthropic
+directly. Its escalate app still asks Claude
 to re-check an answer you push back on, but no longer moves the next subagent
 up a model, since that step belongs to the router app. The other apps work as
 before. When the plugin's decision runtime does not answer, its tally says
@@ -289,6 +456,7 @@ The command writes these. Claude Code reads them from its settings:
   "env": {
     "ANTHROPIC_BASE_URL": "http://localhost:8899",
     "ANTHROPIC_AUTH_TOKEN": "<the listener's API key, or any value without one>",
+    "ANTHROPIC_API_KEY": "",
     "ANTHROPIC_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "vllm-sr/auto",
@@ -319,8 +487,9 @@ the variable it names is unset, and `vllm-sr connect` writes it only when
 `VLLM_SR_API_KEY` is set.
 
 Codex does not know `vllm-sr/auto`, so it warns that it uses fallback model
-metadata. `--context-window` sets `model_context_window` in the profile, so its
-budget follows your backends, though the warning stays.
+metadata. `vllm-sr connect` sets `model_context_window` in the profile from the
+configuration, or from `--context-window`, so its budget follows your
+backends, though the warning stays.
 
 The Codex TUI sends a `namespace` tool on every turn. A Router that refuses
 namespace tools answers its first turn with `unsupported_tool`; on such a

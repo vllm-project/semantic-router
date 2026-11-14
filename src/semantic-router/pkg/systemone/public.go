@@ -55,9 +55,20 @@ func RequestArrival(ctx context.Context) (time.Time, bool) {
 // the handler serves its internal form, and the codec writes every answer in
 // the client's schema.
 func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke) http.HandlerFunc {
+	return HandlerWithRules(config, listener, invoke, nil)
+}
+
+// HandlerWithRules is Handler with the rules the listener binds for the vSR
+// plugins answered by rules (RulesPath); without them it answers that the
+// listener publishes none.
+func HandlerWithRules(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke, rules ListenerRules) http.HandlerFunc {
 	codec := listenerCodec(listener)
 	serve := handle(config, listener, invoke, codec)
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == RulesPath {
+			serveRules(w, r, config, listener, rules)
+			return
+		}
 		held := newCodecWriter()
 		serve(held, r)
 		held.flush(w, r, codec)
@@ -97,6 +108,11 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 					listed = append(listed, map[string]string{"name": model["id"].(string), "description": "System One decision model", "release_date": ""})
 				}
 				list["models"] = listed
+			}
+			// The vSR plugins pointed at this listener read their profile
+			// here, with only the names and descriptions of its rules.
+			if api, _ := listener.API(apiregistry.SystemOne); api.VSR != nil {
+				list["vsr"] = config.VSRListingOf(api.VSR)
 			}
 			_ = json.NewEncoder(w).Encode(list)
 			return
