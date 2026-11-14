@@ -362,3 +362,23 @@ func TestReplayGuardrailStateReadsTheDefaultGuardOfAnUnmatchedRequest(t *testing
 		t.Fatal("the replay record of an unmatched request misses its default guard's hallucination rule")
 	}
 }
+
+// A model without a reasoning family gets its request passed through as the
+// client sent it, so the routing log, metric and trace report no effort for it.
+// getReasoningEffort's fallback of medium was reported before.
+func TestReportedReasoningEffortIsEmptyForAPassThroughModel(t *testing.T) {
+	router := newModelReasoningFamilyRouter()
+
+	effort, projected := router.reportedReasoningEffort(nil, "phi4")
+	if effort != "" || projected {
+		t.Fatalf("pass-through model reported effort %q, projected %v", effort, projected)
+	}
+	if fallback := router.getReasoningEffort(nil, "phi4"); fallback != "medium" {
+		t.Fatalf("getReasoningEffort fallback = %q, want the medium the log used to show", fallback)
+	}
+
+	effort, projected = router.reportedReasoningEffort(nil, "gpt-oss-model")
+	if want := router.getReasoningEffort(nil, "gpt-oss-model"); effort != want || !projected {
+		t.Fatalf("model with a family reported effort %q, projected %v, want %q and true", effort, projected, want)
+	}
+}
