@@ -246,7 +246,8 @@ async function redactOutput($: EngineInterface, settings: Settings, fields: stri
     start += text.length + 1
     return shifted
   })
-  const hidden = hideSpans(texts, [...spans, ...ruled])
+  // A rule's find goes first, so where it and a PII span cover the same text the rule's name is the tag, as in Codex.
+  const hidden = hideSpans(texts, [...ruled, ...spans])
   const counts: Partial<Record<Tag, number>> = addCounts(...secrets.map(one => one.counts), ...hidden.map(one => one.counts))
   return { fields: hidden.map(one => one.text), counts, spans, pii, length: joined.length, unchecked: listened.unchecked }
 }
