@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -50,6 +51,78 @@ type DiscoveredProviderModel struct {
 	Reasoning   *routerconfig.CanonicalReasoning
 	BackendRefs []routerconfig.CanonicalBackendRef
 	LoRAs       []vllmv1alpha1.LoRAAdapterSpec
+}
+
+type backendDiscoveryFailure struct {
+	EndpointName string
+	Dependency   string
+	Model        string
+	Err          error
+}
+
+type backendDiscoveryError struct {
+	Failures []backendDiscoveryFailure
+}
+
+func (e *backendDiscoveryError) Error() string {
+	parts := make([]string, 0, len(e.Failures))
+	for _, failure := range e.Failures {
+		name := failure.Dependency
+		if name == "" {
+			name = failure.EndpointName
+		}
+		if name == "" {
+			name = failure.Model
+		}
+		parts = append(parts, fmt.Sprintf("%s (endpoint %s): %v", name, failure.EndpointName, failure.Err))
+	}
+	return fmt.Sprintf("backend discovery failed for %d endpoint(s): %s", len(parts), strings.Join(parts, "; "))
+}
+
+func (e *backendDiscoveryError) Unwrap() []error {
+	errors := make([]error, 0, len(e.Failures))
+	for _, failure := range e.Failures {
+		errors = append(errors, failure.Err)
+	}
+	return errors
+}
+
+func (e *backendDiscoveryError) DependencyNames() []string {
+	names := make([]string, 0, len(e.Failures))
+	seen := make(map[string]struct{}, len(e.Failures))
+	for _, failure := range e.Failures {
+		name := failure.Dependency
+		if name == "" {
+			name = failure.EndpointName
+		}
+		if name == "" {
+			name = "unknown endpoint"
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	return names
+}
+
+func backendDependencyName(spec vllmv1alpha1.VLLMEndpointSpec, namespace string) string {
+	switch spec.Backend.Type {
+	case "kserve":
+		return fmt.Sprintf("InferenceService %s/%s", namespace, spec.Backend.InferenceServiceName)
+	case "llamastack":
+		return fmt.Sprintf("Llama Stack Service selector for endpoint %q", spec.Name)
+	case "service":
+		if spec.Backend.Service != nil {
+			serviceNamespace := spec.Backend.Service.Namespace
+			if serviceNamespace == "" {
+				serviceNamespace = namespace
+			}
+			return fmt.Sprintf("Service %s/%s", serviceNamespace, spec.Backend.Service.Name)
+		}
+	}
+	return fmt.Sprintf("backend endpoint %q", spec.Name)
 }
 
 // discoverKServeBackend discovers backend from KServe InferenceService
@@ -228,12 +301,18 @@ func discoverVLLMBackends(ctx context.Context, c client.Client, vllmEndpoints []
 	}
 
 	models := make(map[string]DiscoveredProviderModel)
+	failures := make([]backendDiscoveryFailure, 0)
 
 	for _, vllmEndpoint := range vllmEndpoints {
 		endpoint, err := discoverBackendEndpoint(ctx, c, vllmEndpoint, namespace)
 		if err != nil {
 			logger.Error(err, "Failed to discover backend endpoint", "name", vllmEndpoint.Name)
-			// Continue with other endpoints instead of failing completely
+			failures = append(failures, backendDiscoveryFailure{
+				EndpointName: vllmEndpoint.Name,
+				Dependency:   backendDependencyName(vllmEndpoint, namespace),
+				Model:        vllmEndpoint.Model,
+				Err:          err,
+			})
 			continue
 		}
 		if vllmEndpoint.Model == "" {
@@ -246,9 +325,12 @@ func discoverVLLMBackends(ctx context.Context, c client.Client, vllmEndpoints []
 		models[vllmEndpoint.Model] = modelConfig
 	}
 
+	if len(failures) > 0 {
+		return nil, &backendDiscoveryError{Failures: failures}
+	}
+
 	if len(models) == 0 {
-		logger.Info("No backend endpoints discovered")
-		return nil, nil
+		return nil, fmt.Errorf("no models were generated from %d declared backend endpoint(s)", len(vllmEndpoints))
 	}
 
 	logger.Info("Generated discovered backend refs", "count", len(models))
