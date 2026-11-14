@@ -30,7 +30,7 @@ global:
 
 | Section | Owns |
 | --- | --- |
-| `version` | Canonical schema version. Use `v0.5`. |
+| `version` | Canonical schema version. Use `v0.5`. See [Schema version](#schema-version). |
 | `listeners` | Public Router listeners: address, port, timeouts, client API keys, model allowlists, TLS and trusted identity. See [Listeners](#listeners). |
 | `providers` | Logical provider models: their backend endpoints, pricing, defaults, and the facts routing reads about each model (`capabilities`, `modalities`, context window, LoRA adapters). |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
@@ -107,6 +107,47 @@ when enabled, on `127.0.0.1:6060` unless you change `bind`. The Router reads
 it once at startup, so a change needs a restart. See
 [API and Observability](../tutorials/global/api-and-observability).
 :::
+
+## Schema version
+
+`version` declares the canonical contract the document is written for. The Router
+reads it before it interprets anything else, so a document written for a
+different contract fails at startup instead of being silently reinterpreted
+under the current one.
+
+| `version` | Behavior |
+| --- | --- |
+| `v0.5` | Accepted. The contract this build reads and writes. |
+| Absent, or present and empty (`""`) | Accepted, with a startup warning, and interpreted as `v0.5`. |
+| `v0.1`, `v0.2`, `v0.3` | Removed. Rejected with a `vllm-sr config migrate` hint; see [Migrate to v0.5](migrate-to-v0-5.md). |
+| Any other value, including padding or a differently spelled version | Rejected before the document is interpreted. |
+
+A rejected document fails with the offending field path and the set the running
+build accepts:
+
+```
+version: unsupported "v0.4", this build reads v0.5
+```
+
+`vllm-sr config validate`, `vllm-sr serve`, `POST /config/router/validate`, and
+the Dashboard and Operator config paths all apply the same gate, so a document
+that validates on one surface is one the Router will read on the others. Every
+canonical document those surfaces emit is stamped with the version they accept,
+so an exported configuration always loads back.
+
+The generated JSON Schema that the CLI and Dashboard validate against
+(`router-config-v0.5.schema.json`) enumerates this same accepted set, plus the
+empty-string fallback, rather than restating it: the schema is generated from
+the Router's own accepted-version list, so the two cannot drift apart.
+
+### Contract bumps
+
+A release that changes the written contract can keep the outgoing one readable
+for one cycle. During that window the Router stamps new documents with the new
+version and still reads the previous one, so existing files keep loading and can
+be migrated incrementally rather than all at once. The error message always
+names the full set the running build reads, which is the authoritative answer
+for a given binary.
 
 ## Capability catalog
 

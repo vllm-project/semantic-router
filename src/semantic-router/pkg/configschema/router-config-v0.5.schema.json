@@ -7517,7 +7517,10 @@
   "properties": {
     "version": {
       "type": "string",
-      "const": "v0.5"
+      "enum": [
+        "",
+        "v0.5"
+      ]
     },
     "listeners": {
       "items": {

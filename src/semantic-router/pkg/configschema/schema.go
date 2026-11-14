@@ -302,7 +302,8 @@ func modelBindingSchema() *jsonschema.Schema {
 }
 
 func setCoreEnums(root *jsonschema.Schema) {
-	setPropertyConst(root, root, "version", ConfigVersion)
+	// Mirror the Router gate: every readable contract plus "", which it treats as absent.
+	setPropertyEnum(root, "version", append([]string{""}, routerconfig.AcceptedCanonicalVersions()...))
 	setDefinitionPropertyEnum(root, "CanonicalProviderModel", "api_format", apiregistry.AcceptedNames())
 	setDefinitionPropertyEnum(root, "CanonicalProviderModel", "schema", apiregistry.SchemaIDs())
 	if apis := definitionProperty(root, "Listener", "apis"); apis != nil {
@@ -392,12 +393,18 @@ func setCoreEnums(root *jsonschema.Schema) {
 	addRouterLearningStateStoreCondition(root)
 }
 
-func setPropertyConst(_ *jsonschema.Schema, owner *jsonschema.Schema, property string, value any) {
+func setPropertyEnum(owner *jsonschema.Schema, property string, values []string) {
 	if owner == nil || owner.Properties == nil {
 		return
 	}
-	if field, ok := owner.Properties.Get(property); ok {
-		field.Const = value
+	field, ok := owner.Properties.Get(property)
+	if !ok {
+		return
+	}
+	field.Const = nil
+	field.Enum = make([]any, 0, len(values))
+	for _, value := range values {
+		field.Enum = append(field.Enum, value)
 	}
 }
 

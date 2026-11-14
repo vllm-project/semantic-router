@@ -233,6 +233,10 @@ func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterC
 	if err != nil {
 		return nil, err
 	}
+	// Gate the version first: everything below reads the document as this contract.
+	if versionErr := ValidateRawCanonicalVersion(raw); versionErr != nil {
+		return nil, versionErr
+	}
 	if normalizeErr := validateAndNormalizeRawConfig(raw); normalizeErr != nil {
 		return nil, normalizeErr
 	}
@@ -292,8 +296,8 @@ func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
 func rejectDeprecatedUserConfigFields(raw map[string]interface{}) error {
 	if deprecated := deprecatedUserConfigFields(raw); len(deprecated) > 0 {
 		return fmt.Errorf(
-			"deprecated config fields are no longer supported: %s; rewrite them in the canonical v0.5 providers/recipes/global layout",
-			strings.Join(deprecated, ", "),
+			"deprecated config fields are no longer supported: %s; rewrite them in the canonical %s providers/recipes/global layout",
+			strings.Join(deprecated, ", "), CanonicalConfigVersion,
 		)
 	}
 	return nil
@@ -669,7 +673,7 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 	if len(unsupported) > 0 {
 		detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 	}
-	return fmt.Errorf("config file must use the canonical v0.5 hierarchy; %s", detail)
+	return fmt.Errorf("config file must use the canonical %s hierarchy; %s", CanonicalConfigVersion, detail)
 }
 
 func finalizeParsedConfig(cfg *RouterConfig) error {

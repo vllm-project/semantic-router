@@ -107,8 +107,22 @@ func TestRenderTopLevelCollectionAndScalarSections(t *testing.T) {
 	if err := json.Unmarshal(version.Body, &document); err != nil {
 		t.Fatalf("decode version section: %v", err)
 	}
-	if document["shape"] != "string" || document["const"] != ConfigVersion {
-		t.Fatalf("version section does not publish its fixed scalar value: %#v", document)
+	// version is an enum of every contract this build reads plus the "" fallback.
+	enumValues, ok := document["enum"].([]any)
+	if document["shape"] != "string" || !ok {
+		t.Fatalf("version section does not publish its accepted set: %#v", document)
+	}
+	var containsConfigVersion, containsEmptyFallback bool
+	for _, value := range enumValues {
+		switch value {
+		case ConfigVersion:
+			containsConfigVersion = true
+		case "":
+			containsEmptyFallback = true
+		}
+	}
+	if !containsConfigVersion || !containsEmptyFallback {
+		t.Fatalf("version section enum %#v does not cover %q and the \"\" fallback", enumValues, ConfigVersion)
 	}
 }
 
