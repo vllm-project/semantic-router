@@ -13,8 +13,11 @@ The padded layout passes the additive float masks the modeling code builds
 padded CPU path selects the same SDPA backend and is bit-identical to it. On
 the CPU those masks never take ``width x width`` memory: global layers read a
 key mask and local layers attend ``LOCAL_QUERIES`` queries at a time over
-every key, which leaves each query's SDPA reduction unchanged. The
-packed layout runs the ModernBERT layout (``modernbert.packed_layout``):
+every key, which leaves each query's SDPA reduction unchanged. On CUDA and ROCm
+GPUs, rows of ``BLOCKS_FROM`` tokens or more skip those masks too: global layers
+read a key mask and local layers attend in query blocks (``blocked_attention``),
+within the GPU parity bar. The packed layout runs the ModernBERT layout
+(``modernbert.packed_layout``):
 boolean masks per grid, local layers in query blocks on long rows; it is the
 approximate path.
 """
@@ -30,16 +33,23 @@ from torch import nn
 
 from ....accel.kernels import KernelSet
 from .modernbert import (
+    BAND_BLOCK,
     FULL,
     SLIDING,
+    Band,
     Group,
     Layout,
     attention_masks,
+    band,
     banded_attention,
     packed_layout,
 )
 
 MODEL_TYPE = "ultrabert"
+# Row width from which the padded GPU path attends without dense masks, by
+# device type (vela3-fast, FP32, MI300X): one row of 3,072 tokens is still
+# faster with them. The CPU takes key masks at every width (below).
+BLOCKS_FROM = {"cuda": 4096}
 # Queries per CPU SDPA call of a local layer on padded rows: each call builds
 # its own ``[rows, 1, LOCAL_QUERIES, width]`` slice of the dense mask.
 LOCAL_QUERIES = 1024
@@ -103,6 +113,61 @@ def additive_masks(
         .expand(rows, 1, width, width)
         for kind, mask in masks.items()
     }
+
+
+def additive_band(
+    key_valid: torch.Tensor | None,
+    rows: int,
+    width: int,
+    window: int,
+    dtype: torch.dtype,
+    device: torch.device | str,
+) -> Band:
+    """``modernbert.band`` with the modeling code's mask values (0 or the dtype's minimum).
+
+    Built once per layout in the dtype SDPA adds, so no local layer converts a
+    boolean mask again.
+    """
+    blocks = band(key_valid, rows, width, window, BAND_BLOCK, device)
+    minimum = torch.finfo(dtype).min
+    return Band(blocks.block, window, torch.where(blocks.mask, 0.0, minimum).to(dtype))
+
+
+def blocked_attention(
+    kernels: KernelSet,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    blocks: Band,
+    scale: float,
+) -> torch.Tensor:
+    """Local attention of padded ``[rows, heads, width, dim]`` rows in query blocks.
+
+    Blocks fold into the batch axis and every head reads its block's mask
+    (``[rows * blocks, 1, block, span]``), so the mask is never copied per head
+    as ``modernbert.banded_attention`` does.
+    """
+    rows, heads, width, dim = query.shape
+    count, block, window = blocks.mask.shape[2], blocks.block, blocks.window
+    span, tail = blocks.mask.shape[-1], count * block - width
+
+    def windows(x: torch.Tensor) -> torch.Tensor:
+        # Block b reads keys [b * block - window, (b + 1) * block + window), zeros outside the row.
+        x = F.pad(x, (0, 0, window, tail + window)).unfold(2, span, block)
+        return x.permute(0, 2, 1, 4, 3).reshape(rows * count, heads, span, dim)
+
+    q = F.pad(query, (0, 0, 0, tail)).view(rows, heads, count, block, dim)
+    out: torch.Tensor = kernels("sdpa")(
+        q.transpose(1, 2).reshape(rows * count, heads, block, dim),
+        windows(key),
+        windows(value),
+        blocks.mask.view(rows * count, 1, block, span),
+        scale=scale,
+        is_causal=False,
+        enable_gqa=False,
+    )
+    out = out.view(rows, count, heads, block, dim).transpose(1, 2)
+    return out.reshape(rows, heads, count * block, dim)[:, :, :width]
 
 
 def local_attention(
@@ -291,7 +356,8 @@ class UltraBertAttention(nn.Module):
         blocks = group.band if kind == SLIDING else None
         mask = group.masks.get(kind)
         if blocks is not None:
-            output = banded_attention(kernels, query, key, value, blocks, self.scaling)
+            local = banded_attention if group.packed else blocked_attention
+            output = local(kernels, query, key, value, blocks, self.scaling)
         elif kind == SLIDING and mask is not None and mask.shape[-2] < width:
             # A key mask on a local layer: the CPU padded layout.
             assert self.window is not None
@@ -410,11 +476,14 @@ class UltraBertBackbone(nn.Module):
         width: int,
         device: torch.device | str,
     ) -> Layout:
-        """Padded ``[rows, width]`` rows with the modeling code's float masks, padding or not.
+        """Padded ``[rows, width]`` rows with the modeling code's mask values, padding or not.
 
         On the CPU every layer gets the ``[rows, 1, 1, width]`` key mask
         instead: local layers then attend in query chunks (``local_attention``)
         and global layers broadcast it, both bit-identical to the dense masks.
+        On CUDA and ROCm GPUs, rows of ``BLOCKS_FROM`` tokens or more (by device type) skip
+        the dense ``[rows, 1, width, width]`` masks: global layers read a key
+        mask, or none without padding, and local layers attend in query blocks.
         """
         if attention_mask is None:
             valid = torch.ones(rows, width, dtype=torch.bool, device=device)
@@ -423,7 +492,17 @@ class UltraBertBackbone(nn.Module):
         dtype = self.embed_tokens.weight.dtype
         if not dtype.is_floating_point or dtype == torch.float64:
             dtype = torch.float32
-        if torch.device(device).type == "cpu":
+        kind = torch.device(device).type
+        limit = BLOCKS_FROM.get(kind)
+        if self.window and limit is not None and width >= limit:
+            key_valid = None if bool(valid.all()) else valid
+            full = None
+            if key_valid is not None:
+                minimum = torch.finfo(dtype).min
+                full = torch.where(key_valid, 0.0, minimum).to(dtype)[:, None, None, :]
+            blocks = additive_band(key_valid, rows, width, self.window, dtype, device)
+            return Layout((Group(rows, width, {FULL: full}, band=blocks),))
+        if kind == "cpu":
             minimum = torch.finfo(dtype).min
             key = torch.where(valid, 0.0, minimum).to(dtype)[:, None, None, :]
             return Layout((Group(rows, width, {FULL: key, SLIDING: key}),))
