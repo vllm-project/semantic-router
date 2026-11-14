@@ -28,6 +28,9 @@ type requestSignalSnapshot struct {
 	Turns      []classification.ConversationTurn
 	Images     []string
 	UserVideos []string
+	// ToolResults are the tool messages' texts, in order: the content a
+	// tool-continuation turn carries instead of user text.
+	ToolResults []string
 	// InputModality holds the structural input-modality counts for the
 	// input_modality signal family, scoped to user messages.
 	InputModality classification.InputModalityFacts
