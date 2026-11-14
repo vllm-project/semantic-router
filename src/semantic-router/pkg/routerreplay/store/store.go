@@ -15,26 +15,20 @@ import (
 // Signal represents various routing signals captured during a request.
 type Signal struct {
 	Keyword       []string `json:"keyword,omitempty"`
-	Embedding     []string `json:"embedding,omitempty"`
 	Domain        []string `json:"domain,omitempty"`
 	FactCheck     []string `json:"fact_check,omitempty"`
 	UserFeedback  []string `json:"user_feedback,omitempty"`
-	Reask         []string `json:"reask,omitempty"`
-	Preference    []string `json:"preference,omitempty"`
+	TurnRelation  []string `json:"turn_relation,omitempty"`
 	Language      []string `json:"language,omitempty"`
 	Context       []string `json:"context,omitempty"`
-	Structure     []string `json:"structure,omitempty"`
 	Complexity    []string `json:"complexity,omitempty"`
 	Modality      []string `json:"modality,omitempty"`
 	Authz         []string `json:"authz,omitempty"`
 	Jailbreak     []string `json:"jailbreak,omitempty"`
 	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
-	KB            []string `json:"kb,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
-	Event         []string `json:"event,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
-	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
 	Decision      []string `json:"decision,omitempty"`
 }
@@ -82,8 +76,9 @@ type ToolTrace struct {
 	ToolNames []string        `json:"tool_names,omitempty"`
 	Steps     []ToolTraceStep `json:"steps,omitempty"`
 	// StepsTruncated is true when older Steps were dropped to enforce the
-	// MaxToolTraceSteps cap. Long agent sessions can otherwise produce
-	// hundreds of steps per record and OOM the router (see issue #1835).
+	// MaxToolTraceSteps cap or the MaxToolTraceTotalBytes budget. Long agent
+	// sessions can otherwise produce hundreds of steps per record and OOM the
+	// router (see issue #1835).
 	StepsTruncated bool `json:"steps_truncated,omitempty"`
 	// DroppedStepCount records how many steps were dropped from the head of
 	// the timeline when StepsTruncated is true. Zero when no truncation
@@ -118,8 +113,11 @@ type ToolTraceStep struct {
 	// APIType indicates the API variant this step was extracted from:
 	// "chat_completions" or "responses".
 	APIType string `json:"api_type,omitempty"`
-	// Truncated is true when Arguments or Output was cut to MaxToolTraceBytes.
+	// Truncated is true when Text, Arguments or Output was cut to MaxToolTraceBytes.
 	Truncated bool `json:"truncated,omitempty"`
+	// RawTruncated is true when RawArguments or RawOutput was cut too, which
+	// only the default trace limit does: a configured one keeps them whole.
+	RawTruncated bool `json:"raw_truncated,omitempty"`
 }
 
 // LooperUsage is content-free token accounting for one Looper attempt.
@@ -210,14 +208,8 @@ type RouteDiagnostics struct {
 	SelectionReasoning             string                               `json:"selection_reasoning,omitempty"`
 	SelectionTrace                 *selectiontrace.MultiFactorObjective `json:"selection_trace,omitempty"`
 	FusionQuorum                   *FusionQuorumDiagnostics             `json:"fusion_quorum,omitempty"`
-	TopicContinuity                []TopicContinuityRecord              `json:"topic_continuity,omitempty"`
 	Looper                         *LooperDiagnostics                   `json:"looper,omitempty"`
 	PreparedDispatch               *PreparedDispatchReceipt             `json:"prepared_dispatch,omitempty"`
-	PromptHelperModel              string                               `json:"prompt_helper_model,omitempty"`
-	PromptHelperPromptTokens       int64                                `json:"prompt_helper_prompt_tokens,omitempty"`
-	PromptHelperCompletionTokens   int64                                `json:"prompt_helper_completion_tokens,omitempty"`
-	PromptHelperTotalTokens        int64                                `json:"prompt_helper_total_tokens,omitempty"`
-	PromptHelperLatencyMs          int64                                `json:"prompt_helper_latency_ms,omitempty"`
 	OriginalModel                  string                               `json:"original_model,omitempty"`
 	ProposalModel                  string                               `json:"proposal_model,omitempty"`
 	PreviousModel                  string                               `json:"previous_model,omitempty"`
@@ -316,6 +308,7 @@ type Record struct {
 	ProjectionTrace          *projectiontrace.Trace `json:"projection_trace,omitempty"`
 	SignalConfidences        map[string]float64     `json:"signal_confidences,omitempty"`
 	SignalErrorMatches       map[string]bool        `json:"signal_error_matches,omitempty"`
+	ScanCoverage             map[string]string      `json:"scan_coverage,omitempty"`
 	ConfidenceScoreAvailable bool                   `json:"confidence_score_available"`
 	SignalValues             map[string]float64     `json:"signal_values,omitempty"`
 	ToolTrace                *ToolTrace             `json:"tool_trace,omitempty"`
@@ -343,13 +336,6 @@ type Record struct {
 	JailbreakScoreAvailable bool                 `json:"jailbreak_score_available"`
 	JailbreakDecision       *tasks.LabelDecision `json:"jailbreak_decision,omitempty"`
 
-	// Response Jailbreak Detection Results
-	ResponseJailbreakDetected       bool                 `json:"response_jailbreak_detected,omitempty"`
-	ResponseJailbreakType           string               `json:"response_jailbreak_type,omitempty"`
-	ResponseJailbreakConfidence     float32              `json:"response_jailbreak_confidence,omitempty"`
-	ResponseJailbreakScoreAvailable bool                 `json:"response_jailbreak_score_available"`
-	ResponseJailbreakDecision       *tasks.LabelDecision `json:"response_jailbreak_decision,omitempty"`
-
 	// PII Detection Results
 	PIIDetected bool     `json:"pii_detected,omitempty"`
 	PIIEntities []string `json:"pii_entities,omitempty"`
@@ -360,6 +346,11 @@ type Record struct {
 	// that they are complete even when the raw body is truncated by MaxBodyBytes.
 	Prompt          string `json:"prompt,omitempty"`
 	PromptTruncated bool   `json:"prompt_truncated,omitempty"`
+	// PromptOriginalBytes and PromptOriginalSHA256 are the size in bytes and
+	// the hex SHA-256 of the whole prompt, set when Prompt was cut to the
+	// record's limit (PromptTruncated).
+	PromptOriginalBytes  int    `json:"prompt_original_bytes,omitempty"`
+	PromptOriginalSHA256 string `json:"prompt_original_sha256,omitempty"`
 	// ToolDefinitions is the JSON array of tool schemas from the request
 	// (the "tools" field in Chat Completions, or ResponseAPIRequest.Tools).
 	ToolDefinitions string `json:"tool_definitions,omitempty"`
@@ -436,7 +427,7 @@ type BodyWriter interface {
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
 
 	// AttachPrompt stores the prompt of an existing record that was written without it.
-	AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error
+	AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error
 }
 
 // OutcomeWriter appends post-route feedback to replay records.
@@ -471,6 +462,22 @@ type Enricher interface {
 
 	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
 	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
+}
+
+// StoredPrompt is a record's prompt as it is kept: the text and, when the text
+// was cut to the record's limit, the size in bytes and the hex SHA-256 of the
+// whole prompt.
+type StoredPrompt struct {
+	Text           string
+	Truncated      bool
+	OriginalBytes  int
+	OriginalSHA256 string
+}
+
+// Apply writes the prompt into rec.
+func (p StoredPrompt) Apply(rec *Record) {
+	rec.Prompt, rec.PromptTruncated = p.Text, p.Truncated
+	rec.PromptOriginalBytes, rec.PromptOriginalSHA256 = p.OriginalBytes, p.OriginalSHA256
 }
 
 // Storage is the interface that all storage backends must implement.
@@ -567,26 +574,20 @@ func cloneToolTrace(trace *ToolTrace) *ToolTrace {
 func cloneSignal(signal Signal) Signal {
 	return Signal{
 		Keyword:       cloneStringSlice(signal.Keyword),
-		Embedding:     cloneStringSlice(signal.Embedding),
 		Domain:        cloneStringSlice(signal.Domain),
 		FactCheck:     cloneStringSlice(signal.FactCheck),
 		UserFeedback:  cloneStringSlice(signal.UserFeedback),
-		Reask:         cloneStringSlice(signal.Reask),
-		Preference:    cloneStringSlice(signal.Preference),
+		TurnRelation:  cloneStringSlice(signal.TurnRelation),
 		Language:      cloneStringSlice(signal.Language),
 		Context:       cloneStringSlice(signal.Context),
-		Structure:     cloneStringSlice(signal.Structure),
 		Complexity:    cloneStringSlice(signal.Complexity),
 		Modality:      cloneStringSlice(signal.Modality),
 		Authz:         cloneStringSlice(signal.Authz),
 		Jailbreak:     cloneStringSlice(signal.Jailbreak),
 		Safety:        cloneStringSlice(signal.Safety),
 		PII:           cloneStringSlice(signal.PII),
-		KB:            cloneStringSlice(signal.KB),
 		Conversation:  cloneStringSlice(signal.Conversation),
-		Event:         cloneStringSlice(signal.Event),
 		Metadata:      cloneStringSlice(signal.Metadata),
-		Classifier:    cloneStringSlice(signal.Classifier),
 		InputModality: cloneStringSlice(signal.InputModality),
 		Decision:      cloneStringSlice(signal.Decision),
 	}
@@ -596,7 +597,6 @@ func cloneRecord(record Record) Record {
 	cloned := record
 	cloned.SignalErrorMatches = cloneBoolMap(record.SignalErrorMatches)
 	cloned.JailbreakDecision = cloneLabelDecision(record.JailbreakDecision)
-	cloned.ResponseJailbreakDecision = cloneLabelDecision(record.ResponseJailbreakDecision)
 	cloned.RouteDiagnostics = cloneRouteDiagnostics(record.RouteDiagnostics)
 	cloned.Learning = cloneLearningDiagnostics(record.Learning)
 	cloned.Outcomes = cloneOutcomes(record.Outcomes)
@@ -665,7 +665,6 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	}
 	cloned := *value
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
-	cloned.TopicContinuity = append([]TopicContinuityRecord(nil), value.TopicContinuity...)
 	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
 	if value.PreparedDispatch != nil {

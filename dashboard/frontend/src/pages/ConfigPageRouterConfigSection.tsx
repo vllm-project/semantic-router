@@ -4,29 +4,26 @@ import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import ProductIcon from '../components/ProductIcon'
 import { responseConfigWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import styles from './ConfigPageRouterConfigSection.module.css'
-import ConfigPageLegacyCategoriesSection from './ConfigPageLegacyCategoriesSection'
+import ConfigPageListenerVSRPanel from './ConfigPageListenerVSRPanel'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
   buildEffectiveRouterConfig,
   buildRouterSectionCards,
+  editedRouterSectionPatch,
   routerLayerMeta,
   type RouterSectionBadge,
 } from './configPageRouterDefaultsSupport'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
-import type { CanonicalGlobalConfig, ConfigData, Tool } from './configPageSupport'
+import type { CanonicalGlobalConfig, ConfigData } from './configPageSupport'
 
 type GlobalEditorMode = 'visual' | 'raw'
 
 interface ConfigPageRouterConfigSectionProps {
   config: ConfigData | null
-  toolsData: Tool[]
-  toolsLoading: boolean
-  toolsError: string | null
   isReadonly: boolean
   openEditModal: OpenEditModal
-  saveConfig: (config: ConfigData) => Promise<void>
   refreshConfig: () => Promise<void>
-  showLegacyCategories?: boolean
+  saveConfig: (config: ConfigData) => Promise<void>
 }
 
 function badgeClassName(badge: RouterSectionBadge): string {
@@ -42,14 +39,10 @@ function badgeClassName(badge: RouterSectionBadge): string {
 
 export default function ConfigPageRouterConfigSection({
   config,
-  toolsData,
-  toolsLoading,
-  toolsError,
   isReadonly,
   openEditModal,
-  saveConfig,
   refreshConfig,
-  showLegacyCategories = false,
+  saveConfig,
 }: ConfigPageRouterConfigSectionProps) {
   const { hash } = useLocation()
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
@@ -130,9 +123,6 @@ export default function ConfigPageRouterConfigSection({
     config,
     routerConfig: effectiveRouterConfig,
     routerDefaults,
-    toolsData,
-    toolsLoading,
-    toolsError,
   })
 
   const configuredCount = sectionCards.filter((card) => card.data !== undefined).length
@@ -151,18 +141,6 @@ export default function ConfigPageRouterConfigSection({
   }, [sectionCards])
 
   const saveRouterSettings = async (updates: Partial<ConfigData>) => {
-    if (showLegacyCategories) {
-      if (!config) {
-        throw new Error('Configuration not loaded yet.')
-      }
-
-      await saveConfig({
-        ...config,
-        ...updates,
-      })
-      return
-    }
-
     setSaveWarnings([])
     const response = await fetch('/api/router/config/global/update', {
       method: 'POST',
@@ -191,7 +169,10 @@ export default function ConfigPageRouterConfigSection({
       card.editData,
       card.editFields,
       async (data) => {
-        await saveRouterSettings(card.save(data))
+        const updates = isConfigured ? editedRouterSectionPatch(card, data) : card.save(data)
+        if (updates) {
+          await saveRouterSettings(updates)
+        }
       },
       isConfigured ? 'edit' : 'add',
     )
@@ -378,6 +359,11 @@ export default function ConfigPageRouterConfigSection({
                   </div>
                 </section>
               ))}
+              <ConfigPageListenerVSRPanel
+                config={config}
+                isReadonly={isReadonly}
+                saveConfig={saveConfig}
+              />
             </div>
           </div>
         ) : (
@@ -440,15 +426,6 @@ export default function ConfigPageRouterConfigSection({
             </div>
           </section>
         )}
-
-        {showLegacyCategories ? (
-          <ConfigPageLegacyCategoriesSection
-            config={config}
-            isReadonly={isReadonly}
-            openEditModal={openEditModal}
-            saveConfig={saveConfig}
-          />
-        ) : null}
       </div>
     </ConfigPageManagerLayout>
   )

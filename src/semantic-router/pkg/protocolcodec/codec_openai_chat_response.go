@@ -40,6 +40,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"citations":                                              wire.hasCitations(),
 		"search_results":                                         wire.hasSearchResults(),
 	}, "response request metadata is not model output")
+	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, wire.vllmServingMetadata(), vllmServingMetadataReason)
 	if wire.hasTimeInfo() {
 		// A same-format response replays the original bytes, so unlike the
 		// shared family message this reason also states what the client sees.
@@ -57,7 +58,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// from the neutral response, so render it again instead of leaking them.
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
 	// not be replayed.
-	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices)
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices) || wire.hasDeepSeekDecorations()
 	replay := body
 	if needsReencode {
 		replay = nil
@@ -65,6 +66,13 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, replay, response.Generation, response.SourceStopReason, policy)
 	envelope.ResponseReencodeRequired = needsReencode
 	return response, envelope, diagnostics, nil
+}
+
+func (wire chatResponseWire) hasDeepSeekDecorations() bool {
+	if wire.Usage == nil {
+		return false
+	}
+	return wire.Usage.PromptCacheHitTokens != nil || wire.Usage.PromptCacheMissTokens != nil
 }
 
 func chatChoicesHaveNativeFinishReason(choices []chatChoiceWire) bool {
@@ -184,6 +192,8 @@ func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool 
 		prefix + "is_byok":                                              wire.IsBYOK != nil,
 		prefix + "cost_details":                                         wire.CostDetails != nil,
 		prefix + "server_tool_use":                                      wire.ServerToolUse != nil,
+		prefix + "prompt_cache_hit_tokens":                              wire.PromptCacheHitTokens != nil,
+		prefix + "prompt_cache_miss_tokens":                             wire.PromptCacheMissTokens != nil,
 	}
 }
 
@@ -273,10 +283,27 @@ func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 		OutputTotal:     authoritative(wire.CompletionTokens),
 		Total:           authoritative(wire.TotalTokens),
 	}
+	var cachedTokens *int64
+	var cacheWriteTokens *int64
+	var createdCacheTokens *int64
+	var cacheCreationTokens *int64
 	if wire.PromptTokensDetails != nil {
-		details := wire.PromptTokensDetails
-		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens, details.CacheCreationTokens); err != nil {
+		cachedTokens = wire.PromptTokensDetails.CachedTokens
+		cacheWriteTokens = wire.PromptTokensDetails.CacheWriteTokens
+		createdCacheTokens = wire.PromptTokensDetails.CreatedCacheTokens
+		cacheCreationTokens = wire.PromptTokensDetails.CacheCreationTokens
+	}
+	if cachedTokens == nil {
+		cachedTokens = wire.PromptCacheHitTokens
+	}
+	if cachedTokens != nil || cacheWriteTokens != nil || createdCacheTokens != nil || cacheCreationTokens != nil {
+		if err := decodeInputCacheUsage(&usage, cachedTokens, cacheWriteTokens, createdCacheTokens, cacheCreationTokens); err != nil {
 			return llmprotocol.Usage{}, err
+		}
+	}
+	if usage.InputUncached.Value == nil && wire.PromptCacheMissTokens != nil {
+		if *wire.PromptCacheMissTokens >= 0 && *wire.PromptCacheMissTokens <= wire.PromptTokens {
+			usage.InputUncached = authoritative(*wire.PromptCacheMissTokens)
 		}
 	}
 	if wire.CompletionTokensDetails != nil {
@@ -339,11 +366,14 @@ func appendChatStopReasonDiagnostic(
 	policy llmprotocol.Policy,
 ) error {
 	switch stopReason {
-	case llmprotocol.StopPaused, llmprotocol.StopContextWindow, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
+	case llmprotocol.StopPaused, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
 		return appendLossy(
 			diagnostics, policy, source, llmprotocol.OpenAIChatV1,
 			"response.stop_reason", "Chat Completions cannot represent the source terminal reason",
 		)
+	case llmprotocol.StopContextWindow:
+		appendContextWindowProjection(diagnostics, policy, source, llmprotocol.OpenAIChatV1)
+		return nil
 	default:
 		return nil
 	}
@@ -429,9 +459,19 @@ func decodeChatStop(reason string) llmprotocol.StopReason {
 	}
 }
 
+// appendContextWindowProjection reports that a full context window reaches a
+// Chat or Responses client as its output-limit stop, the way vLLM reports
+// generation that reaches max_model_len. The reply is not refused.
+func appendContextWindowProjection(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source, target llmprotocol.WireFormat) {
+	*diagnostics = appendDiagnostics(*diagnostics, llmprotocol.Diagnostics{{
+		Source: source, Target: target, Field: "response.stop_reason", Action: llmprotocol.DiagnosticApproximated,
+		Reason: "a full context window is reported as the output token limit",
+	}}, policy.Limits.Diagnostics)
+}
+
 func encodeChatStop(reason llmprotocol.StopReason) string {
 	switch reason {
-	case llmprotocol.StopMaxTokens:
+	case llmprotocol.StopMaxTokens, llmprotocol.StopContextWindow:
 		return "length"
 	case llmprotocol.StopToolCall:
 		return "tool_calls"

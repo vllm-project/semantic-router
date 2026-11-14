@@ -180,6 +180,9 @@ func decodeResponsesInputItem(
 	if err := validateResponsesInputItemMetadata(item); err != nil {
 		return err
 	}
+	if err := flattenResponsesHistoryCall(&item, request, policy); err != nil {
+		return err
+	}
 	return decodeResponsesInputItemKind(item, index, request, policy)
 }
 
@@ -192,13 +195,8 @@ func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	}); err != nil {
 		return err
 	}
-	if item.Namespace != "" {
+	if item.Namespace != "" && item.Type != "function_call" && item.Type != "custom_tool_call" {
 		return rejectUnsupportedRequestField("input.namespace", json.RawMessage(`true`))
-	}
-	if item.Status != "" && item.Type != "" && item.Type != "message" &&
-		item.Type != "function_call" && item.Type != "function_call_output" &&
-		item.Type != "custom_tool_call" && item.Type != "custom_tool_call_output" && item.Type != "image_generation_call" {
-		return rejectUnsupportedRequestField("input.status", json.RawMessage(`true`))
 	}
 	return nil
 }

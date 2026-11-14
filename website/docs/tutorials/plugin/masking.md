@@ -14,38 +14,63 @@ Because every wire format (Chat Completions, Responses, Anthropic Messages) is d
 
 - a route dispatches to a provider that must not receive personal data
 - the same value should map to the same placeholder throughout one request, and different values should map to different placeholders
-- a missing or unavailable PII classifier should block the request rather than silently send it unmasked
+- a missing or unavailable PII detector should block the request rather than silently send it unmasked
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Masking masks what a [pii rule](../signal/application/pii) detects. Declare the
+rule under `recipes[].signals.pii` and name it in the plugin under
+`recipes[].decisions[].plugins`:
 
 ```yaml
-plugins:
-  - type: masking
-    configuration:
-      enabled: true
-      threshold: 0.85
-      entity_types:
-        - EMAIL_ADDRESS
-        - PHONE_NUMBER
-      placeholders:
-        EMAIL_ADDRESS: "[EMAIL_{index}]"
-        PHONE_NUMBER: "[PHONE_{index}]"
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: contact_details
+          predicate: {gte: 0.85}
+          description: Contact details masked before the request leaves the Router.
+    decisions:
+      - name: support
+        # ...rules, modelRefs...
+        plugins:
+          - type: masking
+            configuration:
+              enabled: true
+              signal: contact_details
+              entity_types:
+                - EMAIL_ADDRESS
+                - PHONE_NUMBER
+              placeholders:
+                EMAIL_ADDRESS: "[EMAIL_{index}]"
+                PHONE_NUMBER: "[PHONE_{index}]"
 ```
 
 | Field | Meaning |
 |---|---|
 | `enabled` | Turns masking on for this decision. |
-| `threshold` | Minimum classifier confidence for a span to be masked. `0` falls back to the router's configured PII model threshold. |
-| `entity_types` | An **include list**: only these types are masked. Empty means every detected type is masked. This is the opposite of `PIIRule`'s `pii_types_allowed`, which is an allow-list of types let through. |
-| `placeholders` | Maps an entity type to a template. The template must contain `{index}`; a template without it would collapse distinct values onto one placeholder, so it is rejected at config load. Types absent from the map get the default `[TYPE_n]` shape. |
+| `signal` | The pii rule whose detections are masked: its deployment, its `predicate`, and the labels its `ignore_labels` lets through, which are not masked. No decision has to read the rule. |
+| `entity_types` | An **include list** of PII labels (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `US_SSN`, `CREDIT_CARD`, `LOCATION`, `IP_ADDRESS`, `DATE_TIME`, `US_DRIVER_LICENSE`, `US_PASSPORT`, `IBAN_CODE`): only these types are masked. Empty means every type the rule detects is masked. Any other label is rejected at config load. |
+| `placeholders` | Maps a PII label to a template. The template must contain `{index}`; a template without it would collapse distinct values onto one placeholder, so it is rejected at config load. Types absent from the map get the default `[TYPE_n]` shape. |
+
+The rule reads the request as it is sent, after every plugin that changes it
+has run, so personal data a [RAG](./context) document or a system prompt brought
+in is masked too. The rule's text is scanned once per request: a decision that
+also reads the rule at routing reuses the scan of the same text.
+
+The rule's detector must answer with positions. A rule that resolves to a
+deployment that cannot answer span questions, such as a decision model without
+span support, fails at load with `span_required`.
+
+A configuration that still sets `masking.threshold`, or names no `signal`,
+fails at load with a one-line hint; `vllm-sr config migrate` adds a pii rule
+with the plugin's threshold and names it.
 
 ## Fail-closed, with no override
 
-If the PII classifier is unavailable, or scanning fails for any reason, **the request is refused with a 503** rather than dispatched unmasked. This is unconditional: there is no `fail_open` configuration option, unlike `context_compression`'s `failure_mode`. A privacy control that can be configured to fail open is a footgun that gets flipped on during an incident and never flipped back. Operators who need availability over privacy should not enable this plugin.
+If the rule's detector is unavailable, or scanning fails for any reason, **the request is refused with a 503** rather than dispatched unmasked. This is unconditional: there is no `fail_open` configuration option, unlike `context_compression`'s `failure_mode`. A privacy control that can be configured to fail open is a footgun that gets flipped on during an incident and never flipped back. Operators who need availability over privacy should not enable this plugin.
 
-A truncated classifier response — the provider only scanned part of the text — is treated the same way: the unscanned remainder cannot be vouched for, so the request is refused rather than partially masked.
+A truncated answer, where the deployment scanned only part of the text, is treated the same way: the unscanned remainder cannot be vouched for, so the request is refused rather than partially masked.
 
 ## Router Replay does not capture request content on a masking route
 
@@ -62,6 +87,10 @@ This plugin only ever removes information going forward to the provider. It does
 - give an operator, an API, or a log line any way to recover a masked value
 
 If a response happens to echo a placeholder like `[EMAIL_ADDRESS_0]` back to the client, that placeholder is not decoded — the client sees exactly that string. Restoring placeholders in responses is an explicit non-goal, not a missing feature.
+
+An agent that keeps working with placeholders sends them back in its later requests, for example in a file it writes with `Hi [PERSON_0],`. A detected span that lies inside text shaped like a placeholder this plugin produces, the default `[TYPE_n]` shape or a configured template that has a letter besides `{index}`, with digits for `{index}`, is not masked again, even when the detector reads part of it as personal data. A span that reaches past it, such as an email address whose local part is a placeholder, is still masked, and a template such as `{index}` or `#{index}` is not recognized, since its digits could be part of a real phone number. Without that, the agent would see its own earlier output turn into `[[PERSON_1]]` on the next turn and its edits would stop matching the file it wrote.
+
+The same holds for the `[vsr:<tag>]` marks, such as `[vsr:email]`, that the vSR plugins for Claude Code and Codex leave where their redact app hid a value from a tool's output. With the plugin and the gateway running together, a tool result reaches the Router already redacted, and the marks pass through as they are.
 
 ## What is deliberately not masked
 

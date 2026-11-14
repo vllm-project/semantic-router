@@ -1,10 +1,12 @@
 # Build the operator binary
 # Using RHEL 10 UBI Golang builder image
 # Build context must be the repository root so local replace directives can reach src/semantic-router.
-FROM registry.access.redhat.com/ubi10/go-toolset:latest AS builder
+# The builder runs on the build machine and cross-compiles for the target, so an
+# arm64 image needs no emulation. No default for TARGETARCH: a default would
+# replace the architecture BuildKit sets and put an amd64 binary in arm64 images.
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi10/go-toolset:latest AS builder
 
-# Target architecture - defaults to amd64
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 
 USER root
 

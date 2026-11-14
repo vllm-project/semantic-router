@@ -31,14 +31,11 @@ metadata:
   namespace: default
 spec:
   signals:
-    embeddings:
+    keywords:
       - name: "research_question"
-        threshold: 0.78
-        candidates:
-          - "Can you explain the theory behind this concept?"
-          - "What are the latest research findings on this topic?"
-          - "I'm conducting research and need detailed information"
-        aggregationMethod: "max"
+        operator: "OR"
+        keywords: ["Can you explain the theory behind this concept?", "What are the latest research findings on this topic?", "I'm conducting research and need detailed information"]
+        caseSensitive: false
 
     domains:
       - name: "biology"
@@ -55,7 +52,7 @@ spec:
       signals:
         operator: "AND"
         conditions:
-          - type: "embedding"
+          - type: "keyword"
             name: "research_question"
           - type: "domain"
             name: "biology"
@@ -70,7 +67,7 @@ spec:
       signals:
         operator: "AND"
         conditions:
-          - type: "embedding"
+          - type: "keyword"
             name: "research_question"
           - type: "domain"
             name: "chemistry"

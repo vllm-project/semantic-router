@@ -7,48 +7,26 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 
 from cli.models import (
+    FastResponsePluginConfig,
     PluginConfig,
     PluginType,
+    RequestParamsPluginConfig,
     RouterReplayPluginConfig,
-    RAGPluginConfig,
+    ContextPluginConfig,
+    ContextSource,
+    ResponseGuardPluginConfig,
     ToolsPluginConfig,
 )
-from cli.config_migration import migrate_config_data
 from cli.parser import ConfigParseError, parse_user_config
 from cli.validator import validate_user_config
+from recipe_document_test_support import default_recipe_document
 
 
 def _write_config(config_yaml: str) -> str:
-    data = yaml.safe_load(config_yaml)
-    providers = data.get("providers") if isinstance(data, dict) else None
-    models = providers.get("models", []) if isinstance(providers, dict) else []
-    if isinstance(data, dict) and (
-        "signals" in data
-        or "decisions" in data
-        or any(
-            isinstance(model, dict)
-            and any(
-                key in model
-                for key in (
-                    "endpoints",
-                    "access_key",
-                    "reasoning_family",
-                    "param_size",
-                    "context_window_size",
-                    "description",
-                    "capabilities",
-                    "quality_score",
-                    "modality",
-                    "tags",
-                )
-            )
-            for model in models
-        )
-    ):
-        data = migrate_config_data(data)
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        yaml.safe_dump(data, f, sort_keys=False)
+        yaml.safe_dump(
+            default_recipe_document(yaml.safe_load(config_yaml)), f, sort_keys=False
+        )
         return f.name
 
 
@@ -61,17 +39,13 @@ class TestPluginTypeValidation:
             PluginType.RESPONSE_CACHE.value,
             PluginType.SYSTEM_PROMPT.value,
             PluginType.HEADER_MUTATION.value,
-            PluginType.HALLUCINATION.value,
             PluginType.ROUTER_REPLAY.value,
-            PluginType.MEMORY.value,
-            PluginType.RAG.value,
+            PluginType.CONTEXT.value,
             PluginType.FAST_RESPONSE.value,
             PluginType.REQUEST_PARAMS.value,
-            PluginType.RESPONSE_JAILBREAK.value,
+            PluginType.RESPONSE_GUARD.value,
             PluginType.TOOLS.value,
-            PluginType.TOOL_SELECTION.value,
             PluginType.PROMPT_CACHE.value,
-            PluginType.SHADOW_DISPATCH.value,
         ]
 
         for plugin_type in valid_types:
@@ -82,10 +56,9 @@ class TestPluginTypeValidation:
     @pytest.mark.parametrize(
         "alias", ["semantic-cache", "semantic_cache", "response-cache"]
     )
-    def test_response_cache_aliases_export_canonical(self, alias):
-        with pytest.warns(DeprecationWarning):
-            plugin = PluginConfig(type=alias, configuration={"enabled": True})
-        assert plugin.model_dump()["type"] == "response_cache"
+    def test_response_cache_aliases_are_no_plugin_types(self, alias):
+        with pytest.raises(PydanticValidationError, match="Input should be.*enum"):
+            PluginConfig(type=alias, configuration={"enabled": True})
 
     def test_invalid_plugin_type(self):
         """Test that invalid plugin types are rejected."""
@@ -95,7 +68,6 @@ class TestPluginTypeValidation:
     def test_new_plugin_types_validate_in_full_config(self):
         """Test newly exposed plugin types validate end-to-end."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -106,7 +78,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -125,20 +97,13 @@ decisions:
           blocked_params: ["logprobs"]
           max_tokens_limit: 256
           max_n: 1
-          strip_unknown: true
-      - type: "response_jailbreak"
+      - type: "response_guard"
         configuration:
-          enabled: true
-          threshold: 0.7
-          action: "header"
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
+          rules:
+            - when: {type: "keyword", name: "test_keywords"}
+              action: "annotate"
+              details: true
+          on_unknown: "none"
 """
 
         temp_path = _write_config(config_yaml)
@@ -149,6 +114,15 @@ providers:
             assert len(errors) == 0, f"Unexpected validation errors: {errors}"
         finally:
             os.unlink(temp_path)
+
+    @pytest.mark.parametrize(
+        "model", [FastResponsePluginConfig, ResponseGuardPluginConfig]
+    )
+    def test_enabled_false_alone_turns_off_an_inherited_plugin(self, model):
+        """A decision turns off an inherited plugin with enabled: false alone."""
+        assert model(enabled=False).enabled is False
+        with pytest.raises(PydanticValidationError):
+            model()
 
 
 class TestRouterReplayPluginConfig:
@@ -177,9 +151,12 @@ class TestRouterReplayPluginConfig:
         assert config.capture_request_body is None
         assert config.capture_response_body is None
         assert config.max_body_bytes is None
+        assert config.prompt_capture is None
         assert config.capture_personal_data is None
         assert config.capture_tool_results is None
+        assert config.max_prompt_bytes is None
         assert config.max_tool_trace_bytes is None
+        assert config.max_tool_trace_total_bytes is None
         assert config.max_tool_trace_steps is None
 
     @pytest.mark.parametrize(
@@ -187,11 +164,18 @@ class TestRouterReplayPluginConfig:
         [
             {},
             {"enabled": False},
+            {"prompt_capture": "none"},
+            {"prompt_capture": "raw", "capture_tool_results": True},
+            {"prompt_capture": "verified"},
             {"capture_personal_data": False},
             {"capture_tool_results": True},
             {"capture_request_body": False, "capture_response_body": False},
             {"max_tool_trace_bytes": 0, "max_tool_trace_steps": 0},
             {"max_records": 0, "max_body_bytes": 0},
+            {"max_prompt_bytes": 0},
+            {"prompt_capture": "raw", "max_prompt_bytes": 262144},
+            {"max_tool_trace_total_bytes": 0},
+            {"prompt_capture": "raw", "max_tool_trace_total_bytes": 1048576},
         ],
     )
     def test_router_replay_serialization_preserves_explicit_overrides(self, overrides):
@@ -201,11 +185,15 @@ class TestRouterReplayPluginConfig:
     @pytest.mark.parametrize(
         "overrides",
         [
+            {"prompt_capture": "full"},
+            {"prompt_capture": True},
             {"capture_personal_data": "false"},
             {"capture_tool_results": "true"},
             {"capture_request_body": 0},
             {"max_tool_trace_bytes": -1},
             {"max_tool_trace_steps": -1},
+            {"max_tool_trace_total_bytes": -1},
+            {"max_prompt_bytes": -1},
             {"max_records": -1},
             {"max_body_bytes": -1},
             {"replay_personal_data": False},
@@ -218,7 +206,6 @@ class TestRouterReplayPluginConfig:
     def test_router_replay_plugin_in_config(self):
         """Test router_replay plugin in full config."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -229,7 +216,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -250,14 +237,6 @@ decisions:
           capture_request_body: true
           capture_response_body: false
           max_body_bytes: 2048
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)
@@ -283,42 +262,17 @@ providers:
 
 
 class TestToolsPluginConfig:
-    """Test tools plugin schema and privacy-policy round trips."""
+    """Test the tools plugin schema and its privacy-policy round trip."""
 
-    def test_strip_history_and_dynamic_retrieval_round_trip(self):
+    def test_strip_history_round_trip(self):
         privacy = ToolsPluginConfig.model_validate(
             {
                 "enabled": True,
-                "mode": "none",
-                "strip_tool_history": True,
+                "policy": {"mode": "none", "strip_tool_history": True},
             }
         )
-        assert privacy.model_dump(exclude_none=True)["strip_tool_history"] is True
-
-        retrieval = ToolsPluginConfig.model_validate(
-            {
-                "enabled": True,
-                "mode": "passthrough",
-                "strategy": "default",
-                "dynamic_retrieval": {
-                    "enabled": True,
-                    "strategy": "hybrid_history",
-                    "history_window": 8,
-                    "weights": {
-                        "semantic": 1.0,
-                        "history": 0.7,
-                        "decision_prior": 0.2,
-                        "repetition_penalty": 0.1,
-                    },
-                    "min_history_confidence": 0.4,
-                    "fallback_on_low_confidence": True,
-                },
-            }
-        )
-        dumped = retrieval.model_dump(exclude_none=True)
-        assert dumped["strategy"] == "default"
-        assert dumped["dynamic_retrieval"]["history_window"] == 8
-        assert dumped["dynamic_retrieval"]["weights"]["history"] == 0.7
+        dumped = privacy.model_dump(exclude_none=True)
+        assert dumped["policy"]["strip_tool_history"] is True
 
     def test_strip_history_requires_mode_none(self):
         with pytest.raises(
@@ -327,63 +281,34 @@ class TestToolsPluginConfig:
             ToolsPluginConfig.model_validate(
                 {
                     "enabled": True,
-                    "mode": "passthrough",
-                    "strip_tool_history": True,
+                    "policy": {"mode": "passthrough", "strip_tool_history": True},
                 }
             )
 
-    def test_hybrid_history_requires_window(self):
-        with pytest.raises(
-            PydanticValidationError, match="history_window must be at least 1"
-        ):
-            ToolsPluginConfig.model_validate(
-                {
-                    "enabled": True,
-                    "mode": "passthrough",
-                    "dynamic_retrieval": {
-                        "enabled": True,
-                        "strategy": "hybrid_history",
-                    },
-                }
-            )
-
-    def test_disabled_dynamic_retrieval_skips_inactive_constraints(self):
-        config = ToolsPluginConfig.model_validate(
-            {
-                "enabled": False,
-                "mode": "none",
-                "strip_tool_history": True,
-                "dynamic_retrieval": {
-                    "enabled": False,
-                    "strategy": "future_strategy",
-                    "history_window": -1,
-                    "min_history_confidence": 2.0,
-                    "weights": {"history": -1.0},
-                },
-            }
-        )
-        assert config.dynamic_retrieval is not None
-        assert config.dynamic_retrieval.enabled is False
-
-    def test_disabled_tools_plugin_skips_inactive_mode_constraints(self):
-        config = ToolsPluginConfig.model_validate(
-            {
-                "enabled": False,
-                "mode": "future_mode",
-                "allow_tools": ["future.tool"],
-                "strip_tool_history": True,
-            }
-        )
-        assert config.enabled is False
+    def test_policy_fields_at_the_top_are_rejected(self):
+        with pytest.raises(PydanticValidationError):
+            ToolsPluginConfig.model_validate({"enabled": True, "mode": "none"})
 
     def test_enabled_tools_plugin_rejects_unknown_mode(self):
-        with pytest.raises(PydanticValidationError, match="mode must be"):
+        with pytest.raises(PydanticValidationError):
             ToolsPluginConfig.model_validate(
-                {
-                    "enabled": True,
-                    "mode": "future_mode",
-                }
+                {"enabled": True, "policy": {"mode": "future_mode"}}
             )
+
+
+class TestRequestParamsPluginConfig:
+    """Test the request_params plugin schema."""
+
+    def test_stream_cannot_be_blocked(self):
+        with pytest.raises(
+            PydanticValidationError, match="blocked_params cannot include stream"
+        ):
+            RequestParamsPluginConfig.model_validate(
+                {"blocked_params": ["logprobs", " stream "]}
+            )
+        assert RequestParamsPluginConfig.model_validate(
+            {"blocked_params": ["logprobs"]}
+        ).blocked_params == ["logprobs"]
 
 
 class TestPluginConfigurationValidation:
@@ -392,7 +317,6 @@ class TestPluginConfigurationValidation:
     def test_invalid_router_replay_config(self):
         """Test that invalid router_replay configuration is caught."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -403,7 +327,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -422,14 +346,6 @@ decisions:
           enabled: true
           max_records: "invalid"  # Should be int
           capture_request_body: "yes"  # Should be bool
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
 """
 
         temp_path = _write_config(config_yaml)
@@ -443,10 +359,9 @@ providers:
         finally:
             os.unlink(temp_path)
 
-    def test_invalid_semantic_cache_config(self):
-        """Test that invalid semantic-cache configuration is caught."""
+    def test_invalid_response_cache_config(self):
+        """Test that invalid response_cache configuration is caught."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -457,7 +372,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -471,18 +386,10 @@ decisions:
     modelRefs:
       - model: "test_model"
     plugins:
-      - type: "semantic-cache"
+      - type: "response_cache"
         configuration:
           enabled: "yes"  # Should be bool
-          similarity_threshold: 1.5  # Should be 0.0-1.0
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
+          ttl_seconds: -1  # Should be >= 0
 """
 
         temp_path = _write_config(config_yaml)
@@ -497,7 +404,6 @@ providers:
     def test_missing_required_fields(self):
         """Test that missing required fields are caught."""
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -512,18 +418,10 @@ decisions:
     modelRefs:
       - model: "test_model"
     plugins:
-      - type: "semantic-cache"
+      - type: "response_cache"
         configuration:
           # Missing required 'enabled' field
-          similarity_threshold: 0.8
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
+          ttl_seconds: 60
 """
 
         temp_path = _write_config(config_yaml)
@@ -550,46 +448,50 @@ providers:
             os.unlink(temp_path)
 
 
-class TestRAGPluginConfig:
-    """Test RAG plugin configuration."""
+class TestContextPluginConfig:
+    """Test context plugin configuration."""
 
-    def test_valid_rag_config_all_fields(self):
-        """Test RAGPluginConfig accepts all valid fields."""
-        config = RAGPluginConfig(
+    def test_valid_rag_source_all_fields(self):
+        config = ContextPluginConfig(
             enabled=True,
-            backend="external_api",
-            similarity_threshold=0.75,
-            top_k=5,
-            max_context_length=4096,
-            injection_mode="tool_role",
-            backend_config={
-                "endpoint": "http://rag-service:8000/v1/search",
-                "request_format": "openai",
-                "timeout_seconds": 10,
-                "max_response_bytes": 4194304,
-            },
-            on_failure="skip",
-            cache_results=True,
-            cache_ttl_seconds=300,
-            min_confidence_threshold=0.5,
+            sources=[
+                {
+                    "type": "rag",
+                    "backend": "external_api",
+                    "match": {
+                        "recall": {
+                            "method": "embedding",
+                            "top_k": 5,
+                            "min_similarity": 0.75,
+                        },
+                        "judge": {"preset": "relevance", "top_k": 2},
+                    },
+                    "max_context_length": 4096,
+                    "backend_config": {
+                        "endpoint": "http://rag-service:8000/v1/search",
+                        "request_format": "openai",
+                        "timeout_seconds": 10,
+                        "max_response_bytes": 4194304,
+                    },
+                    "on_failure": "skip",
+                    "cache_results": True,
+                    "cache_ttl_seconds": 300,
+                }
+            ],
+            injection={"mode": "tool_role"},
         )
-        assert config.enabled is True
-        assert config.backend == "external_api"
-        assert config.similarity_threshold == 0.75
-        assert config.top_k == 5
-        assert config.max_context_length == 4096
-        assert config.injection_mode == "tool_role"
-        assert config.backend_config["endpoint"] == "http://rag-service:8000/v1/search"
-        assert config.backend_config["request_format"] == "openai"
-        assert config.backend_config["max_response_bytes"] == 4194304
-        assert config.on_failure == "skip"
-        assert config.cache_results is True
-        assert config.cache_ttl_seconds == 300
-        assert config.min_confidence_threshold == 0.5
+        source = config.sources[0]
+        assert source.type == "rag"
+        assert source.backend == "external_api"
+        assert source.match["judge"]["top_k"] == 2
+        assert source.backend_config["max_response_bytes"] == 4194304
+        assert source.on_failure == "skip"
+        assert source.cache_ttl_seconds == 300
+        assert config.injection.mode == "tool_role"
 
     def test_openai_response_limit_is_preserved(self):
-        config = RAGPluginConfig(
-            enabled=True,
+        source = ContextSource(
+            type="rag",
             backend="openai",
             backend_config={
                 "vector_store_id": "vs_123",
@@ -597,60 +499,44 @@ class TestRAGPluginConfig:
                 "max_response_bytes": 4194304,
             },
         )
+        assert source.backend_config["max_response_bytes"] == 4194304
 
-        assert config.backend_config["max_response_bytes"] == 4194304
+    def test_rag_source_required_fields_only(self):
+        source = ContextSource(type="rag", backend="milvus")
+        assert source.match is None
+        assert source.max_context_length is None
+        assert source.backend_config is None
+        assert source.on_failure is None
+        assert source.cache_ttl_seconds is None
 
-    def test_rag_config_required_fields_only(self):
-        """Test RAGPluginConfig with only required fields; optional fields default to None."""
-        config = RAGPluginConfig(enabled=True, backend="milvus")
-        assert config.enabled is True
-        assert config.backend == "milvus"
-        assert config.similarity_threshold is None
-        assert config.top_k is None
-        assert config.max_context_length is None
-        assert config.injection_mode is None
-        assert config.backend_config is None
-        assert config.on_failure is None
-        assert config.cache_results is None
-        assert config.cache_ttl_seconds is None
-        assert config.min_confidence_threshold is None
+    def test_source_takes_only_its_own_fields(self):
+        with pytest.raises(
+            PydanticValidationError, match="a rag source needs a backend"
+        ):
+            ContextSource(type="rag")
+        with pytest.raises(
+            PydanticValidationError, match="a memory source takes no backend"
+        ):
+            ContextSource(type="memory", backend="milvus")
+        with pytest.raises(
+            PydanticValidationError, match="a rag source takes no store"
+        ):
+            ContextSource(type="rag", backend="milvus", store={"auto": True})
+        assert ContextSource(type="memory", store={"auto": False}).store.auto is False
 
-    def test_rag_config_missing_required_fields(self):
-        """Test that missing required fields (enabled, backend) raise errors."""
-        with pytest.raises(PydanticValidationError, match="enabled"):
-            RAGPluginConfig(backend="external_api")
-
-        with pytest.raises(PydanticValidationError, match="backend"):
-            RAGPluginConfig(enabled=True)
-
-    def test_rag_config_field_constraints(self):
-        """Test that Pydantic rejects out-of-range RAG field values."""
-        # similarity_threshold > 1.0
+    def test_field_constraints(self):
         with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(enabled=True, backend="milvus", similarity_threshold=1.1)
-
-        # similarity_threshold < 0.0
+            ContextSource(type="rag", backend="milvus", cache_ttl_seconds=0)
         with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(enabled=True, backend="milvus", similarity_threshold=-0.1)
-
-        # top_k must be >= 1
+            ContextSource(type="rag", backend="milvus", max_context_length=-1)
         with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(enabled=True, backend="milvus", top_k=0)
+            ContextSource(type="rag", backend="pinecone")
+        with pytest.raises(PydanticValidationError, match="retrieves sources"):
+            ContextPluginConfig(enabled=True)
+        assert ContextPluginConfig(enabled=False).sources is None
 
-        # cache_ttl_seconds must be >= 1
-        with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(enabled=True, backend="milvus", cache_ttl_seconds=0)
-
-        # min_confidence_threshold > 1.0
-        with pytest.raises(PydanticValidationError):
-            RAGPluginConfig(
-                enabled=True, backend="milvus", min_confidence_threshold=1.1
-            )
-
-    def test_rag_plugin_in_full_config(self):
-        """Test end-to-end RAG plugin YAML parsing and validation."""
+    def test_context_plugin_in_full_config(self):
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
@@ -661,11 +547,11 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
-    description: "Test decision with RAG"
+    description: "Test decision with context"
     priority: 100
     rules:
       operator: "OR"
@@ -675,100 +561,64 @@ decisions:
     modelRefs:
       - model: "test_model"
     plugins:
-      - type: "rag"
+      - type: "context"
         configuration:
           enabled: true
-          backend: "external_api"
-          top_k: 5
-          similarity_threshold: 0.75
-          injection_mode: "tool_role"
-          on_failure: "skip"
-          cache_results: true
-          cache_ttl_seconds: 300
-          backend_config:
-            endpoint: "http://rag-service:8000/v1/search"
-            request_format: "openai"
-            timeout_seconds: 10
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
+          sources:
+            - type: "rag"
+              backend: "external_api"
+              match:
+                recall: {method: embedding, top_k: 5, min_similarity: 0.75}
+              on_failure: "skip"
+              cache_results: true
+              cache_ttl_seconds: 300
+              backend_config:
+                endpoint: "http://rag-service:8000/v1/search"
+                request_format: "openai"
+                timeout_seconds: 10
+          injection:
+            mode: "tool_role"
 """
 
         temp_path = _write_config(config_yaml)
 
         try:
             config = parse_user_config(temp_path)
-            assert len(config.decisions) == 1
-            assert len(config.decisions[0].plugins) == 1
-
             plugin = config.decisions[0].plugins[0]
-            assert plugin.type.value == "rag"
-            assert plugin.configuration["enabled"] is True
-            assert plugin.configuration["backend"] == "external_api"
-            assert plugin.configuration["top_k"] == 5
-            assert plugin.configuration["similarity_threshold"] == 0.75
-            assert plugin.configuration["injection_mode"] == "tool_role"
-            assert plugin.configuration["on_failure"] == "skip"
-            assert plugin.configuration["cache_results"] is True
-            assert plugin.configuration["cache_ttl_seconds"] == 300
-            assert (
-                plugin.configuration["backend_config"]["endpoint"]
-                == "http://rag-service:8000/v1/search"
-            )
-            assert plugin.configuration["backend_config"]["request_format"] == "openai"
+            assert plugin.type.value == "context"
+            source = plugin.configuration["sources"][0]
+            assert source["backend"] == "external_api"
+            assert source["match"]["recall"]["top_k"] == 5
+            assert source["backend_config"]["request_format"] == "openai"
 
             errors = validate_user_config(config)
             assert len(errors) == 0, f"Unexpected validation errors: {errors}"
         finally:
             os.unlink(temp_path)
 
-    def test_invalid_rag_config_in_full_yaml(self):
-        """Test that invalid RAG YAML is caught by the validator."""
+    def test_invalid_context_config_in_full_yaml(self):
         config_yaml = """
-version: v0.1
 listeners:
   - name: "http-8888"
     address: "0.0.0.0"
     port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
 decisions:
   - name: "test_decision"
-    description: "Test decision with invalid RAG"
+    description: "Test decision with an invalid context source"
     priority: 100
     rules:
       operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
+      conditions: []
     modelRefs:
       - model: "test_model"
     plugins:
-      - type: "rag"
+      - type: "context"
         configuration:
           enabled: true
-          backend: "external_api"
-          similarity_threshold: 1.5
-          top_k: "invalid"
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
+          sources:
+            - type: "rag"
+              backend: "external_api"
+              cache_ttl_seconds: "invalid"
 """
 
         temp_path = _write_config(config_yaml)
@@ -776,6 +626,6 @@ providers:
         try:
             with pytest.raises(ConfigParseError) as exc_info:
                 parse_user_config(temp_path)
-            assert "configuration.top_k" in str(exc_info.value)
+            assert "cache_ttl_seconds" in str(exc_info.value)
         finally:
             os.unlink(temp_path)

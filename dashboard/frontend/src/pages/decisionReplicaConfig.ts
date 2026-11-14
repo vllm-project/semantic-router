@@ -5,12 +5,8 @@ import { decisionRuntimeDeclarations } from './decisionRuntimeDeployment'
 export type ReplicaPlacement = NonNullable<CanonicalModelDeployment['replicas']>[number]
 
 export function deploymentPlacements(deployment: CanonicalModelDeployment): ReplicaPlacement[] {
-  if (deployment.replicas?.length)
-    return deployment.replicas.map(({ served_name, ...replica }) => ({
-      ...replica,
-      ...(served_name && !replica.model ? { model: served_name } : {}),
-    }))
-  const model = deployment.model || deployment.served_name
+  if (deployment.replicas?.length) return deployment.replicas.map((replica) => ({ ...replica }))
+  const model = deployment.model
   return deployment.endpoint
     ? [{ endpoint: deployment.endpoint, ...(model ? { model } : {}) }]
     : [{ device: deployment.device || 'auto' }]
@@ -60,7 +56,6 @@ export function withDecisionReplicas(
   delete target.endpoint
   // Each placement now names the served model an attached worker answers with.
   delete target.model
-  delete target.served_name
   target.replicas = placements
   return next
 }

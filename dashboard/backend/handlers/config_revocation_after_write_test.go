@@ -37,7 +37,7 @@ func TestConfigMutationRevokedAtFileCommitRestoresPreviousConfig(t *testing.T) {
 			name: "deploy", path: "/api/router/config/deploy",
 			body: func(t *testing.T) []byte {
 				t.Helper()
-				body, err := json.Marshal(DeployRequest{YAML: "routing:\n  decisions: []\n"})
+				body, err := json.Marshal(DeployRequest{YAML: "recipes:\n  - name: default\n"})
 				if err != nil {
 					t.Fatal(err)
 				}

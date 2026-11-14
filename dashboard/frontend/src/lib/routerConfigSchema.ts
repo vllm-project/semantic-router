@@ -16,6 +16,7 @@ interface JSONSchemaNode {
   oneOf?: JSONSchemaNode[]
   minimum?: number
   maximum?: number
+  deprecated?: boolean
 }
 
 interface RouterConfigDocument extends JSONSchemaNode {
@@ -57,9 +58,6 @@ function arrayFieldType(items: JSONSchemaNode | undefined): FieldSchema['type'] 
   const item = concreteSchema(items)
   if (item.type === 'string') return 'string[]'
   if (item.type === 'number' || item.type === 'integer') return 'number[]'
-  if (item.type === 'array' && concreteSchema(item.items ?? {}).type === 'string') {
-    return 'string[][]'
-  }
   if (item.type === 'object' || item.properties) return 'object[]'
   return 'json'
 }
@@ -137,9 +135,10 @@ function fieldsFromObjectSchema(
     typeof schemaOrRef === 'string' ? { $ref: schemaOrRef } : schemaOrRef,
   )
   const required = new Set(schema.required ?? [])
-  return Object.entries(schema.properties ?? {}).map(([key, property]) =>
-    fieldFromSchema(key, property, required.has(key), nextRefs),
-  )
+  // A deprecated field loads rewritten as its replacement, so no form offers it.
+  return Object.entries(schema.properties ?? {})
+    .filter(([, property]) => !property.deprecated)
+    .map(([key, property]) => fieldFromSchema(key, property, required.has(key), nextRefs))
 }
 
 export function routerConfigFieldsForRef(
@@ -208,13 +207,11 @@ export function algorithmFieldsFromRouterSchema(algorithmType: string): FieldSch
   const payloadKeys = ROUTER_CONFIG_EXTENSION.algorithms.flatMap((entry) =>
     'config_field' in entry && typeof entry.config_field === 'string' ? [entry.config_field] : [],
   )
-  // Native execution owns its budget, stages, and acceptance gate. Chat selectors
-  // can have their own payload field named quality (for example multi_factor).
-  const native = surface.execution === 'native'
-  const nativeFields = new Set(['budget', 'quality', 'stages'])
+  // budget and on_error are executor settings; selectors reject them.
+  const executorFields = new Set(['budget', 'on_error'])
   const common = routerConfigFieldsForRef('#/$defs/AlgorithmConfig', {
     omit: ['type', ...payloadKeys],
-  }).filter((field) => native === nativeFields.has(field.key))
+  }).filter((field) => surface.kind === 'executor' || !executorFields.has(field.key))
   if (!('schema_ref' in surface) || typeof surface.schema_ref !== 'string') return common
   const payloadFields = routerConfigFieldsForRef(surface.schema_ref)
   if (

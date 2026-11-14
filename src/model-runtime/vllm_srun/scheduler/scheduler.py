@@ -39,6 +39,7 @@ from __future__ import annotations
 import contextlib
 import heapq
 import itertools
+import logging
 import threading
 import time
 from collections import deque
@@ -54,7 +55,9 @@ from ..timing import RunTiming
 from .batching import Batcher, reference
 from .planner import cost
 
-__all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
+__all__ = ["DEADLINE", "Forward", "Scheduler", "SchedulerLimits"]
+
+log = logging.getLogger(__name__)
 
 # Seconds per token assumed until a lane's first forward is measured, and the
 # weight of each later forward in the lane's running estimate.
@@ -64,6 +67,8 @@ COST_SMOOTHING = 0.1
 # at most this many windows, checking every BURST_POLL_S once its own has passed.
 BURST_WINDOWS = 3
 BURST_POLL_S = 0.00025
+# How long ``stop`` waits for the worker by default.
+STOP_SECONDS = 10.0
 
 
 @dataclass
@@ -71,6 +76,24 @@ class SchedulerLimits:
     max_queue: int = 256
     max_queued_tokens: int = 1 << 22
     batch_window_ms: float = 2.0
+
+
+@dataclass(frozen=True, eq=False)
+class Forward:
+    """A forward in flight: when it started, its rows and tokens, and the requests whose rows it holds."""
+
+    started: float
+    rows: int
+    tokens: int
+    requests: int
+
+    def describe(self) -> str:
+        counts = (
+            (self.rows, "row"),
+            (self.tokens, "token"),
+            (self.requests, "request"),
+        )
+        return ", ".join(f"{n} {noun}{'' if n == 1 else 's'}" for n, noun in counts)
 
 
 @dataclass
@@ -106,6 +129,7 @@ class Scheduler:
         execute: Callable[[Callable[[], Any]], Any] | None = None,
         device_fault: Callable[[BaseException], bool] | None = None,
         planning: Callable[[float], bool] | None = None,
+        on_failure: Callable[[BaseException], None] | None = None,
     ):
         """``execute`` runs each batch where the device wants its work (the CPU's one thread).
 
@@ -114,6 +138,8 @@ class Scheduler:
         forward, which fails only the jobs of that batch. ``planning(opened)``
         says whether a request received before ``opened`` is still being
         planned: a batching window then waits for it (``_take``).
+        ``on_failure`` reports an unexpected worker exit before its outstanding
+        jobs are failed. Ordinary forward errors retain their per-batch handling.
         """
         self.model = model
         self.batcher = batcher
@@ -122,8 +148,10 @@ class Scheduler:
         self.execute = execute or (lambda work: work())
         self.device_fault = device_fault or (lambda error: False)
         self.planning = planning or (lambda opened: False)
+        self.on_failure = on_failure or (lambda error: None)
         self._queue: deque[_Pending] = deque()
         # Admitted jobs not yet answered, queued or planned, and their tokens.
+        self._futures: set[Future[Results[Any]]] = set()
         self._pending_jobs = 0
         self._pending_tokens = 0
         self._lock = threading.Condition()
@@ -134,6 +162,7 @@ class Scheduler:
         self._sequence = itertools.count()
         self._token_cost: dict[str, float] = {}
         self._owned = False
+        self._forward: Forward | None = None
         self._thread = threading.Thread(
             target=self._loop, name="vllm-srun-worker", daemon=True
         )
@@ -143,18 +172,23 @@ class Scheduler:
     def start(self) -> None:
         self._thread.start()
 
-    def stop(self) -> bool:
-        """Stop taking work and answer what is left; whether the worker has exited."""
+    def stop(self, timeout: float = STOP_SECONDS) -> bool:
+        """Stop taking work and answer what is left; whether the worker exited within ``timeout`` seconds."""
         with self._lock:
             self._stopped = True
             self._lock.notify_all()
         if self._thread.is_alive():
-            self._thread.join(timeout=10)
+            self._thread.join(timeout=timeout)
         return not self._thread.is_alive()
 
     @property
     def failure(self) -> BaseException | None:
         return self._failure
+
+    @property
+    def forward(self) -> Forward | None:
+        """The forward running now, on the worker or on a ``run_now`` caller, if any."""
+        return self._forward
 
     def depth(self) -> int:
         """Queued jobs plus planned batches still waiting for the device."""
@@ -181,9 +215,11 @@ class Scheduler:
 
         ``deadlines`` holds each job's own deadline. Admission counts every
         job not yet answered, queued or planned, and refuses the whole group
-        or none of it. ``timing`` records the group's forwards. ``reference``
-        jobs (the golden check) run alone, in their released forwards.
-        ``alone`` jobs (``Job.alone``) are planned without the batching window.
+        or none of it; with nothing pending it admits a group beyond either
+        bound, which could never run otherwise. ``timing`` records the
+        group's forwards. ``reference`` jobs (the golden check) run alone, in
+        their released forwards. ``alone`` jobs (``Job.alone``) are planned
+        without the batching window.
         """
         futures, pending = self._jobs(item_lists, deadlines, timing, reference, alone)
         if not pending:
@@ -191,10 +227,15 @@ class Scheduler:
         tokens = sum(entry.tokens for entry in pending)
         with self._lock:
             if self._stopped:
-                raise RuntimeServiceError("not_ready", "the runtime is shutting down")
-            if self._pending_jobs + len(pending) > self.limits.max_queue or (
-                self._pending_jobs
-                and self._pending_tokens + tokens > self.limits.max_queued_tokens
+                reason = (
+                    "the model worker failed"
+                    if self._failure is not None
+                    else "the runtime is shutting down"
+                )
+                raise RuntimeServiceError("not_ready", reason)
+            if self._pending_jobs and (
+                self._pending_jobs + len(pending) > self.limits.max_queue
+                or self._pending_tokens + tokens > self.limits.max_queued_tokens
             ):
                 raise RuntimeServiceError(
                     "overloaded", "the request queue is full; retry later"
@@ -280,6 +321,7 @@ class Scheduler:
     def _admit(self, pending: list[_Pending]) -> None:
         """Count jobs as pending until they are answered (the caller holds the lock)."""
         for entry in pending:
+            self._futures.add(entry.future)
             self._pending_jobs += 1
             self._pending_tokens += entry.tokens
             entry.future.add_done_callback(partial(self._settle, entry))
@@ -287,6 +329,7 @@ class Scheduler:
     def _settle(self, entry: _Pending, future: Future[Results[Any]]) -> None:
         """Release an answered job's admission; a cancelled one also leaves the queue."""
         with self._lock:
+            self._futures.discard(future)
             self._pending_jobs -= 1
             self._pending_tokens -= entry.tokens
             if future.cancelled():
@@ -302,16 +345,37 @@ class Scheduler:
 
     def _loop(self) -> None:
         while True:
-            taken = self._take(wait=not self._ready)
-            if taken is None:
-                self._abandon()
-                return
             try:
+                taken = self._take(wait=not self._ready)
+                if taken is None:
+                    self._abandon()
+                    return
                 self._plan(self._unstarted() + taken if taken else taken)
                 if self._ready:
                     self._run(heapq.heappop(self._ready))
+            except BaseException as exc:
+                self._fail_worker(exc)
+                return
             finally:
                 self._release()
+
+    def _fail_worker(self, error: BaseException) -> None:
+        """Close admission and settle all jobs, including work between queue and ready."""
+        with self._lock:
+            self._failure = error
+            self._stopped = True
+            futures = tuple(self._futures)
+            self._queue.clear()
+            self._ready.clear()
+            self._lock.notify_all()
+        log.exception("Model scheduler worker failed")
+        try:
+            self.on_failure(error)
+        except BaseException:
+            log.exception("Reporting model scheduler failure failed")
+        finally:
+            for future in futures:
+                _fail(future, error)
 
     def _unstarted(self) -> list[_Pending]:
         """Take back the planned batches whose jobs have not started, to plan them with new arrivals.
@@ -479,6 +543,7 @@ class Scheduler:
 
     def _run_batch(self, batch: Batch, members: list[_Pending], sequence: int) -> None:
         items = batch.items()
+        tokens = sum(cost(item) for item in items)
         started = time.monotonic()
         for pending in members:
             if not pending.started:
@@ -491,7 +556,11 @@ class Scheduler:
                 work = partial(self.model.run_approximate, items)
             else:
                 work = partial(self.model.run, items)
-            values = self.execute(work)
+            self._forward = Forward(started, len(items), tokens, len(members))
+            try:
+                values = self.execute(work)
+            finally:
+                self._forward = None
             # Validate the whole forward before publishing any job's results.
             if len(values) != len(items):
                 raise RuntimeError(
@@ -508,7 +577,6 @@ class Scheduler:
         ended = time.monotonic()
         _timed(members, sequence, started, ended)
         seconds = ended - started
-        tokens = sum(cost(item) for item in items)
         self.observe(
             "forward", {"seconds": seconds, "rows": len(items), "tokens": tokens}
         )

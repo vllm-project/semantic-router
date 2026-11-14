@@ -3,7 +3,17 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import chat, classify, images, looper, messages, provider_boundary, responses
+from . import (
+    chat,
+    embeddings,
+    held_stream,
+    images,
+    looper,
+    messages,
+    provider_boundary,
+    responses,
+    systemone,
+)
 from .cache import SessionCacheTracker
 from .provider_boundary import RequestStore
 from .settings import Settings
@@ -21,7 +31,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     instance.state.dispatch_counts = {}
     for router in (
         provider_boundary.router,
-        classify.router,
+        systemone.router,
+        embeddings.router,
+        held_stream.router,
         chat.router,
         responses.router,
         messages.router,

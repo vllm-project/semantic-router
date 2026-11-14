@@ -3,23 +3,54 @@
 import copy
 import json
 import os
+import shutil
+import tempfile
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 import yaml
+from cli import instance_paths
 from cli.commands.instance import instance
 from cli.instance_controller import ControllerHandler, ControllerServer
 from cli.instance_paths import (
+    MAX_UNIX_SOCKET_PATH_BYTES,
     instance_control_directory,
+    instance_socket_address,
     prepare_instance_control_directory,
 )
 from cli.instance_runtime import ContainerInstanceBackend
-from cli.instance_setup import attach_controller, controller_request
+from cli.instance_setup import attach_controller, controller_request, ensure_controller
 from cli.instance_state import InstanceConflictError, InstanceController
 from cli.runtime_stack import resolve_runtime_stack
 from click.testing import CliRunner
+
+
+@pytest.fixture(autouse=True)
+def short_root(monkeypatch):
+    """A short private directory that stands in for /tmp, removed afterwards."""
+
+    root = Path(tempfile.mkdtemp(prefix="vsr-", dir="/tmp"))
+    monkeypatch.setattr(instance_paths, "_SHORT_TEMPORARY_ROOT", root)
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    yield root
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def serve_controller(address, directory):
+    server = ControllerServer(address, ControllerHandler)
+    server.controller = InstanceController(directory, Backend())
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    return server, worker
+
+
+def stop_controller(server, worker):
+    server.shutdown()
+    server.server_close()
+    worker.join(3)
 
 
 class Backend:
@@ -71,12 +102,7 @@ def test_control_state_is_outside_dashboard_writable_runtime_tree(
 def test_unix_controller_serves_status_and_bounded_native_requests(tmp_path):
     directory = tmp_path / "controller"
     (directory / "socket").mkdir(parents=True)
-    server = ControllerServer(
-        str(directory / "socket" / "control.sock"), ControllerHandler
-    )
-    server.controller = InstanceController(directory, Backend())
-    worker = threading.Thread(target=server.serve_forever, daemon=True)
-    worker.start()
+    server, worker = serve_controller(instance_socket_address(directory), directory)
     try:
         assert controller_request(directory, "/status")["observed_mode"] == "router"
         assert controller_request(directory, "/models")["object"] == "list"
@@ -87,9 +113,100 @@ def test_unix_controller_serves_status_and_bounded_native_requests(tmp_path):
                 directory, "/deploy", {"mode": "invalid", "request_id": "x"}
             )
     finally:
-        server.shutdown()
-        server.server_close()
-        worker.join(3)
+        stop_controller(server, worker)
+
+
+def test_a_long_home_path_serves_its_controller_through_a_short_address(
+    tmp_path, monkeypatch, short_root
+):
+    monkeypatch.setenv("HOME", str(tmp_path / ("a-long-home-directory-" * 4)))
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    monkeypatch.setattr("cli.instance_paths.cli_user_share_gid", os.getgid)
+    directory = prepare_instance_control_directory(str(tmp_path / "recipe"), "one")
+    mounted = directory / "socket" / "control.sock"
+    assert len(os.fsencode(mounted)) > MAX_UNIX_SOCKET_PATH_BYTES
+
+    address = Path(instance_socket_address(directory))
+
+    assert len(os.fsencode(address)) <= MAX_UNIX_SOCKET_PATH_BYTES
+    assert address.parent.parent == short_root / f"vllm-sr-{os.geteuid()}"
+    assert address.parent.parent.stat().st_mode & 0o777 == 0o700
+    assert address.parent.resolve() == (directory / "socket").resolve()
+    server, worker = serve_controller(str(address), directory)
+    try:
+        # The Dashboard mounts the socket directory; the socket is there.
+        assert mounted.is_socket()
+        assert controller_request(directory, "/status")["observed_mode"] == "router"
+    finally:
+        stop_controller(server, worker)
+    assert instance_socket_address(directory) == str(address)
+
+
+def test_the_short_address_prefers_a_private_xdg_runtime_dir(
+    tmp_path, monkeypatch, short_root
+):
+    runtime = short_root / "run"
+    runtime.mkdir(mode=0o700)
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(runtime))
+    directory = tmp_path / ("d" * 100)
+
+    address = Path(instance_socket_address(directory))
+    assert address.parent.parent == runtime / "vllm-sr"
+    assert address.parent.resolve() == (directory / "socket").resolve()
+
+    # The spec requires a runtime directory only its user can enter.
+    runtime.chmod(0o755)
+    fallback = Path(instance_socket_address(directory)).parent.parent
+    assert fallback == short_root / f"vllm-sr-{os.geteuid()}"
+
+
+def test_a_short_state_directory_keeps_its_direct_socket_path(short_root):
+    directory = short_root / "instance"
+
+    assert instance_socket_address(directory) == str(
+        directory / "socket" / "control.sock"
+    )
+    assert not (short_root / f"vllm-sr-{os.geteuid()}").exists()
+
+
+def test_a_fallback_directory_another_user_owns_is_refused_with_the_way_out(
+    tmp_path, monkeypatch, short_root
+):
+    user = os.geteuid()
+    squatted = short_root / f"vllm-sr-{user + 1}"
+    squatted.mkdir(mode=0o700)
+    monkeypatch.setattr(os, "geteuid", lambda: user + 1)
+
+    with pytest.raises(ValueError, match="owned by the current user") as refused:
+        instance_socket_address(tmp_path / ("d" * 100))
+    assert f"remove {squatted} or set XDG_RUNTIME_DIR" in str(refused.value)
+
+
+def test_an_address_still_too_long_names_the_limit_and_the_setting(
+    tmp_path, monkeypatch
+):
+    long_root = Path(tempfile.mkdtemp(prefix="vsr-", dir="/tmp")) / ("t" * 80)
+    long_root.mkdir()
+    monkeypatch.setattr(instance_paths, "_SHORT_TEMPORARY_ROOT", long_root)
+    try:
+        with pytest.raises(ValueError) as refused:
+            instance_socket_address(tmp_path / ("d" * 100))
+    finally:
+        shutil.rmtree(long_root.parent)
+    assert f"longer than the {MAX_UNIX_SOCKET_PATH_BYTES} bytes" in str(refused.value)
+    assert "set XDG_RUNTIME_DIR to a shorter private directory" in str(refused.value)
+
+
+def test_a_controller_that_cannot_start_says_why(short_root):
+    directory = short_root / "instance"
+    (directory / "socket").mkdir(parents=True)
+
+    # Without a manifest the controller exits at once.
+    with pytest.raises(RuntimeError) as failed:
+        ensure_controller(directory)
+
+    assert "failed to start: FileNotFoundError" in str(failed.value)
+    assert f"its log is {directory / 'controller.log'}" in str(failed.value)
 
 
 def request(controller, **kwargs):
@@ -170,8 +287,8 @@ def test_preparation_failure_leaves_previous_desire(tmp_path):
 
 def frontend_backend(tmp_path):
     document = {
-        "version": "v0.3",
-        "routing": {"decisions": [{"name": "kept-router-policy"}]},
+        "version": "v0.5",
+        "recipes": [{"name": "default", "decisions": [{"name": "kept-router-policy"}]}],
         "global": {
             "router": {"enabled": True},
             "model_catalog": {
@@ -240,7 +357,7 @@ def test_mode_only_publication_preserves_models_routing_and_container_lifetime(
         assert result["operation"]["phase"] == "ready"
         assert result["active_deployment"] == "primary"
         assert result["observed_mode"] == "engine"
-        assert state["document"]["routing"] == before["routing"]
+        assert state["document"]["recipes"] == before["recipes"]
         assert (
             state["document"]["global"]["model_catalog"]
             == before["global"]["model_catalog"]
@@ -348,7 +465,7 @@ def test_attach_preserves_actual_accelerator_scope_without_copying_credentials(
     directory = tmp_path / "controller"
     directory.mkdir()
     active = tmp_path / "active.yaml"
-    active.write_text("version: v0.3\n")
+    active.write_text("version: v0.5\n")
     paths = {"effective_config_path": str(active), "models_dir": str(tmp_path)}
 
     def inspect(command, **_kwargs):
@@ -386,7 +503,7 @@ def test_attach_preserves_actual_accelerator_scope_without_copying_credentials(
 
 def test_instance_attach_and_models_use_supported_controller_commands(tmp_path):
     source = tmp_path / "config.yaml"
-    source.write_text("version: v0.3\n")
+    source.write_text("version: v0.5\n")
     arguments = ["--config", str(source)]
     with (
         patch("cli.commands.instance.attach_controller") as attach,

@@ -1,12 +1,14 @@
-# Retention Directives
+# Retention
 
 ## Overview
 
-A retention directive adds bounded state-handling instructions to a matched
-decision. It can skip a response-cache write, shorten that write's lifetime,
+A decision's `retention` attribute adds bounded state-handling instructions to
+the decision. It can skip a response-cache write, shorten that write's lifetime,
 keep the current model for a session, or emit a prefix-retention hint.
 
-Retention is an `emits` directive, not a signal, algorithm, or plugin.
+Retention is a decision attribute, not a signal, algorithm, or plugin. It
+replaces the `emits` list, whose only kind was retention; a configuration that
+still writes `emits` fails to load, and `vllm-sr config migrate` rewrites it.
 
 ## Key Advantages
 
@@ -35,22 +37,21 @@ configure a storage backend.
 ## Configuration
 
 ```yaml
-routing:
-  decisions:
-    - name: sensitive-turn
-      description: Drop retained state for sensitive turns.
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: pii
-            name: restricted_pii
-      modelRefs:
-        - model: private-model
-      emits:
-        - kind: retention
-          retention:
-            drop: true
+recipes:
+  - name: default
+    decisions:
+      - name: sensitive-turn
+        description: Drop retained state for sensitive turns.
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: restricted_pii
+        modelRefs:
+          - model: private-model
+        retention:
+          drop: true
 ```
 
 The equivalent DSL is:
@@ -60,7 +61,7 @@ ROUTE sensitive-turn {
   PRIORITY 200
   WHEN pii("restricted_pii")
   MODEL "private-model"
-  EMIT retention {
+  RETENTION {
     drop: true
   }
 }
@@ -71,13 +72,13 @@ ROUTE sensitive-turn {
 | Field | Effect | Important limit |
 |---|---|---|
 | `drop: true` | Skips the response-cache write for the matched decision | It does not prevent a cache read earlier in the same request |
-| `ttl_turns` | Overrides the response-cache entry lifetime using the Router's turn-to-time mapping | It is a cache TTL hint, not durable conversation retention |
+| `ttl_turns` | Shortens the response-cache entry lifetime to at most `ttl_turns` turns, using the Router's turn-to-time mapping; a shorter `ttl_seconds` (the plugin's, else the store's) or caller `ttl` still applies, and a `0` from either still stores nothing | It is a cache TTL hint, not durable conversation retention |
 | `keep_current_model: true` | Forces the model-switch gate to stay on the known current model | It has no effect when session/current-model identity is unavailable |
-| `prefer_prefix_retention: true` | Emits `x-vsr-retention-prefer-prefix` for the inference pool | The Router does not itself manage a provider's KV-cache eviction |
+| `prefer_prefix_retention: true` | Reported as `prefer_prefix` in the `retention` member of `x-vsr-trace` | The Router does not itself manage a provider's KV-cache eviction |
 
 `drop: true` and a positive `ttl_turns` cannot be set together. A decision can
-emit only one retention directive. Explicit values are exposed through bounded
-`x-vsr-retention-*` response headers and routing diagnostics.
+emit only one retention directive. Explicit values are reported in the
+`retention` member of `x-vsr-trace` and in routing diagnostics.
 
 ## Data and Security
 

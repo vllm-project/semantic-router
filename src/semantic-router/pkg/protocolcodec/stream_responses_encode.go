@@ -150,7 +150,7 @@ func (encoder *responsesStreamEncoder) ensureResponsesOutputStarted(
 	case responsesOutputTool:
 		item.Type = "function_call"
 		if event.ToolCall != nil {
-			item.CallID, item.Name = event.ToolCall.ID, event.ToolCall.Name
+			item.CallID, item.Name, item.Namespace = event.ToolCall.ID, event.ToolCall.Name, event.ToolCall.Namespace
 			// The input is carried by delta events. Starting with the first
 			// fragment here would duplicate it when clients reconstruct the call.
 			item.Arguments = ""
@@ -281,25 +281,14 @@ func (encoder *responsesStreamEncoder) responsesCompletionWire(
 		Type:     "response.completed",
 		Response: &response,
 	}
-	switch event.StopReason {
-	case llmprotocol.StopMaxTokens, llmprotocol.StopContentFilter:
-		wire.Type = "response.incomplete"
-		wire.Response.Status = "incomplete"
-		reason := "max_output_tokens"
-		if event.StopReason == llmprotocol.StopContentFilter {
-			reason = "content_filter"
-		}
-		wire.Response.IncompleteDetails = &struct {
-			Reason string `json:"reason"`
-		}{Reason: reason}
-	case llmprotocol.StopPaused, llmprotocol.StopContextWindow, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
-		var diagnostics llmprotocol.Diagnostics
-		if err := appendLossy(&diagnostics, encoder.policy, encoder.context.Source, encoder.context.Target, "response.stop_reason", "Responses cannot represent the source terminal reason"); err != nil {
-			return responsesEventWire{}, diagnostics, err
-		}
-		return wire, diagnostics, nil
+	var diagnostics llmprotocol.Diagnostics
+	if err := applyResponsesStopReason(&response, event.StopReason, encoder.context.Source, encoder.policy, &diagnostics); err != nil {
+		return responsesEventWire{}, diagnostics, err
 	}
-	return wire, nil, nil
+	if response.Status == "incomplete" {
+		wire.Type = "response.incomplete"
+	}
+	return wire, diagnostics, nil
 }
 
 func (encoder *responsesStreamEncoder) responsesFailureWire(
@@ -596,7 +585,7 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesOutput(
 	}
 	item := responsesItemWire{
 		Type: "function_call", ID: id, Status: "completed",
-		CallID: event.ToolCall.ID, Name: event.ToolCall.Name, Arguments: event.ToolCall.Arguments,
+		CallID: event.ToolCall.ID, Name: event.ToolCall.Name, Namespace: event.ToolCall.Namespace, Arguments: event.ToolCall.Arguments,
 	}
 	if event.ToolCall.Kind == llmprotocol.ToolKindCustom {
 		item.Type, item.Input, item.Arguments = "custom_tool_call", event.ToolCall.Arguments, ""

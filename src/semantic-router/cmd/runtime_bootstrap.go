@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -165,22 +166,28 @@ func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
 	return cfg
 }
 
-func newStartupWriter(cfg *config.RouterConfig, configPath string, registry *routerruntime.Registry) startupstatus.StatusWriter {
-	writer := registry.StartupStatusWriter(buildStartupWriter(cfg, configPath))
+func newStartupWriter(cfg *config.RouterConfig, configPath string, registry *routerruntime.Registry) (startupstatus.StatusWriter, func() error) {
+	backend := buildStartupWriter(cfg, configPath, registry.InstanceID())
+	closeWriter := func() error { return nil }
+	if closer, ok := backend.(io.Closer); ok {
+		closeWriter = closer.Close
+	}
+	writer := registry.StartupStatusWriter(backend)
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "starting",
 		Ready:   false,
 		Message: "Router process booting...",
 	}, "Failed to write initial startup status")
-	return writer
+	return writer, closeWriter
 }
 
-func buildStartupWriter(cfg *config.RouterConfig, configPath string) startupstatus.StatusWriter {
+func buildStartupWriter(cfg *config.RouterConfig, configPath, instanceID string) startupstatus.StatusWriter {
 	if cfg.StartupStatus.StoreBackend == "redis" && cfg.StartupStatus.Redis != nil {
 		rw, err := startupstatus.NewRedisWriter(startupstatus.RedisWriterConfig{
-			Address:  cfg.StartupStatus.Redis.Address,
-			Password: cfg.StartupStatus.Redis.Password,
-			DB:       cfg.StartupStatus.Redis.DB,
+			InstanceID: instanceID,
+			Address:    cfg.StartupStatus.Redis.Address,
+			Password:   cfg.StartupStatus.Redis.Password,
+			DB:         cfg.StartupStatus.Redis.DB,
 		})
 		if err != nil {
 			logging.ComponentWarnEvent("router", "startup_status_redis_fallback", map[string]interface{}{
@@ -382,35 +389,31 @@ func startProfilingServerIfEnabled(
 }
 
 func initializeRuntimeDependencies(
-	ctx context.Context,
 	cfg *config.RouterConfig,
 	writer startupstatus.StatusWriter,
 	shutdownHooks *[]func(context.Context) error,
 	runtimeRegistry *routerruntime.Registry,
-) (modelruntime.EmbeddingRuntimeState, error) {
+) error {
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "initializing_models",
 		Ready:   false,
-		Message: "Initializing embedding models and router dependencies...",
+		Message: "Initializing router dependencies...",
 	}, "Failed to write initialization startup status")
-
-	embeddingState := modelruntime.EmbeddingRuntimeState{}
-
-	writeStartupState(writer, startupstatus.State{
-		Phase:             "initializing_models",
-		Ready:             false,
-		Message:           "Runtime dependencies initialized. Starting router services...",
-		EmbeddingProvider: startupEmbeddingProviderStatus(embeddingState),
-	}, "Failed to write runtime dependency startup status")
 
 	// Vector store ingestion embeds through the managed model runtime.
 	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
 	// Explicit global stores serve management APIs as well as routing and
 	// keep their own scoped embedding lease across capability changes.
 	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
-		return embeddingState, err
+		return err
 	}
-	return embeddingState, nil
+
+	writeStartupState(writer, startupstatus.State{
+		Phase:   "initializing_models",
+		Ready:   false,
+		Message: "Runtime dependencies initialized. Starting router services...",
+	}, "Failed to write runtime dependency startup status")
+	return nil
 }
 
 // startModelRuntimeManager starts the model_runtime deployments the config
@@ -460,28 +463,6 @@ func cloneBoolPtr(value *bool) *bool {
 	return &clone
 }
 
-func logRuntimeLifecycleEvent(event modelruntime.Event) {
-	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
-		return
-	}
-	payload := map[string]interface{}{
-		"task":        event.Task,
-		"best_effort": event.BestEffort,
-	}
-	if event.Error != nil {
-		payload["error"] = event.Error.Error()
-	}
-	if event.Status == modelruntime.TaskSkipped {
-		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_skipped", payload)
-		return
-	}
-	if event.BestEffort {
-		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_failed", payload)
-		return
-	}
-	logging.ComponentErrorEvent("router", "runtime_lifecycle_task_failed", payload)
-}
-
 func initializeVectorStoreIfEnabled(
 	cfg *config.RouterConfig,
 	shutdownHooks *[]func(context.Context) error,
@@ -522,14 +503,6 @@ func registerVectorStoreShutdownHook(
 			return err
 		}
 		return nil
-	})
-}
-
-func warmupRouterRuntime(ctx context.Context, server *extproc.Server) error {
-	return server.WarmupRouter(ctx, modelruntime.WarmupRouterOptions{
-		Component:      "router",
-		MaxParallelism: 2,
-		OnEvent:        logRuntimeLifecycleEvent,
 	})
 }
 

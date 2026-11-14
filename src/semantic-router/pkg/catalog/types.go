@@ -212,9 +212,30 @@ type ProviderInstance struct {
 	// ProviderInstance an internal materialization contract.
 	AuthPrefixSet bool   `json:"-" yaml:"-"`
 	ChatPath      string `json:"chat_path,omitempty" yaml:"chat_path,omitempty"`
-	// TrustedGateway receives the request's trusted gateway credential in
-	// place of a configured credential.
-	TrustedGateway bool `json:"trusted_gateway,omitempty" yaml:"trusted_gateway,omitempty"`
+	// AuthCredential is the credential mode: delegated receives the
+	// requesting user's delegated credential in place of a configured one.
+	AuthCredential string `json:"auth_credential,omitempty" yaml:"auth_credential,omitempty"`
+	// TLS is how an https instance is verified; nil keeps the system roots
+	// and the endpoint's host.
+	TLS *ProviderTLS `json:"tls,omitempty" yaml:"tls,omitempty"`
+}
+
+// ProviderTLS verifies an https provider instance against CAFile (else the
+// system roots) under ServerName (else the endpoint's host), and presents
+// CertFile and KeyFile when set.
+type ProviderTLS struct {
+	CAFile     string `json:"ca_file,omitempty" yaml:"ca_file,omitempty"`
+	ServerName string `json:"server_name,omitempty" yaml:"server_name,omitempty"`
+	CertFile   string `json:"cert_file,omitempty" yaml:"cert_file,omitempty"`
+	KeyFile    string `json:"key_file,omitempty" yaml:"key_file,omitempty"`
+}
+
+func cloneProviderTLS(value *ProviderTLS) *ProviderTLS {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
 
 // ModelProviderBinding binds a request-facing model alias to one provider
@@ -356,9 +377,6 @@ type ModelCardOverlay struct {
 	Tags              *[]string                  `json:"tags,omitempty" yaml:"tags,omitempty"`
 	LoRAs             *[]LoRAAdapter             `json:"loras,omitempty" yaml:"loras,omitempty"`
 	Verification      *ModelVerification         `json:"verification,omitempty" yaml:"verification,omitempty"`
-	// RuntimeModality preserves the existing router-specific ar/diffusion/omni
-	// classification while canonical model facts use input/output modalities.
-	RuntimeModality *string `json:"-" yaml:"-"`
 }
 
 // EvaluationConfig is the optional operator extension surface.
@@ -541,10 +559,9 @@ type IndexResult struct {
 type FieldProvenance map[string]string
 
 type EffectiveModelCard struct {
-	Card            ModelCard       `json:"card"`
-	LoRAs           []LoRAAdapter   `json:"loras,omitempty"`
-	Provenance      FieldProvenance `json:"provenance"`
-	RuntimeModality string          `json:"runtime_modality,omitempty"`
+	Card       ModelCard       `json:"card"`
+	LoRAs      []LoRAAdapter   `json:"loras,omitempty"`
+	Provenance FieldProvenance `json:"provenance"`
 }
 
 type EffectiveProvider struct {

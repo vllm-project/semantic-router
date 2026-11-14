@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -24,7 +25,12 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// The skip-processing opt-out would bypass a listener's model allow-list,
 	// so a restricted listener does not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
-	r.captureGatewayCredential(ctx)
+	r.captureDelegatedCredential(ctx)
+	r.captureCallerCredential(ctx)
+	if r.Config != nil {
+		ctx.sessionIDHeaders = r.Config.Headers.SessionIDHeaderNames()
+		ctx.identity = r.Config.Authz.Identity
+	}
 	r.gateDebugHeaders(ctx)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
@@ -49,18 +55,20 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		mutation := buildLooperInternalHeaderRemovalMutation()
-		r.appendGatewayCredentialRemoval(mutation)
-		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
+		mutation := buildLooperInternalHeaderRemovalMutation(ctx.identity)
+		r.appendDelegatedCredentialRemoval(mutation)
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
+		// Per-user keys reach a provider only as its credential, which a
+		// skipped request never gets.
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.CredentialResolver.HeadersToStrip()...)
 		if isAzureOpenAIPath(path) {
 			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
 		}
 		response := newContinueRequestHeadersResponse(mutation)
-		if headerValueCI(ctx, headers.SelectedModel) != "" {
-			// A caller-supplied selected-model header may have selected a provider
-			// route before ext_proc ran. Skip-processing does not materialize a
-			// provider path, so remove the untrusted selector and re-evaluate onto
+		if requestCarriesHeader(v, headers.VSRRouteModel) {
+			// A caller-supplied route key may have selected a provider route
+			// before ext_proc ran. Skip-processing does not materialize a
+			// provider path, so remove the untrusted key and re-evaluate onto
 			// the default route, which owns the ingress path-prefix rewrite.
 			response.GetRequestHeaders().GetResponse().ClearRouteCache = true
 		}
@@ -82,8 +90,8 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if requiresBody && v.RequestHeaders.GetEndOfStream() {
 		return r.rejectBodylessInferenceRequest(ctx), nil
 	}
-	mutation := buildIdentityEncodingRequestMutation()
-	r.appendGatewayCredentialRemoval(mutation)
+	mutation := buildIdentityEncodingRequestMutation(ctx.identity)
+	r.appendDelegatedCredentialRemoval(mutation)
 	mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 	if isAzureOpenAIPath(path) {
 		// The Azure client key authenticates to the Router, never to a provider.
@@ -215,6 +223,17 @@ func detectStreamingExpectation(ctx *RequestContext) {
 	}
 }
 
+// requestCarriesHeader reports whether the client's request carried name,
+// which markLooperHop may since have dropped from the context.
+func requestCarriesHeader(v *ext_proc.ProcessingRequest_RequestHeaders, name string) bool {
+	for _, header := range v.RequestHeaders.GetHeaders().GetHeaders() {
+		if strings.EqualFold(header.GetKey(), name) && extractHeaderValue(header) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func extractHeaderValue(header interface {
 	GetValue() string
 	GetRawValue() []byte
@@ -227,7 +246,7 @@ func extractHeaderValue(header interface {
 	return headerValue
 }
 
-func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
+func buildIdentityEncodingRequestMutation(identity config.IdentityConfig) *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
 		SetHeaders: []*core.HeaderValueOption{{
 			Header: &core.HeaderValue{
@@ -235,7 +254,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: providerBoundRemovals(identity),
 	}
 }
 

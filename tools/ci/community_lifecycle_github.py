@@ -82,7 +82,11 @@ class GitHubClient:
             )
             headers, body = split_http_response(result.stdout)
             remaining = headers.get("x-ratelimit-remaining", "")
-            if remaining.isdigit():
+            # GraphQL's separate pool must not replace the REST reserve.
+            if (
+                remaining.isdigit()
+                and headers.get("x-ratelimit-resource", "core") == "core"
+            ):
                 self.rate_limit_remaining = int(remaining)
             if result.returncode == 0:
                 return json.loads(body) if body.strip() else None
@@ -457,33 +461,87 @@ def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
         raise SystemExit(1)
 
 
+ACCEPTANCE_QUEUE_QUERY = """
+  query ($owner: String!, $repo: String!, $label: String!, $since: DateTime,
+         $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      issues(
+        first: 50
+        after: $cursor
+        states: OPEN
+        labels: [$label]
+        filterBy: {since: $since}
+        orderBy: {field: UPDATED_AT, direction: DESC}
+      ) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          number
+          comments(last: 100) {
+            totalCount
+            nodes { body author { __typename login } }
+          }
+        }
+      }
+    }
+  }
+"""
+
+
+def accept_actors(comments: list[dict[str, Any]]) -> set[str]:
+    """Return the REST logins of the authors of exact ``/accept`` comments."""
+
+    actors: set[str] = set()
+    for comment in comments:
+        author = comment.get("author") or {}
+        login = author.get("login")
+        if comment.get("body") == "/accept" and login:
+            # GraphQL drops the "[bot]" suffix that REST keeps on app logins.
+            actors.add(f"{login}[bot]" if author.get("__typename") == "Bot" else login)
+    return actors
+
+
 def acceptance_sweep_candidates(
     client: GitHubClient, repo: str, since: str | None
-) -> list[int]:
-    """List open ``needs-acceptance`` issues with comments, newest activity first.
+) -> list[tuple[int, set[str] | None]]:
+    """List open ``needs-acceptance`` issues with their ``/accept`` actors.
 
-    The numbers are collected before any write because accepting an issue
-    removes it from the listing being paged.
+    Newest activity comes first. Each request returns fifty issues with their
+    latest hundred comments; ``None`` marks a longer thread, whose comments the
+    sweep reads separately. The list is complete before any write because
+    accepting an issue removes it from the queue being paged.
     """
 
-    query = (
-        f"repos/{repo}/issues?state=open&labels={quote(NEEDS_ACCEPTANCE, safe='')}"
-        f"&sort=updated&direction=desc&per_page={API_PAGE_SIZE}"
-    )
-    if since:
-        query += f"&since={quote(since, safe='')}"
-    numbers: list[int] = []
-    page = 1
+    owner, name = repo.split("/", 1)
+    candidates: list[tuple[int, set[str] | None]] = []
+    cursor: str | None = None
     while True:
-        issues = client.request(f"{query}&page={page}") or []
-        numbers.extend(
-            int(issue["number"])
-            for issue in issues
-            if "pull_request" not in issue and issue.get("comments")
+        result = client.request(
+            "graphql",
+            method="POST",
+            payload={
+                "query": ACCEPTANCE_QUEUE_QUERY,
+                "variables": {
+                    "owner": owner,
+                    "repo": name,
+                    "label": NEEDS_ACCEPTANCE,
+                    "since": since,
+                    "cursor": cursor,
+                },
+            },
         )
-        if len(issues) < API_PAGE_SIZE:
-            return numbers
-        page += 1
+        issues = result["data"]["repository"]["issues"]
+        for issue in issues["nodes"]:
+            thread = issue["comments"]
+            complete = thread["totalCount"] <= len(thread["nodes"])
+            candidates.append(
+                (
+                    int(issue["number"]),
+                    accept_actors(thread["nodes"]) if complete else None,
+                )
+            )
+        if not issues["pageInfo"]["hasNextPage"]:
+            return candidates
+        cursor = issues["pageInfo"]["endCursor"]
 
 
 def sweep_issue_acceptance(
@@ -495,8 +553,9 @@ def sweep_issue_acceptance(
 ) -> None:
     """Backfill missed ``/accept`` decisions without spending the API budget.
 
-    Each candidate costs a few requests, so the sweep stops before one once
-    the token's remaining budget reaches ``reserve``. Accepted issues leave
+    The queue is read through GraphQL, so only an issue with an ``/accept``
+    costs REST requests, a few each. The sweep stops before one once the
+    token's remaining REST budget reaches ``reserve``. Accepted issues leave
     ``needs-acceptance``, so the next run resumes with the rest.
     """
 
@@ -506,7 +565,7 @@ def sweep_issue_acceptance(
     failures = 0
     window = f"updated since {since}" if since else "open"
     print(f"::notice::Found {len(candidates)} {window} issue(s) awaiting acceptance.")
-    for index, number in enumerate(candidates):
+    for index, (number, queued_actors) in enumerate(candidates):
         remaining = client.rate_limit_remaining
         if remaining is not None and remaining <= reserve:
             print(
@@ -516,7 +575,11 @@ def sweep_issue_acceptance(
             )
             break
         try:
-            actors = issue_acceptance_actors(client, repo, number)
+            actors = (
+                issue_acceptance_actors(client, repo, number)
+                if queued_actors is None
+                else queued_actors
+            )
             if not actors:
                 results["uncommanded"] += 1
                 continue
