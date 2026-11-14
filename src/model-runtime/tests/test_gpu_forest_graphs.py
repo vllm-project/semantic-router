@@ -10,11 +10,14 @@ Two inputs share each shape, so a result kept from one must survive the other's 
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 torch = pytest.importorskip("torch")
 
 from vllm_srun.accel.cuda import CUDAAccelerator  # noqa: E402
+from vllm_srun.config import ModelConfig, ServeConfig  # noqa: E402
 from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
 from vllm_srun.families.vela2.family import Vela2Family  # noqa: E402
 from vllm_srun.plugins.base import (  # noqa: E402
@@ -23,6 +26,7 @@ from vllm_srun.plugins.base import (  # noqa: E402
     PackageRef,
     TreeBatch,
 )
+from vllm_srun.runtime import Runtime  # noqa: E402
 from vllm_srun.testing.vela2 import write_decoder_package  # noqa: E402
 
 pytestmark = pytest.mark.gpu
@@ -109,6 +113,69 @@ def test_engine_graph_replays_equal_the_eager_engine(tmp_path):
     ), stats
 
 
+def test_runtime_surface_exposes_graph_admission(tmp_path):
+    """A runtime-loaded CUDA model answers and its engine obeys graph admission."""
+    accelerator = CUDAAccelerator()
+    if not accelerator.available():
+        pytest.skip("needs a CUDA GPU")
+    package = write_decoder_package(tmp_path / "served-decoder")
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), device="cuda:0", name="graph"),),
+            exit_on_device_error=False,
+        )
+    )
+    runtime.start(background=False)
+    try:
+        served = runtime.served[0]
+        engine_model = served.model.engine_model
+        graphs = engine_model.graphs
+        assert graphs is not None
+        graphs.max_graphs = 4
+        graphs.hot_capture_after = 4
+        graphs.budget = 1 << 60  # Exercise graph-count pressure deterministically.
+
+        status, body = asyncio.run(
+            runtime.call(
+                "decisions",
+                {
+                    "model": "graph",
+                    "state": "word " * 9,
+                    "questions": {
+                        "q": {
+                            "type": "noul",
+                            "instructions": "Is this about cooking?",
+                        }
+                    },
+                },
+            )
+        )
+        assert status == 200, body
+
+        generator = torch.Generator().manual_seed(5)
+        early = [forest(*case, generator) for case in FORESTS[:3]]
+        late = rows(ROWS[0], generator)
+        for batch in early:
+            outputs(engine_model, batch)
+            outputs(engine_model, batch)
+        for _ in range(graphs.hot_capture_after + 1):
+            outputs(engine_model, late)
+
+        stats = graphs.receipt()
+        assert served.health.state == "ready" and served.device_failure() is None
+        assert (
+            stats["captures"] > 0
+            and stats["replays"] > 0
+            and stats["eager_reasons"]["pressure"] > 0
+            and stats["lookups"] == stats["eager"] + stats["replays"]
+            and stats["misses"] >= stats["captures"]
+            and sum(stats["eager_reasons"].values()) == stats["eager"]
+            and stats["cached"] <= graphs.max_graphs
+        ), stats
+    finally:
+        runtime.stop()
+
+
 def test_no_graph_is_captured_past_the_memory_budget(tmp_path):
     (model,) = load(tmp_path, (True,))
     model.graphs.max_bytes = 0
@@ -116,7 +183,73 @@ def test_no_graph_is_captured_past_the_memory_budget(tmp_path):
     for _ in range(3):
         model.tree(batch)
     stats = model.receipt()["graphs"]
-    assert stats["captures"] == 0 and stats["full"] > 0, stats
+    assert (
+        stats["captures"] == 0
+        and stats["full"] > 0
+        and stats["eager_reasons"]["full"] > 0
+    ), stats
+
+
+@pytest.mark.parametrize("pressure", ["graphs", "bytes"])
+def test_cache_pressure_admits_a_late_hot_shape(tmp_path, pressure):
+    """At 75% capacity, a later shape waits until it proves it is hot."""
+    graphed, eager = load(tmp_path, (True, False))
+    graphs = graphed.graphs
+    assert graphs is not None
+    graphs.hot_capture_after = 4
+    early_count = 3 if pressure == "graphs" else 1
+    if pressure == "graphs":
+        graphs.max_graphs = 4
+        graphs.budget = 1 << 60  # Isolate graph-count pressure from byte pressure.
+    generator = torch.Generator().manual_seed(5)
+    early = [forest(*case, generator) for case in FORESTS[:early_count]]
+    late = rows(ROWS[0], generator)
+
+    def assert_same(batch):
+        for got, want in zip(
+            outputs(graphed, batch), outputs(eager, batch), strict=True
+        ):
+            assert torch.equal(got, want)
+
+    for batch in early:
+        assert_same(batch)
+        assert_same(batch)
+    assert graphed.receipt()["graphs"]["cached"] == early_count
+    if pressure == "bytes":
+        assert graphs.budget is not None and graphs.spent > 0
+        # Use the real capture's footprint, not synthetic spent bytes, to cross 75%.
+        graphs.budget = graphs.spent * 4 // 3
+    assert graphs._under_pressure()
+
+    for _ in range(3):
+        assert_same(late)
+    before = graphed.receipt()["graphs"]
+    assert (
+        before["cached"] == early_count
+        and before["candidates"] == 1
+        and before["lookups"]
+        == before["eager"] + before["replays"]
+        == early_count * 2 + 3
+        and before["misses"] == before["lookups"]
+        and before["eager_reasons"]["warmup"] == early_count
+        and before["eager_reasons"]["pressure"] == 3
+        and before["spent_bytes"] < before["budget_bytes"]
+    ), before
+
+    assert_same(late)
+    after = graphed.receipt()["graphs"]
+    assert (
+        after["cached"] == early_count + 1
+        and after["candidates"] == 0
+        and after["captures"] == early_count + 1
+        and after["lookups"] == after["eager"] + after["replays"] == early_count * 2 + 4
+        and after["misses"] == after["lookups"]
+        and after["budget_bytes"] == before["budget_bytes"]
+    ), after
+    assert_same(late)
+    replayed = graphed.receipt()["graphs"]
+    assert replayed["misses"] == after["misses"]
+    assert replayed["replays"] == after["replays"] + 1
 
 
 def test_eager_memory_does_not_spend_the_graph_budget(tmp_path):
