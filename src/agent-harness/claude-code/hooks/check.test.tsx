@@ -39,6 +39,19 @@ test('an answer that keeps to what the turn read is GROUNDED, judged against the
   )
 })
 
+test('check reads a command as it ran: after a cd a path shortened for the card would name another file', { options: { check: true } }, async ($, on) => {
+  const reply: Reply = { hallucination: 0.05, bodies: [] }
+  engine(on, reply)
+  on('tool.call', () => ({ result: { stdout: TICKET, stderr: '', interrupted: false } }))
+  const command = 'cd /other && cat /repo/support/ticket-1042.txt'
+
+  await $.turn.start({ turnId: 't1', text: PROMPT })
+  await $.tool.call({ tool: 'Bash', command, tool_use_id: 'b1' })
+  await $.turn.complete({ turnId: 't1', answer: FAITHFUL, reason: 'answer', durationMs: 1, isAborted: false })
+
+  expect(reply.bodies?.find(body => body.questions.hallucination)?.state.context).toBe(`${command}:\n${TICKET}`)
+})
+
 test('an answer with claims the reads do not back is UNVERIFIED', { options: { check: true } }, async ($, on) => {
   engine(on, { hallucination: 0.53 })
   on('tool.call', () => readResult(TICKET))

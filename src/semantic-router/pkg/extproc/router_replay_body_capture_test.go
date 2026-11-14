@@ -79,7 +79,7 @@ func replayConversationReply(t *testing.T, router *OpenAIRouter, ctx *RequestCon
 
 func recordReplayConversation(t *testing.T, plugin map[string]interface{}, streaming bool) routerreplay.RoutingRecord {
 	t.Helper()
-	plugin["enabled"], plugin["capture_tool_results"] = true, true
+	plugin["enabled"], plugin["prompt_capture"], plugin["capture_tool_results"] = true, config.PromptCaptureRaw, true
 	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(plugin))
 	router := replayRuntimeRouter(t, cfg)
 	ctx := replayConversationRequest(streaming)

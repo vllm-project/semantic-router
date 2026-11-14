@@ -19,7 +19,7 @@ export async function readEscalation($: EngineInterface): Promise<Escalation | n
 }
 
 // Prompts a person wrote: a notification, a peer's message or a trigger is no feedback.
-const PERSON_ORIGINS = new Set(['composer', 'bridge', 'sdk', 'unclassified'])
+export const PERSON_ORIGINS = new Set(['composer', 'bridge', 'sdk', 'unclassified'])
 
 const USER_FEEDBACK = {
   type: 'choice',
@@ -97,7 +97,8 @@ export async function escalatePrompt(
   }
   await update($, escalation, () => ({ prompt: e.text, signals, turnId: e.turnId }))
   const latencyMs = Math.max(...asked.map(one => one.latencyMs))
-  await record($, settings.log, { kind: 'escalate', id: at, at, prompt: e.text, signals, feedback: probabilities, reask, latencyMs })
+  const turns = settings.apps.router && settings.routerTurns ? { turns: true as const } : {}
+  await record($, settings.log, { kind: 'escalate', id: at, at, prompt: e.text, signals, feedback: probabilities, reask, latencyMs, ...turns })
   const [first] = signals
   const note = `vSR: the user pushed back on your previous answer (${WHY[first.kind]}, ${fixed(first.score)}). Re-check that answer before you build on it.`
   return next({ ...e, context: [...(e.context ?? []), note] })

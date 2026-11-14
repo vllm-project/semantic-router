@@ -34,13 +34,14 @@ const acted = (d: Decision) =>
   d.kind === 'guard' ? d.verdict === 'ask' : d.kind === 'check' ? d.verdict === 'unverified' : true
 
 // Which answers a decision takes, or undefined for one calibration does not learn from: a hold by a fixed rule or
-// for too many parts, a redaction by the secret rules alone, an escalated route, a skipped call.
+// for too many parts, a redaction by the secret rules alone, an escalated route, a turn a short reply or the prompt
+// cache kept (no threshold decided it), a skipped call.
 export function answersFor(d: Decision): 'binary' | 'router' | undefined {
   switch (d.kind) {
     case 'route':
       return d.escalated ? undefined : 'router'
     case 'keep':
-      return 'router'
+      return d.reason === 'follow-up' || d.reason === 'cache' ? undefined : 'router'
     case 'guard':
       return d.rule || d.unchecked ? undefined : 'binary'
     case 'redact':

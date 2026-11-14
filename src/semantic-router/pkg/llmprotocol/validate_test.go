@@ -616,3 +616,18 @@ func TestGeneratedAudioTranscriptIsNotAMediaReference(t *testing.T) {
 		t.Fatal("oversized audio id was accepted")
 	}
 }
+
+// Claude Code 2.1.323 describes its Artifact tool in 22,096 bytes; a request
+// carrying it must pass, and a description over the limit must not.
+func TestValidateRequestTakesAHarnessToolsLongDescription(t *testing.T) {
+	limits := DefaultPolicy().Limits
+	request := validSemanticRequest()
+	request.Tools = []Tool{{Name: "Artifact", Description: strings.Repeat("d", 22_096), InputSchema: json.RawMessage(`{"type":"object"}`)}}
+	if err := ValidateRequest(request, limits); err != nil {
+		t.Fatalf("a 22,096-byte tool description was refused: %v", err)
+	}
+	request.Tools[0].Description = strings.Repeat("d", limits.ToolDescriptionBytes+1)
+	if err := ValidateRequest(request, limits); err == nil {
+		t.Fatal("a description over the limit was accepted")
+	}
+}

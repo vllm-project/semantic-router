@@ -57,6 +57,7 @@ func TestCandidateBudgetRejectionClientAndReplayAgree(t *testing.T) {
 				r := &OpenAIRouter{ReplayRecorder: recorder}
 				replayConfig := config.DefaultRouterReplayPluginConfig()
 				replayConfig.Enabled = true
+				replayConfig.PromptCapture = config.PromptCaptureRaw
 				replayConfig.CaptureResponseBody = true
 				ctx := &RequestContext{RequestID: "budget-request", SourceFormat: format, SemanticRequest: testNeutralRequest("entrypoint-model", "hello"), RouterReplayPluginConfig: &replayConfig, ExpectStreamingResponse: stream}
 				rejection := &selection.RequestBudgetError{Code: "context_length_exceeded", Message: "estimated input plus requested output exceeds the 32768-token context window"}

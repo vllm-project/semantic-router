@@ -35,3 +35,14 @@ export function costOf(model: string, usage: TurnUsage): number | undefined {
     usage.cache_creation_input_tokens * price.input * 1.25
   return dollars / 1_000_000
 }
+
+// A move of your turns to a smaller model must pay back its re-read within this many turns like the last one: it holds
+// for the turns after it, but a prompt cache lives minutes, not a session.
+export const PAYBACK_TURNS = 3
+
+// What moving a conversation of `tokens` to `to` adds to its first request there: the whole conversation written to
+// `to`'s cache instead of read from it, as the turns after it are. Undefined for a model with no known price.
+export function rereadCost(to: string, tokens: number): number | undefined {
+  const price = priceOf(to)
+  return price === undefined ? undefined : (tokens * (price.input * 1.25 - price.cacheRead)) / 1_000_000
+}
