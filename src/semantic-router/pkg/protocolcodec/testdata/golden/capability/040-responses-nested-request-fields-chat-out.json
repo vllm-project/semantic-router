@@ -202,8 +202,14 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_input_encrypted_content"
-        }
+          "code": "chat_messages_required"
+        },
+        "diagnostics": [
+          {
+            "field": "input[].encrypted_content",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

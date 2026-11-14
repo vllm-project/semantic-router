@@ -258,11 +258,12 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		return result.Status, result.Body, err
 	}
 	var nativeRouter systemone.Router
+	var rules systemone.ListenerRules
 	if lease.Router != nil {
-		nativeRouter = lease.Router
+		nativeRouter, rules = lease.Router, lease.Router
 	}
 	serving := gateway.Serving{
-		SystemOne:       systemone.ForClients(cfg, systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models))),
+		SystemOne:       systemone.ForClients(cfg, systemone.HandlerWithRules(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models), rules)),
 		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
 		IdentityHeaders: []string{

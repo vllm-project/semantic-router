@@ -142,6 +142,15 @@ describe('vSR agent plugin profile on a System One listener', () => {
     expect(next.listeners?.[1]).toBe(chatListener)
   })
 
+  it('a pick and a Default keep the listener\'s rules', () => {
+    const rules = { recipe: 'default', guard: [{ type: 'keyword' as const, name: 'prod_database', enforce: 'required' as const }] }
+    const { onChange, row } = controls({ guard: true, rules })
+    row('Guard risky commands').pick('Off')
+    expect(onChange.mock.calls[0][0]).toEqual({ guard: false, rules })
+    row('Guard risky commands').pick('Default')
+    expect(onChange.mock.calls[1][0]).toEqual({ rules })
+  })
+
   it('shows no vSR block for a listener without systemone', () => {
     const render = (listeners: Listener[]) =>
       renderToStaticMarkup(

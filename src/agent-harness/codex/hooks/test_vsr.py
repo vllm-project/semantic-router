@@ -29,6 +29,11 @@ class Runtime:
         self.listings = 0
         # The Authorization header of every request, the listing's included.
         self.auth: list[str | None] = []
+        # What the listener's rules endpoint answers a request with (None: HTTP 503), every
+        # request it got, and whether the listing answers at all.
+        self.rules = lambda request: None
+        self.asked_rules: list[dict] = []
+        self.listing_status = 200
         runtime = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -44,13 +49,23 @@ class Runtime:
                     else {"models": [], "vsr": runtime.vsr}
                 )
                 data = json.dumps(listing).encode()
-                self.send_response(200 if self.path == "/v1/systemone/models" else 404)
+                ok = self.path == "/v1/systemone/models"
+                self.send_response(runtime.listing_status if ok else 404)
                 self.send_header("content-length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
 
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+                if self.path == "/v1/systemone/rules":
+                    runtime.asked_rules.append(body)
+                    answer = runtime.rules(body)
+                    data = json.dumps(answer or {}).encode()
+                    self.send_response(503 if answer is None else 200)
+                    self.send_header("content-length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
                 runtime.seen.append(body)
                 runtime.auth.append(self.headers.get("Authorization"))
                 questions = body["questions"]
@@ -328,6 +343,208 @@ class HooksTest(unittest.TestCase):
             "[vsr:", json.dumps(run("post", bash("cat customers.csv", CSV), env))
         )
         self.assertEqual(self.runtime.listings, 2)
+
+
+PROD = {
+    "name": "prod_database",
+    "description": "touches the production database.",
+    "required": True,
+}
+EMPLOYEE = {"name": "employee_id", "description": "an employee ID", "required": False}
+
+
+def listing(guard: list, redact: list, revision: str = "r1") -> dict:
+    return {"rules": {"revision": revision, "guard": guard, "redact": redact}}
+
+
+def answer(matches=(), spans=lambda text: [], unchecked=(), revision="r1"):
+    """A rules answer: for each part, the guard rules matched, the spans found, and the rules
+    left unchecked."""
+
+    def reply(request: dict) -> dict:
+        return {
+            "revision": revision,
+            "parts": [
+                {
+                    "id": part["id"],
+                    "coverage": "partial" if unchecked else "complete",
+                    "matches": list(matches),
+                    "spans": spans(part["text"]),
+                    "unchecked": [
+                        {"rule": r, "reason": "the decision model is unavailable"}
+                        for r in unchecked
+                    ],
+                }
+                for part in request["parts"]
+            ],
+        }
+
+    return reply
+
+
+class ListenerRulesTest(unittest.TestCase):
+    def setUp(self):
+        self.runtime = Runtime()
+        self.addCleanup(self.runtime.server.shutdown)
+        self.home = Path(self.id().replace(".", "_"))
+        self.home.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, self.home, True)
+        self.env = {
+            "VSR_RUNTIME_URL": self.runtime.url,
+            "VSR_RUNTIME_MODEL": "vela3-lite",
+            "CODEX_HOME": str(self.home),
+        }
+
+    def fresh(self):
+        """Ask the listing again on the next call, as a minute later."""
+        kept = self.home / "vsr-listener.json"
+        held = json.loads(kept.read_text())
+        kept.write_text(json.dumps({**held, "at": 0}))
+
+    def test_a_command_a_listener_rule_matches_is_held_with_its_description(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer(matches=["prod_database"])
+        reply = run("pre", bash("psql --host=prod-db.internal"), self.env)
+        reason = reply["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn(
+            "touches the production database, a rule of the Router listener", reason
+        )
+        self.assertEqual(
+            self.runtime.asked_rules,
+            [
+                {
+                    "app": "guard",
+                    "parts": [{"id": "p0", "text": "psql --host=prod-db.internal"}],
+                }
+            ],
+        )
+
+    def test_a_required_rule_not_checked_holds_and_an_advisory_one_says_so(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = lambda request: None
+        reply = run("pre", bash("ls"), self.env)
+        self.assertIn(
+            "required rule prod_database could not be checked",
+            reply["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
+        self.runtime.vsr = listing([{**PROD, "required": False}], [])
+        self.fresh()
+        reply = run("pre", bash("ls"), self.env)
+        self.assertNotIn("hookSpecificOutput", reply)
+        self.assertIn("rule prod_database not checked", reply["systemMessage"])
+
+    def test_the_rules_read_before_hold_when_the_listing_does_not_answer(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer(matches=["prod_database"])
+        run("pre", bash("ls"), self.env)
+        self.runtime.listing_status = 500
+        self.fresh()
+        self.assertIn(
+            "permissionDecision",
+            json.dumps(run("pre", bash("psql --host=prod-db.internal"), self.env)),
+        )
+
+    def test_what_a_redact_rule_finds_is_hidden_past_an_astral_character_and_overlaps_join(
+        self,
+    ):
+        text = "Paid 😀 by E-104233 today"
+        self.runtime.vsr = listing([], [EMPLOYEE, {**EMPLOYEE, "name": "digits"}])
+        self.runtime.rules = answer(
+            spans=lambda t: [
+                {"start": 10, "end": 18, "rule": "employee_id"},
+                {"start": 12, "end": 19, "rule": "digits"},
+            ]
+        )
+        reply = run("post", bash("cat pay.txt", text), self.env)
+        self.assertEqual(reply["decision"], "block")
+        self.assertTrue(reply["reason"].startswith("Paid 😀 by [vsr:employee_id]today"))
+        self.assertIn("[vsr:employee_id]", reply["reason"].split("\n\n")[1])
+
+    def test_an_output_a_required_redact_rule_could_not_check_is_withheld(self):
+        self.runtime.vsr = listing([], [{**EMPLOYEE, "required": True}])
+        self.runtime.rules = lambda request: None
+        reply = run("post", bash("cat pay.txt", "Paid by E-104233"), self.env)
+        self.assertEqual(reply["decision"], "block")
+        self.assertIn("required rule employee_id could not check it", reply["reason"])
+        self.assertNotIn("E-104233", reply["reason"])
+
+    def test_an_answer_for_another_revision_holds_for_a_required_rule(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer(revision="r2")
+        reply = run("pre", bash("ls"), self.env)
+        self.assertIn(
+            "the listener's rules changed",
+            reply["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
+    def test_an_answer_that_leaves_out_its_parts_or_coverage_is_no_check(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = lambda request: {
+            "revision": "r1",
+            "parts": [{"id": "p0", "coverage": "failed"}],
+        }
+        reply = run("pre", bash("ls"), self.env)
+        self.assertIn(
+            "required rule prod_database could not be checked",
+            reply["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
+    def test_rules_are_kept_per_key_and_another_revision_reads_the_listing_again(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer(matches=["prod_database"])
+        run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"})
+        self.runtime.vsr = None
+        run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "b"})
+        self.runtime.listing_status = 500
+        self.fresh()
+        reply = run(
+            "pre",
+            bash("psql --host=prod-db.internal"),
+            {**self.env, "VSR_RUNTIME_TOKEN": "a"},
+        )
+        self.assertIn("permissionDecision", json.dumps(reply))
+
+        # The listener's rules change under a cached listing: the first answer for the new
+        # revision holds, and the next call reads the listing again.
+        self.runtime.listing_status = 200
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer()
+        self.fresh()
+        run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"})
+        asked = self.runtime.listings
+        self.runtime.vsr = listing([PROD], [], revision="r2")
+        self.runtime.rules = answer(revision="r2")
+        reply = run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"})
+        self.assertIn("the listener's rules changed", json.dumps(reply))
+        self.assertEqual(self.runtime.listings, asked)
+        self.assertEqual(
+            run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"}), {}
+        )
+        self.assertEqual(self.runtime.listings, asked + 1)
+
+    def test_the_decision_model_reads_what_the_rules_read_and_crossing_finds_join(self):
+        text = "Mail E-104233@corp.example now"
+        self.runtime.vsr = listing([], [EMPLOYEE])
+        self.runtime.rules = answer(
+            spans=lambda t: [{"start": 5, "end": 13, "rule": "employee_id"}]
+        )
+        self.runtime.spans = [
+            span("EMAIL_ADDRESS", text, "E-104233@corp.example", 0.99)
+        ]
+        reply = run("post", bash("cat mail.txt", text), self.env)
+        self.assertTrue(reply["reason"].startswith("Mail [vsr:email] now"))
+        self.assertTrue(
+            any(
+                "E-104233@corp.example" in json.dumps(body)
+                for body in self.runtime.seen
+            )
+        )
+
+    def test_a_listing_that_is_not_one_keeps_the_rules_read_before(self):
+        self.assertIsNone(vsr.rules_of(None))
+        self.assertIsNone(vsr.rules_of({"vsr": "broken"}))
+        self.assertEqual(vsr.rules_of({"models": []}), vsr.NO_RULES)
 
 
 if __name__ == "__main__":

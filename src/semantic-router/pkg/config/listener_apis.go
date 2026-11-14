@@ -60,6 +60,9 @@ type VSRProfile struct {
 	Guard *bool `yaml:"guard,omitempty" json:"guard,omitempty"`
 	// Check compares the agent's answer with what it read.
 	Check *bool `yaml:"check,omitempty" json:"check,omitempty"`
+	// Rules are the recipe rules guard and redact enforce besides their own
+	// checks.
+	Rules *VSRRules `yaml:"rules,omitempty" json:"rules,omitempty"`
 }
 
 // VSRRouterGoals are the router goals a vsr profile can name.
@@ -302,6 +305,11 @@ func validateListenerAPIs(cfg *RouterConfig, listener Listener) error {
 		if profile := entry.VSR; profile != nil && profile.RouterGoal != "" && !slices.Contains(VSRRouterGoals, profile.RouterGoal) {
 			return CheckError(path+".vsr.router_goal", CodeInvalidValue,
 				fmt.Sprintf("%q is not a router goal; use one of %s", profile.RouterGoal, strings.Join(VSRRouterGoals, ", ")))
+		}
+		if profile := entry.VSR; profile != nil && profile.Rules != nil {
+			if err := validateVSRRules(cfg, path+".vsr.rules", profile.Rules); err != nil {
+				return err
+			}
 		}
 		if err := validateListenerAPIModels(path, entry.Models); err != nil {
 			return err

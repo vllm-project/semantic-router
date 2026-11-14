@@ -356,6 +356,73 @@ with `/vsr` stays theirs until `/vsr follow`:
         vsr: {redact: true, guard: true, router: false}
 ```
 
+#### Rules of your own for guard and redact
+
+`vsr.rules` binds rules of one recipe to guard and redact. A rule is an
+ordinary signal of that recipe: guard takes any [keyword
+rule](../tutorials/signal/heuristic/keyword) and a [System
+One](../tutorials/signal/systemone) `noul` rule, or `choice` rule with
+`labels`; redact takes a rule that finds text, an `OR` keyword rule of literal
+or regex keywords without `fuzzy_match`, `count` or `density`, or a System One
+`span` rule. An entrypoint must reach the recipe, since the Router prepares the
+rules of a reachable recipe only.
+
+```yaml
+      systemone:
+        models: [vela3-lite]
+        vsr:
+          rules:
+            recipe: default
+            guard:
+              - {type: keyword, name: prod_database, enforce: required}
+              - {type: systemone, name: deletes_data}
+            redact:
+              - {type: keyword, name: employee_id, enforce: required}
+```
+
+`enforce: required` makes a rule fail closed for the plugin that applies it:
+when the rule cannot be checked, the command waits for the person and the
+output is withheld. `advisory`, the default, lets an unchecked rule step aside
+as the plugins' own checks do. An app binds at most 16 rules, each name once.
+
+The listing (`GET /v1/systemone/models`) hands each rule's name, description
+and `required` to the plugins under `vsr.rules`, with a `revision` that changes
+with any rule's definition, binding or enforcement. A rule's pattern or
+question never leaves the Router. To evaluate them, a client sends the texts
+to the same listener, with the same key as any System One call:
+
+```bash
+curl -s http://localhost:8899/v1/systemone/rules \
+  -H 'Authorization: Bearer <listener key>' \
+  -d '{"app": "redact", "parts": [{"id": "out-1", "text": "Paid by E-104233"}]}'
+```
+
+```json
+{"revision": "3f9c0a1b2d4e", "parts": [{"id": "out-1", "coverage": "complete",
+  "matches": [], "spans": [{"start": 8, "end": 16, "rule": "employee_id"}], "unchecked": []}]}
+```
+
+Each part comes back with the guard rules it matches, or the redact spans in
+code points, overlapping spans of different rules merged into one under the
+rule that starts first, and the rules the Router could not check with a reason.
+`coverage` is `complete`, `partial` or `failed`. A request holds at most 16
+parts and 256 KiB of text; a listener evaluates 8 such requests at once and
+answers `429` with `Retry-After` beyond that, `404 rules_not_published` for an
+app it binds no rules to, and `401` without its key. Every call is logged with
+the rule names, counts and latency, never the text.
+
+The vSR plugins for Claude Code and Codex read these rules from the listing and
+call this endpoint themselves. Guard sends the whole command beside its own
+questions and holds it when a rule matches; redact sends the tool output as the
+tool gave it and puts `[vsr:<rule name>]` where a rule found text. A required
+rule that cannot be checked holds the command or withholds the output in both;
+the rules last read from a listener are kept, so an outage does not drop one
+once a plugin has read the listing. Before that first read a plugin knows no
+rules, and its checks step aside when the listener does not answer.
+Turning guard or redact off for a session turns their rules off too, so a
+protection nobody may turn off belongs in a decision or in masking at the
+gateway.
+
 A Router rule about what the agent reads, such as a prompt injection in a file
 or a web page, should read the tool results and leave the user turn out
 (`input: {tool_results: true, request: false}`). Claude Code's user turn carries

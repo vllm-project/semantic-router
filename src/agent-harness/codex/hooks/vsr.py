@@ -49,6 +49,10 @@ PROFILE_SECONDS = 60
 # line vSR draws says so.
 MAX_CHARS = 16000
 MARK = "▚▞ vSR"
+# The rules the listener binds to guard and redact, when it binds none, and the most text one
+# rules call holds (the listener's limit, in UTF-8 bytes).
+NO_RULES = {"revision": "", "guard": [], "redact": []}
+MAX_RULES_BYTES = 256 << 10
 
 
 def settings() -> dict:
@@ -73,25 +77,77 @@ def settings() -> dict:
     found["runtimeToken"] = os.environ.get("VSR_RUNTIME_TOKEN") or os.environ.get(
         str(found["runtimeTokenEnv"] or ""), ""
     )
-    for app, on in listener_profile(found, home).items():
+    found["home"] = str(home)
+    profile, found["rules"] = listener_profile(found, home)
+    for app, on in profile.items():
         found[app] = saved.get(app, on)
     return found
 
 
-def listener_profile(opts: dict, home: Path) -> dict:
-    """The apps the listener's System One listing turns on or off, asked at most once a minute:
-    Codex runs this file once per tool call, so the answer waits in the Codex home."""
-    url = (
-        re.sub(r"/v1/decisions/?$", "", opts["runtimeUrl"].rstrip("/"))
-        + "/v1/systemone/models"
+def base_url(opts: dict) -> str:
+    return re.sub(r"/v1/decisions/?$", "", opts["runtimeUrl"].rstrip("/"))
+
+
+def is_rule(rule: object) -> bool:
+    return (
+        isinstance(rule, dict)
+        and isinstance(rule.get("name"), str)
+        and rule["name"] != ""
+        and isinstance(rule.get("description"), str)
+        and isinstance(rule.get("required"), bool)
     )
+
+
+def rules_of(listing: object) -> dict | None:
+    """The rules a listing's vsr binds: NO_RULES when it binds none, None when they are there
+    but not readable, which keeps the rules read before rather than drop a required one.
+    """
+    if not isinstance(listing, dict):
+        return None
+    if "vsr" not in listing:
+        return NO_RULES
+    vsr = listing["vsr"]
+    if not isinstance(vsr, dict):
+        return None
+    if "rules" not in vsr:
+        return NO_RULES
+    rules = vsr["rules"]
+    apps = ("guard", "redact")
+    if not (
+        isinstance(rules, dict)
+        and isinstance(rules.get("revision"), str)
+        and all(isinstance(rules.get(app), list) for app in apps)
+        and all(is_rule(rule) for app in apps for rule in rules[app])
+    ):
+        return None
+    keep = ("name", "description", "required")
+    return {
+        "revision": rules["revision"],
+        **{app: [{k: rule[k] for k in keep} for rule in rules[app]] for app in apps},
+    }
+
+
+def listener_profile(opts: dict, home: Path) -> tuple[dict, dict]:
+    """The apps the listener's System One listing turns on or off, asked at most once a minute
+    (Codex runs this file once per tool call, so the answer waits in the Codex home), and the
+    rules it binds. A listing that does not answer, or whose rules cannot be read, keeps the
+    rules read before from it with this key, so an outage never drops a required rule.
+    """
+    url = base_url(opts) + "/v1/systemone/models"
+    # The rules are kept per listener and key, the key hashed: another key may be granted
+    # other rules, and its value never sits in the file.
+    key = f"{url}#{hash32(opts['runtimeToken'])}"
     kept = home / "vsr-listener.json"
-    try:
+    held: dict = {}
+    with contextlib.suppress(OSError, ValueError):
         held = json.loads(kept.read_text())
-        if held["url"] == url and time.time() - held["at"] < PROFILE_SECONDS:
-            return held["profile"]
-    except (OSError, ValueError, KeyError, TypeError):
-        pass
+    if not isinstance(held, dict):
+        held = {}
+    slots = held.get("rules") if isinstance(held.get("rules"), dict) else {}
+    known = rules_of({"vsr": {"rules": slots[key]}}) if key in slots else None
+    with contextlib.suppress(TypeError, KeyError):
+        if held["url"] == key and time.time() - held["at"] < PROFILE_SECONDS:
+            return held["profile"], known or NO_RULES
     headers = (
         {"Authorization": f"Bearer {opts['runtimeToken']}"}
         if opts["runtimeToken"]
@@ -102,15 +158,142 @@ def listener_profile(opts: dict, home: Path) -> dict:
         with urllib.request.urlopen(
             urllib.request.Request(url, headers=headers), timeout=1.5
         ) as response:
-            vsr = json.loads(response.read()).get("vsr") or {}
+            listing = json.loads(response.read())
+        vsr = listing.get("vsr") or {}
         profile = {
             app: vsr[app] for app in PROFILE_APPS if isinstance(vsr.get(app), bool)
         }
+        known = rules_of(listing) or known
     except (OSError, ValueError, AttributeError):
         pass
+    rules = known or NO_RULES
     with contextlib.suppress(OSError):
-        kept.write_text(json.dumps({"url": url, "at": time.time(), "profile": profile}))
-    return profile
+        kept.write_text(
+            json.dumps(
+                {
+                    "url": key,
+                    "at": time.time(),
+                    "profile": profile,
+                    "rules": {**slots, key: rules},
+                }
+            )
+        )
+    return profile, rules
+
+
+def read_listing_again(opts: dict) -> None:
+    """The next call reads the listing again: an answer came for rules of another revision."""
+    kept = Path(opts["home"]) / "vsr-listener.json"
+    with contextlib.suppress(OSError, ValueError, TypeError):
+        held = json.loads(kept.read_text())
+        kept.write_text(json.dumps({**held, "at": 0}))
+
+
+def hash32(text: str) -> str:
+    value = 0x811C9DC5
+    for char in text:
+        value = ((value ^ ord(char)) * 0x01000193) & 0xFFFFFFFF
+    return f"{value:x}"
+
+
+def ask_rules(app: str, texts: list[str], opts: dict) -> dict:
+    """One call to the listener's rules for one app about each text. Raises when it cannot be
+    read; the answer's parts carry the guard rules matched, the redact spans in code points,
+    and the rules left unchecked."""
+    bound = {rule["name"] for rule in opts["rules"][app]}
+    parts = [{"id": f"p{at}", "text": text} for at, text in enumerate(texts)]
+    headers = {"Content-Type": "application/json"}
+    if opts["runtimeToken"]:
+        headers["Authorization"] = f"Bearer {opts['runtimeToken']}"
+    request = urllib.request.Request(
+        base_url(opts) + "/v1/systemone/rules",
+        json.dumps({"app": app, "parts": parts}).encode(),
+        headers,
+    )
+    with urllib.request.urlopen(
+        request, timeout=float(opts["timeoutSeconds"])
+    ) as response:
+        reply = json.loads(response.read())
+    answered = reply.get("parts")
+    if (
+        not isinstance(reply.get("revision"), str)
+        or not isinstance(answered, list)
+        or len(answered) != len(parts)
+    ):
+        raise ValueError("rules answer")
+    for part, given in zip(answered, parts, strict=True):
+        if not isinstance(part, dict) or part.get("id") != given["id"]:
+            raise ValueError("rules answer")
+        matches, spans, unchecked = (
+            part.get("matches"),
+            part.get("spans"),
+            part.get("unchecked"),
+        )
+        if not (
+            isinstance(matches, list)
+            and isinstance(spans, list)
+            and isinstance(unchecked, list)
+        ):
+            raise ValueError("rules answer")
+        # Coverage says whether every rule was checked; it must agree with the rules left unchecked.
+        if part.get("coverage") not in (
+            ("partial", "failed") if unchecked else ("complete",)
+        ):
+            raise ValueError("rules answer")
+        if not (
+            all(isinstance(one, str) and one in bound for one in matches)
+            and all(
+                isinstance(one, dict)
+                and one.get("rule") in bound
+                and isinstance(one.get("reason"), str)
+                for one in unchecked
+            )
+            and all(
+                isinstance(one, dict)
+                and one.get("rule") in bound
+                and isinstance(one.get("start"), int)
+                and isinstance(one.get("end"), int)
+                and 0 <= one["start"] < one["end"] <= len(given["text"])
+                for one in spans
+            )
+        ):
+            raise ValueError("rules answer")
+    return {"revision": reply["revision"], "parts": answered}
+
+
+def rules_unchecked(app: str, opts: dict, asked: dict | Exception, part: int) -> list:
+    """The bound rules a text was not checked against, with why: every one when the call
+    failed or answered for rules of another revision, whose required flags may differ.
+    """
+    bound = opts["rules"][app]
+    if isinstance(asked, Exception):
+        return [(rule, failed(asked)) for rule in bound]
+    if asked["revision"] != opts["rules"]["revision"]:
+        read_listing_again(opts)
+        return [(rule, "the listener's rules changed") for rule in bound]
+    named = {
+        one["rule"]: one["reason"]
+        for one in asked["parts"][part].get("unchecked") or []
+    }
+    return [(rule, named[rule["name"]]) for rule in bound if rule["name"] in named]
+
+
+def rules_found(opts: dict, asked: dict | Exception | None, part: int) -> dict:
+    """What a call found that this session can act on: nothing from a failed call or an answer
+    for another revision."""
+    if (
+        not isinstance(asked, dict)
+        or asked.get("revision") != opts["rules"]["revision"]
+    ):
+        return {}
+    return asked["parts"][part]
+
+
+def asked_rules(app: str, texts: list[str], opts: dict) -> dict | Exception:
+    try:
+        return ask_rules(app, texts, opts)
+    except Exception as error:  # the caller holds or withholds for a required rule
+        return error
 
 
 def ask(app: str, given: object, opts: dict) -> dict:
@@ -150,19 +333,59 @@ def failed(error: Exception) -> str:
     return f"vSR could not read the answer ({type(error).__name__})"
 
 
+def held_by(command: str, why: str, line: str) -> dict:
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": (
+                f"vSR guard held this command: {why}. Do not run it or a variant of it. Tell "
+                "the person what it does and why it was held; they can run it themselves if "
+                "they want it."
+            ),
+        },
+        "systemMessage": f"{MARK} held · {clip(command)} · {line}",
+    }
+
+
 def guard(event: dict, opts: dict) -> dict:
     command = (event.get("tool_input") or {}).get("command")
     if not opts["guard"] or not isinstance(command, str) or not command.strip():
         return {}
+    bound = opts["rules"]["guard"]
+    # The listener's rules read the whole command beside the decision model's question.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        model = pool.submit(ask, "guard", command, opts)
+        rules = pool.submit(asked_rules, "guard", [command], opts) if bound else None
+    listened = rules.result() if rules else None
+    matched = set(rules_found(opts, listened, 0).get("matches") or [])
+    ruled = next((rule for rule in bound if rule["name"] in matched), None)
+    if ruled:
+        words = ruled["description"].rstrip(". ") or f"listener rule {ruled['name']}"
+        return held_by(
+            command, f"{words}, a rule of the Router listener", f"always held: {words}"
+        )
+    unchecked = rules_unchecked("guard", opts, listened, 0) if rules else []
+    required = next(((rule, why) for rule, why in unchecked if rule["required"]), None)
+    if required:
+        rule, why = required
+        return held_by(
+            command,
+            f"the listener's required rule {rule['name']} could not be checked ({why})",
+            f"required rule {rule['name']} not checked · {why}",
+        )
+    skipped = [
+        f"{MARK} rule {rule['name']} not checked · {why} · {clip(command)}"
+        for rule, why in unchecked
+    ]
     try:
-        read = ask("guard", command, opts)
+        read = model.result()
     except Exception as error:  # fail open: the command runs as Codex would run it
-        return {
-            "systemMessage": f"{MARK} guard skipped · {failed(error)} · {clip(command)}"
-        }
+        lines = [*skipped, f"{MARK} guard skipped · {failed(error)} · {clip(command)}"]
+        return {"systemMessage": "\n".join(lines)}
     score = read.get("score")
     if score is None or score < opts["guardReview"]:
-        return {}
+        return {"systemMessage": "\n".join(skipped)} if skipped else {}
     risk = read.get("risk") or "risky"
     why = f"looks {risk}" if risk != "remote_code" else "downloads code and runs it"
     numbers = f"risk score {score:.2f} ≥ {opts['guardReview']:.2f}"
@@ -224,10 +447,14 @@ def placed(text: str, span: dict) -> tuple[int, int] | None:
     return min(start, left), max(end, right)
 
 
-def hide(text: str, spans: list, least: float) -> tuple[str, dict]:
-    """The text with each personal-data span at or over `least` replaced by its tag; of two
-    that overlap, the one that starts first stays."""
-    kept = []
+def hide(
+    text: str, spans: list, least: float, found: list | None = None
+) -> tuple[str, dict]:
+    """The text with each personal-data span at or over `least`, and each (start, end, tag)
+    the listener's rules `found`, replaced by its tag. Pieces that overlap are hidden as one,
+    under the tag of the one that starts first, so no crossing tail stays in clear text.
+    """
+    kept = list(found or [])
     for span in spans:
         if not (
             isinstance(span, dict)
@@ -240,10 +467,14 @@ def hide(text: str, spans: list, least: float) -> tuple[str, dict]:
         at = placed(text, span)
         if at:
             kept.append((*at, PII_TAGS[span["label"]]))
-    out, at, counts = [], 0, {}
+    merged: list[list] = []
     for start, end, tag in sorted(kept, key=lambda k: (k[0], -k[1])):
-        if start < at:
-            continue
+        if merged and start < merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end, tag])
+    out, at, counts = [], 0, {}
+    for start, end, tag in merged:
         out.append(text[at:start] + f"[vsr:{tag}]")
         counts[tag] = counts.get(tag, 0) + 1
         at = end
@@ -260,8 +491,44 @@ def output(event: dict, opts: dict) -> dict:
     source = f"the output of {clip(str(command), 80)}"
     if not text.strip():
         return {}
+    lines, notes, rewritten, counts = [], [], None, {}
+    # The listener's redact rules read the output whole, before the decision model reads it.
+    bound = opts["rules"]["redact"] if opts["redact"] else []
+    if bound:
+        if len(text.encode()) > MAX_RULES_BYTES:
+            listened: dict | Exception = ValueError(
+                f"the output is past the {MAX_RULES_BYTES >> 10} KiB one rules call reads"
+            )
+        else:
+            listened = asked_rules("redact", [text], opts)
+        unchecked = rules_unchecked("redact", opts, listened, 0)
+        required = next(
+            ((rule, why) for rule, why in unchecked if rule["required"]), None
+        )
+        if required:
+            rule, why = required
+            return {
+                "decision": "block",
+                "reason": (
+                    f"vSR redact withheld {source}: the listener's required rule {rule['name']} "
+                    f"could not check it ({why}). The rule is set on the Router listener; ask the "
+                    "person who runs it."
+                ),
+                "systemMessage": f"{MARK} withheld · required rule {rule['name']} not checked · {why} · {source}",
+            }
+        lines += [
+            f"{MARK} rule {rule['name']} not checked · {why} · {source}"
+            for rule, why in unchecked
+        ]
+        found = [
+            (one["start"], one["end"], one["rule"])
+            for one in rules_found(opts, listened, 0).get("spans") or []
+        ]
+    else:
+        found = []
+    # The decision model reads the output as the rules read it, so neither hides part of a
+    # value the other would have found whole; both finds are hidden at once below.
     read, rest = text[:MAX_CHARS], text[MAX_CHARS:]
-    lines, notes, rewritten = [], [], None
     # Whether any question read the output: past MAX_CHARS it then went to Codex unchecked.
     checked = False
     # Both questions go out at once, so the output waits for the slower one, not for the two.
@@ -274,30 +541,33 @@ def output(event: dict, opts: dict) -> dict:
             )
             if opts[app]
         }
+    spans: list = []
     if opts["redact"]:
         try:
             answer = asked["redact"].result()
             checked = True
-            hidden, counts = hide(
-                read, (answer.get("spans") or {}).get("pii") or [], opts["redactPii"]
-            )
-            if counts:
-                rewritten = hidden + rest
-                total = sum(counts.values())
-                kinds = ", ".join(sorted(counts))
-                lines.append(
-                    f"{MARK} redacted · {total} {'item' if total == 1 else 'items'} hidden: {kinds} · {source}"
-                )
-                tags = ", ".join(f"[vsr:{t}]" for t in sorted(counts))
-                notes.append(
-                    f"vSR redact hid {total} {'value' if total == 1 else 'values'} in this output and put "
-                    f"{tags} in {'its' if total == 1 else 'their'} place. The tags are vSR's, not part of "
-                    "the source, which still holds the real values. They are hidden from you on purpose: "
-                    "do not try to read them another way, such as re-reading, encoding or decoding the "
-                    "output. If the task needs one, tell the person it was hidden."
-                )
+            spans = (answer.get("spans") or {}).get("pii") or []
         except Exception as error:
             lines.append(f"{MARK} redact skipped · {failed(error)} · {source}")
+    if spans or found:
+        # A PII span stands in `read`, the start of `text`, so its offsets hold in `text`.
+        hidden, counts = hide(text, spans, opts["redactPii"], found)
+        if counts:
+            rewritten = hidden
+    if counts:
+        total = sum(counts.values())
+        kinds = ", ".join(sorted(counts))
+        lines.append(
+            f"{MARK} redacted · {total} {'item' if total == 1 else 'items'} hidden: {kinds} · {source}"
+        )
+        tags = ", ".join(f"[vsr:{t}]" for t in sorted(counts))
+        notes.append(
+            f"vSR redact hid {total} {'value' if total == 1 else 'values'} in this output and put "
+            f"{tags} in {'its' if total == 1 else 'their'} place. The tags are vSR's, not part of "
+            "the source, which still holds the real values. They are hidden from you on purpose: "
+            "do not try to read them another way, such as re-reading, encoding or decoding the "
+            "output. If the task needs one, tell the person it was hidden."
+        )
     if opts["shield"]:
         try:
             score = asked["shield"].result().get("score")

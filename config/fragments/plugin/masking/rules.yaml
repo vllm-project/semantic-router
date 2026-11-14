@@ -1,0 +1,14 @@
+# Masks what the keyword rule employee_id and the systemone span rule
+# customer_account find, each under its own placeholder, with no pii rule.
+plugin:
+  type: masking
+  configuration:
+    enabled: true
+    rules:
+      - type: keyword
+        name: employee_id
+      - type: systemone
+        name: customer_account
+    placeholders:
+      employee_id: "[EMPLOYEE_{index}]"
+      customer_account: "[ACCOUNT_{index}]"

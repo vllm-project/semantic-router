@@ -157,7 +157,8 @@ export default function ConfigPageListenerVSRPanel({
       <div className={styles.sectionList}>
         {error ? <div className={styles.rawError}>{error}</div> : null}
         {listeners.map(({ index, listener, vsr }) => {
-          const set = Object.keys(vsr ?? {}).length
+          // The listener's rules are not a plugin setting: a reset keeps them.
+          const set = Object.keys(vsr ?? {}).filter((key) => key !== 'rules').length
           return (
             <article key={index} className={styles.vsrListener}>
               <header className={styles.vsrListenerHead}>
@@ -170,7 +171,7 @@ export default function ConfigPageListenerVSRPanel({
                     type="button"
                     className={styles.vsrReset}
                     disabled={isReadonly || saving}
-                    onClick={() => void save(index, undefined)}
+                    onClick={() => void save(index, vsr?.rules ? { rules: vsr.rules } : undefined)}
                   >
                     Reset to plugin defaults
                   </button>
