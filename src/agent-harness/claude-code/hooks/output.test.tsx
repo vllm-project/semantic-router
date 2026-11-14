@@ -217,6 +217,22 @@ test('a Bash call gets its guard line and a REDACTED card, and its output is not
   expect(texts.filter(text => /^› allowed \S/.test(text))).toEqual(['› allowed cat a.txt  risk ▕█▎░░░░░░░░░┃░▏ 0.10 < 0.90'])
 })
 
+test('a command names files from the working directory, so the card keeps them when it is clipped', { options: { display: 'verbose' } }, async ($, on) => {
+  const stdout = 'declined for maria.gonzalez@example.com'
+  engine(on, { review: 0.1, pii: [spanOf(stdout, 'maria.gonzalez@example.com', 'EMAIL_ADDRESS', 0.99)] })
+  on('tool.call', () => ({ result: { stdout, stderr: '', interrupted: false } }))
+  const command = 'grep x /repo/logs/a.log'
+
+  await $.tool.call({ tool: 'Bash', command, tool_use_id: 'b1' })
+  const { texts } = await rowTree($, toolRow(callOf('b1', command)))
+
+  expect(texts).toContain('▒  REDACTED  1 item hidden from the output of grep x logs/a.log')
+  // Only a path that starts a word is under the working directory.
+  const other = 'cat /srv/repo/b "/repo/c"'
+  await $.tool.call({ tool: 'Bash', command: other, tool_use_id: 'b2' })
+  expect((await rowTree($, toolRow(callOf('b2', other)))).texts).toContain('▒  REDACTED  1 item hidden from the output of cat /srv/repo/b "c"')
+})
+
 test('a folded group adds the cards of the reads it hides', { options: { display: 'verbose' } }, async ($, on) => {
   engine(on, { pii: TICKET_SPANS })
   on('tool.call', () => readResult(TICKET))

@@ -160,10 +160,22 @@ async function shortPath($: EngineInterface, path: string) {
   return cwd !== undefined && path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path
 }
 
-export async function sourceOf($: EngineInterface, e: ToolCallInput) {
+// A command as the session sees it: the paths under its working directory written from there, so a clipped line keeps
+// the file names. A path is only shortened where it starts a word, so /srv/repo/x stays whole under /repo.
+async function shortCommand($: EngineInterface, command: string) {
+  const cwd = await sessionCwd($)
+  if (cwd === undefined || cwd === '/') return command
+  const escaped = cwd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return command.replace(new RegExp(`(^|[\\s'"=:(])${escaped}/`, 'g'), '$1')
+}
+
+// What a call read from: a file as the session names it, else its command or URL. A card shows the command with
+// shortened paths; check reads it as it ran (shortened: false), since after a cd a short path names another file.
+export async function sourceOf($: EngineInterface, e: ToolCallInput, shortened = true) {
   const input: Record<string, unknown> = { ...e }
   if (typeof input.file_path === 'string') return shortPath($, input.file_path)
-  const named = typeof input.command === 'string' ? input.command : typeof input.url === 'string' ? input.url : String(e.tool)
+  const command = typeof input.command === 'string' ? (shortened ? await shortCommand($, input.command) : input.command) : undefined
+  const named = command ?? (typeof input.url === 'string' ? input.url : String(e.tool))
   return clip(oneLine(named), SOURCE_WIDTH)
 }
 
