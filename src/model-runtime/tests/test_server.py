@@ -6,10 +6,13 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 import pytest
+
+from vllm_srun.api.server import prepare_socket
 
 from .conftest import QUESTIONS, STATE
 
@@ -78,6 +81,30 @@ def free_port():
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+def test_prepare_socket_does_not_unlink_live_listener():
+    with tempfile.TemporaryDirectory(prefix="srun-", dir="/tmp") as root:
+        path = str(Path(root) / "runtime.sock")
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(path)
+            listener.listen(1)
+            with pytest.raises(FileExistsError, match="already in use"):
+                prepare_socket(path)
+            accepted, _ = listener.accept()
+            accepted.close()
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.connect(path)
+            assert Path(path).exists()
+
+
+def test_prepare_socket_removes_stale_socket():
+    with tempfile.TemporaryDirectory(prefix="srun-", dir="/tmp") as root:
+        path = str(Path(root) / "runtime.sock")
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stale:
+            stale.bind(path)
+        prepare_socket(path)
+        assert not Path(path).exists()
 
 
 @pytest.mark.parametrize("transport", ["uds", "tcp"])
