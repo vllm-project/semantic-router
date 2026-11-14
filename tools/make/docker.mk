@@ -484,7 +484,7 @@ vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" -m pip install -e "src/vllm-sr[bench]"
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
-	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q -n auto --dist loadfile src/vllm-sr/tests
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q src/vllm-sr/tests
 
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli model-runtime-install docker-build-provider-mocker
