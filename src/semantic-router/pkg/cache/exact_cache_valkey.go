@@ -85,7 +85,7 @@ func (c *ValkeyCache) FindExact(ctx context.Context, partition string, fingerpri
 		return LookupResult{}, nil
 	}
 	storedAt, expiresAt := parseExactTimingFields(fields)
-	return lookupResultFromTimestamps([]byte(responseBodyStr), 1.0, storedAt, expiresAt), nil
+	return exactLookupResultFromTimestamps([]byte(responseBodyStr), storedAt, expiresAt), nil
 }
 
 // AddExact writes a Valkey exact-response entry with the effective cache TTL.
