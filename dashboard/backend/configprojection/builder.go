@@ -44,7 +44,7 @@ func BuildSnapshot(input RefreshInput) (*builtSnapshot, error) {
 		return nil, fmt.Errorf("configprojection: empty canonical YAML")
 	}
 
-	cfg, err := routerconfig.ParseYAMLBytes(input.YAMLBytes)
+	cfg, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(input.YAMLBytes)
 	if err != nil {
 		return nil, fmt.Errorf("configprojection: parse canonical YAML: %w", err)
 	}
