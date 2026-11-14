@@ -344,6 +344,7 @@ func TestMaskText_ExistingPlaceholderNotMaskedAgain(t *testing.T) {
 	}{
 		{"default shape", "Hi [PERSON_2], Bob called", "PERSON_2", "Hi [PERSON_2], [PERSON_0] called", defaultCfg()},
 		{"vSR mark", `"customer": "[vsr:name]", Bob called`, "vsr:name", `"customer": "[vsr:name]", [PERSON_0] called`, defaultCfg()},
+		{"vSR rule mark", `"payer": "[vsr:employee_id]", Bob called`, "vsr:employee_id", `"payer": "[vsr:employee_id]", [PERSON_0] called`, defaultCfg()},
 		{
 			"configured template", "Hi <<name 3>>, Bob called", "name 3", "Hi <<name 3>>, <<name 0>> called",
 			&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "<<name {index}>>"}},

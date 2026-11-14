@@ -1,4 +1,4 @@
-import type { App, Decision, Signal, Tag, Tiers } from '../../types'
+import type { App, BuiltinTag, Decision, Signal, Tag, Tiers } from '../../types'
 import { APPS, type Color, LOOKS } from './apps'
 import { difficultyMeter, holdMeter, type Segment } from './meters'
 import { clip, fixed, modelName, oneLine, plural, RISK_WORDS } from './text'
@@ -108,12 +108,17 @@ const SIGNAL_WORDS: Record<Signal['kind'], string> = { wrong: 'said it was wrong
 
 const signalText = (signal: Signal) => `${SIGNAL_WORDS[signal.kind]} ${fixed(signal.score)}`
 
-export const TAGS: readonly Tag[] = ['name', 'email', 'phone', 'card', 'ip', 'date', 'ssn', 'iban', 'address', 'id', 'secret']
+export const TAGS: readonly BuiltinTag[] = ['name', 'email', 'phone', 'card', 'ip', 'date', 'ssn', 'iban', 'address', 'id', 'secret']
 
-const hiddenCount = (counts: Partial<Record<Tag, number>>) => Object.values(counts).reduce((sum, n) => sum + (n ?? 0), 0)
+const hiddenCount = (counts: Partial<Record<Tag, number>>) => Object.values(counts).reduce<number>((sum, n) => sum + (n ?? 0), 0)
 
-const countChips = (counts: Partial<Record<Tag, number>>) =>
-  TAGS.flatMap(tag => (counts[tag] ? [`${tag} ×${counts[tag]}`] : []))
+// The tags a redact hid, the plugin's own in their order, then the listener rules' by name.
+const tagsOf = (counts: Partial<Record<Tag, number>>): Tag[] => [
+  ...TAGS.filter(tag => counts[tag]),
+  ...Object.keys(counts).filter(tag => counts[tag] && !(TAGS as readonly string[]).includes(tag)).sort(),
+]
+
+const countChips = (counts: Partial<Record<Tag, number>>) => tagsOf(counts).map(tag => `${tag} ×${counts[tag]}`)
 
 const readWords = (files: number, commands: number) =>
   [files > 0 ? `${plural(files, 'file')} read` : '', commands > 0 ? plural(commands, 'command output') : '']
@@ -227,7 +232,13 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
   },
   guard: {
     look: d => {
-      const words = d.rule ? `always held: ${d.rule}` : d.unchecked ? `${d.unchecked} of ${plural(d.parts, 'step')} not checked` : RISK_WORDS[d.risk]
+      const words = d.rule
+        ? `always held: ${d.rule}`
+        : d.ruleUnchecked
+          ? `required rule ${d.ruleUnchecked} not checked`
+          : d.unchecked
+            ? `${d.unchecked} of ${plural(d.parts, 'step')} not checked`
+            : RISK_WORDS[d.risk]
       const part = oneLine(d.part)
       const more = stepsMore(d.parts)
       const base = { app: 'guard' as const, subject: part, more }
@@ -291,7 +302,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
     look: d => {
       const chips = countChips(d.counts)
       const total = hiddenCount(d.counts)
-      const first = TAGS.find(tag => d.counts[tag])
+      const first = tagsOf(d.counts)[0]
       const headline = `${plural(total, 'item')} hidden ${d.tool === 'Read' ? 'before Claude read' : 'from'} ${outputOf(d.tool, d.source)}`
       return {
         app: 'redact',
@@ -313,7 +324,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
       }
     },
     weight: d => (d.unread ? 'act' : 'notice'),
-    brief: d => TAGS.filter(tag => d.counts[tag]).join(', '),
+    brief: d => tagsOf(d.counts).join(', '),
     line: (d, brief) => `${plural(hiddenCount(d.counts), 'item')} hidden: ${brief} · ${d.tool === 'Read' ? d.source : `output of ${d.source}`}`,
   },
   shield: {

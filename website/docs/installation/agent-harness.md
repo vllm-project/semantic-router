@@ -410,6 +410,18 @@ answers `429` with `Retry-After` beyond that, `404 rules_not_published` for an
 app it binds no rules to, and `401` without its key. Every call is logged with
 the rule names, counts and latency, never the text.
 
+The vSR plugins for Claude Code and Codex read these rules from the listing and
+call this endpoint themselves. Guard sends the whole command beside its own
+questions and holds it when a rule matches; redact sends the tool output as the
+tool gave it and puts `[vsr:<rule name>]` where a rule found text. A required
+rule that cannot be checked holds the command or withholds the output in both;
+the rules last read from a listener are kept, so an outage does not drop one
+once a plugin has read the listing. Before that first read a plugin knows no
+rules, and its checks step aside when the listener does not answer.
+Turning guard or redact off for a session turns their rules off too, so a
+protection nobody may turn off belongs in a decision or in masking at the
+gateway.
+
 A Router rule about what the agent reads, such as a prompt injection in a file
 or a web page, should read the tool results and leave the user turn out
 (`input: {tool_results: true, request: false}`). Claude Code's user turn carries

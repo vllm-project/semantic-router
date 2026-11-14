@@ -68,11 +68,12 @@ func templatePattern(template string) string {
 // [TYPE_n] shape and every configured template with {index} as digits. A
 // template with no letter besides {index}, such as "{index}" or "#{index}",
 // is left out: its pattern would also match digits inside a real phone
-// number or address. It also matches the [vsr:<tag>] marks the vSR Claude
-// Code plugin leaves where it hid a value from a tool's output, which reach
-// the Router when the plugin and the gateway run together.
+// number or address. It also matches the [vsr:<tag>] marks the vSR plugins
+// leave where they hid a value from a tool's output, a tag of their own or the
+// name of a listener rule, which reach the Router when a plugin and the
+// gateway run together.
 func placeholderPattern(cfg *config.MaskingPluginConfig) *regexp.Regexp {
-	alternatives := []string{`\[[A-Z][A-Z0-9_]*_\d+\]`, `\[vsr:[a-z]+\]`}
+	alternatives := []string{`\[[A-Z][A-Z0-9_]*_\d+\]`, `\[vsr:[A-Za-z0-9_.-]+\]`}
 	if cfg != nil {
 		entityTypes := make([]string, 0, len(cfg.Placeholders))
 		for entityType := range cfg.Placeholders {

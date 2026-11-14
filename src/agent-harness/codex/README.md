@@ -58,6 +58,17 @@ vSR reads the listener's listing (`GET /v1/systemone/models`) at most once a min
 answer in `vsr-listener.json` in the Codex home. An app you name in `vsr.json` stays yours; the
 listener sets the others.
 
+Rules the listener binds to guard and redact (`vsr.rules`) come with the same listing, by name and
+description only, and the listener evaluates them. Guard sends the whole command beside its own
+question: a rule that matches denies it with the rule's description, and the person can run it.
+Redact sends the Bash output whole and the decision model reads its first 16,000 characters, the
+same text, and what either finds is hidden together, a rule's find as `[vsr:<rule name>]`. A
+`required` rule the listener could not check denies the command or withholds the output; an
+advisory one adds a line saying it was not checked. The rules last read from a listener stay in
+`vsr-listener.json` (per listener and token), so an outage after that never drops a required rule.
+Before vSR has read a listener's listing once with this token it knows no rules, and when the
+listing does not answer, its checks step aside as they do for any outage.
+
 ## What you see
 
 Each decision is one line in the transcript, starting with vSR's mark:
