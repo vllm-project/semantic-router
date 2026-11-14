@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -20,12 +19,13 @@ func ToolsDBHandler(toolsDBPath string) http.HandlerFunc {
 		// Read the tools database file
 		data, err := os.ReadFile(toolsDBPath)
 		if err != nil {
-			log.Printf("Error reading tools_db.json: %v", err)
 			// Return 404 if file doesn't exist, 500 for other errors
 			if os.IsNotExist(err) {
-				http.Error(w, fmt.Sprintf("Tools database not found: %v", err), http.StatusNotFound)
+				log.Printf("tools database not found at %s: %v", toolsDBPath, err)
+				http.Error(w, "Tools database not found", http.StatusNotFound)
 			} else {
-				http.Error(w, fmt.Sprintf("Failed to read tools database: %v", err), http.StatusInternalServerError)
+				log.Printf("failed to read tools database from %s: %v", toolsDBPath, err)
+				http.Error(w, "Failed to read tools database", http.StatusInternalServerError)
 			}
 			return
 		}
@@ -33,16 +33,16 @@ func ToolsDBHandler(toolsDBPath string) http.HandlerFunc {
 		// Parse JSON to validate it
 		var tools interface{}
 		if err := json.Unmarshal(data, &tools); err != nil {
-			log.Printf("Error parsing tools_db.json: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to parse tools database: %v", err), http.StatusInternalServerError)
+			log.Printf("failed to parse tools database from %s: %v", toolsDBPath, err)
+			http.Error(w, "Failed to parse tools database", http.StatusInternalServerError)
 			return
 		}
 
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(tools); err != nil {
-			log.Printf("Error encoding tools to JSON: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to encode tools: %v", err), http.StatusInternalServerError)
+			log.Printf("failed to encode tools database: %v", err)
+			http.Error(w, "Failed to encode tools", http.StatusInternalServerError)
 			return
 		}
 	}
