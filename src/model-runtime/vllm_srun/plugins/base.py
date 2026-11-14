@@ -14,7 +14,7 @@ register through the same entry points as third-party ones
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from functools import partial
@@ -907,6 +907,18 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     says each item names its own shared context (a state-once model's state),
     so one shared-context batch may hold several requests: the batcher then
     packs whole requests into shared forwards.
+    ``splits_forwards`` says ``run`` splits a batch over the forward token
+    budget itself (a state-once family's branched forwards), so the batcher
+    may pack rows costlier than the budget into one batch instead of running
+    each alone — only rows whose ``packing_key`` matches (``coalesced`` and
+    ``shared_batches`` key over-budget rows by it). A family that sets it
+    must bound every pass it runs of such a batch by the forward token
+    budget, including replay passes; a family whose passes are bounded only
+    by a row count (``TurboDecisions``' replays) must not set it.
+    ``packing_key`` returns the key its own grouping dedupes on (a state-once
+    family's state key), so the batcher packs over-budget rows together
+    exactly when the family encodes them once; None (the default) or a
+    mismatch keeps the runs-alone rule.
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
@@ -921,6 +933,7 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     device_thread: ClassVar[bool] = True
     shared_context_default: ClassVar[bool] = False
     merges_shared_batches: ClassVar[bool] = False
+    splits_forwards: ClassVar[bool] = False
     batch_invariant: bool = False
     packs_rows: bool = False
     packs_merged_rows: bool = False
@@ -1035,6 +1048,18 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
         A positive value runs them through ``run_shared(items, value)``,
         0 batches them as usual, and None lets the scheduler find the common
         token prefix of decision items itself.
+        """
+        return None
+
+    def packing_key(self, item: ItemT) -> Hashable | None:
+        """What lets this row share a batch when the batch outgrows the budget.
+
+        None (the default): the row runs alone when costlier than the forward
+        token budget, whatever ``splits_forwards`` says. A family whose
+        ``splits_forwards`` is True overrides this with the key its own
+        grouping dedupes on (a state-once family's state key), so the batcher
+        packs over-budget rows together exactly when the family encodes them
+        once; rows of a different key still run alone.
         """
         return None
 
