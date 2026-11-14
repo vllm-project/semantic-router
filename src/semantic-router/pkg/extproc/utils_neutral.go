@@ -118,6 +118,7 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 	}
 	result.RoutingInput = routing.Outcome()
 	result.Images = requestImages(request)
+	result.UserVideos = requestVideos(request)
 	result.ToolDefinitionCount = len(request.Tools)
 	estimate := llmprotocol.EstimateInput(request)
 	result.ContextTokenFloor = estimate.Tokens
@@ -149,7 +150,6 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		result.LastUserHasText = strings.TrimSpace(text) != ""
 		result.LastUserAfterToolResult = previousWasTool
 		recordUserInputModalities(result, message.Content, text)
-		result.UserVideos = userInlineVideos(message.Content)
 		if text != "" {
 			if result.UserContent != "" {
 				result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
@@ -283,16 +283,30 @@ func requestImages(request *llmprotocol.Request) []string {
 	return images
 }
 
-// userInlineVideos are a user message's inline videos as base64 data URLs,
-// in order. Remote URLs and local paths never cross this boundary.
-func userInlineVideos(contents []llmprotocol.Content) (videos []string) {
-	for _, content := range contents {
-		if content.Kind != llmprotocol.ContentVideo {
-			continue
+// requestVideos are every video the request as sent carries, in any turn or
+// tool result, in order, as data URLs. A video that is not an inline base64
+// data URL (a remote URL, a local path) carries as the empty string, so the
+// reader can report the input incomplete; the wire reader drops empty ones.
+func requestVideos(request *llmprotocol.Request) []string {
+	var videos []string
+	var consume func([]llmprotocol.Content)
+	consume = func(contents []llmprotocol.Content) {
+		for _, content := range contents {
+			switch content.Kind {
+			case llmprotocol.ContentVideo:
+				videos = append(videos, neutralInlineVideoDataURL(content))
+			case llmprotocol.ContentToolResult:
+				if content.ToolResult != nil {
+					consume(content.ToolResult.Content)
+				}
+			}
 		}
-		if video := neutralInlineVideoDataURL(content); video != "" {
-			videos = append(videos, video)
-		}
+	}
+	for _, instruction := range request.Instructions {
+		consume(instruction.Content)
+	}
+	for _, message := range request.Messages {
+		consume(message.Content)
 	}
 	return videos
 }

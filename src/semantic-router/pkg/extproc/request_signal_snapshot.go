@@ -23,8 +23,8 @@ type requestSignalSnapshot struct {
 	FirstAudio        string
 	// Turns are the user and assistant messages with text, in order; the
 	// last user one is the current turn (PriorTurns). Images are every image
-	// the request carries (requestImages); UserVideos are the inline videos
-	// of the last user message.
+	// the request carries (requestImages); UserVideos are every video the
+	// request carries (requestVideos), unreadable ones as empty strings.
 	Turns      []classification.ConversationTurn
 	Images     []string
 	UserVideos []string
