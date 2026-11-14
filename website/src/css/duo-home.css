@@ -131,6 +131,16 @@ html.duo-home .navbar.navbar-sidebar--show {
   -webkit-backdrop-filter: saturate(160%) blur(18px);
 }
 
+/* A filtered navbar clips Docusaurus's fixed sidebar to the header height on
+ * mobile. Keep the frosted surface color without making it a containing block. */
+@media (max-width: 996px) {
+  html.duo-home[data-duo-scrolled] .navbar,
+  html.duo-home .navbar.navbar-sidebar--show {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 html.duo-home .navbar__item.navbar__link.nav-dashboard-cta {
   border-radius: 999px;
   transition: opacity 0.4s var(--ease), transform 0.5s var(--ease), background-color 0.2s;
