@@ -22,7 +22,7 @@ from ...systemone import choice_confidence
 from ..vela2.calibration import sigmoid, softmax
 from ..vela2.raw import RawRow
 from ..vela2.request import State
-from ..vela2.words import decode_spans, trim
+from ..vela2.words import decode_spans, trim, without_separators
 from .request import Asked
 from .routing import Router
 
@@ -130,8 +130,9 @@ class Answerer:
             start, end = entry["start"], entry["end"]
             if question.span_range is not None:
                 start, end = trim(text, max(start, low), min(end, high))
-                if end <= start:
-                    continue
+            start, end = without_separators(text, start, end)
+            if end <= start:
+                continue
             spans.append(
                 {
                     "label": entry["label"],
