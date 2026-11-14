@@ -150,6 +150,11 @@ config:
             keywords:
               - __LOOPER_FUSION_NONE_PROBE__
             case_sensitive: true
+          - name: looper_fusion_empty_judge_probe_keywords
+            operator: OR
+            keywords:
+              - __LOOPER_FUSION_EMPTY_JUDGE_PROBE__
+            case_sensitive: true
           - name: looper_fusion_synthesis_trace_keywords
             operator: OR
             keywords:
@@ -230,6 +235,26 @@ config:
             conditions:
               - type: keyword
                 name: looper_fusion_none_probe_keywords
+          modelRefs:
+            - model: fusion-panel-valid
+              use_reasoning: false
+          algorithm:
+            type: fusion
+            fusion:
+              model: fusion-judge
+              analysis_models:
+                - fusion-panel-valid
+              analysis_mode: none
+              include_analysis: false
+              include_intermediate_responses: false
+        - name: looper_fusion_empty_judge_decision
+          description: Reject an empty final Fusion judge answer
+          priority: 120
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: looper_fusion_empty_judge_probe_keywords
           modelRefs:
             - model: fusion-panel-valid
               use_reasoning: false

@@ -92,6 +92,7 @@ def test_memory_rewrite_only_adds_relevant_context(query, expected):
         ("Compare the panel responses", "fusion-one-call-answer"),
         ("Synthesize a final answer directly", "fusion-none-answer"),
         ("Structured analysis:", "fusion-separate-answer"),
+        ("__LOOPER_FUSION_EMPTY_JUDGE_PROBE__", ""),
     ],
 )
 async def test_looper_judge_branches_and_observation(prompt, expected):
