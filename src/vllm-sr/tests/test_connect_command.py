@@ -1,3 +1,4 @@
+import difflib
 import importlib
 import json
 import os
@@ -2433,13 +2434,16 @@ def test_check_sees_codex_send_its_approval_review_to_the_review_entrypoint(
     url, _, _ = gateway
     hk = importlib.import_module("cli.harness_check")
     config = tmp_path / "config.yaml"
-    config.write_text(yaml.safe_dump(REVIEW_DOC))
+    # the replay list is read from the management port this config names
+    management = {"management_api": {"port": urllib.parse.urlsplit(url).port}}
+    config.write_text(
+        yaml.safe_dump({**REVIEW_DOC, "global": {"services": management}})
+    )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
     monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
     monkeypatch.setenv("FAKE_EVENTS", json.dumps(CODEX_EVENTS))
     monkeypatch.setenv("FAKE_REVIEW_URL", url + "/v1/responses")
-    monkeypatch.setattr(hk, "management_url", lambda gateway: url)
     args = ["connect", "codex", "--config", str(config), "--base-url", url]
     result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes", "--check"])
     assert result.exit_code == 0, result.output
@@ -2453,7 +2457,10 @@ def test_check_sees_codex_send_its_approval_review_to_the_review_entrypoint(
     assert ran["args"][-1] == hk.REVIEW_PROMPT and ran["stdin_closed"]
 
     # without the Router's replay list the review is not observed, which passes
-    monkeypatch.setattr(hk, "management_url", lambda gateway: "http://127.0.0.1:9")
+    management["management_api"]["port"] = 9
+    config.write_text(
+        yaml.safe_dump({**REVIEW_DOC, "global": {"services": management}})
+    )
     result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes", "--check"])
     assert result.exit_code == 0, result.output
     assert "Approval review not observed the replay list at" in _flat(result.output)
@@ -3567,11 +3574,15 @@ def test_codex_app_sets_the_shared_defaults_and_undo_keeps_the_rest(
     assert result.exit_code == 0, result.output
     assert "the Codex CLI included" in _flat(result.output)
     assert config.read_text() == before
+    preview = result.output
 
     result = CliRunner().invoke(main, [*args, "--yes"])
     assert result.exit_code == 0, result.output
     output = _flat(result.output)
     assert "The gateway is now Codex's default" in output
+    # the preview is the change written, where it is written
+    lines = [text.splitlines(keepends=True) for text in (before, config.read_text())]
+    assert "".join(difflib.unified_diff(*lines, str(config), str(config))) in preview
     assert result.output.rstrip().endswith("Start Codex with: codex")
     held = tomllib.loads(config.read_text())
     assert held["model"] == "vllm-sr/auto" and held["model_provider"] == "vllm-sr"
@@ -3711,3 +3722,28 @@ def test_codex_memories_ask_the_gateway_for_their_models(
     launch = hc.codex_launch_args(url, "vllm-sr/auto", None, None)
     assert "-c" in launch and 'memories.extract_model="vllm-sr/auto"' in launch
     assert 'memories.consolidation_model="vllm-sr/auto"' in launch
+
+
+def test_a_failed_probe_says_what_failed_in_words():
+    class Refuses(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["content-length"]))
+            self.send_response(401)
+            self.end_headers()
+            self.wfile.write(b'{"error": "invalid key"}')
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Refuses)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}"
+    refused = rc.basic_reply(url, "codex", "vllm-sr/auto", "sk-wrong")
+    server.shutdown()
+    server.server_close()
+    assert "the gateway did not accept the key (HTTP 401" in refused.detail
+    down = rc.basic_reply(url, "codex", "vllm-sr/auto", "sk-wrong")
+    assert down.detail == (
+        f"{url}/v1/responses: no connection (Connection refused)."
+        " Is the gateway running there?"
+    )

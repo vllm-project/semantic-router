@@ -93,15 +93,10 @@ class Change:
         return {"file": text or None}
 
     def shown(self, text: str, key_label: str) -> str:
-        """The part of text the command owns, for display, with no key in it."""
-        if self.kind == "file":
+        """The part of text the command owns, for display, with no key in it. A
+        TOML file is shown whole, so its diff places each entry where it is written."""
+        if self.kind in ("file", "toml"):
             return hide_secrets(text)
-        if self.kind == "toml":
-            held = [value for value in self.raw(text).values() if value]
-            keys = "\n".join(v for v in held if not v.startswith("["))
-            tables = [v for v in held if v.startswith("[")]
-            shown = "\n\n".join(part for part in [keys, *tables] if part)
-            return hide_secrets(shown + "\n") if shown else ""
         if self.kind == "json":
             shown: dict[str, Any] = {}
             for key, value in self.raw(text).items():

@@ -545,7 +545,15 @@ def codex(
                     config += ["-c", f"model_catalog_json={json.dumps(str(found))}"]
                 return hk.codex_argv(config, work, bool(reviewer))
 
-            _check("codex", unwritten, env, secrets, False, reviewer, gateway)
+            _check(
+                "codex",
+                unwritten,
+                env,
+                secrets,
+                False,
+                reviewer,
+                _management_url(gateway, doc),
+            )
         return
     if options and _vsr_step(lambda: [_must(argv, env) for argv in install], plan):
         success(
@@ -583,7 +591,7 @@ def codex(
             secrets,
             True,
             reviewer,
-            gateway,
+            _management_url(gateway, doc),
         )
     if app:
         warning(
@@ -977,7 +985,7 @@ def _private(directory: Path, name: str, text: str) -> Path:
 
 
 def _check(
-    harness, argv_for, env, secrets, written=True, review_model=None, gateway=""
+    harness, argv_for, env, secrets, written=True, review_model=None, management=""
 ) -> None:
     """Run the harness once on a tiny task through the gateway, in a temporary
     directory, and report each step. argv_for(private, work) gives its command
@@ -994,7 +1002,7 @@ def _check(
         tempfile.TemporaryDirectory(prefix="vllm-sr-check-") as work,
     ):
         argv = argv_for(Path(private), Path(work))
-        rows = hk.run(harness, argv, env, Path(work), secrets, review_model, gateway)
+        rows = hk.run(harness, argv, env, Path(work), secrets, review_model, management)
     fields((row.name, f"{row.state:<13}{row.detail}".rstrip()) for row in rows)
     if any(row.state == "failed" for row in rows):
         raise click.ClickException(
@@ -1445,10 +1453,10 @@ def _probe(
             raise click.ClickException(
                 f"{result.name}: failed. {result.detail}\n"
                 + (
-                    "The changes above stay written: fix the gateway and run this"
+                    "The changes above stay written: fix what failed and run this"
                     " command again, or take them back with --undo."
                     if written
-                    else f"{harness} was not started: fix the gateway and run this"
+                    else f"{harness} was not started: fix what failed and run this"
                     " command again."
                 )
             )

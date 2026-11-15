@@ -17,13 +17,11 @@ import signal
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from cli.harness_connect import SECRET_NAME
 from cli.router_management_client import (
     OBSERVABILITY_REPLAYS_PATH,
     RouterManagementClient,
-    default_management_base_url,
 )
 
 WORD = "vsr-check"
@@ -112,14 +110,6 @@ def pi_argv(provider: str, model: str) -> list[str]:
     ]
 
 
-def management_url(gateway: str) -> str:
-    """The management API of the Router behind gateway: the same host, on the
-    management port of the local stack."""
-    port = urlsplit(default_management_base_url()).port
-    host = urlsplit(gateway).hostname or "localhost"
-    return f"http://{f'[{host}]' if ':' in host else host}:{port}"
-
-
 def run(
     harness: str,
     argv: list[str],
@@ -127,7 +117,7 @@ def run(
     workdir: Path,
     secrets: list[str],
     review_model: str | None = None,
-    gateway: str = "",
+    management: str = "",
 ) -> list[Row]:
     """The harness found and its version, its login accepted, the tool round trip,
     with review_model whether a review reached that entrypoint, and how it
@@ -139,7 +129,7 @@ def run(
     if found is None:
         return [Row("Harness", "failed", f"{argv[0]} is not on PATH"), *later]
     harness_row = Row("Harness", "ok", f"{_version(found, env) or argv[0]} at {found}")
-    before = _reviews(gateway, review_model) if review_model else None
+    before = _reviews(management, review_model) if review_model else None
     try:
         out, err, code, timed_out = _run_harness([found, *argv[1:]], env, workdir)
     except OSError as exc:
@@ -152,7 +142,7 @@ def run(
         login.detail = last[-1] if last else f"{argv[0]} exited with status {code}"
     rows = [harness_row, login, tool]
     if review_model:
-        rows.append(_review_row(gateway, review_model, before))
+        rows.append(_review_row(management, review_model, before))
     if timed_out:
         rows = [
             (
@@ -412,10 +402,9 @@ def _text_of(value) -> str:
     return ""
 
 
-def _reviews(gateway: str, review_model: str) -> tuple[set[str] | None, str]:
-    """The ids of the replay records for review_model that the Router behind
-    gateway lists, or None and why the list could not be read."""
-    url = management_url(gateway)
+def _reviews(url: str, review_model: str) -> tuple[set[str] | None, str]:
+    """The ids of the replay records for review_model that the Router management
+    API at url lists, or None and why the list could not be read."""
     try:
         payload = (
             RouterManagementClient(url, timeout=5)
@@ -436,12 +425,12 @@ def _reviews(gateway: str, review_model: str) -> tuple[set[str] | None, str]:
     }, ""
 
 
-def _review_row(gateway, review_model, before) -> Row:
+def _review_row(management, review_model, before) -> Row:
     name = "Approval review"
     ids, why = before
     after = None
     if ids is not None:
-        after, why = _reviews(gateway, review_model)
+        after, why = _reviews(management, review_model)
     if after is None:
         return Row(name, "not observed", why)
     new = sorted(after - ids)
