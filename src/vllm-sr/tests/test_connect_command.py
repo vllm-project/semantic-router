@@ -1094,8 +1094,9 @@ BUNDLED_GPT_55 = {
 @pytest.fixture
 def harness_bin(tmp_path, monkeypatch):
     """A claude and a codex on PATH that record their arguments, the settings file
-    or model catalog they were given, and the key in their environment, then exit
-    3. Asked for its bundled models, the codex lists a gpt-5.5 entry."""
+    or model catalog they were given, the key and the homes in their environment
+    and the directory they run in, then exit 3. Asked for its bundled models, the
+    codex lists a gpt-5.5 entry."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     record = tmp_path / "ran.json"
@@ -1112,7 +1113,9 @@ def harness_bin(tmp_path, monkeypatch):
             "catalog = [json.loads(a.split('=', 1)[1]) for a in args if a.startswith('model_catalog_json=')]\n"
             f"json.dump({{'args': args, 'settings': open(given).read() if given else None,"
             " 'catalog': json.load(open(catalog[0])) if catalog else None,"
-            f" 'key': os.environ.get('VLLM_SR_API_KEY')}}, open({str(record)!r}, 'w'))\n"
+            f" 'key': os.environ.get('VLLM_SR_API_KEY'), 'cwd': os.getcwd(),"
+            " 'homes': [os.environ.get('CLAUDE_CONFIG_DIR'), os.environ.get('CODEX_HOME')]"
+            f"}}, open({str(record)!r}, 'w'))\n"
             "sys.exit(3)\n"
         )
         script.chmod(0o755)
@@ -2508,3 +2511,266 @@ def test_a_run_that_ends_badly_fails_the_check_after_steps_that_passed(
     rows = hk.run(harness, [name, "exec"], dict(hk.os.environ), tmp_path, [])
     assert [row.state for row in rows] == ["ok"] * 4
     assert rows[-1].detail == f"{name} exited with status 0"
+
+
+def _git_state(repo: Path) -> list[str]:
+    """The branches, worktrees and checked-out branch of repo."""
+    return [
+        subprocess.run(
+            ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True
+        ).stdout
+        for args in (
+            ["for-each-ref", "refs/heads"],
+            ["worktree", "list", "--porcelain"],
+            ["symbolic-ref", "HEAD"],
+        )
+    ]
+
+
+def test_launch_starts_the_harness_in_a_worktree_with_its_home_or_another(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    tmp_path = tmp_path.resolve()
+    repo, linked = tmp_path / "repo", tmp_path / "linked"
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    git = [
+        "git",
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.com",
+        "-C",
+        str(repo),
+    ]
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "start"], check=True)
+    subprocess.run([*git, "worktree", "add", "-q", str(linked)], check=True)
+    before = _git_state(repo)
+    own, other = tmp_path / "own-home", tmp_path / "other-home"
+    other.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(own))
+    monkeypatch.setenv("CODEX_HOME", str(own))
+    for index, harness in enumerate(["claude-code", "codex"]):
+        args = ["connect", harness, "--base-url", url, "--launch"]
+        result = CliRunner().invoke(main, [*args, "--worktree", str(linked)])
+        assert result.exit_code == 3, result.output
+        ran = json.loads(harness_bin.read_text())
+        # the user's own home, so the harness keeps its own login
+        assert ran["cwd"] == str(linked) and ran["homes"][index] == str(own)
+        assert "Session: started=" in result.output
+        assert (
+            f"worktree={linked} home={own} gateway={url} model=vllm-sr/auto"
+            in result.output
+        )
+
+        result = CliRunner().invoke(
+            main, [*args, "--worktree", str(linked), "--home", str(other)]
+        )
+        assert result.exit_code == 3, result.output
+        assert json.loads(harness_bin.read_text())["homes"][index] == str(other)
+        assert f"home={other} " in result.output
+    # nothing was put in either home, and no branch or worktree changed
+    assert list(other.iterdir()) == [] and not own.exists()
+    assert _git_state(repo) == before
+
+    launch = ["connect", "codex", "--base-url", url, "--launch"]
+    result = CliRunner().invoke(main, [*launch, "--worktree", str(other)])
+    assert result.exit_code == 2 and "is not inside a git work tree" in result.output
+    for flag in ("--worktree", "--home"):
+        result = CliRunner().invoke(main, ["connect", "codex", flag, str(linked)])
+        assert result.exit_code == 2 and f"{flag} goes with --launch" in result.output
+
+
+@pytest.mark.parametrize("harness", ["claude-code", "codex"])
+def test_launch_runs_the_key_command_in_the_worktree_and_home_it_starts(
+    tmp_path, gateway, harness_bin, monkeypatch, harness
+):
+    url, seen, _ = gateway
+    tmp_path = tmp_path.resolve()
+    repo, ran_in = tmp_path / "repo", tmp_path / "ran-in"
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    own, other = tmp_path / "own-home", tmp_path / "other-home"
+    for home, key in [(own, "sk-own"), (other, "sk-other")]:
+        home.mkdir()
+        (home / "key").write_text(f"{key}\n")
+    variable = {"claude-code": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME"}[harness]
+    helper = f'pwd > {ran_in}; cat "${variable}/key"'
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(own))
+    monkeypatch.setenv("CODEX_HOME", str(own))
+    args = ["connect", harness, "--base-url", url, "--key-command", helper]
+    result = CliRunner().invoke(
+        main, [*args, "--launch", "--worktree", str(repo), "--home", str(other)]
+    )
+    assert result.exit_code == 3, result.output
+    # the probe sent the key the harness's own run of the command gets
+    assert {auth for _, _, auth in seen} == {"Bearer sk-other"}
+    assert ran_in.read_text() == f"{repo}\n"
+    assert json.loads(harness_bin.read_text())["cwd"] == str(repo)
+    assert "sk-" not in result.output
+
+
+def test_claude_code_writes_a_key_command_as_its_helper_and_never_the_key(
+    tmp_path, gateway, monkeypatch
+):
+    url, seen, _ = gateway
+    runs, keyfile = tmp_path / "runs", tmp_path / "key"
+    keyfile.write_text("sk-helper\n")
+    helper = f"echo run >> {runs}; cat {keyfile}"
+    settings = tmp_path / "claude" / "settings.json"
+    settings.parent.mkdir()
+    settings.write_text('{"theme": "dark"}')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(settings.parent))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-env")  # the command wins over it
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    args = ["connect", "claude-code", "--base-url", url, "--key-command", helper]
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert not runs.exists()  # a dry run probes nothing, so needs no key
+
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    held = json.loads(settings.read_text())
+    assert held["apiKeyHelper"] == helper and held["theme"] == "dark"
+    # both win over the helper, so both are empty
+    assert held["env"]["ANTHROPIC_AUTH_TOKEN"] == held["env"]["ANTHROPIC_API_KEY"] == ""
+    record = (settings.parent / hc.MANIFEST).read_text()
+    assert "sk-" not in settings.read_text() + record + result.output
+    assert "Claude Code runs" in result.output and "(apiKeyHelper)" in result.output
+    # run once, for the probe, which sent what it printed
+    assert runs.read_text() == "run\n"
+    assert {auth for _, _, auth in seen} == {"Bearer sk-helper"}
+
+    asked = len(seen)
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    claude = json.loads(result.output)["connections"][0]
+    assert (claude["login"], claude["key_command"]) == ("key command", helper)
+    assert claude["probe"]["state"] == "ok" and "sk-" not in result.output
+    assert [auth for _, _, auth in seen[asked:]] == ["Bearer sk-helper"]
+    result = CliRunner().invoke(main, ["connect", "status"])
+    assert f"login gateway key from the command {helper}" in _flat(result.output)
+
+    # a run with a key in its place takes the helper out
+    result = CliRunner().invoke(main, [*args[:4], "--yes"])
+    assert result.exit_code == 0, result.output
+    held = json.loads(settings.read_text())
+    assert "apiKeyHelper" not in held
+    assert held["env"]["ANTHROPIC_AUTH_TOKEN"] == "sk-env"
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--undo"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(settings.read_text()) == {"theme": "dark"}
+
+    for broken, why in [("exit 4", "exited with status 4"), ("true", "printed no key")]:
+        result = CliRunner().invoke(main, [*args[:4], "--key-command", broken, "--yes"])
+        assert result.exit_code == 1
+        assert f"--key-command {why}, so nothing was written" in _flat(result.output)
+    assert json.loads(settings.read_text()) == {"theme": "dark"}
+
+
+def test_codex_takes_a_key_command_as_its_providers_auth_command(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    tomllib = pytest.importorskip("tomllib")
+    url, seen, _ = gateway
+    keyfile = tmp_path / "key"
+    keyfile.write_text("sk-helper\n")
+    helper = f"cat {keyfile}"
+    home = tmp_path / "codex"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    args = ["connect", "codex", "--base-url", url, "--key-command", helper]
+    result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes"])
+    assert result.exit_code == 0, result.output
+    profile = home / "vllm-sr.config.toml"
+    provider = tomllib.loads(profile.read_text())["model_providers"]["vllm-sr"]
+    # Codex refuses auth beside env_key or requires_openai_auth (0.166)
+    assert provider["auth"] == {"command": "/bin/sh", "args": ["-c", helper]}
+    assert "env_key" not in provider and "requires_openai_auth" not in provider
+    assert {auth for _, _, auth in seen} == {"Bearer sk-helper"}
+    assert "sk-" not in profile.read_text() + result.output
+    assert "Codex runs" in result.output
+
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    codex = json.loads(result.output)["connections"][1]
+    assert (codex["login"], codex["key_command"]) == ("key command", helper)
+    assert codex["probe"]["state"] == "ok" and "sk-" not in result.output
+
+    # --launch gives the same table as overrides, and the key nowhere
+    result = CliRunner().invoke(main, [*args, "--launch"])
+    assert result.exit_code == 3, result.output
+    ran = json.loads(harness_bin.read_text())
+    overrides = dict(arg.split("=", 1) for arg in ran["args"] if "=" in arg)
+    assert overrides["model_providers.vllm-sr.auth.command"] == '"/bin/sh"'
+    assert json.loads(overrides["model_providers.vllm-sr.auth.args"]) == ["-c", helper]
+    assert "model_providers.vllm-sr.env_key" not in overrides
+    assert "sk-" not in " ".join(ran["args"]) + result.output
+    assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
+    assert not profile.exists()
+
+
+def test_a_check_hides_the_key_its_key_command_printed(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    url, _, _ = gateway
+    keyfile = tmp_path / "key"
+    keyfile.write_text("sk-helper-123\n")
+    helper = f"cat {keyfile}"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    refused = "API Error: 401 the key sk-helper-123 is not valid"
+    events = [
+        {
+            "type": "assistant",
+            "message": {
+                "model": "<synthetic>",
+                "content": [{"type": "text", "text": refused}],
+            },
+        },
+        {"type": "result", "is_error": True, "result": refused},
+    ]
+    monkeypatch.setenv("FAKE_EVENTS", json.dumps(events))
+    monkeypatch.setenv("FAKE_EXIT", "1")
+    args = ["connect", "claude-code", "--base-url", url, "--key-command", helper]
+    result = CliRunner().invoke(main, [*args, "--dry-run", "--check"])
+    assert result.exit_code == 1
+    assert "Login failed API Error: 401 the key <hidden> is not valid" in _flat(
+        result.output
+    )
+    assert "sk-helper" not in result.output
+    # the harness runs the helper from the settings it is given
+    ran = json.loads(checked_harness.read_text())
+    assert json.loads(ran["settings"])["apiKeyHelper"] == helper
+
+
+@pytest.mark.parametrize("harness", ["claude-code", "codex"])
+def test_a_key_command_is_refused_for_a_caller_login_and_leaves_vsr_out(
+    tmp_path, harness_bin, monkeypatch, harness
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    provider = "anthropic" if harness == "claude-code" else "openai"
+    config = _caller_config(tmp_path, provider)
+    args = ["connect", harness, "--base-url", "http://localhost:8899"]
+    result = CliRunner().invoke(
+        main, [*args, "--config", str(config), "--key-command", "printf k"]
+    )
+    assert result.exit_code == 2 and "own login instead" in result.output
+
+    config.write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n        models: [vela3-lite]\n"
+    )
+    result = CliRunner().invoke(
+        main, [*args, "--config", str(config), "--key-command", "printf k", "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "vSR is not set up: its plugin takes a stored key or a variable" in _flat(
+        result.output
+    )

@@ -26,8 +26,14 @@ TOKEN_KEY = "ANTHROPIC_AUTH_TOKEN"
 # token unless the settings set it empty, which they win over (2.1.323)
 API_KEY = "ANTHROPIC_API_KEY"
 NO_KEY = "vllm-sr-no-key"
+# The command Claude Code runs for its key. Its documented order puts both
+# variables above before it, so with one written both are set empty.
+KEY_HELPER = "apiKeyHelper"
 # Claude Code settings the command may own outside "env"
-TOP_LEVEL_KEYS = ("statusLine",)
+TOP_LEVEL_KEYS = ("statusLine", KEY_HELPER)
+# What runs a key command: Claude Code runs apiKeyHelper in the system shell, and
+# a Codex auth command is a program with its arguments (0.166).
+KEY_SHELL = "/bin/sh"
 STATUS_LINE_SCRIPT = "vllm-sr-status-line.py"
 
 
@@ -94,6 +100,8 @@ class Change:
             held[TOKEN_KEY] = key_label if written else "<hidden>"
         if held.get(API_KEY):
             held[API_KEY] = "<hidden>"
+        if held.get(KEY_HELPER) and held[KEY_HELPER] != self.values[KEY_HELPER]:
+            held[KEY_HELPER] = "<hidden>"  # a helper of yours may name its secret
         shown = {k: held.pop(k) for k in TOP_LEVEL_KEYS if k in held}
         if held:
             shown["env"] = held
@@ -143,11 +151,17 @@ def claude_settings_path(scope: str, cwd: Path, env: dict[str, str]) -> Path:
     return Path(base) / "settings.json"
 
 
-def claude_env(gateway: str, model: str, token: str) -> dict[str, str]:
+def claude_env(
+    gateway: str, model: str, token: str, key_command: str | None = None
+) -> dict[str, str | None]:
+    """The settings, and with key_command the helper that gives the key, which
+    token must then leave empty. Without one any helper is removed: it would
+    send its key in place of a caller's own login."""
     return {
         "ANTHROPIC_BASE_URL": gateway.rstrip("/"),
         TOKEN_KEY: token,
         API_KEY: "",
+        KEY_HELPER: key_command,
         "ANTHROPIC_MODEL": model,
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
         "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
@@ -157,19 +171,23 @@ def claude_env(gateway: str, model: str, token: str) -> dict[str, str]:
 
 
 def claude_overrides(cwd: Path, keys, user: Path) -> list[tuple[Path, list[str]]]:
-    """The project settings in cwd that set any of keys in their env: Claude Code
-    reads them only where it starts, and they win over the user's settings. Started
-    in the home directory, ./.claude/settings.json is the user's own file."""
+    """The project settings in cwd that set any of keys, in their env or for
+    TOP_LEVEL_KEYS at the top: Claude Code reads them only where it starts, and
+    they win over the user's settings. Started in the home directory,
+    ./.claude/settings.json is the user's own file."""
     found = []
     for name in ("settings.json", "settings.local.json"):
         path = cwd / ".claude" / name
         if path.resolve() == user.resolve():
             continue
         try:
-            env = _settings(path.read_text(encoding="utf-8")).get("env") or {}
+            settings = _settings(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if held := [key for key in keys if key in env]:
+        env = settings.get("env") or {}
+        if held := [
+            key for key in keys if key in (settings if key in TOP_LEVEL_KEYS else env)
+        ]:
             found.append((path, held))
     return found
 
@@ -360,11 +378,14 @@ def codex_settings(
     context_window: int | None,
     login: bool = False,
     catalog: Path | None = None,
+    key_command: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """The top-level settings, then the provider's. key_env is left out for a
     listener without keys: Codex refuses to start while the variable a provider
     names is unset. login has Codex send its own sign-in, for a gateway that
-    presents it upstream. catalog is the model catalog file Codex reads."""
+    presents it upstream. catalog is the model catalog file Codex reads.
+    key_command becomes the provider's auth table, whose command output Codex
+    sends as the bearer key; it takes neither key_env nor login (0.166)."""
     top = {
         "model": model,
         "model_context_window": context_window,
@@ -379,6 +400,7 @@ def codex_settings(
         "wire_api": "responses",
         "env_key": key_env,
         "requires_openai_auth": login,
+        "auth": key_command and {"command": KEY_SHELL, "args": ["-c", key_command]},
     }
     return (
         {k: v for k, v in top.items() if v},
@@ -395,15 +417,20 @@ def codex_change(
     context_window: int | None = None,
     login: bool = False,
     catalog: Path | None = None,
+    key_command: str | None = None,
 ) -> Change:
     """The profile file. Codex layers it over config.toml with --profile, and it
     holds the provider too, so config.toml is not touched."""
     top, provider = codex_settings(
-        gateway, model, key_env, context_window, login, catalog
+        gateway, model, key_env, context_window, login, catalog, key_command
     )
+    auth = provider.pop("auth", None)
     lines = [f"{k} = {json.dumps(v)}" for k, v in top.items()]
     lines += ["", f"[model_providers.{PROVIDER}]"]
     lines += [f"{k} = {json.dumps(v)}" for k, v in provider.items()]
+    if auth:
+        lines += ["", f"[model_providers.{PROVIDER}.auth]"]
+        lines += [f"{k} = {json.dumps(v)}" for k, v in auth.items()]
     text = "\n".join(lines) + "\n"
     return Change(home / f"{profile}.config.toml", "file", {"file": text})
 
@@ -414,12 +441,17 @@ def codex_launch_args(
     key_env: str | None,
     context_window: int | None,
     login: bool = False,
+    key_command: str | None = None,
 ) -> list[str]:
     """The same settings as command-line overrides, which win over every
     configuration file, a trusted project's included (0.166)."""
-    top, provider = codex_settings(gateway, model, key_env, context_window, login)
+    top, provider = codex_settings(
+        gateway, model, key_env, context_window, login, key_command=key_command
+    )
+    auth = provider.pop("auth", None) or {}
     pairs = [*top.items()]
     pairs += [(f"model_providers.{PROVIDER}.{k}", v) for k, v in provider.items()]
+    pairs += [(f"model_providers.{PROVIDER}.auth.{k}", v) for k, v in auth.items()]
     return [arg for k, v in pairs for arg in ("-c", f"{k}={json.dumps(v)}")]
 
 
@@ -673,7 +705,7 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
         path = Path(item["path"])
         written = {key: entry.get("written") for key, entry in item["keys"].items()}
         if item["kind"] == "json-env":
-            token = written.get(TOKEN_KEY)
+            token, helper = written.get(TOKEN_KEY), written.get(KEY_HELPER)
             window = str(written.get("CLAUDE_CODE_MAX_CONTEXT_TOKENS") or "")
             found.append(
                 {
@@ -684,7 +716,8 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                     "gateway": written.get("ANTHROPIC_BASE_URL"),
                     "model": written.get("ANTHROPIC_MODEL"),
                     "context_window": int(window) if window.isdigit() else None,
-                    "login": _login(token == "", token not in (None, NO_KEY)),
+                    "login": _login(token == "", token not in (None, NO_KEY), helper),
+                    "key_command": helper,
                     "settings": str(path),
                     "files": [
                         file_state(other)
@@ -698,6 +731,10 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
         elif item["kind"] == "file" and path.name.endswith(".config.toml"):
             profile = profile_values(written.get("file") or "")
             catalog = profile.get("model_catalog_json")
+            # the auth table connect writes: the shell, then -c and the command
+            helper = (
+                (profile.get("args") or [None])[-1] if "command" in profile else None
+            )
             paired = [
                 other
                 for other in items
@@ -717,15 +754,19 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                     "login": _login(
                         bool(profile.get("requires_openai_auth")),
                         bool(profile.get("env_key")),
+                        helper,
                     ),
                     "key_env": profile.get("env_key"),
+                    "key_command": helper,
                     "files": [file_state(other) for other in paired],
                 }
             )
     return found
 
 
-def _login(own: bool, keyed: bool) -> str:
+def _login(own: bool, keyed: bool, helper: str | None = None) -> str:
+    if helper:
+        return "key command"
     return "own login" if own else "gateway key" if keyed else "no key"
 
 
@@ -765,7 +806,7 @@ def file_state(item: dict) -> dict[str, Any]:
 
 def profile_values(text: str) -> dict[str, Any]:
     """The settings of a profile connect wrote, one `key = <JSON>` a line. Its
-    provider table repeats no top-level key, so both share one dict."""
+    provider and auth tables repeat no key of another, so all share one dict."""
     values = {}
     for line in text.splitlines():
         key, sep, value = line.partition(" = ")
