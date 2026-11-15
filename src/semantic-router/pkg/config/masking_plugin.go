@@ -143,9 +143,9 @@ func validateMaskingPlugin(at PluginAt, p *MaskingPluginConfig) error {
 	return validateMaskingPlaceholdersDistinct(at, p, labels)
 }
 
-// validateMaskingPlaceholdersDistinct refuses two entity types masking can
-// emit whose templates can produce the same placeholder: each type counts its
-// own indexes, so two values would read as one.
+// validateMaskingPlaceholdersDistinct refuses identical templates for different
+// entity types. Different templates can still intersect; the allocator skips
+// already-issued strings when their outputs collide.
 func validateMaskingPlaceholdersDistinct(at PluginAt, p *MaskingPluginConfig, labels []string) error {
 	var types []string
 	if strings.TrimSpace(p.Signal) != "" {
