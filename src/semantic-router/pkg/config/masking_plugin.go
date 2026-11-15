@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
@@ -131,14 +132,20 @@ func validateMaskingPlugin(at PluginAt, p *MaskingPluginConfig) error {
 		if strings.Count(template, MaskingPlaceholderIndexToken) != 1 {
 			return at.Errorf("placeholder for %q must contain %s exactly once", entityType, MaskingPlaceholderIndexToken)
 		}
+		// A digit next to {index} joins it: [X_{index}0] at 1 writes [X_10],
+		// which reads as [X_{index}] at 10, so one value's placeholder can
+		// read as another's.
+		before, after, _ := strings.Cut(template, MaskingPlaceholderIndexToken)
+		if strings.IndexFunc(before[max(len(before)-1, 0):]+after[:min(len(after), 1)], unicode.IsDigit) >= 0 {
+			return at.Errorf("placeholder for %q must not put a digit next to %s", entityType, MaskingPlaceholderIndexToken)
+		}
 	}
 	return validateMaskingPlaceholdersDistinct(at, p, labels)
 }
 
 // validateMaskingPlaceholdersDistinct refuses two entity types masking can
 // emit whose templates can produce the same placeholder: each type counts its
-// own indexes, so two values would read as one. Digits next to {index} join
-// the index, so [X_{index}] and [X_1{index}] both produce [X_10].
+// own indexes, so two values would read as one.
 func validateMaskingPlaceholdersDistinct(at PluginAt, p *MaskingPluginConfig, labels []string) error {
 	var types []string
 	if strings.TrimSpace(p.Signal) != "" {
@@ -150,14 +157,12 @@ func validateMaskingPlaceholdersDistinct(at PluginAt, p *MaskingPluginConfig, la
 	owner := map[string]string{}
 	for _, entityType := range append(slices.Clone(types), p.RuleNames()...) {
 		template := p.EffectivePlaceholder(entityType)
-		before, after, _ := strings.Cut(template, MaskingPlaceholderIndexToken)
-		shape := strings.TrimRight(before, "0123456789") + MaskingPlaceholderIndexToken + strings.TrimLeft(after, "0123456789")
-		if other, taken := owner[shape]; taken && other != entityType {
+		if other, taken := owner[template]; taken && other != entityType {
 			pair := []string{other, entityType}
 			sort.Strings(pair)
 			return at.Errorf("placeholders: %q and %q can both produce the same placeholder (%s)", pair[0], pair[1], template)
 		}
-		owner[shape] = entityType
+		owner[template] = entityType
 	}
 	return nil
 }
