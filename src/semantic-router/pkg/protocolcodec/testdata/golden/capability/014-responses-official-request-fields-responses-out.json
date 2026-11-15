@@ -96,6 +96,9 @@
       "outcome": {
         "status": "ok",
         "body": {
+          "include": [
+            "reasoning.encrypted_content"
+          ],
           "input": [
             {
               "content": [
@@ -109,13 +112,7 @@
             }
           ],
           "model": "routed-model"
-        },
-        "diagnostics": [
-          {
-            "field": "include",
-            "action": "dropped"
-          }
-        ]
+        }
       }
     },
     {
