@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
@@ -132,12 +133,16 @@ func validateMaskingPlugin(at PluginAt, p *MaskingPluginConfig) error {
 		if strings.Count(template, MaskingPlaceholderIndexToken) != 1 {
 			return at.Errorf("placeholder for %q must contain %s exactly once", entityType, MaskingPlaceholderIndexToken)
 		}
-		// A digit next to {index} joins it: [X_{index}0] at 1 writes [X_10],
-		// which reads as [X_{index}] at 10, so one value's placeholder can
-		// read as another's.
+		// The index must end where the template says it does. A digit next to
+		// {index} joins it, [X_{index}0] at 1 writing [X_10], which reads as
+		// [X_{index}] at 10, and an index at the template's edge runs into a
+		// digit the text has beside the value: #{index} for Bob in "Bob5"
+		// writes #15.
 		before, after, _ := strings.Cut(template, MaskingPlaceholderIndexToken)
-		if strings.IndexFunc(before[max(len(before)-1, 0):]+after[:min(len(after), 1)], unicode.IsDigit) >= 0 {
-			return at.Errorf("placeholder for %q must not put a digit next to %s", entityType, MaskingPlaceholderIndexToken)
+		last, _ := utf8.DecodeLastRuneInString(before)
+		first, _ := utf8.DecodeRuneInString(after)
+		if before == "" || after == "" || unicode.IsDigit(last) || unicode.IsDigit(first) {
+			return at.Errorf("placeholder for %q must put a character other than a digit right before and right after %s, as in #%s#", entityType, MaskingPlaceholderIndexToken, MaskingPlaceholderIndexToken)
 		}
 	}
 	return validateMaskingPlaceholdersDistinct(at, p, labels)
