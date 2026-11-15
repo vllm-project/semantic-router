@@ -2655,12 +2655,13 @@ REMOVED_BACKEND_REF_FIELDS = ("compat_gateway", "openai_compat_gateway")
 
 class BackendAuth(BaseModel):
     """A backend's credential: the mode (delegated sends the requesting user's
-    credential instead of a key), the header (the provider's own when unset),
-    the prefix ("" sends the bare key) and the key's environment variable."""
+    credential instead of a key, caller the client's own provider login), the
+    header (the provider's own when unset), the prefix ("" sends the bare key)
+    and the key's environment variable."""
 
     model_config = ConfigDict(extra="forbid")
 
-    credential: Optional[Literal["delegated"]] = None
+    credential: Optional[Literal["delegated", "caller"]] = None
     header: Optional[str] = None
     prefix: Optional[str] = None
     api_key_env: Optional[str] = None
