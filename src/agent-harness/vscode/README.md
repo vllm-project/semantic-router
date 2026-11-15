@@ -15,9 +15,10 @@ set by the gateway's recipe.
   stable in that release.
 - A Router gateway with at least one entrypoint. The local Quickstart serves one at
   `http://localhost:8899`; see [Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness).
-- A GitHub Copilot sign-in, to send from the chat view. In VS Code 1.146, sending a message there with a
-  vLLM Semantic Router model selected opened a **Sign in to use GitHub Copilot** dialog, and no request
-  reached the gateway.
+- No GitHub sign-in for the chat view's default Copilot harness in VS Code 1.146: pick the model and send.
+  Its Local harness asks for a sign-in unless `"chat.allowAnonymousAccess": true` is set, and with that
+  setting Copilot Chat gets an anonymous Copilot token from GitHub and sends some text there for its own
+  helpers, such as chat titles.
 - Node.js 20 or later and npm, to build the extension.
 
 ## Install from source
@@ -97,7 +98,8 @@ and logged with the key and any bearer token replaced by `***`, in case the gate
   and the gateway tells conversations apart by how they start.
 - The status bar shows the last reply in the window, from any chat.
 - In a remote window (SSH, a container, WSL), `localhost` means the machine the extension runs on.
-- In VS Code 1.104, models from extensions were offered only on individual GitHub Copilot plans. Check
-  VS Code's [language model documentation](https://code.visualstudio.com/docs/agent-customization/language-models)
+- In VS Code 1.104, models from extensions were offered only on individual GitHub Copilot plans; in 1.146
+  they were offered and worked while signed out. Check VS Code's
+  [language model documentation](https://code.visualstudio.com/docs/agent-customization/language-models)
   for the release you run. Copilot Business and Enterprise administrators can turn models from
   extensions off with the Bring Your Own Language Model Key policy; this extension does not change it.
