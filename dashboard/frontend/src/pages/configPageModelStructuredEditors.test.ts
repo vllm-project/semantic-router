@@ -50,6 +50,29 @@ describe('model structured editors', () => {
     expect(markup).not.toContain('secret-key')
   })
 
+  it.each(['delegated', 'caller'] as const)(
+    'keeps a %s credential when a backend is edited',
+    (credential) => {
+      const backend = {
+        name: 'claude',
+        endpoint: 'https://api.anthropic.com',
+        provider: 'anthropic',
+        auth: { credential },
+      }
+      let saved: unknown
+      const editor = ModelBackendRefsEditor({
+        value: [backend],
+        onChange: (value) => {
+          saved = value
+        },
+      })
+
+      expect(renderToStaticMarkup(editor)).toContain(`<option value="${credential}" selected="">`)
+      editor.props.onChange(editor.props.value)
+      expect(saved).toEqual([backend])
+    },
+  )
+
   it('renders capabilities, LoRAs, provider IDs, and pricing without JSON input', () => {
     const markup = renderToStaticMarkup(
       createElement(

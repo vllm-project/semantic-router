@@ -93,8 +93,9 @@ export interface LoRAAdapter {
 /** A backend's credential, the connection block a deployment uses. */
 export interface BackendRefAuth {
   // delegated sends the requesting user's credential
-  // (global.services.authz.delegated_credential) instead of a key.
-  credential?: 'delegated'
+  // (global.services.authz.delegated_credential) instead of a key, caller the
+  // provider login the client itself sent.
+  credential?: 'delegated' | 'caller'
   header?: string
   prefix?: string
   api_key_env?: string
