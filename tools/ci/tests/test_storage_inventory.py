@@ -59,5 +59,6 @@ class StorageInventoryTests(unittest.TestCase):
                 "TestPostgresQueryBeyondTenThousandIntegration",
                 "TestPostgresReviewMetadataScanIntegration",
                 "TestPostgresReviewQueriesIntegration",
+                "TestPostgresTurnQueriesIntegration",
             ],
         )

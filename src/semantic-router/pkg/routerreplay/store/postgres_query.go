@@ -78,6 +78,9 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 	if filters.Model != "" {
 		add("(selected_model = ? OR original_model = ?)", filters.Model)
 	}
+	if filters.TurnID != "" {
+		add("(turn_id = ? OR parent_turn_id = ?)", filters.TurnID)
+	}
 	if filters.Search != "" {
 		add("(strpos(lower(COALESCE(request_id, '')), lower(?)) > 0 OR strpos(lower(COALESCE(recipe, '')), lower(?)) > 0 OR strpos(lower(COALESCE(session_id, '')), lower(?)) > 0)", filters.Search)
 	}
@@ -130,7 +133,7 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 		COALESCE(original_model,''), COALESCE(selected_model,''), COALESCE(session_id,''),
 		from_cache, streaming, lifecycle_state, COALESCE(signals, '{}'::jsonb),
 		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s
+		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s, COALESCE(turn_id, ''), COALESCE(parent_turn_id, '')
 		FROM %s ORDER BY timestamp DESC, id DESC`, postgresReviewMetadataColumn, p.tableName)
 	rows, err := p.db.QueryContext(ctx, query)
 	if err != nil {
@@ -144,7 +147,8 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 			&row.record.FromCache, &row.record.Streaming, &row.record.LifecycleState, &row.signalsJSON,
 			&row.promptTokens, &row.completionTokens, &row.totalTokens, &row.actualCost,
 			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel, &row.providerCacheJSON,
-			&row.record.Timestamp, &row.record.DurationMS, &row.review.requestKind, &row.review.reviewJSON); err != nil {
+			&row.record.Timestamp, &row.record.DurationMS, &row.review.requestKind, &row.review.reviewJSON,
+			&row.record.TurnID, &row.record.ParentTurnID); err != nil {
 			return err
 		}
 		if err = row.review.assign(&row.record); err != nil {

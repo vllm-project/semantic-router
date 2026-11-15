@@ -10,6 +10,9 @@ type QueryFilters struct {
 	// RequestKind and the review fields match exactly; a review's outcome and
 	// risk exist only once it completed.
 	RequestKind, ReviewStatus, ReviewOutcome, ReviewRisk string
+	// TurnID matches a record's turn_id or parent_turn_id: the requests one
+	// agent turn sent and the ones it started, such as its approval reviews.
+	TurnID string
 	// RecipeSet distinguishes an explicit legacy empty recipe from no filter.
 	RecipeSet bool
 }

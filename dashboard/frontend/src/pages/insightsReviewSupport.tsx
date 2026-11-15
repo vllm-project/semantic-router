@@ -67,6 +67,11 @@ export function getReviewsPath(session?: string) {
   return `/insights?${params.toString()}`
 }
 
+/** The request list filtered to one Codex turn: its calls, reviews and subagents' calls. */
+export function getTurnPath(turn: string) {
+  return `/insights?${new URLSearchParams({ turn }).toString()}`
+}
+
 type ReviewTone = 'allow' | 'deny' | 'failed' | 'muted' | 'pending'
 
 export function reviewResult(review?: InsightsReview): { label: string; tone: ReviewTone } {
@@ -100,7 +105,7 @@ export function ReviewResultBadge({ review }: { review?: InsightsReview }) {
   )
 }
 
-const compactID = (value: string) =>
+export const compactID = (value: string) =>
   value.length <= 20 ? value : `${value.slice(0, 8)}…${value.slice(-8)}`
 
 function reviewLatency(record: InsightsRecord) {
@@ -289,9 +294,10 @@ export function summarizeReviews(reviews: InsightsRecord[]) {
 }
 
 /**
- * Places each review under the latest request of the session that started
- * before it: the turn whose planned action it judged. A review that is itself
- * one of the routes is marked as a review instead.
+ * Places each review under the turn whose planned action it judged: the
+ * latest request of that Codex turn when the review names it, else the latest
+ * request of the session that started before it. A review that is itself one
+ * of the routes is marked as a review instead.
  */
 export function assignReviewsToRoutes(
   routes: InsightsTrajectoryRoute[],
@@ -300,13 +306,21 @@ export function assignReviewsToRoutes(
   const reviewIDs = new Set(reviews.map((review) => review.id))
   const turns = routes
     .filter((route) => !reviewIDs.has(route.record_id))
-    .map((route) => ({ id: route.record_id, start: Date.parse(route.timestamp) }))
+    .map((route) => ({
+      id: route.record_id,
+      turn: route.turn_id,
+      start: Date.parse(route.timestamp),
+    }))
     .filter((turn) => Number.isFinite(turn.start))
     .sort((left, right) => left.start - right.start)
   const marks = new Map<string, InsightsRecord[]>()
   for (const review of reviews) {
     const start = Date.parse(review.timestamp)
-    const turn = turns.filter((candidate) => candidate.start <= start).pop()
+    const named = turns.filter(
+      (candidate) => candidate.turn && candidate.turn === review.parent_turn_id,
+    )
+    const pool = named.length > 0 ? named : turns
+    const turn = pool.filter((candidate) => candidate.start <= start).pop() ?? named[0]
     if (!turn) continue
     marks.set(turn.id, [...(marks.get(turn.id) ?? []), review])
   }

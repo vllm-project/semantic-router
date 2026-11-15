@@ -48,15 +48,15 @@ func HasEnvelope(request *llmprotocol.Request) bool {
 // Observe returns the pending review of a request recognised by source. The
 // body is the wire request, whose client_metadata the protocol codec drops.
 func Observe(request *llmprotocol.Request, body []byte, source string) *store.Review {
-	metadata := readClientMetadata(body)
+	turn := readClientMetadata(body)
 	text := userText(request)
 	review := &store.Review{
 		SchemaVersion:        store.ReviewSchemaVersion,
 		IdentificationSource: source,
-		ReviewedSessionID:    boundedID(reviewedSessionID(text, metadata.sessionID)),
-		ThreadID:             boundedID(metadata.threadID),
-		TurnID:               boundedID(metadata.turnID),
-		ParentTurnID:         boundedID(metadata.parentTurnID),
+		ReviewedSessionID:    boundedID(reviewedSessionID(text, turn.SessionID)),
+		ThreadID:             boundedID(turn.ThreadID),
+		TurnID:               boundedID(turn.TurnID),
+		ParentTurnID:         boundedID(turn.ParentTurnID),
 		Status:               store.ReviewStatusPending,
 	}
 	if block, ok := approvalBlock(text); ok {
@@ -152,36 +152,63 @@ func reviewedSessionID(text, fallback string) string {
 	return fallback
 }
 
-type clientMetadata struct {
-	sessionID, threadID, turnID, parentTurnID string
+// Turn is the agent turn a Codex request belongs to, as its turn metadata
+// names it. ParentTurnID is the turn that started the request's thread, such
+// as the turn an approval review judges or the one that spawned a subagent.
+type Turn struct {
+	SessionID    string `json:"session_id"`
+	ThreadID     string `json:"thread_id"`
+	TurnID       string `json:"turn_id"`
+	ParentTurnID string `json:"parent_turn_id"`
+}
+
+// ReadTurn reads the turn metadata Codex sends with each Responses call. The
+// x-codex-turn-metadata header and the body's client_metadata carry the same
+// ids, so the body, which the protocol codec drops, is read only when the
+// header names no turn. Each id is bounded.
+func ReadTurn(header string, body []byte) Turn {
+	turn := turnOf(header)
+	if strings.TrimSpace(turn.TurnID) == "" {
+		turn = readClientMetadata(body)
+	}
+	return Turn{
+		SessionID: boundedID(turn.SessionID), ThreadID: boundedID(turn.ThreadID),
+		TurnID: boundedID(turn.TurnID), ParentTurnID: boundedID(turn.ParentTurnID),
+	}
 }
 
 // readClientMetadata reads Codex's correlation ids from client_metadata,
 // falling back to the turn metadata JSON it also carries there.
-func readClientMetadata(body []byte) clientMetadata {
+func readClientMetadata(body []byte) Turn {
 	var wire struct {
 		ClientMetadata map[string]string `json:"client_metadata"`
 	}
 	if json.Unmarshal(body, &wire) != nil || len(wire.ClientMetadata) == 0 {
-		return clientMetadata{}
+		return Turn{}
 	}
-	var turn map[string]any
-	_ = json.Unmarshal([]byte(wire.ClientMetadata[headers.XCodexTurnMetadata]), &turn)
-	pick := func(key string) string {
+	turn := turnOf(wire.ClientMetadata[headers.XCodexTurnMetadata])
+	pick := func(key, fallback string) string {
 		if value := strings.TrimSpace(wire.ClientMetadata[key]); value != "" {
 			return value
 		}
-		value, _ := turn[key].(string)
-		return strings.TrimSpace(value)
+		return fallback
 	}
-	return clientMetadata{
-		sessionID: pick("session_id"), threadID: pick("thread_id"),
-		turnID: pick("turn_id"), parentTurnID: pick("parent_turn_id"),
+	return Turn{
+		SessionID: pick("session_id", turn.SessionID), ThreadID: pick("thread_id", turn.ThreadID),
+		TurnID: pick("turn_id", turn.TurnID), ParentTurnID: pick("parent_turn_id", turn.ParentTurnID),
 	}
 }
 
+// turnOf reads the ids of one turn metadata JSON object; a field of another
+// type is left empty.
+func turnOf(metadata string) Turn {
+	var turn Turn
+	_ = json.Unmarshal([]byte(metadata), &turn)
+	return turn
+}
+
 func boundedID(value string) string {
-	value, _ = truncate(value, maxIDBytes)
+	value, _ = truncate(strings.TrimSpace(value), maxIDBytes)
 	return value
 }
 

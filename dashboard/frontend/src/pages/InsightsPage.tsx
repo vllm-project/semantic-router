@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
+import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
 
 import configStyles from './ConfigPage.module.css'
@@ -11,6 +12,7 @@ import styles from './InsightsPage.module.css'
 import InsightsEmptyState from './InsightsEmptyState'
 import InsightsReviewsView from './InsightsReviewsView'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
+import { buildReplayQueryString } from './insightsPageFilters'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
 import {
   createInsightsTableColumns,
@@ -23,51 +25,11 @@ import type {
   InsightsListResponse,
   InsightsRecord,
 } from './insightsPageTypes'
+import { compactID } from './insightsReviewSupport'
 
 const insightsPageSize = 25
 const insightsSearchDebounceMs = 300
 const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
-
-interface ReplayQueryFilters {
-  searchTerm: string
-  filter: InsightsFilterType
-  recipeFilter: string
-  decisionFilter: string
-  modelFilter: string
-}
-
-function buildReplayQueryString(
-  filters: ReplayQueryFilters,
-  pagination?: { limit: number; offset: number },
-) {
-  const params = new URLSearchParams()
-
-  if (pagination) {
-    params.set('limit', String(pagination.limit))
-    params.set('offset', String(pagination.offset))
-    params.set('showDetails', 'false')
-  }
-
-  const search = filters.searchTerm.trim()
-  if (search) {
-    params.set('search', search)
-  }
-  if (filters.filter !== 'all') {
-    params.set('cache_status', filters.filter)
-  }
-  if (filters.recipeFilter !== 'all') {
-    params.set('recipe', filters.recipeFilter)
-  }
-  if (filters.decisionFilter !== 'all') {
-    params.set('decision', filters.decisionFilter)
-  }
-  if (filters.modelFilter !== 'all') {
-    params.set('model', filters.modelFilter)
-  }
-
-  const query = params.toString()
-  return query ? `?${query}` : ''
-}
 
 // All requests, or the approval reviews among them, kept in the URL so a
 // reviewed session's link opens its reviews.
@@ -94,10 +56,31 @@ function InsightsViewSwitch({ reviews }: { reviews: boolean }) {
   )
 }
 
+// The Codex turn the list is filtered to, from a record's turn link, until cleared.
+export function InsightsTurnFilter() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const turn = searchParams.get('turn')
+  if (!turn) return null
+  const clear = () =>
+    setSearchParams((params) => {
+      params.delete('turn')
+      return params
+    })
+  return (
+    <span className={styles.filterChip} title={turn}>
+      Codex turn {compactID(turn)}
+      <button type="button" aria-label="Clear turn filter" onClick={clear}>
+        <ProductIcon name="close" width={13} height={13} />
+      </button>
+    </span>
+  )
+}
+
 export default function InsightsPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const reviewsView = searchParams.get('view') === 'reviews'
+  const turn = searchParams.get('turn') ?? ''
   const [records, setRecords] = useState<InsightsRecord[]>([])
   const [aggregate, setAggregate] = useState<InsightsAggregateResponse | null>(null)
   const [totalRecords, setTotalRecords] = useState(0)
@@ -123,8 +106,9 @@ export default function InsightsPage() {
       recipeFilter,
       decisionFilter,
       modelFilter,
+      turn,
     }),
-    [debouncedSearchTerm, filter, recipeFilter, decisionFilter, modelFilter],
+    [debouncedSearchTerm, filter, recipeFilter, decisionFilter, modelFilter, turn],
   )
 
   const totalPages = Math.max(1, Math.ceil(totalRecords / insightsPageSize))
@@ -202,6 +186,10 @@ export default function InsightsPage() {
 
     return () => window.clearTimeout(debounceTimer)
   }, [searchTerm])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [turn])
 
   useEffect(
     () => () => {
@@ -349,6 +337,7 @@ export default function InsightsPage() {
           />
 
           <div className={styles.filterRow}>
+            <InsightsTurnFilter />
             <select
               className={styles.filterSelect}
               value={recipeFilter}

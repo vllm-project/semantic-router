@@ -158,7 +158,9 @@ type TrajectoryResponse struct {
 
 // TrajectoryRoute is one routed call of a session. Agent is the short hash of
 // the agent identity header a harness sent with a subagent's call, empty for
-// the main conversation.
+// the main conversation. TurnID and ParentTurnID are the record's agent turn
+// ids, so a session's calls can be read by the Codex turn that sent or
+// started them.
 type TrajectoryRoute struct {
 	ConversationID       string    `json:"conversation_id,omitempty"`
 	RecordID             string    `json:"record_id"`
@@ -173,6 +175,8 @@ type TrajectoryRoute struct {
 	SessionAction        string    `json:"session_action,omitempty"`
 	SessionReason        string    `json:"session_reason,omitempty"`
 	Agent                string    `json:"agent,omitempty"`
+	TurnID               string    `json:"turn_id,omitempty"`
+	ParentTurnID         string    `json:"parent_turn_id,omitempty"`
 	LifecycleState       string    `json:"lifecycle_state"`
 	ResponseStatus       int       `json:"response_status,omitempty"`
 	DurationMS           int64     `json:"duration_ms"`

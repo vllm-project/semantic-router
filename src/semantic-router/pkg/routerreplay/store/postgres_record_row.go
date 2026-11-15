@@ -23,7 +23,8 @@ const postgresRecordSelectColumns = `
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
 	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache,
-	prompt_original_bytes, prompt_original_sha256, request_kind, review, review_status, review_outcome, review_risk
+	prompt_original_bytes, prompt_original_sha256, request_kind, review, review_status, review_outcome, review_risk,
+	thread_id, turn_id, parent_turn_id
 `
 
 type postgresRowScanner interface {
@@ -84,6 +85,9 @@ type postgresRecordRow struct {
 	turnIndex                    sql.NullInt64
 	previousResponseID           sql.NullString
 	conversationID               sql.NullString
+	threadID                     sql.NullString
+	turnID                       sql.NullString
+	parentTurnID                 sql.NullString
 	recipe                       sql.NullString
 	endedAt                      sql.NullTime
 	terminalReason               sql.NullString
@@ -237,6 +241,9 @@ func (record postgresInsertRecord) args() []interface{} {
 		emptyStringSQL(reviewStatus(record.record.Review)),
 		emptyStringSQL(record.record.Review.Outcome()),
 		emptyStringSQL(record.record.Review.RiskLevel()),
+		emptyStringSQL(record.record.ThreadID),
+		emptyStringSQL(record.record.TurnID),
+		emptyStringSQL(record.record.ParentTurnID),
 	}
 }
 
@@ -344,6 +351,9 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.review.status,
 		&row.review.outcome,
 		&row.review.risk,
+		&row.threadID,
+		&row.turnID,
+		&row.parentTurnID,
 	}
 }
 
@@ -449,6 +459,7 @@ func (row *postgresRecordRow) assignReplaySessionIdentifiers() {
 	if row.conversationID.Valid {
 		row.record.ConversationID = row.conversationID.String
 	}
+	row.record.ThreadID, row.record.TurnID, row.record.ParentTurnID = row.threadID.String, row.turnID.String, row.parentTurnID.String
 }
 
 // assignReplayRecipe restores routing recipe identity. Rows written before the

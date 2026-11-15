@@ -1449,6 +1449,7 @@ def test_vsr_points_the_codex_plugin_at_the_listener_and_keeps_its_other_setting
         "guardReview": 0.8,
         "runtimeUrl": url + "/v1/decisions",
         "runtimeModel": "vela3-lite",
+        "managementUrl": "http://localhost:8080",
     }
     result = CliRunner().invoke(main, ["connect", "codex", "--undo"])
     assert result.exit_code == 0, result.output
@@ -1506,6 +1507,24 @@ def test_a_keyed_listener_names_its_key_variable_to_the_codex_plugin(
     )
     assert result.exit_code == 0, result.output
     assert "runtimeTokenEnv" not in (tmp_path / "vsr.json").read_text()
+
+
+def test_the_codex_plugin_reads_turns_from_the_management_api_the_stack_publishes(
+    tmp_path, monkeypatch
+):
+    _codex_env(tmp_path, monkeypatch, FakeCodexPlugins(installed=True))
+    (tmp_path / "config.yaml").write_text(
+        "listeners:\n  - port: 8899\n    apis:\n      systemone:\n        models: [vela3-lite]\n"
+        "global:\n  services:\n    management_api:\n      port: 9080\n"
+    )
+    result = CliRunner().invoke(main, ["connect", "codex", "--yes"])
+    assert result.exit_code == 0, result.output
+    held = json.loads((tmp_path / "vsr.json").read_text())
+    assert held["managementUrl"] == "http://localhost:9080"
+    # the stack's port offset moves it as it moves the listener
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "100")
+    command = importlib.import_module("cli.commands.connect")
+    assert command._management_url("http://[::1]:8999", {}) == "http://[::1]:8180"
 
 
 @pytest.mark.parametrize("harness", ["claude-code", "codex"])

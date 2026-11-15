@@ -25,6 +25,7 @@ type routerReplayFilters struct {
 	model       string
 	cacheStatus string
 	sessionID   string
+	turnID      string
 	review      routerReplayReviewFilters
 }
 
@@ -200,6 +201,7 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		decision:  strings.TrimSpace(values.Get("decision")),
 		model:     strings.TrimSpace(values.Get("model")),
 		sessionID: strings.TrimSpace(values.Get("session_id")),
+		turnID:    strings.TrimSpace(values.Get("turn_id")),
 	}
 
 	cacheStatus := strings.TrimSpace(values.Get("cache_status"))
@@ -261,6 +263,7 @@ func doesRouterReplayRecordMatchFilters(
 		matchesOptionalValue(record.Recipe, filters.recipe),
 		matchesOptionalModel(record, filters.model),
 		matchesOptionalValue(record.SessionID, filters.sessionID),
+		matchesOptionalTurn(record, filters.turnID),
 		filters.review.matches(record),
 		matchesReplaySearch(record, search),
 	}
@@ -282,6 +285,12 @@ func matchesOptionalValue(value, filter string) bool {
 
 func matchesOptionalModel(record routerreplay.RoutingRecord, model string) bool {
 	return model == "" || doesModelMatch(record, model)
+}
+
+// matchesOptionalTurn keeps the requests one agent turn sent and the ones it
+// started, such as its approval reviews, as the Postgres store filters them.
+func matchesOptionalTurn(record routerreplay.RoutingRecord, turnID string) bool {
+	return turnID == "" || record.TurnID == turnID || record.ParentTurnID == turnID
 }
 
 func matchesReplaySearch(record routerreplay.RoutingRecord, search string) bool {
