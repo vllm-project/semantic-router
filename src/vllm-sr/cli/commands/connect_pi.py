@@ -66,9 +66,8 @@ def pi(
     context_window, notes = base._context_window(doc, model, context_window)
     entry = hp.provider(gateway, model, key_env, context_window, key_command)
     secrets = [token] if from_env else [key] if key else []
-    if not base._run(
-        "pi", [hp.models_change(home, entry)], home, "", doc, dry_run, yes, notes
-    ):
+    change = hp.models_change(home, entry)
+    if not base._run("pi", [change], home, "", doc, dry_run, yes, notes, (), model):
         if check:
             _check_unwritten(entry, model, env, secrets)
         return

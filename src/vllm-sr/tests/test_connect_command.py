@@ -1866,6 +1866,7 @@ def test_vsr_is_set_up_on_a_local_stack_with_a_port_offset(tmp_path, monkeypatch
     assert json.loads((tmp_path / "vsr.json").read_text()) == {
         "runtimeUrl": "http://localhost:8999/v1/decisions",
         "runtimeModel": "vela3-lite",
+        "managementUrl": "http://localhost:8180",
     }
 
 
@@ -3208,6 +3209,42 @@ def test_exit_fails_on_a_pi_turn_that_ended_in_an_error():
     assert hk._exit_row("pi", events, "", 0, False).state == "ok"
 
 
+def test_pi_checks_only_the_models_its_entrypoint_reaches(
+    tmp_path, gateway, pi_home, monkeypatch
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    config = tmp_path / "pi.yaml"
+    recipe = lambda name, model: {  # noqa: E731
+        "name": name,
+        "decisions": [{"name": name, "modelRefs": [{"model": model}]}],
+    }
+    config.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {
+                    "models": [
+                        {"name": "claude", "api_format": "messages"},
+                        {"name": "local", "api_format": "chat_completions"},
+                    ]
+                },
+                "entrypoints": [
+                    {"model_names": ["vllm-sr/auto"], "recipe": "agent"},
+                    {"model_names": ["vllm-sr/chat"], "recipe": "chat"},
+                ],
+                "recipes": [recipe("agent", "claude"), recipe("chat", "local")],
+            }
+        )
+    )
+    args = ["connect", "pi", "--config", str(config), "--base-url", url, "--yes"]
+    chat = CliRunner().invoke(main, [*args, "--model", "vllm-sr/chat"])
+    assert chat.exit_code == 0, chat.output
+    assert "reasoning.signature" not in chat.output
+    auto = CliRunner().invoke(main, [*args, "--model", "vllm-sr/auto"])
+    assert "reasoning.signature" in auto.output
+
+
 def test_router_check_for_pi():
     needs = [f.need for f in rc.check_router_config(_router(), "pi")]
     assert any("reasoning.signature" in n for n in needs)
@@ -3373,6 +3410,23 @@ def test_codex_app_check_runs_codex_without_a_profile(
     ran = json.loads(checked_harness.read_text())
     assert ran["args"][0] == "exec" and "--profile" not in ran["args"]
     assert (tmp_path / "codex" / "config.toml").exists()
+
+
+def test_taking_out_a_table_with_its_subtable_gives_back_the_file():
+    harness_toml = importlib.import_module("cli.harness_toml")
+    mine = "\n".join(
+        [
+            "[model_providers.vllm-sr]",
+            'name = "vLLM Semantic Router"',
+            "",
+            "[model_providers.vllm-sr.auth]",
+            'command = "/bin/sh"',
+        ]
+    )
+    for text in ['# mine\n[model_providers.other]\nname = "Other"\n', "a = 1\n"]:
+        written = harness_toml.set_values(text, {"model_providers.vllm-sr": mine})
+        back = harness_toml.set_values(written, {"model_providers.vllm-sr": None})
+        assert back == text
 
 
 def test_a_toml_layout_that_cannot_be_edited_cleanly_is_left_alone():

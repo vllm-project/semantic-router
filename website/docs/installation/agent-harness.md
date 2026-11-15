@@ -305,7 +305,8 @@ helper in place of the key or a variable, and the harness runs it:
   `command = "/bin/sh"` and `args = ["-c", "<the command>"]`, in place of
   `env_key`, which Codex 0.166 does not take beside it. Codex sends what it
   prints as the bearer key, waits up to 5 seconds for it, and runs it again
-  after five minutes and after a refused key.
+  after five minutes and after a refused key. Windows has no `/bin/sh`, so for
+  the Codex app on Windows use `--api-key-env`, or run its agent in WSL.
 - Pi: `"apiKey": "!<the command>"` for the `vllm-sr` provider in
   `models.json`. Pi runs it in the system shell before each request, waits up
   to 10 seconds for it, and sends what it prints as the bearer key.

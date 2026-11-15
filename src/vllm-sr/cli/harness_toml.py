@@ -80,8 +80,12 @@ def set_values(text: str, wanted: dict[str, str | None]) -> str:
         spans = _spans(lines)
         if "." in key:
             mine = _mine(spans, key)
-            for _, start, end in reversed(mine):
-                del lines[start:end]
+            for number, (_, start, end) in reversed(list(enumerate(mine))):
+                # a subtable takes the blank lines that set it apart with it
+                cut = start
+                while number and cut > 0 and not lines[cut - 1].strip():
+                    cut -= 1
+                del lines[cut:end]
             at = mine[0][1] if mine else len(lines)
             if not mine and new and lines and lines[-1].strip():
                 new.insert(0, "\n")

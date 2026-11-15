@@ -1000,7 +1000,7 @@ Route Claude Code's model calls through the gateway.
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
-| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex and Pi budget with it.  [x&gt;=1] |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code, Codex and Pi then budget with it instead of a window of their own.  [x&gt;=1] |
 | `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |
@@ -1032,7 +1032,7 @@ The default is what the Codex app reads, and the Codex CLI without --profile.
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
-| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex and Pi budget with it.  [x&gt;=1] |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code, Codex and Pi then budget with it instead of a window of their own.  [x&gt;=1] |
 | `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |
@@ -1062,7 +1062,7 @@ Route Pi's model calls through the gateway, as a provider in its models.json.
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
-| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex and Pi budget with it.  [x&gt;=1] |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code, Codex and Pi then budget with it instead of a window of their own.  [x&gt;=1] |
 | `--yes` | Write without asking. Default: false. |
 | `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
 | `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |

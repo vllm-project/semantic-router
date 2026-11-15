@@ -11,6 +11,7 @@ import signal
 import subprocess
 import tempfile
 import textwrap
+import urllib.parse
 from pathlib import Path
 
 import click
