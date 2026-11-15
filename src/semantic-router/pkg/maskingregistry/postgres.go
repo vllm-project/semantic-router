@@ -20,20 +20,55 @@ type Postgres struct {
 	namespace string
 }
 
+// queryTimeout bounds every registry call. lib/pq keeps reading from a server
+// that stopped answering after its context ends (it only sends a cancel), so
+// each call runs aside and fails when the time is up: the request then gets
+// the masking 503 instead of outlasting the gateway's own timeout.
+var queryTimeout = 10 * time.Second
+
+func within[T any](op func(context.Context) (T, error)) (T, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	type result struct {
+		value T
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		value, err := op(ctx)
+		done <- result{value, err}
+	}()
+	select {
+	case r := <-done:
+		return r.value, r.err
+	case <-ctx.Done():
+		select {
+		case r := <-done:
+			return r.value, r.err
+		default:
+		}
+		var zero T
+		return zero, fmt.Errorf("masking registry: postgres did not answer within %s", queryTimeout)
+	}
+}
+
 func openPostgres(cfg *postgres.Config, name, identity string) (Store, error) {
 	rc, e := postgres.NewRuntimeConfig(cfg, "masking_identity")
 	if e != nil {
 		return nil, e
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	db, e := postgres.OpenDB(ctx, rc)
+	p, e := within(func(ctx context.Context) (*Postgres, error) {
+		db, err := postgres.OpenDB(ctx, rc)
+		if err != nil {
+			return nil, errors.New("masking registry: postgres unavailable")
+		}
+		return &Postgres{db: db, namespace: name}, nil
+	})
 	if e != nil {
-		return nil, errors.New("masking registry: postgres unavailable")
+		return nil, e
 	}
-	p := &Postgres{db: db, namespace: name}
-	if e = p.initialize(ctx, identity); e != nil {
-		_ = db.Close()
+	if _, e = within(func(ctx context.Context) (struct{}, error) { return struct{}{}, p.initialize(ctx, identity) }); e != nil {
+		_ = p.db.Close()
 		return nil, e
 	}
 	return p, nil
@@ -74,8 +109,11 @@ func (p *Postgres) initialize(ctx context.Context, identity string) error {
 }
 
 func (p *Postgres) Claim(typ, template string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	_, e := within(func(ctx context.Context) (struct{}, error) { return struct{}{}, p.claim(ctx, typ, template) })
+	return e
+}
+
+func (p *Postgres) claim(ctx context.Context, typ, template string) error {
 	_, e := p.db.ExecContext(ctx, `INSERT INTO vsr_masking_templates(namespace,template,canonical_type) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, p.namespace, template, typ)
 	if e != nil {
 		return e
@@ -119,8 +157,10 @@ func (p *Postgres) Prepare(scope, typ string, indices []int64) (map[int64]bool, 
 			return nil, errors.New("masking registry: negative index")
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	return within(func(ctx context.Context) (map[int64]bool, error) { return p.prepare(ctx, scope, typ, indices) })
+}
+
+func (p *Postgres) prepare(ctx context.Context, scope, typ string, indices []int64) (map[int64]bool, error) {
 	tx, _, _, e := p.transaction(ctx, scope, typ)
 	if e != nil {
 		return nil, e
@@ -156,8 +196,10 @@ func (p *Postgres) Prepare(scope, typ string, indices []int64) (map[int64]bool, 
 }
 
 func (p *Postgres) Allocate(scope, typ, digest string) (int64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	return within(func(ctx context.Context) (int64, error) { return p.allocate(ctx, scope, typ, digest) })
+}
+
+func (p *Postgres) allocate(ctx context.Context, scope, typ, digest string) (int64, error) {
 	tx, next, exhausted, e := p.transaction(ctx, scope, typ)
 	if e != nil {
 		return 0, e

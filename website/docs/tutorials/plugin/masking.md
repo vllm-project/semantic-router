@@ -138,6 +138,8 @@ key and registry aside and change the placeholder templates, for example to
 `[PERSON2_{index}]`, so old placeholders cannot be read as new values. If the
 registry cannot be read or written while serving, the request fails with the
 same 503 as any masking failure; it never falls back to per-request numbering.
+A Postgres registry that stops answering fails each registry call after 10
+seconds, so the client gets that 503 rather than a gateway timeout.
 
 ## Masking your own rules
 
