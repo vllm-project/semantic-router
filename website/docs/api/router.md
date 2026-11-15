@@ -808,7 +808,12 @@ Replay lifecycle values describe what the recorder observed:
 
 - `in_progress`: no terminal response frame has been recorded yet.
 - `completed`: the response finished normally.
-- `failed`: routing or the upstream response failed.
+- `failed`: the Router refused the request, or routing or the upstream
+  response failed. The record keeps the status the client received. A refusal
+  after routing uses `terminal_reason: request_rejected`. In standalone mode, a
+  request no backend answered keeps the gateway's `503` or `504` local reply
+  with `terminal_reason: upstream_<failure>`, such as
+  `upstream_connect_failure` or `upstream_reset`.
 - `aborted`: the stream ended without a valid terminal frame, for example
   after a disconnect or timeout.
 

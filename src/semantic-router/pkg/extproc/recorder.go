@@ -493,6 +493,20 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 	settleReplayApprovalReview(ctx, recorder, state)
 }
 
+// failAnsweredRouterReplay fails a record whose client already got an error
+// the response phases never see: the Router's own refusal, or the gateway's
+// local reply for a backend that did not answer. The record keeps what the
+// client got, since the stream then ends without a terminal response, which
+// would otherwise read as a client abort.
+func (r *OpenAIRouter) failAnsweredRouterReplay(ctx *RequestContext, status int, body []byte, reason string) {
+	if status < 400 {
+		return
+	}
+	r.updateRouterReplayStatus(ctx, status, false)
+	r.attachRouterReplayResponse(ctx, body, false)
+	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, reason)
+}
+
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.
 func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseBody []byte, isFinal bool) {
 	if ctx == nil || ctx.RouterReplayID == "" {
