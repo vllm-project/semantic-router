@@ -1,5 +1,7 @@
 import importlib
 import json
+import os
+import signal
 import stat
 import subprocess
 import sys
@@ -1092,12 +1094,15 @@ def test_launch_starts_the_harness_through_the_gateway_and_writes_nothing(
     assert "Streamed tool loop: ok" in result.output
     ran = json.loads(harness_bin.read_text())
     assert ran["args"][-2:] == ["--resume", "x"]
-    settings = json.loads(ran["settings"])["env"]
-    assert settings["ANTHROPIC_BASE_URL"] == url
-    assert settings["ANTHROPIC_AUTH_TOKEN"] == "sk-secret"
-    assert settings["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "65536"
-    # the key never reaches the command line, and its file is gone afterwards
-    assert "sk-secret" not in " ".join(ran["args"]) + result.output
+    settings = json.loads(ran["settings"])
+    assert settings["env"]["ANTHROPIC_BASE_URL"] == url
+    assert settings["env"]["ANTHROPIC_AUTH_TOKEN"] == ""
+    assert settings["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "65536"
+    # Claude Code reads the key from its own environment: it never reaches the
+    # command line or the settings file, which is gone afterwards
+    assert settings["apiKeyHelper"] == "printenv VLLM_SR_API_KEY"
+    assert ran["key"] == "sk-secret"
+    assert "sk-secret" not in " ".join(ran["args"]) + result.output + ran["settings"]
     assert not Path(ran["args"][ran["args"].index("--settings") + 1]).exists()
 
     result = CliRunner().invoke(main, ["connect", "codex", *launch, "exec", "hi"])
@@ -1111,6 +1116,49 @@ def test_launch_starts_the_harness_through_the_gateway_and_writes_nothing(
     assert ran["key"] == "sk-secret" and "sk-secret" not in " ".join(ran["args"])
     assert [m["slug"] for m in ran["catalog"]["models"]] == ["gpt-5.5", "vllm-sr/auto"]
     assert not home.exists()
+
+
+@pytest.mark.parametrize("signum", [signal.SIGHUP, signal.SIGTERM])
+def test_launch_passes_a_hangup_on_and_removes_its_files(tmp_path, gateway, signum):
+    url, _, _ = gateway
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    record = tmp_path / "ran.json"
+    # a Claude Code whose terminal closes: connect is signalled, and the harness
+    # exits on the signal connect passes on
+    (bin_dir / "claude").write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, signal, sys, time\n"
+        "args = sys.argv[1:]\n"
+        "settings = args[args.index('--settings') + 1]\n"
+        f"def stop(signum, _):\n"
+        f"    json.dump({{'settings': settings, 'signal': signum}}, open({str(record)!r}, 'w'))\n"
+        "    sys.exit(128 + signum)\n"
+        "signal.signal(signal.SIGHUP, stop)\n"
+        "signal.signal(signal.SIGTERM, stop)\n"
+        f"os.kill(os.getppid(), {int(signum)})\n"
+        "time.sleep(10)\n"
+    )
+    (bin_dir / "claude").chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "CLAUDE_CONFIG_DIR": str(tmp_path / "home"),
+        "VLLM_SR_API_KEY": "sk-secret",
+    }
+    launch = ["connect", "claude-code", "--base-url", url, "--launch"]
+    done = subprocess.run(
+        [sys.executable, "-m", "cli.main", *launch],
+        cwd=tmp_path,
+        env={**env, "PYTHONPATH": str(Path(__file__).resolve().parents[1])},
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    ran = json.loads(record.read_text())
+    assert ran["signal"] == signum
+    assert done.returncode == 128 + signum, done.stderr
+    assert not Path(ran["settings"]).parent.exists()
 
 
 def test_codex_gets_a_catalog_entry_for_the_gateway_model(

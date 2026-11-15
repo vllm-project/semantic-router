@@ -160,7 +160,14 @@ def claude_code(
     if context_window:
         values["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = str(context_window)
     if launch:
-        # the key goes in a private file, not on the command line
+        # the key stays off the command line and out of the settings file: Claude
+        # Code reads it from the variable its own session inherits
+        settings = {"env": values}
+        if from_env:
+            settings = {
+                "env": {**values, hc.TOKEN_KEY: ""},
+                "apiKeyHelper": f"printenv {shlex.quote(api_key_env)}",
+            }
         _launch(
             "claude-code",
             ["claude", *harness_args],
@@ -170,7 +177,7 @@ def claude_code(
             token,
             notes,
             dry_run,
-            {"env": values},
+            settings,
         )
     # the undo manifest beside the settings records the key too
     keyed = (path, path.parent / hc.MANIFEST) if scope == "project" and from_env else ()
@@ -458,12 +465,22 @@ def _launch(harness, argv, doc, gateway, model, token, notes, dry_run, settings=
         if settings is not None:
             hc.write_private(path, json.dumps(settings, indent=2))
         _probe_or_say_why(gateway, harness, model, token, doc, written=False)
-        # Ctrl-C belongs to the harness while it runs
-        previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        child = subprocess.Popen([found, *argv[1:]])
+
+        # Ctrl-C belongs to the harness while it runs, and a closed terminal or a
+        # stop reaches it through this process, which outlives it to remove the
+        # private directory
+        def forward(signum, _frame):
+            child.send_signal(signum)
+
+        handlers = {signal.SIGINT: signal.SIG_IGN, signal.SIGHUP: forward}
+        handlers[signal.SIGTERM] = forward
+        previous = {signum: signal.signal(signum, h) for signum, h in handlers.items()}
         try:
-            code = subprocess.call([found, *argv[1:]])
+            code = child.wait()
         finally:
-            signal.signal(signal.SIGINT, previous)
+            for signum, handler in previous.items():
+                signal.signal(signum, handler)
     raise click.exceptions.Exit(code)
 
 
