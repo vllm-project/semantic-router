@@ -4,6 +4,7 @@ import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import ProductIcon from '../components/ProductIcon'
 import { type BuiltInRecipeCatalog, composeBuiltInRecipe } from './configPageBuiltInRecipes'
 import {
+  delegatesCalls,
   getPublishableRecipeNames,
   normalizeEntrypointModelNames,
   requireEntrypointModelNames,
@@ -60,6 +61,7 @@ export default function ConfigPageMixtureDialog({
   const [aliases, setAliases] = useState<string[]>(entrypoint?.model_names.slice(1) ?? [])
   const [aliasDraft, setAliasDraft] = useState('')
   const [reviewModel, setReviewModel] = useState(entrypoint?.review_model ?? '')
+  const [memoryModel, setMemoryModel] = useState(entrypoint?.memory_model ?? '')
   const [assignments, setAssignments] = useState<ModelAssignments>(() =>
     recipeAssignments(config, choice),
   )
@@ -126,7 +128,7 @@ export default function ConfigPageMixtureDialog({
 
   const publishConfigRecipe = (recipeName: string, publicNames: string[]): ConfigData => {
     const normalizedEntrypoint = validateEntrypointForm(
-      { modelNames: publicNames.join('\n'), recipe: recipeName, reviewModel },
+      { modelNames: publicNames.join('\n'), recipe: recipeName, reviewModel, memoryModel },
       config,
       models,
       entrypointIndex ?? null,
@@ -203,6 +205,25 @@ export default function ConfigPageMixtureDialog({
       {name}
     </option>
   ))
+  // Other entrypoints that send nothing on can take this one's reviews and memory calls.
+  const delegateOptions = (config.entrypoints ?? [])
+    .filter(
+      (candidate, index) =>
+        index !== entrypointIndex &&
+        !delegatesCalls(candidate) &&
+        (candidate.api ?? 'chat') === (entrypoint?.api ?? 'chat'),
+    )
+    .flatMap((candidate) => candidate.model_names)
+    .filter((name) => ![primaryName.trim(), ...aliases].includes(name))
+    .map((name) => (
+      <option key={name} value={name}>
+        {name}
+      </option>
+    ))
+  const delegateFields = [
+    { label: 'Reviews go to', value: reviewModel, onChange: setReviewModel },
+    { label: 'Memories go to', value: memoryModel, onChange: setMemoryModel },
+  ]
 
   return (
     <div
@@ -253,29 +274,17 @@ export default function ConfigPageMixtureDialog({
                 data-dialog-initial-focus
               />
             </label>
-            {choice?.bundle === undefined ? (
-              <label>
-                <span>Reviews go to</span>
-                <select
-                  value={reviewModel}
-                  onChange={(event) => setReviewModel(event.target.value)}
-                >
-                  <option value="">Session model</option>
-                  {(config.entrypoints ?? [])
-                    .filter(
-                      (candidate, index) =>
-                        index !== entrypointIndex &&
-                        !candidate.review_model &&
-                        (candidate.api ?? 'chat') === (entrypoint?.api ?? 'chat'),
-                    )
-                    .flatMap((candidate) => candidate.model_names)
-                    .filter((name) => ![primaryName.trim(), ...aliases].includes(name))
-                    .map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                </select>
-              </label>
-            ) : null}
+            {choice?.bundle === undefined
+              ? delegateFields.map(({ label, value, onChange }) => (
+                  <label key={label}>
+                    <span>{label}</span>
+                    <select value={value} onChange={(event) => onChange(event.target.value)}>
+                      <option value="">Session model</option>
+                      {delegateOptions}
+                    </select>
+                  </label>
+                ))
+              : null}
             <label>
               <span>Recipe</span>
               <select

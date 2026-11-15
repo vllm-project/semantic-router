@@ -1,9 +1,10 @@
 """Set and read a few entries of a TOML file, and leave the rest as it is written.
 
 An entry is a top-level key, held as its line (`model = "x"`), or a table with
-the tables under it (a dotted name such as `model_providers.vllm-sr`), held as
-their text from each header to its last line before the next one, blank lines
-and comments left out. Every edit is read back with tomllib and refused when it
+the tables under it (a dotted name such as `model_providers.vllm-sr`, or a
+top-level table named in brackets such as `[memories]`), held as their text
+from each header to its last line before the next one, blank lines and
+comments left out. Every edit is read back with tomllib and refused when it
 changed anything but the entries it set, so a file this cannot edit cleanly is
 left alone.
 """
@@ -45,6 +46,13 @@ def _comment(line: str) -> bool:
     return line.lstrip().startswith("#")
 
 
+def _table(key: str) -> str | None:
+    """The table an entry names, None for a top-level key."""
+    if key.startswith("[") and key.endswith("]"):
+        return key[1:-1]
+    return key if "." in key else None
+
+
 def _mine(spans, key: str):
     return [s for s in spans if s[0] == key or (s[0] or "").startswith(key + ".")]
 
@@ -61,13 +69,22 @@ def values(text: str, keys) -> dict[str, str | None]:
     spans = _spans(lines)
     found: dict[str, str | None] = {}
     for key in keys:
-        if "." in key:
-            parts = ["".join(lines[s:e]).rstrip("\n") for _, s, e in _mine(spans, key)]
+        if table := _table(key):
+            parts = [
+                "".join(lines[s:e]).rstrip("\n") for _, s, e in _mine(spans, table)
+            ]
             found[key] = "\n\n".join(parts) or None
         else:
             index = _key_line(lines, spans, key)
             found[key] = None if index is None else lines[index].rstrip("\n")
     return found
+
+
+def loads(text: str) -> dict[str, Any]:
+    """text as TOML, which needs Python 3.11 or later."""
+    if tomllib is None:
+        raise ValueError("editing TOML needs Python 3.11 or later")
+    return tomllib.loads(text)
 
 
 def set_values(text: str, wanted: dict[str, str | None]) -> str:
@@ -78,8 +95,8 @@ def set_values(text: str, wanted: dict[str, str | None]) -> str:
     for key, value in wanted.items():
         new = [line + "\n" for line in value.split("\n")] if value else []
         spans = _spans(lines)
-        if "." in key:
-            mine = _mine(spans, key)
+        if table := _table(key):
+            mine = _mine(spans, table)
             for number, (_, start, end) in reversed(list(enumerate(mine))):
                 # a subtable takes the blank lines that set it apart with it
                 cut = start
@@ -126,7 +143,7 @@ def _check(old: str, new: str, wanted: dict[str, str | None]) -> None:
     except tomllib.TOMLDecodeError:
         expected = None  # such as a table it adds that the file defines another way
     for key, alone in (expected or {}).items():
-        path = key.split(".")
+        path = (_table(key) or key).split(".")
         pop_path(before, path)
         if pop_path(after, path) != pop_path(alone, path):
             break

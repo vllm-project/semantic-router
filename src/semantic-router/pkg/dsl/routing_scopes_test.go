@@ -181,35 +181,46 @@ ROUTE factual_route {
 	}
 }
 
-func TestReviewModelRoundTrip(t *testing.T) {
-	source := strings.Replace(scopedRoutingDSL, "recipe: \"alpha\"", "recipe: \"alpha\"\n  review_model: \"router/beta-v2\"", 1)
-	cfg, errs := Compile(source)
-	if len(errs) > 0 {
-		t.Fatalf("compile: %v", errs)
-	}
-	text, err := Decompile(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(text, `review_model: "router/beta-v2"`) {
-		t.Fatalf("review_model lost: %s", text)
-	}
-	next, errs := Compile(text)
-	if len(errs) > 0 {
-		t.Fatalf("recompile: %v", errs)
-	}
-	if !reflect.DeepEqual(cfg.Entrypoints, next.Entrypoints) {
-		t.Fatalf("entrypoints changed: %+v => %+v", cfg.Entrypoints, next.Entrypoints)
-	}
-	prog, parseErrs := Parse(source)
-	if len(parseErrs) > 0 {
-		t.Fatalf("parse: %v", parseErrs)
-	}
-	if got := ProgramToJSON(prog).Entrypoints[0].ReviewModel; got != "router/beta-v2" {
-		t.Fatalf("AST reviewModel = %q", got)
-	}
-	_, errs = Compile(strings.Replace(source, "review_model: \"router/beta-v2\"", "review_model: \"missing\"", 1))
-	if len(errs) == 0 || !strings.Contains(errs[0].Error(), "review_model") {
-		t.Fatalf("invalid target accepted: %v", errs)
+func TestDelegateModelRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		field string
+		ast   func(*EntrypointDeclJSON) string
+	}{
+		{"review_model", func(e *EntrypointDeclJSON) string { return e.ReviewModel }},
+		{"memory_model", func(e *EntrypointDeclJSON) string { return e.MemoryModel }},
+	} {
+		t.Run(tc.field, func(t *testing.T) {
+			binding := tc.field + `: "router/beta-v2"`
+			source := strings.Replace(scopedRoutingDSL, "recipe: \"alpha\"", "recipe: \"alpha\"\n  "+binding, 1)
+			cfg, errs := Compile(source)
+			if len(errs) > 0 {
+				t.Fatalf("compile: %v", errs)
+			}
+			text, err := Decompile(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(text, binding) {
+				t.Fatalf("%s lost: %s", tc.field, text)
+			}
+			next, errs := Compile(text)
+			if len(errs) > 0 {
+				t.Fatalf("recompile: %v", errs)
+			}
+			if !reflect.DeepEqual(cfg.Entrypoints, next.Entrypoints) {
+				t.Fatalf("entrypoints changed: %+v => %+v", cfg.Entrypoints, next.Entrypoints)
+			}
+			prog, parseErrs := Parse(source)
+			if len(parseErrs) > 0 {
+				t.Fatalf("parse: %v", parseErrs)
+			}
+			if got := tc.ast(ProgramToJSON(prog).Entrypoints[0]); got != "router/beta-v2" {
+				t.Fatalf("AST %s = %q", tc.field, got)
+			}
+			_, errs = Compile(strings.Replace(source, binding, tc.field+`: "missing"`, 1))
+			if len(errs) == 0 || !strings.Contains(errs[0].Error(), tc.field) {
+				t.Fatalf("invalid target accepted: %v", errs)
+			}
+		})
 	}
 }

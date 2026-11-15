@@ -104,9 +104,12 @@ entrypoints:
 Set `review_model` on an entrypoint to a model name from another entrypoint in
 the same API namespace. `vllm-sr connect codex` uses it for **Approve for me**
 reviews and hides the review entrypoint in the Codex model picker. Without it,
-Codex reviews with the session model. The target must exist, cannot be any of
-the entrypoint’s own model names, and cannot have a `review_model` itself.
-See the complete [Codex review configuration](../../installation/agent-harness#approve-for-me-reviews).
+Codex reviews with the session model. `memory_model` works the same way for
+Codex's background memory extraction and consolidation, such as on a small
+local model. Each target must exist, cannot be any of the entrypoint’s own
+model names, and cannot have a `review_model` or `memory_model` itself. See the
+complete [Codex review configuration](../../installation/agent-harness#approve-for-me-reviews)
+and [Codex memories configuration](../../installation/agent-harness#codex-memories).
 
 Configuration loading rejects an entrypoint when:
 

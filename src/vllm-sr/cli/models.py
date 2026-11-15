@@ -2835,6 +2835,7 @@ class Entrypoint(BaseModel):
     recipe: str = Field(min_length=1)
     default: Optional[bool] = None
     review_model: Optional[str] = Field(default=None, min_length=1)
+    memory_model: Optional[str] = Field(default=None, min_length=1)
 
     @field_validator("model_names", mode="before")
     @classmethod
@@ -2848,7 +2849,7 @@ class Entrypoint(BaseModel):
             raise ValueError("model_names must contain at least one non-empty name")
         return normalized
 
-    @field_validator("recipe", "review_model")
+    @field_validator("recipe", "review_model", "memory_model")
     @classmethod
     def normalize_recipe(cls, value: str | None, info) -> str | None:
         if value is None:

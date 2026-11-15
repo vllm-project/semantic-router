@@ -218,31 +218,33 @@ def _validate_entrypoints(
                 )
     entries = effective_entrypoints(config)
     for index, entrypoint in enumerate(config.entrypoints):
-        review = entrypoint.review_model
-        if not review:
-            continue
-        target = next(
-            (
-                entry
-                for entry in entries
-                if (entry.api or "chat") == (entrypoint.api or "chat")
-                and review in entry.model_names
-            ),
-            None,
-        )
-        message = None
-        if review in entrypoint.model_names:
-            message = "cannot reference its own model name"
-        elif target is None:
-            message = (
-                f"unknown entrypoint model '{review}' in {entrypoint.api or 'chat'} API"
+        for key in ("review_model", "memory_model"):
+            delegate = getattr(entrypoint, key)
+            if not delegate:
+                continue
+            target = next(
+                (
+                    entry
+                    for entry in entries
+                    if (entry.api or "chat") == (entrypoint.api or "chat")
+                    and delegate in entry.model_names
+                ),
+                None,
             )
-        elif target.review_model:
-            message = f"target '{review}' must not have a review_model"
-        if message:
-            errors.append(
-                ValidationError(message, field=f"entrypoints[{index}].review_model")
-            )
+            message = None
+            if delegate in entrypoint.model_names:
+                message = "cannot reference its own model name"
+            elif target is None:
+                api = entrypoint.api or "chat"
+                message = f"unknown entrypoint model '{delegate}' in {api} API"
+            elif target.review_model or target.memory_model:
+                message = (
+                    f"target '{delegate}' must not have a review_model or memory_model"
+                )
+            if message:
+                errors.append(
+                    ValidationError(message, field=f"entrypoints[{index}].{key}")
+                )
     return errors
 
 

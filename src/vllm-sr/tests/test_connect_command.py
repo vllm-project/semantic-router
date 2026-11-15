@@ -2024,6 +2024,134 @@ def test_codex_connect_review_catalog_and_login_hint(
         assert not (home / "vllm-sr.models.json").exists()
 
 
+@pytest.mark.parametrize("review", [None, "vllm-sr/review"])
+@pytest.mark.parametrize("memory", ["vllm-sr/memory", "vllm-sr/review"])
+def test_codex_catalog_hides_the_memory_entrypoint(review, memory):
+    levels = [{"effort": "low", "description": "Fast"}]
+    bundled = {"models": [{**BUNDLED_GPT_55, "supported_reasoning_levels": levels}]}
+    catalog = hc.codex_catalog(
+        bundled, "vllm-sr/auto", 64000, review, 16000, memory, 8000
+    )
+    entries = catalog["models"]
+    # one entrypoint that takes reviews and memories is listed once
+    assert [e["slug"] for e in entries] == list(
+        dict.fromkeys(["vllm-sr/auto", *([review] if review else []), memory])
+    )
+    assert entries[0].get("auto_review_model_override") == review
+    found = entries[-1]
+    assert found["slug"] == memory and found["visibility"] == "hide"
+    assert found["supported_reasoning_levels"] == levels
+    window = 16000 if memory == review else 8000
+    assert found["context_window"] == found["max_context_window"] == window
+    assert "auto_review_model_override" not in found
+
+
+@pytest.mark.parametrize("mode", ["profile", "app", "launch"])
+def test_codex_connect_sends_memories_to_the_memory_entrypoint(
+    tmp_path, monkeypatch, harness_bin, mode
+):
+    tomllib = pytest.importorskip("tomllib")
+    monkeypatch.chdir(tmp_path)
+    home = tmp_path / "codex-home"
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    login = {
+        "endpoint": "https://chatgpt.com/backend-api/codex",
+        "provider": "openai",
+        "auth": {"credential": "caller"},
+    }
+    local = {"endpoint": "http://localhost:8000/v1", "provider": "vllm"}
+    doc = {
+        "version": "v0.5",
+        "providers": {
+            "defaults": {"model": "session"},
+            "models": [
+                {
+                    "name": "session",
+                    "context_window_size": 131072,
+                    "backend_refs": [login],
+                },
+                {
+                    "name": "local",
+                    "api_format": "chat_completions",
+                    "context_window_size": 32768,
+                    "backend_refs": [local],
+                },
+            ],
+        },
+        "entrypoints": [
+            {
+                "model_names": ["vllm-sr/auto"],
+                "recipe": "main",
+                "default": True,
+                "memory_model": " vllm-sr/memory ",
+            },
+            {"model_names": ["vllm-sr/memory"], "recipe": "memory"},
+        ],
+        "recipes": [
+            {
+                "name": name,
+                "decisions": [
+                    {
+                        "name": name,
+                        "priority": 1,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": model}],
+                    }
+                ],
+            }
+            for name, model in [("main", "session"), ("memory", "local")]
+        ],
+    }
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump(doc))
+    args = ["connect", "codex", "--config", str(config)]
+    args += ["--base-url", "http://localhost:8899"]
+    args += {
+        "profile": ["--yes", "--no-vsr"],
+        "app": ["--app", "--yes", "--no-vsr"],
+        "launch": ["--launch", "--", "exec", "hi"],
+    }[mode]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == (3 if mode == "launch" else 0), result.output
+    output = _flat(result.output)
+    assert "Codex memories go to vllm-sr/memory through the gateway." in output
+    assert "Approve for me reviews go to vllm-sr/auto" in output
+    wanted = {
+        "extract_model": "vllm-sr/memory",
+        "consolidation_model": "vllm-sr/memory",
+    }
+    if mode == "launch":
+        ran = json.loads(harness_bin.read_text())
+        catalog = ran["catalog"]
+        for key, value in wanted.items():
+            assert f"memories.{key}={json.dumps(value)}" in ran["args"]
+        assert not home.exists()
+    else:
+        name = "vllm-sr-app" if mode == "app" else "vllm-sr"
+        catalog = json.loads((home / f"{name}.models.json").read_text())
+        written = home / ("config.toml" if mode == "app" else "vllm-sr.config.toml")
+        assert tomllib.loads(written.read_text())["memories"] == wanted
+    assert [
+        (e["slug"], e["visibility"], e["context_window"]) for e in catalog["models"]
+    ] == [("vllm-sr/auto", "list", 131072), ("vllm-sr/memory", "hide", 32768)]
+    assert "auto_review_model_override" not in catalog["models"][0]
+    if mode == "launch":
+        return
+
+    result = CliRunner().invoke(main, ["connect", "status"])
+    assert result.exit_code == 0, result.output
+    assert "memory model vllm-sr/memory" in _flat(result.output)
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    codex = json.loads(result.output)["connections"][1]
+    assert (codex["model"], codex["memory_model"]) == (
+        "vllm-sr/auto",
+        "vllm-sr/memory",
+    )
+    assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
+    assert not (home / f"{name}.models.json").exists()
+
+
 def test_a_recipe_that_drops_what_no_longer_fits_advertises_each_decisions_largest():
     connect_command = importlib.import_module("cli.commands.connect")
     doc = yaml.safe_load(ROUTER)
@@ -2381,6 +2509,7 @@ def test_status_reports_each_connection_and_what_changed_since(
         "gateway now ok: model agent-model",
         "codex (profile vllm-sr)",
         "review model vllm-sr/review",
+        "memory model vllm-sr/auto",
         "login gateway key from $VLLM_SR_API_KEY",
         f"{catalog}: as written",
     ]:
@@ -2414,6 +2543,8 @@ def test_status_reports_each_connection_and_what_changed_since(
         "vllm-sr/review",
         131072,
     )
+    # without a memory_model, memories go to the session model
+    assert codex["memory_model"] == "vllm-sr/auto"
     assert codex["probe"] == {
         "state": "not probed",
         "detail": "$VLLM_SR_API_KEY is not set, and Codex sends the key from it",
@@ -3453,3 +3584,40 @@ def test_a_toml_layout_that_cannot_be_edited_cleanly_is_left_alone():
         "t": None,  # a bare name is a top-level key
         "model": None,
     }
+
+
+def test_codex_memories_ask_the_gateway_for_their_models(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    # Unset, Codex's memories ask for gpt-5.6-luna and gpt-5.6-terra, which the
+    # gateway does not serve; every way connect sets Codex up names its model.
+    tomllib = pytest.importorskip("tomllib")
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    home = tmp_path / "codex"
+    home.mkdir()
+    wanted = {"extract_model": "vllm-sr/auto", "consolidation_model": "vllm-sr/auto"}
+
+    args = ["connect", "codex", "--base-url", url, "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    profile = tomllib.loads((home / "vllm-sr.config.toml").read_text())
+    assert profile["memories"] == wanted
+
+    config = home / "config.toml"
+    before = "[memories]\ngenerate_memories = false\nmax_unused_days = 30\n"
+    config.write_text(before)
+    result = CliRunner().invoke(main, [*args, "--app"])
+    assert result.exit_code == 0, result.output
+    assert tomllib.loads(config.read_text())["memories"] == {
+        "generate_memories": False,
+        "max_unused_days": 30,
+        **wanted,
+    }
+    result = CliRunner().invoke(main, ["connect", "codex", "--undo"])
+    assert result.exit_code == 0, result.output
+    assert tomllib.loads(config.read_text()) == tomllib.loads(before)
+
+    launch = hc.codex_launch_args(url, "vllm-sr/auto", None, None)
+    assert "-c" in launch and 'memories.extract_model="vllm-sr/auto"' in launch
+    assert 'memories.consolidation_model="vllm-sr/auto"' in launch

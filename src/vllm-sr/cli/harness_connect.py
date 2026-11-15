@@ -376,13 +376,17 @@ def codex_catalog(
     context_window: int | None,
     review_model: str | None = None,
     review_context_window: int | None = None,
+    memory_model: str | None = None,
+    memory_context_window: int | None = None,
 ) -> dict[str, Any] | None:
-    """Describe only the gateway's selected entrypoint and optional reviewer.
+    """Describe only the gateway's selected entrypoint and its optional review
+    and memory entrypoints, which are hidden from the model picker.
 
     Adapt the bundled base even when model already names a bundled slug. Never
     expose unrelated bundled models: Codex would select codex-auto-review even
     though the gateway does not serve that public model. Without an override,
-    Codex reviews with the session model.
+    Codex reviews with the session model. The memory entry gives memory
+    extraction the window it fits each session into.
     """
     models = bundled.get("models") if isinstance(bundled, dict) else None
     models = [entry for entry in models or [] if isinstance(entry, dict)]
@@ -390,18 +394,18 @@ def codex_catalog(
     if base is None:
         return None
 
-    def adapted(name: str, window: int | None, *, review: bool = False) -> dict:
+    def adapted(name: str, window: int | None, *, hidden: bool = False) -> dict:
         entry = {
             **base,
             "slug": name,
             "display_name": name,
-            "visibility": "hide" if review else "list",
+            "visibility": "hide" if hidden else "list",
             "supports_search_tool": False,
             "apply_patch_tool_type": None,
             "supported_reasoning_levels": (
-                base.get("supported_reasoning_levels", []) if review else []
+                base.get("supported_reasoning_levels", []) if hidden else []
             ),
-            "default_reasoning_level": "low" if review else None,
+            "default_reasoning_level": "low" if hidden else None,
             "default_reasoning_summary": "auto",
             "support_verbosity": False,
             "default_verbosity": None,
@@ -418,7 +422,12 @@ def codex_catalog(
     entries = [main]
     if review_model:
         main["auto_review_model_override"] = review_model
-        entries.append(adapted(review_model, review_context_window, review=True))
+    for name, window in (
+        (review_model, review_context_window),
+        (memory_model, memory_context_window),
+    ):
+        if name and all(entry["slug"] != name for entry in entries):
+            entries.append(adapted(name, window, hidden=True))
     return {"models": entries}
 
 
@@ -459,6 +468,27 @@ def codex_settings(
     )
 
 
+def codex_memories(model: str, memory_model: str | None = None) -> dict[str, str]:
+    """The models Codex's memories feature asks for: the entrypoint's
+    memory_model, else model. Unset, it asks the provider for gpt-5.6-luna to
+    extract and gpt-5.6-terra to consolidate, which the gateway does not serve,
+    so memories would never be written (0.166)."""
+    memory = memory_model or model
+    return {"extract_model": memory, "consolidation_model": memory}
+
+
+def _memories_table(settings: dict[str, Any]) -> str:
+    lines = ["[memories]"]
+    for key, value in settings.items():
+        if isinstance(value, dict):
+            raise ValueError(
+                f"[memories].{key} is a table, which connect cannot carry over;"
+                " set extract_model and consolidation_model there yourself"
+            )
+        lines.append(f"{key} = {json.dumps(value)}")
+    return "\n".join(lines)
+
+
 def codex_change(
     home: Path,
     profile: str,
@@ -469,6 +499,7 @@ def codex_change(
     login: bool = False,
     catalog: Path | None = None,
     key_command: str | None = None,
+    memory_model: str | None = None,
 ) -> Change:
     """The profile file. Codex layers it over config.toml with --profile, and it
     holds the provider too, so config.toml is not touched."""
@@ -476,7 +507,10 @@ def codex_change(
         gateway, model, key_env, context_window, login, catalog, key_command
     )
     lines = [f"{k} = {json.dumps(v)}" for k, v in top.items()]
-    text = "\n".join(lines) + "\n\n" + _provider_table(provider) + "\n"
+    memories = _memories_table(codex_memories(model, memory_model))
+    text = (
+        "\n".join(lines) + "\n\n" + _provider_table(provider) + "\n\n" + memories + "\n"
+    )
     return Change(home / f"{profile}.config.toml", "file", {"file": text})
 
 
@@ -511,6 +545,7 @@ def codex_app_change(
     login: bool = False,
     catalog: Path | None = None,
     key_command: str | None = None,
+    memory_model: str | None = None,
 ) -> Change:
     """The same settings as the profile, as the defaults of the shared
     config.toml, which the Codex app reads with no profile (0.166). Only
@@ -523,7 +558,14 @@ def codex_app_change(
         for key in CODEX_APP_KEYS
     }
     values[f"model_providers.{PROVIDER}"] = _provider_table(provider)
-    return Change(home / "config.toml", "toml", values)
+    # the memory models join whatever [memories] already sets, which undo puts back
+    path = home / "config.toml"
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    held = harness_toml.values(text, ["[memories]"])["[memories]"]
+    settings = harness_toml.loads(held).get("memories", {}) if held else {}
+    memories = codex_memories(model, memory_model)
+    values["[memories]"] = _memories_table({**settings, **memories})
+    return Change(path, "toml", values)
 
 
 def codex_launch_args(
@@ -533,6 +575,7 @@ def codex_launch_args(
     context_window: int | None,
     login: bool = False,
     key_command: str | None = None,
+    memory_model: str | None = None,
 ) -> list[str]:
     """The same settings as command-line overrides, which win over every
     configuration file, a trusted project's included (0.166)."""
@@ -543,6 +586,8 @@ def codex_launch_args(
     pairs = [*top.items()]
     pairs += [(f"model_providers.{PROVIDER}.{k}", v) for k, v in provider.items()]
     pairs += [(f"model_providers.{PROVIDER}.auth.{k}", v) for k, v in auth.items()]
+    memories = codex_memories(model, memory_model)
+    pairs += [(f"memories.{k}", v) for k, v in memories.items()]
     return [arg for k, v in pairs for arg in ("-c", f"{k}={json.dumps(v)}")]
 
 
@@ -849,6 +894,7 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                     or None,
                     "model": profile.get("model"),
                     "review_model": _review_model(items, catalog),
+                    "memory_model": profile.get("extract_model"),
                     "context_window": profile.get("model_context_window"),
                     "login": _login(
                         bool(profile.get("requires_openai_auth")),

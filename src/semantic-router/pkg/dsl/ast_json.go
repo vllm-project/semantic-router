@@ -32,6 +32,7 @@ type ProgramJSON struct {
 // EntrypointDeclJSON is the JSON form of a request-facing recipe binding.
 type EntrypointDeclJSON struct {
 	ReviewModel string   `json:"reviewModel,omitempty"`
+	MemoryModel string   `json:"memoryModel,omitempty"`
 	ModelNames  []string `json:"modelNames"`
 	Recipe      string   `json:"recipe"`
 	Pos         Position `json:"pos"`
@@ -260,6 +261,7 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 			ModelNames:  append([]string(nil), entrypoint.ModelNames...),
 			Recipe:      entrypoint.Recipe,
 			ReviewModel: entrypoint.ReviewModel,
+			MemoryModel: entrypoint.MemoryModel,
 			Pos:         entrypoint.Pos,
 		})
 	}

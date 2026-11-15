@@ -413,24 +413,32 @@ def codex(
     key = _key("codex", key_command, login, session, where, check or not dry_run)
     key_env = api_key_env if from_env else None
     context_window, notes = _context_window(doc, model, context_window)
-    review_model = next(
+    entrypoint = next(
         (
-            entry.get("review_model")
+            entry
             for entry in (doc or {}).get("entrypoints") or []
             if isinstance(entry, dict)
             and entry.get("api") in (None, "", "chat")
             and model in (entry.get("model_names") or [])
         ),
-        None,
+        {},
     )
-    review_model = review_model.strip() if review_model else None
+    review_model, memory_model = (
+        (entrypoint.get(key) or "").strip() or None
+        for key in ("review_model", "memory_model")
+    )
     review_window, review_notes = (
         _context_window(doc, review_model, None) if review_model else (None, [])
     )
-    notes += review_notes
+    memory_window, memory_notes = (
+        _context_window(doc, memory_model, None) if memory_model else (None, [])
+    )
+    notes += review_notes + memory_notes
     notes += [
         f"Approve for me reviews go to {review_model or model} through the gateway."
-        + ("" if review_model else " (session model)")
+        + ("" if review_model else " (session model)"),
+        f"Codex memories go to {memory_model or model} through the gateway."
+        + ("" if memory_model else " (session model)"),
     ]
     if not review_model and _chatgpt_caller_backend(doc):
         notes.append(_codex_review_hint(model))
@@ -444,12 +452,14 @@ def codex(
         context_window,
         review_model,
         review_window,
+        memory_model,
+        memory_window,
     )
     if launch:
         # Codex reads the key from key_env or its command, so it stays off the
         # command line
         overrides = hc.codex_launch_args(
-            gateway, model, key_env, context_window, login, key_command
+            gateway, model, key_env, context_window, login, key_command, memory_model
         )
         _launch(
             "codex",
@@ -468,7 +478,7 @@ def codex(
     catalog_path = home / f"{catalog_name}.models.json" if catalog else None
     settings = (gateway, model, key_env, context_window, login, catalog_path)
     if app:
-        change = hc.codex_app_change(home, *settings, key_command)
+        change = hc.codex_app_change(home, *settings, key_command, memory_model)
         notes.append(
             f"--app: {change.path} then sends the Codex app and every codex started"
             " without --profile to the gateway, the Codex CLI included."
@@ -480,7 +490,7 @@ def codex(
                 " --key-command gives it a command to run instead."
             )
     else:
-        change = hc.codex_change(home, profile, *settings, key_command)
+        change = hc.codex_change(home, profile, *settings, key_command, memory_model)
     changes = [change]
     if catalog_path:
         text = json.dumps(catalog, indent=2) + "\n"
@@ -517,7 +527,13 @@ def codex(
     if not _run("codex", changes, home, "", doc, dry_run, yes, notes, plan, model):
         if check:
             overrides = hc.codex_launch_args(
-                gateway, model, key_env, context_window, login, key_command
+                gateway,
+                model,
+                key_env,
+                context_window,
+                login,
+                key_command,
+                memory_model,
             )
 
             def unwritten(private: Path, work: Path) -> list[str]:
@@ -711,6 +727,13 @@ def _status_probe(entry: dict, env: dict[str, str]) -> dict[str, str]:
     return {"state": "ok", "detail": f"model {result.model or 'not reported'}"}
 
 
+def _delegate(model: str | None, session: str | None) -> str:
+    """A memory model as status shows it: the session's, written as its name."""
+    if not model:
+        return "not set by connect"
+    return f"{model} (the session model)" if model == session else model
+
+
 def _show_status(entry: dict) -> None:
     harness = entry["harness"]
     if not entry["connected"]:
@@ -745,7 +768,10 @@ def _show_status(entry: dict) -> None:
         ("model", entry["model"] or "not recorded"),
     ]
     if codex:
-        rows.append(("review model", entry["review_model"] or "the session model"))
+        rows += [
+            ("review model", entry["review_model"] or "the session model"),
+            ("memory model", _delegate(entry["memory_model"], entry["model"])),
+        ]
     rows += [
         ("context window", f"{window:,} tokens" if window else "not set"),
         ("login", login),
