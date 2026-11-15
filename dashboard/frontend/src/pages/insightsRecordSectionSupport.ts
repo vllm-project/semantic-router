@@ -14,6 +14,11 @@ const SECTION_PRESENTATION: Record<
     secondaryTitle?: string
   }
 > = {
+  'Approval Review': {
+    size: 'wide',
+    description: 'What the agent planned and what the reviewer decided',
+    metricColumns: 4,
+  },
   Lifecycle: { size: 'compact' },
   'Decision Information': { size: 'compact' },
   'Model Selection': { size: 'compact' },

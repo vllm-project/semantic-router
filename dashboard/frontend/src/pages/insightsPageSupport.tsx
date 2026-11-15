@@ -21,6 +21,7 @@ import { renderToolNamesCell } from './insightsPageToolTrace'
 import { buildSignalFields } from './insightsRecordSignals'
 import { buildInsightsPluginFields } from './insightsRecordPlugins'
 import { buildProviderCacheSection } from './insightsProviderCache'
+import { buildReviewSection } from './insightsReviewSupport'
 import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
@@ -314,6 +315,10 @@ export function buildInsightsRecordSections(
   options: { isReadonly: boolean },
 ): ViewSection[] {
   const sections: ViewSection[] = []
+  const reviewSection = buildReviewSection(record)
+  if (reviewSection) {
+    sections.push(reviewSection)
+  }
 
   sections.push({
     title: 'Lifecycle',

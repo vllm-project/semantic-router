@@ -242,6 +242,30 @@ func TestEntrypointReviewModel(t *testing.T) {
 	}
 }
 
+// Every name of the review_model target is a review entrypoint; the main
+// entrypoint, a backend model and another API are not.
+func TestIsReviewEntrypointMatchesTargetAliases(t *testing.T) {
+	recipes := "recipes:\n  - name: main\n" + structureDecision
+	cfg, err := parseStructure(t, recipes+"entrypoints:\n"+
+		"  - model_names: [main]\n    recipe: main\n    default: true\n    review_model: review-alias\n"+
+		"  - model_names: [review, review-alias]\n    recipe: main\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for model, want := range map[string]bool{"review": true, "review-alias": true, "main": false, "m": false, "": false} {
+		if got := cfg.IsReviewEntrypoint(ChatAPI, model); got != want {
+			t.Errorf("IsReviewEntrypoint(chat, %q) = %v, want %v", model, got, want)
+		}
+	}
+	if cfg.IsReviewEntrypoint(SystemOneAPI, "review") {
+		t.Error("a review_model binds within its own API")
+	}
+	var empty *RouterConfig
+	if empty.IsReviewEntrypoint(ChatAPI, "review") {
+		t.Error("a nil config has no review entrypoint")
+	}
+}
+
 // The documented config must resolve a review request to its own recipe and backend.
 func TestCodexReviewExampleRoutesToReviewRecipe(t *testing.T) {
 	page := filepath.Join("..", "..", "..", "..", "website", "docs", "installation", "agent-harness.md")
@@ -267,6 +291,9 @@ func TestCodexReviewExampleRoutesToReviewRecipe(t *testing.T) {
 		}
 		if got := review.Profile.Decisions[0].ModelRefs[0].Model; got != "codex-auto-review" {
 			t.Fatalf("review backend = %q", got)
+		}
+		if !cfg.IsReviewEntrypoint(ChatAPI, "vllm-sr/review") || cfg.IsReviewEntrypoint(ChatAPI, "vllm-sr/auto") {
+			t.Fatal("only the review_model target is a review entrypoint")
 		}
 		return
 	}

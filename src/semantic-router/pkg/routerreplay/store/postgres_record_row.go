@@ -23,7 +23,7 @@ const postgresRecordSelectColumns = `
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
 	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache,
-	prompt_original_bytes, prompt_original_sha256
+	prompt_original_bytes, prompt_original_sha256, request_kind, review, review_status, review_outcome, review_risk
 `
 
 type postgresRowScanner interface {
@@ -31,6 +31,7 @@ type postgresRowScanner interface {
 }
 
 type postgresInsertRecord struct {
+	reviewJSON                   []byte
 	providerCacheJSON            []byte
 	routingMetadataJSON          []byte
 	safetyEvidenceJSON           []byte
@@ -51,6 +52,7 @@ type postgresInsertRecord struct {
 }
 
 type postgresRecordRow struct {
+	review                       postgresReviewColumns
 	providerCacheJSON            []byte
 	routingMetadataJSON          []byte
 	safetyEvidenceJSON           []byte
@@ -109,6 +111,7 @@ func marshalPostgresInsertJSON(record Record, out *postgresInsertRecord) error {
 		marshal func() ([]byte, error)
 	}{
 		{"provider cache accounting", &out.providerCacheJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.ProviderCache) }},
+		{"review", &out.reviewJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.Review) }},
 		{"safety evidence", &out.safetyEvidenceJSON, func() ([]byte, error) { return marshalPostgresSafety(record) }},
 		{"routing metadata", &out.routingMetadataJSON, func() ([]byte, error) { return marshalPostgresRoutingMetadata(record) }},
 		{"signals", &out.signalsJSON, func() ([]byte, error) { return json.Marshal(record.Signals) }},
@@ -229,6 +232,11 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.providerCacheJSON,
 		record.record.PromptOriginalBytes,
 		emptyStringSQL(record.record.PromptOriginalSHA256),
+		emptyStringSQL(record.record.RequestKind),
+		record.reviewJSON,
+		emptyStringSQL(reviewStatus(record.record.Review)),
+		emptyStringSQL(record.record.Review.Outcome()),
+		emptyStringSQL(record.record.Review.RiskLevel()),
 	}
 }
 
@@ -331,6 +339,11 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.providerCacheJSON,
 		&row.promptOriginalBytes,
 		&row.promptOriginalSHA256,
+		&row.review.requestKind,
+		&row.review.reviewJSON,
+		&row.review.status,
+		&row.review.outcome,
+		&row.review.risk,
 	}
 }
 
@@ -342,6 +355,9 @@ func (row *postgresRecordRow) decode() (Record, error) {
 		return Record{}, err
 	}
 	if err := unmarshalPostgresRoutingMetadata(row.routingMetadataJSON, &row.record); err != nil {
+		return Record{}, err
+	}
+	if err := row.review.assign(&row.record); err != nil {
 		return Record{}, err
 	}
 	if err := row.unmarshalDecodedJSON(); err != nil {

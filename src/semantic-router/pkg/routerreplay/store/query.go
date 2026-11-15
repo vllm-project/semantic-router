@@ -7,6 +7,9 @@ import "context"
 // ID, the recipe or the session ID.
 type QueryFilters struct {
 	Search, Recipe, Decision, Model, CacheStatus, SessionID string
+	// RequestKind and the review fields match exactly; a review's outcome and
+	// risk exist only once it completed.
+	RequestKind, ReviewStatus, ReviewOutcome, ReviewRisk string
 	// RecipeSet distinguishes an explicit legacy empty recipe from no filter.
 	RecipeSet bool
 }

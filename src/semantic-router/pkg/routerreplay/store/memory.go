@@ -259,6 +259,20 @@ func (m *MemoryStore) UpdateToolTrace(ctx context.Context, id string, trace Tool
 	return nil
 }
 
+// UpdateReview replaces the approval review of a record.
+func (m *MemoryStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.Review = CloneReview(&review)
+	return nil
+}
+
 // Close is a no-op for memory storage.
 func (m *MemoryStore) Close() error {
 	return nil

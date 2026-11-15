@@ -504,6 +504,13 @@ func (m *MilvusStore) UpdateToolTrace(ctx context.Context, id string, trace Tool
 	})
 }
 
+// UpdateReview replaces the approval review of a record.
+func (m *MilvusStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	return m.updateRecord(ctx, id, func(record *Record) {
+		record.Review = CloneReview(&review)
+	})
+}
+
 func (m *MilvusStore) updateRecord(ctx context.Context, id string, mutate func(*Record)) error {
 	return m.updateRecordIf(ctx, id, func(record *Record) bool {
 		mutate(record)

@@ -16,6 +16,8 @@ type replayAggregateAccumulator struct {
 	providerCache                                         *replayProviderCacheTotals
 	decisionTokens, modelTokens                           map[string]*routerReplayAggregateTokenEntry
 	availableRecipes, availableDecisions, availableModels map[string]struct{}
+	availableReviewModels                                 map[string]struct{}
+	reviews                                               *replayReviewAccumulator
 }
 
 func newReplayAggregateAccumulator() *replayAggregateAccumulator {
@@ -26,6 +28,7 @@ func newReplayAggregateAccumulator() *replayAggregateAccumulator {
 		providerCache:  newReplayProviderCacheTotals(),
 		decisionTokens: make(map[string]*routerReplayAggregateTokenEntry), modelTokens: make(map[string]*routerReplayAggregateTokenEntry),
 		availableRecipes: make(map[string]struct{}), availableDecisions: make(map[string]struct{}), availableModels: make(map[string]struct{}),
+		availableReviewModels: make(map[string]struct{}), reviews: newReplayReviewAccumulator(),
 	}
 }
 
@@ -47,6 +50,9 @@ func (r *OpenAIRouter) queryRouterReplayAggregate(filters routerReplayFilters) (
 }
 
 func (a *replayAggregateAccumulator) addOptions(record routerreplay.RoutingRecord) {
+	if record.RequestKind != "" && record.SelectedModel != "" {
+		a.availableReviewModels[record.SelectedModel] = struct{}{}
+	}
 	for _, option := range []struct {
 		set   map[string]struct{}
 		value string
@@ -84,6 +90,7 @@ func (a *replayAggregateAccumulator) add(record routerreplay.RoutingRecord) {
 		group.CostRecordCount += currency.CostRecordCount
 	}
 	a.providerCache.add(record)
+	a.reviews.add(record)
 	for _, value := range part.ModelSelection {
 		a.models[value.Name] += value.Value
 	}
@@ -128,5 +135,9 @@ func (a *replayAggregateAccumulator) result() routerReplayAggregateResponse {
 	a.payload.AvailableRecipes = sortRouterReplayOptionSet(a.availableRecipes)
 	a.payload.AvailableDecisions = sortRouterReplayOptionSet(a.availableDecisions)
 	a.payload.AvailableModels = sortRouterReplayOptionSet(a.availableModels)
+	a.payload.Reviews = a.reviews.result()
+	if len(a.availableReviewModels) > 0 {
+		a.payload.AvailableReviewModels = sortRouterReplayOptionSet(a.availableReviewModels)
+	}
 	return a.payload
 }

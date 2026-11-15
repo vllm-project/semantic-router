@@ -364,6 +364,14 @@ func (r *RedisStore) UpdateToolTrace(ctx context.Context, id string, trace ToolT
 	})
 }
 
+// UpdateReview replaces the approval review of a record.
+func (r *RedisStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.Review = CloneReview(&review)
+		return true
+	})
+}
+
 // updateRecord serializes Redis read-modify-write operations through the
 // async writer. Reading inside the queued operation prevents a later update
 // from overwriting fields written by an earlier queued operation with a stale

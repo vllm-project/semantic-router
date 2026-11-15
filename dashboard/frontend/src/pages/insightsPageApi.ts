@@ -1,4 +1,5 @@
-import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
+import type { InsightsListResponse, InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
+import { REVIEW_REQUEST_KIND } from './insightsReviewSupport'
 
 export class InsightsRequestError extends Error {
   readonly status: number
@@ -31,6 +32,21 @@ export function fetchInsightsTrajectory(sessionId: string, recipe: string) {
     `/api/router/api/v1/observability/replays/trajectory?${query.toString()}`,
     'record trace',
   )
+}
+
+// The approval reviews of a session in every recipe: a review entrypoint
+// usually routes through a recipe of its own.
+export async function fetchInsightsSessionReviews(sessionId: string) {
+  const query = new URLSearchParams({
+    request_kind: REVIEW_REQUEST_KIND,
+    session_id: sessionId,
+    limit: '100',
+  })
+  const list = await fetchInsightsJSON<InsightsListResponse>(
+    `/api/router/api/v1/observability/replays?${query.toString()}`,
+    'session reviews',
+  )
+  return list.data || []
 }
 
 export function isInsightsReplayUnavailableError(error: unknown) {

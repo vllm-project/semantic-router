@@ -6,7 +6,11 @@ import ProductIcon from '../components/ProductIcon'
 import { useReadonly } from '../contexts/ReadonlyContext'
 
 import styles from './InsightsPage.module.css'
-import { fetchInsightsRecord, fetchInsightsTrajectory } from './insightsPageApi'
+import {
+  fetchInsightsRecord,
+  fetchInsightsSessionReviews,
+  fetchInsightsTrajectory,
+} from './insightsPageApi'
 import {
   buildInsightsRecordSections,
   buildInsightsRecordTitle,
@@ -25,6 +29,7 @@ export default function InsightsRecordPage() {
   const { isReadonly } = useReadonly()
   const [record, setRecord] = useState<InsightsRecord | null>(null)
   const [trajectory, setTrajectory] = useState<InsightsTrajectory | null>(null)
+  const [sessionReviews, setSessionReviews] = useState<InsightsRecord[]>([])
   const [traceError, setTraceError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -40,6 +45,7 @@ export default function InsightsRecordPage() {
 
     setLoading(true)
     setTrajectory(null)
+    setSessionReviews([])
     setTraceError(null)
 
     try {
@@ -47,6 +53,10 @@ export default function InsightsRecordPage() {
       setRecord(nextRecord)
       setError(null)
       if (nextRecord.session_id) {
+        // Reviews only mark the session's history; a failed lookup leaves it unmarked.
+        void fetchInsightsSessionReviews(nextRecord.session_id)
+          .then(setSessionReviews)
+          .catch(() => setSessionReviews([]))
         try {
           setTrajectory(
             await fetchInsightsTrajectory(nextRecord.session_id, nextRecord.recipe || ''),
@@ -174,7 +184,11 @@ export default function InsightsRecordPage() {
                 sectionIndex={sectionIndex}
               />
             ))}
-            <InsightsSessionRoutes trajectory={trajectory} current={record.id} />
+            <InsightsSessionRoutes
+              trajectory={trajectory}
+              current={record.id}
+              reviews={sessionReviews}
+            />
             <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
           </div>
         </>
