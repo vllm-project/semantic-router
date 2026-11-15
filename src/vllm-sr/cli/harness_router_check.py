@@ -264,15 +264,21 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
     ]
 
 
-def caller_login(doc: dict | None) -> bool:
-    """Whether the Router presents each client's own login upstream
-    (auth.credential: caller), which then has to reach it in place of a gateway
-    key. The Router takes it on every backend or on none."""
-    return any(
-        isinstance(ref, dict) and (ref.get("auth") or {}).get("credential") == "caller"
-        for model in _get(doc, "providers", "models") or []
-        if isinstance(model, dict)
-        for ref in model.get("backend_refs") or []
+def caller_provider(doc: dict | None) -> str | None:
+    """The provider whose login the Router presents upstream for each client
+    (auth.credential: caller), which then has to come from the client in place of
+    a gateway key. The Router takes it on every backend or on none, all of one
+    provider."""
+    return next(
+        (
+            str(ref.get("provider") or "").lower()
+            for model in _get(doc, "providers", "models") or []
+            if isinstance(model, dict)
+            for ref in model.get("backend_refs") or []
+            if isinstance(ref, dict)
+            and (ref.get("auth") or {}).get("credential") == "caller"
+        ),
+        None,
     )
 
 

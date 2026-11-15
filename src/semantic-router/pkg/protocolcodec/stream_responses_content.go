@@ -51,8 +51,23 @@ func (decoder *responsesStreamDecoder) decodeResponsesContentEvent(
 	if err != nil {
 		return true, nil, nil, err
 	}
-	events, diagnostics, err := decoder.emitResponsesEvent(*event)
-	return true, events, diagnostics, err
+	var events []llmprotocol.Event
+	if event.Type == llmprotocol.EventOutputItemCompleted && event.Content != nil && event.Content.ReasoningDetail != nil {
+		// Item-done is the replay snapshot. Terminal output may carry a different
+		// ciphertext; validation accepts that snapshot without emitting it again.
+		delta := *event
+		delta.Type = llmprotocol.EventReasoningDelta
+		delta.ContentIndex = decoder.nextContentIndex[event.ItemIndex]
+		decoder.nextContentIndex[event.ItemIndex]++
+		emitted, _, emitErr := decoder.emitResponsesEvent(delta)
+		if emitErr != nil {
+			return true, nil, nil, emitErr
+		}
+		events = append(events, emitted...)
+		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning}
+	}
+	completed, diagnostics, err := decoder.emitResponsesEvent(*event)
+	return true, append(events, completed...), diagnostics, err
 }
 
 func (decoder *responsesStreamDecoder) applyResponsesContentEvent(

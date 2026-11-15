@@ -236,6 +236,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		return nil, err
 	}
 	requestBackendStreamUsage(format, &dispatchRequest)
+	r.requestUnstoredOnCallerLogin(format, &dispatchRequest)
 	encoded, err := engine.EncodeRequest(format, dispatchRequest, ctx.ProtocolEnvelope)
 	if err != nil {
 		return nil, err

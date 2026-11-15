@@ -267,7 +267,7 @@ domains:
     checks:
       - python3 -m unittest discover -s src/agent-harness/claude-code/skills/setup/scripts
       - python3 -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
-    verifications: []
+    verifications: [agent-plugins]
 
   codex-plugin:
     owner: developer-experience
@@ -277,7 +277,7 @@ domains:
       - src/agent-harness/codex/**
     checks:
       - python3 -m unittest discover -s src/agent-harness/codex/hooks
-    verifications: []
+    verifications: [agent-plugins]
 
   vela-omni-artifacts:
     owner: model-runtime
@@ -835,7 +835,7 @@ domains:
     paths:
       - tools/ci/python_test_evidence.py
     checks: [make harness-check]
-    verifications: [cli-unit, model-runtime, bench-tools, training, learning-tools, harness-tools, mock-provider, onnx-artifacts]
+    verifications: [cli-unit, agent-plugins, model-runtime, bench-tools, training, learning-tools, harness-tools, mock-provider, onnx-artifacts]
 
   component-execution:
     owner: maintainers
@@ -862,7 +862,7 @@ domains:
       - tools/ci/verification_catalog.yaml
       - tools/ci/worker_process.py
     checks: [make harness-check]
-    verifications: [cli-unit, model-runtime, bench-tools, training, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools]
+    verifications: [cli-unit, agent-plugins, model-runtime, bench-tools, training, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools]
 
   runtime-evidence:
     owner: maintainers

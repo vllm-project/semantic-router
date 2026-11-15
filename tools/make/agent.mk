@@ -15,6 +15,10 @@ CI_STATIC_ONLY ?= false
 
 AGENT_GOLANGCI_LINT_VERSION ?= $(shell cat $(CURDIR)/tools/linter/go/golangci-lint.version)
 AGENT_MARKDOWNLINT_VERSION ?= 0.43.0
+# The Claude Code release whose plugin test engine runs the vSR plugin's tests.
+AGENT_CLAUDE_CODE_VERSION ?= 2.1.325
+# Where agent-plugins-test also writes the engine report, for CI evidence.
+AGENT_PLUGINS_TEST_REPORT ?=
 AGENT_NODE_VERSION ?= 22.17.0
 
 # Share the tooling environment across linked worktrees. The worktree symlink
@@ -32,6 +36,7 @@ AGENT_DOCS_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.docs-requirements.txt
 AGENT_NODEENV ?= $(AGENT_VENV)/nodeenv
 AGENT_NODE_TOOLS ?= $(AGENT_VENV)/node-tools
 AGENT_MARKDOWNLINT ?= $(AGENT_NODE_TOOLS)/node_modules/.bin/markdownlint
+AGENT_CLAUDE ?= $(AGENT_NODE_TOOLS)/node_modules/.bin/claude
 
 ifeq ($(HARNESS_BOOTSTRAP_DONE),1)
 HARNESS_BOOTSTRAP_DEPS :=
@@ -117,6 +122,26 @@ harness-markdown-bootstrap: harness-node-bootstrap ## Install repo-local markdow
 		if ! command -v npm >/dev/null 2>&1; then NODE_PATH="$(AGENT_NODEENV)/bin:$$NODE_PATH"; fi; \
 		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" --no-audit --no-fund --loglevel=error markdownlint-cli@$(AGENT_MARKDOWNLINT_VERSION); \
 	fi
+
+agent-plugins-test: harness-node-bootstrap ## Run the vSR agent plugins' tests: Claude Code's engine tests and both plugins' Python tests
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/setup/scripts
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/codex/hooks
+	@NODE_PATH="$$PATH"; \
+	if ! command -v npm >/dev/null 2>&1; then NODE_PATH="$(AGENT_NODEENV)/bin:$$NODE_PATH"; fi; \
+	pinned() { [ "$$(PATH="$$NODE_PATH" "$(AGENT_CLAUDE)" --version 2>/dev/null | cut -d' ' -f1)" = "$(AGENT_CLAUDE_CODE_VERSION)" ]; }; \
+	if ! pinned; then \
+		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" --no-audit --no-fund --loglevel=error @anthropic-ai/claude-code@$(AGENT_CLAUDE_CODE_VERSION) || exit 1; \
+		pinned || { echo "Claude Code $(AGENT_CLAUDE_CODE_VERSION) is not what $(AGENT_CLAUDE) runs"; exit 1; }; \
+	fi; \
+	cd src/agent-harness/claude-code && \
+		PATH="$$NODE_PATH" DISABLE_AUTOUPDATER=1 "$(AGENT_CLAUDE)" plugin validate . || exit 1; \
+	if [ -n "$(AGENT_PLUGINS_TEST_REPORT)" ]; then \
+		PATH="$$NODE_PATH" DISABLE_AUTOUPDATER=1 "$(AGENT_CLAUDE)" plugin test . > "$(AGENT_PLUGINS_TEST_REPORT)" 2>&1; status=$$?; \
+		cat "$(AGENT_PLUGINS_TEST_REPORT)"; exit $$status; \
+	fi; \
+	PATH="$$NODE_PATH" DISABLE_AUTOUPDATER=1 "$(AGENT_CLAUDE)" plugin test .
 
 # golangci-lint cannot type-check a standard library newer than the Go that
 # built it, so rebuild it after a Go release upgrade such as 1.26 to 1.27.

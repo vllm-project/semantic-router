@@ -25,6 +25,12 @@ from cli.terminal import echo, heading, output_width, success, warning
 # The vSR plugin's marketplace: this repository on GitHub.
 VSR_SOURCE = "vllm-project/semantic-router"
 
+# Each harness's name, and the provider whose login it sends a gateway.
+HARNESS_LOGINS = {
+    "claude-code": ("Claude Code", "anthropic"),
+    "codex": ("Codex", "openai"),
+}
+
 
 def _options(command):
     for option in reversed(
@@ -145,7 +151,7 @@ def claude_code(
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    if rc.caller_login(doc):
+    if _caller_login("claude-code", doc):
         # the Router presents Claude Code's own login to Anthropic, and a gateway
         # token would go in its place
         token, from_env = "", False
@@ -265,11 +271,25 @@ def codex(
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
+    login = _caller_login("codex", doc)
+    if login:
+        # the Router presents Codex's own ChatGPT login or API key to OpenAI, and a
+        # gateway key would go in its place
+        token, from_env = "", False
     key_env = api_key_env if from_env else None
     context_window, notes = _context_window(doc, model, context_window)
+    catalog = hc.codex_catalog(
+        (
+            _json_of(["codex", "debug", "models", "--bundled"], env)
+            if shutil.which("codex")
+            else None
+        ),
+        model,
+        context_window,
+    )
     if launch:
         # Codex reads the key from key_env, so it stays off the command line
-        overrides = hc.codex_launch_args(gateway, model, key_env, context_window)
+        overrides = hc.codex_launch_args(gateway, model, key_env, context_window, login)
         _launch(
             "codex",
             ["codex", *overrides, *harness_args],
@@ -279,9 +299,16 @@ def codex(
             token,
             notes,
             dry_run,
+            catalog or None,
         )
-    change = hc.codex_change(home, profile, gateway, model, key_env, context_window)
+    catalog_path = home / f"{profile}.models.json" if catalog else None
+    change = hc.codex_change(
+        home, profile, gateway, model, key_env, context_window, login, catalog_path
+    )
     changes = [change]
+    if catalog_path:
+        text = json.dumps(catalog, indent=2) + "\n"
+        changes.append(hc.Change(catalog_path, "file", {"file": text}))
     options = _vsr_options(gateway, doc) if vsr else None
     if options and shutil.which("codex") is None:
         warning("vSR is not set up: codex is not on PATH.")
@@ -315,12 +342,18 @@ def codex(
             f"{found} sets model, which Codex asks for instead of {model} once it trusts"
             " this project. Remove it there, or start with --launch."
         )
-    if not context_window:
+    if catalog is None:
         echo(
             f"Codex does not know {model}, so it warns that it falls back to default"
-            " model metadata; --context-window gives it the window to budget with."
+            f" model metadata: this Codex bundles no {hc.CODEX_CATALOG_BASE} entry to"
+            " describe it with."
         )
-    _probe(gateway, "codex", model, token)
+    if not context_window:
+        echo(
+            f"Codex budgets {model} with a window of its own; --context-window gives"
+            " it the gateway's."
+        )
+    _probe_or_say_why(gateway, "codex", model, token, doc)
     echo(f"Start Codex with: codex --profile {profile}")
 
 
@@ -407,8 +440,17 @@ def _launch(harness, argv, doc, gateway, model, token, notes, dry_run, settings=
     with tempfile.TemporaryDirectory(prefix="vllm-sr-launch-") as private:
         path = Path(private) / "settings.json"
         if settings is not None:
-            # --settings wins over the user's and the project's settings (2.1.323)
-            argv = [argv[0], "--settings", str(path), *argv[1:]]
+            # --settings wins over the user's and the project's settings (2.1.323);
+            # Codex reads its model catalog from the file an override names
+            argv = [
+                argv[0],
+                *(
+                    ["--settings", str(path)]
+                    if harness == "claude-code"
+                    else ["-c", f"model_catalog_json={json.dumps(str(path))}"]
+                ),
+                *argv[1:],
+            ]
         echo(f"Starts: {shlex.join(argv)}")
         if dry_run:
             echo("Dry run: nothing was started.")
@@ -676,11 +718,28 @@ def _json_of(argv: list[str], env: dict[str, str]):
         return None
 
 
+def _caller_login(harness: str, doc: dict | None) -> bool:
+    """Whether the gateway presents the harness's own login upstream. A gateway
+    that presents another provider's login refuses every call of the harness, so
+    nothing is written for it."""
+    provider = rc.caller_provider(doc)
+    if provider is None:
+        return False
+    name, own = HARNESS_LOGINS[harness]
+    if provider != own:
+        raise click.ClickException(
+            f"The gateway presents each client's own {provider} login upstream, and"
+            f" {name} sends a {own} login, so every call would be refused. Point"
+            f" {name} at a gateway whose caller backends name {own}."
+        )
+    return True
+
+
 def _probe_or_say_why(gateway, harness, model, token, doc, written=True) -> None:
-    if rc.caller_login(doc):
+    if rc.caller_provider(doc) is not None:
         echo(
-            "Not probed: the gateway answers only on the login Claude Code itself"
-            " sends, which this command does not hold."
+            f"Not probed: the gateway answers only on the login {HARNESS_LOGINS[harness][0]}"
+            " itself sends, which this command does not hold."
         )
         return
     _probe(gateway, harness, model, token, written)
