@@ -7,6 +7,7 @@ from vllm_srun.families.vela2.words import (
     decode_spans,
     split_words,
     trim,
+    without_separators,
     words_of,
 )
 
@@ -42,6 +43,19 @@ def test_trim_edges_and_url_tails() -> None:
     url = "see www.example.com/x)."
     start = url.index("www")
     assert url[slice(*trim(url, start, len(url)))] == "www.example.com/x"
+
+
+def test_without_separators_drops_commas_and_like_marks_at_the_edges() -> None:
+    text = "Park,mina@example.com; +82 10-4821-3390|x=y"
+
+    def kept(start: int, end: int) -> str:
+        return text[slice(*without_separators(text, start, end))]
+
+    assert kept(4, text.index(";") + 1) == "mina@example.com"
+    assert kept(text.index(";"), text.index("|") + 1) == "+82 10-4821-3390"
+    assert kept(text.index("="), len(text)) == "y"
+    assert without_separators("::1", 0, 3) == (0, 3)
+    assert without_separators(",", 0, 1) == (1, 1)
 
 
 def _decode(text: str, rows: list[list[float]], threshold: float = 0.5):

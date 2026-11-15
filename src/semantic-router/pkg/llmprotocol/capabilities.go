@@ -338,7 +338,10 @@ func RequiredResponseCapabilities(response Response) CapabilitySet {
 func RequiredEventCapabilities(event Event) CapabilitySet {
 	var required CapabilitySet
 	if event.Content != nil && event.Content.ReasoningDetail != nil {
-		required.bits |= CapabilityReasoningContinuity
+		required.bits |= CapabilityReasoning
+		if !IsResponsesReasoning(event.Content.ReasoningDetail) {
+			required.bits |= CapabilityReasoningContinuity
+		}
 	}
 	if event.MatchedStopSequence != "" {
 		required.bits |= CapabilityMatchedStopSequence
@@ -368,6 +371,9 @@ func capabilityForRequestContent(content Content) Capability {
 	case ContentToolResult:
 		return requestToolResultCapabilities(content.ToolResult) | cache
 	case ContentReasoning:
+		if IsResponsesReasoning(content.ReasoningDetail) {
+			return CapabilityReasoning | cache
+		}
 		if content.ReasoningDetail != nil {
 			return CapabilityReasoning | CapabilityReasoningContinuity | cache
 		}
@@ -390,6 +396,9 @@ func capabilityForResponseContent(content Content) Capability {
 	case ContentToolResult:
 		return responseToolResultCapabilities(content.ToolResult)
 	case ContentReasoning:
+		if IsResponsesReasoning(content.ReasoningDetail) {
+			return CapabilityReasoning
+		}
 		if content.ReasoningDetail != nil {
 			return CapabilityReasoning | CapabilityReasoningContinuity
 		}
