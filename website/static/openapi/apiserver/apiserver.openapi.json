@@ -19493,6 +19493,9 @@
                                     "kind": {
                                       "type": "string"
                                     },
+                                    "model": {
+                                      "type": "string"
+                                    },
                                     "prompt_tokens": {
                                       "type": "integer"
                                     },
@@ -24928,6 +24931,9 @@
                                 "type": "string"
                               },
                               "kind": {
+                                "type": "string"
+                              },
+                              "model": {
                                 "type": "string"
                               },
                               "prompt_tokens": {

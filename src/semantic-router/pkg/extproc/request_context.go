@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -407,6 +408,7 @@ type RequestContext struct {
 	PIIBlocked         bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
+	ModelCallMeter    *modelservice.RequestMeter
 	TraceContext      context.Context // OpenTelemetry trace context for span propagation
 	RequestSpan       trace.Span      // Spans the complete ext_proc request, including streaming
 	UpstreamSpan      trace.Span      // Spans provider dispatch through final response body

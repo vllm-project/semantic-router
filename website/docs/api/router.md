@@ -657,7 +657,7 @@ costs; infrastructure charges and billing adjustments are excluded.
 | `unpriced_reason` | Why `actual_cost` is missing: `no_usage`, `pricing_not_configured`, or `counted_in_parent` for a Looper hop's own record. |
 | `baseline_source` | `configured_model`, `recipe_most_expensive` (the default), or `selected_model` for a direct request. |
 | `baseline_unavailable` | Why a priced record has no baseline: `pricing_not_configured` or `currency_mismatch`. A configured baseline that cannot be used never falls back to the default. |
-| `router_calls` | Model calls the Router made itself to answer the request, one entry per `kind`. |
+| `router_calls` | Model calls the Router made itself to answer the request, entries by task `kind` and `model`. |
 
 A Looper request's cost is its calls, so its record has no `actual_cost` and one
 `router_calls` entry of kind `looper`: `calls`, the request's `prompt_tokens`
@@ -666,9 +666,24 @@ and `unpriced_calls` with `unpriced_reasons` for the others. A call is unpriced
 when its model has no price, it reported no usage or incomplete usage, it is in
 another currency than the first priced call, or no attempt trace kept it
 (`attempt_not_traced`: of the Looper algorithms only `escalate` traces its
-attempts). An unpriced call is never counted as free. Decision-model, System
-One and embedding calls made while routing are not yet attributed to a request
-and are not in `router_calls`.
+attempts). An unpriced call is never counted as free.
+
+Request-scoped runtime calls also appear here: `decision_model` for native
+questions and selections, `systemone` for remote System One exchanges, and
+`embeddings`, `classify` or `rerank` for other model tasks. These entries include
+`model`, input (`prompt_tokens`) and output (`completion_tokens`) usage. Each
+dispatched task counts once, including fused tasks; result-cache hits, startup,
+warmup and background work do not add request spend. Usage returned with a
+failed decision is retained. Aggregate router call spend and coverage include
+these calls even when the request fails, while savings still require a
+completed request.
+
+Deployment pricing is `global.model_catalog.deployments.<name>.pricing`, with
+the same per-million-token rates as provider model pricing. An explicit block
+wins (an empty block means zero rates); otherwise a deployment's `model` may
+name a priced provider model. Currency defaults to USD. Calls without usage or
+rates carry `no_usage` or `pricing_not_configured`, respectively. Local compute
+costs are not measured by these token-rate estimates.
 
 The default baseline covers the recipe's models across all its decisions: model
 references, explicit candidate-iteration models, and route destinations. A

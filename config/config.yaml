@@ -2839,6 +2839,15 @@ global:
       primary:
         provider: model_runtime
         public_name: decision-public
+        # Explicit self-hosted rates; omit pricing to report unpriced calls.
+        # Remote deployments may inherit pricing from providers.models via model.
+        pricing:
+          currency: USD
+          prompt_per_1m: 0
+          completion_per_1m: 0
+          cached_input_per_1m: 0
+          cache_write_per_1m: 0
+          cache_write_1h_per_1m: 0
         artifact: vllm-sr/vela3-fast
         device: cpu
       # Vela 1.0 Omni-Nano, the embedding model of the vector store below:

@@ -123,6 +123,7 @@ func (r *OpenAIRouter) startRouterReplay(
 		MaxToolTraceSteps:      policy.MaxToolTraceSteps,
 	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	record.CostAccounting = r.replaceReplayModelCalls(ctx, record.CostAccounting)
 	prompt := record.Prompt
 	ctx.RouterReplayContentOmitted = !r.replayPromptAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
@@ -480,6 +481,7 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 		return
 	}
 
+	r.refreshReplayModelCalls(ctx, recorder)
 	if err := recorder.FinalizeLifecycle(ctx.RouterReplayID, state, reason); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_lifecycle_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -561,6 +563,7 @@ func (r *OpenAIRouter) writeRouterReplayUsageCost(ctx *RequestContext, usage rou
 		return
 	}
 
+	usage.CostAccounting = r.replaceReplayModelCalls(ctx, usage.CostAccounting)
 	if err := recorder.UpdateUsageCost(ctx.RouterReplayID, usage); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_usage_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

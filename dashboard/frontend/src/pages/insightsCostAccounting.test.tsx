@@ -99,7 +99,7 @@ describe('Insights cost accounting labels', () => {
       },
     }
     expect(field(looper, 'Router calls')).toBe(
-      '3 Looper calls, 2 priced at $0.02, 1 unpriced (1 no price configured)',
+      '3 Looper calls, 0 input / 0 output tokens, 2 priced at $0.02, 1 unpriced (1 no price configured)',
     )
     expect(field(looper, 'Estimated model cost')).toBe('In router calls')
   })
@@ -148,7 +148,7 @@ describe('Insights cost coverage', () => {
     const html = renderToStaticMarkup(<InsightsCharts aggregate={aggregate} />)
     expect(html).toContain('Priced: 2 of 5 requests, 1 partly, 2 without a price.')
     expect(html).toContain('Left out: 2 no price configured, 1 not completed.')
-    expect(html).toContain('Router calls (Looper): 3 calls, 1 unpriced')
+    expect(html).toContain('Router calls: 3 calls, 1 unpriced')
     expect(html).toContain(
       'Savings compare 2 requests with the configured baseline model (1), the recipe pool’s most expensive model (1).',
     )
@@ -201,5 +201,41 @@ describe('Insights cost coverage', () => {
     expect(html).toContain('Estimated Total Cost')
     expect(html).toContain('$0.50')
     expect(html).not.toContain('$0.0000')
+  })
+})
+
+describe('Router decision costs', () => {
+  it('shows model identity, tokens, spend and unpriced calls in the cost section', () => {
+    const record: InsightsRecord = {
+      ...priced,
+      cost_accounting: {
+        router_calls: [
+          {
+            kind: 'decision_model',
+            model: 'primary',
+            calls: 1,
+            prompt_tokens: 120,
+            completion_tokens: 3,
+            cost: 0.002,
+            currency: 'USD',
+          },
+          {
+            kind: 'systemone',
+            model: 'remote',
+            calls: 1,
+            prompt_tokens: 10,
+            unpriced_calls: 1,
+            unpriced_reasons: { pricing_not_configured: 1 },
+          },
+        ],
+      },
+    }
+    expect(field(record, 'Router calls')).toContain(
+      '1 Decision model call (primary), 120 input / 3 output tokens, 1 priced at $0.0020',
+    )
+    expect(field(record, 'Router calls')).toContain(
+      '1 System One call (remote), 10 input / 0 output tokens, 1 unpriced',
+    )
+    expect(field(priced, 'Router calls')).toBeUndefined()
   })
 })

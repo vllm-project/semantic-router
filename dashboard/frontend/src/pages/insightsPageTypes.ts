@@ -198,8 +198,9 @@ export interface InsightsRecord {
   cost_accounting?: InsightsCostAccounting
 }
 
-/** One kind of call the Router made itself to serve a request (a Looper's attempts). */
+/** Model calls the Router made itself to serve a request. */
 export interface InsightsRouterCallCost {
+  model?: string
   kind: string
   calls: number
   prompt_tokens?: number

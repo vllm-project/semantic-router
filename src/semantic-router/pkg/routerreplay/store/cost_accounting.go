@@ -82,13 +82,14 @@ type CostAccounting struct {
 	BaselineSource      string `json:"baseline_source,omitempty"`
 	BaselineUnavailable string `json:"baseline_unavailable,omitempty"`
 	// RouterCalls are the model calls the Router made itself to serve the
-	// request, one entry per kind, costed apart from ActualCost.
+	// request, costed apart from ActualCost. Runtime tasks include their model.
 	RouterCalls []RouterCallCost `json:"router_calls,omitempty"`
 }
 
-// RouterCallCost totals one kind of call the Router made itself. Cost sums
+// RouterCallCost describes model calls the Router made itself. Cost sums
 // the priced calls in Currency; the others are UnpricedCalls, by reason.
 type RouterCallCost struct {
+	Model            string         `json:"model,omitempty"`
 	Kind             string         `json:"kind"`
 	Calls            int            `json:"calls"`
 	PromptTokens     int64          `json:"prompt_tokens,omitempty"`
