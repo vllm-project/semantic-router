@@ -66,6 +66,7 @@ ci-full: ## Reproduce the complete baseline PR checks locally
 harness-check: $(HARNESS_BOOTSTRAP_DEPS) test-tiny-model ## Validate the domain registry, workflows, and harness tests
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py validate
+	@"$(AGENT_PYTHON)" tools/agent/scripts/check_skill_catalog.py
 	@"$(AGENT_PYTHON)" tools/agent/scripts/sync_public_skill.py --check
 	@"$(AGENT_PYTHON)" tools/ci/validate_workflows.py
 	@"$(AGENT_PYTHON)" -m unittest discover -s tools/ci/tests -p "test_*.py"
@@ -183,7 +184,8 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 agent-skill-sync: ## Regenerate the public install skill from its repository source
 	@python3 tools/agent/scripts/sync_public_skill.py
 
-agent-skill-check: ## Check the generated public skill without writing
+agent-skill-check: ## Check the skill catalog and generated public skill without writing
+	@python3 tools/agent/scripts/check_skill_catalog.py
 	@python3 tools/agent/scripts/sync_public_skill.py --check
 
 .PHONY: agent-skill-sync agent-skill-check
