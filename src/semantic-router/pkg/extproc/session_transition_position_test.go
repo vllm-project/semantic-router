@@ -46,7 +46,8 @@ func TestSessionPositionFactsPreferOriginalSnapshot(t *testing.T) {
 
 	turnIndex, historyTokens := sessionPositionFacts(ctx)
 	require.Equal(t, 1, turnIndex, "renumbered requests must not move the turn index")
-	require.Equal(t, 0, historyTokens, "history excludes only the trailing user message")
+	require.Equal(t, len("original turn one")/4+len("original reply")/4, historyTokens,
+		"history excludes only the trailing user message")
 }
 
 func TestSessionPositionFactsDegradesWithoutUserHistory(t *testing.T) {
