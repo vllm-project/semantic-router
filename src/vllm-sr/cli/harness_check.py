@@ -225,7 +225,8 @@ def _claude_rows(events: list[dict]) -> tuple[Row, Row]:
         # Claude Code writes a refused login as a reply of its own
         why = result.get("result") or _text_of(replies)
         return Row("Login", "failed", why), Row("Tool round trip", "not run")
-    login = Row("Login", "ok", f"the gateway answered with {answered[0]['model']}")
+    # the reply names the backend's own model id, not the Router's model name
+    login = Row("Login", "ok", f"the gateway answered, as {answered[0]['model']}")
     blocks = [
         b for m in answered for b in m.get("content") or [] if isinstance(b, dict)
     ]

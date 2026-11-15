@@ -230,7 +230,8 @@ gateway answers a basic reply now. That sends one short request with the key
 the harness would send and waits up to 5 seconds. It sends nothing, and says
 why, once Claude Code's settings name another gateway or model than connect
 wrote, or the Codex profile no longer holds what connect wrote, since the key
-they send may then be for another gateway. `--json` prints the same as JSON.
+they send may then be for another gateway. `--json` prints the same as JSON,
+and the command exits with status 1 when a gateway check fails.
 
 ### Try it without writing anything
 

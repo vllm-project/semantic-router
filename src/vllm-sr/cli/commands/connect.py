@@ -505,9 +505,12 @@ def status(as_json):
         ]
     if as_json:
         echo(json.dumps({"connections": found}, indent=2))
-        return
-    for entry in found:
-        _show_status(entry)
+    else:
+        for entry in found:
+            _show_status(entry)
+    # a script can tell a gateway that stopped answering from one that answers
+    if any(entry.get("probe", {}).get("state") == "failed" for entry in found):
+        raise click.exceptions.Exit(1)
 
 
 def _connections(folder: Path) -> list[dict]:

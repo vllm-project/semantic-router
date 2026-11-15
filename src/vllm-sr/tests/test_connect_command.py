@@ -2057,7 +2057,7 @@ def test_check_runs_claude_code_on_the_settings_connect_wrote(
     output = _flat(result.output)
     assert "spends a few short model calls on your login or key" in output
     assert "Harness ok 2.1.325 (Claude Code) at " in output
-    assert "Login ok the gateway answered with qwen36" in output
+    assert "Login ok the gateway answered, as qwen36" in output
     assert (
         "Tool round trip ok ran echo vsr-check and answered with its output" in output
     )
@@ -2357,6 +2357,21 @@ def test_a_write_that_fails_part_way_puts_back_what_it_wrote(
     monkeypatch.setattr(hc.os, "replace", replace)
     hc.apply_changes(changes, tmp_path)
     assert profile.read_text() == "new = 1\n" and _mode(profile) == 0o640
+
+
+def test_status_fails_when_a_gateway_check_fails(tmp_path, gateway, monkeypatch):
+    url, _, replies = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    args = ["connect", "claude-code", "--base-url", url, "--context-window", "65536"]
+    assert CliRunner().invoke(main, [*args, "--no-vsr", "--yes"]).exit_code == 0
+    replies["/v1/messages"].pop("plain")
+    for shown in ([], ["--json"]):
+        result = CliRunner().invoke(main, ["connect", "status", *shown])
+        assert result.exit_code == 1, result.output
+        assert "failed" in result.output
 
 
 def test_status_sends_no_key_to_a_gateway_the_settings_no_longer_name(
