@@ -110,11 +110,17 @@ recipes:
           density: {gt: 16}
 ```
 
-A literal keyword counts each occurrence that stands as a word of its own;
-CJK keywords, and keywords with no letters or digits such as `?`, count every
+A literal keyword counts each occurrence that stands as a word of its own.
+Keywords in scripts written without spaces between words (CJK, Thai, Lao, Khmer
+and Myanmar), and keywords with no letters or digits such as `?`, count every
 occurrence. With `method: regex`, each pattern counts its non-overlapping
 matches. BM25, n-gram, and fuzzy matching score similarity rather than locate
 occurrences, so a rule that counts uses literal keywords or `method: regex`.
+
+A literal keyword in one of these unspaced scripts matches inside running text,
+the way a CJK keyword does, and a Latin keyword matches next to it. Such a match
+does not split a syllable: it does not end before a combining mark, or start
+after a preposed vowel or a stacking sign that belongs to the next consonant.
 
 The rule publishes the number as its value whether or not its predicate holds:
 a decision condition can apply its own `predicate` to `keyword:<rule>`, and a

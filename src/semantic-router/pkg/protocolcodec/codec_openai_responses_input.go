@@ -324,15 +324,20 @@ func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.R
 			content = append(content, part)
 		}
 	}
+	encrypted, err := decodeResponsesEncryptedReasoning(item, policy, false)
+	if err != nil {
+		return err
+	}
+	if encrypted != nil {
+		content = append(content, *encrypted)
+	} else if len(item.EncryptedContent) > 0 {
+		// Null and empty ciphertext carry no state and are omitted on re-encoding.
+		request.Generation++
+	}
+	// Stored ID-only references have no canonical provider scope yet.
 	if len(content) == 0 && (len(item.EncryptedContent) > 0 || len(reasoning) > 0 || item.ID != "") {
-		// The item's payload was the provider blob the Router does not relay,
-		// reasoning with no text, or only the ID of the provider's reasoning, as
-		// an item the Router completed from a blob alone comes back. The turn
-		// carries nothing a target can render, and an empty reasoning part sent
-		// on would reach an OpenAI target as plaintext reasoning, which it
-		// refuses. decode reported a dropped blob; leave the empty turn out
-		// instead of rejecting the request. An item with nothing at all is still
-		// an empty message.
+		// Retire the source envelope so it cannot resurrect the omitted item.
+		request.Generation++
 		return nil
 	}
 	request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: llmprotocol.RoleAssistant, Content: content})

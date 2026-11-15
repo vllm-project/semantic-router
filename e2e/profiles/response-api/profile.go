@@ -145,6 +145,7 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-responses-input-compat",
 		"protocol-codec-azure-ingress",
 		"protocol-codec-reasoning-summary-responses-backend",
+		"protocol-codec-responses-encrypted-reasoning",
 		"protocol-codec-reasoning-summary-template-responses-backend",
 		"protocol-codec-ollama-output-limit",
 		"protocol-codec-ollama-empty-content",

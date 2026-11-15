@@ -52,8 +52,8 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 		return responseBody, fmt.Errorf("context recovery retrieval limit exceeded")
 	}
 	// The followup keeps only this turn's retrieval calls and is sent through
-	// a Looper client, so neither this turn's nor the history's continuity
-	// blocks would reach the provider.
+	// a Looper client, so other continuity formats would lose required state.
+	// Responses blobs may be dropped by Chat encoding, as in ordinary dispatch.
 	if carriesReasoningContinuity(requestCtx.SemanticRequest, &decoded.Response) {
 		return responseBody, fmt.Errorf("context recovery cannot carry reasoning continuity blocks")
 	}
@@ -196,6 +196,21 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	)
 	if err != nil {
 		return nil, fmt.Errorf("encode context recovery followup: %w", err)
+	}
+	// The dispatch may already have reported what this encode drops again,
+	// such as a replayed Responses blob, so a loss is added only past the
+	// copies the context already holds, and two blobs still count as two.
+	type loss struct{ action, field, reason string }
+	held := map[loss]int{}
+	for _, seen := range requestCtx.ProtocolDiagnostics {
+		held[loss{string(seen.Action), seen.Field, seen.Reason}]++
+	}
+	for _, diagnostic := range encodedRequest.Diagnostics {
+		if key := (loss{string(diagnostic.Action), diagnostic.Field, diagnostic.Reason}); held[key] > 0 {
+			held[key]--
+			continue
+		}
+		requestCtx.ProtocolDiagnostics = append(requestCtx.ProtocolDiagnostics, diagnostic)
 	}
 	openAIRequest, err := parseOpenAIRequest(encodedRequest.Body)
 	if err != nil {
