@@ -403,8 +403,30 @@ A fragment of another type under the same index starts a new block, as Gemini
 models do for the encrypted signature of a tool call. Blocks without either
 identifier remain separate; the Router does not infer their identity.
 
-Only Chat Completions carries these blocks. A Responses or Messages client of a
-Chat backend still gets the reply: the Router drops the blocks and keeps the
+Responses separately carries its own encrypted reasoning state as
+`encrypted_content` on reasoning items, including items with no text. Send
+`include: ["reasoning.encrypted_content"]` to request it. Buffered replies and
+streams preserve the blob verbatim; streams reuse the item-done ciphertext in
+the terminal output. The Router's Responses store retains it for
+`previous_response_id` replay.
+
+Before dispatch, the Router projects Responses reasoning for each backend,
+fallback, and shadow. A model qualifies as an OpenAI-hosted Responses target
+only when every endpoint in its pool has provider `type: openai` and a resolved
+address or profile base URL host exactly `api.openai.com` or `chatgpt.com`, or
+ending in `.openai.azure.com`. A shadow checks its single endpoint. Hosted
+targets receive encrypted items with `content: []` and the include. Unsigned
+plaintext-only reasoning items are omitted for those targets; signed thinking
+remains subject to the signature capability check. Other targets keep the
+existing plaintext behavior and omit the Responses blob and include, with
+translation diagnostics. Internal Chat paths for Looper, context recovery,
+and memory history also drop Responses blobs and the include. Other continuity
+formats still fail closed there. Chat and Messages clients omit Responses blobs
+with the reasoning continuity diagnostic. A blob's format does not prove that
+another account or model can use it.
+
+Only Chat Completions carries the OpenRouter blocks described above. A Responses
+or Messages client of a Chat backend still gets the reply: the Router drops the blocks and keeps the
 reasoning text. A buffered reply reports the drop in `x-vsr-warnings`
 as `dropped;...;reasoning_details`. A stream has already sent its headers when
 the drop is found, so the drop is recorded only in the

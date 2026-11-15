@@ -25,7 +25,7 @@ const (
 func init() {
 	pkgtestcases.Register("masking-own-rules", pkgtestcases.TestCase{
 		Priority:    pkgtestcases.P0,
-		Description: "What a regex keyword rule and a System One span rule find reaches the backend under each rule's placeholder, on Chat and Anthropic, and a span rule that fails answers 503",
+		Description: "What a regex keyword rule and a System One span rule find reaches the backend under each rule's placeholder, on Chat and Anthropic, a placeholder the client wrote is not issued again, and a span rule that fails answers 503",
 		Tags:        []string{"masking", "keyword", "systemone", "functional", "fail-closed"},
 		Fn:          testMaskingOwnRules,
 	})
@@ -67,6 +67,23 @@ func testMaskingOwnRules(ctx context.Context, client *kubernetes.Clientset, opts
 		}
 		received[tc.name] = echoed
 	}
+
+	// A placeholder the client wrote keeps its meaning: the employee ID after
+	// it takes the next index, not the same one (#6513).
+	typed, err := runMaskingWireCase(ctx, session, maskingWireCase{
+		name: "client placeholder", path: "/v1/chat/completions", decision: maskingRulesDecision,
+		body: map[string]interface{}{
+			"model":    maskingRulesEntrypoint,
+			"messages": []map[string]interface{}{{"role": "user", "content": "[EMPLOYEE_0] approved, paid by " + maskingRulesEmployee}},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("client placeholder: %w", err)
+	}
+	if want := "[EMPLOYEE_0] approved, paid by [EMPLOYEE_1]"; typed != want {
+		return fmt.Errorf("client placeholder: the backend received %q, want %q", typed, want)
+	}
+	received["client placeholder"] = typed
 
 	failed, err := runMaskingRawRequest(ctx, session, "/v1/chat/completions", map[string]interface{}{
 		"model":    maskingRulesEntrypoint,
