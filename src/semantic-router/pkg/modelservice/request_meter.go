@@ -102,8 +102,8 @@ func reportRemoteCall(ctx context.Context, deployment, model string, data []byte
 	var body struct {
 		Model string `json:"model"`
 		Usage *struct {
-			Input  int `json:"input_tokens"`
-			Output int `json:"output_tokens"`
+			Input  *int `json:"input_tokens"`
+			Output *int `json:"output_tokens"`
 		} `json:"usage"`
 	}
 	_ = json.Unmarshal(data, &body)
@@ -112,7 +112,8 @@ func reportRemoteCall(ctx context.Context, deployment, model string, data []byte
 		call.Model = body.Model
 	}
 	if body.Usage != nil {
-		call.InputTokens, call.OutputTokens, call.HasUsage = body.Usage.Input, body.Usage.Output, true
+		call.InputTokens, call.OutputTokens = deref(body.Usage.Input), deref(body.Usage.Output)
+		call.HasUsage = body.Usage.Input != nil && body.Usage.Output != nil
 	}
 	RecordModelCall(ctx, call)
 }

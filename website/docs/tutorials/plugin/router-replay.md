@@ -301,6 +301,8 @@ unpriced reason. Fused runtime tasks count once; cached results and startup or
 warmup calls add no request spend. Calls spent before a decision fails remain
 in its record and in aggregate router spend. Generation cost and savings keep
 their existing meaning; router spend is added to total spend separately.
+Auxiliary model calls made by internal Looper hops count in the parent
+request's router spend and coverage; hop generation costs count there once.
 
 Set deployment rates under `global.model_catalog.deployments.<name>.pricing`,
 using the same per-million-token fields as `providers.models[].pricing`:
@@ -318,8 +320,10 @@ global:
 Explicit deployment pricing wins. Otherwise, a deployment's `model` may name a
 provider model whose pricing is used. Omitted currency defaults to USD; an
 explicit empty pricing block declares zero rates. An unpriced deployment or a
-call without usage remains unpriced, never implicitly free. These are token
-rate estimates; they do not measure local compute or GPU costs.
+call without complete usage remains unpriced, never implicitly free. Remote
+System One usage must include both input and output token counters, even when
+zero. These are token rate estimates; they do not measure local compute or GPU
+costs.
 
 ### Keep personal data out of Replay
 

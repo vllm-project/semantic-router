@@ -120,7 +120,12 @@ func startRequestHeaderSpan(
 		tracing.SpanRequest,
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
-	ctx.TraceContext, ctx.ModelCallMeter = modelservice.WithRequestMeter(spanCtx)
+	ctx.TraceContext = spanCtx
+	// Internal hops charge auxiliary calls to the inherited parent meter;
+	// their own replay records defer generation costs to that parent too.
+	if ctx.Hop == nil {
+		ctx.TraceContext, ctx.ModelCallMeter = modelservice.WithRequestMeter(spanCtx)
+	}
 	ctx.RequestSpan = span
 	return span
 }
