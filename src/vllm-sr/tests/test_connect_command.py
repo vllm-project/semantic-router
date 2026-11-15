@@ -329,6 +329,33 @@ def _router(
     return doc
 
 
+def test_codex_findings_cover_only_the_models_the_entrypoint_reaches():
+    doc = _router()
+    doc["providers"]["models"].append({"name": "c", "api_format": "openai"})
+    doc["recipes"] = [
+        {"name": "agent", "decisions": [{"name": "d", "modelRefs": [{"model": "m"}]}]},
+        {"name": "chat", "decisions": [{"name": "e", "modelRefs": [{"model": "c"}]}]},
+    ]
+    doc["entrypoints"] = [
+        {"model_names": ["vllm-sr/auto"], "recipe": "agent", "default": True},
+        {"model_names": ["vllm-sr/chat"], "recipe": "chat"},
+    ]
+
+    def signature(model):
+        needs = [f.need for f in rc.check_router_config(doc, "codex", model)]
+        return any(n.startswith("reasoning.signature") for n in needs)
+
+    # vllm-sr/chat reaches no anthropic model, so Codex on it needs no signature
+    assert signature("vllm-sr/auto") and signature(None)
+    assert not signature("vllm-sr/chat")
+
+
+def test_a_preview_cuts_a_long_line_short():
+    shown = hc.hide_secrets('{"base_instructions": "' + "x" * 5000 + '"}\n')
+    assert shown.endswith("... (4,865 more characters)\n")
+    assert len(shown) < 200
+
+
 def _learning(headers, enabled=True):
     return {
         "enabled": enabled,
@@ -1480,6 +1507,46 @@ def test_a_keyed_listener_names_its_key_variable_to_the_codex_plugin(
     )
     assert result.exit_code == 0, result.output
     assert "runtimeTokenEnv" not in (tmp_path / "vsr.json").read_text()
+
+
+@pytest.mark.parametrize("harness", ["claude-code", "codex"])
+def test_a_keyed_listener_without_its_key_is_refused_before_writing(
+    tmp_path, monkeypatch, harness
+):
+    home = tmp_path / "home"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    monkeypatch.delenv("VLLM_SR_API_KEY", raising=False)
+    config = tmp_path / "router.yaml"
+    config.write_text(
+        "version: v0.5\nlisteners:\n"
+        "  - {name: http, address: 127.0.0.1, port: 8899, api_keys: [listener-key]}\n"
+    )
+    args = ["connect", harness, "--config", str(config), "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 1, result.output
+    assert "takes an API key and $VLLM_SR_API_KEY is not set" in result.output
+    # a key written before stays: nothing is replaced with a placeholder
+    assert not home.exists()
+
+
+def test_a_second_run_with_nothing_to_change_writes_nothing(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    args = ["connect", "claude-code", "--base-url", url, "--context-window", "65536"]
+    args += ["--no-vsr", "--yes"]
+    assert CliRunner().invoke(main, args).exit_code == 0
+    files = [tmp_path / "settings.json", tmp_path / hc.MANIFEST]
+    before = [path.stat().st_mtime_ns for path in files]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    assert "Nothing to change" in result.output
+    assert "Written" not in result.output
+    assert [path.stat().st_mtime_ns for path in files] == before
 
 
 @pytest.mark.parametrize("harness", ["claude-code", "codex"])

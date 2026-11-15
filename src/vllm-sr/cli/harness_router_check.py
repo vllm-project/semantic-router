@@ -124,7 +124,7 @@ def _sets_default_max_tokens(decision: dict) -> bool:
     )
 
 
-def _claude_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
+def _claude_findings(doc: dict, router: dict, reach) -> list[RouterFinding | None]:
     findings = [
         _lossy_finding(
             router,
@@ -135,7 +135,7 @@ def _claude_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
         ),
         _protection_finding(router, CLAUDE_HEADERS),
     ]
-    formats = set(_model_formats(doc).values())
+    formats = {f for name, f in _model_formats(doc).items() if reach(name)}
     allowed = router.get("allow_lossy_translation") or []
     missing = [f for f in OPENAI_LOSSY if f not in allowed]
     if missing and formats & (OPENAI_FORMATS | {""}):
@@ -150,7 +150,7 @@ def _claude_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
     return findings
 
 
-def _codex_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
+def _codex_findings(doc: dict, router: dict, reach) -> list[RouterFinding | None]:
     formats = _model_formats(doc)
     findings: list[RouterFinding | None] = []
     # each decision that can pick an anthropic model, with a hint when none of its
@@ -160,7 +160,7 @@ def _codex_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
         kinds = {
             formats.get(ref.get("model"), "")
             for ref in decision.get("modelRefs") or []
-            if isinstance(ref, dict)
+            if isinstance(ref, dict) and reach(ref.get("model"))
         }
         if "messages" in kinds:
             to_anthropic.append((decision, ""))
@@ -311,13 +311,19 @@ def _catalog_windows() -> dict[str, int]:
     }
 
 
-def check_router_config(doc: dict, harness: str) -> list[RouterFinding]:
-    """What this harness needs from a v0.5 Router configuration and does not find."""
+def check_router_config(
+    doc: dict, harness: str, model: str | None = None
+) -> list[RouterFinding]:
+    """What this harness needs from a v0.5 Router configuration and does not find,
+    for the models a request for model can reach (all of them when model is None
+    or maps nowhere)."""
     router = _get(doc, "global", "router") or {}
+    reachable = entrypoint_models(doc, model) if model else None
+    reach = (lambda _: True) if reachable is None else set(reachable).__contains__
     found = (
-        _claude_findings(doc, router)
+        _claude_findings(doc, router, reach)
         if harness == "claude-code"
-        else _codex_findings(doc, router)
+        else _codex_findings(doc, router, reach)
     )
     return [f for f in found if f]
 
