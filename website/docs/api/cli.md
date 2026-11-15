@@ -1005,6 +1005,9 @@ Route Claude Code's model calls through the gateway.
 | `--yes` | Write without asking. Default: false. |
 | `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
 | `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
+| `--worktree DIRECTORY` | With --launch, start the harness in this existing git worktree. No branch or worktree is created, switched or removed. |
+| `--home DIRECTORY` | With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR or $CODEX_HOME) in place of yours, for another login. Nothing is copied into it. |
+| `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as Claude Code's apiKeyHelper or as the Codex provider's auth command, which the harness runs itself and again every 5 minutes by default. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--scope CHOICE` | user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.  [default: user] Choices: user, project. |
 | `--status-line` | Also show in Claude Code's status line which models answered, the last first. Default: false. |
@@ -1032,6 +1035,9 @@ Route Codex CLI through the gateway with a profile of its own.
 | `--yes` | Write without asking. Default: false. |
 | `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
 | `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
+| `--worktree DIRECTORY` | With --launch, start the harness in this existing git worktree. No branch or worktree is created, switched or removed. |
+| `--home DIRECTORY` | With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR or $CODEX_HOME) in place of yours, for another login. Nothing is copied into it. |
+| `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as Claude Code's apiKeyHelper or as the Codex provider's auth command, which the harness runs itself and again every 5 minutes by default. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--profile TEXT` | The Codex profile to write.  [default: vllm-sr] |
 | `--help` | Show this message and exit. Default: false. |

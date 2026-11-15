@@ -253,6 +253,67 @@ gateway that fails the probe means the harness is not started. Claude Code's
 `--resume` hint on exit names the removed file, so resume a launched session
 with `vllm-sr connect claude-code --launch -- --resume <session id>`.
 
+### Launch in a worktree or another home
+
+```bash
+vllm-sr connect codex --config codex.yaml --launch --worktree ../feature-x
+vllm-sr connect claude-code --config claude-code.yaml --launch \
+  --worktree ../feature-x --home ~/.claude-work
+```
+
+`--worktree` starts the harness in an existing git worktree, with the same
+temporary settings as `--launch`. The command only checks that git sees a work
+tree there: it never creates, switches or removes a branch or a worktree, so
+make one with `git worktree add` first. The harness keeps its own home,
+`$CLAUDE_CONFIG_DIR` or `~/.claude` and `$CODEX_HOME` or `~/.codex`, and with
+it its own login. `--home` gives it another existing home for that session,
+such as one signed in to a second account. Nothing is copied into it, so the
+harness signs in there as that home's account does.
+
+Before the harness starts, the command prints one line to match the session to
+its calls in Insights later:
+
+```text
+Session: started=2026-11-15T21:03:11+09:00 worktree=/src/feature-x home=/home/me/.codex gateway=http://localhost:8899 model=vllm-sr/auto
+```
+
+### Fetch the key with a command
+
+```bash
+vllm-sr connect claude-code --config claude-code.yaml --key-command "pass show vllm-sr/gateway"
+vllm-sr connect codex --config codex.yaml --key-command "pass show vllm-sr/gateway"
+```
+
+Where exporting `VLLM_SR_API_KEY` into a shell is awkward, as for a service or
+an IDE that starts the harness, `--key-command` names a shell command that
+prints the listener's key. The command writes it as the harness's own key
+helper in place of the key or a variable, and the harness runs it:
+
+- Claude Code: `apiKeyHelper` in the settings, with `ANTHROPIC_AUTH_TOKEN` and
+  `ANTHROPIC_API_KEY` set empty, since either would win over it. Claude Code
+  runs it in the system shell, sends what it prints as both `Authorization`
+  and `x-api-key`, and runs it again after five minutes
+  (`CLAUDE_CODE_API_KEY_HELPER_TTL_MS`). Without `--key-command` the command
+  takes any `apiKeyHelper` out of the settings it writes, since a helper would
+  send its key in place of Claude Code's own login on a caller gateway, and
+  `--undo` puts it back.
+- Codex: a `[model_providers.vllm-sr.auth]` table in the profile, with
+  `command = "/bin/sh"` and `args = ["-c", "<the command>"]`, in place of
+  `env_key`, which Codex 0.166 does not take beside it. Codex sends what it
+  prints as the bearer key, waits up to 5 seconds for it, and runs it again
+  after five minutes and after a refused key.
+
+The command runs it only to probe the gateway, for `--check` and for
+`connect status`, and never prints or writes what it prints. A command that
+fails, prints nothing, or takes longer than the harness waits for it (5 seconds
+for Codex) stops it before anything is written. `--launch` passes
+the same setting for that session and runs the command for its probe as the
+harness will, in the `--worktree` and with the `--home` given, so the key
+probed is the key the harness sends. `--undo` removes it with the rest. A
+gateway that takes the harness's own login has no key to fetch, so the option
+is refused there. The vSR plugin takes a stored key or a variable, not a
+command, so vSR is not set up with it.
+
 ### Router settings for Claude Code
 
 ```yaml

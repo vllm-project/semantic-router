@@ -20,6 +20,7 @@ import yaml
 from cli import harness_check as hk
 from cli import harness_connect as hc
 from cli import harness_router_check as rc
+from cli import harness_session as hs
 from cli.chat_client import resolve_chat_base_url
 from cli.runtime_management_config import _configured_management_port
 from cli.runtime_stack import resolve_runtime_stack
@@ -110,6 +111,36 @@ def _options(command):
                 help="Start the harness through the gateway for this session only, writing"
                 " no file; arguments after -- go to the harness.",
             ),
+            click.option(
+                "--worktree",
+                type=click.Path(
+                    exists=True, file_okay=False, resolve_path=True, path_type=Path
+                ),
+                default=None,
+                help="With --launch, start the harness in this existing git worktree."
+                " No branch or worktree is created, switched or removed.",
+            ),
+            click.option(
+                "--home",
+                "harness_home",
+                type=click.Path(
+                    exists=True, file_okay=False, resolve_path=True, path_type=Path
+                ),
+                default=None,
+                help="With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR"
+                " or $CODEX_HOME) in place of yours, for another login. Nothing is"
+                " copied into it.",
+            ),
+            click.option(
+                "--key-command",
+                metavar="CMD",
+                default=None,
+                help="A shell command that prints the listener's API key, in place of"
+                " --api-key-env: written as Claude Code's apiKeyHelper or as the Codex"
+                " provider's auth command, which the harness runs itself and again"
+                " every 5 minutes by default. connect itself runs it only when it calls"
+                " the gateway, and never shows or writes what it prints.",
+            ),
             click.argument("harness_args", nargs=-1, type=click.UNPROCESSED),
         ]
     ):
@@ -149,6 +180,9 @@ def claude_code(
     vsr_source,
     check,
     launch,
+    worktree,
+    harness_home,
+    key_command,
     harness_args,
     scope,
     status_line,
@@ -156,42 +190,47 @@ def claude_code(
     """Route Claude Code's model calls through the gateway."""
     env = dict(os.environ)
     path = hc.claude_settings_path(scope, Path.cwd(), env)
-    _check_launch(launch, harness_args, undo, status_line, check)
+    where = _check_launch(
+        launch, harness_args, undo, status_line, check, worktree, harness_home
+    )
     if undo:
         _undo(path.parent)
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    _require_key(
-        doc, base_url, from_env, api_key_env, _caller_login("claude-code", doc)
-    )
-    if _caller_login("claude-code", doc):
-        # the Router presents Claude Code's own login to Anthropic, and a gateway
-        # token would go in its place
+    login = _caller_login("claude-code", doc)
+    # a key command gives the key, so the variable may be unset
+    _require_key(doc, base_url, from_env, api_key_env, login or key_command)
+    if login or key_command:
+        # the Router presents Claude Code's own login to Anthropic, or Claude Code
+        # runs the key command itself, and a gateway token would go in its place
         token, from_env = "", False
+    # the harness runs the key command in its session, so the probe's run does too
+    session = hs.session_env("claude-code", env, harness_home)
+    key = _key("claude-code", key_command, login, session, where, check or not dry_run)
     context_window, notes = _context_window(doc, model, context_window)
-    values = hc.claude_env(gateway, model, token)
+    values = hc.claude_env(gateway, model, token, key_command)
     if context_window:
         values["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = str(context_window)
     if launch:
         # the key stays off the command line and out of the settings file: Claude
-        # Code reads it from the variable its own session inherits
-        settings = {"env": values}
+        # Code prints it from the variable its own session inherits
+        launched = values
         if from_env:
-            settings = {
-                "env": {**values, hc.TOKEN_KEY: ""},
-                "apiKeyHelper": f"printenv {shlex.quote(api_key_env)}",
-            }
+            helper = f"printenv {shlex.quote(api_key_env)}"
+            launched = {**values, hc.TOKEN_KEY: "", hc.KEY_HELPER: helper}
         _launch(
             "claude-code",
             ["claude", *harness_args],
             doc,
             gateway,
             model,
-            token,
+            key or token,
             notes,
             dry_run,
-            settings,
+            json.loads(hc.set_json_env("", launched)),
+            where,
+            session,
         )
     # the undo manifest beside the settings records the key too
     keyed = (path, path.parent / hc.MANIFEST) if scope == "project" and from_env else ()
@@ -208,13 +247,13 @@ def claude_code(
     changes.append(hc.Change(path, "json-env", values))
     label = f"<${api_key_env}>" if from_env else token
     options, plugin_id, state = _vsr_claude_start(
-        env, gateway, doc, vsr, from_env, api_key_env
+        env, gateway, doc, vsr, from_env, api_key_env, key_command
     )
     install = _installs("claude", vsr_source) if options and not plugin_id else []
     plan = _vsr_claude_plan(
         options, plugin_id, install, api_key_env if from_env else None
     )
-    secrets = [token] if from_env else []
+    secrets = [token] if from_env else [key] if key else []
     if not _run(
         "claude-code",
         changes,
@@ -253,8 +292,12 @@ def claude_code(
             echo(f"Added {kept} to this repository's .git/info/exclude.")
     if from_env:
         warning(f"{path} now holds the API key from ${api_key_env}.")
+    if key_command:
+        echo(_key_note("claude-code", key_command))
+    # a key set to None is one the settings leave out
+    owned = [key for key, value in values.items() if value is not None]
     overrides = (
-        list(hc.claude_overrides(Path.cwd(), values, path)) if scope == "user" else []
+        list(hc.claude_overrides(Path.cwd(), owned, path)) if scope == "user" else []
     )
     # a project file that sets the key itself sends it again, and is warned about below
     if env.get(hc.API_KEY) and all(hc.API_KEY not in keys for _, keys in overrides):
@@ -277,7 +320,7 @@ def claude_code(
             " (1,000,000 tokens in 2.1.323) and says so at start; --context-window sets"
             " the real window."
         )
-    _probe_or_say_why(gateway, "claude-code", model, token, doc)
+    _probe_or_say_why(gateway, "claude-code", model, key or token, doc)
     if check:
         settings = path.absolute()  # the harness runs in a directory of its own
         _check("claude-code", lambda *_: hk.claude_argv(settings), env, secrets)
@@ -305,24 +348,32 @@ def codex(
     vsr_source,
     check,
     launch,
+    worktree,
+    harness_home,
+    key_command,
     harness_args,
     profile,
 ):
     """Route Codex CLI through the gateway with a profile of its own."""
     env = dict(os.environ)
     home = hc.codex_home(env)
-    _check_launch(launch, harness_args, undo, check=check)
+    where = _check_launch(
+        launch, harness_args, undo, check=check, worktree=worktree, home=harness_home
+    )
     if undo:
         _undo(home)
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
     login = _caller_login("codex", doc)
-    _require_key(doc, base_url, from_env, api_key_env, login)
-    if login:
-        # the Router presents Codex's own ChatGPT login or API key to OpenAI, and a
-        # gateway key would go in its place
+    _require_key(doc, base_url, from_env, api_key_env, login or key_command)
+    if login or key_command:
+        # the Router presents Codex's own ChatGPT login or API key to OpenAI, or
+        # Codex runs the key command itself, and a gateway key would go in its place
         token, from_env = "", False
+    # the harness runs the key command in its session, so the probe's run does too
+    session = hs.session_env("codex", env, harness_home)
+    key = _key("codex", key_command, login, session, where, check or not dry_run)
     key_env = api_key_env if from_env else None
     context_window, notes = _context_window(doc, model, context_window)
     review_model = next(
@@ -358,28 +409,44 @@ def codex(
         review_window,
     )
     if launch:
-        # Codex reads the key from key_env, so it stays off the command line
-        overrides = hc.codex_launch_args(gateway, model, key_env, context_window, login)
+        # Codex reads the key from key_env or its command, so it stays off the
+        # command line
+        overrides = hc.codex_launch_args(
+            gateway, model, key_env, context_window, login, key_command
+        )
         _launch(
             "codex",
             ["codex", *overrides, *harness_args],
             doc,
             gateway,
             model,
-            token,
+            key or token,
             notes,
             dry_run,
             catalog or None,
+            where,
+            session,
         )
     catalog_path = home / f"{profile}.models.json" if catalog else None
     change = hc.codex_change(
-        home, profile, gateway, model, key_env, context_window, login, catalog_path
+        home,
+        profile,
+        gateway,
+        model,
+        key_env,
+        context_window,
+        login,
+        catalog_path,
+        key_command,
     )
     changes = [change]
     if catalog_path:
         text = json.dumps(catalog, indent=2) + "\n"
         changes.append(hc.Change(catalog_path, "file", {"file": text}))
     options = _vsr_options(gateway, doc) if vsr else None
+    if options and key_command:
+        warning(_vsr_without_key(api_key_env))
+        options = None
     if options and shutil.which("codex") is None:
         warning("vSR is not set up: codex is not on PATH.")
         options = None
@@ -402,13 +469,13 @@ def codex(
     if options:
         # the vSR plugin's own settings: connect owns the runtime keys, the rest stays
         changes.append(hc.Change(home / "vsr.json", "json", options))
-    secrets = [token] if from_env else []
+    secrets = [token] if from_env else [key] if key else []
     # only the catalog sends reviews to the review entrypoint
     reviewer = review_model if catalog else None
     if not _run("codex", changes, home, "", doc, dry_run, yes, notes, plan, model):
         if check:
             overrides = hc.codex_launch_args(
-                gateway, model, key_env, context_window, login
+                gateway, model, key_env, context_window, login, key_command
             )
 
             def unwritten(private: Path, work: Path) -> list[str]:
@@ -428,6 +495,8 @@ def codex(
     if from_env:
         reader = "Codex and its vSR plugin read" if options else "Codex reads"
         echo(f"{reader} the key from ${api_key_env}; keep it set when you start it.")
+    if key_command:
+        echo(_key_note("codex", key_command))
 
     for found in hc.codex_model_overrides(Path.cwd()):
         warning(
@@ -445,7 +514,7 @@ def codex(
             f"Codex budgets {model} with a window of its own; --context-window gives"
             " it the gateway's."
         )
-    _probe_or_say_why(gateway, "codex", model, token, doc)
+    _probe_or_say_why(gateway, "codex", model, key or token, doc)
     if check:
         _check(
             "codex",
@@ -553,10 +622,12 @@ def _status_probe(entry: dict, env: dict[str, str]) -> dict[str, str]:
             "detail": f"${key_env} is not set, and Codex sends the key from it",
         }
     token = env.get(key_env) if key_env else hc.NO_KEY
+    command = entry.get("key_command")
     if harness == "claude-code":
-        # where to, for which model and with which key, from one read of the settings
+        # where to, for which model and with which key, from one read of the
+        # settings: a token wins over the helper
         recorded = {"ANTHROPIC_BASE_URL": gateway, "ANTHROPIC_MODEL": model}
-        keys = dict.fromkeys((*recorded, hc.TOKEN_KEY), "")
+        keys = dict.fromkeys((*recorded, hc.TOKEN_KEY, hc.KEY_HELPER), "")
         settings = hc.Change(Path(entry["settings"]), "json-env", keys)
         try:
             now = settings.raw(settings.old_text())
@@ -568,7 +639,14 @@ def _status_probe(entry: dict, env: dict[str, str]) -> dict[str, str]:
                 "detail": f"the settings no longer hold the {' and '.join(moved)}"
                 f" connect wrote, so their key is not sent to {gateway}",
             }
-        token = now[hc.TOKEN_KEY] or hc.NO_KEY
+        token = now.get(hc.TOKEN_KEY) or ""
+        command = None if token else now.get(hc.KEY_HELPER)
+        token = token or hc.NO_KEY
+    if command:
+        try:
+            token = hs.key_from(command, env, harness=harness)
+        except ValueError as exc:
+            return {"state": "failed", "detail": str(exc)}
     result = rc.basic_reply(gateway, harness, model, token, STATUS_PROBE_TIMEOUT)
     if not result.ok:
         return {"state": "failed", "detail": hk.shown(result.detail, [token])}
@@ -593,6 +671,7 @@ def _show_status(entry: dict) -> None:
             if codex
             else "gateway key, in the settings"
         ),
+        "key command": f"gateway key from the command {entry.get('key_command')}",
     }[entry["login"]]
     rows = [
         ("record", entry["record"]),
@@ -717,7 +796,20 @@ def _run(
     return True
 
 
-def _check_launch(launch, harness_args, undo, status_line=False, check=False) -> None:
+def _check_launch(
+    launch,
+    harness_args,
+    undo,
+    status_line=False,
+    check=False,
+    worktree=None,
+    home=None,
+) -> Path | None:
+    """Refuse options that do not go together, and give the worktree --launch
+    starts the harness in, checked to be one."""
+    if (worktree or home) and not launch:
+        flag = "--worktree" if worktree else "--home"
+        raise click.UsageError(f"{flag} goes with --launch, which starts the harness")
     if harness_args and not launch:
         raise click.UsageError(
             "arguments after -- go to the harness only with --launch"
@@ -733,6 +825,53 @@ def _check_launch(launch, harness_args, undo, status_line=False, check=False) ->
     if launch and (undo or status_line):
         flag = "--undo" if undo else "--status-line"
         raise click.UsageError(f"--launch writes nothing, so it does not take {flag}")
+    if not worktree:
+        return None
+    try:
+        return hs.worktree(worktree)
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="--worktree") from exc
+
+
+def _key(harness, key_command, login, env, cwd, needed) -> str | None:
+    """The key --key-command prints, run with env in cwd as the harness runs it,
+    and only when the gateway is probed or the harness checked. It is never shown
+    or written."""
+    if not key_command:
+        return None
+    if login:
+        raise click.UsageError(
+            "--key-command fetches a gateway key, but this gateway takes"
+            f" {HARNESS_LOGINS[harness][0]}'s own login instead."
+        )
+    if not needed:
+        return None
+    try:
+        return hs.key_from(key_command, env, cwd, harness)
+    except ValueError as exc:
+        raise click.ClickException(
+            f"{exc}, so nothing was written or started."
+        ) from exc
+
+
+def _key_note(harness: str, key_command: str) -> str:
+    name = HARNESS_LOGINS[harness][0]
+    setting = (
+        hc.KEY_HELPER
+        if harness == "claude-code"
+        else f"[model_providers.{hc.PROVIDER}.auth]"
+    )
+    return (
+        f"{name} runs {key_command} ({setting}) for the key itself, and again every"
+        " 5 minutes by default."
+    )
+
+
+def _vsr_without_key(key_env: str) -> str:
+    return (
+        "vSR is not set up: its plugin takes a stored key or a variable and cannot"
+        f" run --key-command. Connect with ${key_env} in its place to set it up too."
+    )
 
 
 def _private(directory: Path, name: str, text: str) -> Path:
@@ -824,8 +963,22 @@ def _context_window(doc, model, given) -> tuple[int | None, list[str]]:
     ]
 
 
-def _launch(harness, argv, doc, gateway, model, token, notes, dry_run, settings=None):
-    """Probe the gateway, then run the harness through it and exit with its status."""
+def _launch(
+    harness,
+    argv,
+    doc,
+    gateway,
+    model,
+    token,
+    notes,
+    dry_run,
+    settings=None,
+    where=None,
+    env=None,
+):
+    """Probe the gateway, then run the harness through it, in where (default: here)
+    with the session environment env (default: this one), and exit with its
+    status."""
     heading(f"vllm-sr connect {harness} --launch")
     _check_router(harness, doc, model)
     for note in notes:
@@ -854,7 +1007,10 @@ def _launch(harness, argv, doc, gateway, model, token, notes, dry_run, settings=
         if settings is not None:
             hc.write_private(path, json.dumps(settings, indent=2))
         _probe_or_say_why(gateway, harness, model, token, doc, written=False)
-        child = subprocess.Popen([found, *argv[1:]])
+        env = dict(os.environ) if env is None else env
+        where = where or Path.cwd()
+        echo(hs.receipt(where, hs.home_of(harness, env), gateway, model))
+        child = subprocess.Popen([found, *argv[1:]], cwd=where, env=env)
 
         # Ctrl-C belongs to the harness while it runs, and a closed terminal or a
         # stop reaches it through this process, which outlives it to remove the
@@ -954,11 +1110,14 @@ def _vsr_codex_installed(env: dict[str, str]) -> bool:
     )
 
 
-def _vsr_claude_start(env, gateway, doc, vsr, from_env, key_env):
+def _vsr_claude_start(env, gateway, doc, vsr, from_env, key_env, key_command=None):
     """The runtime options to set, the installed plugin's id, and its current state,
     or no options with a line saying why vSR is left out. Read before anything is
     written, so a plugin that cannot be read or that holds a token is left alone."""
     options = _vsr_options(gateway, doc) if vsr else None
+    if options and key_command:
+        warning(_vsr_without_key(key_env))
+        return None, None, None
     if options and shutil.which("claude") is None:
         warning("vSR is not set up: claude is not on PATH.")
         return None, None, None
