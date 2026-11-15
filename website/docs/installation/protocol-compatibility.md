@@ -717,4 +717,6 @@ namespaces with a `tool_search` tool, which the Router does not support. For a
 Messages backend, also set `apply_patch_tool_type` to `null`, because Codex
 otherwise sends `apply_patch` as a custom tool. The `gpt-6` entries send tools
 in an `additional_tools` input item with `reasoning.context`, which the Router
-rejects.
+rejects. `vllm-sr connect codex` writes such a catalog: the bundled entries and
+one for the profile's model, with `apply_patch_tool_type` set to `null`
+whatever the backends; add an entry to it for each other name.
