@@ -19,8 +19,10 @@ func TestSessionPositionFactsGroupToolContinuations(t *testing.T) {
 		textMessage(llmprotocol.RoleAssistant, "calling tool"),
 		// Tool output text the client sent as user content continues the
 		// tool loop; it must not advance the turn index.
-		{Role: llmprotocol.RoleUser, WithToolResults: true,
-			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "tool output"}}},
+		{
+			Role: llmprotocol.RoleUser, WithToolResults: true,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "tool output"}},
+		},
 		textMessage(llmprotocol.RoleUser, "second question"),
 	}}}
 
