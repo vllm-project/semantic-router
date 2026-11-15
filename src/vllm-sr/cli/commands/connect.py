@@ -727,6 +727,13 @@ def _status_probe(entry: dict, env: dict[str, str]) -> dict[str, str]:
     return {"state": "ok", "detail": f"model {result.model or 'not reported'}"}
 
 
+def _delegate(model: str | None, session: str | None) -> str:
+    """A memory model as status shows it: the session's, written as its name."""
+    if not model:
+        return "not set by connect"
+    return f"{model} (the session model)" if model == session else model
+
+
 def _show_status(entry: dict) -> None:
     harness = entry["harness"]
     if not entry["connected"]:
@@ -763,7 +770,7 @@ def _show_status(entry: dict) -> None:
     if codex:
         rows += [
             ("review model", entry["review_model"] or "the session model"),
-            ("memory model", entry["memory_model"] or "not set by connect"),
+            ("memory model", _delegate(entry["memory_model"], entry["model"])),
         ]
     rows += [
         ("context window", f"{window:,} tokens" if window else "not set"),

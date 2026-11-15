@@ -2128,7 +2128,8 @@ def test_codex_connect_sends_memories_to_the_memory_entrypoint(
             assert f"memories.{key}={json.dumps(value)}" in ran["args"]
         assert not home.exists()
     else:
-        catalog = json.loads((home / "vllm-sr.models.json").read_text())
+        name = "vllm-sr-app" if mode == "app" else "vllm-sr"
+        catalog = json.loads((home / f"{name}.models.json").read_text())
         written = home / ("config.toml" if mode == "app" else "vllm-sr.config.toml")
         assert tomllib.loads(written.read_text())["memories"] == wanted
     assert [
@@ -2148,7 +2149,7 @@ def test_codex_connect_sends_memories_to_the_memory_entrypoint(
         "vllm-sr/memory",
     )
     assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
-    assert not (home / "vllm-sr.models.json").exists()
+    assert not (home / f"{name}.models.json").exists()
 
 
 def test_a_recipe_that_drops_what_no_longer_fits_advertises_each_decisions_largest():
