@@ -1001,3 +1001,55 @@ def test_listener_names_are_unique():
         UserConfig(version="v0.5", listeners=listeners)
     listeners[1].name = "http-8001"
     assert len(UserConfig(version="v0.5", listeners=listeners).listeners) == 2
+
+
+@pytest.mark.parametrize(
+    "target, message",
+    [
+        (None, None),
+        ("amd/rocm-v1-private", None),
+        ("missing", "unknown entrypoint model"),
+        ("model-a", "unknown entrypoint model"),
+        ("vllm-sr/auto", "own model name"),
+    ],
+)
+def test_entrypoint_review_model_contract(target, message):
+    config = recipe_config()
+    config.entrypoints[1].review_model = target
+    errors = validate_user_config(config, log_summary=False)
+    review_errors = [
+        error for error in errors if error.field == "entrypoints[1].review_model"
+    ]
+    if message:
+        assert any(message in error.message for error in review_errors)
+    else:
+        assert not review_errors
+        assert (
+            config.model_dump(exclude_none=True)["entrypoints"][1].get("review_model")
+            == target
+        )
+
+
+def test_entrypoint_review_model_rejects_chains_and_cycles():
+    config = recipe_config()
+    config.entrypoints[1].review_model = "amd/rocm-v1-private"
+    config.entrypoints[0].review_model = "vllm-sr/auto"
+    errors = validate_user_config(config, log_summary=False)
+    assert any(
+        error.field == "entrypoints[1].review_model"
+        and "must not have a review_model" in error.message
+        for error in errors
+    )
+
+
+def test_entrypoint_review_model_is_normalized():
+    entry = Entrypoint(model_names=["main"], recipe="default", review_model=" review ")
+    assert entry.review_model == "review"
+    assert (
+        Entrypoint(
+            model_names=["main"], recipe="default", review_model=None
+        ).review_model
+        is None
+    )
+    with pytest.raises(PydanticValidationError, match="review_model"):
+        Entrypoint(model_names=["main"], recipe="default", review_model="  ")

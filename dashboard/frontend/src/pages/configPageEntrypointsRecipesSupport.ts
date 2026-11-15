@@ -12,6 +12,7 @@ export const DEFAULT_RECIPE_NAME = 'default'
 
 export interface EntrypointFormState {
   modelNames: string
+  reviewModel?: string
   recipe: string
 }
 
@@ -159,7 +160,41 @@ export function validateEntrypointForm(
     }
   }
 
-  return { model_names: modelNames, recipe }
+  const reviewModel = form.reviewModel?.trim()
+  const api = originalIndex === null ? 'chat' : config.entrypoints?.[originalIndex]?.api ?? 'chat'
+  if (reviewModel) {
+    if (modelNames.includes(reviewModel)) {
+      throw new Error('Reviews go to must name another entrypoint.')
+    }
+    const target = (config.entrypoints ?? []).find(
+      (entry, index) =>
+        index !== originalIndex &&
+        (entry.api ?? 'chat') === api &&
+        entry.model_names.includes(reviewModel),
+    )
+    if (!target) throw new Error(`Review entrypoint "${reviewModel}" does not exist.`)
+    if (target.review_model) throw new Error('A review entrypoint cannot have its own review_model.')
+  }
+  const originalNames =
+    originalIndex === null ? [] : config.entrypoints?.[originalIndex]?.model_names ?? []
+  for (const entry of config.entrypoints ?? []) {
+    if ((entry.api ?? 'chat') === api && entry.review_model && originalNames.includes(entry.review_model)) {
+      if (!modelNames.includes(entry.review_model)) {
+        throw new Error(`Keep review model name "${entry.review_model}" while another entrypoint uses it.`)
+      }
+      if (reviewModel) {
+        throw new Error('An entrypoint used for reviews cannot have its own review_model.')
+      }
+    }
+  }
+  const result: EntrypointConfig = {
+    ...(originalIndex === null ? {} : config.entrypoints?.[originalIndex]),
+    model_names: modelNames,
+    recipe,
+  }
+  delete result.review_model
+  if (reviewModel) result.review_model = reviewModel
+  return result
 }
 
 export function validateRecipeForm(

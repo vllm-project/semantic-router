@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // InferenceAPI identifies an inference contract independently of its HTTP path.
 // Chat and System One have separate routing namespaces; neither inherits the
@@ -79,4 +82,32 @@ func (c *RouterConfig) DefaultEntrypointNames() []string {
 		}
 	}
 	return append(marked, others...)
+}
+
+// ValidateReviewModels checks approval-review bindings in the public routing table.
+// Review targets use the same inference namespace and cannot delegate again.
+func (c *RouterConfig) ValidateReviewModels() error {
+	for index, entrypoint := range c.Entrypoints {
+		review := strings.TrimSpace(entrypoint.ReviewModel)
+		if review == "" {
+			continue
+		}
+		api := entrypoint.API
+		if api == "" {
+			api = ChatAPI
+		}
+		for _, name := range entrypoint.ModelNames {
+			if name == review {
+				return fmt.Errorf("entrypoints[%d].review_model: cannot reference its own model name %q", index, review)
+			}
+		}
+		target, ok := c.ResolveEntrypoint(api, review)
+		if !ok {
+			return fmt.Errorf("entrypoints[%d].review_model: unknown entrypoint model %q in %s API", index, review, api)
+		}
+		if strings.TrimSpace(target.ReviewModel) != "" {
+			return fmt.Errorf("entrypoints[%d].review_model: target %q must not have a review_model", index, review)
+		}
+	}
+	return nil
 }

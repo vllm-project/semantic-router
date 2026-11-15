@@ -334,6 +334,7 @@ entrypoints:
 | `entrypoints[].model_names` | The public model aliases. |
 | `entrypoints[].recipe` | The recipe those aliases enter. |
 | `entrypoints[].default` | Marks the default chat entrypoint. |
+| `entrypoints[].review_model` | Optional model name of another entrypoint in the same API namespace for agent approval reviews. The target cannot have its own `review_model`. See [Approve for me](agent-harness#approve-for-me-reviews). |
 | `recipes[]` | One recipe's policy: its signals, projections, decisions, algorithms, plugins, cache, learning and routing state. |
 
 Providers, stores and the model catalog's deployments can be shared without

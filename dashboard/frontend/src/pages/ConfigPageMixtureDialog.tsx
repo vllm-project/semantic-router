@@ -59,6 +59,7 @@ export default function ConfigPageMixtureDialog({
   const [primaryName, setPrimaryName] = useState(entrypoint?.model_names[0] ?? '')
   const [aliases, setAliases] = useState<string[]>(entrypoint?.model_names.slice(1) ?? [])
   const [aliasDraft, setAliasDraft] = useState('')
+  const [reviewModel, setReviewModel] = useState(entrypoint?.review_model ?? '')
   const [assignments, setAssignments] = useState<ModelAssignments>(() =>
     recipeAssignments(config, choice),
   )
@@ -125,7 +126,7 @@ export default function ConfigPageMixtureDialog({
 
   const publishConfigRecipe = (recipeName: string, publicNames: string[]): ConfigData => {
     const normalizedEntrypoint = validateEntrypointForm(
-      { modelNames: publicNames.join('\n'), recipe: recipeName },
+      { modelNames: publicNames.join('\n'), recipe: recipeName, reviewModel },
       config,
       models,
       entrypointIndex ?? null,
@@ -252,6 +253,29 @@ export default function ConfigPageMixtureDialog({
                 data-dialog-initial-focus
               />
             </label>
+            {choice?.bundle === undefined ? (
+              <label>
+                <span>Reviews go to</span>
+                <select
+                  value={reviewModel}
+                  onChange={(event) => setReviewModel(event.target.value)}
+                >
+                  <option value="">Session model</option>
+                  {(config.entrypoints ?? [])
+                    .filter(
+                      (candidate, index) =>
+                        index !== entrypointIndex &&
+                        !candidate.review_model &&
+                        (candidate.api ?? 'chat') === (entrypoint?.api ?? 'chat'),
+                    )
+                    .flatMap((candidate) => candidate.model_names)
+                    .filter((name) => ![primaryName.trim(), ...aliases].includes(name))
+                    .map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                </select>
+              </label>
+            ) : null}
             <label>
               <span>Recipe</span>
               <select

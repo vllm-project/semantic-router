@@ -357,11 +357,12 @@ type Program struct {
 // EntrypointDecl is the DSL form of one request-facing recipe binding.
 // Default marks the entrypoint of the default recipe.
 type EntrypointDecl struct {
-	API        string
-	ModelNames []string
-	Recipe     string
-	Default    bool
-	Pos        Position
+	API         string
+	ModelNames  []string
+	Recipe      string
+	Default     bool
+	ReviewModel string
+	Pos         Position
 }
 
 // RecipeDecl is an isolated routing scope. Program contains only recipe-local

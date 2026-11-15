@@ -101,6 +101,13 @@ entrypoints:
 
 ## Naming and validation rules
 
+Set `review_model` on an entrypoint to a model name from another entrypoint in
+the same API namespace. `vllm-sr connect codex` uses it for **Approve for me**
+reviews and hides the review entrypoint in the Codex model picker. Without it,
+Codex reviews with the session model. The target must exist, cannot be any of
+the entrypoint’s own model names, and cannot have a `review_model` itself.
+See the complete [Codex review configuration](../../installation/agent-harness#approve-for-me-reviews).
+
 Configuration loading rejects an entrypoint when:
 
 - `model_names` is empty or `recipe` names no configured recipe;

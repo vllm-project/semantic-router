@@ -324,6 +324,105 @@ Messages and an `openai` one only on Responses or Chat, so every call would be
 refused. The plan's usage limits apply to each call, and the login stays its
 owner's, as for Claude Code above.
 
+### Approve for me reviews
+
+`vllm-sr connect codex` keeps approval reviews on the gateway. Without an
+entrypoint's `review_model`, Codex's **Approve for me** uses the session model.
+The generated catalog contains only that selected model, so Codex cannot pick
+an unrelated bundled `codex-auto-review` model the gateway does not serve.
+
+To choose a separate reviewer, publish a second entrypoint and set the main
+entrypoint's `review_model` to one of its model names. This complete config
+answers on `gpt-6-luna` and reviews with Codex's own `codex-auto-review`, both
+on the caller's ChatGPT login:
+
+```yaml
+version: v0.5
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+    apis:
+      responses: {}
+providers:
+  defaults:
+    model: gpt-6-luna
+  models:
+    - name: gpt-6-luna
+      provider_model_id: gpt-6-luna
+      api_format: responses
+      context_window_size: 272000
+      backend_refs:
+        - name: chatgpt
+          endpoint: https://chatgpt.com/backend-api/codex
+          provider: openai
+          auth:
+            credential: caller
+    - name: codex-auto-review
+      provider_model_id: codex-auto-review
+      api_format: responses
+      context_window_size: 272000
+      backend_refs:
+        - name: chatgpt
+          endpoint: https://chatgpt.com/backend-api/codex
+          provider: openai
+          auth:
+            credential: caller
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: main
+    default: true
+    review_model: vllm-sr/review
+  - model_names: [vllm-sr/review]
+    recipe: review
+recipes:
+  - name: main
+    decisions:
+      - name: answer
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: gpt-6-luna}]
+  - name: review
+    decisions:
+      - name: approve
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: codex-auto-review}]
+global:
+  router:
+    learning:
+      enabled: true
+      protection:
+        enabled: true
+        scope: session
+        identity:
+          headers:
+            session: session-id
+            agent: thread-id
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+```
+
+Serve it, run `vllm-sr connect codex --config config.yaml`, then start
+`codex --profile vllm-sr` (or use `connect codex --launch`). Connect prints where reviews go and keeps its catalog and provider settings in
+separate profile files; `--undo` restores them.
+
+The catalog lists `vllm-sr/auto` and hides `vllm-sr/review`, setting the main
+model's `auto_review_model_override` to the review entrypoint. The review entry
+retains the base model's reasoning levels, defaults to `low` effort, and gets
+its own context window from the models its recipe can reach. Reviews use the
+ordinary Responses API, including function tools and JSON schema output;
+Responses Lite is not needed.
+
+Any other model can be the reviewer: point the review recipe at that model's
+provider binding instead. The target must be another entrypoint in the same
+API namespace, and must not have a `review_model` itself. A reviewer cannot
+refer back to the main entrypoint or form a chain. With several recipes,
+keep `default: true` on the main entrypoint. Re-run connect after changing the
+review binding to refresh the catalog.
+
 ### With the vSR plugin
 
 One listener can serve both systems: the routed model calls for Claude Code
@@ -537,18 +636,20 @@ the variable it names is unset, and `vllm-sr connect` writes it only when
 Codex does not know `vllm-sr/auto`, so without a catalog entry for it, it warns
 that it uses fallback model metadata. `vllm-sr connect` writes one next to the
 profile, `vllm-sr.models.json`, named by `model_catalog_json`. The file
-replaces Codex's own catalog, so it holds the installed Codex's bundled entries
-(from `codex debug models --bundled`) and adds one for the model: the `gpt-5.5`
-entry under the model's name, with tool search and the `apply_patch` custom
-tool turned off, since the Router does not serve the first and a Messages
-backend refuses the second, with Codex's fallback reasoning settings, and
-without `gpt-5.5`'s upgrade prompt and Fast tier, which belong to that model.
-Codex then edits files through its shell. A model Codex already knows, such as
-`--model gpt-5.5`, keeps its own entry, and no catalog is written. A Codex that
-bundles no `gpt-5.5` entry gets no catalog and keeps the warning. Run `vllm-sr connect codex` again after
-updating Codex, so the catalog follows its release. `vllm-sr connect` also sets
-`model_context_window` and the entry's window from the configuration, or from
-`--context-window`, so the budget follows your backends.
+replaces Codex's own catalog and holds only the selected gateway model and its
+optional review entrypoint. Both adapt the installed Codex's `gpt-5.5` entry
+(from `codex debug models --bundled`), with tool search and the `apply_patch`
+custom tool turned off, since the Router does not serve the first and a
+Messages backend refuses the second. The main entry uses Codex's fallback
+reasoning settings, without the base model's upgrade prompt and Fast tier.
+Codex then edits files through its shell. A name Codex already knows, such as
+`--model gpt-5.5`, gets the same gateway adaptation. A Codex that bundles no
+`gpt-5.5` entry gets no catalog and keeps the warning. Run `vllm-sr connect codex`
+again after updating Codex, so the catalog follows its release.
+`vllm-sr connect` also sets `model_context_window` and the main entry's window
+from the configuration, or from `--context-window`, so the budget follows your
+backends. See [Approve for me reviews](#approve-for-me-reviews) to select a
+reviewer.
 
 Codex 0.166 also says it runs without its shared background server: a profile,
 like `-c` overrides, starts a Codex process of its own. The session works as

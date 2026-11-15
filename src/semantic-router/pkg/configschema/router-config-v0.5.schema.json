@@ -487,6 +487,9 @@
         },
         "default": {
           "type": "boolean"
+        },
+        "review_model": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

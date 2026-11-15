@@ -1141,7 +1141,7 @@ def test_launch_starts_the_harness_through_the_gateway_and_writes_nothing(
     assert overrides["model_providers.vllm-sr.env_key"] == '"VLLM_SR_API_KEY"'
     assert overrides["model_context_window"] == "65536"
     assert ran["key"] == "sk-secret" and "sk-secret" not in " ".join(ran["args"])
-    assert [m["slug"] for m in ran["catalog"]["models"]] == ["gpt-5.5", "vllm-sr/auto"]
+    assert [m["slug"] for m in ran["catalog"]["models"]] == ["vllm-sr/auto"]
     assert not home.exists()
 
 
@@ -1202,16 +1202,14 @@ def test_codex_gets_a_catalog_entry_for_the_gateway_model(
         f"model_catalog_json = {json.dumps(str(catalog))}"
         in (tmp_path / "vllm-sr.config.toml").read_text()
     )
-    # every bundled entry, since the file replaces Codex's catalog, and this Codex's
-    # own gpt-5.5 entry under the gateway model's name, with what the Router cannot
-    # serve turned off, so Codex has metadata and does not warn
+    # Only the served model, adapted from the bundled base for the gateway.
     assert json.loads(catalog.read_text()) == {
         "models": [
-            BUNDLED_GPT_55,
             {
                 **BUNDLED_GPT_55,
                 "slug": "vllm-sr/auto",
                 "display_name": "vllm-sr/auto",
+                "visibility": "list",
                 "supports_search_tool": False,
                 "apply_patch_tool_type": None,
                 "supported_reasoning_levels": [],
@@ -1231,14 +1229,15 @@ def test_codex_gets_a_catalog_entry_for_the_gateway_model(
     assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
     assert not catalog.exists()
 
-    # a model this Codex knows keeps its own entry: no catalog, no warning
+    # A bundled-name collision still gets gateway metadata and a restricted catalog.
     result = CliRunner().invoke(
         main, [*args, "--model", "gpt-5.5", "--no-vsr", "--yes"]
     )
     assert result.exit_code == 0, result.output
-    assert not catalog.exists()
-    assert "model_catalog_json" not in (tmp_path / "vllm-sr.config.toml").read_text()
+    assert json.loads(catalog.read_text())["models"][0]["slug"] == "gpt-5.5"
+    assert json.loads(catalog.read_text())["models"][0]["supports_search_tool"] is False
     assert "does not know" not in result.output
+    assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
 
     monkeypatch.setattr("shutil.which", lambda _: None)
     result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes"])
@@ -1737,3 +1736,143 @@ def test_started_in_the_home_directory_the_user_settings_are_not_their_own_overr
     result = CliRunner().invoke(main, args)
     assert result.exit_code == 0, result.output
     assert "takes those over" not in result.output
+
+
+@pytest.mark.parametrize("model", ["vllm-sr/auto", "gpt-5.5", "codex-auto-review"])
+@pytest.mark.parametrize("review", [None, "vllm-sr/review"])
+def test_codex_catalog_exposes_only_gateway_models(model, review):
+    levels = [{"effort": "low", "description": "Fast review"}]
+    bundled = {
+        "models": [
+            {
+                **BUNDLED_GPT_55,
+                "supported_reasoning_levels": levels,
+                "auto_review_model_override": "unserved-reviewer",
+            },
+            {"slug": "codex-auto-review"},
+            {"slug": "gpt-6-sol"},
+        ]
+    }
+    before = json.dumps(bundled)
+    catalog = hc.codex_catalog(bundled, model, 64000, review, 16000)
+    entries = catalog["models"]
+    assert [e["slug"] for e in entries] == [model, *([review] if review else [])]
+    main = entries[0]
+    assert main["visibility"] == "list"
+    assert main["supports_search_tool"] is False
+    assert main["context_window"] == main["max_context_window"] == 64000
+    assert main["supported_reasoning_levels"] == []
+    if review:
+        assert main["auto_review_model_override"] == review
+        reviewer = entries[1]
+        assert reviewer["visibility"] == "hide"
+        assert reviewer["default_reasoning_level"] == "low"
+        assert reviewer["supported_reasoning_levels"] == levels
+        assert reviewer["context_window"] == reviewer["max_context_window"] == 16000
+        assert "auto_review_model_override" not in reviewer
+    else:
+        assert "auto_review_model_override" not in main
+    assert json.dumps(bundled) == before
+
+
+@pytest.mark.parametrize("launch", [False, True])
+@pytest.mark.parametrize("review", [False, True])
+def test_codex_connect_review_catalog_and_login_hint(
+    tmp_path, monkeypatch, harness_bin, launch, review
+):
+    monkeypatch.chdir(tmp_path)
+    home = tmp_path / "codex-home"
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    backend = {
+        "endpoint": "https://chatgpt.com/backend-api/codex",
+        "provider": "openai",
+        "auth": {"credential": "caller"},
+    }
+    doc = {
+        "version": "v0.5",
+        "providers": {
+            "defaults": {"model": "session"},
+            "models": [
+                {
+                    "name": "session",
+                    "context_window_size": 131072,
+                    "backend_refs": [backend],
+                },
+                {
+                    "name": "codex-auto-review",
+                    "context_window_size": 16384,
+                    "backend_refs": [backend],
+                },
+            ],
+        },
+        "entrypoints": [
+            {
+                "model_names": ["vllm-sr/auto"],
+                "recipe": "main",
+                "default": True,
+                **({"review_model": " vllm-sr/review "} if review else {}),
+            },
+            {"model_names": ["vllm-sr/review"], "recipe": "review"},
+        ],
+        "recipes": [
+            {
+                "name": name,
+                "decisions": [
+                    {
+                        "name": name,
+                        "priority": 1,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": model}],
+                    }
+                ],
+            }
+            for name, model in [("main", "session"), ("review", "codex-auto-review")]
+        ],
+    }
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump(doc))
+    args = [
+        "connect",
+        "codex",
+        "--config",
+        str(config),
+        "--base-url",
+        "http://localhost:8899",
+        "--context-window",
+        "8000",
+    ]
+    args += ["--launch", "--", "exec", "hi"] if launch else ["--yes", "--no-vsr"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == (3 if launch else 0), result.output
+    if launch:
+        catalog = json.loads(harness_bin.read_text())["catalog"]
+        assert not home.exists()
+    else:
+        catalog = json.loads((home / "vllm-sr.models.json").read_text())
+        assert not (home / "config.toml").exists()
+    assert [e["slug"] for e in catalog["models"]] == [
+        "vllm-sr/auto",
+        *(["vllm-sr/review"] if review else []),
+    ]
+    assert catalog["models"][0]["context_window"] == 8000
+    destination = "vllm-sr/review" if review else "vllm-sr/auto"
+    assert (
+        f"Approve for me reviews go to {destination} through the gateway."
+        in result.output
+    )
+    if review:
+        assert catalog["models"][1]["context_window"] == 16384
+        assert catalog["models"][0]["auto_review_model_override"] == destination
+        assert "To use the ChatGPT reviewer" not in result.output
+    else:
+        assert "auto_review_model_override" not in catalog["models"][0]
+        for part in [
+            "review_model: vllm-sr/review",
+            "recipe: review",
+            "name: codex-auto-review",
+            "auth: {credential: caller}",
+        ]:
+            assert part in result.output
+    if not launch:
+        assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
+        assert not (home / "vllm-sr.models.json").exists()
