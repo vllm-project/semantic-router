@@ -21,7 +21,7 @@ HOME_VARIABLES = {"claude-code": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME"}
 # longer than the harness waits for it (Codex 0.166:
 # model_providers.<id>.auth.timeout_ms), so a key the probe got reaches the
 # harness too.
-KEY_COMMAND_TIMEOUTS = {"codex": 5}
+KEY_COMMAND_TIMEOUTS = {"codex": 5, "pi": 10}
 KEY_COMMAND_TIMEOUT = 30
 
 

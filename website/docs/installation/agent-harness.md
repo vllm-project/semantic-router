@@ -128,7 +128,8 @@ The command shows the changes and asks before writing them:
   `x-api-key` beside the gateway's token.
 - Codex: the `~/.codex/vllm-sr.config.toml` profile, which holds a `vllm-sr`
   provider, selects it and turns off hosted web search, which the Router does
-  not serve. `~/.codex/config.toml` is not touched.
+  not serve. `~/.codex/config.toml` is not touched, unless `--app` asks for it
+  ([the Codex app](#the-codex-app)).
 
 It writes what it showed or nothing: a file that changes while the command
 waits, or while it writes the files before it, is refused, and when one file
@@ -196,8 +197,9 @@ vllm-sr connect status
 ```
 
 `--check` then runs the harness itself once through the gateway: `claude -p`
-with the settings the command wrote, or `codex exec --profile vllm-sr`, and
-with `--dry-run` the settings it would write, given for that run only. The
+with the settings the command wrote, `codex exec --profile vllm-sr`, or
+`pi --mode json --provider vllm-sr` ([Pi](#pi)), and with `--dry-run` the
+settings it would write, given for that run only. The
 harness works in a temporary directory, is asked to run `echo vsr-check` and
 answer with its output, and is stopped after 120 seconds. This spends a few
 short model calls on your login or key. The harness reads its own credentials
@@ -221,16 +223,18 @@ line, and a failed one fails the command:
   even after the steps above passed.
 
 `vllm-sr connect status` reads the undo records beside Claude Code's user and
-project settings and in the Codex home. For each connection it shows the files
-written, the gateway, the entrypoint, the review model (Codex), the context
+project settings, in the Codex home and in Pi's agent directory. For each
+connection it shows the files written, the gateway, the entrypoint, the review model (Codex), the context
 window and the login, whether each file still holds what connect wrote
 (`as written`, `changed` with the keys that differ, or `missing`; tables Codex
 appends to the profile count as written, as for `--undo`), and whether the
 gateway answers a basic reply now. That sends one short request with the key
 the harness would send and waits up to 5 seconds. It sends nothing, and says
 why, once Claude Code's settings name another gateway or model than connect
-wrote, or the Codex profile no longer holds what connect wrote, since the key
-they send may then be for another gateway. `--json` prints the same as JSON,
+wrote, or the Codex profile, Codex's shared `config.toml` (`--app`) or Pi's
+`models.json` no longer holds what connect wrote, since the key they send may
+then be for another gateway. A Pi connection fails when Pi's `auth.json` holds
+a key of its own for `vllm-sr`, which Pi sends in its place. `--json` prints the same as JSON,
 and the command exits with status 1 when a gateway check fails.
 
 ### Try it without writing anything
@@ -301,18 +305,58 @@ helper in place of the key or a variable, and the harness runs it:
   `command = "/bin/sh"` and `args = ["-c", "<the command>"]`, in place of
   `env_key`, which Codex 0.166 does not take beside it. Codex sends what it
   prints as the bearer key, waits up to 5 seconds for it, and runs it again
-  after five minutes and after a refused key.
+  after five minutes and after a refused key. Windows has no `/bin/sh`, so for
+  the Codex app on Windows use `--api-key-env`, or run its agent in WSL.
+- Pi: `"apiKey": "!<the command>"` for the `vllm-sr` provider in
+  `models.json`. Pi runs it in the system shell before each request, waits up
+  to 10 seconds for it, and sends what it prints as the bearer key.
 
 The command runs it only to probe the gateway, for `--check` and for
 `connect status`, and never prints or writes what it prints. A command that
 fails, prints nothing, or takes longer than the harness waits for it (5 seconds
-for Codex) stops it before anything is written. `--launch` passes
+for Codex, 10 for Pi) stops it before anything is written. `--launch` passes
 the same setting for that session and runs the command for its probe as the
 harness will, in the `--worktree` and with the `--home` given, so the key
 probed is the key the harness sends. `--undo` removes it with the rest. A
 gateway that takes the harness's own login has no key to fetch, so the option
 is refused there. The vSR plugin takes a stored key or a variable, not a
 command, so vSR is not set up with it.
+
+### The Codex app
+
+```bash
+vllm-sr connect codex --config codex.yaml --app --key-command "pass show vllm-sr/gateway"
+```
+
+The Codex app reads `~/.codex/config.toml` (`$CODEX_HOME/config.toml`), which
+also holds the app's own settings, and no profile: Codex 0.166 layers a
+`<name>.config.toml` profile over it only when `--profile` names one, and
+refuses a `profile` key in it. `--app` therefore writes the gateway there, as
+the default, in place of the profile:
+
+- the top-level `model`, `model_provider`, `model_context_window`,
+  `model_catalog_json` and `web_search`, and the `[model_providers.vllm-sr]`
+  table, with its `auth` table for `--key-command`. The catalog is
+  `vllm-sr-app.models.json`, so a profile's catalog is never replaced. A key of these that the
+  command has no value for, such as a `model_context_window` of yours, is taken out, since it would
+  describe another model.
+- every other line, comment and table stays as it is. A file it cannot edit
+  that way, such as one where a key it sets spans several lines or one that is
+  not valid TOML, is refused and left alone. Reading TOML needs Python 3.11 or
+  later.
+
+This changes the default for the Codex CLI too: every `codex` started without
+`--profile` uses the gateway, and the command says so before it writes and
+after. It never reads or writes `~/.codex/auth.json`. `--undo` gives each key
+and the provider table their value from before, leaves those changed since as
+they are, and keeps what you or Codex added. `--check` runs `codex exec`
+without `--profile`, and `connect status` lists the connection as
+`codex (config.toml, its default)`. `--launch` writes nothing, so it does not
+take `--app`.
+
+Restart the app afterwards: Codex reads `model_catalog_json` only when it
+starts. An app started from the desktop often does not see the variables your
+shell exports, so give it `--key-command` rather than `VLLM_SR_API_KEY`.
 
 ### Router settings for Claude Code
 
@@ -975,6 +1019,98 @@ usual.
 The Codex TUI sends a `namespace` tool on every turn. A Router that refuses
 namespace tools answers its first turn with `unsupported_tool`; on such a
 Router, run `codex exec` with `[features] multi_agent = false` instead.
+
+## Pi
+
+```bash
+export VLLM_SR_API_KEY=<the listener's API key>   # leave unset when it has none
+vllm-sr connect pi --config pi.yaml
+pi --provider vllm-sr --model vllm-sr/auto
+```
+
+[Pi](https://github.com/earendil-works/pi) reads custom providers from
+`models.json` in its agent directory, `~/.pi/agent` or `$PI_CODING_AGENT_DIR`.
+The command adds a `vllm-sr` provider there and leaves your other providers
+and keys as they are. It shows the change, writes it all or nothing, and
+`--undo` puts back the provider you had under that name, or removes it, as for
+the other harnesses. Pi is not made the default: select the provider as
+above, or with `/model`, where Ctrl+S saves it for new sessions.
+
+- Pi talks to the gateway over Chat Completions (`api: openai-completions`),
+  the API its documentation uses for OpenAI-compatible servers such as vLLM.
+  On it Pi keeps its own model ID on each reply and records the model ID the
+  reply names, the backend's `provider_model_id`, as `responseModel`.
+- The file holds no key. `apiKey` is `$VLLM_SR_API_KEY`, which Pi reads from its
+  environment before each request, or `!<the command>` with `--key-command`. A
+  listener without keys gets a placeholder value, since Pi lists a model only
+  once its provider has a key. A key Pi stored for `vllm-sr` in `auth.json`
+  wins over `apiKey`, so the command refuses to connect while one is there.
+- The model gets the context window the command works out as `contextWindow`
+  (Pi assumes 128,000 tokens without one), and `maxTokens: 32000`, the output
+  limit the command gives Claude Code. Pi lowers it for a request that leaves
+  less room in the window.
+- `compat.sendSessionAffinityHeaders` with `sessionAffinityFormat: "openrouter"`
+  has Pi send its session ID as `x-session-id`, which session protection reads.
+
+Pi accepts comments in `models.json`; a file with comments is refused rather
+than rewritten without them. The command probes `/v1/chat/completions` with a
+basic reply and a streamed tool loop. `--check` runs `pi --mode json` with only
+its `bash` tool, no session file, and no extensions, skills or instruction
+files. Pi has no allowlist for a single command, so it runs whatever the model
+asks for, in the check's empty temporary directory. With `--dry-run` the check
+gives Pi an agent directory of its own that holds only the `models.json` the
+command would write, so it runs without your Pi login and settings.
+
+There is no `--launch` for Pi: it reads providers only from `models.json`, so
+it cannot reach a gateway for one session without one being written. There is
+no vSR plugin for Pi. A gateway that presents each caller's own login upstream
+is refused, since Pi sends only the key `models.json` gives it.
+
+### Router settings for Pi
+
+```yaml
+global:
+  router:
+    # only when a decision can pick an anthropic model
+    allow_lossy_translation: [reasoning.signature]
+    learning:
+      enabled: true
+      protection:
+        enabled: true
+        scope: session
+        identity:
+          headers:
+            session: x-session-id
+```
+
+Pi names no subagent, and it sends its own output limit
+(`max_completion_tokens`), so decisions need no `default_max_tokens`. The
+command reports what the configuration given with `--config` lacks of these.
+
+### Pi settings by hand
+
+The command writes this provider into `models.json`; these settings follow the
+`models.json` reference of Pi 1.5.2:
+
+```json
+{
+  "providers": {
+    "vllm-sr": {
+      "name": "vLLM Semantic Router",
+      "baseUrl": "http://localhost:8899/v1",
+      "api": "openai-completions",
+      "apiKey": "$VLLM_SR_API_KEY",
+      "compat": {
+        "sendSessionAffinityHeaders": true,
+        "sessionAffinityFormat": "openrouter"
+      },
+      "models": [
+        { "id": "vllm-sr/auto", "maxTokens": 32000, "contextWindow": 131072 }
+      ]
+    }
+  }
+}
+```
 
 ## Set budgets before running a task
 
