@@ -1,0 +1,94 @@
+{
+  "name": "vllm-sr-vscode",
+  "displayName": "vLLM Semantic Router",
+  "description": "Chat in VS Code with the models a vLLM Semantic Router gateway publishes, such as vllm-sr/auto, and see which model answered.",
+  "version": "0.1.0",
+  "publisher": "vllm-project",
+  "private": true,
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/vscode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vllm-project/semantic-router.git",
+    "directory": "src/agent-harness/vscode"
+  },
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "main": "./out/extension.js",
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "tsc -p . && node --test out/test/gateway.test.js",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/vscode": "1.104.0",
+    "typescript": "5.9.3"
+  },
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "vllm-sr",
+        "displayName": "vLLM Semantic Router"
+      }
+    ],
+    "commands": [
+      {
+        "command": "vllm-sr.setApiKey",
+        "title": "Set Gateway API Key",
+        "category": "vLLM Semantic Router"
+      },
+      {
+        "command": "vllm-sr.clearApiKey",
+        "title": "Clear Gateway API Key",
+        "category": "vLLM Semantic Router"
+      },
+      {
+        "command": "vllm-sr.refreshModels",
+        "title": "Refresh Models",
+        "category": "vLLM Semantic Router"
+      },
+      {
+        "command": "vllm-sr.showLog",
+        "title": "Show Log",
+        "category": "vLLM Semantic Router"
+      }
+    ],
+    "configuration": {
+      "title": "vLLM Semantic Router",
+      "properties": {
+        "vllm-sr.gatewayUrl": {
+          "type": "string",
+          "default": "http://localhost:8899",
+          "scope": "machine",
+          "markdownDescription": "The gateway's inference address, without `/v1`. A workspace cannot change it, so a workspace cannot send your API key elsewhere."
+        },
+        "vllm-sr.models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Model IDs from the gateway's `GET /v1/models` to show in the chat model picker, in this order. Empty shows every entrypoint the gateway publishes, such as `vllm-sr/auto`."
+        },
+        "vllm-sr.maxInputTokens": {
+          "type": "integer",
+          "minimum": 1024,
+          "default": 128000,
+          "markdownDescription": "The prompt size VS Code fits each request into. The gateway does not publish context windows, so set it to the smallest one among the models an entrypoint can reach."
+        },
+        "vllm-sr.maxOutputTokens": {
+          "type": "integer",
+          "minimum": 256,
+          "default": 16384,
+          "markdownDescription": "The reply size VS Code is told to expect. It is not sent to the gateway."
+        }
+      }
+    }
+  }
+}
