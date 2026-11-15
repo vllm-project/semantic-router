@@ -17,12 +17,13 @@ from pathlib import Path
 import click
 import yaml
 
+from cli import harness_check as hk
 from cli import harness_connect as hc
 from cli import harness_router_check as rc
 from cli.chat_client import resolve_chat_base_url
 from cli.runtime_management_config import _configured_management_port
 from cli.runtime_stack import resolve_runtime_stack
-from cli.terminal import echo, heading, output_width, success, warning
+from cli.terminal import echo, fields, heading, output_width, success, warning
 
 # The vSR plugin's marketplace: this repository on GitHub.
 VSR_SOURCE = "vllm-project/semantic-router"
@@ -96,6 +97,14 @@ def _options(command):
             ),
             click.option("--yes", is_flag=True, help="Write without asking."),
             click.option(
+                "--check",
+                is_flag=True,
+                help="Then run the harness itself once on a tiny task through the"
+                " gateway, with what was written (or, with --dry-run, would be), and"
+                " report each step. Spends a few short model calls on your login or"
+                " key.",
+            ),
+            click.option(
                 "--launch",
                 is_flag=True,
                 help="Start the harness through the gateway for this session only, writing"
@@ -138,6 +147,7 @@ def claude_code(
     yes,
     vsr,
     vsr_source,
+    check,
     launch,
     harness_args,
     scope,
@@ -146,7 +156,7 @@ def claude_code(
     """Route Claude Code's model calls through the gateway."""
     env = dict(os.environ)
     path = hc.claude_settings_path(scope, Path.cwd(), env)
-    _check_launch(launch, harness_args, undo, status_line)
+    _check_launch(launch, harness_args, undo, status_line, check)
     if undo:
         _undo(path.parent)
         return
@@ -204,6 +214,7 @@ def claude_code(
     plan = _vsr_claude_plan(
         options, plugin_id, install, api_key_env if from_env else None
     )
+    secrets = [token] if from_env else []
     if not _run(
         "claude-code",
         changes,
@@ -216,6 +227,17 @@ def claude_code(
         plan,
         model,
     ):
+        if check:
+            text = hc.set_json_env("", values)
+            _check(
+                "claude-code",
+                lambda private, _: hk.claude_argv(
+                    _private(private, "settings.json", text)
+                ),
+                env,
+                secrets,
+                written=False,
+            )
         return
     if options:
         before = state[0] if state else None
@@ -256,6 +278,9 @@ def claude_code(
             " the real window."
         )
     _probe_or_say_why(gateway, "claude-code", model, token, doc)
+    if check:
+        settings = path.absolute()  # the harness runs in a directory of its own
+        _check("claude-code", lambda *_: hk.claude_argv(settings), env, secrets)
     echo("Start a new Claude Code session to use it.")
 
 
@@ -278,6 +303,7 @@ def codex(
     yes,
     vsr,
     vsr_source,
+    check,
     launch,
     harness_args,
     profile,
@@ -285,7 +311,7 @@ def codex(
     """Route Codex CLI through the gateway with a profile of its own."""
     env = dict(os.environ)
     home = hc.codex_home(env)
-    _check_launch(launch, harness_args, undo)
+    _check_launch(launch, harness_args, undo, check=check)
     if undo:
         _undo(home)
         return
@@ -376,7 +402,24 @@ def codex(
     if options:
         # the vSR plugin's own settings: connect owns the runtime keys, the rest stays
         changes.append(hc.Change(home / "vsr.json", "json", options))
+    secrets = [token] if from_env else []
+    # only the catalog sends reviews to the review entrypoint
+    reviewer = review_model if catalog else None
     if not _run("codex", changes, home, "", doc, dry_run, yes, notes, plan, model):
+        if check:
+            overrides = hc.codex_launch_args(
+                gateway, model, key_env, context_window, login
+            )
+
+            def unwritten(private: Path, work: Path) -> list[str]:
+                config = list(overrides)
+                if catalog:
+                    text = json.dumps(catalog, indent=2)
+                    found = _private(private, "models.json", text)
+                    config += ["-c", f"model_catalog_json={json.dumps(str(found))}"]
+                return hk.codex_argv(config, work, bool(reviewer))
+
+            _check("codex", unwritten, env, secrets, False, reviewer, gateway)
         return
     if options and _vsr_step(lambda: [_must(argv, env) for argv in install], plan):
         success(
@@ -403,7 +446,175 @@ def codex(
             " it the gateway's."
         )
     _probe_or_say_why(gateway, "codex", model, token, doc)
+    if check:
+        _check(
+            "codex",
+            lambda _, work: hk.codex_argv(["--profile", profile], work, bool(reviewer)),
+            env,
+            secrets,
+            True,
+            reviewer,
+            gateway,
+        )
     echo(f"Start Codex with: codex --profile {profile}")
+
+
+# Seconds the status waits for the gateway's basic reply.
+STATUS_PROBE_TIMEOUT = 5
+
+
+@connect.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Print the status as JSON.")
+def status(as_json):
+    """Show what connect manages for each harness now, and whether it still holds.
+
+    Read from the undo records beside Claude Code's settings (user and project)
+    and in the Codex home; the gateway gets one short request per connection.
+    """
+    env = dict(os.environ)
+    cwd = Path.cwd()
+    places = {
+        "claude-code": [
+            hc.claude_settings_path(scope, cwd, env).parent
+            for scope in ("user", "project")
+        ],
+        "codex": [hc.codex_home(env)],
+    }
+    found = []
+    for harness, listed in places.items():
+        folders = list(dict.fromkeys(folder.resolve() for folder in listed))
+        entries = [
+            {
+                "harness": harness,
+                "connected": True,
+                "record": str(folder / hc.MANIFEST),
+                **entry,
+            }
+            for folder in folders
+            for entry in _connections(folder)
+            if entry["harness"] == harness
+        ]
+        for entry in entries:
+            entry["probe"] = _status_probe(entry, env)
+        found += entries or [
+            {
+                "harness": harness,
+                "connected": False,
+                "looked_in": [str(folder) for folder in folders],
+            }
+        ]
+    if as_json:
+        echo(json.dumps({"connections": found}, indent=2))
+        return
+    for entry in found:
+        _show_status(entry)
+
+
+def _connections(folder: Path) -> list[dict]:
+    try:
+        return hc.connections(folder)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise click.ClickException(
+            f"cannot read {folder / hc.MANIFEST}: {exc!r}"
+        ) from exc
+
+
+def _status_probe(entry: dict, env: dict[str, str]) -> dict[str, str]:
+    """The gateway's basic reply now, sent with the key the harness would send,
+    while the harness still sends to the gateway and model connect wrote: a key
+    the settings now hold for another gateway never goes to the one recorded."""
+    harness, gateway, model = entry["harness"], entry["gateway"], entry["model"]
+    if not gateway or not model:
+        return {"state": "not probed", "detail": "the record names no gateway or model"}
+    if entry["login"] == "own login":
+        name = HARNESS_LOGINS[harness][0]
+        return {
+            "state": "not probed",
+            "detail": f"the gateway answers only on the login {name} itself sends",
+        }
+    # the profile is the one file of a Codex connection that says where it goes
+    if harness == "codex" and any(
+        item["state"] != "as written"
+        for item in entry["files"]
+        if item["path"].endswith(".config.toml")
+    ):
+        return {
+            "state": "not probed",
+            "detail": "the profile no longer holds what connect wrote, so no key is"
+            f" sent to {gateway}",
+        }
+    key_env = entry.get("key_env")
+    if key_env and not env.get(key_env):
+        return {
+            "state": "not probed",
+            "detail": f"${key_env} is not set, and Codex sends the key from it",
+        }
+    token = env.get(key_env) if key_env else hc.NO_KEY
+    if harness == "claude-code":
+        # where to, for which model and with which key, from one read of the settings
+        recorded = {"ANTHROPIC_BASE_URL": gateway, "ANTHROPIC_MODEL": model}
+        keys = dict.fromkeys((*recorded, hc.TOKEN_KEY), "")
+        settings = hc.Change(Path(entry["settings"]), "json-env", keys)
+        try:
+            now = settings.raw(settings.old_text())
+        except ValueError:
+            now = {}
+        if moved := [key for key, value in recorded.items() if now.get(key) != value]:
+            return {
+                "state": "not probed",
+                "detail": f"the settings no longer hold the {' and '.join(moved)}"
+                f" connect wrote, so their key is not sent to {gateway}",
+            }
+        token = now[hc.TOKEN_KEY] or hc.NO_KEY
+    result = rc.basic_reply(gateway, harness, model, token, STATUS_PROBE_TIMEOUT)
+    if not result.ok:
+        return {"state": "failed", "detail": hk.shown(result.detail, [token])}
+    return {"state": "ok", "detail": f"model {result.model or 'not reported'}"}
+
+
+def _show_status(entry: dict) -> None:
+    harness = entry["harness"]
+    if not entry["connected"]:
+        echo(f"{harness}: not connected (no record in {', '.join(entry['looked_in'])})")
+        return
+    name = HARNESS_LOGINS[harness][0]
+    codex = harness == "codex"
+    where = f"profile {entry['profile']}" if codex else f"{entry['scope']} scope"
+    heading(f"{harness} ({where})")
+    window = entry["context_window"]
+    login = {
+        "own login": f"{name}'s own login",
+        "no key": "no key",
+        "gateway key": (
+            f"gateway key from ${entry['key_env']}"
+            if codex
+            else "gateway key, in the settings"
+        ),
+    }[entry["login"]]
+    rows = [
+        ("record", entry["record"]),
+        ("gateway", entry["gateway"] or "not recorded"),
+        ("model", entry["model"] or "not recorded"),
+    ]
+    if codex:
+        rows.append(("review model", entry["review_model"] or "the session model"))
+    rows += [
+        ("context window", f"{window:,} tokens" if window else "not set"),
+        ("login", login),
+    ]
+    for index, item in enumerate(entry["files"]):
+        state = item["state"]
+        if item.get("changed"):
+            state += f": {', '.join(item['changed'])}"
+        rows.append(("files" if index == 0 else "", f"{item['path']}: {state}"))
+    if entry.get("plugins"):
+        rows.append(("vSR plugin", ", ".join(entry["plugins"])))
+    probe = entry["probe"]
+    rows.append(("gateway now", f"{probe['state']}: {probe['detail']}"))
+    # not wrapped, so a path stays whole to copy
+    width = max(len(label) for label, _ in rows)
+    for label, value in rows:
+        echo(f"  {label:<{width}}  {value}")
 
 
 def _chatgpt_caller_backend(doc) -> bool:
@@ -462,13 +673,17 @@ def _run(
 ):
     """Show the changes, check the Router configuration, and write; False on a dry run."""
     heading(f"vllm-sr connect {harness}")
+    # what the diffs are worked out from: a file that holds anything else by the
+    # time it is written is refused, not merged
+    seen = {}
     try:
         for change in changes:
-            label = str(change.path)
+            seen[change.path] = old = hc.read(change.path)
+            label, new = str(change.path), change.new_text(old=old or "")
             diff = difflib.unified_diff(
-                change.shown(change.old_text(), key_label).splitlines(keepends=True),
-                change.shown(change.new_text(), key_label).splitlines(keepends=True),
-                fromfile=label if change.path.exists() else "/dev/null",
+                change.shown(old or "", key_label).splitlines(keepends=True),
+                change.shown(new, key_label).splitlines(keepends=True),
+                fromfile=label if old is not None else "/dev/null",
                 tofile=label,
             )
             echo("".join(diff) or f"{label}: no change")
@@ -489,19 +704,71 @@ def _run(
         return True
     if not yes and not click.confirm("Write these changes?", default=True):
         raise click.Abort()
-    manifest = hc.apply_changes(changes, manifest_dir)
+    try:
+        manifest = hc.apply_changes(changes, manifest_dir, seen)
+    except hc.StaleWriteError as exc:
+        raise click.ClickException(str(exc)) from exc
+    except OSError as exc:
+        raise click.ClickException(f"Writing failed: {exc}") from exc
     success(f"Written; undo with --undo (record: {manifest}).")
     return True
 
 
-def _check_launch(launch, harness_args, undo, status_line=False) -> None:
+def _check_launch(launch, harness_args, undo, status_line=False, check=False) -> None:
     if harness_args and not launch:
         raise click.UsageError(
             "arguments after -- go to the harness only with --launch"
         )
+    if launch and check:
+        raise click.UsageError(
+            "--launch starts the harness itself, so it does not take --check"
+        )
+    if undo and check:
+        raise click.UsageError(
+            "--undo leaves nothing to check, so it does not take --check"
+        )
     if launch and (undo or status_line):
         flag = "--undo" if undo else "--status-line"
         raise click.UsageError(f"--launch writes nothing, so it does not take {flag}")
+
+
+def _private(directory: Path, name: str, text: str) -> Path:
+    """A file only its owner can read, in a temporary directory."""
+    hc.write_private(directory / name, text)
+    return directory / name
+
+
+def _check(
+    harness, argv_for, env, secrets, written=True, review_model=None, gateway=""
+) -> None:
+    """Run the harness once on a tiny task through the gateway, in a temporary
+    directory, and report each step. argv_for(private, work) gives its command
+    line and writes any file it needs into the private directory, which the
+    harness does not work in."""
+    name = HARNESS_LOGINS[harness][0]
+    heading(f"vllm-sr connect {harness} --check")
+    echo(
+        f"Runs {name} once on a tiny task through the gateway. This spends a few"
+        " short model calls on your login or key."
+    )
+    with (
+        tempfile.TemporaryDirectory(prefix="vllm-sr-check-") as private,
+        tempfile.TemporaryDirectory(prefix="vllm-sr-check-") as work,
+    ):
+        argv = argv_for(Path(private), Path(work))
+        rows = hk.run(harness, argv, env, Path(work), secrets, review_model, gateway)
+    fields((row.name, f"{row.state:<13}{row.detail}".rstrip()) for row in rows)
+    if any(row.state == "failed" for row in rows):
+        raise click.ClickException(
+            f"The {name} check failed. "
+            + (
+                "The changes above stay written: fix what failed and run this"
+                " command again, or take them back with --undo."
+                if written
+                else "Nothing was written."
+            )
+        )
+    success(f"{name} works through the gateway.")
 
 
 def _context_window(doc, model, given) -> tuple[int | None, list[str]]:

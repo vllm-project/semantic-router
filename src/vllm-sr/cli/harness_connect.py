@@ -46,22 +46,26 @@ class Change:
     values: dict[str, str]
 
     def old_text(self) -> str:
-        return self.path.read_text(encoding="utf-8") if self.path.exists() else ""
+        return read(self.path) or ""
 
-    def new_text(self, values: dict[str, Any] | None = None) -> str:
-        """The file with values (default: the command's) set; None removes one."""
+    def new_text(
+        self, values: dict[str, Any] | None = None, old: str | None = None
+    ) -> str:
+        """old (default: the file now) with values (default: the command's) set;
+        None removes one."""
         values = self.values if values is None else values
+        old = self.old_text() if old is None else old
         if self.kind == "json-env":
-            return set_json_env(self.old_text(), values)
+            return set_json_env(old, values)
         if self.kind == "json":
-            held = _settings(self.old_text())
+            held = _settings(old)
             for key, value in values.items():
                 if value is None:
                     held.pop(key, None)
                 else:
                     held[key] = value
             return json.dumps(held, indent=2) + "\n" if held else ""
-        return values.get("file", self.old_text()) or ""
+        return values.get("file", old) or ""
 
     def raw(self, text: str) -> dict[str, Any]:
         """What each owned key holds in text, None when absent."""
@@ -445,16 +449,25 @@ def codex_model_overrides(cwd: Path) -> list[Path]:
 # --- writing and undo --------------------------------------------------------------
 
 
-def write_private(path: Path, text: str, *, always: bool = False) -> None:
-    """Write text; a file created here, and every file with always, is readable by its owner only.
+def read(path: Path) -> str | None:
+    """A file's text, None when it does not exist."""
+    return path.read_text(encoding="utf-8") if path.exists() else None
+
+
+def write_private(
+    path: Path, text: str, *, always: bool = False, mode: int | None = None
+) -> None:
+    """Write text with mode, by default the file's own; a file created here, and
+    every file with always, is readable by its owner only.
 
     The text goes to a file beside it that then replaces it, so a crash never
     leaves the settings half written.
     """
     path = path.resolve()  # a settings file linked from elsewhere stays a link
     path.parent.mkdir(parents=True, exist_ok=True)
-    keep = path.exists() and not always
-    mode = stat.S_IMODE(path.stat().st_mode) if keep else 0o600
+    if mode is None:
+        keep = path.exists() and not always
+        mode = stat.S_IMODE(path.stat().st_mode) if keep else 0o600
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -466,38 +479,101 @@ def write_private(path: Path, text: str, *, always: bool = False) -> None:
         raise
 
 
-def apply_changes(changes: list[Change], manifest_dir: Path) -> Path:
-    """Write each file and record what it owns for --undo.
+class StaleWriteError(ValueError):
+    """A file changed after the changes to it were worked out and shown."""
 
-    A second run keeps each key's first "before", so --undo still returns to
-    what was there before vllm-sr connect first touched it.
+
+def apply_changes(
+    changes: list[Change],
+    manifest_dir: Path,
+    seen: dict[Path, str | None] | None = None,
+) -> Path:
+    """Write each file and record what it owns for --undo, all or nothing.
+
+    seen holds each file as the preview read it, None when absent. A file that
+    no longer holds that is refused before anything is written, since the
+    changes shown were worked out from it. A second run keeps each key's first
+    "before", so --undo still returns to what was there before vllm-sr connect
+    first touched it.
     """
+    now = {change.path: read(change.path) for change in changes}
+    moved = [p for p, text in now.items() if seen is not None and text != seen.get(p)]
+    if moved:
+        raise StaleWriteError(
+            f"{', '.join(map(str, moved))} changed after the changes above were"
+            " worked out from it, so nothing was written. Run the command again to"
+            " see the changes against what it holds now."
+        )
     manifest_path = manifest_dir / MANIFEST
-    record = (
-        json.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest_path.exists()
-        else {"files": []}
-    )
+    held = read(manifest_path)
+    record = (json.loads(held) if held is not None else None) or {"files": []}
     by_path = {item["path"]: item for item in record["files"]}
+    writes = []
     for change in changes:
-        old, new = change.old_text(), change.new_text()
+        old = now[change.path]
+        new = change.new_text(old=old or "")
         item = by_path.get(str(change.path))
         if item is None:
             item = {
                 "path": str(change.path),
                 "kind": change.kind,
-                "created": not change.path.exists(),
+                "created": old is None,
                 "keys": {},
             }
             record["files"].append(item)
-        before, written = change.raw(old), change.raw(new)
+        before, written = change.raw(old or ""), change.raw(new)
         for key in change.values:
             entry = item["keys"].setdefault(key, {"before": before[key]})
             entry["written"] = written[key]
         # Claude Code's settings now hold the key, so they are made private too
-        write_private(change.path, new, always=change.kind == "json-env")
-    write_private(manifest_path, json.dumps(record, indent=2) + "\n", always=True)
+        writes.append((change.path, new, change.kind == "json-env", old))
+    record_text = json.dumps(record, indent=2) + "\n"
+    writes.append((manifest_path, record_text, True, held))
+    _write_all(writes)
     return manifest_path
+
+
+def _write_all(writes: list[tuple[Path, str, bool, str | None]]) -> None:
+    """Write each (path, text, always private, expected) in turn, where expected
+    is the file the text was worked out from, None when absent: a file that holds
+    anything else by then was edited meanwhile, and is refused. When one fails,
+    the ones already written get back their text and mode, and one created is
+    removed, except a file edited again after it was written."""
+    done = []
+    try:
+        for path, text, always, expected in writes:
+            before = read(path)
+            if before != expected:
+                raise StaleWriteError(f"{path} changed while the changes were written")
+            mode = stat.S_IMODE(path.stat().st_mode) if before is not None else None
+            write_private(path, text, always=always)
+            done.append((path, text, before, mode))
+    except BaseException as exc:
+        lost = []
+        for path, text, before, mode in reversed(done):
+            try:
+                if read(path) != text:
+                    lost.append(f"{path} (changed since it was written)")
+                elif before is None:
+                    path.resolve().unlink(missing_ok=True)
+                else:
+                    write_private(path, before, mode=mode)
+            except OSError:
+                lost.append(str(path))
+        if not isinstance(exc, (OSError, StaleWriteError)):
+            raise
+        kept = (
+            f"; {', '.join(lost)} could not be put back"
+            if lost
+            else ", so every file was left as it was"
+        )
+        error = StaleWriteError if isinstance(exc, StaleWriteError) else OSError
+        raise error(f"{exc}{kept}") from exc
+
+
+def _record(manifest_path: Path) -> dict | None:
+    text = read(manifest_path)
+    return json.loads(text) if text is not None else None
 
 
 def record_plugin(
@@ -506,11 +582,7 @@ def record_plugin(
     """Record a plugin's options as set through its harness's command: a second run
     keeps each option's first "before", as files do."""
     manifest_path = manifest_dir / MANIFEST
-    record = (
-        json.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest_path.exists()
-        else {"files": []}
-    )
+    record = _record(manifest_path) or {"files": []}
     keys = record.setdefault("plugins", {}).setdefault(plugin_id, {})
     for key, value in written.items():
         keys.setdefault(key, {"before": before.get(key)})["written"] = value
@@ -520,10 +592,7 @@ def record_plugin(
 def plugin_undo(manifest_dir: Path, inputs) -> list[tuple[str, dict]]:
     """For each recorded plugin, the options to set back: those still as written,
     each to its value before. `inputs(plugin_id)` reads what a plugin holds now."""
-    manifest_path = manifest_dir / MANIFEST
-    if not manifest_path.exists():
-        return []
-    plugins = json.loads(manifest_path.read_text(encoding="utf-8")).get("plugins", {})
+    plugins = (_record(manifest_dir / MANIFEST) or {}).get("plugins", {})
     undo = []
     for plugin_id, keys in plugins.items():
         now = inputs(plugin_id)
@@ -539,10 +608,11 @@ def plugin_undo(manifest_dir: Path, inputs) -> list[tuple[str, dict]]:
 def undo_changes(manifest_dir: Path) -> list[str]:
     """Return each owned key to what it held before, unless it was changed since."""
     manifest_path = manifest_dir / MANIFEST
-    if not manifest_path.exists():
+    record = _record(manifest_path)
+    if record is None:
         raise FileNotFoundError(f"nothing to undo: {manifest_path} does not exist")
     report = []
-    for item in json.loads(manifest_path.read_text(encoding="utf-8"))["files"]:
+    for item in record["files"]:
         path = Path(item["path"])
         if not path.exists():
             report.append(f"skipped {path}: it no longer exists")
@@ -552,18 +622,17 @@ def undo_changes(manifest_dir: Path) -> list[str]:
         restore = {}
         for key, entry in item["keys"].items():
             now, written = current[key], entry["written"]
-            if now == written:
-                restore[key] = entry["before"]
-            elif key == "file" and now and now.startswith(written):
-                # the Codex TUI appends tables of its own, such as [tui], to the profile
+            if not still_written(key, now, written):
+                what = path if key == "file" else f"{key} in {path}"
+                report.append(f"kept {what}: it was changed after vllm-sr connect")
+                continue
+            restore[key] = entry["before"]
+            if now != written:
                 tail = now[len(written) :].lstrip("\n")
                 before = entry["before"] or ""
                 if before and not before.endswith("\n"):
                     before += "\n"
                 restore[key] = before + tail
-            else:
-                what = path if key == "file" else f"{key} in {path}"
-                report.append(f"kept {what}: it was changed after vllm-sr connect")
         if not restore:
             continue
         text = probe.new_text(restore)
@@ -575,6 +644,137 @@ def undo_changes(manifest_dir: Path) -> list[str]:
             report.append(f"restored {path}")
     manifest_path.unlink()
     return report
+
+
+def still_written(key: str, now: Any, written: Any) -> bool:
+    """Whether an owned key, or a whole file, still holds what connect wrote. The
+    Codex TUI appends tables of its own, such as [tui], to the profile, which
+    leaves the profile connect's."""
+    return now == written or (
+        key == "file"
+        and isinstance(written, str)
+        and bool(now)
+        and now.startswith(written)
+    )
+
+
+# --- status ------------------------------------------------------------------------
+
+
+def connections(manifest_dir: Path) -> list[dict[str, Any]]:
+    """What the undo record in manifest_dir says connect set up, one entry for each
+    Claude Code settings file and each Codex profile: the gateway, model and
+    window written there, and whether each file written still holds them. No
+    entry holds a secret."""
+    record = _record(manifest_dir / MANIFEST) or {}
+    items = record.get("files") or []
+    found = []
+    for item in items:
+        path = Path(item["path"])
+        written = {key: entry.get("written") for key, entry in item["keys"].items()}
+        if item["kind"] == "json-env":
+            token = written.get(TOKEN_KEY)
+            window = str(written.get("CLAUDE_CODE_MAX_CONTEXT_TOKENS") or "")
+            found.append(
+                {
+                    "harness": "claude-code",
+                    "scope": (
+                        "project" if path.name == "settings.local.json" else "user"
+                    ),
+                    "gateway": written.get("ANTHROPIC_BASE_URL"),
+                    "model": written.get("ANTHROPIC_MODEL"),
+                    "context_window": int(window) if window.isdigit() else None,
+                    "login": _login(token == "", token not in (None, NO_KEY)),
+                    "settings": str(path),
+                    "files": [
+                        file_state(other)
+                        for other in items
+                        if other is item
+                        or Path(other["path"]).name == STATUS_LINE_SCRIPT
+                    ],
+                    "plugins": sorted(record.get("plugins") or {}),
+                }
+            )
+        elif item["kind"] == "file" and path.name.endswith(".config.toml"):
+            profile = profile_values(written.get("file") or "")
+            catalog = profile.get("model_catalog_json")
+            paired = [
+                other
+                for other in items
+                if other is item
+                or other["path"] == catalog
+                or Path(other["path"]).name == "vsr.json"
+            ]
+            found.append(
+                {
+                    "harness": "codex",
+                    "profile": path.name[: -len(".config.toml")],
+                    "gateway": str(profile.get("base_url") or "").removesuffix("/v1")
+                    or None,
+                    "model": profile.get("model"),
+                    "review_model": _review_model(items, catalog),
+                    "context_window": profile.get("model_context_window"),
+                    "login": _login(
+                        bool(profile.get("requires_openai_auth")),
+                        bool(profile.get("env_key")),
+                    ),
+                    "key_env": profile.get("env_key"),
+                    "files": [file_state(other) for other in paired],
+                }
+            )
+    return found
+
+
+def _login(own: bool, keyed: bool) -> str:
+    return "own login" if own else "gateway key" if keyed else "no key"
+
+
+def _review_model(items: list[dict], catalog: str | None) -> str | None:
+    """The reviewer the catalog connect wrote names for its main model."""
+    item = next((i for i in items if catalog and i["path"] == catalog), None)
+    try:
+        text = item["keys"]["file"]["written"] if item else None
+        models = json.loads(text or "{}").get("models") or [{}]
+    except (KeyError, ValueError, AttributeError):
+        return None
+    return models[0].get("auto_review_model_override")
+
+
+def file_state(item: dict) -> dict[str, Any]:
+    """A recorded file now: as written, changed (naming the owned keys that no
+    longer hold what connect wrote) or missing."""
+    path = Path(item["path"])
+    text = read(path)
+    if text is None:
+        return {"path": str(path), "state": "missing"}
+    probe = Change(path, item["kind"], dict.fromkeys(item["keys"], ""))
+    try:
+        now = probe.raw(text)
+        changed = [
+            key
+            for key, entry in item["keys"].items()
+            if not still_written(key, now[key], entry["written"])
+        ]
+    except ValueError:  # no longer the JSON object connect wrote into
+        changed = list(item["keys"])
+    if not changed:
+        return {"path": str(path), "state": "as written"}
+    keys = {} if item["kind"] == "file" else {"changed": changed}
+    return {"path": str(path), "state": "changed", **keys}
+
+
+def profile_values(text: str) -> dict[str, Any]:
+    """The settings of a profile connect wrote, one `key = <JSON>` a line. Its
+    provider table repeats no top-level key, so both share one dict."""
+    values = {}
+    for line in text.splitlines():
+        key, sep, value = line.partition(" = ")
+        if sep:
+            try:
+                values[key.strip()] = json.loads(value)
+            except ValueError:
+                continue
+    return values
 
 
 def token_from(env: dict[str, str], key_env: str) -> tuple[str, bool]:

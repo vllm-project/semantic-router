@@ -73,6 +73,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr connect`](#vllm-sr-connect) | Point an agent harness at a Router gateway (System Two). |
 | [`vllm-sr connect claude-code`](#vllm-sr-connect-claude-code) | Route Claude Code's model calls through the gateway. |
 | [`vllm-sr connect codex`](#vllm-sr-connect-codex) | Route Codex CLI through the gateway with a profile of its own. |
+| [`vllm-sr connect status`](#vllm-sr-connect-status) | Show what connect manages for each harness now, and whether it still holds. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
 | [`vllm-sr instance`](#vllm-sr-instance) | Inspect the serving state of an existing local instance. |
 | [`vllm-sr instance models`](#vllm-sr-instance-models) | Print actual native model cards for readiness checks, without inference. |
@@ -1002,6 +1003,7 @@ Route Claude Code's model calls through the gateway.
 | `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |
+| `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
 | `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--scope CHOICE` | user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.  [default: user] Choices: user, project. |
@@ -1028,9 +1030,26 @@ Route Codex CLI through the gateway with a profile of its own.
 | `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |
+| `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
 | `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--profile TEXT` | The Codex profile to write.  [default: vllm-sr] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect status` {#vllm-sr-connect-status}
+
+```text
+Usage: vllm-sr connect status [OPTIONS]
+```
+
+Show what connect manages for each harness now, and whether it still holds.
+
+Read from the undo records beside Claude Code's settings (user and project)
+and in the Codex home; the gateway gets one short request per connection.
+
+| Parameter | Description |
+| --- | --- |
+| `--json` | Print the status as JSON. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr dashboard` {#vllm-sr-dashboard}

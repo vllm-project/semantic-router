@@ -130,6 +130,13 @@ The command shows the changes and asks before writing them:
   provider, selects it and turns off hosted web search, which the Router does
   not serve. `~/.codex/config.toml` is not touched.
 
+It writes what it showed or nothing: a file that changes while the command
+waits, or while it writes the files before it, is refused, and when one file
+is refused or cannot be written, the files written before it get back their
+text and mode, except one edited again since, which is named and left as it
+is. Each file is replaced in one step and keeps its mode, except that Claude
+Code's settings become readable by you only.
+
 Neither harness knows `vllm-sr/auto`, so the command gives them its context
 window: the smallest `context_window_size` of the models the entrypoint can
 reach in the configuration, which are the models its recipe's decisions name
@@ -179,6 +186,51 @@ sits beside the settings as `vllm-sr-status-line.py`, and `--undo` puts back
 the status line you had before.
 `--undo` puts back what each key, or the Codex profile, held before the first
 run, leaves alone what changed since, and keeps everything else in the files.
+
+### Check and status
+
+```bash
+vllm-sr connect codex --config codex.yaml --check
+vllm-sr connect claude-code --config claude-code.yaml --dry-run --check
+vllm-sr connect status
+```
+
+`--check` then runs the harness itself once through the gateway: `claude -p`
+with the settings the command wrote, or `codex exec --profile vllm-sr`, and
+with `--dry-run` the settings it would write, given for that run only. The
+harness works in a temporary directory, is asked to run `echo vsr-check` and
+answer with its output, and is stopped after 120 seconds. This spends a few
+short model calls on your login or key. The harness reads its own credentials
+as it always does, and the lines shown hide the gateway key, the value of any
+variable whose name says it holds a secret, and bearer tokens. Each step gets a
+line, and a failed one fails the command:
+
+- `Harness`: found on `PATH`, with its version.
+- `Login`: the gateway answered, so the key or login the harness sent was
+  accepted.
+- `Tool round trip`: the command ran and the model answered with its output.
+- `Approval review`, for Codex with a `review_model`: Codex runs with
+  `--approve-for-me` and is asked to request approval for the command. The line
+  says whether a request for the review entrypoint appeared in the Router's
+  replay list, read from the management API on the gateway's host (port 8080
+  plus `VLLM_SR_PORT_OFFSET`, with `VSR_MGMT_TOKEN`). Without replay capture on
+  the review recipe, or when the model runs the command without asking, it
+  reads `not observed`, which does not fail the check.
+- `Exit`: the harness finished in time, exited with status 0, and reported no
+  failed turn or error result. A run that ends any other way fails the check,
+  even after the steps above passed.
+
+`vllm-sr connect status` reads the undo records beside Claude Code's user and
+project settings and in the Codex home. For each connection it shows the files
+written, the gateway, the entrypoint, the review model (Codex), the context
+window and the login, whether each file still holds what connect wrote
+(`as written`, `changed` with the keys that differ, or `missing`; tables Codex
+appends to the profile count as written, as for `--undo`), and whether the
+gateway answers a basic reply now. That sends one short request with the key
+the harness would send and waits up to 5 seconds. It sends nothing, and says
+why, once Claude Code's settings name another gateway or model than connect
+wrote, or the Codex profile no longer holds what connect wrote, since the key
+they send may then be for another gateway. `--json` prints the same as JSON.
 
 ### Try it without writing anything
 
