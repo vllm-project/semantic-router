@@ -295,6 +295,8 @@ func (r *OpenAIRouter) buildLooperRequest(
 		var encoded protocolcodec.RequestResult
 		encoded, err = engine.EncodeRequest(llmprotocol.OpenAIChatV1, *request, llmprotocol.Envelope{})
 		if err == nil {
+			// Chat drops a Responses blob the client replayed; the reply says so.
+			reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, encoded.Diagnostics...)
 			var openAIRequest *openai.ChatCompletionNewParams
 			openAIRequest, err = parseOpenAIRequest(encoded.Body)
 			if err == nil {
@@ -338,7 +340,8 @@ func (r *OpenAIRouter) buildLooperRequest(
 // carriesReasoningContinuity reports whether a request history or a reply holds
 // typed reasoning continuity blocks. Internal Looper calls are built from
 // openai-go parameters, which drop the blocks, so a tool turn would reach the
-// provider without the state it needs; those paths refuse instead.
+// provider without the state it needs; those paths refuse instead. Responses
+// blobs are excluded because Chat request encoding deliberately drops them.
 func carriesReasoningContinuity(request *llmprotocol.Request, response *llmprotocol.Response) bool {
 	if request != nil && llmprotocol.RequiredCapabilities(*request).Supports(llmprotocol.CapabilityReasoningContinuity) {
 		return true

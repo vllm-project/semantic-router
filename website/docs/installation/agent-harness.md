@@ -89,8 +89,8 @@ adds guard, shield, redact and check to it without a gateway. Route Claude Code
 or Codex CLI through the Router when your own models or provider keys should
 answer: the Router then chooses the model for every call, the main
 conversation included, while vSR keeps judging tool output and shell commands
-inside Claude Code. Codex reaches the Router the same way; its vSR plugin requires a checkout
-with Codex plugin support (PR #6413).
+inside Claude Code. Codex reaches the Router the same way, with its own vSR
+plugin.
 
 The two harnesses need different Router-wide settings: the losses the Router
 accepts, the headers that identify a session and a subagent, and defaults for
@@ -222,7 +222,7 @@ describes. An `anthropic` backend receives those as sent.
 
 Claude Code signed in to a Claude subscription can use the gateway without an
 API key: give every backend `auth: {credential: caller}`
-([Security Hardening](security-hardening#send-the-clients-own-login-to-anthropic)),
+([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)),
 and point Claude Code at the listener without a gateway token, so it sends its
 own login:
 
@@ -248,7 +248,10 @@ only on that login.
 The Router then routes each call among Claude models on that login, and
 Insights shows the session's calls with the model each decision picked. A
 model's `pricing` is the API's list price, not the plan's, so leave it out or
-read the cost as an API-price estimate.
+read the cost as an API-price estimate. The login stays its owner's: serve this
+to your own Claude Code, or to your organization's members, never to other
+people as a service
+([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)).
 
 ### Router settings for Codex CLI
 
@@ -287,6 +290,33 @@ ends in a `lossy_translation` error where the thinking block closes, and Codex
 reconnects until it gives up. The Responses endpoint needs the Router's
 Responses service and store. See [Codex CLI](protocol-compatibility#codex-cli)
 for the other fields Codex sends.
+
+### Codex on its own ChatGPT login
+
+Codex signed in with ChatGPT can use the gateway without an API key as well:
+give every backend `provider: openai`, the endpoint
+`https://chatgpt.com/backend-api/codex` and `auth: {credential: caller}`
+([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)),
+and add `requires_openai_auth = true` to the gateway's provider in the Codex
+profile, so Codex sends its own login with the request:
+
+```toml
+[model_providers.vllm-sr]
+name = "vLLM Semantic Router"
+base_url = "http://localhost:8899/v1"
+wire_api = "responses"
+requires_openai_auth = true
+```
+
+Keep `web_search = "disabled"` in the profile: the Router takes function tools
+only. `vllm-sr connect codex --config <your config>` writes this profile for
+such a configuration, with `requires_openai_auth` and without a key variable,
+and does not probe the gateway, which answers only on Codex's own login. Each
+`connect` command stops before writing anything for a gateway whose caller
+backends name the other provider: the Router takes an `anthropic` login only on
+Messages and an `openai` one only on Responses or Chat, so every call would be
+refused. The plan's usage limits apply to each call, and the login stays its
+owner's, as for Claude Code above.
 
 ### With the vSR plugin
 
@@ -338,8 +368,7 @@ models. When the API key variable is set it also passes `runtimeToken`, which
 Claude Code keeps in its credential store, not in `settings.json`; the preview
 names the variable and never shows the key. For Codex it writes
 `runtimeUrl` and `runtimeModel` to `$CODEX_HOME/vsr.json` (default
-`~/.codex/vsr.json`), keeping its other settings. Until the Codex plugin from
-PR #6413 is on main, point `--vsr-source` at a checkout that has it.
+`~/.codex/vsr.json`), keeping its other settings.
 
 Both harnesses preview everything with `--dry-run`, the plugin commands
 included, which run only when writing. `--undo` sets back the plugin options the
@@ -499,10 +528,25 @@ Leave `env_key` out for a listener without keys: Codex refuses to start while
 the variable it names is unset, and `vllm-sr connect` writes it only when
 `VLLM_SR_API_KEY` is set.
 
-Codex does not know `vllm-sr/auto`, so it warns that it uses fallback model
-metadata. `vllm-sr connect` sets `model_context_window` in the profile from the
-configuration, or from `--context-window`, so its budget follows your
-backends, though the warning stays.
+Codex does not know `vllm-sr/auto`, so without a catalog entry for it, it warns
+that it uses fallback model metadata. `vllm-sr connect` writes one next to the
+profile, `vllm-sr.models.json`, named by `model_catalog_json`. The file
+replaces Codex's own catalog, so it holds the installed Codex's bundled entries
+(from `codex debug models --bundled`) and adds one for the model: the `gpt-5.5`
+entry under the model's name, with tool search and the `apply_patch` custom
+tool turned off, since the Router does not serve the first and a Messages
+backend refuses the second, with Codex's fallback reasoning settings, and
+without `gpt-5.5`'s upgrade prompt and Fast tier, which belong to that model.
+Codex then edits files through its shell. A model Codex already knows, such as
+`--model gpt-5.5`, keeps its own entry, and no catalog is written. A Codex that
+bundles no `gpt-5.5` entry gets no catalog and keeps the warning. Run `vllm-sr connect codex` again after
+updating Codex, so the catalog follows its release. `vllm-sr connect` also sets
+`model_context_window` and the entry's window from the configuration, or from
+`--context-window`, so the budget follows your backends.
+
+Codex 0.166 also says it runs without its shared background server: a profile,
+like `-c` overrides, starts a Codex process of its own. The session works as
+usual.
 
 The Codex TUI sends a `namespace` tool on every turn. A Router that refuses
 namespace tools answers its first turn with `unsupported_tool`; on such a
