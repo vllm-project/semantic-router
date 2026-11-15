@@ -908,6 +908,12 @@ func (decoder *chatStreamDecoder) Finalize(reason error) ([]llmprotocol.Event, l
 }
 
 func (encoder *chatStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.Content != nil {
+		if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, []llmprotocol.Content{*event.Content}); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	if encoder.terminal {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already terminal", nil)
 	}
