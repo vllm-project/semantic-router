@@ -528,10 +528,25 @@ Leave `env_key` out for a listener without keys: Codex refuses to start while
 the variable it names is unset, and `vllm-sr connect` writes it only when
 `VLLM_SR_API_KEY` is set.
 
-Codex does not know `vllm-sr/auto`, so it warns that it uses fallback model
-metadata. `vllm-sr connect` sets `model_context_window` in the profile from the
-configuration, or from `--context-window`, so its budget follows your
-backends, though the warning stays.
+Codex does not know `vllm-sr/auto`, so without a catalog entry for it, it warns
+that it uses fallback model metadata. `vllm-sr connect` writes one next to the
+profile, `vllm-sr.models.json`, named by `model_catalog_json`. The file
+replaces Codex's own catalog, so it holds the installed Codex's bundled entries
+(from `codex debug models --bundled`) and adds one for the model: the `gpt-5.5`
+entry under the model's name, with tool search and the `apply_patch` custom
+tool turned off, since the Router does not serve the first and a Messages
+backend refuses the second, with Codex's fallback reasoning settings, and
+without `gpt-5.5`'s upgrade prompt and Fast tier, which belong to that model.
+Codex then edits files through its shell. A model Codex already knows, such as
+`--model gpt-5.5`, keeps its own entry, and no catalog is written. A Codex that
+bundles no `gpt-5.5` entry gets no catalog and keeps the warning. Run `vllm-sr connect codex` again after
+updating Codex, so the catalog follows its release. `vllm-sr connect` also sets
+`model_context_window` and the entry's window from the configuration, or from
+`--context-window`, so the budget follows your backends.
+
+Codex 0.166 also says it runs without its shared background server: a profile,
+like `-c` overrides, starts a Codex process of its own. The session works as
+usual.
 
 The Codex TUI sends a `namespace` tool on every turn. A Router that refuses
 namespace tools answers its first turn with `unsupported_tool`; on such a

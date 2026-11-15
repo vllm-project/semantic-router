@@ -572,8 +572,9 @@ tools or error translation.
   `response.completed` or `response.incomplete`. The Router accepts this
   difference while checking every other item field, output count, and output
   order. A non-empty string becoming missing, null, or empty still fails with
-  `stream_terminal_output_mismatch`. The field remains reported as `dropped`
-  during protocol translation.
+  `stream_terminal_output_mismatch`. For Responses clients, the Router keeps
+  the item-done ciphertext and reuses it in terminal output. Other client
+  formats omit it with the reasoning continuity diagnostic.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../api/headers).
@@ -595,11 +596,28 @@ The Router handles them as follows:
 | Field | Router behavior |
 | --- | --- |
 | `prompt_cache_key` | Forwarded to `openai` and `responses` backends. A route to an `anthropic` backend omits it and reports `dropped`, because Messages has no equivalent. A decision's `request_params.blocked_params` can remove it before dispatch. |
-| `include: ["reasoning.encrypted_content"]` | Accepted and not forwarded. The Router never relays provider-encrypted reasoning, so reasoning items carry no `encrypted_content`. Other `include` values remain unsupported. |
+| `include: ["reasoning.encrypted_content"]` | Forwarded to OpenAI-hosted Responses targets. Responses clients receive `encrypted_content` verbatim on reasoning items, including encrypted-only items. Other `include` values remain unsupported. |
 | `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
 | `input[].internal_chat_message_metadata_passthrough` | Accepted and not forwarded. Codex CLI 0.163 attaches it to every input message to record which instructions the message carries; it is client metadata, not model input. |
 | `text.verbosity` | Forwarded to `responses` backends, mapped to `verbosity` for `openai` Chat backends, and reported as `dropped` for `anthropic` Messages backends. The only accepted values are `low`, `medium`, and `high`. |
 | Omitted `max_output_tokens` | Codex CLI sends no output limit, so a route to an `anthropic` backend gets `max_tokens: 4096` as described above. A reasoning model can spend all of it before it answers, which Codex CLI reports as `Incomplete response returned, reason: max_output_tokens`. Set a positive integer `request_params.default_max_tokens` on the decisions that send Codex CLI to an `anthropic` backend. |
+
+Responses reasoning replay is projected separately for each selected backend,
+including fallbacks and shadows. A model is an OpenAI-hosted Responses target
+only when every endpoint in its pool has provider `type: openai` and a resolved
+address or profile base URL whose host is exactly `api.openai.com` or
+`chatgpt.com`, or ends in `.openai.azure.com`. A shadow checks only its own
+endpoint. Hosted targets receive encrypted reasoning items with `content: []`;
+unsigned plaintext-only reasoning items are omitted. Signed thinking stays
+subject to the signature capability check. Other targets receive the existing
+plaintext representation, with the Responses ciphertext and its `include`
+omitted. Internal Chat paths, including Looper, context recovery, and memory
+history, also drop Responses blobs and the include. Other reasoning continuity
+formats still fail closed on paths that cannot carry them. These omissions are
+reported through translation diagnostics.
+The Router's `previous_response_id` store retains the ciphertext with the item.
+A blob's format does not establish its account or model provenance; replay still
+requires a compatible provider context.
 
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-warnings`.
@@ -717,4 +735,6 @@ namespaces with a `tool_search` tool, which the Router does not support. For a
 Messages backend, also set `apply_patch_tool_type` to `null`, because Codex
 otherwise sends `apply_patch` as a custom tool. The `gpt-6` entries send tools
 in an `additional_tools` input item with `reasoning.context`, which the Router
-rejects.
+rejects. `vllm-sr connect codex` writes such a catalog: the bundled entries and
+one for the profile's model, with `apply_patch_tool_type` set to `null`
+whatever the backends; add an entry to it for each other name.

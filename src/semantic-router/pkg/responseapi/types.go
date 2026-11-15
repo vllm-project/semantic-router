@@ -159,7 +159,8 @@ type InputItem struct {
 	Output    json.RawMessage `json:"output,omitempty"`
 
 	// Summary contains reasoning summary blocks. Reasoning content uses Content.
-	Summary json.RawMessage `json:"summary,omitempty"`
+	Summary          json.RawMessage `json:"summary,omitempty"`
+	EncryptedContent string          `json:"encrypted_content,omitempty"`
 
 	// Status of the item
 	Status string `json:"status,omitempty"`
@@ -181,7 +182,8 @@ type OutputItem struct {
 	Content []ContentPart `json:"content,omitempty"`
 
 	// Summary is the public reasoning summary (for reasoning type).
-	Summary []ContentPart `json:"summary,omitempty"`
+	Summary          []ContentPart `json:"summary,omitempty"`
+	EncryptedContent string        `json:"encrypted_content,omitempty"`
 
 	// Status of the output item
 	Status string `json:"status,omitempty"`

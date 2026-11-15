@@ -73,8 +73,13 @@ test('a held then declined call draws a DECLINED card with the part, the risk me
 test('a held call that is still waiting draws a HELD card with the part', async ($, on) => {
   const clock = engine(on, { review: 0.98 })
   on('classic.PermissionRequest', () => YES)
-  on('tool.call', () => new Promise<{ result: object }>(() => {}))
-  void $.tool.call(PUSH)
+  // The call runs until the test ends it: one still open when the test ends is failed with no handler, and that
+  // failure fails the whole file.
+  let finish = (_: { result: object }) => {}
+  const running = new Promise<void>(ran =>
+    on('tool.call', () => new Promise<{ result: object }>(resolve => ((finish = resolve), ran()))),
+  )
+  const call = $.tool.call(PUSH)
   await clock.advance(1)
 
   const { texts, cards } = await rowTree($, toolRow(callOf('call-9', PUSH.command)))
@@ -82,6 +87,9 @@ test('a held call that is still waiting draws a HELD card with the part', async 
   expect(cards).toEqual([expect.objectContaining({ borderStyle: 'round', borderColor: 'warning' })])
   expect(texts).toContain('‖  HELD  git push --force origin main')
   expect(texts).toContain('waiting for you · looks destructive')
+  await running
+  finish({ result: { stdout: '' } })
+  await call
 })
 
 test('a held call the person let run draws an APPROVED card', async ($, on) => {

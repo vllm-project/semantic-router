@@ -293,6 +293,13 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItemKind(
 		}
 	case "reasoning":
 		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning}
+		encrypted, err := decodeResponsesEncryptedReasoning(item, decoder.policy, true)
+		if err != nil {
+			return err
+		}
+		if encrypted != nil {
+			event.Content = encrypted
+		}
 	case "image_generation_call":
 		event.Content = &llmprotocol.Content{
 			Kind:           llmprotocol.ContentGeneratedImage,
