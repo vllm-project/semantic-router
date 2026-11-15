@@ -227,7 +227,7 @@ describes. An `anthropic` backend receives those as sent.
 ### Claude Code on its own Claude login
 
 Claude Code signed in to a Claude subscription can use the gateway without an
-API key: give every backend `auth: {credential: caller}`
+API key: give the backends of its Claude models `auth: {credential: caller}`
 ([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)),
 and point Claude Code at the listener without a gateway token, so it sends its
 own login:
@@ -300,7 +300,7 @@ for the other fields Codex sends.
 ### Codex on its own ChatGPT login
 
 Codex signed in with ChatGPT can use the gateway without an API key as well:
-give every backend `provider: openai`, the endpoint
+give the backends of its OpenAI models `provider: openai`, the endpoint
 `https://chatgpt.com/backend-api/codex` and `auth: {credential: caller}`
 ([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)),
 and add `requires_openai_auth = true` to the gateway's provider in the Codex
@@ -445,6 +445,154 @@ model and a table of reviews; a session's routing history marks the turns
 whose actions were reviewed. See
 [Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
 for the fields and the API filters.
+
+### Mixing a login with other models
+
+A pool on the caller's login can sit beside models with a key of their own or
+none, so hard turns, easy turns and reviews each go to a model of their own:
+here hard work goes to `gpt-6.1-sol` and reviews to `codex-auto-review` on the
+ChatGPT login, and easy turns to a local model, with `gpt-6-luna` for the ones
+too long for it.
+
+```yaml
+version: v0.5
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+    apis:
+      responses: {}
+providers:
+  defaults:
+    model: gpt-6-luna
+  models:
+    - name: gpt-6.1-sol
+      provider_model_id: gpt-6.1-sol
+      api_format: responses
+      context_window_size: 500000
+      max_output_tokens: 128000
+      backend_refs:
+        - name: chatgpt
+          endpoint: https://chatgpt.com/backend-api/codex
+          provider: openai
+          auth:
+            credential: caller
+    - name: gpt-6-luna
+      provider_model_id: gpt-6-luna
+      api_format: responses
+      context_window_size: 272000
+      max_output_tokens: 128000
+      backend_refs:
+        - name: chatgpt
+          endpoint: https://chatgpt.com/backend-api/codex
+          provider: openai
+          auth:
+            credential: caller
+    - name: codex-auto-review
+      provider_model_id: codex-auto-review
+      api_format: responses
+      context_window_size: 272000
+      max_output_tokens: 128000
+      backend_refs:
+        - name: chatgpt
+          endpoint: https://chatgpt.com/backend-api/codex
+          provider: openai
+          auth:
+            credential: caller
+    - name: local-coder
+      provider_model_id: Qwen/Qwen3-Coder-30B-A3B-Instruct
+      api_format: chat_completions
+      context_window_size: 65536
+      max_output_tokens: 16384
+      backend_refs:
+        - name: local
+          endpoint: http://localhost:8000/v1
+          provider: vllm
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: agent
+    default: true
+    review_model: vllm-sr/review
+  - model_names: [vllm-sr/review]
+    recipe: review
+recipes:
+  - name: agent
+    candidate_requirements:
+      context: known_limits
+    signals:
+      keywords:
+        - name: hard_work
+          description: Work that needs the strongest model.
+          operator: OR
+          method: regex
+          keywords: ['(?i)\b(refactor|architecture|migrate|debug)\b']
+    decisions:
+      - name: hard
+        priority: 200
+        rules: {operator: AND, conditions: [{type: keyword, name: hard_work}]}
+        modelRefs: [{model: gpt-6.1-sol}]
+        plugins:
+          - type: request_params
+            configuration: {default_max_tokens: 32000}
+      - name: easy
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local-coder}, {model: gpt-6-luna}]
+        plugins:
+          - type: request_params
+            configuration: {default_max_tokens: 8192}
+  - name: review
+    decisions:
+      - name: approve
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: codex-auto-review}]
+global:
+  router:
+    learning:
+      enabled: true
+      protection:
+        enabled: true
+        scope: session
+        identity:
+          headers:
+            session: session-id
+            agent: thread-id
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+```
+
+- **Who pays.** The login reaches only the caller models. The local model
+  receives neither the login nor the `chatgpt-account-id` beside it, and
+  answers without one, so easy turns keep working when the plan's limit is
+  reached. One model keeps one payer: its backends all take the login or none
+  does. A decision may list models of both kinds, as `easy` does, and then
+  either may answer.
+- **What each decision may do.** The login rules bind only the decisions that
+  can reach a caller model: there no `system_prompt` and no in-process calls.
+  A decision whose models all take no login may use both, and a recipe-wide
+  `response_cache` stays refused, since a request may name a caller model
+  itself.
+- **Long conversations.** With `candidate_requirements.context: known_limits`
+  on the recipe, a request that no longer fits the local model's 65,536 tokens
+  goes to `gpt-6-luna`, the larger model of the same decision. That needs each
+  model's `context_window_size` and `max_output_tokens` and an output bound on
+  the decision (`request_params.default_max_tokens`, since Codex sends none).
+  `vllm-sr connect` then advertises 272,000 tokens, the smallest of each
+  decision's largest window, instead of the local model's, so Codex does not
+  compact at 65,536. Without `known_limits` a request too long for its model
+  is refused, and connect advertises the smallest window of all.
+- **What picks hard or easy.** A decision's rules read the last user message,
+  so a task keeps its decision through the tool calls that follow it, and the
+  session protection in `global.router.learning` keeps the session on its
+  model. A System One rule
+  reads more when its `input` asks for the history or tool results.
+
+Claude Code on a Claude login mixes the same way: Claude models with
+`provider: anthropic` and `auth: {credential: caller}` for hard turns and a
+local model for easy ones, on a `messages` listener.
 
 ### With the vSR plugin
 

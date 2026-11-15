@@ -505,26 +505,44 @@ def _check_launch(launch, harness_args, undo, status_line=False) -> None:
 
 
 def _context_window(doc, model, given) -> tuple[int | None, list[str]]:
-    """The flag, else the smallest window of the models the configuration lets
-    model reach, with a line on where it came from or why there is none."""
+    """The flag, else the window every request for model fits in this
+    configuration, with a line on where it came from or why there is none. That
+    is the smallest window of the models model can reach, or, when its recipe
+    drops the candidates a request no longer fits, the smallest over decisions
+    of the window that still leaves the decision the candidates it needs."""
     if given or doc is None:
         return given, []
-    names = rc.entrypoint_models(doc, model)
-    if not names:
+    groups = rc.entrypoint_candidates(doc, model)
+    if not groups:
         return None, [
             f"Context window: the configuration maps {model} to no recipe or model,"
             " so none was read from it."
         ]
-    windows = rc.context_windows(doc, names)
-    missing = [name for name, window in windows.items() if window is None]
-    if missing:
+    windows = rc.context_windows(doc, [n for names, _ in groups for n in names])
+    falls_over = rc.recipe_known_limits(doc, model)
+    if falls_over:
+        # a candidate without a known window never stays eligible
+        groups = [([n for n in names if windows[n]], need) for names, need in groups]
+    missing = sorted({n for names, _ in groups for n in names if windows[n] is None})
+    if missing or any(len(names) < need for names, need in groups):
         one = len(missing) == 1
         return None, [
-            f"Context window: not set: {', '.join(missing)}, which {model} can reach,"
-            f" {'states' if one else 'state'} no context_window_size. Set it"
-            f" {'there' if one else 'on each'}, or pass --context-window."
+            f"Context window: not set: {', '.join(missing) or 'a decision'}, which"
+            f" {model} can reach, {'states' if one else 'state'} no"
+            f" context_window_size. Set it {'there' if one else 'on each'}, or pass"
+            " --context-window."
         ]
-    window = min(windows.values())
+    if falls_over:
+        window = min(
+            sorted((windows[n] for n in names), reverse=True)[need - 1]
+            for names, need in groups
+        )
+        return window, [
+            f"Context window: {window:,} tokens, the most every decision still"
+            f" serves, since {model}'s recipe moves a long request to the"
+            " decision's larger models."
+        ]
+    window = min(windows[n] for names, _ in groups for n in names)
     return window, [
         f"Context window: {window:,} tokens, "
         + (
