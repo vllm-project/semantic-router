@@ -1214,6 +1214,21 @@ The command writes this provider into `models.json`; these settings follow the
 }
 ```
 
+## VS Code
+
+The [VS Code extension](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/vscode)
+puts the gateway's entrypoints, such as `vllm-sr/auto`, in VS Code's chat model
+picker, for chat and agent mode. It sends each request to the gateway's Chat
+Completions API, and the gateway does all the routing. After each reply the
+status bar shows the model the gateway chose, from `x-vsr-selected-model`, and
+its tooltip the decision, from `x-vsr-selected-decision`.
+
+It needs VS Code 1.104 or later and installs from source, as its README
+describes. Set `vllm-sr.gatewayUrl` to the inference address, run **vLLM
+Semantic Router: Set Gateway API Key** when the listener has `api_keys`, and
+set `vllm-sr.maxInputTokens` as the next section describes. Each VS Code window
+sends one `x-session-id`, and no `x-conversation-id`.
+
 ## Set budgets before running a task
 
 `GET /v1/models` discovers virtual names and routing metadata; it does not
