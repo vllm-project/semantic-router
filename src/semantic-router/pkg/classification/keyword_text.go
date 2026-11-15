@@ -84,6 +84,8 @@ func isUnspacedScript(r rune) bool {
 	return isCJK(r) || isSyllabicScript(r)
 }
 
+// isSyllabicScript reports letters of the unspaced syllabic scripts. Their
+// digits are excluded so a digit or identifier keyword keeps word boundaries.
 func isSyllabicScript(r rune) bool {
-	return unicode.In(r, unicode.Thai, unicode.Lao, unicode.Khmer, unicode.Myanmar)
+	return unicode.IsLetter(r) && unicode.In(r, unicode.Thai, unicode.Lao, unicode.Khmer, unicode.Myanmar)
 }

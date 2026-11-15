@@ -67,3 +67,55 @@ func TestKeywordClassifierUnspacedScriptsRegexWorkaround(t *testing.T) {
 		t.Fatalf("route=%q error=%v, want selected", name, err)
 	}
 }
+
+// The script exemption covers letters, not digits: a digit or identifier
+// keyword keeps its word boundaries, so it does not match inside a longer
+// number or identifier. Thai, Lao, Khmer and Myanmar digits behave the same.
+func TestKeywordClassifierUnspacedScriptDigitBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		word, text string
+		want       bool
+	}{
+		{"๓", "๑๓๕", false},
+		{"๓", "๓", true},
+		{"code๓", "prefixcode๓suffix", false},
+		{"code๓", "code๓", true},
+		{"໓", "໑໓໕", false}, // Lao
+		{"៣", "១៣៥", false}, // Khmer
+		{"၃", "၁၃၅", false}, // Myanmar
+	} {
+		t.Run(tc.word+"/"+tc.text, func(t *testing.T) {
+			c, err := NewKeywordClassifier([]config.KeywordRule{{Name: "selected", Operator: "OR", Keywords: []string{tc.word}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			name, confidence, err := c.Classify(tc.text)
+			if err != nil || (name == "selected") != tc.want {
+				t.Fatalf("word=%q input=%q route=%q confidence=%v error=%v want=%t", tc.word, tc.text, name, confidence, err, tc.want)
+			}
+		})
+	}
+}
+
+// Counting shares the matcher, so a digit keyword counts only where it stands
+// as a word of its own, not inside a longer number.
+func TestKeywordCountUnspacedScriptDigitBoundaries(t *testing.T) {
+	classifier := countingKeywordClassifier(t, config.KeywordRule{
+		Name: "digits", Operator: "OR", Keywords: []string{"๓"}, Count: &config.NumericPredicate{GTE: bound(0)},
+	})
+	for _, tc := range []struct {
+		text string
+		want float64
+	}{
+		{"๑๓๕", 0},
+		{"๓", 1},
+		{"๓ ๓", 2},
+	} {
+		t.Run(tc.text, func(t *testing.T) {
+			_, values, err := classifier.MatchAllWithHistory(tc.text, "")
+			if err != nil || values["digits"] != tc.want {
+				t.Fatalf("count(%q) = %v (%v), want %v", tc.text, values["digits"], err, tc.want)
+			}
+		})
+	}
+}
