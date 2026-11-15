@@ -18,6 +18,9 @@ type CanonicalEntrypoint struct {
 	Default bool `yaml:"default,omitempty"`
 	// ReviewModel names another entrypoint model for agent approval reviews.
 	ReviewModel string `yaml:"review_model,omitempty"`
+	// MemoryModel names another entrypoint model for agent memory extraction
+	// and consolidation.
+	MemoryModel string `yaml:"memory_model,omitempty"`
 }
 
 // CanonicalRecipe is a named routing profile: its signals, projections and
@@ -235,11 +238,12 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 			Recipe:      recipeName,
 			Default:     entrypoint.Default,
 			ReviewModel: strings.TrimSpace(entrypoint.ReviewModel),
+			MemoryModel: strings.TrimSpace(entrypoint.MemoryModel),
 		})
 	}
 	view := *cfg
 	view.Entrypoints = result
-	if err := view.ValidateReviewModels(); err != nil {
+	if err := view.ValidateDelegateModels(); err != nil {
 		return nil, err
 	}
 	for _, entrypoint := range view.EffectiveEntrypoints(ChatAPI) {
@@ -348,6 +352,7 @@ func canonicalEntrypointsFromRouterConfig(cfg *RouterConfig) []CanonicalEntrypoi
 			Recipe:      string(entrypoint.Recipe),
 			Default:     entrypoint.Default,
 			ReviewModel: strings.TrimSpace(entrypoint.ReviewModel),
+			MemoryModel: strings.TrimSpace(entrypoint.MemoryModel),
 		})
 	}
 	return entrypoints

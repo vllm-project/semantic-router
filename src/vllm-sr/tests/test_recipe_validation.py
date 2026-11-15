@@ -1003,6 +1003,10 @@ def test_listener_names_are_unique():
     assert len(UserConfig(version="v0.5", listeners=listeners).listeners) == 2
 
 
+DELEGATE_KEYS = ["review_model", "memory_model"]
+
+
+@pytest.mark.parametrize("key", DELEGATE_KEYS)
 @pytest.mark.parametrize(
     "target, message",
     [
@@ -1013,43 +1017,45 @@ def test_listener_names_are_unique():
         ("vllm-sr/auto", "own model name"),
     ],
 )
-def test_entrypoint_review_model_contract(target, message):
+def test_entrypoint_delegate_model_contract(key, target, message):
     config = recipe_config()
-    config.entrypoints[1].review_model = target
+    setattr(config.entrypoints[1], key, target)
     errors = validate_user_config(config, log_summary=False)
-    review_errors = [
-        error for error in errors if error.field == "entrypoints[1].review_model"
-    ]
+    found = [error for error in errors if error.field == f"entrypoints[1].{key}"]
     if message:
-        assert any(message in error.message for error in review_errors)
+        assert any(message in error.message for error in found)
     else:
-        assert not review_errors
-        assert (
-            config.model_dump(exclude_none=True)["entrypoints"][1].get("review_model")
-            == target
-        )
+        assert not found
+        assert config.model_dump(exclude_none=True)["entrypoints"][1].get(key) == target
 
 
-def test_entrypoint_review_model_rejects_chains_and_cycles():
+@pytest.mark.parametrize("key", DELEGATE_KEYS)
+@pytest.mark.parametrize("back", DELEGATE_KEYS)
+def test_entrypoint_delegate_model_rejects_chains_and_cycles(key, back):
     config = recipe_config()
-    config.entrypoints[1].review_model = "amd/rocm-v1-private"
-    config.entrypoints[0].review_model = "vllm-sr/auto"
+    setattr(config.entrypoints[1], key, "amd/rocm-v1-private")
+    setattr(config.entrypoints[0], back, "vllm-sr/auto")
     errors = validate_user_config(config, log_summary=False)
     assert any(
-        error.field == "entrypoints[1].review_model"
-        and "must not have a review_model" in error.message
+        error.field == f"entrypoints[1].{key}"
+        and "must not have a review_model or memory_model" in error.message
         for error in errors
     )
 
 
-def test_entrypoint_review_model_is_normalized():
-    entry = Entrypoint(model_names=["main"], recipe="default", review_model=" review ")
-    assert entry.review_model == "review"
-    assert (
-        Entrypoint(
-            model_names=["main"], recipe="default", review_model=None
-        ).review_model
-        is None
-    )
-    with pytest.raises(PydanticValidationError, match="review_model"):
-        Entrypoint(model_names=["main"], recipe="default", review_model="  ")
+def test_entrypoint_takes_reviews_and_memories_to_one_target():
+    config = recipe_config()
+    config.entrypoints[1].review_model = "amd/rocm-v1-private"
+    config.entrypoints[1].memory_model = "amd/rocm-v1-private"
+    errors = validate_user_config(config, log_summary=False)
+    assert not [e for e in errors if (e.field or "").startswith("entrypoints[1].")]
+
+
+@pytest.mark.parametrize("key", DELEGATE_KEYS)
+def test_entrypoint_delegate_model_is_normalized(key):
+    entry = Entrypoint(model_names=["main"], recipe="default", **{key: " review "})
+    assert getattr(entry, key) == "review"
+    none = Entrypoint(model_names=["main"], recipe="default", **{key: None})
+    assert getattr(none, key) is None
+    with pytest.raises(PydanticValidationError, match=key):
+        Entrypoint(model_names=["main"], recipe="default", **{key: "  "})

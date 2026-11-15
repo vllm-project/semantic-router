@@ -226,43 +226,98 @@ describe('entrypoints and recipes support', () => {
   })
 })
 
-it('saves and clears a review binding while retaining entrypoint metadata', () => {
+const delegates = [
+  { key: 'review_model', field: 'reviewModel', other: 'memory_model', noun: 'review' },
+  { key: 'memory_model', field: 'memoryModel', other: 'review_model', noun: 'memory' },
+] as const
+
+it.each(delegates)(
+  'saves and clears a $key binding while retaining entrypoint metadata',
+  ({ key, field }) => {
+    const config = baseConfig()
+    config.entrypoints = [
+      { model_names: ['main'], recipe: 'default', default: true, [key]: 'review' },
+      { model_names: ['review'], recipe: 'frontier' },
+    ]
+    expect(
+      validateEntrypointForm(
+        { modelNames: 'main', recipe: 'default', [field]: 'review' },
+        config,
+        models,
+        0,
+      ),
+    ).toEqual(config.entrypoints[0])
+    expect(
+      validateEntrypointForm(
+        { modelNames: 'main', recipe: 'default', [field]: '' },
+        config,
+        models,
+        0,
+      ),
+    ).toEqual({ model_names: ['main'], recipe: 'default', default: true })
+  },
+)
+
+it('sends reviews and memory calls to one entrypoint', () => {
   const config = baseConfig()
   config.entrypoints = [
-    { model_names: ['main'], recipe: 'default', default: true, review_model: 'review' },
+    { model_names: ['main'], recipe: 'default' },
     { model_names: ['review'], recipe: 'frontier' },
   ]
-  expect(validateEntrypointForm({ modelNames: 'main', recipe: 'default', reviewModel: 'review' }, config, models, 0))
-    .toEqual(config.entrypoints[0])
-  expect(validateEntrypointForm({ modelNames: 'main', recipe: 'default', reviewModel: '' }, config, models, 0))
-    .toEqual({ model_names: ['main'], recipe: 'default', default: true })
+  expect(
+    validateEntrypointForm(
+      { modelNames: 'main', recipe: 'default', reviewModel: 'review', memoryModel: 'review' },
+      config,
+      models,
+      0,
+    ),
+  ).toEqual({
+    model_names: ['main'],
+    recipe: 'default',
+    review_model: 'review',
+    memory_model: 'review',
+  })
 })
 
-it('rejects missing, self, chained and cyclic review bindings', () => {
-  const config = baseConfig()
-  config.entrypoints = [
-    { model_names: ['main', 'main-alias'], recipe: 'default' },
-    { model_names: ['review'], recipe: 'frontier' },
-  ]
-  const validate = (reviewModel: string, index = 0) => validateEntrypointForm(
-    { modelNames: config.entrypoints![index].model_names.join(','), recipe: config.entrypoints![index].recipe, reviewModel },
-    config, models, index,
-  )
-  expect(() => validate('missing')).toThrow('does not exist')
-  expect(() => validate('main-alias')).toThrow('another entrypoint')
-  config.entrypoints[1].review_model = 'main'
-  expect(() => validate('review')).toThrow('own review_model')
-  delete config.entrypoints[1].review_model
-  config.entrypoints[0].review_model = 'review'
-  expect(() => validate('main', 1)).toThrow('own review_model')
-})
+it.each(delegates)(
+  'rejects missing, self, chained and cyclic $key bindings',
+  ({ key, field, other }) => {
+    const config = baseConfig()
+    config.entrypoints = [
+      { model_names: ['main', 'main-alias'], recipe: 'default' },
+      { model_names: ['review'], recipe: 'frontier' },
+    ]
+    const validate = (target: string, index = 0) =>
+      validateEntrypointForm(
+        {
+          modelNames: config.entrypoints![index].model_names.join(','),
+          recipe: config.entrypoints![index].recipe,
+          [field]: target,
+        },
+        config,
+        models,
+        index,
+      )
+    expect(() => validate('missing')).toThrow('does not exist')
+    expect(() => validate('main-alias')).toThrow('another entrypoint')
+    for (const sent of [key, other]) {
+      config.entrypoints[1][sent] = 'main'
+      expect(() => validate('review')).toThrow('own review_model or memory_model')
+      delete config.entrypoints[1][sent]
+      config.entrypoints[0][sent] = 'review'
+      expect(() => validate('main', 1)).toThrow('own review_model or memory_model')
+      delete config.entrypoints[0][sent]
+    }
+  },
+)
 
-it('preserves names used by another entrypoint for reviews', () => {
+it.each(delegates)('preserves names used by another entrypoint as its $key', ({ key, noun }) => {
   const config = baseConfig()
   config.entrypoints = [
-    { model_names: ['main'], recipe: 'default', review_model: 'review' },
+    { model_names: ['main'], recipe: 'default', [key]: 'review' },
     { model_names: ['review'], recipe: 'frontier' },
   ]
-  expect(() => validateEntrypointForm({ modelNames: 'renamed', recipe: 'frontier' }, config, models, 1))
-    .toThrow('Keep review model name')
+  expect(() =>
+    validateEntrypointForm({ modelNames: 'renamed', recipe: 'frontier' }, config, models, 1),
+  ).toThrow(`Keep ${noun} model name`)
 })

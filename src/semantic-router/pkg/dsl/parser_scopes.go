@@ -49,6 +49,9 @@ func rawToEntrypoint(raw *rawEntrypointDecl) (*EntrypointDecl, []error) {
 	if review, ok := getStringField(fields, "review_model"); ok {
 		decl.ReviewModel = strings.TrimSpace(review)
 	}
+	if memory, ok := getStringField(fields, "memory_model"); ok {
+		decl.MemoryModel = strings.TrimSpace(memory)
+	}
 	if marked, ok := fields["default"].(BoolValue); ok {
 		decl.Default = marked.V
 	}

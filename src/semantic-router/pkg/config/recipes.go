@@ -74,6 +74,8 @@ type EntrypointMapping struct {
 	Default bool
 	// ReviewModel names another entrypoint model used for agent approval reviews.
 	ReviewModel string
+	// MemoryModel names another entrypoint model used for agent memory calls.
+	MemoryModel string
 }
 
 // RoutingDecisionRef identifies a decision inside its owning recipe. The

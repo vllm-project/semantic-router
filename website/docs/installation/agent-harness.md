@@ -224,7 +224,7 @@ line, and a failed one fails the command:
 
 `vllm-sr connect status` reads the undo records beside Claude Code's user and
 project settings, in the Codex home and in Pi's agent directory. For each
-connection it shows the files written, the gateway, the entrypoint, the review model (Codex), the context
+connection it shows the files written, the gateway, the entrypoint, the review and memory models (Codex), the context
 window and the login, whether each file still holds what connect wrote
 (`as written`, `changed` with the keys that differ, or `missing`; tables Codex
 appends to the profile count as written, as for `--undo`), and whether the
@@ -576,10 +576,112 @@ Responses Lite is not needed.
 
 Any other model can be the reviewer: point the review recipe at that model's
 provider binding instead. The target must be another entrypoint in the same
-API namespace, and must not have a `review_model` itself. A reviewer cannot
-refer back to the main entrypoint or form a chain. With several recipes,
-keep `default: true` on the main entrypoint. Re-run connect after changing the
-review binding to refresh the catalog.
+API namespace, and must have neither a `review_model` nor a `memory_model`
+itself. A reviewer cannot refer back to the main entrypoint or form a chain.
+With several recipes, keep `default: true` on the main entrypoint. Re-run
+connect after changing the review binding to refresh the catalog.
+
+### Codex memories
+
+Codex's memories feature (off by default; `[features] memories = true` turns
+it on) summarizes earlier interactive sessions in the background. It asks the
+configured provider, the gateway here, for its own models: `gpt-5.6-luna` to
+extract and `gpt-5.6-terra` to consolidate, which the gateway does not serve,
+so no memory would be written. `vllm-sr connect codex` therefore sets
+`[memories] extract_model` and `consolidation_model` in the profile, in
+`config.toml` with `--app` (beside the `[memories]` settings you have, which
+`--undo` restores), and on the command line with `--launch`. Without an
+entrypoint's `memory_model` they name the connected entrypoint, and the Router
+routes these calls like any other request to it.
+
+To send memory calls to a model of their own, such as a small local one that
+spends nothing from a plan's limits, publish a second entrypoint and set the
+main entrypoint's `memory_model` to one of its model names. This complete
+config answers on `gpt-6-luna` on the caller's ChatGPT login and writes
+memories with a local model served by vLLM:
+
+```yaml
+version: v0.5
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+    apis:
+      responses: {}
+providers:
+  defaults:
+    model: gpt-6-luna
+  models:
+    - name: gpt-6-luna
+      provider_model_id: gpt-6-luna
+      api_format: responses
+      context_window_size: 272000
+      backend_refs:
+        - name: chatgpt
+          endpoint: https://chatgpt.com/backend-api/codex
+          provider: openai
+          auth:
+            credential: caller
+    - name: local-memory
+      provider_model_id: Qwen/Qwen3-8B
+      api_format: chat_completions
+      context_window_size: 32768
+      backend_refs:
+        - name: local
+          endpoint: http://localhost:8000/v1
+          provider: vllm
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: main
+    default: true
+    memory_model: vllm-sr/memory
+  - model_names: [vllm-sr/memory]
+    recipe: memory
+recipes:
+  - name: main
+    decisions:
+      - name: answer
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: gpt-6-luna}]
+  - name: memory
+    decisions:
+      - name: remember
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local-memory}]
+global:
+  router:
+    learning:
+      enabled: true
+      protection:
+        enabled: true
+        scope: session
+        identity:
+          headers:
+            session: session-id
+            agent: thread-id
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+```
+
+Serve it, run `vllm-sr connect codex --config config.yaml`, then start
+`codex --profile vllm-sr` (or use `connect codex --launch`). Connect prints
+where memories go and sets both memory models to `vllm-sr/memory`. It also
+adds `vllm-sr/memory` to the catalog as a hidden entry, so it stays out of the
+model picker, with its own context window from the models its recipe can
+reach. Codex cuts each session it extracts to fit that window.
+`vllm-sr connect status` shows the memory model.
+
+Extraction asks for JSON schema output, and consolidation runs as an agent
+that edits the memory files with shell commands, so the local server must
+accept function tools (for vLLM, `--enable-auto-tool-choice` with the model's
+tool call parser). The target follows the same rules as a review target:
+another entrypoint in the same API namespace with neither a `review_model` nor
+a `memory_model` of its own. One entrypoint can take both reviews and
+memories. Re-run connect after changing the memory binding.
 
 To see the reviews, turn Router Replay on for the recipe that answers them,
 the `review` recipe above or the main one when reviews use the session model.
@@ -998,7 +1100,7 @@ Codex does not know `vllm-sr/auto`, so without a catalog entry for it, it warns
 that it uses fallback model metadata. `vllm-sr connect` writes one next to the
 profile, `vllm-sr.models.json`, named by `model_catalog_json`. The file
 replaces Codex's own catalog and holds only the selected gateway model and its
-optional review entrypoint. Both adapt the installed Codex's `gpt-5.5` entry
+optional review and memory entrypoints. All adapt the installed Codex's `gpt-5.5` entry
 (from `codex debug models --bundled`), with tool search and the `apply_patch`
 custom tool turned off, since the Router does not serve the first and a
 Messages backend refuses the second. The main entry uses Codex's fallback
@@ -1010,7 +1112,7 @@ again after updating Codex, so the catalog follows its release.
 `vllm-sr connect` also sets `model_context_window` and the main entry's window
 from the configuration, or from `--context-window`, so the budget follows your
 backends. See [Approve for me reviews](#approve-for-me-reviews) to select a
-reviewer.
+reviewer and [Codex memories](#codex-memories) to select a memory model.
 
 Codex 0.166 also says it runs without its shared background server: a profile,
 like `-c` overrides, starts a Codex process of its own. The session works as

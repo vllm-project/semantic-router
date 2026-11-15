@@ -110,3 +110,24 @@ it('offers other entrypoints as reviewers and retains the chosen review model', 
   expect(html).not.toContain('<option value="my/blend"')
   expect(html).not.toContain('<option value="chained"')
 })
+
+it('offers other entrypoints for memory calls and retains the chosen memory model', () => {
+  const edited = { ...entrypoint, memory_model: 'local' }
+  const html = render({
+    entrypoint: edited,
+    entrypointIndex: 0,
+    config: {
+      ...config,
+      entrypoints: [
+        edited,
+        { model_names: ['local'], recipe: 'blend' },
+        { model_names: ['remembers'], recipe: 'blend', memory_model: 'local' },
+      ],
+    },
+  })
+  expect(html).toContain('Memories go to')
+  expect(html).toContain('<option value="local" selected="">local</option>')
+  // the review select offers the same target, not chosen there
+  expect(html).toContain('<option value="local">local</option>')
+  expect(html).not.toContain('<option value="remembers"')
+})

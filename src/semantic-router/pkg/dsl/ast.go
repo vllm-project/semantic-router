@@ -362,6 +362,7 @@ type EntrypointDecl struct {
 	Recipe      string
 	Default     bool
 	ReviewModel string
+	MemoryModel string
 	Pos         Position
 }
 

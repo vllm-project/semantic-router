@@ -490,6 +490,9 @@
         },
         "review_model": {
           "type": "string"
+        },
+        "memory_model": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

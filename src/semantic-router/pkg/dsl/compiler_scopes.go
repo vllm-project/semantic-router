@@ -161,6 +161,7 @@ func (c *Compiler) compileEntrypoints(recipeNames map[config.RecipeName]struct{}
 			Recipe:      recipeName,
 			Default:     entrypoint.Default,
 			ReviewModel: entrypoint.ReviewModel,
+			MemoryModel: entrypoint.MemoryModel,
 		})
 	}
 	switch {
@@ -174,7 +175,7 @@ func (c *Compiler) compileEntrypoints(recipeNames map[config.RecipeName]struct{}
 	default:
 		c.errors = append(c.errors, fmt.Errorf("%d recipes need exactly one ENTRYPOINT with default: true", len(c.config.Recipes)))
 	}
-	if err := c.config.ValidateReviewModels(); err != nil {
+	if err := c.config.ValidateDelegateModels(); err != nil {
 		c.errors = append(c.errors, err)
 	}
 }

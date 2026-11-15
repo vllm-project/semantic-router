@@ -344,6 +344,7 @@ entrypoints:
     recipe: default
     default: true
     review_model: vllm-sr/exhaustive-privacy
+    memory_model: vllm-sr/exhaustive-privacy
   - model_names: ["vllm-sr/exhaustive-privacy"]
     recipe: privacy-first
   - api: systemone
