@@ -55,6 +55,8 @@ recipes:
 | `rules` | Your own rules whose matches are masked as well, as `{type, name}` references to rules of the recipe that find text. See [Masking your own rules](#masking-your-own-rules). |
 | `entity_types` | An **include list** of PII labels (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `US_SSN`, `CREDIT_CARD`, `LOCATION`, `IP_ADDRESS`, `DATE_TIME`, `US_DRIVER_LICENSE`, `US_PASSPORT`, `IBAN_CODE`): only these types are masked. Empty means every type the rule detects is masked. Any other label is rejected at config load. It applies to the pii rule only; every rule in `rules` is always masked. |
 | `placeholders` | Maps a PII label, or the name of a rule in `rules`, to a template. The template must contain `{index}` exactly once, with a character other than a digit right before and right after it, as in `[EMAIL_{index}]` or `#{index}#`. A template without `{index}` would collapse distinct values onto one placeholder; a digit next to it joins the index, so `[X_{index}0]` at 1 writes `[X_10]`, which reads as `[X_{index}]` at 10; and an index at the template's edge runs into a digit the text has beside the value, so `#{index}` for the name in `Bob5` would write `#15`. Config load rejects all three. Types absent from the map get the default `[TYPE_n]` shape, which for a rule is its name in capitals, so `employee_id` becomes `[EMPLOYEE_ID_0]`. Two types that would produce the same placeholder are rejected at config load. |
+| `index` | How placeholders are numbered. `registry` keeps one index per value for good in an identity namespace, so a value has the same placeholder in every request, session and restart. `sequence` numbers values in the order one request meets them. Left out, it is `registry` when `identity_namespace` is set and `sequence` otherwise. See [Placeholders that last](#placeholders-that-last). |
+| `identity_namespace` | The namespace of `global.services.masking_identity` that `index: registry` takes its indexes from. |
 
 The rule reads the request as it is sent, after every plugin that changes it
 has run, so personal data a [RAG](./context) document or a system prompt brought
@@ -68,6 +70,74 @@ span support, fails at load with `span_required`.
 A configuration that still sets `masking.threshold`, or names neither a
 `signal` nor `rules`, fails at load with a one-line hint; `vllm-sr config
 migrate` adds a pii rule with the plugin's threshold and names it.
+
+## Placeholders that last
+
+With `index: sequence` each request numbers its values afresh, from `_0`. That
+holds while an agent resends its whole history, since the value comes before
+every echo of its placeholder. It breaks when the history was compacted, when
+a new session reads a file an earlier one wrote, and across restarts: the
+echo `[PERSON_0]` arrives without Alice, and Alice, seen later, gets another
+index.
+
+With `index: registry` the Router keeps, per namespace, scope and type, which
+index each value holds, and never gives that index to another value. Alice is
+`[PERSON_0]` in every request of the scope, an echo of `[PERSON_0]` is known to
+be one even when Alice is not in the request, and a file written last week
+still means what it meant.
+
+```yaml
+global:
+  services:
+    masking_identity:
+      namespaces:
+        agents:
+          key_file: /var/lib/vsr/masking/agents.key   # 32 random bytes
+          scope: principal_or_installation
+          registry:
+            backend: file
+            path: /var/lib/vsr/masking/agents.log
+recipes:
+  - name: default
+    decisions:
+      - name: support
+        plugins:
+          - type: masking
+            configuration:
+              enabled: true
+              signal: contact_details
+              identity_namespace: agents
+```
+
+| Field | Meaning |
+|---|---|
+| `key_file` / `key_env` | The namespace secret, 32 bytes in a file or 64 hex digits in an environment variable. Exactly one is set. |
+| `scope` | `principal_or_installation`: placeholders are numbered per user that a trusted authenticator names in the user header (`x-authz-user-id` unless `authz.identity` changes it, with `x-authz-tenant-id`), or for the whole installation when the request names no such user. A forwarded account header such as `chatgpt-account-id` is not a user. |
+| `session_scope` | When `true`, numbering also starts afresh per session id, so placeholders stay consistent within a session only. |
+| `registry.backend` | `file`: an append-only log one Router process owns, synced to disk on every write. `postgres`: tables in the database that `registry.postgres` names, with the connection fields of the Router Replay Postgres store, shared by every replica. |
+
+`vllm-sr serve` provisions a namespace named `local` the first time it starts,
+with a new key and a file registry in its state directory
+(`.vllm-sr/masking/<stack>/`), and masking plugins that set neither `index` nor
+`identity_namespace` use it. On Kubernetes, mount the key from a Secret and use
+the Postgres backend, since a file registry belongs to one process.
+
+The registry stores a keyed digest of each value (HMAC-SHA-256 under a key
+derived from the namespace secret), the index it holds, and the placeholder
+indexes a request held before they were issued, which are reserved for good.
+It stores no value, no request text and no user id, and the digests cannot be
+checked against a guess without the key. Equal values are equal placeholders
+everywhere in a scope, which is the point, and the indexes show the order in
+which values first appeared.
+
+Back up the key and the registry together. The Router refuses to start when
+the key is missing or does not match the registry, or when an established
+registry is gone, because a fresh one would hand `[PERSON_0]` to a new value
+while old files still mean Alice by it. To start over on purpose, move the old
+key and registry aside and change the placeholder templates, for example to
+`[PERSON2_{index}]`, so old placeholders cannot be read as new values. If the
+registry cannot be read or written while serving, the request fails with the
+same 503 as any masking failure; it never falls back to per-request numbering.
 
 ## Masking your own rules
 
@@ -172,15 +242,15 @@ Masking the stored Replay copy instead of suppressing it is a reasonable idea, b
 
 This plugin only ever removes information going forward to the provider. It does not:
 
-- remember the value-to-placeholder mapping beyond the lifetime of one request
+- remember a value-to-placeholder mapping beyond the lifetime of one request, except as a keyed digest under `index: registry`, which cannot be turned back into the value
 - restore a placeholder back to its original value anywhere, including in the model's response
 - give an operator, an API, or a log line any way to recover a masked value
 
 If a response happens to echo a placeholder like `[EMAIL_ADDRESS_0]` back to the client, that placeholder is not decoded — the client sees exactly that string. Restoring placeholders in responses is an explicit non-goal, not a missing feature.
 
-An agent that keeps working with placeholders sends them back in its later requests, for example in a file it writes with `Hi [PERSON_0],`. A detected span that lies inside a placeholder this plugin can write, for one of the pii labels or the rules in its configured template or the default `[TYPE_n]` shape, with an index of up to nine digits and no leading zero, is not masked again, even when the detector reads part of it as personal data. Text that only looks like one, such as `[X_104233]` or `[PERSON_ALICE_0]`, is not a placeholder. A span that reaches past it, such as an email address whose local part is a placeholder, is still masked, and a template with no letter besides `{index}`, such as `#{index}#`, exempts nothing unless masking issued that placeholder, since its digits could be part of a real phone number. Without that, the agent would see its own earlier output turn into `[[PERSON_1]]` on the next turn and its edits would stop matching the file it wrote.
+An agent that keeps working with placeholders sends them back in its later requests, for example in a file it writes with `Hi [PERSON_0],`. A detected span that lies inside a placeholder this plugin can write, for one of the pii labels or the rules in its configured template or the default `[TYPE_n]` shape, with an index of up to nine digits (nineteen under `index: registry`) and no leading zero, is not masked again, even when the detector reads part of it as personal data. Text that only looks like one, such as `[X_104233]` or `[PERSON_ALICE_0]`, is not a placeholder. A span that reaches past it, such as an email address whose local part is a placeholder, is still masked, and a template with no letter besides `{index}`, such as `#{index}#`, exempts nothing unless masking issued that placeholder, since its digits could be part of a real phone number. Without that, the agent would see its own earlier output turn into `[[PERSON_1]]` on the next turn and its edits would stop matching the file it wrote. Under `index: registry` only a placeholder the registry issued in the scope is left alone this way: it knows every one it issued, so any other placeholder-shaped text is something a client wrote and is masked like the rest of the text.
 
-A detector's span that takes in none of a placeholder's own letters, such as one over its index or over the tag of a `[vsr:<tag>]` mark alone, and a rule's match that reaches into the index, are left alone only when masking issued that very placeholder earlier in the same request, whichever label or rule finds them there. An agent's history carries the value before the placeholder it echoes, since the conversation is resent each turn, so `[PERSON_0]` is issued again for that value before the echo is read; a value wrapped in a placeholder shape, such as `[ACCOUNT_NUMBERS_19104822]` or `[vsr:4111111111111111]`, was never issued and is masked. Placeholder-shaped text the request holds before masking issued it, which a client may have typed, is reserved, in any configured template, `#{index}#` included: `[ACCOUNT_NUMBERS_0] is overdue, and so is account 19104822` reaches the provider as `[ACCOUNT_NUMBERS_0] is overdue, and so is account [ACCOUNT_NUMBERS_1]`. An echo that comes before its value in the request, for example after the history was compacted, is treated the same way: its index is reserved, and a detector reading only that index masks it.
+A detector's span that takes in none of a placeholder's own letters, such as one over its index or over the tag of a `[vsr:<tag>]` mark alone, and a rule's match that reaches into the index, are left alone only when masking issued that very placeholder earlier in the same request, or under `index: registry` in any earlier request of the scope, whichever label or rule finds them there. An agent's history carries the value before the placeholder it echoes, since the conversation is resent each turn, so `[PERSON_0]` is issued again for that value before the echo is read; a value wrapped in a placeholder shape, such as `[ACCOUNT_NUMBERS_19104822]` or `[vsr:4111111111111111]`, was never issued and is masked. Placeholder-shaped text the request holds before masking issued it, which a client may have typed, is reserved, in any configured template, `#{index}#` included: `[ACCOUNT_NUMBERS_0] is overdue, and so is account 19104822` reaches the provider as `[ACCOUNT_NUMBERS_0] is overdue, and so is account [ACCOUNT_NUMBERS_1]`. Under `index: sequence` an echo that comes before its value in the request, for example after the history was compacted, is treated the same way: its index is reserved, and a detector reading only that index masks it. Under `index: registry` the registry knows the echo was issued, so it is left alone and its value gets the same placeholder when it appears.
 
 The same holds for the `[vsr:<tag>]` marks, such as `[vsr:email]` or `[vsr:employee_id]` for a listener rule, that the vSR plugins for Claude Code and Codex leave where their redact app hid a value from a tool's output. With the plugin and the gateway running together, a tool result reaches the Router already redacted, and the marks pass through as they are, also at the start of a tool result. A detector that reads a mark's tag alone as personal data masks the tag, and the value the mark stands for was never in the request.
 

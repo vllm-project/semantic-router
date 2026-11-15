@@ -1147,6 +1147,9 @@
         "observability": {
           "$ref": "#/$defs/ObservabilityConfig"
         },
+        "masking_identity": {
+          "$ref": "#/$defs/MaskingIdentityConfig"
+        },
         "authz": {
           "$ref": "#/$defs/AuthzConfig"
         },
@@ -3510,6 +3513,42 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "MaskingIdentityConfig": {
+      "properties": {
+        "namespaces": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MaskingIdentityNamespace"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MaskingIdentityNamespace": {
+      "properties": {
+        "key_file": {
+          "type": "string"
+        },
+        "key_env": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "principal_or_installation"
+          ]
+        },
+        "session_scope": {
+          "type": "boolean"
+        },
+        "registry": {
+          "$ref": "#/$defs/MaskingRegistryConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "MaskingPluginConfig": {
       "properties": {
         "enabled": {
@@ -3535,6 +3574,35 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "index": {
+          "type": "string",
+          "enum": [
+            "registry",
+            "sequence"
+          ]
+        },
+        "identity_namespace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MaskingRegistryConfig": {
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": [
+            "file",
+            "postgres"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "postgres": {
+          "$ref": "#/$defs/RouterReplayPostgresConfig"
         }
       },
       "additionalProperties": false,
@@ -7968,6 +8036,15 @@
         "path": [
           "services",
           "observability"
+        ]
+      },
+      {
+        "key": "masking_identity",
+        "layer": "services",
+        "display_name": "Masking Identity",
+        "path": [
+          "services",
+          "masking_identity"
         ]
       },
       {
