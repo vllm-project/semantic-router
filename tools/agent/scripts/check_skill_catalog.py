@@ -20,6 +20,7 @@ SKILL_ROOTS = (
 PUBLIC_SOURCE = Path("tools/agent/skills/vllm-sr-agent-operations/SKILL.md")
 PUBLIC_COPY = Path("website/static/install/agent/vllm-sr/SKILL.md")
 PUBLIC_URL = "https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md"
+PUBLIC_ROOT = Path("website/static/install/agent")
 FIELDS = (
     "id",
     "name",
@@ -91,18 +92,30 @@ def check(root: Path = ROOT) -> list[str]:
             errors.append(f"{label}: unknown distribution {distribution}")
         if distribution == "public-website":
             copy = Path(entry.get("published", ""))
-            if copy.is_absolute() or ".." in copy.parts or not (root / copy).is_file():
+            if (
+                copy.is_absolute()
+                or ".." in copy.parts
+                or not copy.is_relative_to(PUBLIC_ROOT)
+                or not (root / copy).is_file()
+            ):
                 errors.append(f"{label}: missing public copy {copy}")
             if copy in copies:
                 errors.append(f"{label}: duplicate public copy {copy}")
             copies.add(copy)
-            if (source, copy, entry.get("public_url")) != (
-                PUBLIC_SOURCE,
+            public_url = entry.get("public_url")
+            expected_url = (
+                "https://vllm-sr.ai/" + copy.relative_to("website/static").as_posix()
+                if copy.is_relative_to(PUBLIC_ROOT)
+                else None
+            )
+            if public_url != expected_url:
+                errors.append(f"{label}: public URL does not match the copy path")
+            if source == PUBLIC_SOURCE and (copy, public_url) != (
                 PUBLIC_COPY,
                 PUBLIC_URL,
             ):
                 errors.append(
-                    f"{label}: public source, copy, and URL must match the sync contract"
+                    f"{label}: operations public mapping differs from the sync contract"
                 )
         elif "published" in entry or "public_url" in entry:
             errors.append(
@@ -122,8 +135,8 @@ def check(root: Path = ROOT) -> list[str]:
         errors.append(f"{CATALOG}: unlisted skill {source}")
     for source in sorted(sources - actual):
         errors.append(f"{CATALOG}: listed skill outside inventory {source}")
-    if copies != {PUBLIC_COPY}:
-        errors.append(f"{CATALOG}: expected exactly the operations public copy")
+    if PUBLIC_COPY not in copies:
+        errors.append(f"{CATALOG}: missing the operations public copy")
 
     readme = (root / README).read_text()
     linked_sources: set[Path] = set()

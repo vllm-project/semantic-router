@@ -61,6 +61,28 @@ class SkillCatalogTests(unittest.TestCase):
             any("sync contract" in error for error in catalog.check(self.root))
         )
 
+    def test_a_new_public_skill_can_have_its_own_path(self):
+        source = Path("tools/agent/skills/new/SKILL.md")
+        copy = Path("website/static/install/agent/new/SKILL.md")
+        for path in (source, copy):
+            target = self.root / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("---\nname: new\ndescription: Test\n---\n")
+        data = yaml.safe_load((self.root / catalog.CATALOG).read_text())
+        entry = data["skills"][0].copy()
+        entry.update(
+            id="new",
+            name="new",
+            source=source.as_posix(),
+            published=copy.as_posix(),
+            public_url="https://vllm-sr.ai/install/agent/new/SKILL.md",
+        )
+        data["skills"].append(entry)
+        (self.root / catalog.CATALOG).write_text(yaml.safe_dump(data))
+        readme = self.root / catalog.README
+        readme.write_text(readme.read_text() + "\n[New](new/SKILL.md)\n")
+        self.assertEqual(catalog.check(self.root), [])
+
     def test_broken_discovery_link_is_rejected(self):
         readme = self.root / catalog.README
         readme.write_text(
