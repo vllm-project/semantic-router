@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"math"
 	"net/url"
 	"sort"
 
@@ -89,53 +88,6 @@ func buildRouterReplayLifecycleSummary(
 		}
 	}
 	return summary
-}
-
-func buildRouterReplayAggregateCostSummary(
-	records []routerreplay.RoutingRecord,
-) routerReplayAggregateCostSummary {
-	summary := routerReplayAggregateCostSummary{}
-	byCurrency := make(map[string]*routerreplay.CurrencyCostSummary)
-	for _, record := range records {
-		if record.LifecycleState != routerreplay.LifecycleCompleted ||
-			record.TotalTokens == nil || record.BaselineModel == nil || *record.BaselineModel == "" ||
-			record.Currency == nil || normalizeReplayCurrency(*record.Currency) == "" {
-			continue
-		}
-		if !finiteReplayCost(record.ActualCost) || !finiteReplayCost(record.BaselineCost) || !finiteReplayCost(record.CostSavings) {
-			continue
-		}
-		currency := normalizeReplayCurrency(*record.Currency)
-		group := byCurrency[currency]
-		if group == nil {
-			group = &routerreplay.CurrencyCostSummary{Currency: currency}
-			byCurrency[currency] = group
-		}
-		group.TotalSaved += *record.CostSavings
-		group.BaselineSpend += *record.BaselineCost
-		group.ActualSpend += *record.ActualCost
-		group.CostRecordCount++
-		summary.CostRecordCount++
-	}
-	for _, group := range byCurrency {
-		summary.ByCurrency = append(summary.ByCurrency, *group)
-	}
-	sort.Slice(summary.ByCurrency, func(i, j int) bool {
-		return summary.ByCurrency[i].Currency < summary.ByCurrency[j].Currency
-	})
-	if len(summary.ByCurrency) == 1 {
-		group := summary.ByCurrency[0]
-		summary.Currency = group.Currency
-		summary.TotalSaved = group.TotalSaved
-		summary.BaselineSpend = group.BaselineSpend
-		summary.ActualSpend = group.ActualSpend
-	}
-	summary.ExcludedRecordCount = len(records) - summary.CostRecordCount
-	return summary
-}
-
-func finiteReplayCost(value *float64) bool {
-	return value != nil && !math.IsNaN(*value) && !math.IsInf(*value, 0)
 }
 
 func buildRouterReplayModelSelection(

@@ -195,6 +195,29 @@ export interface InsightsRecord {
   cost_savings?: number
   currency?: string
   baseline_model?: string
+  cost_accounting?: InsightsCostAccounting
+}
+
+/** One kind of call the Router made itself to serve a request (a Looper's attempts). */
+export interface InsightsRouterCallCost {
+  kind: string
+  calls: number
+  prompt_tokens?: number
+  completion_tokens?: number
+  cost?: number
+  currency?: string
+  unpriced_calls?: number
+  unpriced_reasons?: Record<string, number>
+}
+
+/** Where a record's cost figures came from and what they leave out. */
+export interface InsightsCostAccounting {
+  pricing_source?: 'configured' | 'catalog_list_price'
+  caller_login?: boolean
+  unpriced_reason?: string
+  baseline_source?: 'configured_model' | 'recipe_most_expensive' | 'selected_model'
+  baseline_unavailable?: string
+  router_calls?: InsightsRouterCallCost[]
 }
 
 export interface TokenCostComponent {
@@ -287,18 +310,38 @@ export interface InsightsAggregateCurrencySummary {
   total_saved: number
   baseline_spend: number
   actual_spend: number
+  router_call_spend?: number
+  total_spend?: number
   currency: string
   cost_record_count: number
+}
+
+/** How much of the filtered traffic the cost figures leave out, and why. */
+export interface InsightsAggregateCostCoverage {
+  priced_records: number
+  partly_priced_records: number
+  unpriced_records: number
+  unpriced_reasons?: Record<string, number>
+  looper_hop_records: number
+  list_price_records: number
+  caller_login_records: number
+  router_calls: number
+  unpriced_router_calls: number
+  baseline_sources?: Record<string, number>
+  baseline_unavailable?: Record<string, number>
 }
 
 export interface InsightsAggregateSummary {
   total_saved: number
   baseline_spend: number
   actual_spend: number
+  router_call_spend?: number
+  total_spend?: number
   currency?: string
   cost_record_count: number
   excluded_record_count: number
   by_currency?: InsightsAggregateCurrencySummary[]
+  coverage?: InsightsAggregateCostCoverage
 }
 
 export interface InsightsProviderCacheCurrencyTotal {

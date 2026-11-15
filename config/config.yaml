@@ -1022,6 +1022,11 @@ recipes:
           - type: router_replay
             configuration:
               enabled: true
+              # Savings compare each request with qwen3-32b at the same recorded
+              # tokens, so a request this route sends to a dearer model shows
+              # a negative saving. Unset, the baseline is the most expensive
+              # model of the recipe's pool. It must name a model with pricing.
+              cost_baseline_model: qwen3-32b
               shadow:
                 model: qwen3-32b
                 sample_rate: 0.05

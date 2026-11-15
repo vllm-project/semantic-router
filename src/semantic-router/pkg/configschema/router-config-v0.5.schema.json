@@ -6191,6 +6191,9 @@
         "max_tool_trace_steps": {
           "type": "integer"
         },
+        "cost_baseline_model": {
+          "type": "string"
+        },
         "shadow": {
           "$ref": "#/$defs/RouterReplayShadowConfig"
         },
