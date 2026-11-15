@@ -151,9 +151,10 @@ function TokenBreakdownChart({ title, data }: TokenBreakdownChartProps) {
   )
 }
 
-// Router calls (a Looper's model calls) are a separate cost, and the total
-// adds them and the priced requests without a baseline, failed ones included;
-// each card shows only where it differs from the model cost.
+// Router calls (a Looper's model calls and the questions the Router asks to
+// route) are a separate cost, and the total adds them and the priced requests
+// without a baseline, failed ones included; each card shows only where it
+// differs from the model cost.
 const spendCards = (summary: InsightsAggregateSummary | InsightsAggregateCurrencySummary) => [
   ...((summary.router_call_spend ?? 0) !== 0
     ? [
@@ -234,11 +235,12 @@ function InsightsEstimateNotes() {
           captured baseline.
         </p>
         <p>
-          Model calls the Router makes itself, such as a Looper’s attempts, are costed apart from
-          the selected model and added to the total; a call without a price is counted as unpriced,
-          never as free. A model without configured pricing uses the built-in catalog’s list price
-          when its provider lists one, marked as an estimate. On a client’s own login a cost is the
-          API-price equivalent, not what the plan charges.
+          Decision-model, System One, embedding and Looper calls are costed apart from the selected
+          model and added to the total; a call without a price is counted as unpriced, never as
+          free. Recorded router spend includes failed requests. A generation model without
+          configured pricing uses the built-in catalog’s list price when its provider lists one,
+          marked as an estimate. On a client’s own login a cost is the API-price equivalent, not
+          what the plan charges.
         </p>
         <p>
           Infrastructure charges and invoice adjustments are excluded. Currencies are shown

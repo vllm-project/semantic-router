@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -119,7 +120,7 @@ func startRequestHeaderSpan(
 		tracing.SpanRequest,
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
-	ctx.TraceContext = spanCtx
+	ctx.TraceContext, ctx.ModelCallMeter = modelservice.WithRequestMeter(spanCtx)
 	ctx.RequestSpan = span
 	return span
 }

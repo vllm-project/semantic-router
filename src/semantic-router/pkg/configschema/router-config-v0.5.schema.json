@@ -4183,6 +4183,9 @@
     },
     "ModelDeployment": {
       "properties": {
+        "pricing": {
+          "$ref": "#/$defs/ModelPricing"
+        },
         "artifact": {
           "type": "string"
         },

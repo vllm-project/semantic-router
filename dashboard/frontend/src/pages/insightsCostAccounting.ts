@@ -86,9 +86,18 @@ export function describeRouterCalls(accounting?: InsightsCostAccounting): string
   }
   return calls
     .map((call) => {
-      const label = call.kind === 'looper' ? 'Looper' : call.kind
+      const label =
+        (
+          { looper: 'Looper', systemone: 'System One', decision_model: 'Decision model' } as Record<
+            string,
+            string
+          >
+        )[call.kind] ?? call.kind
       const priced = call.calls - (call.unpriced_calls ?? 0)
-      const parts = [`${call.calls} ${label} call${call.calls === 1 ? '' : 's'}`]
+      const parts = [
+        `${call.calls} ${label} call${call.calls === 1 ? '' : 's'}${call.model ? ` (${call.model})` : ''}`,
+      ]
+      parts.push(`${call.prompt_tokens ?? 0} input / ${call.completion_tokens ?? 0} output tokens`)
       if (priced > 0) {
         parts.push(`${priced} priced at ${formatInsightsCost(call.cost, call.currency)}`)
       }
@@ -129,7 +138,7 @@ export function buildCostCoverageLines(
   }
   if (coverage.router_calls > 0) {
     lines.push(
-      `Router calls (Looper): ${plural(coverage.router_calls, 'call')}, ${coverage.unpriced_router_calls} unpriced; their cost is shown apart from the model cost.`,
+      `Router calls: ${plural(coverage.router_calls, 'call')}, ${coverage.unpriced_router_calls} unpriced; their cost is shown apart from the model cost.`,
     )
   }
   const baselines = Object.entries(coverage.baseline_sources ?? {})
