@@ -104,9 +104,14 @@ SECRET_NAME = re.compile(
 SETTING_LINE = re.compile(r'(\s*"?([\w.-]+)"?\s*[=:]\s*)(.*?)(,?\s*)$')
 
 
+# Characters of a line a preview shows; Codex's model catalog holds its base
+# instructions as one line of tens of thousands.
+SHOWN_LINE = 160
+
+
 def hide_secrets(text: str) -> str:
     """A whole file as shown: a line that sets a credential, or a bearer header,
-    keeps its name and loses its value."""
+    keeps its name and loses its value, and a long line is cut short."""
     lines = []
     for line in text.splitlines(keepends=True):
         found = SETTING_LINE.match(line)
@@ -115,6 +120,10 @@ def hide_secrets(text: str) -> str:
             name, value = found.group(2), found.group(3)
             if SECRET_NAME.search(name) or "bearer " in value.lower():
                 shown = f'{found.group(1)}"<hidden>"{found.group(4)}'
+        body = shown.rstrip("\n")
+        if len(body) > SHOWN_LINE:
+            cut = len(body) - SHOWN_LINE
+            shown = f"{body[:SHOWN_LINE]}... ({cut:,} more characters)\n"
         lines.append(shown)
     return "".join(lines)
 

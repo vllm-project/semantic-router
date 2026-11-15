@@ -998,7 +998,7 @@ Route Claude Code's model calls through the gateway.
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
-| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code and Codex then budget with it instead of a window of their own.  [x&gt;=1] |
 | `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |
@@ -1024,7 +1024,7 @@ Route Codex CLI through the gateway with a profile of its own.
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
-| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code and Codex then budget with it instead of a window of their own.  [x&gt;=1] |
 | `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |

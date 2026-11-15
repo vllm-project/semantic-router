@@ -111,7 +111,9 @@ codex --profile vllm-sr
 Here each harness has its own Router, served from `claude-code.yaml` and
 `codex.yaml`. The command reaches the gateway at the first listener of the
 configuration it is given (`config.yaml` by default); `--base-url` names
-another origin.
+another origin. When that listener has `api_keys` and the variable is unset,
+the command stops before writing anything, so a key written before is never
+replaced.
 
 The command shows the changes and asks before writing them:
 
@@ -142,7 +144,8 @@ default model metadata. `--context-window` sets the window either way.
 It then reports three checks, each on its own line:
 
 - `Router configuration`: what the configuration given with `--config` lacks
-  for this harness, from the settings below, without changing it.
+  for this harness and the models its entrypoint reaches, from the settings
+  below, without changing it.
 - `Basic reply`: a plain request in the harness's protocol gets an answer, and
   the line names the model that gave it.
 - `Streamed tool loop`: a streamed tool call, then the answer once its result

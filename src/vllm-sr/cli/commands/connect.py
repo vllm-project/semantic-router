@@ -77,8 +77,7 @@ def _options(command):
                 default=None,
                 help="The smallest context window, in tokens, of the models the gateway"
                 " can pick; by default read from the configuration's model cards. Claude"
-                " Code then neither assumes its own window nor warns that it does not know"
-                " the entrypoint, and Codex budgets with it.",
+                " Code and Codex then budget with it instead of a window of their own.",
             ),
             click.option(
                 "--vsr/--no-vsr",
@@ -151,6 +150,9 @@ def claude_code(
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
+    _require_key(
+        doc, base_url, from_env, api_key_env, _caller_login("claude-code", doc)
+    )
     if _caller_login("claude-code", doc):
         # the Router presents Claude Code's own login to Anthropic, and a gateway
         # token would go in its place
@@ -201,7 +203,16 @@ def claude_code(
         options, plugin_id, install, api_key_env if from_env else None
     )
     if not _run(
-        "claude-code", changes, path.parent, label, doc, dry_run, yes, notes, plan
+        "claude-code",
+        changes,
+        path.parent,
+        label,
+        doc,
+        dry_run,
+        yes,
+        notes,
+        plan,
+        model,
     ):
         return
     if options:
@@ -279,6 +290,7 @@ def codex(
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
     login = _caller_login("codex", doc)
+    _require_key(doc, base_url, from_env, api_key_env, login)
     if login:
         # the Router presents Codex's own ChatGPT login or API key to OpenAI, and a
         # gateway key would go in its place
@@ -334,7 +346,7 @@ def codex(
     if options:
         # the vSR plugin's own settings: connect owns the runtime keys, the rest stays
         changes.append(hc.Change(home / "vsr.json", "json", options))
-    if not _run("codex", changes, home, "", doc, dry_run, yes, notes, plan):
+    if not _run("codex", changes, home, "", doc, dry_run, yes, notes, plan, model):
         return
     if options and _vsr_step(lambda: [_must(argv, env) for argv in install], plan):
         success(
@@ -365,7 +377,16 @@ def codex(
 
 
 def _run(
-    harness, changes, manifest_dir, key_label, doc, dry_run, yes, notes=(), plan=()
+    harness,
+    changes,
+    manifest_dir,
+    key_label,
+    doc,
+    dry_run,
+    yes,
+    notes=(),
+    plan=(),
+    model=None,
 ):
     """Show the changes, check the Router configuration, and write; False on a dry run."""
     heading(f"vllm-sr connect {harness}")
@@ -381,7 +402,7 @@ def _run(
             echo("".join(diff) or f"{label}: no change")
     except ValueError as exc:
         raise click.ClickException(f"{change.path}: {exc}") from exc
-    _check_router(harness, doc)
+    _check_router(harness, doc, model)
     for note in notes:
         echo(note)
     if plan:
@@ -391,6 +412,9 @@ def _run(
     if dry_run:
         echo("Dry run: nothing was written.")
         return False
+    if all(change.old_text() == change.new_text() for change in changes):
+        success("Nothing to change: the files already hold these settings.")
+        return True
     if not yes and not click.confirm("Write these changes?", default=True):
         raise click.Abort()
     manifest = hc.apply_changes(changes, manifest_dir)
@@ -430,15 +454,20 @@ def _context_window(doc, model, given) -> tuple[int | None, list[str]]:
         ]
     window = min(windows.values())
     return window, [
-        f"Context window: {window:,} tokens, the smallest of the {len(windows)}"
-        f" models {model} can reach in this configuration."
+        f"Context window: {window:,} tokens, "
+        + (
+            f"the smallest of the {len(windows)} models"
+            if len(windows) > 1
+            else "that of the one model"
+        )
+        + f" {model} can reach in this configuration."
     ]
 
 
 def _launch(harness, argv, doc, gateway, model, token, notes, dry_run, settings=None):
     """Probe the gateway, then run the harness through it and exit with its status."""
     heading(f"vllm-sr connect {harness} --launch")
-    _check_router(harness, doc)
+    _check_router(harness, doc, model)
     for note in notes:
         echo(note)
     found = shutil.which(argv[0])
@@ -502,11 +531,23 @@ def _gateway(router_config: Path, base_url: str | None) -> tuple[str, dict | Non
     return gateway, doc
 
 
-def _check_router(harness: str, doc: dict | None) -> None:
+def _require_key(doc, base_url, from_env, api_key_env, login) -> None:
+    """Refuse to write a placeholder key for a listener that takes keys: it would
+    replace a key written before, and every request would be refused."""
+    listeners = (doc or {}).get("listeners") or [{}]
+    if base_url or from_env or login or not (listeners[0] or {}).get("api_keys"):
+        return
+    raise click.ClickException(
+        f"The listener takes an API key and ${api_key_env} is not set. Export it"
+        " (or name another variable with --api-key-env) and run this again."
+    )
+
+
+def _check_router(harness: str, doc: dict | None, model: str | None = None) -> None:
     if doc is None:
         echo("Router configuration: not checked (pass --config to check it).")
         return
-    findings = rc.check_router_config(doc, harness)
+    findings = rc.check_router_config(doc, harness, model)
     if not findings:
         success(f"Router configuration: has what {harness} needs.")
         return
