@@ -9,10 +9,18 @@ import (
 )
 
 func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
-	if err := rejectReasoningContinuity(llmprotocol.OpenAIResponsesV1, llmprotocol.RequiredCapabilities(request)); err != nil {
-		return nil, nil, err
+	hasEncryptedReasoning := false
+	for _, message := range request.Messages {
+		for _, content := range message.Content {
+			hasEncryptedReasoning = hasEncryptedReasoning || llmprotocol.IsResponsesReasoning(content.ReasoningDetail)
+		}
+		if err := requireReasoningRepresentation(llmprotocol.OpenAIResponsesV1, message.Content); err != nil {
+			return nil, nil, err
+		}
 	}
-	if envelope.CanReplay(llmprotocol.OpenAIResponsesV1, request.Generation, policy, false) {
+	// Re-encode encrypted history to materialize content: [] even when the
+	// original client item omitted it.
+	if !hasEncryptedReasoning && envelope.CanReplay(llmprotocol.OpenAIResponsesV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
 	}
 	if llmprotocol.RequiredCapabilities(request).Supports(llmprotocol.CapabilityCacheDirectives) {
@@ -86,6 +94,9 @@ func encodeResponsesRequestWire(request llmprotocol.Request) (responsesRequestWi
 		Truncation: request.Truncation, User: request.EndUserID, PromptCacheKey: request.PromptCacheKey,
 		ParallelToolCalls: request.ParallelToolCalls, Temperature: request.Sampling.Temperature,
 		TopP: request.Sampling.TopP, MaxOutputTokens: request.Sampling.MaxOutputTokens,
+	}
+	if request.IncludeEncryptedReasoning {
+		wire.Include = json.RawMessage(`["reasoning.encrypted_content"]`)
 	}
 	if request.Stream && request.StreamOptions.IncludeObfuscation != nil {
 		wire.StreamOptions = &responsesStreamOptionsWire{IncludeObfuscation: request.StreamOptions.IncludeObfuscation}
@@ -369,6 +380,16 @@ func (state *responsesMessageEncodingState) flushReasoning() error {
 	summaries := make([]map[string]string, 0, len(state.reasoning))
 	texts := make([]map[string]string, 0, len(state.reasoning))
 	for _, content := range state.reasoning {
+		if detail := content.ReasoningDetail; detail != nil {
+			if err := requireReasoningRepresentation(llmprotocol.OpenAIResponsesV1, []llmprotocol.Content{content}); err != nil {
+				return err
+			}
+			item.EncryptedContent, _ = json.Marshal(detail.Data.Value)
+			if detail.ID.Set() {
+				item.ID = detail.ID.Value
+			}
+			continue
+		}
 		if content.Reasoning == llmprotocol.ReasoningScopeSummary {
 			summaries = append(summaries, map[string]string{"type": "summary_text", "text": content.Text})
 		} else {
@@ -380,7 +401,7 @@ func (state *responsesMessageEncodingState) flushReasoning() error {
 	if err != nil {
 		return err
 	}
-	if len(texts) > 0 {
+	if len(texts) > 0 || len(item.EncryptedContent) > 0 {
 		item.Content, err = json.Marshal(texts)
 		if err != nil {
 			return err

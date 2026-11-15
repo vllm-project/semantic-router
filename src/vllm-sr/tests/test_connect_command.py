@@ -1033,10 +1033,24 @@ def test_settings_that_win_over_what_connect_wrote_are_named(
     assert hc.codex_model_overrides(project / "sub") == []
 
 
+BUNDLED_GPT_55 = {
+    "slug": "gpt-5.5",
+    "display_name": "GPT-5.5",
+    "supports_search_tool": True,
+    "apply_patch_tool_type": "freeform",
+    "context_window": 272000,
+    "max_context_window": 272000,
+    "upgrade": {"model": "gpt-6-sol", "migration_markdown": "Meet GPT-6 Sol"},
+    "service_tiers": [{"id": "priority", "name": "Fast"}],
+    "additional_speed_tiers": ["fast"],
+}
+
+
 @pytest.fixture
 def harness_bin(tmp_path, monkeypatch):
     """A claude and a codex on PATH that record their arguments, the settings file
-    they were given, and the key in their environment, then exit 3."""
+    or model catalog they were given, and the key in their environment, then exit
+    3. Asked for its bundled models, the codex lists a gpt-5.5 entry."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     record = tmp_path / "ran.json"
@@ -1046,8 +1060,13 @@ def harness_bin(tmp_path, monkeypatch):
             f"#!{sys.executable}\n"
             "import json, os, sys\n"
             "args = sys.argv[1:]\n"
+            "if args[:2] == ['debug', 'models']:\n"
+            f"    print(json.dumps({{'models': [{BUNDLED_GPT_55!r}]}}))\n"
+            "    sys.exit(0)\n"
             "given = args[args.index('--settings') + 1] if '--settings' in args else None\n"
+            "catalog = [json.loads(a.split('=', 1)[1]) for a in args if a.startswith('model_catalog_json=')]\n"
             f"json.dump({{'args': args, 'settings': open(given).read() if given else None,"
+            " 'catalog': json.load(open(catalog[0])) if catalog else None,"
             f" 'key': os.environ.get('VLLM_SR_API_KEY')}}, open({str(record)!r}, 'w'))\n"
             "sys.exit(3)\n"
         )
@@ -1090,7 +1109,68 @@ def test_launch_starts_the_harness_through_the_gateway_and_writes_nothing(
     assert overrides["model_providers.vllm-sr.env_key"] == '"VLLM_SR_API_KEY"'
     assert overrides["model_context_window"] == "65536"
     assert ran["key"] == "sk-secret" and "sk-secret" not in " ".join(ran["args"])
+    assert [m["slug"] for m in ran["catalog"]["models"]] == ["gpt-5.5", "vllm-sr/auto"]
     assert not home.exists()
+
+
+def test_codex_gets_a_catalog_entry_for_the_gateway_model(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    args = ["connect", "codex", "--base-url", url, "--context-window", "65536"]
+    result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes"])
+    assert result.exit_code == 0, result.output
+    catalog = tmp_path / "vllm-sr.models.json"
+    assert (
+        f"model_catalog_json = {json.dumps(str(catalog))}"
+        in (tmp_path / "vllm-sr.config.toml").read_text()
+    )
+    # every bundled entry, since the file replaces Codex's catalog, and this Codex's
+    # own gpt-5.5 entry under the gateway model's name, with what the Router cannot
+    # serve turned off, so Codex has metadata and does not warn
+    assert json.loads(catalog.read_text()) == {
+        "models": [
+            BUNDLED_GPT_55,
+            {
+                **BUNDLED_GPT_55,
+                "slug": "vllm-sr/auto",
+                "display_name": "vllm-sr/auto",
+                "supports_search_tool": False,
+                "apply_patch_tool_type": None,
+                "supported_reasoning_levels": [],
+                "default_reasoning_level": None,
+                "default_reasoning_summary": "auto",
+                "support_verbosity": False,
+                "default_verbosity": None,
+                "upgrade": None,
+                "service_tiers": [],
+                "additional_speed_tiers": [],
+                "context_window": 65536,
+                "max_context_window": 65536,
+            },
+        ]
+    }
+    assert "does not know" not in result.output
+    assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
+    assert not catalog.exists()
+
+    # a model this Codex knows keeps its own entry: no catalog, no warning
+    result = CliRunner().invoke(
+        main, [*args, "--model", "gpt-5.5", "--no-vsr", "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    assert not catalog.exists()
+    assert "model_catalog_json" not in (tmp_path / "vllm-sr.config.toml").read_text()
+    assert "does not know" not in result.output
+
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert not catalog.exists()
+    assert "model_catalog_json" not in (tmp_path / "vllm-sr.config.toml").read_text()
+    assert "bundles no gpt-5.5 entry" in result.output
 
 
 def test_launch_starts_nothing_when_the_gateway_fails(
@@ -1268,7 +1348,7 @@ def test_connect_installs_the_codex_plugin_from_its_source_unless_it_is_there(
     codex.ran.clear()
     (tmp_path / "vsr.json").unlink()
     assert CliRunner().invoke(main, [*args, "--no-vsr", "--yes"]).exit_code == 0
-    assert not any(argv[0] == "codex" for argv in codex.ran)
+    assert not any(argv[1] == "plugin" for argv in codex.ran)
     assert not (tmp_path / "vsr.json").exists()
 
 
