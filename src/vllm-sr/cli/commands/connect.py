@@ -297,6 +297,27 @@ def codex(
         token, from_env = "", False
     key_env = api_key_env if from_env else None
     context_window, notes = _context_window(doc, model, context_window)
+    review_model = next(
+        (
+            entry.get("review_model")
+            for entry in (doc or {}).get("entrypoints") or []
+            if isinstance(entry, dict)
+            and entry.get("api") in (None, "", "chat")
+            and model in (entry.get("model_names") or [])
+        ),
+        None,
+    )
+    review_model = review_model.strip() if review_model else None
+    review_window, review_notes = (
+        _context_window(doc, review_model, None) if review_model else (None, [])
+    )
+    notes += review_notes
+    notes += [
+        f"Approve for me reviews go to {review_model or model} through the gateway."
+        + ("" if review_model else " (session model)")
+    ]
+    if not review_model and _chatgpt_caller_backend(doc):
+        notes.append(_codex_review_hint(model))
     catalog = hc.codex_catalog(
         (
             _json_of(["codex", "debug", "models", "--bundled"], env)
@@ -305,6 +326,8 @@ def codex(
         ),
         model,
         context_window,
+        review_model,
+        review_window,
     )
     if launch:
         # Codex reads the key from key_env, so it stays off the command line
@@ -374,6 +397,48 @@ def codex(
         )
     _probe_or_say_why(gateway, "codex", model, token, doc)
     echo(f"Start Codex with: codex --profile {profile}")
+
+
+def _chatgpt_caller_backend(doc) -> bool:
+    return any(
+        ref.get("provider") == "openai"
+        and str(ref.get("endpoint", "")).rstrip("/")
+        == "https://chatgpt.com/backend-api/codex"
+        and (ref.get("auth") or {}).get("credential") == "caller"
+        for model in (doc or {}).get("providers", {}).get("models") or []
+        for ref in model.get("backend_refs") or []
+    )
+
+
+def _codex_review_hint(model: str) -> str:
+    """The config that sends Approve for me reviews to Codex's own reviewer on
+    the person's ChatGPT login, for a gateway that already takes that login."""
+    return f"""To review with Codex's own reviewer on your ChatGPT login, add this to the Router config:
+  entrypoints:
+    - model_names: [{model}]
+      default: true
+      review_model: vllm-sr/review
+      # recipe: as before
+    - model_names: [vllm-sr/review]
+      recipe: review
+  recipes:
+    - name: review
+      decisions:
+        - name: review
+          priority: 100
+          rules: {{}}
+          modelRefs: [{{model: codex-auto-review}}]
+  providers:
+    models:
+      - name: codex-auto-review
+        provider_model_id: codex-auto-review
+        api_format: responses
+        backend_refs:
+          - name: chatgpt
+            provider: openai
+            endpoint: https://chatgpt.com/backend-api/codex
+            auth: {{credential: caller}}
+Any other model the Router serves can review instead."""
 
 
 def _run(

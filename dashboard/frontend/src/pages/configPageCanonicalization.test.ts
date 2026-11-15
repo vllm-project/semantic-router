@@ -103,6 +103,14 @@ describe('manager load and save', () => {
     expect(canonicalizeConfigForManagerSave(view)).toEqual(v05Config())
   })
 
+  it('retains the default entrypoint when it delegates approval reviews', () => {
+    const original = v05Config()
+    original.entrypoints![0].review_model = 'vllm-sr/private'
+    const view = projectCanonicalConfigForManager(original)
+    expect(view.entrypoints?.[0].review_model).toBe('vllm-sr/private')
+    expect(canonicalizeConfigForManagerSave(view)).toEqual(original)
+  })
+
   it('saves the edited signals and decisions of the default recipe', () => {
     const view = projectCanonicalConfigForManager(v05Config())
     view.decisions![0].priority = 300

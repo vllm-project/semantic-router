@@ -225,3 +225,44 @@ describe('entrypoints and recipes support', () => {
     expect(getPublishableRecipeNames(config)).toEqual(['frontier'])
   })
 })
+
+it('saves and clears a review binding while retaining entrypoint metadata', () => {
+  const config = baseConfig()
+  config.entrypoints = [
+    { model_names: ['main'], recipe: 'default', default: true, review_model: 'review' },
+    { model_names: ['review'], recipe: 'frontier' },
+  ]
+  expect(validateEntrypointForm({ modelNames: 'main', recipe: 'default', reviewModel: 'review' }, config, models, 0))
+    .toEqual(config.entrypoints[0])
+  expect(validateEntrypointForm({ modelNames: 'main', recipe: 'default', reviewModel: '' }, config, models, 0))
+    .toEqual({ model_names: ['main'], recipe: 'default', default: true })
+})
+
+it('rejects missing, self, chained and cyclic review bindings', () => {
+  const config = baseConfig()
+  config.entrypoints = [
+    { model_names: ['main', 'main-alias'], recipe: 'default' },
+    { model_names: ['review'], recipe: 'frontier' },
+  ]
+  const validate = (reviewModel: string, index = 0) => validateEntrypointForm(
+    { modelNames: config.entrypoints![index].model_names.join(','), recipe: config.entrypoints![index].recipe, reviewModel },
+    config, models, index,
+  )
+  expect(() => validate('missing')).toThrow('does not exist')
+  expect(() => validate('main-alias')).toThrow('another entrypoint')
+  config.entrypoints[1].review_model = 'main'
+  expect(() => validate('review')).toThrow('own review_model')
+  delete config.entrypoints[1].review_model
+  config.entrypoints[0].review_model = 'review'
+  expect(() => validate('main', 1)).toThrow('own review_model')
+})
+
+it('preserves names used by another entrypoint for reviews', () => {
+  const config = baseConfig()
+  config.entrypoints = [
+    { model_names: ['main'], recipe: 'default', review_model: 'review' },
+    { model_names: ['review'], recipe: 'frontier' },
+  ]
+  expect(() => validateEntrypointForm({ modelNames: 'renamed', recipe: 'frontier' }, config, models, 1))
+    .toThrow('Keep review model name')
+})

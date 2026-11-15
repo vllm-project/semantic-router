@@ -485,6 +485,7 @@ export interface ConfigData {
     strategy?: 'priority' | 'confidence'
   }
   entrypoints?: Array<{
+    review_model?: string
     model_names: string[]
     recipe: string
   }>

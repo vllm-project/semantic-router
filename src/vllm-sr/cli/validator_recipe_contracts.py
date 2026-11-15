@@ -216,6 +216,33 @@ def _validate_entrypoints(
                         ),
                     )
                 )
+    entries = effective_entrypoints(config)
+    for index, entrypoint in enumerate(config.entrypoints):
+        review = entrypoint.review_model
+        if not review:
+            continue
+        target = next(
+            (
+                entry
+                for entry in entries
+                if (entry.api or "chat") == (entrypoint.api or "chat")
+                and review in entry.model_names
+            ),
+            None,
+        )
+        message = None
+        if review in entrypoint.model_names:
+            message = "cannot reference its own model name"
+        elif target is None:
+            message = (
+                f"unknown entrypoint model '{review}' in {entrypoint.api or 'chat'} API"
+            )
+        elif target.review_model:
+            message = f"target '{review}' must not have a review_model"
+        if message:
+            errors.append(
+                ValidationError(message, field=f"entrypoints[{index}].review_model")
+            )
     return errors
 
 

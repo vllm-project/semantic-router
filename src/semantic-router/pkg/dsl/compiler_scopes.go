@@ -156,10 +156,11 @@ func (c *Compiler) compileEntrypoints(recipeNames map[config.RecipeName]struct{}
 			seenModels[api][modelName] = struct{}{}
 		}
 		c.config.Entrypoints = append(c.config.Entrypoints, config.EntrypointMapping{
-			API:        config.InferenceAPI(entrypoint.API),
-			ModelNames: append([]string(nil), entrypoint.ModelNames...),
-			Recipe:     recipeName,
-			Default:    entrypoint.Default,
+			API:         config.InferenceAPI(entrypoint.API),
+			ModelNames:  append([]string(nil), entrypoint.ModelNames...),
+			Recipe:      recipeName,
+			Default:     entrypoint.Default,
+			ReviewModel: entrypoint.ReviewModel,
 		})
 	}
 	switch {
@@ -172,6 +173,9 @@ func (c *Compiler) compileEntrypoints(recipeNames map[config.RecipeName]struct{}
 		c.markTopLevelDefault()
 	default:
 		c.errors = append(c.errors, fmt.Errorf("%d recipes need exactly one ENTRYPOINT with default: true", len(c.config.Recipes)))
+	}
+	if err := c.config.ValidateReviewModels(); err != nil {
+		c.errors = append(c.errors, err)
 	}
 }
 

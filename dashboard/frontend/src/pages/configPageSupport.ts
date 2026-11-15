@@ -304,6 +304,8 @@ export interface RoutingConfig {
 }
 
 export interface EntrypointConfig {
+  /** Another entrypoint model used for agent approval reviews. */
+  review_model?: string
   model_names: string[]
   recipe: string
   api?: 'chat' | 'systemone'

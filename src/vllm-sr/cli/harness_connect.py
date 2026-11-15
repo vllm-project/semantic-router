@@ -298,45 +298,55 @@ CODEX_CATALOG_BASE = "gpt-5.5"
 
 
 def codex_catalog(
-    bundled: Any, model: str, context_window: int | None
+    bundled: Any,
+    model: str,
+    context_window: int | None,
+    review_model: str | None = None,
+    review_context_window: int | None = None,
 ) -> dict[str, Any] | None:
-    """A Codex model catalog holding model, so Codex does not fall back to
-    default metadata and warn. A catalog file replaces Codex's own, so it keeps
-    every bundled entry and adds model: this Codex's CODEX_CATALOG_BASE entry
-    under the model's name, without tool search, which the Router does not
-    serve, without apply_patch as a custom tool, which a Messages backend
-    refuses, with the reasoning and verbosity of Codex's fallback (a summary,
-    no effort, no verbosity), and with no migration target or service tiers,
-    which belong to the bundled model. Empty when Codex knows model already, so
-    its own entry stays in force; None when bundled holds no base entry."""
+    """Describe only the gateway's selected entrypoint and optional reviewer.
+
+    Adapt the bundled base even when model already names a bundled slug. Never
+    expose unrelated bundled models: Codex would select codex-auto-review even
+    though the gateway does not serve that public model. Without an override,
+    Codex reviews with the session model.
+    """
     models = bundled.get("models") if isinstance(bundled, dict) else None
     models = [entry for entry in models or [] if isinstance(entry, dict)]
-    if any(m.get("slug") == model for m in models):
-        return {}
     base = next((m for m in models if m.get("slug") == CODEX_CATALOG_BASE), None)
     if base is None:
         return None
-    entry = {
-        **base,
-        "slug": model,
-        "display_name": model,
-        "supports_search_tool": False,
-        "apply_patch_tool_type": None,
-        "supported_reasoning_levels": [],
-        "default_reasoning_level": None,
-        "default_reasoning_summary": "auto",
-        "support_verbosity": False,
-        "default_verbosity": None,
-        "upgrade": None,
-        "service_tiers": [],
-        "additional_speed_tiers": [],
-    }
-    if context_window:
-        entry |= {
-            "context_window": context_window,
-            "max_context_window": context_window,
+
+    def adapted(name: str, window: int | None, *, review: bool = False) -> dict:
+        entry = {
+            **base,
+            "slug": name,
+            "display_name": name,
+            "visibility": "hide" if review else "list",
+            "supports_search_tool": False,
+            "apply_patch_tool_type": None,
+            "supported_reasoning_levels": (
+                base.get("supported_reasoning_levels", []) if review else []
+            ),
+            "default_reasoning_level": "low" if review else None,
+            "default_reasoning_summary": "auto",
+            "support_verbosity": False,
+            "default_verbosity": None,
+            "upgrade": None,
+            "service_tiers": [],
+            "additional_speed_tiers": [],
         }
-    return {"models": [*models, entry]}
+        entry.pop("auto_review_model_override", None)
+        if window:
+            entry |= {"context_window": window, "max_context_window": window}
+        return entry
+
+    main = adapted(model, context_window)
+    entries = [main]
+    if review_model:
+        main["auto_review_model_override"] = review_model
+        entries.append(adapted(review_model, review_context_window, review=True))
+    return {"models": entries}
 
 
 def codex_settings(

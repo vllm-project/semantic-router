@@ -89,3 +89,24 @@ describe('ConfigPageMixtureDialog', () => {
     expect(markup).toContain('1 selected · minimum 1')
   })
 })
+
+it('offers other entrypoints as reviewers and retains the chosen review model', () => {
+  const edited = { ...entrypoint, review_model: 'review' }
+  const html = render({
+    entrypoint: edited,
+    entrypointIndex: 0,
+    config: {
+      ...config,
+      entrypoints: [
+        edited,
+        { model_names: ['review'], recipe: 'blend' },
+        { model_names: ['chained'], recipe: 'blend', review_model: 'review' },
+      ],
+    },
+  })
+  expect(html).toContain('Reviews go to')
+  expect(html).toContain('Session model')
+  expect(html).toContain('<option value="review" selected="">review</option>')
+  expect(html).not.toContain('<option value="my/blend"')
+  expect(html).not.toContain('<option value="chained"')
+})
