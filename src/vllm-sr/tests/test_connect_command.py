@@ -21,6 +21,7 @@ if str(PROJECT_ROOT) not in sys.path:
 main = importlib.import_module("cli.main").main
 hc = importlib.import_module("cli.harness_connect")
 rc = importlib.import_module("cli.harness_router_check")
+hs = importlib.import_module("cli.harness_session")
 chat_client = importlib.import_module("cli.chat_client")
 
 # What the stub gateway answers at each stage: a plain reply, the streamed tool
@@ -2610,6 +2611,21 @@ def test_launch_runs_the_key_command_in_the_worktree_and_home_it_starts(
     assert ran_in.read_text() == f"{repo}\n"
     assert json.loads(harness_bin.read_text())["cwd"] == str(repo)
     assert "sk-" not in result.output
+
+
+def test_a_key_command_gets_no_longer_than_the_harness_gives_it(
+    tmp_path, gateway, monkeypatch
+):
+    url, seen, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    monkeypatch.setitem(hs.KEY_COMMAND_TIMEOUTS, "codex", 0.2)
+    args = ["connect", "codex", "--base-url", url, "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, [*args, "--key-command", "sleep 2; echo sk"])
+    assert result.exit_code == 1, result.output
+    assert "did not finish in 0.2 s, the time codex gives it" in result.output
+    assert not seen and not (tmp_path / "codex").exists()
 
 
 def test_claude_code_writes_a_key_command_as_its_helper_and_never_the_key(

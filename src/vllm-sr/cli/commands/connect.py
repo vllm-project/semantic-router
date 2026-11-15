@@ -644,7 +644,7 @@ def _status_probe(entry: dict, env: dict[str, str]) -> dict[str, str]:
         token = token or hc.NO_KEY
     if command:
         try:
-            token = hs.key_from(command, env)
+            token = hs.key_from(command, env, harness=harness)
         except ValueError as exc:
             return {"state": "failed", "detail": str(exc)}
     result = rc.basic_reply(gateway, harness, model, token, STATUS_PROBE_TIMEOUT)
@@ -847,7 +847,7 @@ def _key(harness, key_command, login, env, cwd, needed) -> str | None:
     if not needed:
         return None
     try:
-        return hs.key_from(key_command, env, cwd)
+        return hs.key_from(key_command, env, cwd, harness)
     except ValueError as exc:
         raise click.ClickException(
             f"{exc}, so nothing was written or started."

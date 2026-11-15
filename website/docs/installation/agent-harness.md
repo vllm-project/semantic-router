@@ -305,7 +305,8 @@ helper in place of the key or a variable, and the harness runs it:
 
 The command runs it only to probe the gateway, for `--check` and for
 `connect status`, and never prints or writes what it prints. A command that
-fails or prints nothing stops it before anything is written. `--launch` passes
+fails, prints nothing, or takes longer than the harness waits for it (5 seconds
+for Codex) stops it before anything is written. `--launch` passes
 the same setting for that session and runs the command for its probe as the
 harness will, in the `--worktree` and with the `--home` given, so the key
 probed is the key the harness sends. `--undo` removes it with the rest. A

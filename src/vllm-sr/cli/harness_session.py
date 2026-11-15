@@ -17,7 +17,11 @@ from cli import harness_connect as hc
 
 # The variable each harness reads its home from.
 HOME_VARIABLES = {"claude-code": "CLAUDE_CONFIG_DIR", "codex": "CODEX_HOME"}
-# Seconds connect waits for --key-command when it probes the gateway itself.
+# Seconds connect waits for --key-command when it probes the gateway itself: no
+# longer than the harness waits for it (Codex 0.166:
+# model_providers.<id>.auth.timeout_ms), so a key the probe got reaches the
+# harness too.
+KEY_COMMAND_TIMEOUTS = {"codex": 5}
 KEY_COMMAND_TIMEOUT = 30
 
 
@@ -58,10 +62,14 @@ def receipt(where: Path, home: Path, gateway: str, model: str) -> str:
     return "Session: " + " ".join(f"{k}={shlex.quote(v)}" for k, v in fields.items())
 
 
-def key_from(command: str, env: dict[str, str], cwd: Path | None = None) -> str:
+def key_from(
+    command: str, env: dict[str, str], cwd: Path | None = None, harness: str = ""
+) -> str:
     """What command prints, stripped as both harnesses strip it, run the way they
-    run it: with the harness's environment, in its directory (default: here). A
-    failure says how it failed, never what it printed."""
+    run it: with the harness's environment, in its directory (default: here), and
+    within the time it allows. A failure says how it failed, never what it
+    printed."""
+    limit = KEY_COMMAND_TIMEOUTS.get(harness, KEY_COMMAND_TIMEOUT)
     try:
         result = subprocess.run(
             [hc.KEY_SHELL, "-c", command],
@@ -70,12 +78,17 @@ def key_from(command: str, env: dict[str, str], cwd: Path | None = None) -> str:
             env=env,
             cwd=cwd,
             stdin=subprocess.DEVNULL,
-            timeout=KEY_COMMAND_TIMEOUT,
+            timeout=limit,
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
         raise ValueError(
-            f"--key-command did not finish in {KEY_COMMAND_TIMEOUT} s"
+            f"--key-command did not finish in {limit} s"
+            + (
+                f", the time {harness} gives it"
+                if harness in KEY_COMMAND_TIMEOUTS
+                else ""
+            )
         ) from exc
     except OSError as exc:
         raise ValueError(f"--key-command did not start: {exc}") from exc
