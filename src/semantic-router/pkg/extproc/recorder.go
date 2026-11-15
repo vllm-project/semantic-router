@@ -292,6 +292,7 @@ func buildReplayRoutingRecord(
 		record.ConversationID = state.ConversationID
 	}
 	record.RequestKind, record.Review = replayApprovalReview(ctx)
+	record.ThreadID, record.TurnID, record.ParentTurnID = ctx.AgentTurn.ThreadID, ctx.AgentTurn.TurnID, ctx.AgentTurn.ParentTurnID
 	// The sanitiser drops tool-result payloads unless the route captures tool
 	// results; a masking route persists no request text at all, because Replay
 	// snapshots the request before masking runs (D3, #3566).

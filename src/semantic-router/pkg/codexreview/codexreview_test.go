@@ -108,6 +108,38 @@ func TestObserveWithoutEnvelopeKeepsOnlyTheSource(t *testing.T) {
 	}
 }
 
+// Every Codex call names its turn: the header is read first, and the body's
+// client_metadata, flat keys before the metadata JSON, when it names none.
+func TestReadTurnFromTheHeaderOrClientMetadata(t *testing.T) {
+	captured, _ := loadReview(t)
+	review := Turn{
+		SessionID: "00000000-0000-4000-8000-000000000005", ThreadID: "00000000-0000-4000-8000-000000000007",
+		TurnID: "00000000-0000-4000-8000-000000000008", ParentTurnID: "00000000-0000-4000-8000-000000000010",
+	}
+	for name, test := range map[string]struct {
+		header string
+		body   []byte
+		want   Turn
+	}{
+		"captured review body":      {"", captured, review},
+		"header over the body":      {`{"session_id":"s","thread_id":"s","turn_id":" t1 "}`, captured, Turn{SessionID: "s", ThreadID: "s", TurnID: "t1"}},
+		"header without a turn":     {`{"session_id":"s"}`, captured, review},
+		"unreadable header":         {"not json", captured, review},
+		"metadata JSON only":        {"", []byte(`{"client_metadata":{"x-codex-turn-metadata":"{\"thread_id\":\"th\",\"turn_id\":\"t2\"}"}}`), Turn{ThreadID: "th", TurnID: "t2"}},
+		"no metadata":               {"", []byte(`{"model":"m","input":"hi"}`), Turn{}},
+		"a turn id of another type": {`{"turn_id":7}`, nil, Turn{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := ReadTurn(test.header, test.body); got != test.want {
+				t.Fatalf("turn = %+v, want %+v", got, test.want)
+			}
+		})
+	}
+	if long := ReadTurn(`{"turn_id":"`+strings.Repeat("x", 300)+`"}`, nil); len(long.TurnID) != maxIDBytes {
+		t.Fatalf("turn id kept %d bytes", len(long.TurnID))
+	}
+}
+
 func TestPlannedActionSummaries(t *testing.T) {
 	for name, test := range map[string]struct{ action, summary string }{
 		"shell script":    {`{"tool":"shell","command":["/bin/zsh","-c","git status\n  --short"]}`, "git status --short"},

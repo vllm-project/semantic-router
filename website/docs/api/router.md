@@ -557,9 +557,11 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 | `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
 
 List and aggregate requests accept filters such as `recipe`, `decision`,
-`model`, `session_id`, `cache_status`, and `search`, and, for agent approval
-reviews, `request_kind=codex_approval_review`, `review_status`,
-`review_outcome`, and `review_risk`. Pagination uses `limit`
+`model`, `session_id`, `turn_id`, `cache_status`, and `search`, and, for agent
+approval reviews, `request_kind=codex_approval_review`, `review_status`,
+`review_outcome`, and `review_risk`. `turn_id` matches a record's `turn_id` or
+`parent_turn_id`: the calls one Codex turn sent, and the approval reviews and
+subagent calls it started. Pagination uses `limit`
 and `offset`; `limit` is capped at 100. `showDetails=true` requests large body
 fields, so use it only when those fields are needed. See
 [Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
@@ -574,7 +576,9 @@ multiple requests at the same turn index.
 Records, trajectory routes, and messages include `conversation_id` when an
 explicit conversation identity is available. Messages are grouped by conversation
 and turn, so separate conversations in one session can each start at turn zero.
-Insights shows their boundaries and complete IDs.
+Insights shows their boundaries and complete IDs. Records and trajectory routes
+also carry a Codex request's `turn_id` and `parent_turn_id`; see
+[Agent turns](../tutorials/plugin/router-replay#agent-turns).
 
 Dashboard Insights shows these routes alongside recorded signals, projections,
 candidate scores, and session-switch reasons. In `observe` mode, candidate and

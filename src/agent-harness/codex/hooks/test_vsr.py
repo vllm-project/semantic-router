@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import os
 import shutil
 import threading
+import time
 import unittest
+import urllib.parse
 from contextlib import redirect_stdout
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -582,6 +585,219 @@ class ListenerRulesTest(unittest.TestCase):
         self.assertIsNone(vsr.rules_of(None))
         self.assertIsNone(vsr.rules_of({"vsr": "broken"}))
         self.assertEqual(vsr.rules_of({"models": []}), vsr.NO_RULES)
+
+
+class Management:
+    """A stub Router management API: the Router Replay list, paged as the Router pages it."""
+
+    def __init__(self):
+        self.records: list[dict] = []
+        self.status, self.delay, self.body = 200, 0.0, None
+        # The query and the Authorization header of every request.
+        self.asked: list[dict] = []
+        self.auth: list[str | None] = []
+        # Where every request is redirected to, when set.
+        self.redirect: str | None = None
+        management = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                url = urllib.parse.urlsplit(self.path)
+                query = dict(urllib.parse.parse_qsl(url.query))
+                management.asked.append(query)
+                management.auth.append(self.headers.get("Authorization"))
+                if management.redirect:
+                    self.send_response(302)
+                    self.send_header("location", management.redirect + self.path)
+                    self.send_header("content-length", "0")
+                    self.end_headers()
+                    return
+                time.sleep(management.delay)
+                offset, limit = int(query["offset"]), int(query["limit"])
+                found = [
+                    r
+                    for r in management.records
+                    if query["turn_id"] in (r.get("turn_id"), r.get("parent_turn_id"))
+                ]
+                page = found[offset : offset + limit]
+                data = (
+                    management.body
+                    or json.dumps(
+                        {
+                            "object": "router_replay.list",
+                            "total": len(found),
+                            "has_more": offset + len(page) < len(found),
+                            "data": page,
+                        }
+                    ).encode()
+                )
+                ok = url.path == "/api/v1/observability/replays"
+                # a hook that stopped waiting has gone away
+                with contextlib.suppress(OSError):
+                    self.send_response(management.status if ok else 404)
+                    self.send_header("content-length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+
+TURN = "019a7c2e-0000-7000-8000-000000000010"
+
+
+def call(model: str, decision: str, turn: str = TURN) -> dict:
+    return {"turn_id": turn, "selected_model": model, "decision": decision}
+
+
+def review(status: str, outcome: str | None = None) -> dict:
+    verdict = {"status": status}
+    if outcome:
+        verdict["assessment"] = {"outcome": outcome}
+    return {
+        "turn_id": "review-turn",
+        "parent_turn_id": TURN,
+        "request_kind": "codex_approval_review",
+        "selected_model": "codex-auto-review",
+        "decision": "review",
+        "review": verdict,
+    }
+
+
+def stop(turn_id: str = TURN) -> dict:
+    """The Stop event Codex 0.166 sends (hooks crate, stop.command.input)."""
+    return {
+        "session_id": "019a7c2e-0000-7000-8000-000000000005",
+        "turn_id": turn_id,
+        "transcript_path": None,
+        "cwd": "/work",
+        "hook_event_name": "Stop",
+        "model": "vllm-sr/auto",
+        "permission_mode": "default",
+        "stop_hook_active": False,
+        "last_assistant_message": "Done.",
+    }
+
+
+class TurnLineTest(unittest.TestCase):
+    def setUp(self):
+        self.management = Management()
+        self.addCleanup(self.management.server.shutdown)
+        self.env = {
+            "VSR_MANAGEMENT_URL": self.management.url,
+            "CODEX_HOME": "/nonexistent",
+        }
+
+    def test_the_line_names_the_models_decisions_and_reviews_the_router_recorded(self):
+        self.management.records = [
+            call("gpt-6-luna", "coding"),
+            call("qwen3-coder", "simple"),
+            call("gpt-6-luna", "coding"),
+            review("completed", "allow"),
+            # a tool check is the same review going on, not a verdict
+            review("tool_call"),
+            review("completed", "deny"),
+            call("gpt-6-luna", "coding"),
+            call("other-model", "coding", turn="another-turn"),
+        ]
+        self.assertEqual(
+            run("stop", stop(), self.env),
+            {
+                "systemMessage": "▚▞ vSR turn · 4 calls: gpt-6-luna (3), qwen3-coder (1)"
+                " · decisions: coding, simple · 2 reviews: 1 allowed, 1 denied by codex-auto-review"
+            },
+        )
+        self.assertEqual(
+            self.management.asked, [{"turn_id": TURN, "limit": "100", "offset": "0"}]
+        )
+
+    def test_a_turn_the_router_has_no_record_of_or_that_cannot_be_read_ends_without_a_line(
+        self,
+    ):
+        self.assertEqual(run("stop", stop(), self.env), {})
+        self.management.records = [call("gpt-6-luna", "coding")]
+        for status, body in ((500, None), (200, b"not json"), (200, b'{"data": 1}')):
+            self.management.status, self.management.body = status, body
+            self.assertEqual(run("stop", stop(), self.env), {})
+        self.assertEqual(run("stop", {**stop(), "turn_id": None}, self.env), {})
+        port = self.management.server.server_address[1]
+        self.management.server.shutdown()
+        self.management.server.server_close()
+        self.assertEqual(
+            run(
+                "stop",
+                stop(),
+                {**self.env, "VSR_MANAGEMENT_URL": f"http://127.0.0.1:{port}"},
+            ),
+            {},
+        )
+
+    def test_a_redirect_is_refused_so_the_token_never_reaches_another_host(self):
+        elsewhere = Management()
+        self.addCleanup(elsewhere.server.shutdown)
+        elsewhere.records = [call("gpt-6-luna", "coding")]
+        self.management.redirect = elsewhere.url
+        env = {**self.env, "VSR_MANAGEMENT_TOKEN": "management-secret"}
+        line = run("stop", stop(), env)
+        self.assertEqual(elsewhere.auth, [])
+        self.assertEqual(self.management.auth, ["Bearer management-secret"])
+        self.assertEqual(line, {})
+
+    def test_every_request_that_carries_a_token_refuses_redirects(self):
+        # The runtime token goes to the listener the same way the management
+        # token goes to the management API, so neither follows a redirect.
+        source = Path(vsr.__file__).read_text()
+        self.assertNotIn("urllib.request.urlopen(", source)
+        self.assertEqual(source.count("NO_REDIRECTS.open("), 4)
+
+    def test_a_slow_router_costs_the_turn_no_more_than_the_wait(self):
+        self.management.records, self.management.delay = [call("m", "d")], 1.0
+        with mock.patch.object(vsr, "TURN_SECONDS", 0.2):
+            started = time.monotonic()
+            self.assertEqual(run("stop", stop(), self.env), {})
+            self.assertLess(time.monotonic() - started, 0.8)
+
+    def test_every_page_of_a_long_turn_is_read_and_a_cut_short_read_says_so(self):
+        self.management.records = [call("gpt-6-luna", "coding")] * 150
+        self.assertIn(
+            "150 calls: gpt-6-luna (150)",
+            run("stop", stop(), self.env)["systemMessage"],
+        )
+        self.assertEqual([q["offset"] for q in self.management.asked], ["0", "100"])
+        with mock.patch.object(vsr, "TURN_PAGES", 1):
+            line = run("stop", stop(), self.env)["systemMessage"]
+        self.assertTrue(line.endswith(" · read 100 of 150 calls"), line)
+
+    def test_the_url_comes_from_vsr_json_or_a_variable_and_the_token_from_a_variable(
+        self,
+    ):
+        home = Path(self.id().replace(".", "_"))
+        home.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, home, True)
+        self.management.records = [call("gpt-6-luna", "coding")]
+        (home / "vsr.json").write_text(
+            json.dumps({"managementUrl": self.management.url})
+        )
+        runtime = Runtime()
+        self.addCleanup(runtime.server.shutdown)
+        env = {
+            "CODEX_HOME": str(home),
+            "VSR_MANAGEMENT_URL": "",
+            "VSR_MANAGEMENT_TOKEN": "m",
+            "VSR_RUNTIME_URL": runtime.url,
+        }
+        self.assertIn("systemMessage", run("stop", stop(), env))
+        self.assertEqual(self.management.auth, ["Bearer m"])
+        # The line never waits on the listener's listing.
+        self.assertEqual(runtime.listings, 0)
+        # An empty URL leaves the line out without a request.
+        (home / "vsr.json").write_text(json.dumps({"managementUrl": ""}))
+        self.assertEqual(run("stop", stop(), env), {})
+        self.assertEqual(len(self.management.asked), 1)
 
 
 if __name__ == "__main__":

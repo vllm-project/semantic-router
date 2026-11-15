@@ -326,6 +326,13 @@ type Record struct {
 	RequestBodyTruncated     bool                   `json:"request_body_truncated,omitempty"`
 	ResponseBodyTruncated    bool                   `json:"response_body_truncated,omitempty"`
 
+	// The agent's own ids for the thread and turn a request belongs to, as
+	// Codex names them in its turn metadata. ParentTurnID is the turn that
+	// started the thread, such as the turn an approval review judges.
+	ThreadID     string `json:"thread_id,omitempty"`
+	TurnID       string `json:"turn_id,omitempty"`
+	ParentTurnID string `json:"parent_turn_id,omitempty"`
+
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
 	JailbreakEnabled  bool `json:"jailbreak_enabled,omitempty"`

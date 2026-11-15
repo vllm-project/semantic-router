@@ -110,6 +110,14 @@ export interface InsightsRecord {
   request_kind?: string
   review?: InsightsReview
   session_id?: string
+  /**
+   * The Codex thread and turn that sent the request. parent_turn_id is the
+   * turn that started the thread, such as the turn a review judges or a
+   * subagent was spawned from.
+   */
+  thread_id?: string
+  turn_id?: string
+  parent_turn_id?: string
   turn_index: number
   recipe?: string
   decision?: string

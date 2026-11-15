@@ -733,5 +733,33 @@ allowed plus denied verdicts, latency percentiles of reviews with a verdict,
 recorded cost per currency with the number of unpriced requests, reviews over
 time, and requests by review model.
 
+### Agent turns
+
+A request Codex sends carries its turn metadata, in the `x-codex-turn-metadata`
+header and the Responses request's `client_metadata`, and every record of it
+keeps three of its ids:
+
+| Field | Holds |
+| --- | --- |
+| `thread_id` | The Codex thread that sent the request: the session's own thread, a reviewer's or a subagent's. |
+| `turn_id` | The turn of that thread the request belongs to. |
+| `parent_turn_id` | The turn that started the thread, such as the turn an approval review judges or a subagent was spawned from. |
+
+The [Replay API](../../api/router#router-replay) filter `turn_id` matches
+`turn_id` or `parent_turn_id`, so one query returns a turn's calls, its
+approval reviews and the calls of subagents it spawned. The Codex plugin reads
+it at the end of each turn to name the models that served it. Every store
+keeps the ids on the record; PostgreSQL also keeps them in columns, with
+indexes on `turn_id` and `parent_turn_id`, added to an existing table when the
+Router starts.
+
+Trajectory routes carry `turn_id` and `parent_turn_id` too. In **Insights**, a
+record's Session Routing section shows its Codex thread, turn and parent turn,
+and each turn opens the request list filtered to it (`/insights?turn=...`),
+with a chip that clears the filter. A session's routing history opens each
+Codex turn with a row that links there and counts its calls, so a turn's own
+calls and its subagents' calls read as one unit, and a review that names the
+turn it judged is marked on that turn's calls.
+
 For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).

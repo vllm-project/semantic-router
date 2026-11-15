@@ -19275,6 +19275,14 @@
             }
           },
           {
+            "name": "turn_id",
+            "in": "query",
+            "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -20403,6 +20411,9 @@
                                 "verdict"
                               ]
                             }
+                          },
+                          "parent_turn_id": {
+                            "type": "string"
                           },
                           "pii_blocked": {
                             "type": "boolean"
@@ -21680,6 +21691,9 @@
                           "terminal_reason": {
                             "type": "string"
                           },
+                          "thread_id": {
+                            "type": "string"
+                          },
                           "timestamp": {
                             "type": "string",
                             "format": "date-time"
@@ -21775,6 +21789,9 @@
                           "total_tokens": {
                             "nullable": true,
                             "type": "integer"
+                          },
+                          "turn_id": {
+                            "type": "string"
                           },
                           "turn_index": {
                             "type": "integer"
@@ -22119,6 +22136,14 @@
             "name": "session_id",
             "in": "query",
             "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "turn_id",
+            "in": "query",
+            "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
             "schema": {
               "type": "string"
             }
@@ -23086,6 +23111,14 @@
             }
           },
           {
+            "name": "turn_id",
+            "in": "query",
+            "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -23679,6 +23712,14 @@
             "name": "session_id",
             "in": "query",
             "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "turn_id",
+            "in": "query",
+            "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
             "schema": {
               "type": "string"
             }
@@ -24306,6 +24347,9 @@
                           "lifecycle_state": {
                             "type": "string"
                           },
+                          "parent_turn_id": {
+                            "type": "string"
+                          },
                           "previous_model": {
                             "type": "string"
                           },
@@ -24336,6 +24380,9 @@
                           "timestamp": {
                             "type": "string",
                             "format": "date-time"
+                          },
+                          "turn_id": {
+                            "type": "string"
                           },
                           "turn_index": {
                             "type": "integer"
@@ -25662,6 +25709,9 @@
                         ]
                       }
                     },
+                    "parent_turn_id": {
+                      "type": "string"
+                    },
                     "pii_blocked": {
                       "type": "boolean"
                     },
@@ -26938,6 +26988,9 @@
                     "terminal_reason": {
                       "type": "string"
                     },
+                    "thread_id": {
+                      "type": "string"
+                    },
                     "timestamp": {
                       "type": "string",
                       "format": "date-time"
@@ -27033,6 +27086,9 @@
                     "total_tokens": {
                       "nullable": true,
                       "type": "integer"
+                    },
+                    "turn_id": {
+                      "type": "string"
                     },
                     "turn_index": {
                       "type": "integer"

@@ -3,11 +3,22 @@ package extproc
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/codexreview"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
+
+// observeAgentTurn reads the Codex turn a request belongs to at ingress, from
+// its turn metadata header or, for a Responses request, the client_metadata
+// the codec drops.
+func observeAgentTurn(ctx *RequestContext, body []byte) {
+	if ctx.SourceFormat != llmprotocol.OpenAIResponsesV1 {
+		body = nil
+	}
+	ctx.AgentTurn = codexreview.ReadTurn(headerValueCI(ctx, headers.XCodexTurnMetadata), body)
+}
 
 // observeApprovalReview recognises a Codex approval review at ingress, while
 // the wire body still has the client metadata the codec drops. A request is a

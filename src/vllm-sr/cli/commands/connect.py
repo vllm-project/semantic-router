@@ -20,6 +20,8 @@ import yaml
 from cli import harness_connect as hc
 from cli import harness_router_check as rc
 from cli.chat_client import resolve_chat_base_url
+from cli.runtime_management_config import _configured_management_port
+from cli.runtime_stack import resolve_runtime_stack
 from cli.terminal import echo, heading, output_width, success, warning
 
 # The vSR plugin's marketplace: this repository on GitHub.
@@ -364,8 +366,13 @@ def codex(
     if options:
         # the listener checks its key on System One too: the plugin reads it from the
         # variable named here, so the key itself stays out of vsr.json; without a key
-        # none is named, so a variable an earlier listener's key sits in is not sent
-        options = {**options, "runtimeTokenEnv": key_env}
+        # none is named, so a variable an earlier listener's key sits in is not sent.
+        # The turn line reads each turn's records from the management API.
+        options = {
+            **options,
+            "runtimeTokenEnv": key_env,
+            "managementUrl": _management_url(gateway, doc),
+        }
     if options:
         # the vSR plugin's own settings: connect owns the runtime keys, the rest stays
         changes.append(hc.Change(home / "vsr.json", "json", options))
@@ -699,6 +706,16 @@ def _vsr_options(gateway: str, doc: dict | None) -> dict[str, str] | None:
         "runtimeUrl": f"{gateway.rstrip('/')}/v1/decisions",
         "runtimeModel": models[0],
     }
+
+
+def _management_url(gateway: str, doc: dict | None) -> str:
+    """The Router management API beside the gateway, as `vllm-sr serve` publishes
+    it: the gateway's host at the configured management port, 8080 by default,
+    moved by the stack's port offset like the listener."""
+    port = _configured_management_port(doc or {})
+    host = urllib.parse.urlsplit(gateway).hostname or "localhost"
+    host = f"[{host}]" if ":" in host else host
+    return f"http://{host}:{port + resolve_runtime_stack().port_offset}"
 
 
 def _vsr_claude_plan(options, plugin_id, install, key_env) -> list[str]:

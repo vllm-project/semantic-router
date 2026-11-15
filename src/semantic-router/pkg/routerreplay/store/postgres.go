@@ -38,8 +38,9 @@ const postgresInsertQueryTemplate = `
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id,
 			cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache,
-			prompt_original_bytes, prompt_original_sha256, request_kind, review, review_status, review_outcome, review_risk
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68, $69, $70, $71, $72, $73, $74, $75)
+			prompt_original_bytes, prompt_original_sha256, request_kind, review, review_status, review_outcome, review_risk,
+			thread_id, turn_id, parent_turn_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68, $69, $70, $71, $72, $73, $74, $75, $76, $77, $78)
 	`
 
 const postgresCreateTableQueryTemplate = `
@@ -154,12 +155,17 @@ const postgresCreateTableQueryTemplate = `
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS context_token_count INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS hallucination_span_details JSONB;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS recipe VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS thread_id VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS turn_id VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS parent_turn_id VARCHAR(255);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_timestamp ON {{table}} (timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_created_at ON {{table}} (created_at);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_request_id ON {{table}} (request_id);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_decision_timestamp ON {{table}} (decision, timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_selected_model_timestamp ON {{table}} (selected_model, timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_session_timestamp ON {{table}} (session_id, timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_turn_timestamp ON {{table}} (turn_id, timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_parent_turn_timestamp ON {{table}} (parent_turn_id, timestamp DESC);
 	`
 
 // PostgresStore implements Storage using PostgreSQL as the backend.

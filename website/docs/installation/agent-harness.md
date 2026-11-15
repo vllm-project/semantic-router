@@ -495,8 +495,11 @@ first published System One model, and `router: false` so the gateway chooses the
 models. When the API key variable is set it also passes `runtimeToken`, which
 Claude Code keeps in its credential store, not in `settings.json`; the preview
 names the variable and never shows the key. For Codex it writes
-`runtimeUrl` and `runtimeModel` to `$CODEX_HOME/vsr.json` (default
-`~/.codex/vsr.json`), keeping its other settings.
+`runtimeUrl`, `runtimeModel` and `managementUrl` to `$CODEX_HOME/vsr.json`
+(default `~/.codex/vsr.json`), keeping its other settings. `managementUrl` is
+the Router's management API on the gateway's host, at
+`global.services.management_api.port` (8080 by default) moved by the stack's
+port offset.
 
 Both harnesses preview everything with `--dry-run`, the plugin commands
 included, which run only when writing. `--undo` sets back the plugin options the
@@ -521,6 +524,35 @@ with `/vsr` stays theirs until `/vsr follow`:
         models: [vela3-lite]
         vsr: {redact: true, guard: true, router: false}
 ```
+
+#### Which models served a Codex turn
+
+Codex knows only the entrypoint it asked for, such as `vllm-sr/auto`. At the
+end of each turn the Codex plugin asks Router Replay for the turn's records and
+shows one line:
+
+```text
+↳ Hook · ▚▞ vSR turn · 4 calls: gpt-6-luna (3), qwen3-coder (1) · decisions: coding, simple · 2 reviews: 1 allowed, 1 denied by codex-auto-review
+```
+
+Codex sends its turn metadata with every model call, in the
+`x-codex-turn-metadata` header and the request's `client_metadata`, and the
+Router records the call's `thread_id`, `turn_id` and `parent_turn_id` from it.
+An approval review and a subagent name the turn that started them as their
+parent turn, so `GET /api/v1/observability/replays?turn_id=<id>` returns the
+turn's calls, reviews and subagent calls, and the plugin asks for the turn id
+its `Stop` hook receives. The line does not use the session: Codex sends its
+session in `session-id`, which the Router reads only when
+`global.router.headers.session_id_headers` or protection's `identity.headers`
+name it, so by default a Codex call is filed under a session the Router derives.
+
+- **Router Replay** must be on for the recipes that serve the turn and its
+  reviews. A principal without `replay.detail` permission still sees the
+  models, decisions and verdicts.
+- **The management API** must be reachable at `managementUrl`. With bearer
+  auth, set `VSR_MANAGEMENT_TOKEN` to a token with `replay.read`.
+- **No answer within 1.5 seconds**, or no record of the turn, ends the turn
+  without a line. Set `managementUrl` to `""` in `vsr.json` to turn it off.
 
 #### Rules of your own for guard and redact
 

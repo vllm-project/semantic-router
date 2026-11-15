@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/codexreview"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
@@ -438,6 +439,9 @@ type RequestContext struct {
 	// nothing routes, authorizes or masks on it.
 	ApprovalReview        *routerreplay.Review
 	approvalReviewSettled bool
+	// AgentTurn is the Codex turn the request belongs to, read from its turn
+	// metadata at ingress. Replay records it; nothing routes on it.
+	AgentTurn codexreview.Turn
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process
