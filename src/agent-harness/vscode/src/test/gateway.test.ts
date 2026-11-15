@@ -197,6 +197,48 @@ test('takes the API key and bearer tokens out of every error the gateway words',
   await assert.rejects(collect({ model: 'vllm-sr/auto', messages: [] }), redacted(/not JSON/));
 });
 
+test('says the gateway refused the connection, with its address, and no key', async () => {
+  const closed = createServer();
+  await new Promise<void>((resolve) => closed.listen(0, '127.0.0.1', resolve));
+  const { port } = closed.address() as AddressInfo;
+  await new Promise((resolve) => closed.close(resolve));
+  // A URL that holds the key, which the message quotes.
+  const dead = { url: `http://127.0.0.1:${port}/secret-key`, apiKey: 'secret-key' };
+  const refused = new RegExp(`The gateway at http://127\\.0\\.0\\.1:${port}/\\*\\*\\* refused the connection \\(connect ECONNREFUSED 127\\.0\\.0\\.1:${port}\\)\\.$`);
+  await assert.rejects(listModels(dead, []), refused);
+  await assert.rejects(chat(dead, { model: 'vllm-sr/auto', messages: [] }, parts, () => {}), refused);
+});
+
+test('gives up on a gateway that accepts the request and never answers', { timeout: 5000 }, async () => {
+  handle = () => {};
+  const impatient = { ...gateway(), timeoutMs: 100 };
+  const timedOut = (error: Error) => {
+    assert.equal(error.name, 'TimeoutError');
+    assert.equal(error.message, `The gateway at ${impatient.url} did not answer within 0.1 s.`);
+    return true;
+  };
+  for (const request of [() => listModels(impatient, []), () => chat(impatient, { model: 'vllm-sr/auto', messages: [] }, parts, () => {})]) {
+    const started = Date.now();
+    await assert.rejects(request(), timedOut);
+    assert.ok(Date.now() - started >= 100);
+  }
+});
+
+test('keeps reading a reply that started in time, however long it streams', async () => {
+  handle = async (_request, _body, response) => {
+    response.writeHead(200, { 'content-type': 'text/event-stream' });
+    for (const word of ['one ', 'two ', 'three ', 'four']) {
+      response.write(event({ choices: [{ delta: { content: word } }] }));
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    }
+    response.end(event({ choices: [{ delta: {}, finish_reason: 'stop' }] }));
+  };
+  const impatient = { ...gateway(), timeoutMs: 100 };
+  const reported: unknown[] = [];
+  await chat(impatient, { model: 'vllm-sr/auto', messages: [] }, parts, (part) => reported.push(part));
+  assert.deepEqual(reported, ['one ', 'two ', 'three ', 'four'].map((word) => new Text(word)));
+});
+
 test('streams text and a tool call cut across writes, and reads the routing headers', async () => {
   let request: { url?: string; headers: IncomingMessage['headers']; body: Record<string, unknown> } | undefined;
   handle = (incoming, body, response) => {

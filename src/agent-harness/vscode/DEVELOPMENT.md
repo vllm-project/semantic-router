@@ -8,6 +8,7 @@
 | `src/extension.ts` | Activation: registers the chat provider, the status bar item, the commands and the log. The only file that loads `vscode`. |
 | `src/gateway.ts` | The gateway client: the model list, the Chat Completions request built from VS Code's messages and tools, the streamed reply turned back into VS Code's parts, and the routing headers. |
 | `src/test/gateway.test.ts` | `gateway.ts` against a fake gateway on a local port, with plain classes standing in for VS Code's parts. |
+| `src/test/extension.test.ts` | `extension.ts` with a stand-in for the `vscode` module: what the user is told when listing the models fails. |
 
 ## The VS Code API
 

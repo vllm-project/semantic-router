@@ -22,7 +22,7 @@
   "main": "./out/extension.js",
   "scripts": {
     "compile": "tsc -p .",
-    "test": "tsc -p . && node --test out/test/gateway.test.js",
+    "test": "tsc -p . && node --test out/test/gateway.test.js out/test/extension.test.js",
     "vscode:prepublish": "npm run compile"
   },
   "devDependencies": {

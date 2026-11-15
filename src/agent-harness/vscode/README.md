@@ -15,6 +15,9 @@ set by the gateway's recipe.
   stable in that release.
 - A Router gateway with at least one entrypoint. The local Quickstart serves one at
   `http://localhost:8899`; see [Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness).
+- A GitHub Copilot sign-in, to send from the chat view. In VS Code 1.146, sending a message there with a
+  vLLM Semantic Router model selected opened a **Sign in to use GitHub Copilot** dialog, and no request
+  reached the gateway.
 - Node.js 20 or later and npm, to build the extension.
 
 ## Install from source
@@ -38,6 +41,10 @@ from VSIX...** and pick `vllm-sr.vsix`.
 3. Open the chat view, open the model picker and choose a model under **vLLM Semantic Router**. If it is
    not listed, run **Chat: Manage Language Models**: that editor lists every model VS Code knows of,
    and whether each one shows in the picker.
+
+If the extension cannot list the gateway's models, for example with no key, a wrong key or no gateway at
+the address, it says why in a notification, once for each error, with buttons to set the key or open the
+log, and the status bar item shows a warning with the reason until a listing works.
 
 After each reply the status bar shows the model the gateway chose, for example
 `qwen36-35b-a3b-off`. Hover over it for the details:
@@ -83,6 +90,8 @@ and logged with the key and any bearer token replaced by `***`, in case the gate
   and tool results keep only their text and JSON. A model's reasoning text is not shown, since VS Code's
   stable API has no part for it.
 - Token counts that VS Code asks for are estimates, about four characters a token.
+- The extension waits 30 s for the model list and 120 s for a reply to start, then fails the request.
+  A reply that has started streams for as long as it takes; cancel it in the chat to stop it.
 - Each VS Code window sends one `x-session-id`, so the gateway can keep a conversation on its model.
   VS Code's stable API does not give the extension a conversation ID, so no `x-conversation-id` is sent,
   and the gateway tells conversations apart by how they start.

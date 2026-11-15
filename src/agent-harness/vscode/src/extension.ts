@@ -39,6 +39,10 @@ export function activate(context: vscode.ExtensionContext): void {
     apiKey: await context.secrets.get(API_KEY),
     sessionId,
   });
+  // VS Code lists the models silently, at startup and after every key or
+  // setting change, so a listing error goes to the status bar and is shown
+  // once, until the listing works again.
+  let listingError: string | undefined;
 
   const provider: vscode.LanguageModelChatProvider = {
     onDidChangeLanguageModelChatInformation: changed.event,
@@ -52,6 +56,10 @@ export function activate(context: vscode.ExtensionContext): void {
         if (missing.length) {
           log.warn(`The gateway does not list ${missing.join(', ')}.`);
         }
+        if (listingError) {
+          listingError = undefined;
+          status.hide();
+        }
         return models.map((model) => ({
           id: model.id,
           name: model.id,
@@ -64,9 +72,16 @@ export function activate(context: vscode.ExtensionContext): void {
         }));
       } catch (error) {
         if (!token.isCancellationRequested) {
-          log.error(`Could not list the gateway's models: ${messageOf(error)}`);
-          if (!options.silent) {
-            void vscode.window.showErrorMessage(`vLLM Semantic Router could not list the gateway's models. ${messageOf(error)}`);
+          const reason = messageOf(error);
+          log.error(`Could not list the gateway's models: ${reason}`);
+          status.text = '$(warning) vLLM Semantic Router';
+          status.tooltip = `Could not list the gateway's models: ${reason}`;
+          status.show();
+          if (!options.silent || reason !== listingError) {
+            listingError = reason;
+            void vscode.window
+              .showErrorMessage(`vLLM Semantic Router could not list the gateway's models. ${reason}`, 'Set API Key', 'Show Log')
+              .then((action) => action && vscode.commands.executeCommand(action === 'Set API Key' ? 'vllm-sr.setApiKey' : 'vllm-sr.showLog'));
           }
         }
         return [];

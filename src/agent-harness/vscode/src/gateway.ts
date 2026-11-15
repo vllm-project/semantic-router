@@ -15,7 +15,14 @@ export interface Gateway {
   url: string;
   apiKey?: string;
   sessionId?: string;
+  /** How long to wait for the gateway to answer, in ms, instead of the defaults below. */
+  timeoutMs?: number;
 }
+
+// How long the model list may take, and how long a reply may take to start.
+// A reply that has started streams for as long as it takes.
+const LIST_TIMEOUT_MS = 30_000;
+const REPLY_TIMEOUT_MS = 120_000;
 
 /** One entry of the gateway's `GET /v1/models`. */
 export interface GatewayModel {
@@ -117,7 +124,8 @@ export function listModels(gateway: Gateway, wanted: readonly string[], signal?:
 }
 
 async function readModels(gateway: Gateway, wanted: readonly string[], signal?: AbortSignal): Promise<GatewayModel[]> {
-  const response = await fetch(`${baseUrl(gateway.url)}/v1/models`, { headers: requestHeaders(gateway), signal });
+  const { signal: timed } = deadline(gateway, gateway.timeoutMs ?? LIST_TIMEOUT_MS, signal);
+  const response = await fetch(`${baseUrl(gateway.url)}/v1/models`, { headers: requestHeaders(gateway), signal: timed });
   if (!response.ok) {
     throw await gatewayError(response, gateway.apiKey);
   }
@@ -144,12 +152,14 @@ async function streamReply(gateway: Gateway, request: ChatRequest, parts: Parts,
     stream: true,
     ...(tools.length ? { tools, ...(request.toolRequired ? { tool_choice: 'required' } : {}) } : {}),
   };
+  const wait = deadline(gateway, gateway.timeoutMs ?? REPLY_TIMEOUT_MS, signal);
   const response = await fetch(`${baseUrl(gateway.url)}/v1/chat/completions`, {
     method: 'POST',
     headers: requestHeaders(gateway),
     body: JSON.stringify(body),
-    signal,
+    signal: wait.signal,
   });
+  wait.answered();
   if (!response.ok) {
     throw await gatewayError(response, gateway.apiKey);
   }
@@ -304,6 +314,15 @@ function requestHeaders(gateway: Gateway): Record<string, string> {
   };
 }
 
+// `signal`, which also aborts with a readable error when the gateway has not
+// answered within `ms`, unless `answered` is called first.
+function deadline(gateway: Gateway, ms: number, signal?: AbortSignal) {
+  const clock = new AbortController();
+  const late = Object.assign(new Error(`The gateway at ${baseUrl(gateway.url)} did not answer within ${ms / 1000} s.`), { name: 'TimeoutError' });
+  const timer = setTimeout(() => clock.abort(late), ms).unref();
+  return { signal: signal ? AbortSignal.any([signal, clock.signal]) : clock.signal, answered: () => clearTimeout(timer) };
+}
+
 async function gatewayError(response: Response, apiKey?: string): Promise<Error> {
   // Redacted before it is cut, so no part of the key is left at the cut.
   const text = redact(await response.text().catch(() => ''), apiKey);
@@ -330,9 +349,23 @@ async function redacted<T>(gateway: Gateway, work: () => Promise<T>): Promise<T>
     const text =
       error instanceof SyntaxError
         ? 'The gateway sent a reply that is not JSON.'
-        : redact(error instanceof Error ? error.message : String(error), gateway.apiKey);
+        : redact(reasonOf(gateway, error), gateway.apiKey);
     throw Object.assign(new Error(text), { name: error instanceof Error ? error.name : 'Error' });
   }
+}
+
+// fetch says only "fetch failed" (or "terminated" mid-reply) when the network
+// fails, and keeps why, with the code and the address, in `cause`.
+function reasonOf(gateway: Gateway, error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const { code, message: why } = ((error as { cause?: unknown })?.cause ?? {}) as { code?: unknown; message?: string };
+  if (typeof code !== 'string') {
+    return message;
+  }
+  const reason = why?.includes(code) ? why : `${why || message}, ${code}`;
+  return code === 'ECONNREFUSED'
+    ? `The gateway at ${baseUrl(gateway.url)} refused the connection (${reason}).`
+    : `The connection to the gateway at ${baseUrl(gateway.url)} failed (${reason}).`;
 }
 
 /**
