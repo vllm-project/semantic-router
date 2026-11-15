@@ -51,7 +51,7 @@ type Allocator struct {
 // tag of their own or the name of a listener rule, and those marks reach the
 // Router when a plugin and the gateway run together; their shape has no
 // entity type. A shape is lettered when its template has a letter besides
-// {index}: "#{index}" is not, since its digits could be part of a phone
+// {index}: "#{index}#" is not, since its digits could be part of a phone
 // number.
 type placeholderShape struct {
 	pattern    *regexp.Regexp
@@ -129,10 +129,8 @@ func templatePattern(template string) string {
 
 // occurrences finds every match of a placeholder pattern, those that overlap
 // included: with the template "__NAME{index}__", "__NAME1__NAME2__" holds two,
-// and with "X0X{index}X", "X0X0X1X" does too. The next search starts a byte
-// after a match starts,
-// except after the template "{index}" alone, since a digit run is one index
-// and its tail is not another.
+// and with "X0X{index}X", "X0X0X1X" does too, so the next search starts a
+// byte after a match starts.
 func occurrences(pattern *regexp.Regexp, text string) [][]int {
 	var found [][]int
 	for at := 0; at < len(text); {
@@ -145,9 +143,6 @@ func occurrences(pattern *regexp.Regexp, text string) [][]int {
 		}
 		found = append(found, loc)
 		at = loc[0] + 1
-		if loc[2] == loc[0] && loc[3] == loc[1] {
-			at = loc[3]
-		}
 	}
 	return found
 }
