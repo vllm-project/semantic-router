@@ -20,6 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 main = importlib.import_module("cli.main").main
 hc = importlib.import_module("cli.harness_connect")
+hp = importlib.import_module("cli.harness_pi")
 rc = importlib.import_module("cli.harness_router_check")
 hs = importlib.import_module("cli.harness_session")
 chat_client = importlib.import_module("cli.chat_client")
@@ -58,7 +59,56 @@ RESPONSES_EVENTS = [
         },
     }
 ]
+CHAT_EVENTS = [
+    {
+        "object": "chat.completion.chunk",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "c1",
+                            "type": "function",
+                            "function": {"name": "get_time", "arguments": ""},
+                        }
+                    ],
+                },
+            }
+        ],
+    },
+    {
+        "object": "chat.completion.chunk",
+        "choices": [
+            {
+                "index": 0,
+                "delta": {
+                    "tool_calls": [{"index": 0, "function": {"arguments": "{}"}}]
+                },
+                "finish_reason": "tool_calls",
+            }
+        ],
+    },
+]
 STAGES = {
+    "/v1/chat/completions": {
+        "plain": {
+            "object": "chat.completion",
+            "choices": [
+                {
+                    "message": {"role": "assistant", "content": "ok"},
+                    "finish_reason": "stop",
+                }
+            ],
+        },
+        "tool": CHAT_EVENTS,
+        "result": [
+            {"choices": [{"index": 0, "delta": {"content": "It is 12:00."}}]},
+            {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+        ],
+    },
     "/v1/messages": {
         "plain": {"type": "message", "content": [{"type": "text", "text": "ok"}]},
         "tool": MESSAGES_EVENTS,
@@ -105,9 +155,8 @@ def _stage(body: dict) -> str:
     if not body.get("stream"):
         return "plain"
     sent = json.dumps(body.get("messages") or body.get("input"))
-    return (
-        "result" if "tool_result" in sent or "function_call_output" in sent else "tool"
-    )
+    answered = ("tool_result", "function_call_output", '"tool_call_id"')
+    return "result" if any(word in sent for word in answered) else "tool"
 
 
 # A translation loss whose reason holds a comma, as the Router writes it: an RFC 8941 list.
@@ -115,6 +164,14 @@ PLAIN_WARNINGS = (
     'protocol;action=approximated;reason="stop_sequence, absent, read as null";'
     'field="stop_sequence", truncated;count=2'
 )
+
+
+@pytest.fixture(autouse=True)
+def pi_home(tmp_path, monkeypatch):
+    """Pi's agent directory, in the test's own folder: connect status reads it."""
+    home = tmp_path / "pi-agent"
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(home))
+    return home
 
 
 @pytest.fixture
@@ -536,6 +593,32 @@ def test_probe_refuses_a_200_that_is_not_a_reply(gateway):
         replies["/v1/responses"]["result"] = [incomplete]
         loop = rc.probe_gateway(url, "codex", "m", "t")[1]
         assert not loop.ok and ("output limit" in loop.detail) is says
+
+
+def test_probe_reads_chat_completions_for_pi(gateway):
+    url, _, replies = gateway
+    chat = replies["/v1/chat/completions"]
+    chat["plain"] = {"object": "response", "output": []}
+    (plain,) = rc.probe_gateway(url, "pi", "m", "t")
+    assert not plain.ok and "not a Chat Completions reply" in plain.detail
+
+    chat["plain"] = STAGES["/v1/chat/completions"]["plain"]
+    chat["tool"] = CHAT_EVENTS[:1]  # no finish reason
+    loop = rc.probe_gateway(url, "pi", "m", "t")[1]
+    assert not loop.ok and "did not finish" in loop.detail
+    # a stream that fails says so in an error object of its own
+    chat["tool"] = [CHAT_EVENTS[0], {"error": {"message": "lossy_translation"}}]
+    loop = rc.probe_gateway(url, "pi", "m", "t")[1]
+    assert not loop.ok and "lossy_translation" in loop.detail
+    # a model that runs out of output before it calls the tool names the limit
+    length = {"choices": [{"index": 0, "delta": {}, "finish_reason": "length"}]}
+    chat["tool"] = [length]
+    loop = rc.probe_gateway(url, "pi", "m", "t")[1]
+    assert loop.ok and "output limit before calling the tool" in loop.detail
+    chat["tool"] = CHAT_EVENTS
+    chat["result"] = [length]
+    loop = rc.probe_gateway(url, "pi", "m", "t")[1]
+    assert not loop.ok and f"{rc.PROBE_TOKENS}-token output limit" in loop.detail
 
 
 def test_probe_answers_every_tool_call_and_says_when_none_came(gateway):
@@ -1751,7 +1834,7 @@ def test_undo_restores_the_runtime_keys_of_vsr_json_and_keeps_later_edits(
     assert json.loads(held.read_text()) == {"guardReview": 0.95}
 
 
-def test_vsr_asks_the_listener_the_gateway_url_names():
+def test_vsr_asks_the_listener_the_gateway_url_names(monkeypatch):
     doc = {
         "listeners": [
             {"port": 8899, "apis": {"systemone": {"models": ["first"]}}},
@@ -1759,8 +1842,31 @@ def test_vsr_asks_the_listener_the_gateway_url_names():
         ]
     }
     assert rc.system_one_models(doc) == ["first"]
-    assert rc.system_one_models(doc, 9900) == ["second"]
-    assert rc.system_one_models(doc, 7000) == []
+    assert rc.system_one_models(doc, "http://localhost:9900") == ["second"]
+    assert rc.system_one_models(doc, "http://localhost:7000") == []
+    # the local stack publishes each listener VLLM_SR_PORT_OFFSET ports higher
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "100")
+    assert rc.system_one_models(doc, "http://localhost:10000") == ["second"]
+    assert rc.system_one_models(doc, "http://127.0.0.1:8999") == ["first"]
+    assert rc.system_one_models(doc, "http://localhost:9900") == []
+    # a gateway on another host is no port of the local stack
+    assert rc.system_one_models(doc, "http://gw.example:9900") == ["second"]
+
+
+def test_vsr_is_set_up_on_a_local_stack_with_a_port_offset(tmp_path, monkeypatch):
+    _codex_env(tmp_path, monkeypatch, FakeCodexPlugins(installed=True))
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "100")
+    (tmp_path / "config.yaml").write_text(
+        "version: v0.5\nlisteners:\n  - port: 8899\n    apis:\n      systemone:\n"
+        "        models: [vela3-lite]\n"
+    )
+    result = CliRunner().invoke(main, ["connect", "codex", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert "publishes no model" not in result.output
+    assert json.loads((tmp_path / "vsr.json").read_text()) == {
+        "runtimeUrl": "http://localhost:8999/v1/decisions",
+        "runtimeModel": "vela3-lite",
+    }
 
 
 def test_started_in_the_home_directory_the_user_settings_are_not_their_own_override(
@@ -2002,14 +2108,19 @@ CODEX_EVENTS = [
 
 @pytest.fixture
 def checked_harness(tmp_path, monkeypatch):
-    """A claude and a codex that answer --version, list a bundled gpt-5.5, and
-    otherwise act out one --check run: they record how they were started, send a
-    review request to $FAKE_REVIEW_URL when Codex reviews approvals, then print
-    $FAKE_EVENTS and exit with $FAKE_EXIT."""
+    """A claude, a codex and a pi that answer --version, list a bundled gpt-5.5,
+    and otherwise act out one --check run: they record how they were started and
+    the models.json in Pi's agent directory, send a review request to
+    $FAKE_REVIEW_URL when Codex reviews approvals, then print $FAKE_EVENTS and
+    exit with $FAKE_EXIT."""
     bin_dir = tmp_path / "check-bin"
     bin_dir.mkdir()
     record = tmp_path / "check-ran.json"
-    versions = {"claude": "2.1.325 (Claude Code)", "codex": "codex-cli 0.166.0"}
+    versions = {
+        "claude": "2.1.325 (Claude Code)",
+        "codex": "codex-cli 0.166.0",
+        "pi": "1.5.2",
+    }
     for name, version in versions.items():
         script = bin_dir / name
         script.write_text(
@@ -2024,7 +2135,10 @@ def checked_harness(tmp_path, monkeypatch):
             "    sys.exit(0)\n"
             "given = args[args.index('--settings') + 1] if '--settings' in args else None\n"
             "catalog = [a.split('=', 1)[1] for a in args if a.startswith('model_catalog_json=')]\n"
-            "json.dump({'args': args, 'cwd': os.getcwd(),"
+            "agent = os.environ.get('PI_CODING_AGENT_DIR') or ''\n"
+            "models = os.path.join(agent, 'models.json')\n"
+            "json.dump({'args': args, 'cwd': os.getcwd(), 'agent': agent,"
+            " 'models': open(models).read() if os.path.exists(models) else None,"
             " 'settings': open(given).read() if given else None,"
             " 'catalog': json.load(open(json.loads(catalog[0]))) if catalog else None,"
             " 'stdin_closed': os.path.samestat(os.fstat(0), os.stat(os.devnull)),"
@@ -2286,7 +2400,8 @@ def test_status_reports_each_connection_and_what_changed_since(
     monkeypatch.delenv("VLLM_SR_API_KEY")
     result = CliRunner().invoke(main, ["connect", "status", "--json"])
     assert result.exit_code == 0, result.output
-    claude, codex = json.loads(result.output)["connections"]
+    claude, codex, pi = json.loads(result.output)["connections"]
+    assert pi["connected"] is False
     assert claude["files"] == [
         {"path": str(settings), "state": "changed", "changed": ["ANTHROPIC_MODEL"]}
     ]
@@ -2418,7 +2533,7 @@ def test_status_sends_no_key_to_a_gateway_the_settings_no_longer_name(
     result = CliRunner().invoke(main, ["connect", "status", "--json"])
     assert result.exit_code == 0, result.output
     assert seen[asked:] == []
-    claude, codex = json.loads(result.output)["connections"]
+    claude, codex = json.loads(result.output)["connections"][:2]
     assert claude["probe"] == {
         "state": "not probed",
         "detail": "the settings no longer hold the ANTHROPIC_BASE_URL connect"
@@ -2790,3 +2905,376 @@ def test_a_key_command_is_refused_for_a_caller_login_and_leaves_vsr_out(
     assert "vSR is not set up: its plugin takes a stored key or a variable" in _flat(
         result.output
     )
+
+
+# --- Pi and the Codex app ----------------------------------------------------------
+
+PI_EVENTS = [
+    {"type": "session", "version": 3, "id": "s1", "cwd": "/w"},
+    {"type": "agent_start"},
+    {
+        "type": "message_end",
+        "message": {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "toolCall",
+                    "id": "c1",
+                    "name": "bash",
+                    "arguments": {"command": "echo vsr-check"},
+                }
+            ],
+            "model": "vllm-sr/auto",
+            "responseModel": "qwen36",
+            "stopReason": "toolUse",
+        },
+    },
+    {
+        "type": "tool_execution_end",
+        "toolCallId": "c1",
+        "toolName": "bash",
+        "result": {"content": [{"type": "text", "text": "vsr-check\n"}]},
+        "isError": False,
+    },
+    {
+        "type": "message_end",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "vsr-check"}],
+            "model": "vllm-sr/auto",
+            "responseModel": "qwen36",
+            "stopReason": "stop",
+        },
+    },
+    {"type": "agent_end", "messages": []},
+]
+
+
+def _homes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+
+
+def test_pi_provider_keeps_the_other_providers_and_undo_puts_back_the_old_one(
+    tmp_path,
+):
+    models = tmp_path / "models.json"
+    theirs = {"baseUrl": "http://old/v1", "api": "openai-completions", "apiKey": "sk-1"}
+    other = {"baseUrl": "http://localhost:11434/v1", "apiKey": "ollama"}
+    models.write_text(json.dumps({"providers": {"ollama": other, "vllm-sr": theirs}}))
+    entry = hp.provider("http://gw:8899/", "vllm-sr/auto", "VLLM_SR_API_KEY", 65536)
+    change = hp.models_change(tmp_path, entry)
+    # the provider it replaces may hold a key, which the diff never shows
+    old = change.shown(change.old_text(), "")
+    assert "sk-1" not in old and '"apiKey": "<hidden>"' in old
+    assert '"apiKey": "$VLLM_SR_API_KEY"' in change.shown(change.new_text(), "")
+    hc.apply_changes([change], tmp_path)
+    providers = json.loads(models.read_text())["providers"]
+    assert providers["ollama"] == other
+    assert providers["vllm-sr"] == {
+        "name": "vLLM Semantic Router",
+        "baseUrl": "http://gw:8899/v1",
+        "api": "openai-completions",
+        "apiKey": "$VLLM_SR_API_KEY",
+        "compat": {
+            "sendSessionAffinityHeaders": True,
+            "sessionAffinityFormat": "openrouter",
+        },
+        "models": [{"id": "vllm-sr/auto", "maxTokens": 32000, "contextWindow": 65536}],
+    }
+    hc.undo_changes(tmp_path)
+    assert json.loads(models.read_text()) == {
+        "providers": {"ollama": other, "vllm-sr": theirs}
+    }
+
+    models.unlink()
+    hc.apply_changes([change], tmp_path)
+    hc.undo_changes(tmp_path)
+    assert not models.exists()
+    # a listener without keys gets a placeholder, which Pi needs to list the model
+    keyless = hp.provider("http://gw", "m", None, None)
+    assert keyless["apiKey"] == hc.NO_KEY
+    assert keyless["models"] == [{"id": "m", "maxTokens": 32000}]
+
+
+def test_cli_connects_pi_through_chat_completions_and_undoes(
+    tmp_path, gateway, pi_home, monkeypatch
+):
+    url, seen, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    models = pi_home / "models.json"
+    args = ["connect", "pi", "--base-url", url]
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert '"apiKey": "$VLLM_SR_API_KEY"' in result.output
+    assert not models.exists() and not seen
+
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    output = _flat(result.output)
+    assert "Basic reply: ok (model agent-model" in output
+    assert "Streamed tool loop: ok" in output
+    assert "Pi reads the key from $VLLM_SR_API_KEY" in output
+    assert "Start Pi with: pi --provider vllm-sr --model vllm-sr/auto" in output
+    assert "sk-secret" not in result.output + models.read_text()
+    assert {(path, auth) for path, _, auth in seen} == {
+        ("/v1/chat/completions", "Bearer sk-secret")
+    }
+    # the tool result goes back as Pi sends it, after the call it answers
+    answer = seen[-1][1]["messages"]
+    assert [m["role"] for m in answer] == ["user", "assistant", "tool"]
+    assert answer[1]["tool_calls"][0]["function"] == {
+        "name": "get_time",
+        "arguments": "{}",
+    }
+    assert answer[2]["tool_call_id"] == "c1"
+
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    (pi,) = [
+        e for e in json.loads(result.output)["connections"] if e["harness"] == "pi"
+    ]
+    assert (pi["gateway"], pi["model"], pi["login"], pi["key_env"]) == (
+        url,
+        "vllm-sr/auto",
+        "gateway key",
+        "VLLM_SR_API_KEY",
+    )
+    assert pi["files"] == [{"path": str(models), "state": "as written"}]
+    assert pi["probe"] == {"state": "ok", "detail": "model agent-model"}
+    result = CliRunner().invoke(main, ["connect", "status"])
+    assert "pi (provider vllm-sr)" in result.output
+
+    result = CliRunner().invoke(main, ["connect", "pi", "--undo"])
+    assert result.exit_code == 0, result.output
+    assert not models.exists()
+    # Pi reads providers only from models.json, so nothing launches it unwritten
+    result = CliRunner().invoke(main, ["connect", "pi", "--launch"])
+    assert result.exit_code == 2 and "No such option" in result.output
+
+
+def test_pi_takes_a_key_command_as_its_api_key_and_never_the_key(
+    tmp_path, gateway, pi_home, monkeypatch
+):
+    url, seen, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.delenv("VLLM_SR_API_KEY", raising=False)
+    secret = tmp_path / "key"
+    secret.write_text("sk-from-file\n")
+    command = f"cat {secret}"
+    args = ["connect", "pi", "--base-url", url, "--key-command", command, "--yes"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    text = (pi_home / "models.json").read_text()
+    assert json.loads(text)["providers"]["vllm-sr"]["apiKey"] == f"!{command}"
+    assert "sk-from-file" not in result.output + text
+    assert f"Pi runs {command}" in _flat(result.output)
+    assert {auth for _, _, auth in seen} == {"Bearer sk-from-file"}
+
+
+def test_pi_refuses_a_gateway_that_presents_each_callers_login(
+    tmp_path, gateway, pi_home, monkeypatch
+):
+    url, seen, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    config = _caller_config(tmp_path, "openai")
+    args = ["connect", "pi", "--config", str(config), "--base-url", url, "--yes"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 1
+    assert "own openai login upstream" in _flat(result.output)
+    assert not pi_home.exists() and not seen
+
+
+def test_router_check_for_pi():
+    needs = [f.need for f in rc.check_router_config(_router(), "pi")]
+    assert any("reasoning.signature" in n for n in needs)
+    assert any("session protection" in n for n in needs)
+    # Pi sends its own output limit, so no default is asked for
+    assert not any("output limit" in n for n in needs)
+    complete = _router(["reasoning.signature"], _learning(rc.PI_HEADERS))
+    assert rc.check_router_config(complete, "pi") == []
+    assert rc.PI_HEADERS == {"session": "x-session-id"}
+
+
+def test_check_runs_pi_on_the_provider_connect_wrote(
+    tmp_path, gateway, checked_harness, pi_home, monkeypatch
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setenv("FAKE_EVENTS", json.dumps(PI_EVENTS))
+    args = ["connect", "pi", "--base-url", url, "--check"]
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    output = _flat(result.output)
+    assert "Harness ok 1.5.2 at " in output
+    assert "Login ok the gateway answered with qwen36" in output
+    assert (
+        "Tool round trip ok ran echo vsr-check and answered with its output" in output
+    )
+    ran = json.loads(checked_harness.read_text())
+    assert ran["args"][:7] == [
+        "--mode",
+        "json",
+        "--provider",
+        "vllm-sr",
+        "--model",
+        "vllm-sr/auto",
+        "--tools",
+    ]
+    assert "--no-session" in ran["args"] and ran["args"][-1] == rc_prompt()
+    # the user's own agent directory, with the provider written there
+    assert ran["agent"] == str(pi_home)
+    assert ran["stdin_closed"] and not Path(ran["cwd"]).exists()
+
+    # a dry run checks the provider it would write, in an agent directory of its own
+    (pi_home / "models.json").unlink()
+    (pi_home / hc.MANIFEST).unlink()
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    ran = json.loads(checked_harness.read_text())
+    assert ran["agent"] != str(pi_home) and not Path(ran["agent"]).exists()
+    held = json.loads(ran["models"])["providers"]["vllm-sr"]
+    assert held["baseUrl"] == url + "/v1" and held["apiKey"] == "$VLLM_SR_API_KEY"
+    assert not (pi_home / "models.json").exists()
+
+    # a refused key is a failed login, with the key hidden
+    refused = {
+        "type": "message_end",
+        "message": {
+            "role": "assistant",
+            "content": [],
+            "stopReason": "error",
+            "errorMessage": "401 the key sk-secret is not valid",
+        },
+    }
+    monkeypatch.setenv("FAKE_EVENTS", json.dumps([refused]))
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 1
+    output = _flat(result.output)
+    assert "Login failed 401 the key <hidden> is not valid" in output
+    assert "Tool round trip not run" in output and "Nothing was written" in output
+
+
+def test_codex_app_sets_the_shared_defaults_and_undo_keeps_the_rest(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    tomllib = pytest.importorskip("tomllib")
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    home = tmp_path / "codex"
+    home.mkdir()
+    auth = home / "auth.json"
+    auth.write_text('{"tokens": "the login"}')
+    config = home / "config.toml"
+    before = (
+        "# my settings\n"
+        'model = "gpt-5"\n'
+        "model_context_window = 400000\n"
+        'approval_policy = "on-request"\n'
+        "\n"
+        '[projects."/src/app"]\n'
+        'trust_level = "trusted"\n'
+        "\n"
+        "[model_providers.other]\n"
+        'name = "Other"\n'
+        'base_url = "http://other/v1"\n'
+    )
+    config.write_text(before)
+    args = ["connect", "codex", "--app", "--base-url", url, "--no-vsr"]
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "the Codex CLI included" in _flat(result.output)
+    assert config.read_text() == before
+
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    output = _flat(result.output)
+    assert "The gateway is now Codex's default" in output
+    assert result.output.rstrip().endswith("Start Codex with: codex")
+    held = tomllib.loads(config.read_text())
+    assert held["model"] == "vllm-sr/auto" and held["model_provider"] == "vllm-sr"
+    assert "model_context_window" not in held  # the gateway's is unknown here
+    assert held["model_catalog_json"] == str(home / "vllm-sr.models.json")
+    assert held["approval_policy"] == "on-request"
+    assert held["projects"] == {"/src/app": {"trust_level": "trusted"}}
+    assert held["model_providers"]["other"]["name"] == "Other"
+    assert held["model_providers"]["vllm-sr"]["base_url"] == url + "/v1"
+    assert config.read_text().startswith("# my settings\n")
+    assert not (home / "vllm-sr.config.toml").exists()
+    assert auth.read_text() == '{"tokens": "the login"}'
+
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    (codex,) = [
+        e for e in json.loads(result.output)["connections"] if e["harness"] == "codex"
+    ]
+    assert (codex["profile"], codex["gateway"], codex["model"]) == (
+        None,
+        url,
+        "vllm-sr/auto",
+    )
+    assert codex["files"][0] == {"path": str(config), "state": "as written"}
+    assert (
+        "codex (config.toml, its default)"
+        in CliRunner().invoke(main, ["connect", "status"]).output
+    )
+
+    # Codex adds a table of its own, and the person changes a setting of theirs
+    config.write_text(
+        config.read_text().replace("on-request", "never")
+        + "\n[tui]\nscreen_reader = true\n"
+    )
+    result = CliRunner().invoke(main, ["connect", "codex", "--undo"])
+    assert result.exit_code == 0, result.output
+    undone = config.read_text()
+    expected = before.replace("on-request", "never") + "\n[tui]\nscreen_reader = true\n"
+    # each key gets its value back; one taken out returns beside the others
+    assert tomllib.loads(undone) == tomllib.loads(expected)
+    assert undone.startswith('# my settings\nmodel = "gpt-5"\n')
+    assert "vllm-sr" not in undone
+    assert auth.read_text() == '{"tokens": "the login"}'
+
+    result = CliRunner().invoke(main, ["connect", "codex", "--app", "--launch"])
+    assert result.exit_code == 2 and "does not take --app" in result.output
+
+
+def test_codex_app_check_runs_codex_without_a_profile(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("FAKE_EVENTS", json.dumps(CODEX_EVENTS))
+    args = ["connect", "codex", "--app", "--base-url", url, "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, [*args, "--check"])
+    assert result.exit_code == 0, result.output
+    ran = json.loads(checked_harness.read_text())
+    assert ran["args"][0] == "exec" and "--profile" not in ran["args"]
+    assert (tmp_path / "codex" / "config.toml").exists()
+
+
+def test_a_toml_layout_that_cannot_be_edited_cleanly_is_left_alone():
+    harness_toml = importlib.import_module("cli.harness_toml")
+    pytest.importorskip("tomllib")
+    wanted = {"model": 'model = "vllm-sr/auto"'}
+    # a value written over several lines would be cut in half
+    with pytest.raises(ValueError, match="left as it is"):
+        harness_toml.set_values('model = """\ngpt-5\n"""\n', wanted)
+    with pytest.raises(ValueError, match="not valid TOML"):
+        harness_toml.set_values("model = \n", wanted)
+    # a provider written as an inline table is not one a header can replace
+    inline = '[model_providers]\nvllm-sr = { name = "mine" }\n'
+    table = {"model_providers.vllm-sr": '[model_providers.vllm-sr]\nname = "x"'}
+    with pytest.raises(ValueError, match="its layout could not be edited"):
+        harness_toml.set_values(inline, table)
+    # a top-level key goes after the others, before the first table
+    text = "a = 1\n\n[t]\nb = 2\n"
+    assert harness_toml.set_values(text, wanted) == (
+        'a = 1\nmodel = "vllm-sr/auto"\n\n[t]\nb = 2\n'
+    )
+    assert harness_toml.values(text, ["a", "t", "model"]) == {
+        "a": "a = 1",
+        "t": None,  # a bare name is a top-level key
+        "model": None,
+    }

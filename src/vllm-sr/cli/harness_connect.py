@@ -1,9 +1,10 @@
-"""Point Claude Code or Codex CLI at a Router gateway, and take it back.
+"""Point Claude Code, Codex CLI or Pi at a Router gateway, and take it back.
 
-The command owns the env keys it sets in Claude Code's settings and the whole of
-one Codex profile file. It records what each held before and what it wrote, so
---undo puts back only what still holds what it wrote and leaves every other edit
-in place.
+The command owns the env keys it sets in Claude Code's settings, the whole of
+one Codex profile file or, for the Codex app, a few keys of Codex's shared
+config.toml, and one provider of Pi's models.json. It records what each held
+before and what it wrote, so --undo puts back only what still holds what it
+wrote and leaves every other edit in place.
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from cli import harness_toml
 
 PROVIDER = "vllm-sr"
 MANIFEST = ".vllm-sr-connect.json"
@@ -42,9 +45,10 @@ class Change:
     """One file and what the command sets in it.
 
     kind is json-env (keys of the "env" object of a JSON settings file, and
-    TOP_LEVEL_KEYS at its top level), json (top-level keys of a JSON file whose
-    other keys are not the command's) or file (the whole file, held as the one
-    value under "file").
+    TOP_LEVEL_KEYS at its top level), json (keys of a JSON file whose other
+    keys are not the command's; a key with / in it names a nested one, such as
+    providers/vllm-sr), toml (entries of a TOML file, as harness_toml reads
+    them) or file (the whole file, held as the one value under "file").
     """
 
     path: Path
@@ -66,11 +70,10 @@ class Change:
         if self.kind == "json":
             held = _settings(old)
             for key, value in values.items():
-                if value is None:
-                    held.pop(key, None)
-                else:
-                    held[key] = value
+                _put(held, key.split("/"), value)
             return json.dumps(held, indent=2) + "\n" if held else ""
+        if self.kind == "toml":
+            return harness_toml.set_values(old, values)
         return values.get("file", old) or ""
 
     def raw(self, text: str) -> dict[str, Any]:
@@ -84,16 +87,28 @@ class Change:
             }
         if self.kind == "json":
             held = _settings(text)
-            return {key: held.get(key) for key in self.values}
+            return {key: _at(held, key.split("/")) for key in self.values}
+        if self.kind == "toml":
+            return harness_toml.values(text, self.values)
         return {"file": text or None}
 
     def shown(self, text: str, key_label: str) -> str:
         """The part of text the command owns, for display, with no key in it."""
         if self.kind == "file":
             return hide_secrets(text)
+        if self.kind == "toml":
+            held = [value for value in self.raw(text).values() if value]
+            keys = "\n".join(v for v in held if not v.startswith("["))
+            tables = [v for v in held if v.startswith("[")]
+            shown = "\n\n".join(part for part in [keys, *tables] if part)
+            return hide_secrets(shown + "\n") if shown else ""
         if self.kind == "json":
-            held = {k: v for k, v in self.raw(text).items() if v is not None}
-            return json.dumps(held, indent=2) + "\n" if held else ""
+            shown: dict[str, Any] = {}
+            for key, value in self.raw(text).items():
+                path = key.split("/")
+                if value is not None:
+                    _put(shown, path, _hidden(value, self.values[key], path[-1]))
+            return json.dumps(shown, indent=2) + "\n" if shown else ""
         held = {k: v for k, v in self.raw(text).items() if v is not None}
         if held.get(TOKEN_KEY):
             written = held[TOKEN_KEY] == self.values[TOKEN_KEY]
@@ -119,6 +134,42 @@ SETTING_LINE = re.compile(r'(\s*"?([\w.-]+)"?\s*[=:]\s*)(.*?)(,?\s*)$')
 # Characters of a line a preview shows; Codex's model catalog holds its base
 # instructions as one line of tens of thousands.
 SHOWN_LINE = 160
+
+
+def _at(held: dict, path: list[str]) -> Any:
+    for part in path:
+        held = held.get(part) if isinstance(held, dict) else None
+    return held
+
+
+def _put(held: dict, path: list[str], value: Any) -> None:
+    """Set the value at path, creating the objects above it; None removes it,
+    and the objects it leaves empty."""
+    if value is None:
+        harness_toml.pop_path(held, path)
+        return
+    for part in path[:-1]:
+        held = held.setdefault(part, {})
+        if not isinstance(held, dict):
+            raise ValueError(f'"{part}" is not an object')
+    held[path[-1]] = value
+
+
+def _hidden(value: Any, ours: Any, name: str) -> Any:
+    """value as shown: a string under a name that says it holds a credential is
+    hidden, unless it is what the command writes there."""
+    if isinstance(value, dict):
+        mine = ours if isinstance(ours, dict) else {}
+        return {k: _hidden(v, mine.get(k), k) for k, v in value.items()}
+    if isinstance(value, list):
+        mine = ours if isinstance(ours, list) else []
+        return [
+            _hidden(v, mine[i] if i < len(mine) else None, name)
+            for i, v in enumerate(value)
+        ]
+    if isinstance(value, str) and SECRET_NAME.search(name) and value != ours:
+        return "<hidden>"
+    return value
 
 
 def hide_secrets(text: str) -> str:
@@ -424,15 +475,55 @@ def codex_change(
     top, provider = codex_settings(
         gateway, model, key_env, context_window, login, catalog, key_command
     )
-    auth = provider.pop("auth", None)
     lines = [f"{k} = {json.dumps(v)}" for k, v in top.items()]
-    lines += ["", f"[model_providers.{PROVIDER}]"]
+    text = "\n".join(lines) + "\n\n" + _provider_table(provider) + "\n"
+    return Change(home / f"{profile}.config.toml", "file", {"file": text})
+
+
+def _provider_table(provider: dict[str, Any]) -> str:
+    """The provider's table, and its auth table under it, as TOML."""
+    auth = provider.pop("auth", None)
+    lines = [f"[model_providers.{PROVIDER}]"]
     lines += [f"{k} = {json.dumps(v)}" for k, v in provider.items()]
     if auth:
         lines += ["", f"[model_providers.{PROVIDER}.auth]"]
         lines += [f"{k} = {json.dumps(v)}" for k, v in auth.items()]
-    text = "\n".join(lines) + "\n"
-    return Change(home / f"{profile}.config.toml", "file", {"file": text})
+    return "\n".join(lines)
+
+
+# The top-level keys of config.toml that --app owns, set or removed: a model
+# context window or catalog of yours would describe another model.
+CODEX_APP_KEYS = (
+    "model",
+    "model_context_window",
+    "model_catalog_json",
+    "model_provider",
+    "web_search",
+)
+
+
+def codex_app_change(
+    home: Path,
+    gateway: str,
+    model: str,
+    key_env: str | None,
+    context_window: int | None = None,
+    login: bool = False,
+    catalog: Path | None = None,
+    key_command: str | None = None,
+) -> Change:
+    """The same settings as the profile, as the defaults of the shared
+    config.toml, which the Codex app reads with no profile (0.166). Only
+    CODEX_APP_KEYS and the provider's table are the command's."""
+    top, provider = codex_settings(
+        gateway, model, key_env, context_window, login, catalog, key_command
+    )
+    values: dict[str, str | None] = {
+        key: f"{key} = {json.dumps(top[key])}" if key in top else None
+        for key in CODEX_APP_KEYS
+    }
+    values[f"model_providers.{PROVIDER}"] = _provider_table(provider)
+    return Change(home / "config.toml", "toml", values)
 
 
 def codex_launch_args(
@@ -695,9 +786,9 @@ def still_written(key: str, now: Any, written: Any) -> bool:
 
 def connections(manifest_dir: Path) -> list[dict[str, Any]]:
     """What the undo record in manifest_dir says connect set up, one entry for each
-    Claude Code settings file and each Codex profile: the gateway, model and
-    window written there, and whether each file written still holds them. No
-    entry holds a secret."""
+    Claude Code settings file, Codex profile and Codex config.toml: the gateway,
+    model and window written there, and whether each file written still holds
+    them. No entry holds a secret."""
     record = _record(manifest_dir / MANIFEST) or {}
     items = record.get("files") or []
     found = []
@@ -728,8 +819,12 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                     "plugins": sorted(record.get("plugins") or {}),
                 }
             )
-        elif item["kind"] == "file" and path.name.endswith(".config.toml"):
-            profile = profile_values(written.get("file") or "")
+        elif item["kind"] == "toml" or (
+            item["kind"] == "file" and path.name.endswith(".config.toml")
+        ):
+            # the profile, or the entries --app wrote into config.toml
+            text = "\n".join(str(value) for value in written.values() if value)
+            profile = profile_values(text)
             catalog = profile.get("model_catalog_json")
             # the auth table connect writes: the shell, then -c and the command
             helper = (
@@ -745,7 +840,11 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
             found.append(
                 {
                     "harness": "codex",
-                    "profile": path.name[: -len(".config.toml")],
+                    "profile": (
+                        path.name[: -len(".config.toml")]
+                        if item["kind"] == "file"
+                        else None
+                    ),
                     "gateway": str(profile.get("base_url") or "").removesuffix("/v1")
                     or None,
                     "model": profile.get("model"),

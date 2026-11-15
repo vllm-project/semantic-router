@@ -89,6 +89,29 @@ def codex_argv(config: list[str], workdir: Path, review: bool) -> list[str]:
     ]
 
 
+def pi_argv(provider: str, model: str) -> list[str]:
+    """pi in JSON mode on the provider connect wrote, with its shell tool only
+    and nothing of its own loaded: no session file, extension, skill or
+    instruction file. Pi has no per-command allowlist, so it runs whatever the
+    model asks for in the check's empty directory."""
+    return [
+        "pi",
+        "--mode",
+        "json",
+        "--provider",
+        provider,
+        "--model",
+        model,
+        "--tools",
+        "bash",
+        "--no-session",
+        "--no-extensions",
+        "--no-skills",
+        "--no-context-files",
+        PROMPT,
+    ]
+
+
 def management_url(gateway: str) -> str:
     """The management API of the Router behind gateway: the same host, on the
     management port of the local stack."""
@@ -122,7 +145,8 @@ def run(
     except OSError as exc:
         return [Row("Harness", "failed", f"{found} did not start: {exc}"), *later]
     events = _json_lines(out)
-    login, tool = (_claude_rows if harness == "claude-code" else _codex_rows)(events)
+    rows_of = {"claude-code": _claude_rows, "pi": _pi_rows}.get(harness, _codex_rows)
+    login, tool = rows_of(events)
     if login.state == "failed" and not login.detail:
         last = [line for line in err.splitlines() if line.strip()]
         login.detail = last[-1] if last else f"{argv[0]} exited with status {code}"
@@ -305,6 +329,57 @@ def _exit_row(name: str, events: list[dict], err: str, code: int, timed_out) -> 
     if code and not failures and last:
         why[0] += f": {last[-1]}"
     return Row("Exit", "failed", f"{name} {' and '.join(why)}")
+
+
+# A Pi reply that ended this way is no answer from the gateway.
+FAILED_STOPS = ("error", "aborted")
+
+
+def _pi_rows(events: list[dict]) -> tuple[Row, Row]:
+    """From pi --mode json: a reply the gateway gave, and the command's call, its
+    run and the answer after it."""
+    ended = [
+        (index, e.get("message") or {})
+        for index, e in enumerate(events)
+        if e.get("type") == "message_end"
+        and (e.get("message") or {}).get("role") == "assistant"
+    ]
+    answered = [(i, m) for i, m in ended if m.get("stopReason") not in FAILED_STOPS]
+    if not answered:
+        why = next((m.get("errorMessage") for _, m in reversed(ended)), "")
+        return Row("Login", "failed", why or ""), Row("Tool round trip", "not run")
+    first = answered[0][1]
+    model = first.get("responseModel")
+    login = Row(
+        "Login",
+        "ok",
+        f"the gateway answered with {model}" if model else "the gateway answered",
+    )
+    called = any(
+        block.get("type") == "toolCall" and WORD in json.dumps(block.get("arguments"))
+        for _, message in answered
+        for block in message.get("content") or []
+        if isinstance(block, dict)
+    )
+    runs = [
+        (index, e)
+        for index, e in enumerate(events)
+        if e.get("type") == "tool_execution_end" and e.get("toolName") == "bash"
+    ]
+    ran = next(
+        (
+            i
+            for i, e in runs
+            if not e.get("isError") and WORD in json.dumps(e.get("result"))
+        ),
+        None,
+    )
+    final = ran is not None and any(
+        index > ran and WORD in _text_of(message.get("content"))
+        for index, message in answered
+    )
+    output = (runs[0][1].get("result") or {}).get("content") if runs else None
+    return login, _tool_row(called, ran is not None, final, output)
 
 
 def _tool_row(called: bool, ran: bool, final: bool, output) -> Row:

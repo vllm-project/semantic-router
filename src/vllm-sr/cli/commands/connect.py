@@ -1,4 +1,4 @@
-"""Connect Claude Code or Codex CLI to a Router gateway."""
+"""Connect Claude Code, Codex CLI or Pi to a Router gateway."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import signal
 import subprocess
 import tempfile
 import textwrap
-import urllib.parse
 from pathlib import Path
 
 import click
@@ -19,6 +18,7 @@ import yaml
 
 from cli import harness_check as hk
 from cli import harness_connect as hc
+from cli import harness_pi as hp
 from cli import harness_router_check as rc
 from cli import harness_session as hs
 from cli.chat_client import resolve_chat_base_url
@@ -29,14 +29,23 @@ from cli.terminal import echo, fields, heading, output_width, success, warning
 # The vSR plugin's marketplace: this repository on GitHub.
 VSR_SOURCE = "vllm-project/semantic-router"
 
-# Each harness's name, and the provider whose login it sends a gateway.
+# Each harness's name, and the provider whose login it sends a gateway (Pi sends
+# only the key its models.json names).
 HARNESS_LOGINS = {
     "claude-code": ("Claude Code", "anthropic"),
     "codex": ("Codex", "openai"),
+    "pi": ("Pi", None),
 }
 
 
-def _options(command):
+def _options(command, launch_and_vsr: bool = True):
+    """The options every harness takes; without launch_and_vsr, those only Claude
+    Code and Codex take are left out: Pi has no vSR plugin, and no command-line
+    setting that adds a provider for one session."""
+
+    def theirs(option):
+        return option if launch_and_vsr else None
+
     for option in reversed(
         [
             click.option(
@@ -81,20 +90,25 @@ def _options(command):
                 default=None,
                 help="The smallest context window, in tokens, of the models the gateway"
                 " can pick; by default read from the configuration's model cards. Claude"
-                " Code and Codex then budget with it instead of a window of their own.",
+                " Code, Codex and Pi then budget with it instead of a window of their own.",
             ),
-            click.option(
-                "--vsr/--no-vsr",
-                default=True,
-                help="Also set up vSR (System One) beside the agent when the listener"
-                " publishes a System One model: install its plugin and point it there.",
+            theirs(
+                click.option(
+                    "--vsr/--no-vsr",
+                    default=True,
+                    help="Also set up vSR (System One) beside the agent when the"
+                    " listener publishes a System One model: install its plugin and"
+                    " point it there.",
+                )
             ),
-            click.option(
-                "--vsr-source",
-                default=VSR_SOURCE,
-                show_default=True,
-                help="Where the vSR plugin installs from: a marketplace's owner/repo,"
-                " Git URL, or a local checkout.",
+            theirs(
+                click.option(
+                    "--vsr-source",
+                    default=VSR_SOURCE,
+                    show_default=True,
+                    help="Where the vSR plugin installs from: a marketplace's"
+                    " owner/repo, Git URL, or a local checkout.",
+                )
             ),
             click.option("--yes", is_flag=True, help="Write without asking."),
             click.option(
@@ -105,46 +119,55 @@ def _options(command):
                 " report each step. Spends a few short model calls on your login or"
                 " key.",
             ),
-            click.option(
-                "--launch",
-                is_flag=True,
-                help="Start the harness through the gateway for this session only, writing"
-                " no file; arguments after -- go to the harness.",
+            theirs(
+                click.option(
+                    "--launch",
+                    is_flag=True,
+                    help="Start the harness through the gateway for this session only,"
+                    " writing no file; arguments after -- go to the harness.",
+                )
             ),
-            click.option(
-                "--worktree",
-                type=click.Path(
-                    exists=True, file_okay=False, resolve_path=True, path_type=Path
-                ),
-                default=None,
-                help="With --launch, start the harness in this existing git worktree."
-                " No branch or worktree is created, switched or removed.",
+            theirs(
+                click.option(
+                    "--worktree",
+                    type=click.Path(
+                        exists=True, file_okay=False, resolve_path=True, path_type=Path
+                    ),
+                    default=None,
+                    help="With --launch, start the harness in this existing git"
+                    " worktree. No branch or worktree is created, switched or removed.",
+                )
             ),
-            click.option(
-                "--home",
-                "harness_home",
-                type=click.Path(
-                    exists=True, file_okay=False, resolve_path=True, path_type=Path
-                ),
-                default=None,
-                help="With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR"
-                " or $CODEX_HOME) in place of yours, for another login. Nothing is"
-                " copied into it.",
+            theirs(
+                click.option(
+                    "--home",
+                    "harness_home",
+                    type=click.Path(
+                        exists=True, file_okay=False, resolve_path=True, path_type=Path
+                    ),
+                    default=None,
+                    help="With --launch, run the harness with this home"
+                    " ($CLAUDE_CONFIG_DIR or $CODEX_HOME) in place of yours, for another"
+                    " login. Nothing is copied into it.",
+                )
             ),
             click.option(
                 "--key-command",
                 metavar="CMD",
                 default=None,
                 help="A shell command that prints the listener's API key, in place of"
-                " --api-key-env: written as Claude Code's apiKeyHelper or as the Codex"
-                " provider's auth command, which the harness runs itself and again"
-                " every 5 minutes by default. connect itself runs it only when it calls"
-                " the gateway, and never shows or writes what it prints.",
+                " --api-key-env: written as the harness's own key helper (Claude"
+                " Code's apiKeyHelper, the Codex provider's auth command, Pi's"
+                ' "!command" apiKey), which the harness runs itself: Claude Code and'
+                " Codex again every 5 minutes by default, Pi before each request."
+                " connect itself runs it only when it calls the gateway, and never"
+                " shows or writes what it prints.",
             ),
-            click.argument("harness_args", nargs=-1, type=click.UNPROCESSED),
+            theirs(click.argument("harness_args", nargs=-1, type=click.UNPROCESSED)),
         ]
     ):
-        command = option(command)
+        if option:
+            command = option(command)
     return command
 
 
@@ -335,6 +358,13 @@ def claude_code(
     show_default=True,
     help="The Codex profile to write.",
 )
+@click.option(
+    "--app",
+    is_flag=True,
+    help="Write the gateway as the default of Codex's shared config.toml in place"
+    " of a profile, since the Codex app reads that file and no profile. This"
+    " changes the default for the Codex CLI too; --undo takes it back.",
+)
 def codex(
     router_config,
     base_url,
@@ -353,10 +383,16 @@ def codex(
     key_command,
     harness_args,
     profile,
+    app,
 ):
-    """Route Codex CLI through the gateway with a profile of its own."""
+    """Route Codex through the gateway, with a profile or (--app) as its default.
+
+    The default is what the Codex app reads, and the Codex CLI without --profile.
+    """
     env = dict(os.environ)
     home = hc.codex_home(env)
+    if app and launch:
+        raise click.UsageError("--launch writes nothing, so it does not take --app")
     where = _check_launch(
         launch, harness_args, undo, check=check, worktree=worktree, home=harness_home
     )
@@ -428,17 +464,21 @@ def codex(
             session,
         )
     catalog_path = home / f"{profile}.models.json" if catalog else None
-    change = hc.codex_change(
-        home,
-        profile,
-        gateway,
-        model,
-        key_env,
-        context_window,
-        login,
-        catalog_path,
-        key_command,
-    )
+    settings = (gateway, model, key_env, context_window, login, catalog_path)
+    if app:
+        change = hc.codex_app_change(home, *settings, key_command)
+        notes.append(
+            f"--app: {change.path} then sends the Codex app and every codex started"
+            " without --profile to the gateway, the Codex CLI included."
+        )
+        if key_env:
+            notes.append(
+                f"The Codex app sees ${key_env} only if the environment it starts in"
+                " exports it, which an app started from the desktop often does not;"
+                " --key-command gives it a command to run instead."
+            )
+    else:
+        change = hc.codex_change(home, profile, *settings, key_command)
     changes = [change]
     if catalog_path:
         text = json.dumps(catalog, indent=2) + "\n"
@@ -515,17 +555,25 @@ def codex(
             " it the gateway's."
         )
     _probe_or_say_why(gateway, "codex", model, key or token, doc)
+    selected = [] if app else ["--profile", profile]
     if check:
         _check(
             "codex",
-            lambda _, work: hk.codex_argv(["--profile", profile], work, bool(reviewer)),
+            lambda _, work: hk.codex_argv(selected, work, bool(reviewer)),
             env,
             secrets,
             True,
             reviewer,
             gateway,
         )
-    echo(f"Start Codex with: codex --profile {profile}")
+    if app:
+        warning(
+            "The gateway is now Codex's default: the Codex app and codex without"
+            " --profile both use it. --undo takes it back."
+        )
+        # model_catalog_json is read only when Codex starts (0.166)
+        echo("Restart the Codex app so it reads the new model catalog.")
+    echo(f"Start Codex with: {shlex.join(['codex', *selected])}")
 
 
 # Seconds the status waits for the gateway's basic reply.
@@ -537,8 +585,9 @@ STATUS_PROBE_TIMEOUT = 5
 def status(as_json):
     """Show what connect manages for each harness now, and whether it still holds.
 
-    Read from the undo records beside Claude Code's settings (user and project)
-    and in the Codex home; the gateway gets one short request per connection.
+    Read from the undo records beside Claude Code's settings (user and project),
+    in the Codex home and in Pi's agent directory; the gateway gets one short
+    request per connection.
     """
     env = dict(os.environ)
     cwd = Path.cwd()
@@ -548,6 +597,7 @@ def status(as_json):
             for scope in ("user", "project")
         ],
         "codex": [hc.codex_home(env)],
+        "pi": [hp.agent_dir(env)],
     }
     found = []
     for harness, listed in places.items():
@@ -584,7 +634,7 @@ def status(as_json):
 
 def _connections(folder: Path) -> list[dict]:
     try:
-        return hc.connections(folder)
+        return hc.connections(folder) + hp.connections(folder)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise click.ClickException(
             f"cannot read {folder / hc.MANIFEST}: {exc!r}"
@@ -617,9 +667,10 @@ def _status_probe(entry: dict, env: dict[str, str]) -> dict[str, str]:
         }
     key_env = entry.get("key_env")
     if key_env and not env.get(key_env):
+        name = HARNESS_LOGINS[harness][0]
         return {
             "state": "not probed",
-            "detail": f"${key_env} is not set, and Codex sends the key from it",
+            "detail": f"${key_env} is not set, and {name} sends the key from it",
         }
     token = env.get(key_env) if key_env else hc.NO_KEY
     command = entry.get("key_command")
@@ -660,7 +711,15 @@ def _show_status(entry: dict) -> None:
         return
     name = HARNESS_LOGINS[harness][0]
     codex = harness == "codex"
-    where = f"profile {entry['profile']}" if codex else f"{entry['scope']} scope"
+    where = {
+        "claude-code": f"{entry.get('scope')} scope",
+        "codex": (
+            f"profile {entry.get('profile')}"
+            if entry.get("profile")
+            else "config.toml, its default"
+        ),
+        "pi": f"provider {entry.get('provider')}",
+    }[harness]
     heading(f"{harness} ({where})")
     window = entry["context_window"]
     login = {
@@ -668,7 +727,7 @@ def _show_status(entry: dict) -> None:
         "no key": "no key",
         "gateway key": (
             f"gateway key from ${entry['key_env']}"
-            if codex
+            if entry.get("key_env")
             else "gateway key, in the settings"
         ),
         "key command": f"gateway key from the command {entry.get('key_command')}",
@@ -1142,7 +1201,7 @@ def _vsr_options(gateway: str, doc: dict | None) -> dict[str, str] | None:
     """The runtime the vSR plugin asks: this listener's System One, or None when it
     publishes no model."""
     # the listener the gateway URL names, which --base-url may set to any of them
-    models = rc.system_one_models(doc, urllib.parse.urlsplit(gateway).port)
+    models = rc.system_one_models(doc, gateway)
     if not models:
         echo(
             "System One: this listener publishes no model (listeners[].systemone), so"
@@ -1230,7 +1289,7 @@ def _check_vsr(
             " do not both choose a subagent's model: run /vsr router off in Claude Code."
             " This also stops its escalate app from moving the next subagent up a model."
         )
-    published = rc.system_one_models(doc)
+    published = rc.system_one_models(doc, gateway)
     decisions = gateway + "/v1/decisions"
     if published and inputs.get("runtimeUrl") != decisions:
         values = json.dumps(
