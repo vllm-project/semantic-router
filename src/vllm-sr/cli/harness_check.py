@@ -321,6 +321,15 @@ def _exit_row(name: str, events: list[dict], err: str, code: int, timed_out) -> 
         if e.get("type") == "turn.failed"
         or (e.get("type") == "result" and e.get("is_error"))
     ]
+    # Pi ends a failed turn with an assistant message and exits 0
+    ended = [
+        e.get("message") or {}
+        for e in events
+        if e.get("type") == "message_end"
+        and (e.get("message") or {}).get("role") == "assistant"
+    ]
+    if ended and ended[-1].get("stopReason") in FAILED_STOPS:
+        failures.append(ended[-1].get("errorMessage") or ended[-1]["stopReason"])
     why = [f"exited with status {code}"] if code else []
     why += [f"reported a failure: {text}" for text in failures[-1:]]
     if not why:
@@ -353,7 +362,7 @@ def _pi_rows(events: list[dict]) -> tuple[Row, Row]:
     login = Row(
         "Login",
         "ok",
-        f"the gateway answered with {model}" if model else "the gateway answered",
+        f"the gateway answered, as {model}" if model else "the gateway answered",
     )
     called = any(
         block.get("type") == "toolCall" and WORD in json.dumps(block.get("arguments"))

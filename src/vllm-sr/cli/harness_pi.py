@@ -56,6 +56,21 @@ def provider(
     }
 
 
+STORED_KEY = (
+    f"Pi holds a key of its own for {PROVIDER} in auth.json, which it sends in place"
+    " of the one models.json names"
+)
+
+
+def stored_key(home: Path) -> bool:
+    """Whether Pi's auth.json holds a credential for PROVIDER: Pi 1.5 sends a
+    stored credential before it reads the provider's apiKey."""
+    try:
+        return PROVIDER in json.loads(hc.read(home / "auth.json") or "{}")
+    except (ValueError, TypeError):
+        return False
+
+
 def models_change(home: Path, entry: dict[str, Any]) -> hc.Change:
     return hc.Change(home / "models.json", "json", {OWNED: entry})
 
@@ -88,6 +103,7 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                 ),
                 "key_env": key_env,
                 "key_command": key_command,
+                "stored_key": stored_key(manifest_dir),
                 "files": [hc.file_state(item)],
             }
         )

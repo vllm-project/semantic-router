@@ -463,7 +463,8 @@ def codex(
             where,
             session,
         )
-    catalog_path = home / f"{profile}.models.json" if catalog else None
+    catalog_name = f"{hc.PROVIDER}-app" if app else profile
+    catalog_path = home / f"{catalog_name}.models.json" if catalog else None
     settings = (gateway, model, key_env, context_window, login, catalog_path)
     if app:
         change = hc.codex_app_change(home, *settings, key_command)
@@ -654,17 +655,22 @@ def _status_probe(entry: dict, env: dict[str, str]) -> dict[str, str]:
             "state": "not probed",
             "detail": f"the gateway answers only on the login {name} itself sends",
         }
-    # the profile is the one file of a Codex connection that says where it goes
-    if harness == "codex" and any(
-        item["state"] != "as written"
+    # the file of a Codex (profile or shared config.toml) or Pi connection that
+    # says where it sends
+    where = {"codex": "config.toml", "pi": "models.json"}.get(harness)
+    moved = [
+        item["path"]
         for item in entry["files"]
-        if item["path"].endswith(".config.toml")
-    ):
+        if where and item["path"].endswith(where) and item["state"] != "as written"
+    ]
+    if moved:
         return {
             "state": "not probed",
-            "detail": "the profile no longer holds what connect wrote, so no key is"
+            "detail": f"{moved[0]} no longer holds what connect wrote, so no key is"
             f" sent to {gateway}",
         }
+    if entry.get("stored_key"):
+        return {"state": "failed", "detail": hp.STORED_KEY}
     key_env = entry.get("key_env")
     if key_env and not env.get(key_env):
         name = HARNESS_LOGINS[harness][0]
@@ -829,7 +835,10 @@ def _run(
             )
             echo("".join(diff) or f"{label}: no change")
     except ValueError as exc:
-        raise click.ClickException(f"{change.path}: {exc}") from exc
+        raise click.ClickException(
+            f"{change.path} is not plain JSON ({exc}). connect would lose its"
+            " comments or trailing commas, so remove them or edit the file yourself."
+        ) from exc
     _check_router(harness, doc, model)
     for note in notes:
         echo(note)

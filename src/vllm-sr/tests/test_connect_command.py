@@ -2539,9 +2539,10 @@ def test_status_sends_no_key_to_a_gateway_the_settings_no_longer_name(
         "detail": "the settings no longer hold the ANTHROPIC_BASE_URL connect"
         f" wrote, so their key is not sent to {url}",
     }
+    profile = tmp_path / "codex" / "vllm-sr.config.toml"
     assert codex["probe"] == {
         "state": "not probed",
-        "detail": "the profile no longer holds what connect wrote, so no key is"
+        "detail": f"{profile} no longer holds what connect wrote, so no key is"
         f" sent to {url}",
     }
     assert "sk-b" not in result.output
@@ -3087,6 +3088,126 @@ def test_pi_refuses_a_gateway_that_presents_each_callers_login(
     assert not pi_home.exists() and not seen
 
 
+def test_pi_refuses_a_key_of_its_own_and_a_keyed_listener_without_one(
+    tmp_path, gateway, pi_home, monkeypatch
+):
+    url, seen, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.delenv("VLLM_SR_API_KEY", raising=False)
+    config = tmp_path / "pi.yaml"
+    config.write_text("listeners:\n  - {port: 8899, api_keys: [listener-key]}\n")
+    result = CliRunner().invoke(main, ["connect", "pi", "--config", str(config)])
+    assert result.exit_code == 1
+    assert "takes an API key and $VLLM_SR_API_KEY is not set" in result.output
+    # Pi sends a key it stored for the provider before the one models.json names
+    pi_home.mkdir(parents=True, exist_ok=True)
+    (pi_home / "auth.json").write_text('{"vllm-sr": {"type": "api_key", "key": "old"}}')
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    args = ["connect", "pi", "--base-url", url, "--yes"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 1
+    assert "Pi holds a key of its own for vllm-sr in auth.json" in _flat(result.output)
+    assert not (pi_home / "models.json").exists() and not seen
+
+    (pi_home / "auth.json").write_text("{}")
+    assert CliRunner().invoke(main, args).exit_code == 0
+    (pi_home / "auth.json").write_text('{"vllm-sr": {"type": "api_key", "key": "old"}}')
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 1, result.output
+    (pi,) = [
+        e for e in json.loads(result.output)["connections"] if e["harness"] == "pi"
+    ]
+    assert pi["probe"]["state"] == "failed"
+    assert "auth.json" in pi["probe"]["detail"]
+
+
+def test_pi_models_with_comments_are_refused_by_name(
+    tmp_path, gateway, pi_home, monkeypatch
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    pi_home.mkdir(parents=True, exist_ok=True)
+    (pi_home / "models.json").write_text('{\n  // mine\n  "providers": {}\n}\n')
+    result = CliRunner().invoke(main, ["connect", "pi", "--base-url", url, "--yes"])
+    assert result.exit_code == 1
+    assert "is not plain JSON" in _flat(result.output)
+    assert "remove them or edit the file yourself" in _flat(result.output)
+
+
+def test_status_sends_no_key_once_pi_or_the_codex_app_points_elsewhere(
+    tmp_path, gateway, pi_home, monkeypatch
+):
+    url, seen, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    home = tmp_path / "codex"
+    args = ["--base-url", url, "--no-vsr", "--yes"]
+    assert CliRunner().invoke(main, ["connect", "codex", "--app", *args]).exit_code == 0
+    assert (
+        CliRunner()
+        .invoke(main, ["connect", "pi", "--base-url", url, "--yes"])
+        .exit_code
+        == 0
+    )
+    config, models = home / "config.toml", pi_home / "models.json"
+    config.write_text(config.read_text().replace(url, "http://other:1"))
+    models.write_text(models.read_text().replace(url, "http://other:1"))
+    asked = len(seen)
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    found = {e["harness"]: e for e in json.loads(result.output)["connections"]}
+    for harness, path in (("codex", config), ("pi", models)):
+        assert found[harness]["probe"] == {
+            "state": "not probed",
+            "detail": f"{path} no longer holds what connect wrote, so no key is"
+            f" sent to {url}",
+        }
+    assert seen[asked:] == []
+
+
+def test_the_codex_app_keeps_a_profiles_catalog(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    home = tmp_path / "codex"
+    args = ["connect", "codex", "--base-url", url, "--no-vsr", "--yes"]
+    assert CliRunner().invoke(main, [*args, "--model", "vllm-sr/a"]).exit_code == 0
+    catalog = home / "vllm-sr.models.json"
+    before = catalog.read_text()
+    assert (
+        CliRunner().invoke(main, [*args, "--app", "--model", "vllm-sr/b"]).exit_code
+        == 0
+    )
+    assert catalog.read_text() == before
+    slugs = [
+        m["slug"]
+        for m in json.loads((home / "vllm-sr-app.models.json").read_text())["models"]
+    ]
+    assert slugs == ["vllm-sr/b"]
+
+
+def test_exit_fails_on_a_pi_turn_that_ended_in_an_error():
+    hk = importlib.import_module("cli.harness_check")
+    events = [
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "stopReason": "error",
+                "errorMessage": "HTTP 401",
+            },
+        },
+    ]
+    row = hk._exit_row("pi", events, "", 0, False)
+    assert (row.state, row.detail) == ("failed", "pi reported a failure: HTTP 401")
+    # a retry that answered leaves the run a success
+    events.append(
+        {"type": "message_end", "message": {"role": "assistant", "stopReason": "stop"}}
+    )
+    assert hk._exit_row("pi", events, "", 0, False).state == "ok"
+
+
 def test_router_check_for_pi():
     needs = [f.need for f in rc.check_router_config(_router(), "pi")]
     assert any("reasoning.signature" in n for n in needs)
@@ -3110,7 +3231,7 @@ def test_check_runs_pi_on_the_provider_connect_wrote(
     assert result.exit_code == 0, result.output
     output = _flat(result.output)
     assert "Harness ok 1.5.2 at " in output
-    assert "Login ok the gateway answered with qwen36" in output
+    assert "Login ok the gateway answered, as qwen36" in output
     assert (
         "Tool round trip ok ran echo vsr-check and answered with its output" in output
     )
@@ -3197,7 +3318,7 @@ def test_codex_app_sets_the_shared_defaults_and_undo_keeps_the_rest(
     held = tomllib.loads(config.read_text())
     assert held["model"] == "vllm-sr/auto" and held["model_provider"] == "vllm-sr"
     assert "model_context_window" not in held  # the gateway's is unknown here
-    assert held["model_catalog_json"] == str(home / "vllm-sr.models.json")
+    assert held["model_catalog_json"] == str(home / "vllm-sr-app.models.json")
     assert held["approval_policy"] == "on-request"
     assert held["projects"] == {"/src/app": {"trust_level": "trusted"}}
     assert held["model_providers"]["other"]["name"] == "Other"

@@ -51,9 +51,16 @@ def pi(
             " those models would be refused. Point Pi at a gateway without caller"
             " backends."
         )
+    if hp.stored_key(home):
+        raise click.ClickException(
+            f"{hp.STORED_KEY} ({home / 'auth.json'}). Remove its {hp.PROVIDER} entry"
+            " and run this again."
+        )
     token, from_env = hc.token_from(env, api_key_env)
     if key_command:
         token, from_env = "", False
+    else:
+        base._require_key(doc, base_url, from_env, api_key_env, False)
     key = base._key("pi", key_command, False, env, Path.cwd(), check or not dry_run)
     key_env = api_key_env if from_env else None
     context_window, notes = base._context_window(doc, model, context_window)

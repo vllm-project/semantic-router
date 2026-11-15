@@ -180,8 +180,8 @@ def _signature_finding(router: dict, to_anthropic) -> RouterFinding | None:
     return _lossy_finding(
         router,
         "reasoning.signature",
-        "reasoning.signature, or a stream from an anthropic backend ends in lossy_translation"
-        " where its thinking block closes" + ("" if known else MAYBE_ANTHROPIC),
+        "reasoning.signature, or a reply in which an anthropic backend thinks fails with"
+        " lossy_translation" + ("" if known else MAYBE_ANTHROPIC),
     )
 
 

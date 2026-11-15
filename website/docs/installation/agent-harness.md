@@ -231,8 +231,10 @@ appends to the profile count as written, as for `--undo`), and whether the
 gateway answers a basic reply now. That sends one short request with the key
 the harness would send and waits up to 5 seconds. It sends nothing, and says
 why, once Claude Code's settings name another gateway or model than connect
-wrote, or the Codex profile no longer holds what connect wrote, since the key
-they send may then be for another gateway. `--json` prints the same as JSON,
+wrote, or the Codex profile, Codex's shared `config.toml` (`--app`) or Pi's
+`models.json` no longer holds what connect wrote, since the key they send may
+then be for another gateway. A Pi connection fails when Pi's `auth.json` holds
+a key of its own for `vllm-sr`, which Pi sends in its place. `--json` prints the same as JSON,
 and the command exits with status 1 when a gateway check fails.
 
 ### Try it without writing anything
@@ -311,7 +313,7 @@ helper in place of the key or a variable, and the harness runs it:
 The command runs it only to probe the gateway, for `--check` and for
 `connect status`, and never prints or writes what it prints. A command that
 fails, prints nothing, or takes longer than the harness waits for it (5 seconds
-for Codex) stops it before anything is written. `--launch` passes
+for Codex, 10 for Pi) stops it before anything is written. `--launch` passes
 the same setting for that session and runs the command for its probe as the
 harness will, in the `--worktree` and with the `--home` given, so the key
 probed is the key the harness sends. `--undo` removes it with the rest. A
@@ -333,7 +335,8 @@ the default, in place of the profile:
 
 - the top-level `model`, `model_provider`, `model_context_window`,
   `model_catalog_json` and `web_search`, and the `[model_providers.vllm-sr]`
-  table, with its `auth` table for `--key-command`. A key of these that the
+  table, with its `auth` table for `--key-command`. The catalog is
+  `vllm-sr-app.models.json`, so a profile's catalog is never replaced. A key of these that the
   command has no value for, such as a `model_context_window` of yours, is taken out, since it would
   describe another model.
 - every other line, comment and table stays as it is. A file it cannot edit
@@ -1034,12 +1037,13 @@ above, or with `/model`, where Ctrl+S saves it for new sessions.
 
 - Pi talks to the gateway over Chat Completions (`api: openai-completions`),
   the API its documentation uses for OpenAI-compatible servers such as vLLM.
-  On it Pi keeps its own model ID on each reply and records the model the
-  Router picked as `responseModel`.
+  On it Pi keeps its own model ID on each reply and records the model ID the
+  reply names, the backend's `provider_model_id`, as `responseModel`.
 - The file holds no key. `apiKey` is `$VLLM_SR_API_KEY`, which Pi reads from its
   environment before each request, or `!<the command>` with `--key-command`. A
   listener without keys gets a placeholder value, since Pi lists a model only
-  once its provider has a key.
+  once its provider has a key. A key Pi stored for `vllm-sr` in `auth.json`
+  wins over `apiKey`, so the command refuses to connect while one is there.
 - The model gets the context window the command works out as `contextWindow`
   (Pi assumes 128,000 tokens without one), and `maxTokens: 32000`, the output
   limit the command gives Claude Code. Pi lowers it for a request that leaves
