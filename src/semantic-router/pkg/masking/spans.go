@@ -205,44 +205,36 @@ func MergeSpans(spans []Span) []Span {
 	return merged
 }
 
-// spanReplacement is one resolved splice: the original byte range in the
-// source text and the placeholder that replaces it.
-type spanReplacement struct {
-	start, end  int
-	placeholder string
-}
-
 // citationShift is one masked range's effect on citation offsets, expressed
 // in Unicode code points. llmprotocol.Citation offsets are code-point
 // indexes into Content.Text (llmprotocol/types.go), a different unit from
 // the byte offsets Span uses to match classifier output (D2), so citation
-// math cannot reuse spanReplacement's byte range directly.
+// math cannot reuse a span's byte range directly.
 type citationShift struct {
 	runeStart, runeEnd int
 	runeLengthDelta    int
 }
 
-// byteOffsetToRuneOffset converts a byte offset into text to the equivalent
-// Unicode code-point offset. Mirrors the function of the same name in
-// pkg/services/classification_pii_response.go, reimplemented here rather
-// than imported because that package links the Rust bindings (D7).
-func byteOffsetToRuneOffset(text string, byteOffset int) int {
-	if byteOffset <= 0 {
-		return 0
-	}
-	if byteOffset >= len(text) {
-		return utf8.RuneCountInString(text)
-	}
-	return utf8.RuneCountInString(text[:byteOffset])
+func runeBoundary(text string, at int) bool {
+	return at == len(text) || utf8.RuneStart(text[at])
 }
 
-// MaskText returns the masked text and the surviving citations. Splicing runs
-// descending by start offset so earlier replacements cannot shift later ones.
+// MaskText returns the masked text and the surviving citations. The merged
+// spans are sorted and disjoint, so one pass in offset order writes the
+// masked text and counts code points as it goes: splicing one span at a time
+// and counting each offset from the start copied and read the whole text once
+// per span.
 func MaskText(text string, spans []Span, citations []llmprotocol.Citation, a *Allocator) (string, []llmprotocol.Citation, error) {
 	for _, span := range spans {
 		// A span the router cannot trust is fail-closed, not skipped (D4).
 		if span.Start < 0 || span.End > len(text) || span.Start >= span.End {
 			return "", nil, fmt.Errorf("masking: span [%d,%d) outside text of %d bytes", span.Start, span.End, len(text))
+		}
+		// One that cuts a character would leave part of it beside the
+		// placeholder, and the code points counted for citations would not
+		// add up across the cut.
+		if !runeBoundary(text, span.Start) || !runeBoundary(text, span.End) {
+			return "", nil, fmt.Errorf("masking: span [%d,%d) splits a character", span.Start, span.End)
 		}
 	}
 	merged := a.maskable(text, spans)
@@ -250,31 +242,29 @@ func MaskText(text string, spans []Span, citations []llmprotocol.Citation, a *Al
 		return text, citations, nil
 	}
 
-	replacements := make([]spanReplacement, len(merged))
+	var masked strings.Builder
+	masked.Grow(len(text))
 	shifts := make([]citationShift, len(merged))
+	at, runeAt := 0, 0
 	for i, span := range merged {
 		// The value must come from the text, not span.Text: after a merge
 		// widens a span, span.Text still holds the narrower original value.
 		value := text[span.Start:span.End]
 		placeholder := a.Placeholder(span.EntityType, value)
-		replacements[i] = spanReplacement{start: span.Start, end: span.End, placeholder: placeholder}
-
-		runeStart := byteOffsetToRuneOffset(text, span.Start)
-		runeEnd := byteOffsetToRuneOffset(text, span.End)
+		runeStart := runeAt + utf8.RuneCountInString(text[at:span.Start])
+		runeEnd := runeStart + utf8.RuneCountInString(value)
 		shifts[i] = citationShift{
 			runeStart:       runeStart,
 			runeEnd:         runeEnd,
 			runeLengthDelta: utf8.RuneCountInString(placeholder) - (runeEnd - runeStart),
 		}
+		masked.WriteString(text[at:span.Start])
+		masked.WriteString(placeholder)
+		at, runeAt = span.End, runeEnd
 	}
+	masked.WriteString(text[at:])
 
-	masked := text
-	for i := len(replacements) - 1; i >= 0; i-- {
-		r := replacements[i]
-		masked = masked[:r.start] + r.placeholder + masked[r.end:]
-	}
-
-	return masked, adjustCitations(citations, shifts), nil
+	return masked.String(), adjustCitations(citations, shifts), nil
 }
 
 // adjustCitations shifts each citation by the net code-point length delta of
@@ -286,27 +276,20 @@ func adjustCitations(citations []llmprotocol.Citation, shifts []citationShift) [
 	if len(citations) == 0 {
 		return citations
 	}
+	// The shifts are sorted and disjoint, so those a citation follows are a
+	// prefix found by search, and only the next one can overlap it.
+	before := make([]int64, len(shifts)+1)
+	for i, shift := range shifts {
+		before[i+1] = before[i] + int64(shift.runeLengthDelta)
+	}
 	surviving := make([]llmprotocol.Citation, 0, len(citations))
 	for _, citation := range citations {
-		start := citation.StartIndex
-		end := citation.EndIndex
-		var delta int64
-		overlaps := false
-		for _, shift := range shifts {
-			runeStart, runeEnd := int64(shift.runeStart), int64(shift.runeEnd)
-			if start < runeEnd && runeStart < end {
-				overlaps = true
-				break
-			}
-			if runeEnd <= start {
-				delta += int64(shift.runeLengthDelta)
-			}
-		}
-		if overlaps {
+		next := sort.Search(len(shifts), func(i int) bool { return int64(shifts[i].runeEnd) > citation.StartIndex })
+		if next < len(shifts) && int64(shifts[next].runeStart) < citation.EndIndex {
 			continue
 		}
-		citation.StartIndex += delta
-		citation.EndIndex += delta
+		citation.StartIndex += before[next]
+		citation.EndIndex += before[next]
 		surviving = append(surviving, citation)
 	}
 	return surviving
