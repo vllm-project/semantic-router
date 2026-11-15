@@ -711,7 +711,7 @@ func (engine *StreamEngine) prepareEvent(event *llmprotocol.Event) (llmprotocol.
 	if !engine.targetCapabilities.Supports(llmprotocol.CapabilityMatchedStopSequence) {
 		diagnostics = projectMatchedStopSequenceEvent(engine.sourceFormat, engine.targetFormat, event)
 	}
-	if err := projectReasoningContinuityEvent(engine.targetCapabilities, *event); err != nil {
+	if err := projectReasoningContinuityEvent(engine.targetFormat, engine.targetCapabilities, *event); err != nil {
 		if !engine.continuityDropped {
 			engine.continuityDropped = true
 			diagnostics = append(diagnostics, reasoningContinuityDropped(engine.sourceFormat, engine.targetFormat)...)

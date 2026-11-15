@@ -419,16 +419,18 @@ func invalidAnthropicMediaSource(message string) error {
 }
 
 func (AnthropicMessagesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	request, projectionDiagnostics := llmprotocol.ProjectResponsesReasoning(request, llmprotocol.AnthropicMessagesV1, false)
 	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredCapabilities(request)); err != nil {
-		return nil, nil, err
+		return nil, projectionDiagnostics, err
 	}
 	if envelope.CanReplay(llmprotocol.AnthropicMessagesV1, request.Generation, policy, false) {
-		return append([]byte(nil), envelope.Request...), nil, nil
+		return append([]byte(nil), envelope.Request...), projectionDiagnostics, nil
 	}
 	if err := validateAnthropicEncodableRequest(request); err != nil {
-		return nil, nil, err
+		return nil, projectionDiagnostics, err
 	}
 	diagnostics, validationErr := anthropicRequestDiagnostics(request, policy)
+	diagnostics = appendDiagnostics(projectionDiagnostics, diagnostics, policy.Limits.Diagnostics)
 	if validationErr != nil {
 		return nil, diagnostics, validationErr
 	}
@@ -787,6 +789,9 @@ func encodeAnthropicContentBlock(content llmprotocol.Content) (anthropicContentW
 	case llmprotocol.ContentText:
 		return anthropicContentWire{Type: "text", Text: content.Text, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
 	case llmprotocol.ContentReasoning:
+		if err := requireReasoningRepresentation(llmprotocol.AnthropicMessagesV1, []llmprotocol.Content{content}); err != nil {
+			return anthropicContentWire{}, err
+		}
 		if content.Cache != nil {
 			return anthropicContentWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_cache_directive", "Anthropic Messages cannot attach cache_control to thinking content", nil)
 		}
