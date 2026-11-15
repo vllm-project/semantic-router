@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
@@ -39,14 +40,26 @@ func openPostgres(cfg *postgres.Config, name, identity string) (Store, error) {
 }
 
 func (p *Postgres) initialize(ctx context.Context, identity string) error {
-	// Fixed dedicated tables; unrelated store table_name settings do not alter them.
-	_, e := p.db.ExecContext(ctx, `
+	// Fixed dedicated tables; unrelated store table_name settings do not alter
+	// them. Replicas start together and CREATE TABLE IF NOT EXISTS races, so a
+	// transaction lock lets one of them create the schema at a time.
+	tx, e := p.db.BeginTx(ctx, nil)
+	if e != nil {
+		return fmt.Errorf("masking registry: postgres schema unavailable: %w", e)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, e = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('vsr_masking_schema'))`); e == nil {
+		_, e = tx.ExecContext(ctx, `
  CREATE TABLE IF NOT EXISTS vsr_masking_namespaces (namespace TEXT PRIMARY KEY, identity TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS vsr_masking_templates (namespace TEXT NOT NULL REFERENCES vsr_masking_namespaces(namespace), template TEXT NOT NULL, canonical_type TEXT NOT NULL, PRIMARY KEY(namespace,template));
  CREATE TABLE IF NOT EXISTS vsr_masking_counters (namespace TEXT NOT NULL REFERENCES vsr_masking_namespaces(namespace), scope TEXT NOT NULL, canonical_type TEXT NOT NULL, next_index BIGINT NOT NULL CHECK(next_index>=0), exhausted BOOLEAN NOT NULL DEFAULT FALSE, PRIMARY KEY(namespace,scope,canonical_type));
  CREATE TABLE IF NOT EXISTS vsr_masking_indices (namespace TEXT NOT NULL REFERENCES vsr_masking_namespaces(namespace), scope TEXT NOT NULL, canonical_type TEXT NOT NULL, idx BIGINT NOT NULL CHECK(idx>=0), digest TEXT, PRIMARY KEY(namespace,scope,canonical_type,idx), UNIQUE(namespace,scope,canonical_type,digest));`)
+	}
+	if e == nil {
+		e = tx.Commit()
+	}
 	if e != nil {
-		return errors.New("masking registry: postgres schema unavailable")
+		return fmt.Errorf("masking registry: postgres schema unavailable: %w", e)
 	}
 	_, e = p.db.ExecContext(ctx, `INSERT INTO vsr_masking_namespaces(namespace,identity) VALUES($1,$2) ON CONFLICT DO NOTHING`, p.namespace, identity)
 	if e != nil {
