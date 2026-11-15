@@ -26,6 +26,14 @@ type ConversationFacts struct {
 	LastMessageFlowToolResult bool
 	LastAssistantToolCall     bool
 	LastUserAfterToolResult   bool
+	// TurnIndex is the zero-based user turn index within the session: tool
+	// continuations are grouped with the user message that started them,
+	// matching the router-replay TurnIndex semantics. It stays 0 when no user
+	// history is visible to the router.
+	TurnIndex int
+	// HistoryTokens estimates the token size of the conversation history the
+	// request carries, excluding the current user message.
+	HistoryTokens int
 }
 
 func (c *Classifier) evaluateConversationSignal(
@@ -114,6 +122,10 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 		return activeToolLoopCount(facts)
 	case "flow_tool_state":
 		return conversationBoolCount(facts.LastMessageFlowToolResult)
+	case "turn_index":
+		return facts.TurnIndex
+	case "session_history_tokens":
+		return facts.HistoryTokens
 	default:
 		return 0
 	}

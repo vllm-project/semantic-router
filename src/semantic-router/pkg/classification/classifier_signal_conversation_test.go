@@ -291,3 +291,51 @@ func TestConversation_FlowToolState(t *testing.T) {
 		t.Fatal("ordinary history should not match flow_tool_state")
 	}
 }
+
+func TestConversation_TurnIndex(t *testing.T) {
+	rule := config.ConversationRule{
+		Name: "late_session",
+		Feature: config.ConversationFeature{
+			Type:   "count",
+			Source: config.ConversationSource{Type: "turn_index"},
+		},
+		Predicate: &config.NumericPredicate{GTE: ptrFloat(2)},
+	}
+
+	late := resolveConversationValue(rule.Feature, ConversationFacts{TurnIndex: 2})
+	if late != 2.0 || !conversationPredicateMatches(rule, late) {
+		t.Fatalf("turn_index 2 should match gte 2, got %v", late)
+	}
+	early := resolveConversationValue(rule.Feature, ConversationFacts{TurnIndex: 1})
+	if conversationPredicateMatches(rule, early) {
+		t.Fatal("turn_index 1 should not match gte 2")
+	}
+	// No visible user history falls back to 0, so single-turn requests never
+	// match a late-session rule.
+	if got := resolveConversationValue(rule.Feature, ConversationFacts{}); got != 0 {
+		t.Fatalf("missing facts must resolve turn_index to 0, got %v", got)
+	}
+}
+
+func TestConversation_SessionHistoryTokens(t *testing.T) {
+	rule := config.ConversationRule{
+		Name: "long_session",
+		Feature: config.ConversationFeature{
+			Type:   "count",
+			Source: config.ConversationSource{Type: "session_history_tokens"},
+		},
+		Predicate: &config.NumericPredicate{GTE: ptrFloat(100)},
+	}
+
+	loaded := resolveConversationValue(rule.Feature, ConversationFacts{HistoryTokens: 120})
+	if loaded != 120 || !conversationPredicateMatches(rule, loaded) {
+		t.Fatalf("history tokens 120 should match gte 100, got %v", loaded)
+	}
+	light := resolveConversationValue(rule.Feature, ConversationFacts{HistoryTokens: 8})
+	if conversationPredicateMatches(rule, light) {
+		t.Fatal("history tokens 8 should not match gte 100")
+	}
+	if got := resolveConversationValue(rule.Feature, ConversationFacts{}); got != 0 {
+		t.Fatalf("missing facts must resolve session_history_tokens to 0, got %v", got)
+	}
+}

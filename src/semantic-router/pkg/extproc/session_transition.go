@@ -212,6 +212,31 @@ func setSessionIDFromRequestIDFallback(ctx *RequestContext) {
 	}
 }
 
+// sessionPositionFacts derives the trajectory-position facts the conversation
+// signal family exposes: the zero-based user turn index (tool continuations
+// grouped with the user message that started them, matching the router-replay
+// TurnIndex semantics) and the estimated token size of the conversation history
+// the request carries. Both mirror the session-transition fields the router
+// records after routing, computed from the original request snapshot so routing
+// edits cannot renumber turns, and both stay available at decision time —
+// populateSessionTransitionFields runs later in the request path.
+func sessionPositionFacts(ctx *RequestContext) (turnIndex int, historyTokens int) {
+	if ctx == nil {
+		return 0, 0
+	}
+	var messages []llmprotocol.Message
+	if ctx.OriginalContextHistory != nil {
+		messages = ctx.OriginalContextHistory.Conversation().Messages
+	} else if ctx.SemanticRequest != nil {
+		messages = ctx.SemanticRequest.Messages
+	}
+	if len(messages) == 0 {
+		return 0, 0
+	}
+	return replayUserTurnIndex(ctx), historyTokensFromSemanticMessages(messages)
+}
+
+// sessionTransitionMessages converts neutral messages for turn counting.
 func sessionTransitionMessages(messages []llmprotocol.Message) []sessiontelemetry.ChatMessage {
 	converted := make([]sessiontelemetry.ChatMessage, len(messages))
 	for i := range messages {

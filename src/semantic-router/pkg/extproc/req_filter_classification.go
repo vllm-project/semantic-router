@@ -30,6 +30,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	}
 
 	signalInput := r.prepareSignalEvaluationInput(history)
+	signalInput.conversationFacts.TurnIndex, signalInput.conversationFacts.HistoryTokens = sessionPositionFacts(ctx)
 	compressSignalEvaluationInput(&signalInput, ctx.Routing.SelectedRecipe().SignalsCompression())
 	observePromptCompression(ctx, signalInput.compression.outcome, signalInput.compression.elapsed)
 	signalInput.requestFacts.Context = selectionRequestContext(ctx)
