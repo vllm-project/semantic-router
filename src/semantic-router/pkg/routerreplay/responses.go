@@ -43,16 +43,25 @@ type LifecycleSummary struct {
 	Unknown    int `json:"unknown"`
 }
 
+// AggregateCostSummary compares the records with a baseline (TotalSaved,
+// BaselineSpend and ActualSpend over CostRecordCount completed records) and
+// totals every priced cost of every record, failed ones included
+// (TotalSpend), the calls the Router made itself included apart as
+// RouterCallSpend.
 type AggregateCostSummary struct {
 	TotalSaved          float64 `json:"total_saved"`
 	BaselineSpend       float64 `json:"baseline_spend"`
 	ActualSpend         float64 `json:"actual_spend"`
+	RouterCallSpend     float64 `json:"router_call_spend"`
+	TotalSpend          float64 `json:"total_spend"`
 	Currency            string  `json:"currency,omitempty"`
 	CostRecordCount     int     `json:"cost_record_count"`
 	ExcludedRecordCount int     `json:"excluded_record_count"`
 	// ByCurrency retains every complete estimate without converting or summing
 	// currencies. Flat amounts are populated only when exactly one currency exists.
 	ByCurrency []CurrencyCostSummary `json:"by_currency,omitempty"`
+	// Coverage says how much of the filtered traffic the amounts leave out.
+	Coverage AggregateCostCoverage `json:"coverage"`
 }
 
 type CurrencyCostSummary struct {
@@ -60,7 +69,35 @@ type CurrencyCostSummary struct {
 	TotalSaved      float64 `json:"total_saved"`
 	BaselineSpend   float64 `json:"baseline_spend"`
 	ActualSpend     float64 `json:"actual_spend"`
+	RouterCallSpend float64 `json:"router_call_spend"`
+	TotalSpend      float64 `json:"total_spend"`
 	CostRecordCount int     `json:"cost_record_count"`
+}
+
+// AggregateCostCoverage counts the filtered records whose every cost has a
+// price, those with some, and those with none; a record that has not
+// completed is at most partly priced. UnpricedReasons counts the partly
+// priced and unpriced records by the reason of their first missing price. A
+// Looper hop's record is in none of them but in LooperHopRecords: the record
+// of the request that made the hop counts its call.
+// ListPriceRecords are priced at a catalog list price, an estimate.
+// CallerLoginRecords ran on the client's own provider login, priced or not:
+// a price shown for one is what its tokens cost at API prices, not what the
+// client's plan charges. BaselineSources counts the records compared with a
+// baseline by how it was chosen; BaselineUnavailable, the priced completed
+// records without one, by why.
+type AggregateCostCoverage struct {
+	PricedRecords       int            `json:"priced_records"`
+	PartlyPricedRecords int            `json:"partly_priced_records"`
+	UnpricedRecords     int            `json:"unpriced_records"`
+	UnpricedReasons     map[string]int `json:"unpriced_reasons,omitempty"`
+	LooperHopRecords    int            `json:"looper_hop_records"`
+	ListPriceRecords    int            `json:"list_price_records"`
+	CallerLoginRecords  int            `json:"caller_login_records"`
+	RouterCalls         int            `json:"router_calls"`
+	UnpricedRouterCalls int            `json:"unpriced_router_calls"`
+	BaselineSources     map[string]int `json:"baseline_sources,omitempty"`
+	BaselineUnavailable map[string]int `json:"baseline_unavailable,omitempty"`
 }
 
 // AggregateProviderCacheSummary totals the same-model provider prompt-cache

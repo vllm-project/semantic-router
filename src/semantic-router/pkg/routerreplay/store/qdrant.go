@@ -316,6 +316,7 @@ func (q *QdrantStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 		r.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 		r.Currency = cloneStringPtr(usage.Currency)
 		r.BaselineModel = cloneStringPtr(usage.BaselineModel)
+		r.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 	})
 }
 

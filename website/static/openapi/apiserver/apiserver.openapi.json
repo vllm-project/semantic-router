@@ -19455,6 +19455,69 @@
                           "conversation_id": {
                             "type": "string"
                           },
+                          "cost_accounting": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "baseline_source": {
+                                "type": "string"
+                              },
+                              "baseline_unavailable": {
+                                "type": "string"
+                              },
+                              "caller_login": {
+                                "type": "boolean"
+                              },
+                              "pricing_source": {
+                                "type": "string"
+                              },
+                              "router_calls": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "calls": {
+                                      "type": "integer"
+                                    },
+                                    "completion_tokens": {
+                                      "type": "integer"
+                                    },
+                                    "cost": {
+                                      "nullable": true,
+                                      "type": "number"
+                                    },
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "type": "string"
+                                    },
+                                    "prompt_tokens": {
+                                      "type": "integer"
+                                    },
+                                    "unpriced_calls": {
+                                      "type": "integer"
+                                    },
+                                    "unpriced_reasons": {
+                                      "nullable": true,
+                                      "type": "object",
+                                      "additionalProperties": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "calls"
+                                  ]
+                                }
+                              },
+                              "unpriced_reason": {
+                                "type": "string"
+                              }
+                            }
+                          },
                           "cost_savings": {
                             "nullable": true,
                             "type": "number"
@@ -22675,7 +22738,13 @@
                               "currency": {
                                 "type": "string"
                               },
+                              "router_call_spend": {
+                                "type": "number"
+                              },
                               "total_saved": {
+                                "type": "number"
+                              },
+                              "total_spend": {
                                 "type": "number"
                               }
                             },
@@ -22684,6 +22753,8 @@
                               "total_saved",
                               "baseline_spend",
                               "actual_spend",
+                              "router_call_spend",
+                              "total_spend",
                               "cost_record_count"
                             ]
                           }
@@ -22691,13 +22762,79 @@
                         "cost_record_count": {
                           "type": "integer"
                         },
+                        "coverage": {
+                          "type": "object",
+                          "properties": {
+                            "baseline_sources": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "baseline_unavailable": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "caller_login_records": {
+                              "type": "integer"
+                            },
+                            "list_price_records": {
+                              "type": "integer"
+                            },
+                            "looper_hop_records": {
+                              "type": "integer"
+                            },
+                            "partly_priced_records": {
+                              "type": "integer"
+                            },
+                            "priced_records": {
+                              "type": "integer"
+                            },
+                            "router_calls": {
+                              "type": "integer"
+                            },
+                            "unpriced_reasons": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "unpriced_records": {
+                              "type": "integer"
+                            },
+                            "unpriced_router_calls": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "priced_records",
+                            "partly_priced_records",
+                            "unpriced_records",
+                            "looper_hop_records",
+                            "list_price_records",
+                            "caller_login_records",
+                            "router_calls",
+                            "unpriced_router_calls"
+                          ]
+                        },
                         "currency": {
                           "type": "string"
                         },
                         "excluded_record_count": {
                           "type": "integer"
                         },
+                        "router_call_spend": {
+                          "type": "number"
+                        },
                         "total_saved": {
+                          "type": "number"
+                        },
+                        "total_spend": {
                           "type": "number"
                         }
                       },
@@ -22705,8 +22842,11 @@
                         "total_saved",
                         "baseline_spend",
                         "actual_spend",
+                        "router_call_spend",
+                        "total_spend",
                         "cost_record_count",
-                        "excluded_record_count"
+                        "excluded_record_count",
+                        "coverage"
                       ]
                     },
                     "token_breakdown": {
@@ -24751,6 +24891,69 @@
                     },
                     "conversation_id": {
                       "type": "string"
+                    },
+                    "cost_accounting": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "baseline_source": {
+                          "type": "string"
+                        },
+                        "baseline_unavailable": {
+                          "type": "string"
+                        },
+                        "caller_login": {
+                          "type": "boolean"
+                        },
+                        "pricing_source": {
+                          "type": "string"
+                        },
+                        "router_calls": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "calls": {
+                                "type": "integer"
+                              },
+                              "completion_tokens": {
+                                "type": "integer"
+                              },
+                              "cost": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "prompt_tokens": {
+                                "type": "integer"
+                              },
+                              "unpriced_calls": {
+                                "type": "integer"
+                              },
+                              "unpriced_reasons": {
+                                "nullable": true,
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "calls"
+                            ]
+                          }
+                        },
+                        "unpriced_reason": {
+                          "type": "string"
+                        }
+                      }
                     },
                     "cost_savings": {
                       "nullable": true,

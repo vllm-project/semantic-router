@@ -262,6 +262,37 @@ These defaults are new:
 traces sets `max_tool_trace_bytes: 0` itself.
 :::
 
+### Choose the savings baseline
+
+A record's savings compare its recorded tokens at the selected model's rates
+with the same tokens at a baseline model's rates. By default the baseline is
+the most expensive model of the selected recipe's pool, so a request routed to
+a model in that pool never shows a loss. Name the model to compare with
+instead:
+
+```yaml
+plugins:
+  - type: router_replay
+    configuration:
+      enabled: true
+      cost_baseline_model: premium-model
+```
+
+`cost_baseline_model` must name a model with pricing, or the configuration does
+not load. Like the other fields it layers: set it in `global.plugins` for every
+route, or on one recipe or decision. A request sent to a model dearer than the
+baseline then shows a negative saving. A record whose baseline is priced in
+another currency than the selected model has no baseline and says why
+(`baseline_unavailable`); it never falls back to the default. Each record names
+how its baseline was chosen in `cost_accounting.baseline_source`, and Insights
+shows which baselines the savings cover.
+
+A model with no `pricing` of its own takes its provider's list price from the
+built-in catalog when the catalog has one, and Insights marks that cost as a
+list price estimate. For a backend on the client's own login
+(`auth.credential: caller`) a cost is the API-price equivalent of its tokens,
+not what the client's plan charges; set `pricing` on such a model to see it.
+
 ### Keep personal data out of Replay
 
 Set `prompt_capture: verified` globally or on a decision's `router_replay`

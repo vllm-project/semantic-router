@@ -540,7 +540,16 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 }
 
 func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
-	if ctx == nil || ctx.RouterReplayID == "" || (usage.TotalTokens == nil && usage.ProviderCache == nil) {
+	if usage.TotalTokens == nil && usage.ProviderCache == nil {
+		return
+	}
+	r.writeRouterReplayUsageCost(ctx, usage)
+}
+
+// writeRouterReplayUsageCost replaces the record's usage and cost, even with
+// none.
+func (r *OpenAIRouter) writeRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
+	if ctx == nil || ctx.RouterReplayID == "" {
 		return
 	}
 

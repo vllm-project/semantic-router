@@ -494,6 +494,7 @@ func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 		record.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 		record.Currency = cloneStringPtr(usage.Currency)
 		record.BaselineModel = cloneStringPtr(usage.BaselineModel)
+		record.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 	})
 }
 

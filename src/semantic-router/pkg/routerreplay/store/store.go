@@ -33,21 +33,6 @@ type Signal struct {
 	Decision      []string `json:"decision,omitempty"`
 }
 
-// UsageCost captures token usage and pricing-derived cost details for a record.
-type UsageCost struct {
-	ProviderCache      *ProviderCacheAccounting `json:"provider_cache,omitempty"`
-	PromptTokens       *int                     `json:"prompt_tokens,omitempty"`
-	CachedPromptTokens *int                     `json:"cached_prompt_tokens,omitempty"`
-	CacheWriteTokens   *int                     `json:"cache_write_tokens,omitempty"`
-	CompletionTokens   *int                     `json:"completion_tokens,omitempty"`
-	TotalTokens        *int                     `json:"total_tokens,omitempty"`
-	ActualCost         *float64                 `json:"actual_cost,omitempty"`
-	BaselineCost       *float64                 `json:"baseline_cost,omitempty"`
-	CostSavings        *float64                 `json:"cost_savings,omitempty"`
-	Currency           *string                  `json:"currency,omitempty"`
-	BaselineModel      *string                  `json:"baseline_model,omitempty"`
-}
-
 // Outcome captures typed post-route feedback linked to a replay record.
 type Outcome struct {
 	Timestamp      time.Time         `json:"timestamp,omitempty"`
@@ -411,6 +396,7 @@ type Record struct {
 	CostSavings        *float64                 `json:"cost_savings,omitempty"`
 	Currency           *string                  `json:"currency,omitempty"`
 	BaselineModel      *string                  `json:"baseline_model,omitempty"`
+	CostAccounting     *CostAccounting          `json:"cost_accounting,omitempty"`
 }
 
 // RecordWriter creates records and advances their routing lifecycle.
@@ -633,6 +619,7 @@ func cloneRecord(record Record) Record {
 	cloned.CostSavings = cloneFloat64Ptr(record.CostSavings)
 	cloned.Currency = cloneStringPtr(record.Currency)
 	cloned.BaselineModel = cloneStringPtr(record.BaselineModel)
+	cloned.CostAccounting = cloneCostAccounting(record.CostAccounting)
 	cloned.EndedAt = cloneTimePtr(record.EndedAt)
 	return cloned
 }

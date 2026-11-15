@@ -133,7 +133,7 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 		COALESCE(original_model,''), COALESCE(selected_model,''), COALESCE(session_id,''),
 		from_cache, streaming, lifecycle_state, COALESCE(signals, '{}'::jsonb),
 		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s, COALESCE(turn_id, ''), COALESCE(parent_turn_id, '')
+		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s, COALESCE(turn_id, ''), COALESCE(parent_turn_id, ''), cost_accounting
 		FROM %s ORDER BY timestamp DESC, id DESC`, postgresReviewMetadataColumn, p.tableName)
 	rows, err := p.db.QueryContext(ctx, query)
 	if err != nil {
@@ -148,7 +148,7 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 			&row.promptTokens, &row.completionTokens, &row.totalTokens, &row.actualCost,
 			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel, &row.providerCacheJSON,
 			&row.record.Timestamp, &row.record.DurationMS, &row.review.requestKind, &row.review.reviewJSON,
-			&row.record.TurnID, &row.record.ParentTurnID); err != nil {
+			&row.record.TurnID, &row.record.ParentTurnID, &row.costAccountingJSON); err != nil {
 			return err
 		}
 		if err = row.review.assign(&row.record); err != nil {
@@ -158,6 +158,9 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 			return err
 		}
 		if err = unmarshalReplayOptionalJSON(row.providerCacheJSON, &row.record.ProviderCache); err != nil {
+			return err
+		}
+		if err = unmarshalReplayOptionalJSON(row.costAccountingJSON, &row.record.CostAccounting); err != nil {
 			return err
 		}
 		assignUsageCostFields(&row.record, row.promptTokens, sql.NullInt64{}, sql.NullInt64{}, row.completionTokens,

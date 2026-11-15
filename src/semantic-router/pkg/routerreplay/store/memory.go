@@ -241,6 +241,7 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	rec.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 	rec.Currency = cloneStringPtr(usage.Currency)
 	rec.BaselineModel = cloneStringPtr(usage.BaselineModel)
+	rec.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 
 	return nil
 }

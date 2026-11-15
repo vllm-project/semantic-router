@@ -57,6 +57,7 @@ describe('Insights cost charts', () => {
     expect(html.indexOf('</details>')).toBeGreaterThan(html.indexOf('Older records retain'))
     expect(html).toContain('N/A')
     expect(html).toContain('not completed or lack token usage, model pricing, or baseline data')
+    expect(html).toContain('The total still counts the priced calls of a request that failed.')
     expect(html).toContain('recipe’s complete model pool across all decisions')
     expect(html).toContain('Historical requests without captured prices remain')
     expect(html).toContain('Price not recorded')

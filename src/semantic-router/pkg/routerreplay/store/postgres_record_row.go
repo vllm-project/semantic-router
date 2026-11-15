@@ -24,7 +24,7 @@ const postgresRecordSelectColumns = `
 	session_id, turn_index, previous_response_id, conversation_id,
 	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache,
 	prompt_original_bytes, prompt_original_sha256, request_kind, review, review_status, review_outcome, review_risk,
-	thread_id, turn_id, parent_turn_id
+	thread_id, turn_id, parent_turn_id, cost_accounting
 `
 
 type postgresRowScanner interface {
@@ -34,6 +34,7 @@ type postgresRowScanner interface {
 type postgresInsertRecord struct {
 	reviewJSON                   []byte
 	providerCacheJSON            []byte
+	costAccountingJSON           []byte
 	routingMetadataJSON          []byte
 	safetyEvidenceJSON           []byte
 	record                       Record
@@ -55,6 +56,7 @@ type postgresInsertRecord struct {
 type postgresRecordRow struct {
 	review                       postgresReviewColumns
 	providerCacheJSON            []byte
+	costAccountingJSON           []byte
 	routingMetadataJSON          []byte
 	safetyEvidenceJSON           []byte
 	record                       Record
@@ -116,6 +118,7 @@ func marshalPostgresInsertJSON(record Record, out *postgresInsertRecord) error {
 	}{
 		{"provider cache accounting", &out.providerCacheJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.ProviderCache) }},
 		{"review", &out.reviewJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.Review) }},
+		{"cost accounting", &out.costAccountingJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.CostAccounting) }},
 		{"safety evidence", &out.safetyEvidenceJSON, func() ([]byte, error) { return marshalPostgresSafety(record) }},
 		{"routing metadata", &out.routingMetadataJSON, func() ([]byte, error) { return marshalPostgresRoutingMetadata(record) }},
 		{"signals", &out.signalsJSON, func() ([]byte, error) { return json.Marshal(record.Signals) }},
@@ -244,6 +247,7 @@ func (record postgresInsertRecord) args() []interface{} {
 		emptyStringSQL(record.record.ThreadID),
 		emptyStringSQL(record.record.TurnID),
 		emptyStringSQL(record.record.ParentTurnID),
+		record.costAccountingJSON,
 	}
 }
 
@@ -354,11 +358,15 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.threadID,
 		&row.turnID,
 		&row.parentTurnID,
+		&row.costAccountingJSON,
 	}
 }
 
 func (row *postgresRecordRow) decode() (Record, error) {
 	if err := unmarshalReplayOptionalJSON(row.providerCacheJSON, &row.record.ProviderCache); err != nil {
+		return Record{}, err
+	}
+	if err := unmarshalReplayOptionalJSON(row.costAccountingJSON, &row.record.CostAccounting); err != nil {
 		return Record{}, err
 	}
 	if err := unmarshalPostgresSafety(row.safetyEvidenceJSON, &row.record); err != nil {

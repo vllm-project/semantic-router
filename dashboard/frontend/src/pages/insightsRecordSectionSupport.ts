@@ -39,7 +39,7 @@ const SECTION_PRESENTATION: Record<
     size: 'wide',
     description: 'Recorded token usage and configured-rate estimates',
     metricColumns: 4,
-    noteFields: ['Cost basis'],
+    noteFields: ['Cost basis', 'Router calls'],
     secondaryFields: ['Baseline basis', 'Current pricing'],
     secondaryTitle: 'How these estimates are calculated',
   },

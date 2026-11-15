@@ -1272,7 +1272,9 @@ class RouterReplayPluginConfig(BaseModel):
     prompt keeps max_tool_trace_bytes's bound when that is above 0, else 65536.
     Where no layer sets max_tool_trace_bytes, each tool text field keeps 65536
     bytes, raw copies included, and max_tool_trace_total_bytes, the steps' text
-    in all, defaults to 262144; 0 removes either limit.
+    in all, defaults to 262144; 0 removes either limit. cost_baseline_model is
+    the configured, priced model a record's savings compare with; unset, the
+    baseline is the most expensive model of the recipe's pool.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1289,6 +1291,7 @@ class RouterReplayPluginConfig(BaseModel):
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_total_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
+    cost_baseline_model: Optional[str] = Field(default=None, min_length=1)
     shadow: Optional["RouterReplayShadowConfig"] = None
 
 

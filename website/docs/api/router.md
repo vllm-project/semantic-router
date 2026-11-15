@@ -642,12 +642,35 @@ costs; infrastructure charges and billing adjustments are excluded.
 | Field | Meaning |
 | --- | --- |
 | `actual_cost` | Estimated cost of the selected model for the recorded usage. |
-| `baseline_cost` | Highest same-currency estimate in the selected recipe's model pool, using that same usage. |
+| `baseline_cost` | The baseline model's estimate for that same usage: `cost_baseline_model` when the request's `router_replay` plugin sets one, else the highest same-currency estimate in the selected recipe's model pool. |
 | `baseline_model` | The model used for that comparison. Equal costs use model-name order. |
-| `cost_savings` | The difference between the baseline and actual estimate. |
+| `cost_savings` | The difference between the baseline and actual estimate. It is negative when the baseline costs less. |
 | `currency` | Currency of the recorded estimate; no exchange-rate conversion is applied. |
+| `cost_accounting` | Where the figures came from and what they leave out (below). |
 
-The baseline covers the recipe's models across all its decisions: model
+`cost_accounting` labels each new record:
+
+| Field | Meaning |
+| --- | --- |
+| `pricing_source` | `configured` for the model's `providers.models[].pricing`, or `catalog_list_price` when none is set and the built-in catalog lists a price for the model's provider. A list price is an estimate. |
+| `caller_login` | The model's backends take the client's own login (`auth.credential: caller`). Its cost is what the tokens would cost at API prices, not what the client's plan charges. |
+| `unpriced_reason` | Why `actual_cost` is missing: `no_usage`, `pricing_not_configured`, or `counted_in_parent` for a Looper hop's own record. |
+| `baseline_source` | `configured_model`, `recipe_most_expensive` (the default), or `selected_model` for a direct request. |
+| `baseline_unavailable` | Why a priced record has no baseline: `pricing_not_configured` or `currency_mismatch`. A configured baseline that cannot be used never falls back to the default. |
+| `router_calls` | Model calls the Router made itself to answer the request, one entry per `kind`. |
+
+A Looper request's cost is its calls, so its record has no `actual_cost` and one
+`router_calls` entry of kind `looper`: `calls`, the request's `prompt_tokens`
+and `completion_tokens`, `cost` and `currency` for the calls that have a price,
+and `unpriced_calls` with `unpriced_reasons` for the others. A call is unpriced
+when its model has no price, it reported no usage or incomplete usage, it is in
+another currency than the first priced call, or no attempt trace kept it
+(`attempt_not_traced`: of the Looper algorithms only `escalate` traces its
+attempts). An unpriced call is never counted as free. Decision-model, System
+One and embedding calls made while routing are not yet attributed to a request
+and are not in `router_calls`.
+
+The default baseline covers the recipe's models across all its decisions: model
 references, explicit candidate-iteration models, and route destinations. A
 permitted default-model fallback is included only for decisions that can use it;
 auxiliary planners and judges do not enlarge the pool. Other recipes, unpriced
@@ -702,15 +725,37 @@ its record has no `provider_cache`; Insights identifies it separately instead
 of showing replayed provider usage as new provider savings.
 
 Aggregates use `summary.by_currency`, a sorted array with `currency`,
-`total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count` for each
-currency. With one currency, the flat summary fields mirror that group. With
-multiple currencies, flat `currency` is omitted and flat amounts are zero
-placeholders: use `by_currency`, not those placeholders. There is no combined
-cross-currency total.
+`total_saved`, `baseline_spend`, `actual_spend`, `router_call_spend`,
+`total_spend`, and `cost_record_count` for each currency. With one currency,
+the flat summary fields mirror that group. With multiple currencies, flat
+`currency` is omitted and flat amounts are zero placeholders: use
+`by_currency`, not those placeholders. There is no combined cross-currency
+total.
 
-`cost_record_count` counts complete estimates. `excluded_record_count` includes
-non-completed requests and records missing the data needed for a complete
-estimate; it does not imply that every excluded request lacks pricing.
+`total_saved`, `baseline_spend`, and `actual_spend` cover the
+`cost_record_count` completed records compared with a baseline. `total_spend`
+adds every priced cost, with or without a baseline, including
+`router_call_spend`, the priced calls the Router made itself. A request that
+failed or has not finished still counts the calls it paid for, such as the
+attempts of an escalation that then failed.
+`excluded_record_count` includes non-completed requests and records missing the
+data needed for a savings comparison; it does not imply that every excluded
+request lacks pricing.
+
+`summary.coverage` says how much the amounts leave out:
+
+| Field | Meaning |
+| --- | --- |
+| `priced_records` | Records whose every cost has a price. |
+| `partly_priced_records` | Records with some costs priced, such as a Looper request with an unpriced call. |
+| `unpriced_records` | Records with no price at all. |
+| `unpriced_reasons` | The partly priced and unpriced records by the reason of their first missing price, for example `pricing_not_configured`, `no_usage`, `not_completed` for a request that failed or has not finished, which is never fully priced, or `price_not_recorded` for a record written before the Router recorded why. |
+| `looper_hop_records` | Records of Looper hops, left out of the three counts because the record of the request that made each hop counts its call. |
+| `list_price_records` | Priced records whose rate is a catalog list price. |
+| `caller_login_records` | Records served on a client's own login, priced or not. |
+| `router_calls`, `unpriced_router_calls` | Calls the Router made itself, and how many have no price. |
+| `baseline_sources` | The records compared with a baseline, by `baseline_source` (`unrecorded` for older records). |
+| `baseline_unavailable` | Priced completed records without a baseline, by why. |
 
 ### Net provider prompt-cache saving
 
