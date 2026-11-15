@@ -26,6 +26,10 @@ jobs:
         run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - name: Check out the repo
         uses: actions/checkout@v4
+        with:
+          # The merge commit and its parents, so the core test selection can
+          # read which files the pull request changes.
+          fetch-depth: 2
 
       - name: Set up Go
         uses: actions/setup-go@v5
