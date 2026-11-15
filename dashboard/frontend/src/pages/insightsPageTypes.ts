@@ -5,6 +5,7 @@ import type {
   ReplaySessionPolicy,
 } from './insightsPageRoutingTypes'
 import type { SignalType } from '../generated/routerConfigContract'
+import type { InsightsReview, InsightsReviewAggregate } from './insightsReviewTypes'
 
 export type Signal = Partial<Record<SignalType, string[]>> & Record<string, string[] | undefined>
 
@@ -105,6 +106,9 @@ export interface InsightsRecord {
   id: string
   timestamp: string
   request_id?: string
+  /** codex_approval_review for an agent approval review; absent otherwise. */
+  request_kind?: string
+  review?: InsightsReview
   session_id?: string
   turn_index: number
   recipe?: string
@@ -352,4 +356,6 @@ export interface InsightsAggregateResponse {
   available_recipes: string[]
   available_decisions: string[]
   available_models: string[]
+  reviews?: InsightsReviewAggregate
+  available_review_models?: string[]
 }

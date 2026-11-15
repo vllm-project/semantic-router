@@ -126,7 +126,8 @@ func (r *OpenAIRouter) startRouterReplay(
 	prompt := record.Prompt
 	ctx.RouterReplayContentOmitted = !r.replayPromptAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
-	r.populateReplayIdentity(&record, ctx)
+	headerSession := r.populateReplayIdentity(&record, ctx) || ctx.SessionProvenance == SessionProvenanceHeader
+	applyReplayReviewSession(&record, headerSession)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
 	}
@@ -138,10 +139,11 @@ func (r *OpenAIRouter) startRouterReplay(
 
 // populateReplayIdentity records the same explicit identity used by protection,
 // including custom header names, without enabling protection or changing request
-// state. Optional Responses lineage remains the fallback for older clients.
-func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) {
+// state. Optional Responses lineage remains the fallback for older clients. It
+// reports whether a header named the session.
+func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) bool {
 	if r == nil || ctx == nil || record == nil {
-		return
+		return false
 	}
 	cfg := config.RouterLearningProtectionConfig{}
 	if r.Config != nil {
@@ -149,7 +151,7 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 	}
 	identity, ok := r.protectionIdentity(ctx, cfg)
 	if !ok {
-		return
+		return false
 	}
 	record.SessionID = identity.sessionID
 	if conversationID := identity.declaredConversationID(); conversationID != "" {
@@ -160,6 +162,7 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 	if record.Learning != nil {
 		record.Learning.ProtectionStateKey = routingLearningStateKey(ctx)
 	}
+	return true
 }
 
 func shouldStartRouterReplay(ctx *RequestContext) bool {
@@ -288,6 +291,7 @@ func buildReplayRoutingRecord(
 		record.PreviousResponseID = state.PreviousResponseID
 		record.ConversationID = state.ConversationID
 	}
+	record.RequestKind, record.Review = replayApprovalReview(ctx)
 	// The sanitiser drops tool-result payloads unless the route captures tool
 	// results; a masking route persists no request text at all, because Replay
 	// snapshots the request before masking runs (D3, #3566).
@@ -483,6 +487,7 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 			"error":      err.Error(),
 		})
 	}
+	settleReplayApprovalReview(ctx, recorder, state)
 }
 
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.

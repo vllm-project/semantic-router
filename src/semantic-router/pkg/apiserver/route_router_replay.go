@@ -109,6 +109,10 @@ func routerReplayFilterParameters() []OpenAPIParameter {
 		queryParameter("model", "Filter by selected model.", "string"),
 		queryParameter("session_id", "Filter by logical session identifier.", "string"),
 		queryParameter("cache_status", "Filter by response-cache outcome.", "string", "all", "cached", "streamed"),
+		queryParameter("request_kind", "Filter by request kind; codex_approval_review selects Codex approval reviews.", "string", "all", "codex_approval_review"),
+		queryParameter("review_status", "Filter approval reviews by status.", "string", "all", "pending", "completed", "tool_call", "invalid", "failed", "cancelled"),
+		queryParameter("review_outcome", "Filter completed approval reviews by verdict.", "string", "all", "allow", "deny"),
+		queryParameter("review_risk", "Filter completed approval reviews by reported risk.", "string", "all", "low", "medium", "high", "critical"),
 	}
 }
 

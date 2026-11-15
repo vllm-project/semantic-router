@@ -325,6 +325,13 @@ func (q *QdrantStore) UpdateToolTrace(ctx context.Context, id string, trace Tool
 	})
 }
 
+// UpdateReview replaces the approval review of a record.
+func (q *QdrantStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	return q.updateRecord(ctx, id, func(r *Record) {
+		r.Review = CloneReview(&review)
+	})
+}
+
 func (q *QdrantStore) Close() error {
 	return q.lifecycle.close(func() error {
 		if q.asyncWrites {

@@ -29,6 +29,10 @@ type AggregateResponse struct {
 	AvailableRecipes     []string                      `json:"available_recipes"`
 	AvailableDecisions   []string                      `json:"available_decisions"`
 	AvailableModels      []string                      `json:"available_models"`
+	// Reviews is present when the filtered records include approval reviews.
+	Reviews *ReviewAggregate `json:"reviews,omitempty"`
+	// AvailableReviewModels lists the models that answered any review.
+	AvailableReviewModels []string `json:"available_review_models,omitempty"`
 }
 
 type LifecycleSummary struct {

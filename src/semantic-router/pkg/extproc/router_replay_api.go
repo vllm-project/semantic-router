@@ -25,6 +25,7 @@ type routerReplayFilters struct {
 	model       string
 	cacheStatus string
 	sessionID   string
+	review      routerReplayReviewFilters
 }
 
 type routerReplayListQuery struct {
@@ -211,7 +212,9 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		return filters, fmt.Errorf("cache_status must be one of all, cached, or streamed")
 	}
 
-	return filters, nil
+	review, err := parseRouterReplayReviewFilters(values)
+	filters.review = review
+	return filters, err
 }
 
 func parseRouterReplayQueryInt(values url.Values, key string, positiveOnly bool) (int, error) {
@@ -258,6 +261,7 @@ func doesRouterReplayRecordMatchFilters(
 		matchesOptionalValue(record.Recipe, filters.recipe),
 		matchesOptionalModel(record, filters.model),
 		matchesOptionalValue(record.SessionID, filters.sessionID),
+		filters.review.matches(record),
 		matchesReplaySearch(record, search),
 	}
 	for _, match := range matches {

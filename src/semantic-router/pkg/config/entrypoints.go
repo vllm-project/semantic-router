@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -110,4 +111,22 @@ func (c *RouterConfig) ValidateReviewModels() error {
 		}
 	}
 	return nil
+}
+
+// IsReviewEntrypoint reports whether model names an entrypoint that another
+// entrypoint uses as its review_model, under any of the target's names.
+func (c *RouterConfig) IsReviewEntrypoint(api InferenceAPI, model string) bool {
+	if c == nil {
+		return false
+	}
+	target, ok := c.ResolveEntrypoint(api, model)
+	if !ok {
+		return false
+	}
+	for _, entrypoint := range c.EffectiveEntrypoints(api) {
+		if review := strings.TrimSpace(entrypoint.ReviewModel); review != "" && slices.Contains(target.ModelNames, review) {
+			return true
+		}
+	}
+	return false
 }

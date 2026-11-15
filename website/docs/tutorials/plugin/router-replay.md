@@ -674,5 +674,64 @@ Each record's `route_diagnostics` explains the route:
 - `looper` excludes prompts, tool arguments, credentials and raw errors. Its
   attempt details need `replay.detail`, and any truncation is marked.
 
+### Agent approval reviews
+
+When Codex's **Approve for me** asks a reviewer whether to run a planned
+action, Replay records that review on the request's record, with
+`request_kind: codex_approval_review` and a `review` object. A request is a
+review when it names an entrypoint that another entrypoint uses as its
+`review_model` (`identification_source: entrypoint`), or, when reviews use the
+session model, when it carries Codex's review request: its judge instructions,
+the approval request block and the verdict schema
+(`identification_source: content`). Recognition only records; it never changes
+routing, authorization or masking. Replay must be on for the recipe that
+answers reviews; see
+[Approve for me reviews](../../installation/agent-harness#approve-for-me-reviews).
+
+| Field | Holds |
+| --- | --- |
+| `status` | `completed` with a verdict, `tool_call` when the reviewer asked for a read-only check and answers in a later request, `invalid` when the answer was missing or not the verdict schema, `failed` when the upstream call failed, `cancelled` when the client left first, and `pending` while the request runs. A failed or cancelled review is never a deny. |
+| `assessment` | Completed reviews only: `outcome` (`allow` or `deny`), and `risk_level`, `user_authorization` and `rationale` when the reviewer gave them. The rationale is cut at 2 KiB. |
+| `action` | The planned action's `tool`, a one-line `summary` such as the shell command, its `cwd`, and the action as Codex sent it in `arguments`, cut at 16 KiB. |
+| `reviewed_session_id`, `thread_id`, `turn_id`, `parent_turn_id` | The agent session whose action was judged, the reviewer's thread and turn, and the session's turn that planned the action. |
+| `latency_ms` | The review request's duration. Tokens, model and cost are the record's own fields. |
+
+The verdict is read from the decoded answer, buffered or streamed, before any
+response rewrite or body truncation. A review keeps its text as the record
+keeps request and response text:
+
+- **The action's summary, directory and arguments** are kept only under
+  `prompt_capture: raw` with `capture_request_body: true`, and never on a
+  masking route. Otherwise only the tool name is kept.
+- **The rationale** is kept only under `prompt_capture: raw` with
+  `capture_response_body: true`.
+- **List responses** leave out `arguments`; read one record for them.
+- **Principals without `replay.detail`** receive the status, verdict, risk and
+  tool, with the summary, directory, arguments and rationale cleared.
+
+A review is filed under the session a header names, as every record is. When
+none does, it is filed under the session it judged, so the review appears with
+that session's requests. Every store keeps the review on the record; PostgreSQL
+also keeps `request_kind`, the status, the outcome and the risk in indexed
+columns, added to an existing table when the Router starts.
+
+In **Insights**, the **Reviews** switch shows reviews alone: the number of
+reviews, the approval rate, denials, failures, p50 and p95 latency and cost,
+reviews over time by result, requests by review model, and a table with each
+review's time, result, risk, action, session, model, latency, tokens and cost.
+Filter by session, result, risk and review model; a row opens the record with
+its review section and a link to the reviewed session's reviews. A session's
+routing history marks the turn each review judged and counts its reviews in
+the summary. Past 2,000 reviews it keeps the newest and says that older reviews
+are not shown.
+
+The [Replay API](../../api/router#router-replay) filters with `request_kind`,
+`review_status`, `review_outcome` and `review_risk`. With reviews among the
+filtered records, the aggregate response carries a `reviews` summary over the
+whole filtered set: counts by result, `approval_rate` as allowed verdicts over
+allowed plus denied verdicts, latency percentiles of reviews with a verdict,
+recorded cost per currency with the number of unpriced requests, reviews over
+time, and requests by review model.
+
 For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).

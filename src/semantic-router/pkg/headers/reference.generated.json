@@ -254,6 +254,18 @@
       "doc": "Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it."
     },
     {
+      "name": "x-codex-turn-metadata",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_replay",
+      "version": "v0.5",
+      "doc": "Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay files an approval review under them, and providers receive it."
+    },
+    {
       "name": "x-conversation-id",
       "direction": [
         "request",

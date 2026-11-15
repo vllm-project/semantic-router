@@ -5,7 +5,13 @@ import { formatSeconds } from '../utils/dateTime'
 import InsightsDecisionBadge from './InsightsDecisionBadge'
 import { buildConversationLabels } from './insightsConversationIdentity'
 import { formatInsightsDecisionName, getInsightsRecordPath } from './insightsPageSupport'
-import type { InsightsTrajectory } from './insightsPageTypes'
+import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
+import {
+  assignReviewsToRoutes,
+  getReviewsPath,
+  ReviewResultBadge,
+  summarizeReviews,
+} from './insightsReviewSupport'
 import type { InsightsTrajectoryRoute } from './insightsPageRoutingTypes'
 import styles from './InsightsPage.module.css'
 
@@ -87,12 +93,56 @@ function wallTime(routes: InsightsTrajectoryRoute[]) {
 
 // The session in one strip: who asked, which models answered and how often, how many
 // times the model changed, and how the requests ended.
+function ReviewSummary({
+  reviews,
+  session,
+  truncated,
+}: {
+  reviews: InsightsRecord[]
+  session?: string
+  truncated?: boolean
+}) {
+  const summary = summarizeReviews(reviews)
+  if (summary.total === 0) return null
+  return (
+    <div>
+      <dt>Reviews</dt>
+      <dd title="Approval reviews the agent asked for in this session">
+        <Link to={getReviewsPath(session)}>{summary.total}</Link>
+        {` · ${summary.allowed} allowed · ${summary.denied} denied`}
+        {summary.failed > 0 ? <span data-outcome="failed"> · {summary.failed} failed</span> : null}
+        {truncated ? ' · older reviews not shown' : null}
+      </dd>
+    </div>
+  )
+}
+
+// A turn's reviews, or the review a row itself is, each linking to its record.
+function ReviewMarks({ reviews }: { reviews?: InsightsRecord[] }) {
+  return reviews?.map((review) => (
+    <Link
+      key={review.id}
+      className={styles.historyReviewMark}
+      to={getInsightsRecordPath(review.id)}
+      title={`Approval review of ${review.review?.action?.tool || 'an action'}`}
+    >
+      <ReviewResultBadge review={review.review} />
+    </Link>
+  ))
+}
+
 function Summary({
   routes,
   agents,
+  reviews,
+  reviewsTruncated,
+  session,
 }: {
   routes: InsightsTrajectoryRoute[]
   agents: Map<string, string>
+  reviews: InsightsRecord[]
+  reviewsTruncated?: boolean
+  session?: string
 }) {
   const models = new Map<string, number>()
   for (const route of routes) {
@@ -164,6 +214,7 @@ function Summary({
           <dd title="From the first request's start to the last one's end">{spanText(wall)}</dd>
         </div>
       )}
+      <ReviewSummary reviews={reviews} session={session} truncated={reviewsTruncated} />
     </dl>
   )
 }
@@ -231,12 +282,18 @@ export function InsightsSessionPosition({
 export default function InsightsSessionRoutes({
   trajectory,
   current,
+  reviews = [],
+  reviewsTruncated,
 }: {
   trajectory: InsightsTrajectory | null
   current?: string
+  reviews?: InsightsRecord[]
+  reviewsTruncated?: boolean
 }) {
   const routes = trajectory?.routes ?? []
   if (routes.length === 0) return null
+  const marks = assignReviewsToRoutes(routes, reviews)
+  const ownReview = new Map(reviews.map((review) => [review.id, [review]]))
   const labels = buildConversationLabels(routes)
   const agents = agentNames(routes)
   const agentIndex = new Map([...agents.keys()].map((agent, index) => [agent, index]))
@@ -252,7 +309,13 @@ export default function InsightsSessionRoutes({
           {trajectory?.recipe || 'Default recipe'} · {routes.length} requests
         </span>
       </div>
-      <Summary routes={routes} agents={agents} />
+      <Summary
+        routes={routes}
+        agents={agents}
+        reviews={reviews}
+        reviewsTruncated={reviewsTruncated}
+        session={trajectory?.session_id}
+      />
       <div className={styles.historyWrap}>
         <table className={styles.historyTable}>
           <thead>
@@ -308,7 +371,12 @@ export default function InsightsSessionRoutes({
                         {agents.get(agent)}
                       </span>
                     </td>
-                    <td className={styles.historyNumber}>{route.turn_index + 1}</td>
+                    <td className={styles.historyNumber}>
+                      {route.turn_index + 1}
+                      <ReviewMarks
+                        reviews={ownReview.get(route.record_id) ?? marks.get(route.record_id)}
+                      />
+                    </td>
                     <td>
                       {route.decision ? (
                         <InsightsDecisionBadge

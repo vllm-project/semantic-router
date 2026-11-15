@@ -423,6 +423,29 @@ refer back to the main entrypoint or form a chain. With several recipes,
 keep `default: true` on the main entrypoint. Re-run connect after changing the
 review binding to refresh the catalog.
 
+To see the reviews, turn Router Replay on for the recipe that answers them,
+the `review` recipe above or the main one when reviews use the session model.
+A global plugin covers every recipe:
+
+```yaml
+global:
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
+```
+
+Each review's record holds the planned action, the verdict with its risk and
+rationale, the reviewed session, the review model, latency, tokens and cost.
+A failed or interrupted review is recorded as failed or cancelled, never as a
+deny. The command and the rationale are request and response text, so they are
+kept only with `prompt_capture: raw` and body capture on. Open **Insights** and
+switch to **Reviews** for the approval rate, reviews over time, cost by review
+model and a table of reviews; a session's routing history marks the turns
+whose actions were reviewed. See
+[Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
+for the fields and the API filters.
+
 ### With the vSR plugin
 
 One listener can serve both systems: the routed model calls for Claude Code

@@ -557,9 +557,13 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 | `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
 
 List and aggregate requests accept filters such as `recipe`, `decision`,
-`model`, `session_id`, `cache_status`, and `search`. Pagination uses `limit`
+`model`, `session_id`, `cache_status`, and `search`, and, for agent approval
+reviews, `request_kind=codex_approval_review`, `review_status`,
+`review_outcome`, and `review_risk`. Pagination uses `limit`
 and `offset`; `limit` is capped at 100. `showDetails=true` requests large body
-fields, so use it only when those fields are needed.
+fields, so use it only when those fields are needed. See
+[Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
+for the review record and the aggregate's `reviews` summary.
 
 Trajectory queries use the exact recipe name. Omitting `recipe` is supported
 only when the session's records belong to one recipe; an ambiguous session

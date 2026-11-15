@@ -284,6 +284,8 @@ type Record struct {
 	ID                       string                 `json:"id"`
 	Timestamp                time.Time              `json:"timestamp"`
 	RequestID                string                 `json:"request_id,omitempty"`
+	RequestKind              string                 `json:"request_kind,omitempty"`
+	Review                   *Review                `json:"review,omitempty"`
 	SessionID                string                 `json:"session_id,omitempty"`
 	TurnIndex                int                    `json:"turn_index"`
 	PreviousResponseID       string                 `json:"previous_response_id,omitempty"`
@@ -485,6 +487,7 @@ type Storage interface {
 	Writer
 	Reader
 	Enricher
+	ReviewWriter
 	io.Closer
 }
 
@@ -608,6 +611,7 @@ func cloneRecord(record Record) Record {
 	cloned.SignalValues = cloneFloat64Map(record.SignalValues)
 	cloned.SessionPolicy = cloneInterfaceMap(record.SessionPolicy)
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
+	cloned.Review = CloneReview(record.Review)
 	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
 	cloned.HallucinationSpanDetails = cloneHallucinationSpanDetails(record.HallucinationSpanDetails)

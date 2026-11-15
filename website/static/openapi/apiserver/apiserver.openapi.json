@@ -19288,6 +19288,63 @@
             }
           },
           {
+            "name": "request_kind",
+            "in": "query",
+            "description": "Filter by request kind; codex_approval_review selects Codex approval reviews.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "codex_approval_review"
+              ]
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "description": "Filter approval reviews by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "completed",
+                "tool_call",
+                "invalid",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "review_outcome",
+            "in": "query",
+            "description": "Filter completed approval reviews by verdict.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "allow",
+                "deny"
+              ]
+            }
+          },
+          {
+            "name": "review_risk",
+            "in": "query",
+            "description": "Filter completed approval reviews by reported risk.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Maximum records; defaults to 20 and is capped at 100.",
@@ -20742,6 +20799,9 @@
                           "request_id": {
                             "type": "string"
                           },
+                          "request_kind": {
+                            "type": "string"
+                          },
                           "response_body": {
                             "type": "string"
                           },
@@ -20750,6 +20810,86 @@
                           },
                           "response_status": {
                             "type": "integer"
+                          },
+                          "review": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "action": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "arguments": {
+                                    "type": "string"
+                                  },
+                                  "arguments_truncated": {
+                                    "type": "boolean"
+                                  },
+                                  "cwd": {
+                                    "type": "string"
+                                  },
+                                  "summary": {
+                                    "type": "string"
+                                  },
+                                  "tool": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "assessment": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "outcome": {
+                                    "type": "string"
+                                  },
+                                  "rationale": {
+                                    "type": "string"
+                                  },
+                                  "rationale_truncated": {
+                                    "type": "boolean"
+                                  },
+                                  "risk_level": {
+                                    "type": "string"
+                                  },
+                                  "user_authorization": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "outcome"
+                                ]
+                              },
+                              "identification_source": {
+                                "type": "string"
+                              },
+                              "latency_ms": {
+                                "type": "integer"
+                              },
+                              "parent_turn_id": {
+                                "type": "string"
+                              },
+                              "reviewed_session_id": {
+                                "type": "string"
+                              },
+                              "schema_version": {
+                                "type": "integer"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "thread_id": {
+                                "type": "string"
+                              },
+                              "turn_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "schema_version",
+                              "identification_source",
+                              "status"
+                            ]
                           },
                           "route_diagnostics": {
                             "nullable": true,
@@ -21995,6 +22135,63 @@
                 "streamed"
               ]
             }
+          },
+          {
+            "name": "request_kind",
+            "in": "query",
+            "description": "Filter by request kind; codex_approval_review selects Codex approval reviews.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "codex_approval_review"
+              ]
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "description": "Filter approval reviews by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "completed",
+                "tool_call",
+                "invalid",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "review_outcome",
+            "in": "query",
+            "description": "Filter completed approval reviews by verdict.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "allow",
+                "deny"
+              ]
+            }
+          },
+          {
+            "name": "review_risk",
+            "in": "query",
+            "description": "Filter completed approval reviews by reported risk.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            }
           }
         ],
         "security": [
@@ -22026,6 +22223,13 @@
                       }
                     },
                     "available_recipes": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "available_review_models": {
                       "nullable": true,
                       "type": "array",
                       "items": {
@@ -22235,6 +22439,170 @@
                     },
                     "record_count": {
                       "type": "integer"
+                    },
+                    "reviews": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "allowed": {
+                          "type": "integer"
+                        },
+                        "approval_rate": {
+                          "nullable": true,
+                          "type": "number"
+                        },
+                        "bucket": {
+                          "type": "string"
+                        },
+                        "by_model": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "cost": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "amount": {
+                                      "type": "number"
+                                    },
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "requests": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "currency",
+                                    "amount",
+                                    "requests"
+                                  ]
+                                }
+                              },
+                              "model": {
+                                "type": "string"
+                              },
+                              "requests": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "model",
+                              "requests",
+                              "cost"
+                            ]
+                          }
+                        },
+                        "cancelled": {
+                          "type": "integer"
+                        },
+                        "cost": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "requests": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "amount",
+                              "requests"
+                            ]
+                          }
+                        },
+                        "denied": {
+                          "type": "integer"
+                        },
+                        "failed": {
+                          "type": "integer"
+                        },
+                        "invalid": {
+                          "type": "integer"
+                        },
+                        "latency_p50_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "latency_p95_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "over_time": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "allowed": {
+                                "type": "integer"
+                              },
+                              "cancelled": {
+                                "type": "integer"
+                              },
+                              "denied": {
+                                "type": "integer"
+                              },
+                              "failed": {
+                                "type": "integer"
+                              },
+                              "invalid": {
+                                "type": "integer"
+                              },
+                              "start": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "start",
+                              "allowed",
+                              "denied",
+                              "invalid",
+                              "failed",
+                              "cancelled"
+                            ]
+                          }
+                        },
+                        "pending": {
+                          "type": "integer"
+                        },
+                        "reviews": {
+                          "type": "integer"
+                        },
+                        "tool_calls": {
+                          "type": "integer"
+                        },
+                        "unpriced_requests": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "reviews",
+                        "allowed",
+                        "denied",
+                        "invalid",
+                        "failed",
+                        "cancelled",
+                        "pending",
+                        "tool_calls",
+                        "cost",
+                        "unpriced_requests",
+                        "over_time",
+                        "by_model"
+                      ]
                     },
                     "signal_distribution": {
                       "nullable": true,
@@ -22727,6 +23095,63 @@
                 "all",
                 "cached",
                 "streamed"
+              ]
+            }
+          },
+          {
+            "name": "request_kind",
+            "in": "query",
+            "description": "Filter by request kind; codex_approval_review selects Codex approval reviews.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "codex_approval_review"
+              ]
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "description": "Filter approval reviews by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "completed",
+                "tool_call",
+                "invalid",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "review_outcome",
+            "in": "query",
+            "description": "Filter completed approval reviews by verdict.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "allow",
+                "deny"
+              ]
+            }
+          },
+          {
+            "name": "review_risk",
+            "in": "query",
+            "description": "Filter completed approval reviews by reported risk.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "medium",
+                "high",
+                "critical"
               ]
             }
           },
@@ -23268,6 +23693,63 @@
                 "all",
                 "cached",
                 "streamed"
+              ]
+            }
+          },
+          {
+            "name": "request_kind",
+            "in": "query",
+            "description": "Filter by request kind; codex_approval_review selects Codex approval reviews.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "codex_approval_review"
+              ]
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "description": "Filter approval reviews by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "completed",
+                "tool_call",
+                "invalid",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "review_outcome",
+            "in": "query",
+            "description": "Filter completed approval reviews by verdict.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "allow",
+                "deny"
+              ]
+            }
+          },
+          {
+            "name": "review_risk",
+            "in": "query",
+            "description": "Filter completed approval reviews by reported risk.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "medium",
+                "high",
+                "critical"
               ]
             }
           },
@@ -25575,6 +26057,9 @@
                     "request_id": {
                       "type": "string"
                     },
+                    "request_kind": {
+                      "type": "string"
+                    },
                     "response_body": {
                       "type": "string"
                     },
@@ -25583,6 +26068,86 @@
                     },
                     "response_status": {
                       "type": "integer"
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "arguments": {
+                              "type": "string"
+                            },
+                            "arguments_truncated": {
+                              "type": "boolean"
+                            },
+                            "cwd": {
+                              "type": "string"
+                            },
+                            "summary": {
+                              "type": "string"
+                            },
+                            "tool": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "assessment": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "rationale": {
+                              "type": "string"
+                            },
+                            "rationale_truncated": {
+                              "type": "boolean"
+                            },
+                            "risk_level": {
+                              "type": "string"
+                            },
+                            "user_authorization": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "outcome"
+                          ]
+                        },
+                        "identification_source": {
+                          "type": "string"
+                        },
+                        "latency_ms": {
+                          "type": "integer"
+                        },
+                        "parent_turn_id": {
+                          "type": "string"
+                        },
+                        "reviewed_session_id": {
+                          "type": "string"
+                        },
+                        "schema_version": {
+                          "type": "integer"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "thread_id": {
+                          "type": "string"
+                        },
+                        "turn_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "identification_source",
+                        "status"
+                      ]
                     },
                     "route_diagnostics": {
                       "nullable": true,

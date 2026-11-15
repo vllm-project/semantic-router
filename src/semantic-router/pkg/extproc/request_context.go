@@ -433,6 +433,11 @@ type RequestContext struct {
 	// trusted-facts gate and its selection) recorded before Replay created
 	// its record; startRouterReplay appends them.
 	pendingToolsOutcomes []routerreplay.Outcome
+	// ApprovalReview is the agent approval review this request carries, seen
+	// at ingress and given its verdict from the response. Observational only:
+	// nothing routes, authorizes or masks on it.
+	ApprovalReview        *routerreplay.Review
+	approvalReviewSettled bool
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process

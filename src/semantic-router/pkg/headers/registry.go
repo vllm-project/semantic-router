@@ -197,6 +197,7 @@ var registry = []Header{
 	{VSRSessionID, FromClient, SurfaceControl, SensitivityNone, "session", "v0.5", "Session id the client pins; without it the Router reads the headers `global.router.headers.session_id_headers` names, in order."},
 	{XSessionID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "session", "v0.3", "Client session id `session_id_headers` accepts by default; providers receive it."},
 	{XClaudeCodeSessionID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "session", "v0.3", "Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it."},
+	{XCodexTurnMetadata, FromClient | ToProvider, SurfaceControl, SensitivityNone, "router_replay", "v0.5", "Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay files an approval review under them, and providers receive it."},
 	{XConversationID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "router_learning", "v0.4", "Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it."},
 	{VSRMemory, FromClient, SurfaceControl, SensitivityNone, "memory", "v0.5", "`off` keeps Router-managed memory out of the request."},
 	{VSRSkipProcessing, FromClient, SurfaceControl, SensitivityNone, "skip_processing", "v0.3", "`true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set."},
