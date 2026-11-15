@@ -10,7 +10,7 @@
       {"role": "user", "content": "Third question about Go channels."}
     ],
     "expected_decision": "late_session_routing",
-    "expected_matched_signal": "late_session",
+    "expected_matched_signal": "multi_turn_user,late_session",
     "should_match": true
   },
   {
