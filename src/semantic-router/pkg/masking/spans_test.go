@@ -264,6 +264,44 @@ func TestMaskText_CitationAfterSpanShifted(t *testing.T) {
 	}
 }
 
+// Case: code points are counted across several spans with multi-byte text
+// between them, so a citation after both shifts by both deltas.
+func TestMaskText_CitationAfterSeveralSpansWithMultiByteText(t *testing.T) {
+	text := "日本 Bob と Ann です"
+	bobStart, bobEnd := byteRange(t, text, "Bob")
+	annStart, annEnd := byteRange(t, text, "Ann")
+	spans := []Span{
+		{EntityType: "PERSON", Start: bobStart, End: bobEnd, Confidence: 1.0},
+		{EntityType: "PERSON", Start: annStart, End: annEnd, Confidence: 1.0},
+	}
+	// one between the names, one over Ann, and one after both
+	citations := []llmprotocol.Citation{{StartIndex: 7, EndIndex: 8}, {StartIndex: 9, EndIndex: 12}, {StartIndex: 13, EndIndex: 15}}
+
+	got, gotCitations, err := MaskText(text, spans, citations, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "日本 [PERSON_0] と [PERSON_1] です"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	want := []llmprotocol.Citation{{StartIndex: 14, EndIndex: 15}, {StartIndex: 27, EndIndex: 29}}
+	if len(gotCitations) != 2 || gotCitations[0] != want[0] || gotCitations[1] != want[1] {
+		t.Fatalf("got citations %v, want %v", gotCitations, want)
+	}
+}
+
+// Case: a span that cuts a character fails closed (D4) instead of leaving
+// half of it beside the placeholder.
+func TestMaskText_SpanSplittingACharacterFailsClosed(t *testing.T) {
+	text := "éx"
+	for _, span := range []Span{{Start: 0, End: 1}, {Start: 1, End: 3}} {
+		span.EntityType, span.Confidence = "PERSON", 1
+		if _, _, err := MaskText(text, []Span{span}, nil, NewAllocator(defaultCfg())); err == nil || !strings.Contains(err.Error(), "splits a character") {
+			t.Errorf("span [%d,%d): err = %v, want it refused", span.Start, span.End, err)
+		}
+	}
+}
+
 // Case: Citation overlapping a masked span is dropped.
 func TestMaskText_CitationOverlappingSpanDropped(t *testing.T) {
 	text := "mail alice@x.com"
