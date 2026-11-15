@@ -1895,3 +1895,31 @@ def test_codex_connect_review_catalog_and_login_hint(
     if not launch:
         assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
         assert not (home / "vllm-sr.models.json").exists()
+
+
+def test_a_recipe_that_drops_what_no_longer_fits_advertises_each_decisions_largest():
+    connect_command = importlib.import_module("cli.commands.connect")
+    doc = yaml.safe_load(ROUTER)
+    doc["providers"]["models"].append(
+        {"name": "local", "api_format": "chat_completions", "context_window_size": 8192}
+    )
+    doc["recipes"][0]["decisions"].insert(
+        0, {"name": "easy", "modelRefs": [{"model": "local"}, {"model": "big"}]}
+    )
+    groups = rc.entrypoint_candidates(doc, "vllm-sr/auto")
+    assert groups == [(["local", "big"], 1), (["big", "card"], 1), (["small"], 1)]
+    window, _ = connect_command._context_window(doc, "vllm-sr/auto", None)
+    assert window == 8192
+    doc["recipes"][0]["candidate_requirements"] = {"context": "known_limits"}
+    window, notes = connect_command._context_window(doc, "vllm-sr/auto", None)
+    # a long request moves from local to big, so only the default's 32,768 binds
+    assert window == 32768
+    assert "the most every decision still serves" in notes[0]
+    # a decision that needs two candidates keeps them only up to its second
+    # largest window, and one that calls every candidate up to its smallest
+    easy = doc["recipes"][0]["decisions"][0]
+    easy["algorithm"] = {"type": "multi_factor", "minimum_candidates": 2}
+    assert connect_command._context_window(doc, "vllm-sr/auto", None)[0] == 8192
+    easy["algorithm"] = {"type": "fusion"}
+    assert rc.entrypoint_candidates(doc, "vllm-sr/auto")[0] == (["local", "big"], 2)
+    assert connect_command._context_window(doc, "vllm-sr/auto", None)[0] == 8192

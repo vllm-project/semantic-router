@@ -213,9 +213,15 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
     model's own name, or an entrypoint's recipe, whose decisions name models and
     whose requests no decision takes go to providers.defaults.model. None when the
     configuration maps model nowhere."""
-    formats = _model_formats(doc)
-    if model in formats:
-        return [model]
+    groups = entrypoint_candidates(doc, model)
+    if groups is None:
+        return None
+    return list(dict.fromkeys(name for names, _ in groups for name in names))
+
+
+def _entrypoint_recipe(doc: dict, model: str) -> dict | None:
+    """The recipe an entrypoint maps model to, empty when the document does not
+    write it out, None when no entrypoint maps model."""
     recipes = [r for r in doc.get("recipes") or [] if isinstance(r, dict)]
     chat = [
         e
@@ -237,14 +243,38 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
             recipe = default
     if recipe is None:
         return None
-    # a decision's modelRefs, and the models its candidateIterations walk
-    picked = [
-        ref.get("model")
-        for r in recipes
-        if r.get("name") == recipe
-        for decision in r.get("decisions") or []
-        if isinstance(decision, dict)
-        for ref in [
+    return next((r for r in recipes if r.get("name") == recipe), {})
+
+
+# The Router's selector algorithms answer with one eligible candidate, so a
+# request has to fit only that one, or algorithm.minimum_candidates of them.
+# Any other algorithm may call every candidate.
+SELECTOR_ALGORITHMS = {"static", "random", "multi_factor", "systemone"}
+
+
+def _candidates_needed(decision: dict, models: list[str]) -> int:
+    algorithm = decision.get("algorithm") or {}
+    if algorithm.get("type") not in (None, "", *SELECTOR_ALGORITHMS):
+        return len(models)
+    return max(1, int(algorithm.get("minimum_candidates") or 1))
+
+
+def entrypoint_candidates(doc: dict, model: str) -> list[tuple[list[str], int]] | None:
+    """entrypoint_models, as the candidate lists the Router picks from, one per
+    decision and providers.defaults.model for requests no decision takes, each
+    with how many of its candidates a request has to fit."""
+    formats = _model_formats(doc)
+    if model in formats:
+        return [([model], 1)]
+    recipe = _entrypoint_recipe(doc, model)
+    if recipe is None:
+        return None
+    groups = []
+    for decision in recipe.get("decisions") or []:
+        if not isinstance(decision, dict):
+            continue
+        # a decision's modelRefs, and the models its candidateIterations walk
+        refs = [
             *(decision.get("modelRefs") or []),
             *(
                 one
@@ -253,22 +283,35 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
                 for one in it.get("models") or []
             ),
         ]
-        if isinstance(ref, dict) and ref.get("model")
-    ]
+        names = [r.get("model") for r in refs if isinstance(r, dict) and r.get("model")]
+        groups.append((names, _candidates_needed(decision, names)))
     fallback = _get(doc, "providers", "defaults", "model")
+    if fallback:
+        groups.append(([fallback], 1))
     # an image or System One model never answers a harness's turn
-    return [
-        name
-        for name in dict.fromkeys([*picked, *([fallback] if fallback else [])])
-        if formats.get(name, "") not in NOT_CHAT
+    groups = [
+        (
+            list(dict.fromkeys(n for n in names if formats.get(n, "") not in NOT_CHAT)),
+            need,
+        )
+        for names, need in groups
     ]
+    return [(names, min(need, len(names))) for names, need in groups if names]
+
+
+def recipe_known_limits(doc: dict, model: str) -> bool:
+    """Whether the recipe model maps to drops the candidates a request no longer
+    fits (candidate_requirements.context: known_limits), so a decision falls
+    over to its larger models instead of refusing the request."""
+    recipe = _entrypoint_recipe(doc, model) or {}
+    return _get(recipe, "candidate_requirements", "context") == "known_limits"
 
 
 def caller_provider(doc: dict | None) -> str | None:
     """The provider whose login the Router presents upstream for each client
     (auth.credential: caller), which then has to come from the client in place of
-    a gateway key. The Router takes it on every backend or on none, all of one
-    provider."""
+    a gateway key. Every caller backend names one provider; other models beside
+    them take a key of their own or none."""
     return next(
         (
             str(ref.get("provider") or "").lower()

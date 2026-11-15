@@ -281,10 +281,14 @@ Codex sends a ChatGPT login to ChatGPT's Codex backend at
 login is a person's, so the configuration fails to load wherever it could reach
 someone else, or be used without the person's request:
 
-- **One payer, one provider.** Once one backend takes the caller's login, every
-  backend does and all name one provider, so neither routing nor a fallback
-  moves a request from the person's plan to a key or to another provider. A
-  pool serves Claude Code or Codex, not both.
+- **One provider, one payer per model.** Every caller backend names one
+  provider, so a pool serves Claude Code or Codex, not both, and the backends
+  of one model share one credential, so failing over between them never moves
+  a request from the person's plan to a key. Other models may sit beside the
+  caller's, with a key of their own or none, such as a local model for easy
+  turns ([mixing a login with other models](agent-harness#mixing-a-login-with-other-models)).
+  They never receive the login, nor the `chatgpt-account-id` that names the
+  ChatGPT account it acts for.
 - **The issuer only.** The endpoint is `https://api.anthropic.com` for
   `anthropic`, `https://chatgpt.com` or `https://api.openai.com` for `openai`,
   or an endpoint on this machine such as a test stub.
@@ -293,13 +297,15 @@ someone else, or be used without the person's request:
 - **Only the client's request.** A call the Router makes on its own behalf, an
   in-process hop (an executor algorithm, context recovery), a
   `router_replay.shadow` copy and an automatic output render have no login and
-  are refused, and so is `response_cache`, which would answer one person with
-  another's result.
+  are refused for a caller model, and so is `response_cache`, which would
+  answer one person with another's result. A decision whose models take no
+  login may call them in process.
 - **The client's system prompt.** Both providers refuse the system message a
   decision's `system_prompt` puts before the client's own on a person's login
   (measured: Anthropic answers 429 for a block put first and 200 for the same
   block put last, ChatGPT's Codex backend 400 `System messages are not
-  allowed`), so a decision cannot use `system_prompt`.
+  allowed`), so a decision that can reach a caller model cannot use
+  `system_prompt`. A decision whose models all take no login can.
 
 At dispatch a login reaches a backend only from a request on that provider's own
 API: Messages for Anthropic, Responses or Chat Completions for OpenAI. A request
