@@ -29,7 +29,8 @@ export default function InsightsRecordPage() {
   const { isReadonly } = useReadonly()
   const [record, setRecord] = useState<InsightsRecord | null>(null)
   const [trajectory, setTrajectory] = useState<InsightsTrajectory | null>(null)
-  const [sessionReviews, setSessionReviews] = useState<InsightsRecord[]>([])
+  const [sessionReviews, setSessionReviews] =
+    useState<Awaited<ReturnType<typeof fetchInsightsSessionReviews>>>()
   const [traceError, setTraceError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -45,7 +46,7 @@ export default function InsightsRecordPage() {
 
     setLoading(true)
     setTrajectory(null)
-    setSessionReviews([])
+    setSessionReviews(undefined)
     setTraceError(null)
 
     try {
@@ -56,7 +57,7 @@ export default function InsightsRecordPage() {
         // Reviews only mark the session's history; a failed lookup leaves it unmarked.
         void fetchInsightsSessionReviews(nextRecord.session_id)
           .then(setSessionReviews)
-          .catch(() => setSessionReviews([]))
+          .catch(() => setSessionReviews(undefined))
         try {
           setTrajectory(
             await fetchInsightsTrajectory(nextRecord.session_id, nextRecord.recipe || ''),
@@ -187,7 +188,8 @@ export default function InsightsRecordPage() {
             <InsightsSessionRoutes
               trajectory={trajectory}
               current={record.id}
-              reviews={sessionReviews}
+              reviews={sessionReviews?.reviews}
+              reviewsTruncated={sessionReviews?.truncated}
             />
             <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
           </div>

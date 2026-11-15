@@ -34,19 +34,33 @@ export function fetchInsightsTrajectory(sessionId: string, recipe: string) {
   )
 }
 
+// The list endpoint returns at most 100 records a page; past this many pages a
+// session keeps its newest reviews and is marked truncated.
+const SESSION_REVIEW_PAGES = 20
+
 // The approval reviews of a session in every recipe: a review entrypoint
 // usually routes through a recipe of its own.
 export async function fetchInsightsSessionReviews(sessionId: string) {
-  const query = new URLSearchParams({
-    request_kind: REVIEW_REQUEST_KIND,
-    session_id: sessionId,
-    limit: '100',
-  })
-  const list = await fetchInsightsJSON<InsightsListResponse>(
-    `/api/router/api/v1/observability/replays?${query.toString()}`,
-    'session reviews',
-  )
-  return list.data || []
+  const reviews = new Map<string, InsightsRecord>()
+  let offset = 0
+  for (let page = 0; page < SESSION_REVIEW_PAGES; page += 1) {
+    const query = new URLSearchParams({
+      request_kind: REVIEW_REQUEST_KIND,
+      session_id: sessionId,
+      limit: '100',
+      offset: String(offset),
+    })
+    const list = await fetchInsightsJSON<InsightsListResponse>(
+      `/api/router/api/v1/observability/replays?${query.toString()}`,
+      'session reviews',
+    )
+    const data = list.data || []
+    // A review recorded while paging shifts the newest-first pages; the id keeps each once.
+    for (const review of data) reviews.set(review.id, review)
+    if (!list.has_more) return { reviews: [...reviews.values()], truncated: false }
+    offset += data.length
+  }
+  return { reviews: [...reviews.values()], truncated: true }
 }
 
 export function isInsightsReplayUnavailableError(error: unknown) {

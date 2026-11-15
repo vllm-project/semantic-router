@@ -93,7 +93,15 @@ function wallTime(routes: InsightsTrajectoryRoute[]) {
 
 // The session in one strip: who asked, which models answered and how often, how many
 // times the model changed, and how the requests ended.
-function ReviewSummary({ reviews, session }: { reviews: InsightsRecord[]; session?: string }) {
+function ReviewSummary({
+  reviews,
+  session,
+  truncated,
+}: {
+  reviews: InsightsRecord[]
+  session?: string
+  truncated?: boolean
+}) {
   const summary = summarizeReviews(reviews)
   if (summary.total === 0) return null
   return (
@@ -103,6 +111,7 @@ function ReviewSummary({ reviews, session }: { reviews: InsightsRecord[]; sessio
         <Link to={getReviewsPath(session)}>{summary.total}</Link>
         {` · ${summary.allowed} allowed · ${summary.denied} denied`}
         {summary.failed > 0 ? <span data-outcome="failed"> · {summary.failed} failed</span> : null}
+        {truncated ? ' · older reviews not shown' : null}
       </dd>
     </div>
   )
@@ -126,11 +135,13 @@ function Summary({
   routes,
   agents,
   reviews,
+  reviewsTruncated,
   session,
 }: {
   routes: InsightsTrajectoryRoute[]
   agents: Map<string, string>
   reviews: InsightsRecord[]
+  reviewsTruncated?: boolean
   session?: string
 }) {
   const models = new Map<string, number>()
@@ -203,7 +214,7 @@ function Summary({
           <dd title="From the first request's start to the last one's end">{spanText(wall)}</dd>
         </div>
       )}
-      <ReviewSummary reviews={reviews} session={session} />
+      <ReviewSummary reviews={reviews} session={session} truncated={reviewsTruncated} />
     </dl>
   )
 }
@@ -272,10 +283,12 @@ export default function InsightsSessionRoutes({
   trajectory,
   current,
   reviews = [],
+  reviewsTruncated,
 }: {
   trajectory: InsightsTrajectory | null
   current?: string
   reviews?: InsightsRecord[]
+  reviewsTruncated?: boolean
 }) {
   const routes = trajectory?.routes ?? []
   if (routes.length === 0) return null
@@ -296,7 +309,13 @@ export default function InsightsSessionRoutes({
           {trajectory?.recipe || 'Default recipe'} · {routes.length} requests
         </span>
       </div>
-      <Summary routes={routes} agents={agents} reviews={reviews} session={trajectory?.session_id} />
+      <Summary
+        routes={routes}
+        agents={agents}
+        reviews={reviews}
+        reviewsTruncated={reviewsTruncated}
+        session={trajectory?.session_id}
+      />
       <div className={styles.historyWrap}>
         <table className={styles.historyTable}>
           <thead>

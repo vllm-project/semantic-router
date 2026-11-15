@@ -722,7 +722,8 @@ review's time, result, risk, action, session, model, latency, tokens and cost.
 Filter by session, result, risk and review model; a row opens the record with
 its review section and a link to the reviewed session's reviews. A session's
 routing history marks the turn each review judged and counts its reviews in
-the summary.
+the summary. Past 2,000 reviews it keeps the newest and says that older reviews
+are not shown.
 
 The [Replay API](../../api/router#router-replay) filters with `request_kind`,
 `review_status`, `review_outcome` and `review_risk`. With reviews among the

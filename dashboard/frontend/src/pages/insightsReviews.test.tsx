@@ -1,10 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import InsightsReviewCharts from '../components/InsightsReviewCharts'
 import InsightsReviewsTable from './InsightsReviewsTable'
 import InsightsSessionRoutes from './InsightsSessionRoutes'
+import { fetchInsightsSessionReviews } from './insightsPageApi'
 import { buildInsightsRecordSections } from './insightsPageSupport'
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 import {
@@ -57,6 +58,8 @@ const failed = reviewRecord('review-failed', '2026-11-15T09:05:00Z', {
 })
 
 const render = (node: React.ReactNode) => renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>)
+
+afterEach(() => vi.unstubAllGlobals())
 
 describe('Insights reviews', () => {
   it('maps the filters onto the replay query', () => {
@@ -248,5 +251,75 @@ describe('Insights reviews', () => {
     expect(render(<InsightsSessionRoutes trajectory={trajectory} />)).not.toContain(
       '<dt>Reviews</dt>',
     )
+  })
+
+  it('reads every page of a session reviews and says when it stops short', async () => {
+    const ids = (from: number, count: number) => Array.from({ length: count }, (_, i) => from + i)
+    const page = (pageIds: number[], hasMore: boolean) =>
+      new Response(
+        JSON.stringify({
+          object: 'router_replay.list',
+          count: pageIds.length,
+          has_more: hasMore,
+          data: pageIds.map((id) =>
+            reviewRecord(`review-${id}`, '2026-11-15T09:00:30Z', {
+              assessment: { outcome: 'allow' },
+            }),
+          ),
+        }),
+      )
+    // 101 settled reviews; one recorded while paging pushes review-99 onto the second page.
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(page(ids(0, 100), true))
+      .mockResolvedValueOnce(page([99, 100], false))
+    vi.stubGlobal('fetch', fetch)
+    const { reviews, truncated } = await fetchInsightsSessionReviews('agent-session')
+    expect(
+      fetch.mock.calls.map(([url]) => new URL(url, 'http://localhost').searchParams.get('offset')),
+    ).toEqual(['0', '100'])
+    expect(reviews).toHaveLength(101)
+    expect(truncated).toBe(false)
+
+    const trajectory: InsightsTrajectory = {
+      object: 'router_replay.trajectory',
+      session_id: 'agent-session',
+      record_count: 1,
+      turn_count: 1,
+      messages: [],
+      routes: [
+        {
+          record_id: 'turn-1',
+          timestamp: '2026-11-15T09:00:00Z',
+          turn_index: 0,
+          session_policy_applied: false,
+          lifecycle_state: 'completed',
+          response_status: 200,
+          duration_ms: 900,
+        },
+      ],
+    }
+    const html = render(<InsightsSessionRoutes trajectory={trajectory} reviews={reviews} />)
+    expect(html).toContain('>101</a> · 101 allowed')
+    expect(html).toContain('href="/insights/review-0"')
+    expect(html).not.toContain('older reviews not shown')
+
+    let offset = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => page(ids((offset += 100) - 100, 100), true)),
+    )
+    const capped = await fetchInsightsSessionReviews('agent-session')
+    expect(capped.reviews).toHaveLength(2000)
+    expect(capped.truncated).toBe(true)
+    expect(
+      render(
+        <InsightsSessionRoutes
+          trajectory={trajectory}
+          reviews={capped.reviews}
+          reviewsTruncated={capped.truncated}
+        />,
+      ),
+    ).toContain('>2000</a> · 2000 allowed · 0 denied · older reviews not shown')
   })
 })
