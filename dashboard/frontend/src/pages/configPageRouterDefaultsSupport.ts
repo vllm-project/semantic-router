@@ -273,6 +273,17 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         { label: 'Store backend', value: stringOrFallback(section?.store_backend) },
         { label: 'Redis', value: asObject(section?.redis) ? 'Configured' : 'Not configured' },
       ]
+    case 'masking_identity': {
+      const namespaces = Object.values(asObject(section?.namespaces) || {}).map(asObject)
+      const backends = namespaces.map((namespace) => asObject(namespace?.registry)?.backend)
+      return [
+        { label: 'Namespaces', value: `${namespaces.length}` },
+        {
+          label: 'Registries',
+          value: stringOrFallback([...new Set(backends)].filter(Boolean).join(', ')),
+        },
+      ]
+    }
     case 'memory':
       return [
         { label: 'Milvus address', value: stringOrFallback(asObject(section?.milvus)?.address) },

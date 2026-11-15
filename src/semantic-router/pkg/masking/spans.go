@@ -13,6 +13,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/maskingregistry"
 )
 
 // Span is one detected PII occurrence. Offsets are BYTE offsets into the text
@@ -44,6 +45,17 @@ type Allocator struct {
 	// the placeholder-shaped text the request held before this allocator
 	// issued it, which a new value never gets.
 	issued, reserved map[string]bool
+
+	// In registry mode identity issues the indexes in scope. pending holds,
+	// per shape, the placeholders read in the request that the registry has
+	// not answered for yet, and defaults the default-shaped text of any
+	// label. err is the first registry failure, which fails the request.
+	identity   *maskingregistry.Identity
+	scope      string
+	collecting bool
+	pending    map[int]map[int64]string
+	defaults   map[string]bool
+	err        error
 }
 
 // placeholderShape is what one entity type's placeholders look like. The vSR
@@ -74,6 +86,9 @@ func NewAllocator(cfg *config.MaskingPluginConfig) *Allocator {
 		issued:    make(map[string]bool),
 		reserved:  make(map[string]bool),
 	}
+	if cfg.RegistryMode() {
+		a.err = fmt.Errorf("masking: registry allocator requires a resolved identity")
+	}
 	entityTypes := config.MaskingEntityTypes()
 	if cfg != nil {
 		for _, rule := range cfg.RuleNames() {
@@ -97,7 +112,7 @@ func (a *Allocator) addShape(entityType string) {
 	a.shaped[entityType] = true
 	template := a.cfg.EffectivePlaceholder(entityType)
 	a.shapes = append(a.shapes, placeholderShape{
-		pattern:    shapePattern(templatePattern(template)),
+		pattern:    shapePattern(a.templatePattern(template)),
 		entityType: entityType,
 		lettered:   hasLetter(strings.ReplaceAll(template, config.MaskingPlaceholderIndexToken, "")),
 	})
@@ -120,6 +135,15 @@ func shapePattern(pattern string) *regexp.Regexp {
 // keeps a template such as "{index}x" from reading a long run of digits again
 // at every digit.
 const indexPattern = `(0|[1-9][0-9]{0,8})`
+
+// templatePattern is the pattern of the config's index mode: a registry
+// index runs to 19 digits.
+func (a *Allocator) templatePattern(template string) string {
+	if a.cfg.RegistryMode() {
+		return registryTemplatePattern(template)
+	}
+	return templatePattern(template)
+}
 
 // templatePattern matches what a placeholder template produces, any index,
 // with the index as its one capture group.
@@ -164,6 +188,13 @@ func (a *Allocator) maskable(text string, spans []Span) []Span {
 var anyDefaultShape = regexp.MustCompile(`\[[A-Z][A-Z0-9_]*_` + indexPattern + `\]`)
 
 func (a *Allocator) reserveUnissued(text string) {
+	if a.identity != nil {
+		a.collect(text)
+		if !a.collecting && a.err == nil {
+			a.err = a.settle()
+		}
+		return
+	}
 	patterns := []*regexp.Regexp{anyDefaultShape}
 	for _, shape := range a.shapes {
 		if shape.entityType != "" {
@@ -212,6 +243,10 @@ func (a *Allocator) dropPlaceholderSpans(text string, spans []Span) []Span {
 				case span.End > loc[1]: // ends before the span does
 				case places[at].issued:
 					return true
+				case a.identity != nil && shape.entityType != "":
+					// The registry knows every placeholder it issued in this
+					// scope, so any other one is text a client wrote and
+					// exempts nothing.
 				case a.rules[span.EntityType]:
 					if shape.entityType == span.EntityType && (span.End <= loc[2] || loc[3] <= span.Start) {
 						return true
@@ -265,6 +300,12 @@ func letterIn(text string, from, to int) bool {
 // assigning a fresh index from the per-type counter the first time a value is
 // seen and reusing it on every subsequent occurrence.
 func (a *Allocator) Placeholder(entityType, value string) string {
+	if a.identity != nil {
+		if a.err != nil {
+			return ""
+		}
+		return a.registryPlaceholder(entityType, value)
+	}
 	key := entityType + "\x00" + value
 	if existing, ok := a.assigned[key]; ok {
 		return existing
@@ -373,6 +414,9 @@ func MaskText(text string, spans []Span, citations []llmprotocol.Citation, a *Al
 		}
 	}
 	merged := a.maskable(text, spans)
+	if a.err != nil {
+		return "", nil, a.err
+	}
 	if len(merged) == 0 {
 		return text, citations, nil
 	}
@@ -386,6 +430,9 @@ func MaskText(text string, spans []Span, citations []llmprotocol.Citation, a *Al
 		// widens a span, span.Text still holds the narrower original value.
 		value := text[span.Start:span.End]
 		placeholder := a.Placeholder(span.EntityType, value)
+		if a.err != nil {
+			return "", nil, a.err
+		}
 		runeStart := runeAt + utf8.RuneCountInString(text[at:span.Start])
 		runeEnd := runeStart + utf8.RuneCountInString(value)
 		shifts[i] = citationShift{

@@ -571,6 +571,7 @@ export interface CanonicalServiceGlobalConfig {
   management_api?: Record<string, unknown>
   router_replay?: RouterReplayConfig
   startup_status?: Record<string, unknown>
+  masking_identity?: Record<string, unknown>
 }
 
 export interface CanonicalStoreGlobalConfig {

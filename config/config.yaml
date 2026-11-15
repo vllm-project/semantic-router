@@ -1144,6 +1144,11 @@ recipes:
             configuration:
               enabled: true
               signal: business_contact_pii
+              # registry keeps one index per value for good in the identity
+              # namespace of global.services.masking_identity it names.
+              # sequence numbers values in the order one request meets them.
+              index: registry
+              identity_namespace: agents
               # Rules that find text are masked as well, each under its own
               # name; entity_types filters only the pii rule's labels.
               rules:
@@ -2364,6 +2369,19 @@ global:
           key_prefix: "vsr:router-session:v1:"
 
   services:
+    # Identity namespaces keep a masking placeholder per value across
+    # requests, sessions and restarts (masking index: registry). Each names a
+    # 32-byte key (key_file or key_env), scope: principal_or_installation,
+    # and a registry: {backend: file, path} or {backend: postgres, postgres}.
+    masking_identity:
+      namespaces:
+        agents:
+          key_env: VSR_MASKING_IDENTITY_KEY
+          scope: principal_or_installation
+          session_scope: false
+          registry:
+            backend: file
+            path: /var/lib/vllm-sr/masking/agents.log
     api:
       routing_preview:
         request_timeout_seconds: 120
