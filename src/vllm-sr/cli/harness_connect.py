@@ -167,8 +167,10 @@ def _hidden(value: Any, ours: Any, name: str) -> Any:
             _hidden(v, mine[i] if i < len(mine) else None, name)
             for i, v in enumerate(value)
         ]
+    # a "$NAME" reference names the variable that holds the key, not the key
+    reference = isinstance(value, str) and re.fullmatch(r"\$\{?\w+\}?", value)
     if isinstance(value, str) and SECRET_NAME.search(name) and value != ours:
-        return "<hidden>"
+        return value if reference else "<hidden>"
     return value
 
 

@@ -31,6 +31,7 @@ def provider(
     key_env: str | None,
     context_window: int | None,
     key_command: str | None = None,
+    max_tokens: int = int(hc.MAX_OUTPUT_TOKENS),
 ) -> dict[str, Any]:
     """The provider entry. Chat Completions is the API Pi's docs use for an
     OpenAI-compatible endpoint, and there Pi keeps its own model id on each
@@ -40,7 +41,7 @@ def provider(
     keys still gets a placeholder: Pi lists a model only once its provider has
     a key."""
     api_key = f"!{key_command}" if key_command else f"${key_env}" if key_env else None
-    entry: dict[str, Any] = {"id": model, "maxTokens": int(hc.MAX_OUTPUT_TOKENS)}
+    entry: dict[str, Any] = {"id": model, "maxTokens": max_tokens}
     if context_window:
         entry["contextWindow"] = context_window
     return {

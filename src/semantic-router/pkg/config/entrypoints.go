@@ -120,17 +120,34 @@ func (c *RouterConfig) ValidateDelegateModels() error {
 // IsReviewEntrypoint reports whether model names an entrypoint that another
 // entrypoint uses as its review_model, under any of the target's names.
 func (c *RouterConfig) IsReviewEntrypoint(api InferenceAPI, model string) bool {
+	return c.DelegateRole(api, model) == DelegateReview
+}
+
+// Roles an entrypoint serves for another one, as its review_model or
+// memory_model.
+const (
+	DelegateReview = "review"
+	DelegateMemory = "memory"
+)
+
+// DelegateRole is what another entrypoint sends to model: DelegateReview,
+// DelegateMemory, or "" when no entrypoint names it, under any of its names.
+func (c *RouterConfig) DelegateRole(api InferenceAPI, model string) string {
 	if c == nil {
-		return false
+		return ""
 	}
 	target, ok := c.ResolveEntrypoint(api, model)
 	if !ok {
-		return false
+		return ""
 	}
 	for _, entrypoint := range c.EffectiveEntrypoints(api) {
-		if review := strings.TrimSpace(entrypoint.ReviewModel); review != "" && slices.Contains(target.ModelNames, review) {
-			return true
+		for _, delegate := range [...]struct{ role, name string }{
+			{DelegateReview, entrypoint.ReviewModel}, {DelegateMemory, entrypoint.MemoryModel},
+		} {
+			if name := strings.TrimSpace(delegate.name); name != "" && slices.Contains(target.ModelNames, name) {
+				return delegate.role
+			}
 		}
 	}
-	return false
+	return ""
 }

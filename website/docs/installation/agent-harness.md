@@ -1076,6 +1076,10 @@ The command writes these. Claude Code reads them from its settings:
 }
 ```
 
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS` is 32000, or the smallest `max_output_tokens`
+of the models the entrypoint reaches when that is lower, since a model refuses
+a request for more.
+
 Codex reads the profile from `~/.codex/vllm-sr.config.toml`, which
 `codex --profile vllm-sr` layers over `~/.codex/config.toml`, and the provider
 can live in the same file:
@@ -1148,9 +1152,10 @@ above, or with `/model`, where Ctrl+S saves it for new sessions.
   once its provider has a key. A key Pi stored for `vllm-sr` in `auth.json`
   wins over `apiKey`, so the command refuses to connect while one is there.
 - The model gets the context window the command works out as `contextWindow`
-  (Pi assumes 128,000 tokens without one), and `maxTokens: 32000`, the output
-  limit the command gives Claude Code. Pi lowers it for a request that leaves
-  less room in the window.
+  (Pi assumes 128,000 tokens without one), and as `maxTokens` the output limit
+  the command gives Claude Code: 32000, or the smallest `max_output_tokens` of
+  the models the entrypoint reaches when that is lower. Pi lowers it for a
+  request that leaves less room in the window.
 - `compat.sendSessionAffinityHeaders` with `sessionAffinityFormat: "openrouter"`
   has Pi send its session ID as `x-session-id`, which session protection reads.
 

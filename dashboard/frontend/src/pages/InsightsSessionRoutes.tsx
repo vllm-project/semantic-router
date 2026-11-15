@@ -434,7 +434,8 @@ export default function InsightsSessionRoutes({
       <div className={styles.recordSectionHeader}>
         <h2>Session routing history</h2>
         <span>
-          {trajectory?.recipe || 'Default recipe'} · {routes.length} requests
+          {trajectory?.recipe || 'Default recipe'} · {routes.length} request
+          {routes.length === 1 ? '' : 's'}
         </span>
       </div>
       <Summary

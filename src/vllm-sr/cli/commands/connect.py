@@ -234,6 +234,7 @@ def claude_code(
     key = _key("claude-code", key_command, login, session, where, check or not dry_run)
     context_window, notes = _context_window(doc, model, context_window)
     values = hc.claude_env(gateway, model, token, key_command)
+    values["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(_output_limit(doc, model))
     if context_window:
         values["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = str(context_window)
     if launch:
@@ -1400,11 +1401,19 @@ def _json_of(argv: list[str], env: dict[str, str]):
         return None
 
 
-def _caller_login(harness: str, doc: dict | None) -> bool:
-    """Whether the gateway presents the harness's own login upstream. A gateway
-    that presents another provider's login refuses every call of the harness, so
-    nothing is written for it."""
-    provider = rc.caller_provider(doc)
+def _output_limit(doc: dict | None, model: str) -> int:
+    """The output limit a harness asks for: 32,000 tokens, or less when every
+    model the entrypoint reaches allows less, since a model refuses a request
+    for more than its max_output_tokens."""
+    limit = rc.output_limit(doc, model)
+    return min(int(hc.MAX_OUTPUT_TOKENS), limit) if limit else int(hc.MAX_OUTPUT_TOKENS)
+
+
+def _caller_login(harness: str, doc: dict | None, model: str | None = None) -> bool:
+    """Whether the gateway presents the harness's own login upstream for model.
+    A gateway that presents another provider's login refuses every call of the
+    harness, so nothing is written for it."""
+    provider = rc.caller_provider(doc, model)
     if provider is None:
         return False
     name, own = HARNESS_LOGINS[harness]
@@ -1418,7 +1427,7 @@ def _caller_login(harness: str, doc: dict | None) -> bool:
 
 
 def _probe_or_say_why(gateway, harness, model, token, doc, written=True) -> None:
-    if rc.caller_provider(doc) is not None:
+    if rc.caller_provider(doc, model) is not None:
         echo(
             f"Not probed: the gateway answers only on the login {HARNESS_LOGINS[harness][0]}"
             " itself sends, which this command does not hold."

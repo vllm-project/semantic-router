@@ -49084,6 +49084,9 @@
                               "default_route": {
                                 "type": "boolean"
                               },
+                              "delegate": {
+                                "type": "string"
+                              },
                               "recipe": {
                                 "type": "string"
                               },
