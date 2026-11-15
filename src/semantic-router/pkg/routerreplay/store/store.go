@@ -76,8 +76,9 @@ type ToolTrace struct {
 	ToolNames []string        `json:"tool_names,omitempty"`
 	Steps     []ToolTraceStep `json:"steps,omitempty"`
 	// StepsTruncated is true when older Steps were dropped to enforce the
-	// MaxToolTraceSteps cap. Long agent sessions can otherwise produce
-	// hundreds of steps per record and OOM the router (see issue #1835).
+	// MaxToolTraceSteps cap or the MaxToolTraceTotalBytes budget. Long agent
+	// sessions can otherwise produce hundreds of steps per record and OOM the
+	// router (see issue #1835).
 	StepsTruncated bool `json:"steps_truncated,omitempty"`
 	// DroppedStepCount records how many steps were dropped from the head of
 	// the timeline when StepsTruncated is true. Zero when no truncation
@@ -112,8 +113,11 @@ type ToolTraceStep struct {
 	// APIType indicates the API variant this step was extracted from:
 	// "chat_completions" or "responses".
 	APIType string `json:"api_type,omitempty"`
-	// Truncated is true when Arguments or Output was cut to MaxToolTraceBytes.
+	// Truncated is true when Text, Arguments or Output was cut to MaxToolTraceBytes.
 	Truncated bool `json:"truncated,omitempty"`
+	// RawTruncated is true when RawArguments or RawOutput was cut too, which
+	// only the default trace limit does: a configured one keeps them whole.
+	RawTruncated bool `json:"raw_truncated,omitempty"`
 }
 
 // LooperUsage is content-free token accounting for one Looper attempt.
@@ -304,6 +308,7 @@ type Record struct {
 	ProjectionTrace          *projectiontrace.Trace `json:"projection_trace,omitempty"`
 	SignalConfidences        map[string]float64     `json:"signal_confidences,omitempty"`
 	SignalErrorMatches       map[string]bool        `json:"signal_error_matches,omitempty"`
+	ScanCoverage             map[string]string      `json:"scan_coverage,omitempty"`
 	ConfidenceScoreAvailable bool                   `json:"confidence_score_available"`
 	SignalValues             map[string]float64     `json:"signal_values,omitempty"`
 	ToolTrace                *ToolTrace             `json:"tool_trace,omitempty"`
@@ -341,6 +346,11 @@ type Record struct {
 	// that they are complete even when the raw body is truncated by MaxBodyBytes.
 	Prompt          string `json:"prompt,omitempty"`
 	PromptTruncated bool   `json:"prompt_truncated,omitempty"`
+	// PromptOriginalBytes and PromptOriginalSHA256 are the size in bytes and
+	// the hex SHA-256 of the whole prompt, set when Prompt was cut to the
+	// record's limit (PromptTruncated).
+	PromptOriginalBytes  int    `json:"prompt_original_bytes,omitempty"`
+	PromptOriginalSHA256 string `json:"prompt_original_sha256,omitempty"`
 	// ToolDefinitions is the JSON array of tool schemas from the request
 	// (the "tools" field in Chat Completions, or ResponseAPIRequest.Tools).
 	ToolDefinitions string `json:"tool_definitions,omitempty"`
@@ -417,7 +427,7 @@ type BodyWriter interface {
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
 
 	// AttachPrompt stores the prompt of an existing record that was written without it.
-	AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error
+	AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error
 }
 
 // OutcomeWriter appends post-route feedback to replay records.
@@ -452,6 +462,22 @@ type Enricher interface {
 
 	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
 	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
+}
+
+// StoredPrompt is a record's prompt as it is kept: the text and, when the text
+// was cut to the record's limit, the size in bytes and the hex SHA-256 of the
+// whole prompt.
+type StoredPrompt struct {
+	Text           string
+	Truncated      bool
+	OriginalBytes  int
+	OriginalSHA256 string
+}
+
+// Apply writes the prompt into rec.
+func (p StoredPrompt) Apply(rec *Record) {
+	rec.Prompt, rec.PromptTruncated = p.Text, p.Truncated
+	rec.PromptOriginalBytes, rec.PromptOriginalSHA256 = p.OriginalBytes, p.OriginalSHA256
 }
 
 // Storage is the interface that all storage backends must implement.

@@ -44,14 +44,20 @@ var removedSignalTypeForms = []ConfigForm{
 		What:    "the reask signal is a turn_relation rule",
 		Becomes: "signals.turn_relation with labels [reask]; input.previous_turns is twice lookback_turns",
 		Migrate: func(m *Migration, at FormMatch) error {
+			asked := map[int]string{}
 			for _, rule := range sequenceItems(at.Node) {
+				name := scalarAt(rule, "name")
 				next := copiedRule(rule, "name", "description")
 				setNode(next, "labels", stringSequence("reask"))
-				// lookback_turns counted user turns; previous_turns counts each
-				// of them and the answer that followed it.
-				if turns, ok := intAt(rule, "lookback_turns"); ok {
-					setNode(next, "input", newMapping("previous_turns", intNode(2*turns)))
+				// lookback_turns (default 1) counted user turns; previous_turns
+				// counts each of them and the answer that followed it.
+				lookback, ok := intAt(rule, "lookback_turns")
+				if !ok || lookback < 1 {
+					lookback = 1
 				}
+				turns := min(2*lookback, MaxSystemOnePreviousTurns)
+				setNode(next, "input", newMapping("previous_turns", intNode(turns)))
+				noteReaskRewrite(m, at.Path+"["+name+"]", name, lookback, turns, asked)
 				if scalarAt(rule, "threshold") != "" {
 					m.Note(at.Path, "a reask rule's threshold has no counterpart: the decision model tells a re-ask from the turns themselves")
 				}
@@ -268,6 +274,147 @@ var removedSignalTypeForms = []ConfigForm{
 	},
 }
 
+// noteReaskRewrite says what a reask rule's turn_relation rule does not keep:
+// the streak, the turns past what turn_relation reads, and a question another
+// rule of the recipe asks already. asked holds the first rule of each count of
+// previous turns.
+func noteReaskRewrite(m *Migration, path, name string, lookback, turns int, asked map[int]string) {
+	if turns < 2*lookback {
+		m.Note(path, fmt.Sprintf("lookback_turns %d is %d turns; a turn_relation rule reads at most %d, so input.previous_turns is %d", lookback, 2*lookback, MaxSystemOnePreviousTurns, turns))
+	}
+	if lookback > 1 {
+		m.Note(path, fmt.Sprintf("v0.5 has no streak: lookback_turns %d matched only when the current turn repeated each of the %d previous user turns, "+
+			"and then no reask rule of fewer lookback turns matched; the turn_relation rule matches a first re-ask too. To approximate the streak, ask "+
+			`signals.systemone: [{name: %s, question: {type: noul, instructions: "Does the latest user message repeat the request of each of the %d user messages before it?"}, input: {previous_turns: %d}}]`,
+			lookback, lookback, name, lookback, turns))
+	}
+	if first, ok := asked[turns]; ok {
+		m.Note(path, fmt.Sprintf("turn_relation rule %s asks what %s asks, a re-ask within the previous %d turns: keep one", name, first, turns))
+		return
+	}
+	asked[turns] = name
+}
+
+// domainNeverMatches is why a condition on a domain rule named for no domain
+// never matches.
+var domainNeverMatches = neverMatches{
+	why:     "a domain rule named for no domain without mmlu_categories matched no domain the classifier reported",
+	restore: "to route on it, declare it with labels naming the domains it means",
+}
+
+// Before v0.5 the domain classifier reported domains, and a domain rule
+// without labels or mmlu_categories matched the one its name was in any case.
+// Migrate writes a rule named for a domain in another case in lower case
+// (casedDomain) and drops a rule named for no domain, which never matched
+// (droppedDomain), unless a projection partition names it: then the
+// partition's default matched it, and it is kept (partitionDomain). A name
+// the load suggests a domain for (formatDomainSuggestion) that the recipe
+// reads keeps that load error, as the likely typo of a v0.5 rule.
+
+func unlabeledDomain(rule *yaml.Node) bool {
+	return mappingValue(rule, "labels") == nil && mappingValue(rule, "mmlu_categories") == nil
+}
+
+func casedDomain(rule *yaml.Node) bool {
+	name := scalarAt(rule, "name")
+	return unlabeledDomain(rule) && !IsSupportedRoutingDomainName(name) && IsSupportedRoutingDomainName(strings.ToLower(name))
+}
+
+// noDomain reports whether a domain rule of a recipe is named for no domain,
+// and migrate rewrites it.
+func noDomain(recipe, rule *yaml.Node) bool {
+	name := scalarAt(rule, "name")
+	return unlabeledDomain(rule) && !IsSupportedRoutingDomainName(strings.ToLower(name)) &&
+		(formatDomainSuggestion(name) == "" || !domainNamed(recipe, name))
+}
+
+func droppedDomain(recipe, rule *yaml.Node) bool {
+	return noDomain(recipe, rule) && domainPartition(recipe, scalarAt(rule, "name")) == nil
+}
+
+func partitionDomain(recipe, rule *yaml.Node) bool {
+	return noDomain(recipe, rule) && domainPartition(recipe, scalarAt(rule, "name")) != nil
+}
+
+// droppedDomainRule reports whether a recipe declares the domain rule name,
+// and migrate drops it.
+func droppedDomainRule(recipe *yaml.Node, name string) bool {
+	return slices.ContainsFunc(sequenceAt(recipe, "signals", "domains"), func(rule *yaml.Node) bool {
+		return scalarAt(rule, "name") == name && droppedDomain(recipe, rule)
+	})
+}
+
+// domainPartition is the projection partition of a recipe whose default is
+// the domain rule name, else the first whose members name it, or nil.
+func domainPartition(recipe *yaml.Node, name string) *yaml.Node {
+	var member *yaml.Node
+	for _, partition := range sequenceAt(recipe, "projections", "partitions") {
+		if scalarAt(partition, "default") == name {
+			return partition
+		}
+		if member == nil && slices.Contains(stringItems(mappingValue(partition, "members")), name) {
+			member = partition
+		}
+	}
+	return member
+}
+
+// domainNamed reports whether a recipe's conditions, score inputs or
+// projection partitions name the domain rule name.
+func domainNamed(recipe *yaml.Node, name string) bool {
+	return domainPartition(recipe, name) != nil || slices.ContainsFunc(recipeConditions(recipe), func(node *yaml.Node) bool {
+		return hasType(SignalTypeDomain)(node, "") && scalarAt(node, "name") == name
+	})
+}
+
+// renameDomain renames the domain rule from to in a recipe: the rule and each
+// condition, score input and partition that names it.
+func renameDomain(recipe *yaml.Node, from, to string) {
+	rename := func(node *yaml.Node) {
+		if node != nil && node.Kind == yaml.ScalarNode && node.Value == from {
+			node.Value = to
+		}
+	}
+	for _, rule := range sequenceAt(recipe, "signals", "domains") {
+		rename(mappingValue(rule, "name"))
+	}
+	for _, node := range recipeConditions(recipe) {
+		if hasType(SignalTypeDomain)(node, "") {
+			rename(mappingValue(node, "name"))
+		}
+	}
+	for _, partition := range sequenceAt(recipe, "projections", "partitions") {
+		rename(mappingValue(partition, "default"))
+		for _, member := range sequenceItems(mappingValue(partition, "members")) {
+			rename(member)
+		}
+	}
+}
+
+// recipeConditions are the places a recipe names a signal: its decisions'
+// conditions at any depth and its score inputs.
+func recipeConditions(recipe *yaml.Node) []*yaml.Node {
+	var nodes []*yaml.Node
+	for _, pattern := range []string{"decisions[].rules.**", "projections.scores[].inputs[]"} {
+		for _, use := range matchPattern(recipe, strings.Split(pattern, ".")) {
+			nodes = append(nodes, use.Node)
+		}
+	}
+	return nodes
+}
+
+// namedWithLabel reports whether a condition or score input of a rule's
+// recipe names one of the rule's options, as a condition's label or as the
+// input "<rule>:<label>". So a v0.5 rule without labels is read, whatever its
+// name; before v0.5, a user_feedbacks or modality rule's name chose its option.
+func namedWithLabel(at FormMatch, signalType string) bool {
+	name := scalarAt(at.Node, "name")
+	return slices.ContainsFunc(recipeConditions(scopeRouting(at.Root, at.Path)), func(use *yaml.Node) bool {
+		named := scalarAt(use, "name")
+		return hasType(signalType)(use, "") && ((named == name && scalarAt(use, "label") != "") || strings.HasPrefix(named, name+":"))
+	})
+}
+
 // kbNeverMatches is why a kb condition never matches.
 var kbNeverMatches = neverMatches{
 	why:     "no v0.5 signal reads a knowledge base",
@@ -358,6 +505,75 @@ var applicationFieldForms = []ConfigForm{
 		},
 	},
 	{
+		Code:    CodeInvalidValue,
+		Paths:   RoutingScopes("signals.domains[]"),
+		Match:   func(node *yaml.Node, _ string) bool { return casedDomain(node) },
+		What:    "a domain rule named for a domain in another case matched that domain, since rule names were matched in any case",
+		Becomes: "the domain in lower case, in the rule and each condition, score input and partition that names it",
+		Migrate: func(m *Migration, at FormMatch) error {
+			name := scalarAt(at.Node, "name")
+			renameDomain(scopeRouting(m.Root(), at.Path), name, strings.ToLower(name))
+			return nil
+		},
+	},
+	{
+		Code:  CodeInvalidValue,
+		Paths: conditionPaths,
+		MatchAt: func(at FormMatch) bool {
+			return hasType(SignalTypeDomain)(at.Node, at.Path) && droppedDomainRule(scopeRouting(at.Root, at.Path), scalarAt(at.Node, "name"))
+		},
+		What:    "a domain condition reads a domain rule named for no domain, which never matched",
+		Becomes: "nothing: the condition never matches, so migrate drops a decision that needs it, its term of an OR and a score input on it",
+		Migrate: func(m *Migration, at FormMatch) error {
+			if strings.Contains(at.Path, ".projections.") {
+				dropScoreInput(m, at, "domain "+scalarAt(at.Node, "name"), domainNeverMatches)
+				return nil
+			}
+			recipe := scopeRouting(m.Root(), at.Path)
+			settleRemovedCondition(m, at, "domain rule", func(node *yaml.Node) bool {
+				return hasType(SignalTypeDomain)(node, "") && droppedDomainRule(recipe, scalarAt(node, "name"))
+			}, domainNeverMatches)
+			return nil
+		},
+	},
+	{
+		Code:    CodeInvalidValue,
+		Paths:   RoutingScopes("signals.domains[]"),
+		MatchAt: func(at FormMatch) bool { return droppedDomain(scopeRouting(at.Root, at.Path), at.Node) },
+		What:    "a domain rule without labels or mmlu_categories whose name is no domain never matched, since the domain classifier reports domains",
+		Becomes: "drop it; to route on it, set labels to the domains it means",
+		Migrate: func(m *Migration, at FormMatch) error {
+			name := scalarAt(at.Node, "name")
+			m.Note(at.Path, "domain rule "+name+" is dropped: "+domainNeverMatches.why+"; "+domainNeverMatches.restore)
+			removeItem(at.Parent, at.Node)
+			if len(at.Parent.Content) == 0 {
+				m.Delete(at.Above(2), "domains")
+				deleteEmpty(at.Above(3), "signals")
+			}
+			return nil
+		},
+	},
+	{
+		Code:    CodeInvalidValue,
+		Paths:   RoutingScopes("signals.domains[]"),
+		MatchAt: func(at FormMatch) bool { return partitionDomain(scopeRouting(at.Root, at.Path), at.Node) },
+		What:    "a domain rule without labels or mmlu_categories whose name is no domain matched only as the default of a projection partition that names it",
+		Becomes: "labels: [other], so the partition keeps it",
+		Migrate: func(m *Migration, at FormMatch) error {
+			name := scalarAt(at.Node, "name")
+			partition := domainPartition(scopeRouting(m.Root(), at.Path), name)
+			setNode(at.Node, "labels", stringSequence("other"))
+			if scalarAt(partition, "default") == name {
+				m.Note(at.Path, fmt.Sprintf("domain rule %s matched only as the default of projection partition %s, when no other member matched; with labels [other] it also matches "+
+					"when the decision model chooses other, when no other member matches either, so it matches as before unless another member's labels hold other", name, scalarAt(partition, "name")))
+			} else {
+				m.Note(at.Path, fmt.Sprintf("domain rule %s never matched, and projection partition %s names it as a member, so it is kept with labels [other]: "+
+					"it now matches when the decision model chooses other; drop it from the partition's members to keep it from matching", name, scalarAt(partition, "name")))
+			}
+			return nil
+		},
+	},
+	{
 		Code:  CodeInvalidValue,
 		Paths: RoutingScopes("signals.fact_check[]"),
 		Match: func(node *yaml.Node, _ string) bool {
@@ -378,9 +594,9 @@ var applicationFieldForms = []ConfigForm{
 	{
 		Code:  CodeInvalidValue,
 		Paths: RoutingScopes("signals.user_feedbacks[]"),
-		Match: func(node *yaml.Node, _ string) bool {
-			_, legacy := legacyFeedbackLabels[scalarAt(node, "name")]
-			return legacy && mappingValue(node, "labels") == nil
+		MatchAt: func(at FormMatch) bool {
+			_, legacy := legacyFeedbackLabels[scalarAt(at.Node, "name")]
+			return legacy && mappingValue(at.Node, "labels") == nil && !namedWithLabel(at, SignalTypeUserFeedback)
 		},
 		Describe: func(at FormMatch) (string, string) {
 			return "a user_feedbacks rule's name no longer chooses its feedback", "labels: [" + legacyFeedbackLabels[scalarAt(at.Node, "name")] + "]"
@@ -393,9 +609,9 @@ var applicationFieldForms = []ConfigForm{
 	{
 		Code:  CodeInvalidValue,
 		Paths: RoutingScopes("signals.modality[]"),
-		Match: func(node *yaml.Node, _ string) bool {
-			_, legacy := legacyModalityLabels[scalarAt(node, "name")]
-			return legacy && mappingValue(node, "labels") == nil
+		MatchAt: func(at FormMatch) bool {
+			_, legacy := legacyModalityLabels[scalarAt(at.Node, "name")]
+			return legacy && mappingValue(at.Node, "labels") == nil && !namedWithLabel(at, SignalTypeModality)
 		},
 		Describe: func(at FormMatch) (string, string) {
 			return "a modality rule's name no longer chooses its output (AR, DIFFUSION and BOTH are text, image and text_image)", "labels: [" + legacyModalityLabels[scalarAt(at.Node, "name")] + "]"
@@ -441,6 +657,10 @@ var applicationFieldForms = []ConfigForm{
 		What:    "a jailbreak rule's threshold, direction and include_history are its predicate, stage and input.history, and method and patterns are removed",
 		Becomes: "predicate: {gte: <threshold>}, stage, input.history",
 		Migrate: func(m *Migration, at FormMatch) error {
+			if threshold := scalarAt(at.Node, "threshold"); threshold != "" && scalarAt(at.Node, "method") == "contrastive" {
+				m.Note(at.Path, "threshold "+threshold+" bounded a contrastive score, the closest jailbreak pattern's similarity less the closest benign pattern's, "+
+					"not a probability: re-fit predicate.gte "+threshold+" against real traffic, or drop the predicate for the answering model's calibrated threshold")
+			}
 			moveThreshold(m, at.Node, "gte")
 			if scalarAt(at.Node, "direction") == SystemOneStageResponse {
 				setNode(at.Node, "stage", Scalar(SystemOneStageResponse))
@@ -510,8 +730,13 @@ var applicationFieldForms = []ConfigForm{
 				}
 			}
 			moveInput(m, at.Node, "include_history", "history")
+			// source: tool_result read only the tool results, neither the user
+			// turn nor its history, so the rule keeps reading only them
 			if scalarAt(at.Node, "source") == "tool_result" {
-				setNode(ensureMapping(at.Node, "input"), "tool_results", boolScalar())
+				input := ensureMapping(at.Node, "input")
+				m.Delete(input, "history")
+				setNode(input, "tool_results", boolScalar())
+				setNode(input, "request", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "false"})
 			}
 			m.Delete(at.Node, "source")
 			return nil
@@ -694,27 +919,30 @@ func removedModuleForm(module, thresholdKey, threshold string, collections []str
 }
 
 // migrateGuardFailures carries a guard module's failure handling over to its
-// jailbreak or pii rules. on_error: block matched a request whose classifier
-// failed, so the module's request-stage rules get on_unknown: match; allow,
-// the default, is the rules' own default. Content the model does not read in
-// full matches whatever on_unscanned said.
+// jailbreak or pii rules that set none. on_error: block matched a request
+// whose classifier failed, as on_unknown: match does; allow passed it, as
+// on_unknown: no_match does. on_unscanned: allow decided on what the model
+// read, as on_unscanned: best_effort does; block matched, as match does.
 func migrateGuardFailures(m *Migration, at FormMatch, collections []string) {
 	if !slices.Contains(collections, "jailbreak") && !slices.Contains(collections, "pii") {
 		return
 	}
-	if scalarAt(at.Node, "on_error") == "block" {
-		for _, signals := range allScopeSignals(m.Root()) {
-			for _, collection := range collections {
-				for _, rule := range sequenceAt(signals, collection) {
-					if mappingValue(rule, "on_unknown") == nil && scalarAt(rule, "stage") != SystemOneStageResponse {
-						setNode(rule, "on_unknown", Scalar(string(RuleOnUnknownMatch)))
-					}
+	onUnknown := map[string]string{OnErrorBlock: string(RuleOnUnknownMatch), OnErrorAllow: string(RuleOnUnknownNoMatch)}[scalarAt(at.Node, "on_error")]
+	onUnscanned := map[string]string{OnErrorAllow: SystemOneUnscannedBestEffort, OnErrorBlock: SystemOneUnscannedMatch}[scalarAt(at.Node, "on_unscanned")]
+	for _, signals := range allScopeSignals(m.Root()) {
+		for _, collection := range collections {
+			if collection != "jailbreak" && collection != "pii" {
+				continue
+			}
+			for _, rule := range sequenceAt(signals, collection) {
+				if onUnknown != "" && mappingValue(rule, "on_unknown") == nil && scalarAt(rule, "stage") != SystemOneStageResponse {
+					setNode(rule, "on_unknown", Scalar(onUnknown))
+				}
+				if onUnscanned != "" && mappingValue(rule, "on_unscanned") == nil {
+					setNode(rule, "on_unscanned", Scalar(onUnscanned))
 				}
 			}
 		}
-	}
-	if scalarAt(at.Node, "on_unscanned") == "allow" {
-		m.Note(at.Path+".on_unscanned", "allow has no replacement: content the model does not read in full matches the rule")
 	}
 }
 

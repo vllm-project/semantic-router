@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -163,6 +165,34 @@ func TestToolsSelectAddAppendsCatalogTools(t *testing.T) {
 	}
 	if !reflect.DeepEqual(options, []string{"y=Use y", "z=Use z", "w=Use w"}) {
 		t.Fatalf("tool_rank options %v: the catalog's tools the request lacks and the policy allows", options)
+	}
+}
+
+// A request that matches no decision runs the tools.select of
+// global.plugins, so the generation loads the catalog it adds from.
+func TestToolsSelectAddOfTheDefaultPluginsReachesAnUnmatchedRequest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tools.json")
+	if err := os.WriteFile(path, []byte(`[{"tool":{"type":"function","function":{"name":"w"}},"description":"Use w"}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	router := toolsRouter(&toolsJudge{need: 0.9, choose: map[string]float64{"w": 1}})
+	plugin := toolsSelect(config.ToolsSelectModeAdd, func(s *config.ToolsSelectConfig) { s.ToolsDBPath = path })
+	router.Config.GlobalPlugins = []config.DecisionPlugin{mustToolsDecisionPlugin(t, &plugin)}
+	if err := router.Config.LayerPlugins(); err != nil {
+		t.Fatal(err)
+	}
+	catalogs, err := loadToolCatalogs(router.Config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router.toolCatalogs = catalogs
+	request := toolsRequest("x")
+	ctx := &RequestContext{RequestID: "tools-default", Headers: map[string]string{}, SemanticRequest: request}
+	ctx.Routing.SelectRecipe(router.Config.DefaultRecipe())
+	response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_RequestBody{RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{}}}}
+	router.applyToolsPlugin(request, response, ctx)
+	if got := toolNames(request.Tools); !reflect.DeepEqual(got, []string{"x", "w"}) {
+		t.Fatalf("tools %v, want the request's x, then the catalog's w", got)
 	}
 }
 

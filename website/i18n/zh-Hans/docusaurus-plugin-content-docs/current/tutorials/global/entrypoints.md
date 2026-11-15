@@ -69,9 +69,9 @@ curl http://localhost:8899/v1/chat/completions \
 | `entrypoints[].model_names` 中的值 | 只评估映射的配方。 |
 | 只有一个配方且没有其入口时的 `vllm-sr/auto` | 评估该配方。 |
 | 显式声明的 ReMoM、Fusion 或 Flow 入口 | 评估映射的配方，由匹配的决策选择 looper 算法。 |
-| 具体的提供商模型或 LoRA 名称 | 直接发送到该后端，不经过配方路由。 |
+| 具体的提供商模型或 LoRA 名称 | 直接发送到该后端，不经过配方路由。多个模型声明的同一 LoRA 名称会以 `model_not_found` 拒绝；决策通过 `model` 和 `lora_name` 选择它。 |
 
-入口会由 `/v1/models` 列出，并带有路由元数据。成功路由的响应会暴露 `x-vsr-selected-recipe`；路由回放和 Insights 也可以按配方过滤记录。
+入口会由 `/v1/models` 列出，并带有路由元数据。设置 `global.router.list_backend_models: true` 时，该列表还会按名称排序列出直接请求可以送达的每个模型和 LoRA 名称。成功路由的响应会暴露 `x-vsr-selected-recipe`；路由回放和 Insights 也可以按配方过滤记录。
 
 要改名默认入口，为标记 `default: true` 的入口设置 `model_names`。这会替换内置的
 `vllm-sr/auto`；如果旧客户端仍需使用它，请显式保留该名称。

@@ -113,6 +113,24 @@ func ParseYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error) {
 	return parseYAMLBytesWithOptions(data, "", nil)
 }
 
+// ParseGlobalYAMLBytesWithoutEnvExpansion parses a document that holds a
+// global block whose recipes are elsewhere, as ParseYAMLBytesWithoutEnvExpansion
+// does, but runs only the checks of the global settings, as for a Kubernetes
+// source. A check of what the recipes ask, such as which calls reach a
+// delegated upstream, runs when the whole config loads.
+func ParseGlobalYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error) {
+	cfg, err := decodeYAMLBytes(data, nil)
+	if err != nil {
+		return nil, err
+	}
+	cfg.SkipExternalAssetValidation = true
+	applyParsedConfigDefaults(cfg)
+	if err := validateConfigContractsAtStage(cfg, staticConfigValidation); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
 // ValidateYAMLBytesDeferringEnv validates a config that another process will
 // load with its own environment, so it resolves no reference from this one:
 // references take their defaults, and the config passes if it is valid with
@@ -632,6 +650,9 @@ func attachCanonicalGlobalOverride(raw map[string]interface{}, canonical *Canoni
 	rawGlobal, ok := raw["global"]
 	if !ok {
 		return nil
+	}
+	if err := refuseEmptyGlobalValue(rawGlobal); err != nil {
+		return err
 	}
 
 	payload, err := NewStructuredPayload(rawGlobal)

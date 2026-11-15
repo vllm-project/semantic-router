@@ -173,7 +173,7 @@ func (m *MemoryStore) AttachResponse(ctx context.Context, id string, body string
 }
 
 // AttachPrompt stores the prompt of a record written without it.
-func (m *MemoryStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+func (m *MemoryStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -182,8 +182,7 @@ func (m *MemoryStore) AttachPrompt(ctx context.Context, id string, prompt string
 		return fmt.Errorf("record with ID %s not found", id)
 	}
 
-	rec.Prompt = prompt
-	rec.PromptTruncated = truncated
+	prompt.Apply(rec)
 
 	return nil
 }

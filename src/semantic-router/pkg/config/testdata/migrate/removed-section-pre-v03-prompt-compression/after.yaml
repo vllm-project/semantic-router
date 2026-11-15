@@ -18,6 +18,9 @@ recipes:
         priority: 100
         rules: {operator: AND, conditions: [{type: domain, name: math}]}
         modelRefs: [{model: general, use_reasoning: false}]
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default
 global:
   plugins:
     - type: context

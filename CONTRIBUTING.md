@@ -106,9 +106,9 @@ tag; `--image-pull-policy never` prevents pulling missing images.
 For the AMD local image:
 
 ```bash
-make vllm-sr-dev VLLM_SR_PLATFORM=amd
+make vllm-sr-dev VLLM_SR_PLATFORM=rocm
 VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
-  vllm-sr serve --image-pull-policy never --platform amd
+  vllm-sr serve --image-pull-policy never --platform rocm
 ```
 
 If you customize `DOCKER_TAG`, `DOCKER_REGISTRY`, or the Make image variables,
@@ -233,6 +233,19 @@ Valid scopes accumulate for the same revision; partial authorization does not
 waive the remaining checks. A new head revision requires fresh
 authorization.
 
+GitHub may regenerate a synthetic merge commit without changing its base and
+PR head. The existing Plan and authorization remain usable when the original
+merge's ordered parents can be verified against those inputs and both merge
+commits have the same verifiable tree. A different merge SHA alone does not
+require another push. The existing ancestor-base policy also allows main to
+advance while the planned base remains in its history; that path does not require
+equal trees across different bases.
+
+If the original planned merge commit is no longer readable, CI stays blocked
+with **CI source evidence unavailable**. Diagnostics identify this boundary as
+`planned_merge_unavailable`. Retain the Plan and run evidence for investigation;
+an unavailable object does not prove that qualification succeeded.
+
 The command handler reacts with 👀 when it receives a request and 🚀 after it
 successfully triggers the PR workflow. The rocket means CI was started, not that
 tests passed; **PR Gate** reports the final result. Rejected requests receive 😕
@@ -284,6 +297,36 @@ Summary check shows the effective conditions, including inherited requirements.
   fork secrets and allow access to other branches. This is optional; if you
   leave it off, update the branch yourself after a dequeue. See
   [GitHub's explanation of fork permissions][fork-permissions].
+
+- **Conflicting `PR Gate` results:** a successful publisher check does not
+  necessarily supersede a failed native Actions check on the same head. Inspect
+  both `filter=all` and `filter=latest`, the check suites, and GitHub's required
+  flags rather than choosing the highest check ID. From a trusted checkout,
+  collect a read-only diagnostic with explicit identities:
+
+  ```bash
+  GITHUB_REPOSITORY=vllm-project/semantic-router python3 tools/ci/pr_ci_status.py \
+    --diagnose --pr <number> --head <full-head-sha> \
+    --run-id <replacement-run-id> --attempt <replacement-attempt>
+  ```
+
+  This command reports evidence; it does not update checks, authorize CI, or
+  requeue the PR. Unavailable requiredness or provenance is unknown, not proof
+  of a recoverable failure. Save the diagnostic and the queue's refusal before
+  recovery. Do not rerun a cancelled sibling or repeatedly requeue the same
+  head to try to erase a required failure.
+
+  Any fresh-head recovery needs the author's or maintainer's explicit consent
+  and confirmation that the PR is no longer queued. Use a normal merge from
+  upstream `main` or **Update branch**, not a default rebase/force-push. Confirm
+  that the head actually changed, the new Plan matches the current head/base/
+  merge revision, and affected qualification passes with fresh authorization
+  where needed. Recheck required checks, valid approvals and resolved threads,
+  then observe requeue/merge eligibility. A new green check alone is not proof
+  of recovery. If no new head is produced or the new head is still refused,
+  stop and retain the evidence; do not change native failures to success or
+  neutral. This is a controlled recovery path, not a guarantee that every
+  branch update resolves every check conflict.
 
 To recover from a branch-update failure, merge upstream `main` into your PR
 branch and push it, or use GitHub's **Update branch** button when available.

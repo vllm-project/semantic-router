@@ -1463,15 +1463,54 @@ spec:
                               description: Conditions is the list of rule references
                                 to evaluate
                               items:
-                                description: RuleConditionConfig references a specific
-                                  rule by type and name
+                                description: |-
+                                  RuleConditionConfig is one condition of a decision's rules: a leaf that
+                                  references a rule by type and name, or a subtree that combines its own
+                                  conditions with an operator.
                                 properties:
-                                  name:
-                                    description: Name is the name of the rule to reference
+                                  conditions:
+                                    description: |-
+                                      Conditions are a subtree's conditions, each of this same shape. They
+                                      are preserved as router-owned objects, since a CRD schema cannot
+                                      recurse; the router validates them when it loads the configuration.
+                                    items:
+                                      type: object
+                                      x-kubernetes-preserve-unknown-fields: true
+                                    type: array
+                                  label:
+                                    description: |-
+                                      Label matches one label of the referenced rule (systemone and
+                                      application signal conditions)
                                     type: string
+                                  name:
+                                    description: Name is the name of the rule a leaf
+                                      references
+                                    type: string
+                                  on_error:
+                                    description: OnError resolves a systemone leaf
+                                      whose model backend fails
+                                    enum:
+                                    - no_match
+                                    - match
+                                    type: string
+                                  operator:
+                                    description: 'Operator combines a subtree''s conditions:
+                                      "AND", "OR", or "NOT" (unary)'
+                                    enum:
+                                    - AND
+                                    - OR
+                                    - NOT
+                                    type: string
+                                  predicate:
+                                    description: |-
+                                      Predicate bounds the referenced rule's score, as {gt, gte, lt, lte}.
+                                      The router checks it when it loads the configuration.
+                                    type: object
+                                    x-kubernetes-preserve-unknown-fields: true
                                   type:
-                                    description: Type specifies the signal or projection
-                                      type referenced by this condition.
+                                    description: |-
+                                      Type specifies the signal or projection type a leaf references: a type
+                                      the router accepts in decision rules.
                                     enum:
                                     - authz
                                     - complexity
@@ -1479,7 +1518,6 @@ spec:
                                     - conversation
                                     - domain
                                     - fact_check
-                                    - hallucination
                                     - input_modality
                                     - jailbreak
                                     - keyword
@@ -1488,15 +1526,11 @@ spec:
                                     - modality
                                     - pii
                                     - projection
-                                    - refusal
                                     - safety
                                     - systemone
                                     - turn_relation
                                     - user_feedback
                                     type: string
-                                required:
-                                - name
-                                - type
                                 type: object
                               type: array
                             on_unknown:

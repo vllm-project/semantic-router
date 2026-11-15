@@ -1,6 +1,7 @@
 ---
 title: Embeddings
 description: Embeddings for recall in the response cache, memory, RAG and vector stores.
+sidebar_position: 1
 ---
 
 # Embeddings
@@ -26,7 +27,7 @@ pre-declared `vela-embedding` unless you change it. The deployment starts only
 when the response cache, memory or a vector store recalls with it; a
 configuration without recall never starts it. No decision reads embeddings: to
 route on what an image shows, ask the decision model a question that reads it
-([media inputs](../../system-one/concepts#media-inputs)).
+([media inputs](../../system-one/get-started/concepts#media-inputs)).
 
 ## Choose where it runs
 
@@ -139,4 +140,4 @@ model, layer and dimension that identify the vector space.
 Vectors of different models, layers or sizes are never compared with each
 other. After you change any of them, re-index vector stores and re-add the
 memories you need, and expect the semantic cache to fill again. See
-[Re-embed when the embedding model changes](model-runtime/migrate.md#re-embed-when-the-embedding-model-changes).
+[Re-embed when the embedding model changes](../deploy/migrate.md#re-embed-when-the-embedding-model-changes).

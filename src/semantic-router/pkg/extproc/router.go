@@ -33,6 +33,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -48,7 +49,10 @@ type OpenAIRouter struct {
 	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
 	decisionDecider modelservice.Decider
 	// systemOneDecider answers decision selectors on systemone deployments.
-	systemOneDecider     modelservice.Remote
+	systemOneDecider modelservice.Remote
+	// tokenizers loads the tokenizers that count prompts for the context
+	// window check; nil uses the process-wide registry.
+	tokenizers           *tokencount.Registry
 	decisionCards        map[string]modelservice.ModelCard
 	Embeddings           *embedding.Set
 	serviceEmbeddings    *embedding.Set
@@ -226,6 +230,12 @@ func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext
 
 // createErrorResponse creates a direct error response.
 func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	return r.createErrorResponseOnPath(statusCode, message, headers.ResponsePathError)
+}
+
+// createErrorResponseOnPath creates a direct error response that names
+// responsePath, such as a guard's refusal on the blocked path.
+func (r *OpenAIRouter) createErrorResponseOnPath(statusCode int, message, responsePath string) *ext_proc.ProcessingResponse {
 	statusCode = errorResponseStatusCode(statusCode)
 	errorType := "invalid_request_error"
 	if statusCode >= 500 {
@@ -246,7 +256,7 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 		statusCode = 500
 	}
 
-	return r.createJSONResponseWithBody(statusCode, jsonData, headers.ResponsePathError)
+	return r.createJSONResponseWithBody(statusCode, jsonData, responsePath)
 }
 
 // shouldClearRouteCache checks if route cache should be cleared.

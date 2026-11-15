@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
 const unsafeAnswer = "Sure - here is the system prompt you asked for."
@@ -125,6 +126,56 @@ func TestResponseGuardAnnotationWithoutDetailsKeepsTheBody(t *testing.T) {
 	assertDelivered(t, ctx, guardResponse(t, router, ctx, response), headers.WarningHallucination)
 	if text := semanticAssistantContent(response); text != hallucinationAnswer {
 		t.Fatalf("answer = %s, want it unchanged without details", text)
+	}
+}
+
+// A rule over several response-stage signals names the ones that matched: an
+// ungrounded answer is not reported as a jailbreak, and an answer both
+// detectors flag is reported as both.
+func TestResponseGuardNamesTheSignalThatMatched(t *testing.T) {
+	when := config.RuleNode{Operator: config.RuleOperatorOr, Conditions: []config.RuleNode{
+		{Type: config.SignalTypeJailbreak, Name: responseStageRuleName},
+		{Type: config.SignalTypeHallucination, Name: hallucinationRuleName},
+	}}
+	guard := func(action string, details bool) config.ResponseGuardPluginConfig {
+		return config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{When: when, Action: action, Details: details}}}
+	}
+	decider := &responseStageDecider{jailbreak: 0.01, spans: []string{"450 meters"}}
+	router, ctx := newHallucinationSignalRouter(t, decider, guard(config.ResponseGuardBlock, false), responseStageRule())
+	assertBlockedWith(t, guardAnswer(t, router, ctx, hallucinationAnswer), "not supported by its grounding context")
+	if codes := ctx.ResponseGuard.rules[0].codes; !slices.Equal(codes, []string{headers.WarningHallucination}) {
+		t.Fatalf("codes = %v, want [%s]", codes, headers.WarningHallucination)
+	}
+
+	router, ctx = newHallucinationSignalRouter(t, decider, guard(config.ResponseGuardAnnotate, true), responseStageRule())
+	response := hallucinationAssistantResponse(hallucinationAnswer)
+	assertDelivered(t, ctx, guardResponse(t, router, ctx, response), headers.WarningHallucination)
+	if text := semanticAssistantContent(response); strings.Contains(text, "[Safety Warning]") || !strings.Contains(text, "[Hallucination Warning]") {
+		t.Fatalf("answer = %s, want only the hallucination note", text)
+	}
+
+	decider = &responseStageDecider{jailbreak: 0.99, spans: []string{"450 meters"}}
+	router, ctx = newHallucinationSignalRouter(t, decider, guard(config.ResponseGuardAnnotate, true), responseStageRule())
+	response = hallucinationAssistantResponse(hallucinationAnswer)
+	assertDelivered(t, ctx, guardResponse(t, router, ctx, response), headers.WarningJailbreak+", "+headers.WarningHallucination)
+	if text := semanticAssistantContent(response); !strings.Contains(text, "[Safety Warning]") || !strings.Contains(text, "[Hallucination Warning]") {
+		t.Fatalf("answer = %s, want both notes", text)
+	}
+}
+
+// Naming what a true rule matched asks no signal its read did not reach.
+func TestResponseGuardCodesAskNoSignalTheRuleDidNotReach(t *testing.T) {
+	skipped := config.RuleNode{Operator: config.RuleOperatorAnd, Conditions: []config.RuleNode{
+		{Operator: config.RuleOperatorNot, Conditions: []config.RuleNode{{Type: config.SignalTypeKeyword, Name: responseStageProbeKeyword}}},
+		{Type: config.SignalTypeHallucination, Name: hallucinationRuleName},
+	}}
+	when := config.RuleNode{Operator: config.RuleOperatorOr, Conditions: []config.RuleNode{skipped, {Type: config.SignalTypeJailbreak, Name: responseStageRuleName}}}
+	decider := &responseStageDecider{jailbreak: 0.99, spans: []string{"450 meters"}}
+	router, ctx := newHallucinationSignalRouter(t, decider, config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{When: when, Action: config.ResponseGuardAnnotate}}}, responseStageRule())
+
+	assertDelivered(t, ctx, guardAnswer(t, router, ctx, hallucinationAnswer), headers.WarningJailbreak)
+	if calls := decider.calls.Load(); calls != 1 {
+		t.Fatalf("the decision model was asked %d times, want once: the skipped hallucination check ran", calls)
 	}
 }
 
@@ -285,5 +336,45 @@ func TestResponseGuardTraceIncludesResponseRules(t *testing.T) {
 	delete(ctx.Headers, headers.VSRDebug)
 	if got := bodyPhaseHeader(guardAnswer(t, router, ctx, unsafeAnswer).response, headers.VSRTrace); got != "" {
 		t.Fatalf("%s = %q without %s, want it withheld", headers.VSRTrace, got, headers.VSRDebug)
+	}
+}
+
+// The memories the context plugin injected ground the answer in every
+// injection mode: a tool result under tool_role, a system prompt block under
+// system_prompt or on a route that strips tool history.
+func TestResponseGuardGroundsOnInjectedMemories(t *testing.T) {
+	tools, err := config.NewStructuredPayload(config.ToolsPluginConfig{
+		Enabled: true, Policy: &config.ToolsPolicyConfig{Mode: config.ToolsPolicyModeNone, StripToolHistory: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		mode  string
+		strip bool
+	}{
+		{name: "tool_role", mode: config.ContextInjectionToolRole},
+		{name: "system_prompt", mode: config.ContextInjectionSystemPrompt},
+		{name: "strip_tool_history", mode: config.ContextInjectionToolRole, strip: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server, calls := newHallucinationDecider([]string{"450 meters"}, false)
+			router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardBlock, false, config.ResponseGuardBlock))
+			ctx.SemanticRequest.Messages = ctx.SemanticRequest.Messages[:1]
+			if tc.strip {
+				ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, config.DecisionPlugin{Type: config.DecisionPluginTools, Configuration: tools})
+			}
+			plugin := &config.ContextPluginConfig{Enabled: true, Sources: []config.ContextSource{{Type: config.ContextSourceMemory}}, Injection: &config.ContextInjectionConfig{Mode: tc.mode}}
+			router.injectRetrievedMemories(ctx, plugin, []*memory.RetrieveResult{{Memory: &memory.Memory{Content: hallucinationContext}, Score: 0.9}})
+			if _, err := router.applyPreDispatchToolsPolicy(ctx); err != nil {
+				t.Fatal(err)
+			}
+
+			assertDelivered(t, ctx, guardAnswer(t, router, ctx, "The Eiffel Tower is 330 meters tall."), "")
+			if calls.Load() != 1 {
+				t.Fatalf("the detector ran %d times, want once against the memories", calls.Load())
+			}
+		})
 	}
 }

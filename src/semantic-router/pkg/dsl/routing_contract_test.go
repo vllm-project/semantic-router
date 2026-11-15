@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -256,4 +257,48 @@ ROUTE math_route {
 	}
 
 	t.Fatalf("expected missing LoRA diagnostic, got %#v", diags)
+}
+
+// A catalog-backed provider model's facts stay on its own entry: the merge
+// matches MODEL declarations to providers.models[] entries by name.
+func TestCatalogBackedModelFactsRoundTripOnTheirEntry(t *testing.T) {
+	base := []byte(`version: v0.5
+providers:
+  models:
+    - name: frontier
+      catalog: openai/gpt-5.4
+      backend_refs:
+        - name: primary
+          provider: openai
+      description: The frontier model.
+recipes:
+  - name: default
+    decisions:
+      - name: route
+        priority: 1
+        modelRefs: [{model: frontier, use_reasoning: false}]
+`)
+	original, err := config.ParseYAMLBytes(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := DecompileConfig(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, errs := Compile(text)
+	if len(errs) > 0 {
+		t.Fatalf("%v\n%s", errs, text)
+	}
+	mergedBytes, err := MergeRoutingIntoBase(compiled, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, err := config.ParseYAMLBytes(mergedBytes)
+	if err != nil {
+		t.Fatalf("the round-tripped config does not load: %v\n%s", err, mergedBytes)
+	}
+	if !reflect.DeepEqual(config.ModelCardsFromRouterConfig(merged), config.ModelCardsFromRouterConfig(original)) {
+		t.Fatalf("model facts changed in the round trip:\n%s", mergedBytes)
+	}
 }

@@ -23,10 +23,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
-// A keyed listener restricted to the router's auto model: the key is checked
-// first, a provider model named by the client never reaches a backend (not
-// even through the skip-processing opt-out), the auto model's in-process hops
-// still call the provider models, and /v1/models lists only the auto model.
+// A keyed listener restricted to the router's auto model, whose apis names
+// Chat Completions by its alias openai: the key is checked first, a provider
+// model named by the client never reaches a backend (not even through the
+// skip-processing opt-out), the auto model's in-process hops still call the
+// provider models, /v1/models lists only the auto model, and an API the
+// listener does not serve answers 404 with a detail naming the listener.
 func TestStandaloneListenerServesOnlyItsModels(t *testing.T) {
 	var calls atomic.Int32
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +54,8 @@ listeners:
     address: 127.0.0.1
     port: 8899
     api_keys: [workshop-key]
-    models: [vllm-sr/auto]
+    apis:
+      openai: {models: [vllm-sr/auto]}
 providers:
   defaults:
     model: a
@@ -92,7 +95,7 @@ recipes:
 		t.Fatalf("standalone mode refused the listener's models: %v", err)
 	}
 	if err = config.ValidateGatewayCapabilities(cfg, config.GatewayExtProc); err == nil ||
-		!strings.Contains(err.Error(), "listener 'public': models is unsupported with --gateway extproc") {
+		!strings.Contains(err.Error(), "listener 'public': apis.chat_completions.models is unsupported with --gateway extproc") {
 		t.Fatalf("extproc mode error = %v, want listener models unsupported", err)
 	}
 	server, err := extproc.NewServer(path, 0, false, "", routerruntime.NewRegistry(cfg), extproc.WithConfigParts(upstreamPart(config.GatewayStandalone)))
@@ -198,5 +201,18 @@ recipes:
 	}
 	if len(list.Data) != 1 || list.Data[0].ID != "vllm-sr/auto" {
 		t.Fatalf("/v1/models lists %+v, want only vllm-sr/auto", list.Data)
+	}
+
+	status, body = send(http.MethodPost, "/v1/messages", "workshop-key",
+		`{"model":"vllm-sr/auto","max_tokens":8,"messages":[{"role":"user","content":"compare"}]}`, nil)
+	var refused struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal([]byte(body), &refused); err != nil || status != http.StatusNotFound ||
+		!strings.Contains(refused.Detail, `listener "public"`) || !strings.Contains(refused.Detail, "chat_completions") {
+		t.Fatalf("/v1/messages on a listener without it: status %d body %s, want 404 with a detail naming the listener", status, body)
+	}
+	if got := calls.Load(); got != 0 {
+		t.Fatalf("a refused API reached a backend %d times", got)
 	}
 }

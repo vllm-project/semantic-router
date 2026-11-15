@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -112,6 +113,58 @@ func TestSpecifiedKnownModelRoutes(t *testing.T) {
 	model, ok := selectedModelHeader(resp)
 	require.True(t, ok, "known model should set the route key")
 	assert.Equal(t, "known-model", model)
+}
+
+// A LoRA name two models declare names no single backend, so a direct request
+// for it is refused instead of reaching whichever model sorts first, also when
+// a backendless model carries that name, with or without an external gateway.
+// A name one model declares still routes. A decision selects a shared name
+// through its model and lora_name (TestSameNamedLoRAUsesTheSelectedBaseProvider).
+func TestSpecifiedLoRANameDeclaredTwiceReturns400(t *testing.T) {
+	const models = `
+providers:
+  defaults:
+    model: zeta
+  models:
+    - name: alpha
+      loras: [{name: shared}, {name: only-alpha}]
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.1:8000", api_key: test-secret}]
+    - name: zeta
+      loras: [{name: shared}]
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.2:8000", api_key: test-secret}]
+recipes:
+  - name: default
+`
+	const metadataOnly = "    - name: shared\n      context_window_size: 32768\n"
+	withMetadata := strings.Replace(models, "recipes:", metadataOnly+"recipes:", 1)
+	for _, test := range []struct{ name, document string }{
+		{"LoRA name only", "version: v0.5\n" + models},
+		{"backendless model of that name", "version: v0.5\n" + withMetadata},
+		{
+			"backendless model behind an external gateway",
+			"version: v0.5\nlisteners: []\nglobal: {router: {model_selection: {enabled: false}}}\n" + withMetadata,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg, err := config.ParseYAMLBytes([]byte(test.document))
+			require.NoError(t, err)
+			router := &OpenAIRouter{Config: cfg, CredentialResolver: buildDefaultCredentialResolver(cfg, false)}
+			route := func(model string) *ext_proc.ProcessingResponse {
+				ctx := newModelResolutionTestContext(t)
+				req := modelResolutionRequest(model)
+				ctx.SemanticRequest = req
+				resp, routeErr := router.handleModelRouting(req, model, "", entropy.ReasoningDecision{}, "", ctx)
+				require.NoError(t, routeErr)
+				return resp
+			}
+
+			refused := route("shared").GetImmediateResponse()
+			require.NotNil(t, refused, "a LoRA name two models declare must not be forwarded")
+			assert.Equal(t, 400, int(refused.GetStatus().GetCode()))
+			assert.Contains(t, string(refused.GetBody()), "the requested model is not available")
+			assert.Nil(t, route("only-alpha").GetImmediateResponse(), "a LoRA name one model declares must still route")
+		})
+	}
 }
 
 // B2: an Entrypoint that yields no selection fails closed. A global default

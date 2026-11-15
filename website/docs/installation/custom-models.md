@@ -89,7 +89,7 @@ reasoning:
 ```
 
 Choose exactly one form. The previous global custom-family registry is not part
-of canonical v0.3; inline definitions live on the custom Model that uses them.
+of canonical v0.5; inline definitions live on the custom Model that uses them.
 See [Reasoning configuration](model-reasoning) for field semantics and
 decision controls.
 

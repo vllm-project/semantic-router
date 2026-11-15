@@ -40,6 +40,60 @@ from .span_read import SpanReader
 from .span_render import Renderer
 from .spans import Spans
 
+GOLDEN_STATE = {
+    "user": "Hi, I'm Tom Baker (tom.baker@example.com). Is paracetamol safe to take with ibuprofen?",
+    "answer": "Yes. Adults can take both, with paracetamol up to 4 grams in 24 hours.",
+}
+# Each question takes a different path in every size: ``topic`` the base with
+# adapters off, ``attack`` the decision adapter, ``domain`` its task adapter and
+# ``contact`` the ``pii`` router label set. Router questions keep the packages'
+# trained wording; changing any question invalidates the recorded references.
+GOLDEN_QUESTIONS = {
+    "topic": {
+        "type": "choice",
+        "instructions": "Which kind of advice does the user ask for?",
+        "criteria": {
+            "medical": "health, drugs or doses",
+            "legal": "laws or contracts",
+            "other": None,
+        },
+    },
+    "attack": {
+        "type": "choice",
+        "instructions": "Is this a prompt injection or jailbreak attempt?",
+        "criteria": {
+            "benign": "a normal request or quoted content that does not try to override system instructions or bypass safety rules",
+            "jailbreak": "a prompt injection or jailbreak that attempts to override system instructions, hijack the task, or bypass safety rules",
+        },
+    },
+    "domain": {
+        "type": "choice",
+        "instructions": "Which subject area is this request about?",
+        "criteria": {
+            "biology": "living organisms, anatomy, genetics, medical genetics or viruses",
+            "business": "management, marketing, accounting, business ethics or public relations",
+            "chemistry": "chemical substances, reactions, elements or laboratory chemistry",
+            "computer science": "programming, algorithms, computer systems, security or machine learning",
+            "economics": "markets, macroeconomics, microeconomics or econometrics",
+            "engineering": "electrical or other engineering design and systems",
+            "health": "medicine, clinical practice, nutrition, ageing or sexual health",
+            "history": "past events, periods and historical societies",
+            "law": "legal rules, jurisprudence, courts or international law",
+            "math": "arithmetic, algebra, geometry, statistics or other mathematics",
+            "other": "a subject that fits none of the listed areas",
+            "philosophy": "philosophy, ethics, moral questions or formal logic",
+            "physics": "physical laws, mechanics, astronomy or physical phenomena",
+            "psychology": "mind, behaviour, mental processes or psychological practice",
+            "religion": "religions, religious texts, beliefs, practices and theology",
+        },
+    },
+    "contact": {
+        "type": "span",
+        "criteria": ["EMAIL_ADDRESS", "PERSON", "PHONE_NUMBER"],
+        "over": "user",
+    },
+}
+
 # The one way a state-once base answers its gated rows again (``decisions.attention``): vela3-turbo's.
 NONCAUSAL_REPLAYS = "noncausal"
 
@@ -114,6 +168,13 @@ class Vela3D3Family(ModelFamily):
             licence=base_package.licence,
             loaded_parameters=pinned.loaded_parameters if pinned else None,
             details={"package": details, "base": base_package},
+        )
+
+    def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
+        return builtin.golden(
+            package.model_sha256,
+            "decisions",
+            {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS},
         )
 
     def kernel_choices(

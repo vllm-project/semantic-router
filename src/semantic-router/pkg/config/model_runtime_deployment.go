@@ -93,10 +93,7 @@ func DeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment {
 		mark(name)
 	}
 	for _, listener := range cfg.Listeners {
-		if listener.SystemOne == nil {
-			continue
-		}
-		for _, publicName := range listener.SystemOne.Models {
+		for _, publicName := range cfg.SystemOneModels(listener) {
 			if cfg.IsSystemOneBackend(publicName) {
 				if deployment := cfg.ModelConfig[publicName].Deployment; deployment != "" {
 					mark(deployment)
@@ -205,6 +202,9 @@ func (d ModelDeployment) validateModelRuntime() error {
 		return fmt.Errorf("revision must be a 40-hex commit")
 	}
 	if err := d.validateReplicas(); err != nil {
+		return err
+	}
+	if err := d.validateOutlierDetection(); err != nil {
 		return err
 	}
 	if err := d.validateAttachedConnection(); err != nil {

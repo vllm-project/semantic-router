@@ -4,7 +4,7 @@
 
 `turn_relation` asks the decision model how the current user turn relates to the conversation before it.
 It asks the `turn_relation`
-[preset](../../../system-one/reference#preset-catalog): the turn
+[preset](../../../system-one/reference/presets#preset-catalog): the turn
 `continue`s the current topic, `reask`s for what an earlier turn asked,
 `shift`s to an unrelated topic, or `return`s to an earlier one. It replaces
 the `reasks` and `topic_continuity` signals.

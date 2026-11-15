@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestGlobalConfigYAMLHandler_ReturnsEffectiveGlobalConfig(t *testing.T) {
@@ -242,5 +244,56 @@ global:
 	}
 	if strings.Contains(string(updatedData), "\nglobal:") {
 		t.Fatalf("expected empty raw save to remove global override, got:\n%s", string(updatedData))
+	}
+}
+
+// The typed global omits a false or empty value it would write as a default,
+// so the editor shows each value config.yaml writes as written.
+func TestGlobalConfigYAMLRoundTripKeepsExplicitFalseAndEmptyValues(t *testing.T) {
+	isolateConfigMutationRuntime(t)
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+	base, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial := string(base) + `global:
+  router:
+    model_selection:
+      enabled: false
+  services:
+    observability:
+      tracing:
+        enabled: true
+        exporter:
+          endpoint: ''
+`
+	if err = os.WriteFile(configPath, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	read := httptest.NewRecorder()
+	GlobalConfigYAMLHandler(configPath)(read, httptest.NewRequest(http.MethodGet, "/api/router/config/global/raw", nil))
+	if read.Code != http.StatusOK {
+		t.Fatalf("GET raw global = %d: %s", read.Code, read.Body.String())
+	}
+	saved := httptest.NewRecorder()
+	UpdateGlobalConfigYAMLHandler(configPath, false, tempDir)(saved,
+		httptest.NewRequest(http.MethodPost, "/api/router/config/global/raw/update", bytes.NewReader(read.Body.Bytes())))
+	if saved.Code != http.StatusOK {
+		t.Fatalf("save raw global = %d: %s", saved.Code, saved.Body.String())
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := routerconfig.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatalf("saved config refused: %v", err)
+	}
+	if cfg.ModelSelection.Enabled {
+		t.Errorf("model_selection.enabled = true after an unchanged save, want false")
+	}
+	if endpoint := cfg.Observability.Tracing.Exporter.Endpoint; endpoint != "" {
+		t.Errorf("tracing exporter endpoint = %q after an unchanged save, want empty", endpoint)
 	}
 }

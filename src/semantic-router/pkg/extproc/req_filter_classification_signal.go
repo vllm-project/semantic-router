@@ -75,7 +75,7 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			ContextReserveTokens:   history.contextReserveTokens,
 			InputModality:          history.inputModality,
 			Turns:                  append([]classification.ConversationTurn(nil), history.turns...),
-			Images:                 append([]string(nil), history.userImages...),
+			Images:                 append([]string(nil), history.images...),
 			Videos:                 append([]string(nil), history.userVideos...),
 		},
 	}
@@ -157,6 +157,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRSignalValues = cloneReplayFloat64Map(signals.SignalValues)
 	ctx.VSRSignalErrors = cloneReplayStringMap(signals.SignalErrors)
 	ctx.VSRSignalErrorMatches = cloneReplayBoolMap(signals.SignalErrorMatches)
+	ctx.VSRScanCoverage = cloneReplayStringMap(signals.ScanCoverage)
 	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
 	ctx.RoutedSignals = signals.Matches()
 

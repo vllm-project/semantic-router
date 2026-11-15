@@ -247,10 +247,7 @@ func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
 	}
 
 	for _, listener := range c.Listeners {
-		if listener.SystemOne == nil {
-			continue
-		}
-		for _, model := range listener.SystemOne.Models {
+		for _, model := range c.SystemOneModels(listener) {
 			if entrypoint, ok := c.ResolveEntrypoint(SystemOneAPI, model); ok {
 				reachable[entrypoint.Recipe] = struct{}{}
 			}

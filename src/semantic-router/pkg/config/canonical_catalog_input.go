@@ -38,6 +38,7 @@ func canonicalCatalogInput(canonical *CanonicalConfig) (modelcatalog.CompileInpu
 type catalogInputBuilder struct {
 	input             modelcatalog.CompileInput
 	builtIn           *modelcatalog.Registry
+	defaultTLS        *ProviderDefaultsTLS
 	benchmarks        map[string]modelcatalog.BenchmarkDefinition
 	cards             map[string]RoutingModel
 	boundCards        map[string]struct{}
@@ -63,7 +64,7 @@ func newCatalogInputBuilder(canonical *CanonicalConfig) (*catalogInputBuilder, e
 		return nil, err
 	}
 	return &catalogInputBuilder{
-		input: input, builtIn: builtIn, benchmarks: benchmarks, cards: cards,
+		input: input, builtIn: builtIn, defaultTLS: canonical.Providers.Defaults.TLS, benchmarks: benchmarks, cards: cards,
 		boundCards:        make(map[string]struct{}, len(canonical.Providers.Models)),
 		configuredCards:   make(map[string]struct{}, len(canonical.Providers.Models)),
 		materializedCards: make(map[string]struct{}, len(canonical.Providers.Models)),
@@ -76,14 +77,18 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	}
 	if model.APIFormat != "" && catalogProtocolForAPIFormat(model.APIFormat) == "" {
 		return fmt.Errorf(
-			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, images, or systemone",
+			"providers.models[%d].api_format %q is unsupported; use chat_completions, responses, messages, images or systemone (openai and anthropic are aliases of chat_completions and messages)",
 			modelIndex, model.APIFormat,
 		)
+	}
+	if err := validateUpstreamSchema(model, modelIndex); err != nil {
+		return err
 	}
 	cardID := effectiveCanonicalCardID(model)
 	alias := catalogModelAlias(model, cardID)
 	for backendIndex, backend := range model.BackendRefs {
 		instance, binding := catalogProviderBinding(builder.builtIn, model, backend, backendIndex)
+		instance.TLS = effectiveBackendTLS(backend.TLS, builder.defaultTLS, backendEndpointURL(builder.builtIn, backend))
 		builder.input.Providers = append(builder.input.Providers, instance)
 		alias.Providers = append(alias.Providers, binding)
 	}
@@ -236,14 +241,14 @@ func canonicalBackendURL(backend CanonicalBackendRef) string {
 }
 
 func catalogProtocolForAPIFormat(apiFormat string) string {
-	switch apiFormat {
+	switch CanonicalAPIFormat(apiFormat) {
 	case APIFormatSystemOne:
 		return "vllm-sr/systemone@1"
 	case APIFormatResponses:
 		return "openai/responses@1"
-	case APIFormatAnthropic:
+	case APIFormatMessages:
 		return "anthropic/messages@1"
-	case APIFormatOpenAI:
+	case APIFormatChatCompletions:
 		return "openai/chat-completions@1"
 	case APIFormatImages:
 		return "openai/images@1"

@@ -136,7 +136,7 @@ func TestForwardedNativeActionCannotEnterAnotherRoutingChain(t *testing.T) {
 		"remote": {APIFormat: config.APIFormatSystemOne},
 		"local":  {APIFormat: config.APIFormatSystemOne, Deployment: "primary"},
 	}
-	listener := &config.Listener{APIKeys: []string{"key"}, SystemOne: &config.ListenerSystemOne{Models: []string{"auto", "remote", "local"}}}
+	listener := &config.Listener{APIKeys: []string{"key"}, APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"auto", "remote", "local"}}}}
 	for _, tc := range []struct {
 		model, key string
 		status     int
@@ -166,7 +166,7 @@ func TestForwardedNativeActionCannotEnterAnotherRoutingChain(t *testing.T) {
 
 func TestPublicNativeEntrypointNeedsItsOwnListenerGrant(t *testing.T) {
 	cfg := &config.RouterConfig{Entrypoints: []config.EntrypointMapping{{API: config.SystemOneAPI, ModelNames: []string{"vllm-sr/auto"}, Recipe: "native"}}}
-	listener := &config.Listener{APIKeys: []string{"key"}, Models: []string{"vllm-sr/auto"}, SystemOne: &config.ListenerSystemOne{Models: []string{"another"}}}
+	listener := &config.Listener{APIKeys: []string{"key"}, APIs: config.ListenerAPIs{"chat_completions": {Models: []string{"vllm-sr/auto"}}, "systemone": {Schema: "vllm-sr/4.0", Models: []string{"another"}}}}
 	calls := 0
 	invoke := func(_ context.Context, target string, _ json.RawMessage) (int, []byte, error) {
 		calls++
@@ -185,7 +185,7 @@ func TestPublicNativeEntrypointNeedsItsOwnListenerGrant(t *testing.T) {
 	if send() != http.StatusForbidden || calls != 0 {
 		t.Fatal("Chat grant authorized native auto")
 	}
-	listener.SystemOne.Models = []string{"vllm-sr/auto"}
+	listener.APIs["systemone"] = config.ListenerAPI{Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/auto"}}
 	if send() != http.StatusOK || calls != 1 {
 		t.Fatal("authorized native entrypoint did not dispatch")
 	}
@@ -200,7 +200,7 @@ func TestPublicNativeEntrypointNeedsItsOwnListenerGrant(t *testing.T) {
 
 func TestPublicAutoErrorsDistinguishUnresolvedFromDeadline(t *testing.T) {
 	cfg := &config.RouterConfig{Entrypoints: []config.EntrypointMapping{{API: config.SystemOneAPI, ModelNames: []string{"vllm-sr/auto"}, Recipe: "native"}}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/auto"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/auto"}}}}
 	for _, tc := range []struct {
 		err    error
 		status int
@@ -230,7 +230,7 @@ func TestEngineModeDoesNotPublishPreservedRoutingRecipes(t *testing.T) {
 		Entrypoints:   []config.EntrypointMapping{{API: config.SystemOneAPI, ModelNames: []string{"auto"}, Recipe: "native"}},
 	}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"auto", "vllm-sr/test"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"auto", "vllm-sr/test"}}}}
 	invoked := false
 	handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 		invoked = true

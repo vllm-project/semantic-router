@@ -27,10 +27,10 @@ func (r *OpenAIRouter) applyPromptCachePolicy(
 	ctx *RequestContext,
 	targetFormat llmprotocol.WireFormat,
 ) error {
-	if request == nil || ctx == nil || ctx.VSRSelectedDecision == nil {
+	if request == nil || ctx == nil {
 		return nil
 	}
-	plugin := ctx.VSRSelectedDecision.GetPromptCacheConfig()
+	plugin := config.PromptCachePluginOf(requestPlugins(r.Config, ctx))
 	if plugin == nil || !plugin.Enabled {
 		return nil
 	}

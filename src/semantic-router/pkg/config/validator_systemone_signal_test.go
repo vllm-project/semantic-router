@@ -132,6 +132,15 @@ func TestSystemOneRuleFieldErrors(t *testing.T) {
 		"context at the request stage": {func(cfg *RouterConfig) {
 			cfg.SystemOneRules[0].Stage, cfg.SystemOneRules[0].Input.Context = SystemOneStageRequest, true
 		}, "a request-stage rule does not have"},
+		"turn left out with nothing else": {func(cfg *RouterConfig) {
+			cfg.SystemOneRules[0].Input.Request = new(bool)
+		}, "the rule reads input.history or input.tool_results"},
+		"turn left out at the response stage": {func(cfg *RouterConfig) {
+			cfg.SystemOneRules[0].Stage, cfg.SystemOneRules[0].Input = SystemOneStageResponse, SystemOneInput{ToolResults: true, Request: new(bool)}
+		}, "input.request: false applies to a request-stage rule"},
+		"turn left out with an image": {func(cfg *RouterConfig) {
+			cfg.SystemOneRules[0].Input = SystemOneInput{ToolResults: true, Image: true, Request: new(bool)}
+		}, "drop input.previous_turns and the media inputs"},
 		"unknown stage":    {func(cfg *RouterConfig) { cfg.SystemOneRules[0].Stage = "routing" }, "stage must be request or response"},
 		"unknown coverage": {func(cfg *RouterConfig) { cfg.SystemOneRules[0].Coverage = "whole" }, "coverage must be truncate or full"},
 		"on_unscanned without full coverage": {func(cfg *RouterConfig) {
@@ -139,7 +148,7 @@ func TestSystemOneRuleFieldErrors(t *testing.T) {
 		}, "on_unscanned applies only to a rule with coverage: full"},
 		"unknown on_unscanned": {func(cfg *RouterConfig) {
 			cfg.SystemOneRules[0].Coverage, cfg.SystemOneRules[0].OnUnscanned = SystemOneCoverageFull, "block"
-		}, "on_unscanned must be match, no_match or unknown"},
+		}, "on_unscanned must be best_effort, match, no_match or unknown"},
 	}
 	for name, test := range cases {
 		cfg := labelledSystemOneConfig()
@@ -153,6 +162,7 @@ func TestSystemOneRuleFieldErrors(t *testing.T) {
 	accepted.SystemOneRules[0].Stage = SystemOneStageResponse
 	accepted.SystemOneRules[0].Input = SystemOneInput{Answer: true, Context: true, History: true, PreviousTurns: MaxSystemOnePreviousTurns, ToolResults: true}
 	accepted.SystemOneRules[0].Coverage, accepted.SystemOneRules[0].OnUnscanned = SystemOneCoverageFull, SystemOneUnscannedNoMatch
+	accepted.SystemOneRules[2].Input = SystemOneInput{History: true, ToolResults: true, Request: new(bool)}
 	accepted.SystemOneRules[1].Labels = []string{"math"}
 	accepted.SystemOneRules[3].IgnoreLabels = []string{"shipping"}
 	if err := validateSystemOneContracts(accepted); err != nil {
@@ -326,8 +336,8 @@ func TestSystemOneAnswererLoadChecks(t *testing.T) {
 		"d3":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/d3"},
 		"attached": {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100"},
 		"custom":   {Provider: ModelRuntimeProvider, Artifact: "/models/custom"},
-		"remote":   {Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Capabilities: &DeploymentCapabilities{QuestionTypes: []string{"choice", "noul", "score"}, Modalities: []string{"text", "image"}}},
-		"silent":   {Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra"},
+		"remote":   {Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Capabilities: &DeploymentCapabilities{QuestionTypes: []string{"choice", "noul", "score"}, Modalities: []string{"text", "image"}}},
+		"silent":   {Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra"},
 	}
 	cases := []struct {
 		rule       SystemOneRule
@@ -389,7 +399,7 @@ func TestSystemOneAnswererLoadChecks(t *testing.T) {
 }
 
 func TestDeclaredModalitiesOfASystemOneDeployment(t *testing.T) {
-	base := ModelDeployment{Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Auth: &DeploymentAuth{APIKeyEnv: "KEY"}}
+	base := ModelDeployment{Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Auth: &DeploymentAuth{APIKeyEnv: "KEY"}}
 	for _, modalities := range [][]string{{"text", "image", "video"}, {"text"}} {
 		deployment := base
 		deployment.Capabilities = &DeploymentCapabilities{Modalities: modalities}
@@ -407,6 +417,25 @@ func TestDeclaredModalitiesOfASystemOneDeployment(t *testing.T) {
 		if err := deployment.validateSystemOne(); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("%v: got %v, want %q", modalities, err, want)
 		}
+	}
+}
+
+// A deployment declares box and track questions for a vllm-sr/auto pool to
+// route by; track reads a video, which a systemone/0.2 API does not carry.
+func TestDeclaredBoxAndTrackQuestionsOfASystemOneDeployment(t *testing.T) {
+	deployment := ModelDeployment{Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Auth: &DeploymentAuth{APIKeyEnv: "KEY"}}
+	deployment.Capabilities = &DeploymentCapabilities{QuestionTypes: []string{"choice", "box", "track"}, Modalities: []string{"text", "image", "video"}}
+	if err := deployment.validateSystemOne(); err != nil {
+		t.Fatal(err)
+	}
+	deployment.Schema = "systemone/0.2"
+	deployment.Capabilities = &DeploymentCapabilities{QuestionTypes: []string{"choice", "box"}, Modalities: []string{"text", "image"}}
+	if err := deployment.validateSystemOne(); err != nil {
+		t.Fatalf("box on the standard: %v", err)
+	}
+	deployment.Capabilities.QuestionTypes = []string{"track"}
+	if err := deployment.validateSystemOne(); err == nil || !strings.Contains(err.Error(), "a track question reads a video") {
+		t.Fatalf("track on the standard: %v", err)
 	}
 }
 

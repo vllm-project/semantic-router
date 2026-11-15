@@ -259,6 +259,7 @@ func keywordEmbeddingDeployment(root *yaml.Node, keyword string) (string, *Model
 // model runtime: one the document declares for it on the same device, else
 // a new one named name, or after the model.
 func impliedEmbeddingDeployment(root *yaml.Node, model string, useCPU bool, name string) (string, *ModelDeployment, error) {
+	model = replacedEmbeddingModel(model)
 	deployment, err := modelRuntimeDeploymentOf(model, useCPU)
 	if err != nil {
 		return "", nil, err
@@ -391,6 +392,11 @@ func migrateEmbeddingSemantic(m *Migration, at FormMatch) error {
 		return fmt.Errorf("%s: %w", at.Path, err)
 	}
 	m.Delete(embeddings, "semantic")
+	if model := scalarAt(semantic, "mmbert_model_path"); model != "" {
+		if replacement, ok := legacyModelReplacement(model); ok {
+			m.Note(at.Path, fmt.Sprintf("mmbert_model_path %s is replaced by %s: %s", model, replacement.target, replacement.note))
+		}
+	}
 	settings := mappingValue(semantic, "embedding_config")
 	if strings.EqualFold(scalarAt(settings, "model_type"), embeddingKeywordQwen3) {
 		m.Note(at.Path, "the embeddings API served qwen3 by default; it serves embeddings.default now, so name a Qwen3 deployment there to keep it, which every store without an embedding block then embeds with")
@@ -415,6 +421,16 @@ func migrateEmbeddingSemantic(m *Migration, at FormMatch) error {
 	}
 	deleteEmpty(m.Root(), "global", "model_catalog", "embeddings")
 	return nil
+}
+
+// replacedEmbeddingModel is the model the runtime serves for an embedding
+// model reference: the Vela 1.0 release that replaces an earlier registry
+// model, or the reference itself.
+func replacedEmbeddingModel(model string) string {
+	if replacement, ok := legacyModelReplacement(model); ok {
+		return replacement.target
+	}
+	return model
 }
 
 // semanticEmbeddingDeployment is the deployment embeddings.semantic chose for
@@ -453,6 +469,7 @@ func semanticEmbeddingDeployment(root *yaml.Node, semantic *yaml.Node) (string, 
 	if model == "" {
 		model = VelaEmbeddingModel
 	}
+	model = replacedEmbeddingModel(model)
 	useCPU := semanticUsesCPU(semantic)
 	if model == VelaEmbeddingModel && useCPU {
 		return "", nil, nil

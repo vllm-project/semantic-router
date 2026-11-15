@@ -38,31 +38,31 @@ function expectGeneratedChildrenRendered(generated: FieldSchema, rendered: Route
 }
 
 describe('router defaults structured schemas', () => {
-  it('edits global Replay capture defaults without losing explicit false or zero values', () => {
-    const replay = {
-      enabled: true,
-      store_backend: 'memory',
-      capture_request_body: false,
-      capture_response_body: true,
-      capture_personal_data: false,
-      capture_tool_results: false,
-      max_body_bytes: 0,
-      max_tool_trace_steps: 0,
-    }
+  it('offers no Replay, memory or response cache switch, which v0.5 reads from global.plugins', () => {
+    const replay = { store_backend: 'memory', ttl_seconds: 3600, async_writes: false }
     const cards = buildRouterSectionCards({
       config: null,
       routerConfig: { router_replay: replay },
       routerDefaults: null,
     })
+    const fields = (key: string) =>
+      cards.find((item) => item.key === key)!.editFields.map((field) => field.name)
+    for (const [key, removed] of [
+      ['router_replay', 'enabled'],
+      ['router_replay', 'capture_request_body'],
+      ['router_replay', 'capture_response_body'],
+      ['router_replay', 'prompt_capture'],
+      ['router_replay', 'capture_personal_data'],
+      ['router_replay', 'capture_tool_results'],
+      ['router_replay', 'max_prompt_bytes'],
+      ['router_replay', 'max_tool_trace_total_bytes'],
+      ['memory', 'enabled'],
+      ['response_cache', 'enabled'],
+      ['response_cache', 'similarity_threshold'],
+    ]) {
+      expect(fields(key), `${key}.${removed}`).not.toContain(removed)
+    }
     const card = cards.find((item) => item.key === 'router_replay')!
-    expect(card.editFields.map((field) => field.name)).toEqual(
-      expect.arrayContaining([
-        'capture_request_body',
-        'capture_response_body',
-        'capture_personal_data',
-        'capture_tool_results',
-      ]),
-    )
     expect(card.save(card.editData)).toMatchObject({
       services: { router_replay: replay },
     })

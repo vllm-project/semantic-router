@@ -27,7 +27,9 @@ var responseGuardActions = []string{ResponseGuardBlock, ResponseGuardAnnotate, R
 // rule), each evaluated the first time a rule reads it. Rules run in order,
 // and the first that blocks ends the guard.
 type ResponseGuardPluginConfig struct {
-	Rules []ResponseGuardRule `json:"rules" yaml:"rules"`
+	// Enabled false turns off the guard a decision inherits.
+	Enabled *bool               `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Rules   []ResponseGuardRule `json:"rules" yaml:"rules"`
 	// OnUnknown is what a rule does when its condition cannot be decided: a
 	// signal it reads failed, timed out or, for a hallucination rule, had no
 	// grounding context to check the answer against. Default annotate.
@@ -48,8 +50,14 @@ type ResponseGuardRule struct {
 // GetResponseGuardConfig returns the response_guard plugin configuration with
 // its rule trees normalized, or nil when the decision has none.
 func (d *Decision) GetResponseGuardConfig() *ResponseGuardPluginConfig {
-	guard := decodeDecisionPlugin(d, DecisionPluginResponseGuard, &ResponseGuardPluginConfig{})
-	if guard == nil {
+	return ResponseGuardPluginOf(d.Plugins)
+}
+
+// ResponseGuardPluginOf is the response_guard plugin among a request's
+// plugins with its rule trees normalized, nil without one or when disabled.
+func ResponseGuardPluginOf(plugins []DecisionPlugin) *ResponseGuardPluginConfig {
+	guard := decodePlugin(plugins, DecisionPluginResponseGuard, &ResponseGuardPluginConfig{})
+	if !guard.IsEnabled() {
 		return nil
 	}
 	for i := range guard.Rules {
@@ -67,6 +75,11 @@ func (c *ResponseGuardPluginConfig) Reads(signalType string) bool {
 		}
 	}
 	return false
+}
+
+// IsEnabled reports whether the guard runs: unless enabled is false.
+func (c *ResponseGuardPluginConfig) IsEnabled() bool {
+	return c != nil && (c.Enabled == nil || *c.Enabled)
 }
 
 // EffectiveOnUnknown is what a rule whose condition is unknown does.
@@ -99,7 +112,7 @@ func (c *ResponseGuardPluginConfig) Enforces() bool {
 // actions and the condition trees they read. Which signals a tree may name
 // depends on its recipe (validateResponseGuardReferences).
 func validateResponseGuardPlugin(at PluginAt, p *ResponseGuardPluginConfig) error {
-	if len(p.Rules) == 0 {
+	if len(p.Rules) == 0 && p.IsEnabled() {
 		return at.Errorf("rules: at least one rule is required")
 	}
 	if p.OnUnknown != "" && !slices.Contains(responseGuardActions, p.OnUnknown) {
@@ -147,22 +160,29 @@ func validateResponseGuardTree(node *RuleNode, path string) error {
 }
 
 // validateResponseGuardReferences resolves every condition of a routing
-// scope's guards against the signals the scope declares; a guard may name a
-// response-stage rule, which no decision rule can.
+// scope's guards, its decisions' and its default plugins', against the
+// signals the scope declares; a guard may name a response-stage rule, which no
+// decision rule can.
 func validateResponseGuardReferences(cfg *RouterConfig) error {
 	declared := projectionDeclaredSignals(cfg)
 	declared[SignalTypeHallucination] = collectHallucinationRuleNames(cfg.HallucinationRules)
 	declared[SignalTypeProjection] = collectProjectionOutputNames(cfg.Projections.Mappings)
 	for i := range cfg.Decisions {
 		decision := &cfg.Decisions[i]
-		guard := decision.GetResponseGuardConfig()
-		if guard == nil {
-			continue
+		if err := validateResponseGuardRules(cfg, decision.Name, decision.GetResponseGuardConfig(), declared); err != nil {
+			return err
 		}
-		for j := range guard.Rules {
-			if err := validateResponseGuardLeaves(cfg, decision.Name, j, &guard.Rules[j].When, declared); err != nil {
-				return err
-			}
+	}
+	return validateResponseGuardRules(cfg, cfg.ScopePath("plugins"), ResponseGuardPluginOf(cfg.DefaultPlugins), declared)
+}
+
+func validateResponseGuardRules(cfg *RouterConfig, owner string, guard *ResponseGuardPluginConfig, declared map[string]map[string]struct{}) error {
+	if guard == nil {
+		return nil
+	}
+	for j := range guard.Rules {
+		if err := validateResponseGuardLeaves(cfg, owner, j, &guard.Rules[j].When, declared); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -202,11 +222,11 @@ func collectProjectionOutputNames(mappings []ProjectionMapping) map[string]struc
 	return names
 }
 
-// ResponseGuardRequestConditions are the request-stage conditions of a
-// decision's guard: routing evaluates them with the decisions' own, so the
-// guard reads them once the model has answered.
-func (c *RouterConfig) ResponseGuardRequestConditions(decision *Decision) []RuleNode {
-	guard := decision.GetResponseGuardConfig()
+// ResponseGuardRequestConditions are the request-stage conditions of the
+// guard among a request's plugins: routing evaluates them with the decisions'
+// own, so the guard reads them once the model has answered.
+func (c *RouterConfig) ResponseGuardRequestConditions(plugins []DecisionPlugin) []RuleNode {
+	guard := ResponseGuardPluginOf(plugins)
 	if guard == nil {
 		return nil
 	}

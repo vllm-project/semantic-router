@@ -277,6 +277,78 @@ def test_recipe_learning_accepts_api_root_without_duplicating_it(
     assert calls == ["http://router.example:8080/api/v1/observability/replays"]
 
 
+def test_recipe_learning_follows_next_offset_past_the_router_page_cap(
+    monkeypatch,
+) -> None:
+    # The Router serves at most 100 records a page, newest first.
+    stored = [{"id": f"r{index:03d}"} for index in range(300)]
+    requested: list[dict[str, str]] = []
+
+    class _Response:
+        status_code = 200
+        ok = True
+        headers: ClassVar[dict[str, str]] = {}
+
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self._payload = payload
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    def _fake_request(_method: str, _url: str, **kwargs: Any) -> _Response:
+        params = kwargs["params"]
+        requested.append(params)
+        offset = int(params.get("offset", "0"))
+        page = stored[offset : offset + min(int(params["limit"]), 100)]
+        payload: dict[str, Any] = {"object": "router_replay.list", "data": page}
+        if offset + len(page) < len(stored):
+            payload["next_offset"] = offset + len(page)
+        if len(requested) == 1:
+            # A record stored between two pages shifts the next one by one.
+            stored.insert(0, {"id": "newer"})
+        return _Response(payload)
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", _fake_request)
+
+    payload = fetch_replay_payload("http://router.example:8080", 250, 1)
+
+    assert [record["id"] for record in payload["data"]] == [
+        f"r{index:03d}" for index in range(250)
+    ]
+    assert requested == [
+        {"limit": "250"},
+        {"limit": "150", "offset": "100"},
+        {"limit": "51", "offset": "200"},
+    ]
+
+
+def test_recipe_learning_stops_when_next_offset_does_not_advance(
+    monkeypatch,
+) -> None:
+    requested: list[dict[str, str]] = []
+
+    class _Response:
+        status_code = 200
+        ok = True
+        headers: ClassVar[dict[str, str]] = {}
+
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {"data": [{"id": "r1"}], "next_offset": 0}
+
+    def _fake_request(_method: str, _url: str, **kwargs: Any) -> _Response:
+        requested.append(kwargs["params"])
+        assert len(requested) <= 3, "the fetch keeps requesting the same page"
+        return _Response()
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", _fake_request)
+
+    payload = fetch_replay_payload("http://router.example:8080", 500, 1)
+
+    assert payload["data"] == [{"id": "r1"}]
+    assert requested == [{"limit": "500"}]
+
+
 def test_recipe_learning_rejects_endpoint_credentials() -> None:
     with pytest.raises(ValueError, match="token-env"):
         fetch_replay_payload("https://user:secret@router.example", 25, 1)

@@ -134,3 +134,19 @@ func TestRAGVectorStoreRetrievesWithAPreparedRemoteEmbedder(t *testing.T) {
 		t.Fatalf("prepared remote embedder retrieved %q", retrieved)
 	}
 }
+
+// file_ids narrows a vectorstore source to the chunks of every file it
+// lists, not only the first.
+func TestRAGVectorStoreSearchesEveryListedFile(t *testing.T) {
+	router, storeID := ragVectorStoreFixture(t, &plainRAGEmbedder{})
+	source := vectorStoreSource(storeID, 5, -1)
+	source.BackendConfig = config.MustStructuredPayload(&config.VectorStoreRAGConfig{VectorStoreID: storeID, FileIDs: []string{"file_refund", "file_outage"}})
+
+	documents, err := router.recallFromVectorStore(context.Background(), source, "how long does a refund take", *source.Match.Recall)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retrieved := recalledTexts(documents); retrieved != "refunds take 14 business days\n\n---\n\nstatus updates every 30 minutes" {
+		t.Fatalf("retrieved %q, want the chunks of both listed files", retrieved)
+	}
+}

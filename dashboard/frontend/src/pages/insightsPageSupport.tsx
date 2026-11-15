@@ -3,7 +3,7 @@ import CollapsibleSection from '../components/CollapsibleSection'
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { X_VSR_SELECTED_DECISION } from '../generated/vsrHeaders'
-import { formatDateTime } from '../utils/dateTime'
+import { formatDateTime, formatSeconds } from '../utils/dateTime'
 import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 import { Link } from 'react-router-dom'
 
@@ -12,11 +12,13 @@ import type {
   InsightsCurrencyCostSummary,
   InsightsRecord,
 } from './insightsPageTypes'
+import InsightsDecisionBadge from './InsightsDecisionBadge'
+import InsightsSignalsCell from './InsightsSignalsCell'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
-import { buildSignalFields, collectSignals } from './insightsRecordSignals'
+import { buildSignalFields } from './insightsRecordSignals'
 import { buildInsightsPluginFields } from './insightsRecordPlugins'
 import { buildProviderCacheSection } from './insightsProviderCache'
 import styles from './InsightsPage.module.css'
@@ -138,16 +140,19 @@ function formatCompactIdentifier(value: string) {
   return `${value.slice(0, 8)}…${value.slice(-8)}`
 }
 
-function buildCompactListSummary(items: string[], maxVisibleItems: number) {
-  if (items.length === 0) {
-    return '-'
-  }
-
-  const visibleItems = items.slice(0, maxVisibleItems)
-  const hiddenCount = items.length - visibleItems.length
-  return hiddenCount > 0
-    ? `${visibleItems.join(' · ')} · +${hiddenCount}`
-    : visibleItems.join(' · ')
+// The agent session a request belongs to, so a session search shows which rows matched.
+const SESSION_COLUMN: Column<InsightsRecord> = {
+  key: 'session_id',
+  header: 'Session',
+  width: '170px',
+  render: (row) =>
+    row.session_id ? (
+      <span className={styles.requestId} title={row.session_id}>
+        {formatCompactIdentifier(row.session_id)}
+      </span>
+    ) : (
+      '-'
+    ),
 }
 
 export function createInsightsTableColumns(): Column<InsightsRecord>[] {
@@ -168,6 +173,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
         </Link>
       ),
     },
+    SESSION_COLUMN,
     {
       key: 'timestamp',
       header: 'Created',
@@ -187,28 +193,21 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       header: 'Decision',
       width: '180px',
       sortable: true,
-      render: (row) => (
-        <span className={styles.decision}>
-          {row.decision ? formatInsightsDecisionName(row.decision) : '-'}
-        </span>
-      ),
+      render: (row) =>
+        row.decision ? (
+          <InsightsDecisionBadge
+            decision={row.decision}
+            label={formatInsightsDecisionName(row.decision)}
+          />
+        ) : (
+          <span className={styles.decision}>-</span>
+        ),
     },
     {
       key: 'signals',
       header: 'Signals',
-      width: '180px',
-      render: (row) => {
-        const allSignals = collectSignals(row.signals)
-        if (allSignals.length === 0) {
-          return <span>-</span>
-        }
-
-        return (
-          <span className={styles.tableSummaryText} title={allSignals.join(', ')}>
-            {buildCompactListSummary(allSignals, 2)}
-          </span>
-        )
-      },
+      width: '200px',
+      render: (row) => <InsightsSignalsCell record={row} />,
     },
     {
       key: 'tools',
@@ -324,7 +323,7 @@ export function buildInsightsRecordSections(
       { label: 'Ended at', value: record.ended_at ? formatDateTime(record.ended_at) : '-' },
       {
         label: 'Duration',
-        value: typeof record.duration_ms === 'number' ? `${record.duration_ms} ms` : '-',
+        value: typeof record.duration_ms === 'number' ? formatSeconds(record.duration_ms) : '-',
       },
       { label: 'Terminal reason', value: record.terminal_reason || '-' },
     ],

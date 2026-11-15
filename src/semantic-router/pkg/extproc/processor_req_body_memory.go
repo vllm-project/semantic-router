@@ -106,7 +106,7 @@ func (x *memoryIndex) Recall(ctx context.Context, query string, recall config.Ma
 	}
 	// Without a bound, the store recalls above its default_similarity_threshold.
 	if recall.MinSimilarity != nil {
-		options.Threshold = float32(*recall.MinSimilarity)
+		options.Threshold, options.ThresholdSet = float32(*recall.MinSimilarity), true
 	}
 	switch {
 	case x.source.HybridSearch:
@@ -274,11 +274,7 @@ func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
 
 // handleFastResponse returns an immediate response for the fast_response plugin.
 func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName string) *ext_proc.ProcessingResponse {
-	if ctx.VSRSelectedDecision == nil {
-		return nil
-	}
-
-	fastCfg := ctx.VSRSelectedDecision.GetFastResponseConfig()
+	fastCfg := config.FastResponsePluginOf(requestPlugins(r.Config, ctx))
 	if fastCfg == nil {
 		return nil
 	}

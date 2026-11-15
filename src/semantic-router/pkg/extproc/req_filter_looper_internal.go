@@ -119,7 +119,7 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	}
 	common.HeaderMutation.RemoveHeaders = append(
 		common.HeaderMutation.RemoveHeaders,
-		providerBoundRemovals()...,
+		providerBoundRemovals(ctx.identity)...,
 	)
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 }

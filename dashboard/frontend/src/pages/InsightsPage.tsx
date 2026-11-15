@@ -297,7 +297,7 @@ export default function InsightsPage() {
           <TableHeader
             title="Routing Insights"
             count={totalRecords}
-            searchPlaceholder="Search by Request ID..."
+            searchPlaceholder="Search by request, recipe or session ID..."
             searchValue={searchTerm}
             onSearchChange={handleSearchChange}
             variant="embedded"

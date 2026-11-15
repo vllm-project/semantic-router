@@ -118,7 +118,13 @@
             }
           ],
           "remove": [
+            "api-key",
+            "api-subscription-key",
+            "authorization",
             "content-length",
+            "ocp-apim-subscription-key",
+            "x-api-key",
+            "x-goog-api-key",
             "x-user-anthropic-key",
             "x-user-azure-openai-key",
             "x-user-bedrock-key",

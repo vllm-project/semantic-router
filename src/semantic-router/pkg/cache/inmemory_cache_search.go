@@ -188,9 +188,14 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	return result.ResponseBody, result.Found, err
 }
 
-// LookupSimilarWithThreshold returns the most similar entry within threshold.
+// LookupSimilarWithThreshold returns the most similar entry within threshold,
+// which its caller serves.
 func (c *InMemoryCache) LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
-	return bestSimilar(c.LookupSimilar(ctx, model, query, SimilarityBounds{MinSimilarity: threshold, TopK: 1}))
+	result, err := bestSimilar(c.LookupSimilar(ctx, model, query, SimilarityBounds{MinSimilarity: threshold, TopK: 1}))
+	if result.Found {
+		c.servedSemantic(result.RequestID)
+	}
+	return result, err
 }
 
 // LookupSimilar returns the request-scoped entries most similar to query.
@@ -315,15 +320,15 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 	atomic.AddInt64(&c.hitCount, 1)
 	var queryBuffer [32]string
 	queryTokens := tokenizeForPolarity(query, queryBuffer[:0])
-	c.mu.Lock()
+	// The caller chooses which hit it serves and reports it through
+	// servedSemantic, so a lookup leaves every entry's access info alone.
 	for _, hit := range hits {
-		c.updateAccessInfo(hit.index, hit.entry)
 		result := lookupResultFromTimestamps(hit.entry.ResponseBody, hit.similarity, hit.entry.Timestamp, hit.entry.ExpiresAt)
 		result.Query = hit.entry.Query
 		result.NegationGuard = negationGuardOutcomeFor(queryTokens, hit.entry.Query)
+		result.RequestID = hit.entry.RequestID
 		entries.Hits = append(entries.Hits, result)
 	}
-	c.mu.Unlock()
 	logging.Debugf("InMemoryCache.LookupSimilar: CACHE HIT - %d entries, best similarity=%.4f >= threshold=%.4f",
 		len(entries.Hits), entries.Hits[0].Similarity, bounds.MinSimilarity)
 	logging.LogEvent("cache_hit", map[string]interface{}{

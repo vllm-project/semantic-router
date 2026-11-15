@@ -164,7 +164,11 @@ func (r *OpenAIRouter) ragSourceContext(traceCtx context.Context, ctx *RequestCo
 	if retrieved == "" {
 		logging.Debugf("[RAG] Backend '%s' kept no documents for query: %s", source.Backend, logging.ContentDescriptor(query))
 	}
-	r.cacheRetrievedRAGContext(recipe, query, retrieved, source)
+	// A judge that failed under on_error: skip kept the unjudged recall set,
+	// which serves this request only and is not cached.
+	if judge, _ := judgeStage(result); judge.Outcome != match.OutcomeSkipped {
+		r.cacheRetrievedRAGContext(recipe, query, retrieved, source)
+	}
 	return retrieved, nil
 }
 

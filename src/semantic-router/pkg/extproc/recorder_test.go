@@ -349,3 +349,16 @@ func assertReplayMatchedSignals(t *testing.T, record routerreplay.RoutingRecord)
 		t.Fatalf("unexpected conversation signals: %#v", record.Signals.Conversation)
 	}
 }
+
+// A request that matches no decision runs its recipe's default guard, and its
+// replay record says the guard reads hallucination.
+func TestReplayGuardrailStateReadsTheDefaultGuardOfAnUnmatchedRequest(t *testing.T) {
+	guard := config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{
+		When: config.RuleNode{Type: config.SignalTypeHallucination, Name: "grounded"}, Action: config.ResponseGuardAnnotate,
+	}}}
+	ctx := &RequestContext{}
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{DefaultPlugins: []config.DecisionPlugin{guardPlugin(guard)}}})
+	if _, _, _, hallucination := replayGuardrailState(ctx); !hallucination {
+		t.Fatal("the replay record of an unmatched request misses its default guard's hallucination rule")
+	}
+}

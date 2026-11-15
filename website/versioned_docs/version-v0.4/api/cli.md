@@ -8,7 +8,7 @@ toc_max_heading_level: 2
 
 # CLI Commands
 
-Use `vllm-sr` to configure and run the router, manage recipes, send requests, and evaluate routing. See [Installation](/docs/installation/) to install the CLI and [Local Docker deployment](/docs/installation/docker) to start a router.
+Use `vllm-sr` to configure and run the router, manage recipes, send requests, and evaluate routing. See [Installation](/docs/v0.4/installation/) to install the CLI and [Local Docker deployment](/docs/v0.4/installation/docker) to start a router.
 
 This reference is generated from the registered CLI commands. Command descriptions, arguments, options, and declared defaults match the source. An option without a declared default is omitted until supplied; commands may resolve it from configuration or the environment as described in their help. Repeatable options collect values. Run `vllm-sr COMMAND --help` for help from your installed version.
 

@@ -11,9 +11,10 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// A decision condition of the CRD names a type the Router knows: every
-// signal type of its catalog, and projection.
-func TestCRDConditionTypesAreTheRouterSignalTypes(t *testing.T) {
+// A decision condition of the CRD names a type the Router accepts in decision
+// rules: every decision-referenceable signal type of its catalog, and
+// projection.
+func TestCRDConditionTypesAreTheRouterDecisionSignalTypes(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join("..", "api", "v1alpha1", "semanticrouter_types.go"))
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +24,7 @@ func TestCRDConditionTypesAreTheRouterSignalTypes(t *testing.T) {
 		t.Fatal("RuleConditionConfig declares no condition type enum")
 	}
 	got := strings.Split(string(match[1]), ";")
-	want := append(routerconfig.SupportedSignalTypes(), "projection")
+	want := append(routerconfig.SupportedDecisionSignalTypes(), "projection")
 	slices.Sort(got)
 	slices.Sort(want)
 	if !slices.Equal(got, want) {

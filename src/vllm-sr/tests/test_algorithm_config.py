@@ -217,7 +217,10 @@ class TestReMoMAlgorithmConfig:
         """Test ReMoM config default values."""
         config = ReMoMAlgorithmConfig(breadth_schedule=[32])
         assert config.model_distribution == "weighted"
-        assert config.temperature == 1.0
+        # A remom block's unset fields take the Router's zero values.
+        assert config.temperature is None
+        assert config.shuffle_seed is None
+        assert config.include_intermediate_responses is False
         assert config.include_reasoning is False
         assert config.compaction_strategy == "full"
 

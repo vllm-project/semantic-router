@@ -1,1 +1,1 @@
-recipes[default].decisions[pick].algorithm: removed_algorithm_type: algorithm type prompt is removed; run `vllm-sr config migrate` (type: systemone, which asks the decision model with the same instructions)
+recipes[default].decisions[pick].algorithm: removed_algorithm_type: algorithm type prompt is removed; run `vllm-sr config migrate` (type: systemone, which asks the decision model with the same instructions, over the first modelRef of each model; static when every candidate is one model)

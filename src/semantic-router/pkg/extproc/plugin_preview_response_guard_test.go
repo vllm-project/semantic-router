@@ -98,3 +98,24 @@ func TestResponseGuardBindingReadinessNeverFallsBackAcrossRecipes(t *testing.T) 
 		}
 	}
 }
+
+// A decision that turns its guard off reads no answer, as the response path
+// runs no guard for it.
+func TestResponseGuardPreviewOfATurnedOffGuardReadsNothing(t *testing.T) {
+	server, calls := newCountingJailbreakDecider(0.95)
+	router, _ := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
+	guard, off := jailbreakGuard(config.ResponseGuardBlock, ""), false
+	guard.Enabled = &off
+	router.Config.Decisions[0].Plugins = []config.DecisionPlugin{guardPlugin(guard)}
+	input := pluginruntime.ResponseGuardPreviewRequest{
+		Binding: pluginruntime.Binding{Recipe: config.DefaultRecipeName, Decision: responseStageRouteName}, Mode: pluginruntime.ModeProbe, Response: unsafeAnswer,
+	}
+
+	preview, err := router.PreviewResponseGuard(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Action != config.ResponseGuardNone || len(preview.Rules) != 0 || preview.BackendCalls || calls.Load() != 0 {
+		t.Fatalf("preview of a turned-off guard = %+v (calls=%d), want no rule read", preview, calls.Load())
+	}
+}

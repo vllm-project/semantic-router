@@ -513,6 +513,11 @@ func (decoder *anthropicStreamDecoder) Finalize(reason error) ([]llmprotocol.Eve
 }
 
 func (encoder *anthropicStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.Content != nil {
+		if err := requireReasoningRepresentation(llmprotocol.AnthropicMessagesV1, []llmprotocol.Content{*event.Content}); err != nil {
+			return nil, nil, err
+		}
+	}
 	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredEventCapabilities(event)); err != nil {
 		return nil, nil, err
 	}
@@ -761,15 +766,19 @@ func (encoder *anthropicStreamEncoder) completeAnthropicItem(
 			return nil, nil, err
 		}
 		frames = append(frames, started...)
-		delta := anthropicEventWire{
-			Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
-			Delta: &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments},
+		// A call cut right after its name has no arguments, and Messages has
+		// no empty input_json_delta, so the block stops after it starts.
+		if event.ToolCall.Arguments != "" {
+			delta := anthropicEventWire{
+				Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
+				Delta: &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments},
+			}
+			deltaFrames, _, err := encodeAnthropicWireFrame(delta)
+			if err != nil {
+				return nil, nil, err
+			}
+			frames = append(frames, deltaFrames...)
 		}
-		deltaFrames, _, err := encodeAnthropicWireFrame(delta)
-		if err != nil {
-			return nil, nil, err
-		}
-		frames = append(frames, deltaFrames...)
 		keys = append(keys, key)
 	}
 	if len(keys) == 0 {
@@ -818,7 +827,11 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 	if event.Usage == nil {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "terminal usage is invalid", nil)
 	}
-	stop := encodeAnthropicStop(event.StopReason)
+	toolUse := false
+	for _, kind := range encoder.blocks {
+		toolUse = toolUse || kind == llmprotocol.ContentToolCall
+	}
+	stop := encodeAnthropicStop(event.StopReason, toolUse)
 	deltaWire := &anthropicDeltaWire{Type: "message_delta", StopReason: &stop}
 	if event.StopReason == llmprotocol.StopSequence {
 		deltaWire.StopSequence = &event.MatchedStopSequence

@@ -32,10 +32,6 @@ const (
 	delegatedCredentialCode    = "delegated_credential_missing" // #nosec G101 -- error code, not a credential
 )
 
-// delegatedCredentialMissingBody is the OpenAI-style error a fallback attempt
-// refused for want of a delegated credential ends with.
-var delegatedCredentialMissingBody = []byte(`{"error":{"message":"` + delegatedCredentialMessage + `","type":"authentication_error","code":"` + delegatedCredentialCode + `"}}`)
-
 func (r *OpenAIRouter) delegatedCredentialConfig() config.DelegatedCredentialConfig {
 	if r == nil || r.Config == nil {
 		return config.DelegatedCredentialConfig{}
@@ -76,12 +72,13 @@ func (r *OpenAIRouter) appendDelegatedCredentialRemoval(mutation *ext_proc.Heade
 
 // captureDelegatedCredential moves the credential off ctx.Headers onto the
 // typed request context, and makes every call made with the request's
-// context one made for it. A hop never reads it from headers: its context
-// derives from the client request's (see executeLooperGraph), so it shares
-// that request's principal, and nothing a hop request carries can pose as a
-// credential. The value is kept only when the request also carries the
-// trusted principal the same authenticator sets; a credential without an
-// authentication result is dropped.
+// context one made for it, with the client headers deployments forward. A
+// hop never reads either from headers: its context derives from the client
+// request's (see executeLooperGraph), so it shares that request's principal,
+// and nothing a hop request carries can pose as a credential. The value is
+// kept only when the request also carries the trusted principal the same
+// authenticator sets; a credential without an authentication result is
+// dropped.
 func (r *OpenAIRouter) captureDelegatedCredential(ctx *RequestContext) {
 	if ctx == nil {
 		return
@@ -113,7 +110,27 @@ func (r *OpenAIRouter) captureDelegatedCredential(ctx *RequestContext) {
 		ctx.delegatedCredential, _ = principal.RequestCredential(ctx.TraceContext)
 		return
 	}
-	ctx.TraceContext = principal.ForRequest(ctx.TraceContext, ctx.delegatedCredential)
+	ctx.TraceContext = principal.ForRequestWithHeaders(ctx.TraceContext, ctx.delegatedCredential, r.deploymentForwardedHeaders(ctx))
+}
+
+// deploymentForwardedHeaders are the client's values of the request headers
+// some deployment forwards, by lower-case name: what the calls made for the
+// request may copy (connector.DeploymentAuthorizer). The values are copied
+// once, so those calls never read the request's header map.
+func (r *OpenAIRouter) deploymentForwardedHeaders(ctx *RequestContext) map[string]string {
+	if r == nil {
+		return nil
+	}
+	var forwarded map[string]string
+	for _, name := range r.Config.DeploymentForwardedHeaders() {
+		if value := headerValueCI(ctx, name); value != "" {
+			if forwarded == nil {
+				forwarded = map[string]string{}
+			}
+			forwarded[name] = value
+		}
+	}
+	return forwarded
 }
 
 // requestDelegatedCredential is the credential a delegated upstream may

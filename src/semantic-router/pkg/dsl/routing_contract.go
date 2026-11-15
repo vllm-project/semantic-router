@@ -86,7 +86,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.ModelBindings), RecipePlugins: cfg.Plugins, CandidateRequirements: cfg.CandidateRequirements.Clone()}
+	prog := &Program{Strategy: string(cfg.Strategy), ModelBindings: cloneModelBindings(cfg.RecipeBindings()), RecipePlugins: cfg.Plugins, CandidateRequirements: cfg.CandidateRequirements.Clone()}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
@@ -94,7 +94,10 @@ func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 }
 
 func (d *decompiler) decompileRoutingStrategy() {
-	if d.cfg.Strategy == "" && len(d.cfg.ModelBindings) == 0 && d.cfg.CandidateRequirements == nil && len(d.cfg.Plugins) == 0 {
+	// A recipe view's ModelBindings carry the global bindings as well; those
+	// stay in global.model_catalog.bindings.
+	bindings := d.cfg.RecipeBindings()
+	if d.cfg.Strategy == "" && len(bindings) == 0 && d.cfg.CandidateRequirements == nil && len(d.cfg.Plugins) == 0 {
 		return
 	}
 	d.writeSection("ROUTING PROFILE")
@@ -103,12 +106,12 @@ func (d *decompiler) decompileRoutingStrategy() {
 	if d.cfg.Strategy != "" {
 		d.write("  strategy: %s\n", d.cfg.Strategy)
 	}
-	if len(d.cfg.ModelBindings) > 0 {
+	if len(bindings) > 0 {
 		// Convert the canonical structs through their JSON tags, then use the
 		// DSL formatter so object keys retain the grammar's identifier syntax.
-		bindings, _ := json.Marshal(d.cfg.ModelBindings)
+		encoded, _ := json.Marshal(bindings)
 		var fields map[string]interface{}
-		_ = json.Unmarshal(bindings, &fields)
+		_ = json.Unmarshal(encoded, &fields)
 		d.write("  model_bindings: %s\n", formatPluginConfigValue(fields))
 	}
 	if len(d.cfg.Plugins) > 0 {

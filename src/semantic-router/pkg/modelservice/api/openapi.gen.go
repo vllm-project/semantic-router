@@ -190,7 +190,8 @@ const (
 
 // Defines values for LivenessStatus.
 const (
-	Alive LivenessStatus = "alive"
+	Alive   LivenessStatus = "alive"
+	Stalled LivenessStatus = "stalled"
 )
 
 // Defines values for ModelCardImagePlacements.
@@ -604,6 +605,13 @@ type DecisionRequest struct {
 	// Questions A standard request's named questions; answers keep this order.
 	Questions map[string]Question `json:"questions,omitempty"`
 
+	// Roles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+	// content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
+	// their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
+	// the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they
+	// render it, whatever the roles.
+	Roles *DecisionRoles `json:"roles,omitempty"`
+
 	// State A standard request's context, which its questions are about; text, an object or an array of JSON
 	// values. Models with typed parts read an object's `request` / `user` / `prompt` as the user part,
 	// `answer` / `response` as the answer part and every other field as context.
@@ -654,6 +662,13 @@ type DecisionResponse struct {
 	Usage      Usage               `json:"usage"`
 }
 
+// DecisionRoles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+// content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
+// their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
+// the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they
+// render it, whatever the roles.
+type DecisionRoles map[string]string
+
 // DecisionState One entry of a batch, a standard request without the batch's shared fields.
 type DecisionState struct {
 	// Images Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
@@ -665,6 +680,13 @@ type DecisionState struct {
 
 	// Questions Named questions about this state; answers keep this order.
 	Questions map[string]Question `json:"questions"`
+
+	// Roles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+	// content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
+	// their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
+	// the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they
+	// render it, whatever the roles.
+	Roles *DecisionRoles `json:"roles,omitempty"`
 
 	// State The context this entry's questions are about, as a standard request's `state`.
 	State interface{} `json:"state"`
@@ -859,6 +881,9 @@ type ErrorBody struct {
 	// These fixed words never carry request data, so a gateway may show them where it must not show
 	// `message`.
 	Reason *ErrorBodyReason `json:"reason,omitempty"`
+
+	// State In a batch, the name of the entry `question` belongs to.
+	State *string `json:"state,omitempty"`
 }
 
 // ErrorBodyCode The request's error. `question_failed` (POST /v1/systemone): the request is answered as a whole for
@@ -981,8 +1006,11 @@ type ItemError string
 // Liveness Liveness of the process (`GET /health/live`), whatever its models' readiness.
 type Liveness struct {
 	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
-	ApiVersion string         `json:"api_version"`
-	Status     LivenessStatus `json:"status"`
+	ApiVersion string `json:"api_version"`
+
+	// Reason Why the process is stalled, per model; absent while alive.
+	Reason *string        `json:"reason"`
+	Status LivenessStatus `json:"status"`
 }
 
 // LivenessStatus defines model for Liveness.Status.
@@ -1427,6 +1455,23 @@ type Span struct {
 	Text        string  `json:"text"`
 }
 
+// SystemOneBatchRequest defines model for SystemOneBatchRequest.
+type SystemOneBatchRequest struct {
+	Model   string          `json:"model"`
+	Options *RequestOptions `json:"options,omitempty"`
+
+	// Requests Named vllm-sr/5.0 requests without options; each may repeat the batch's model.
+	Requests map[string]map[string]interface{} `json:"requests"`
+}
+
+// SystemOneBatchResponse defines model for SystemOneBatchResponse.
+type SystemOneBatchResponse struct {
+	Meta      *ResponseMeta               `json:"meta,omitempty"`
+	Model     string                      `json:"model"`
+	Responses map[string]DecisionResponse `json:"responses"`
+	Usage     Usage                       `json:"usage"`
+}
+
 // SystemOneModel defines model for SystemOneModel.
 type SystemOneModel struct {
 	Description string `json:"description"`
@@ -1471,10 +1516,10 @@ type Usage struct {
 
 // WindowOptions defines model for WindowOptions.
 type WindowOptions struct {
-	// Overlap Content tokens shared by neighbouring windows.
+	// Overlap Content tokens shared by neighbouring windows. An overlap that is not smaller than the content width (tokens minus special tokens) fails the request.
 	Overlap *int `json:"overlap,omitempty"`
 
-	// Tokens Window size including special tokens.
+	// Tokens Window size including special tokens. A size that leaves no room for content after the head's special tokens fails the request.
 	Tokens int `json:"tokens"`
 }
 
@@ -1504,6 +1549,9 @@ type CreateSystemOneJSONRequestBody = DecisionRequest
 
 // CreateSystemOneMultipartRequestBody defines body for CreateSystemOne for multipart/form-data ContentType.
 type CreateSystemOneMultipartRequestBody = DecisionMultipart
+
+// CreateSystemOneBatchJSONRequestBody defines body for CreateSystemOneBatch for application/json ContentType.
+type CreateSystemOneBatchJSONRequestBody = SystemOneBatchRequest
 
 // Getter for additional properties for DecisionMultipart. Returns the specified
 // element and whether it was found
@@ -1923,6 +1971,11 @@ type ClientInterface interface {
 	CreateSystemOneWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateSystemOne(ctx context.Context, body CreateSystemOneJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateSystemOneBatchWithBody request with any body
+	CreateSystemOneBatchWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateSystemOneBatch(ctx context.Context, body CreateSystemOneBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2107,6 +2160,30 @@ func (c *Client) CreateSystemOneWithBody(ctx context.Context, contentType string
 
 func (c *Client) CreateSystemOne(ctx context.Context, body CreateSystemOneJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateSystemOneRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSystemOneBatchWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSystemOneBatchRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSystemOneBatch(ctx context.Context, body CreateSystemOneBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSystemOneBatchRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2465,6 +2542,46 @@ func NewCreateSystemOneRequestWithBody(server string, contentType string, body i
 	return req, nil
 }
 
+// NewCreateSystemOneBatchRequest calls the generic CreateSystemOneBatch builder with application/json body
+func NewCreateSystemOneBatchRequest(server string, body CreateSystemOneBatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateSystemOneBatchRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateSystemOneBatchRequestWithBody generates requests for CreateSystemOneBatch with any type of body
+func NewCreateSystemOneBatchRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/systemone/batch")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -2549,6 +2666,11 @@ type ClientWithResponsesInterface interface {
 	CreateSystemOneWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSystemOneResponse, error)
 
 	CreateSystemOneWithResponse(ctx context.Context, body CreateSystemOneJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSystemOneResponse, error)
+
+	// CreateSystemOneBatchWithBodyWithResponse request with any body
+	CreateSystemOneBatchWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSystemOneBatchResponse, error)
+
+	CreateSystemOneBatchWithResponse(ctx context.Context, body CreateSystemOneBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSystemOneBatchResponse, error)
 }
 
 type GetHealthResponse struct {
@@ -2578,6 +2700,7 @@ type GetLivenessResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Liveness
+	JSON503      *Liveness
 }
 
 // Status returns HTTPResponse.Status
@@ -2812,6 +2935,35 @@ func (r CreateSystemOneResponse) StatusCode() int {
 	return 0
 }
 
+type CreateSystemOneBatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SystemOneBatchResponse
+	JSON400      *Error
+	JSON404      *Error
+	JSON413      *Error
+	JSON422      *Error
+	JSON500      *Error
+	JSON503      *Error
+	JSON504      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSystemOneBatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSystemOneBatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // GetHealthWithResponse request returning *GetHealthResponse
 func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
 	rsp, err := c.GetHealth(ctx, reqEditors...)
@@ -2950,6 +3102,23 @@ func (c *ClientWithResponses) CreateSystemOneWithResponse(ctx context.Context, b
 	return ParseCreateSystemOneResponse(rsp)
 }
 
+// CreateSystemOneBatchWithBodyWithResponse request with arbitrary body returning *CreateSystemOneBatchResponse
+func (c *ClientWithResponses) CreateSystemOneBatchWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSystemOneBatchResponse, error) {
+	rsp, err := c.CreateSystemOneBatchWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSystemOneBatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateSystemOneBatchWithResponse(ctx context.Context, body CreateSystemOneBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSystemOneBatchResponse, error) {
+	rsp, err := c.CreateSystemOneBatch(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSystemOneBatchResponse(rsp)
+}
+
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
 func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -3003,6 +3172,13 @@ func ParseGetLivenessResponse(rsp *http.Response) (*GetLivenessResponse, error) 
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Liveness
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -3467,6 +3643,81 @@ func ParseCreateSystemOneResponse(rsp *http.Response) (*CreateSystemOneResponse,
 			return nil, err
 		}
 		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSystemOneBatchResponse parses an HTTP response from a CreateSystemOneBatchWithResponse call
+func ParseCreateSystemOneBatchResponse(rsp *http.Response) (*CreateSystemOneBatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSystemOneBatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SystemOneBatchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Error

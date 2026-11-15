@@ -11,6 +11,9 @@ const EmbeddingIdentityMetadataKey = "_router_embedding_identity"
 
 var ErrEmbeddingIncompatible = errors.New("vector store embeddings are incompatible with the active model; create a new vector store and reattach the original files")
 
+// ErrReservedMetadataKey reports client metadata that sets a key the router owns.
+var ErrReservedMetadataKey = errors.New("metadata key is reserved for the router")
+
 // ManagerOption configures immutable properties of a manager at construction.
 type ManagerOption func(*Manager)
 
@@ -25,7 +28,7 @@ func (m *Manager) EmbeddingIdentity() string { return m.embeddingIdentity }
 
 func validateClientMetadata(metadata map[string]interface{}) error {
 	if _, exists := metadata[EmbeddingIdentityMetadataKey]; exists {
-		return fmt.Errorf("metadata key %q is reserved for the router", EmbeddingIdentityMetadataKey)
+		return fmt.Errorf("%w: %q", ErrReservedMetadataKey, EmbeddingIdentityMetadataKey)
 	}
 	return nil
 }

@@ -366,6 +366,7 @@ func (c *Client) readResponse(
 			StatusCode: response.StatusCode,
 			Attempt:    attempt,
 			Retryable:  operation.RetrySafe && retryableStatus(response.StatusCode),
+			RetryAfter: response.Header.Get("Retry-After"),
 			body:       errorBody,
 			truncated:  truncated,
 		}

@@ -98,6 +98,7 @@ func TestToolsPluginLoadErrors(t *testing.T) {
 		"embedding recall":            {`{enabled: true, select: {mode: filter, match: {recall: {method: embedding, top_k: 5}}}}`, at + ".select.match.recall.method: tool selection recalls with bm25 only"},
 		"choice reading 256":          {`{enabled: true, select: {mode: filter, match: {judge: {preset: tool_rank, max_candidates: 256}}}}`, at + ".select.match.judge.max_candidates must be within [1, 255]"},
 		"empty match block":           {`{enabled: true, select: {mode: filter, match: {}}}`, at + ".select.match: match_empty:"},
+		"recall without a judge":      {`{enabled: true, select: {mode: filter, match: {recall: {method: bm25, top_k: 20}}}}`, at + ".select.match: tool selection keeps the tools its judge ranks; add a judge, such as judge: {preset: tool_rank}"},
 		"sticky enabled":              {`{enabled: true, select: {mode: add, tools_db_path: tools.json, sticky: {enabled: true}}}`, "sticky.enabled is not supported in this release"},
 		"filtered without lists":      {`{enabled: true, policy: {mode: filtered}}`, at + ".policy: mode filtered requires allow_tools or block_tools"},
 		"strip history without none":  {`{enabled: true, policy: {strip_tool_history: true}}`, "strip_tool_history requires mode none"},

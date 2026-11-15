@@ -70,6 +70,9 @@ recipes:
 global:
   router:
     strategy: priority
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default
 
 # The router requires a pii_type_mapping.json on disk even for a remote
 # deployment (IsPIIEnabled/LoadPIIMapping do not special-case it), and the

@@ -26,3 +26,17 @@ func requestPlugins(cfg *config.RouterConfig, ctx *RequestContext) []config.Deci
 func requestResponseCache(ctx *RequestContext) *config.ResponseCachePluginConfig {
 	return config.ResponseCachePluginOf(requestPlugins(nil, ctx))
 }
+
+// requestMasking is the masking plugin a routed request runs. It masks what a
+// pii rule of the request's recipe finds, so a passthrough request, which has
+// no recipe, runs none.
+func requestMasking(ctx *RequestContext) *config.MaskingPluginConfig {
+	return config.MaskingPluginOf(requestPlugins(nil, ctx))
+}
+
+// requestResponseGuard is the response_guard plugin a routed request runs. Its
+// rules read the request's recipe signals, which a passthrough request
+// bypasses, so it runs none.
+func requestResponseGuard(ctx *RequestContext) *config.ResponseGuardPluginConfig {
+	return config.ResponseGuardPluginOf(requestPlugins(nil, ctx))
+}

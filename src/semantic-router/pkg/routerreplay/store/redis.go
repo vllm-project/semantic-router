@@ -311,10 +311,9 @@ func (r *RedisStore) AttachResponse(ctx context.Context, id string, body string,
 }
 
 // AttachPrompt stores the prompt of a record written without it.
-func (r *RedisStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+func (r *RedisStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
 	return r.updateRecord(ctx, id, func(record *Record) bool {
-		record.Prompt = prompt
-		record.PromptTruncated = truncated
+		prompt.Apply(record)
 		return true
 	})
 }

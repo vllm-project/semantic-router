@@ -240,7 +240,6 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       ]
     case 'router_replay':
       return [
-        { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
         { label: 'Store backend', value: stringOrFallback(section?.store_backend) },
         { label: 'Retention', value: section?.ttl_seconds ? `${section.ttl_seconds}s` : 'Not set' },
         { label: 'Async writes', value: stringOrFallback(section?.async_writes, 'Disabled') },
@@ -417,25 +416,11 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '86400' },
         { name: 'max_responses', label: 'Max Responses', type: 'number', placeholder: '1000' },
       ]
+    // The switches and capture settings of Replay, memory and the response
+    // cache are the router_replay, context and response_cache plugins of
+    // global.plugins in v0.5; these cards edit only the stores.
     case 'router_replay':
       return [
-        { name: 'enabled', label: 'Enable Router Replay', type: 'boolean' },
-        { name: 'capture_request_body', label: 'Capture request bodies', type: 'boolean' },
-        { name: 'capture_response_body', label: 'Capture response bodies', type: 'boolean' },
-        {
-          name: 'capture_personal_data',
-          label: 'Capture personal data',
-          type: 'boolean',
-          description:
-            'When off, Replay keeps route metadata but omits content when PII is detected or detection is unavailable. A decision can override this default.',
-        },
-        {
-          name: 'capture_tool_results',
-          label: 'Capture tool results',
-          type: 'boolean',
-          description:
-            'Stores client tool-result text in records, each result bounded by max_tool_trace_bytes. Requires personal data capture; callers without replay detail access still see results redacted. Intended for development and audit.',
-        },
         {
           name: 'store_backend',
           label: 'Store Backend',
@@ -459,7 +444,6 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
       ]
     case 'memory':
       return [
-        { name: 'enabled', label: 'Enable Memory', type: 'boolean' },
         { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },
         routerStructuredField(key, 'milvus'),
         routerStructuredField(key, 'embedding'),
@@ -482,19 +466,12 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
       ]
     case 'response_cache':
       return [
-        { name: 'enabled', label: 'Enable Response Cache', type: 'boolean' },
         {
           name: 'backend_type',
           label: 'Backend Type',
           type: 'select',
           options: ['memory', 'milvus', 'redis'],
           required: true,
-        },
-        {
-          name: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'percentage',
-          placeholder: '80',
         },
         { name: 'max_entries', label: 'Max Entries', type: 'number', placeholder: '1000' },
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '3600' },
@@ -761,4 +738,35 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
     })
 
   return [...curatedCards, ...generatedCards]
+}
+
+function changedSettingsValue(shown: unknown, next: unknown): unknown {
+  const shownObject = asObject(shown)
+  const nextObject = asObject(next)
+  if (shownObject && nextObject) {
+    const changed: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(nextObject)) {
+      const changedValue = changedSettingsValue(shownObject[key], value)
+      if (changedValue !== undefined) changed[key] = changedValue
+    }
+    return Object.keys(changed).length > 0 ? changed : undefined
+  }
+  return JSON.stringify(shown) === JSON.stringify(next) ? undefined : next
+}
+
+// Cards show effective values (Router defaults plus overrides), so only fields
+// the user changed may become overrides. Undefined means nothing changed.
+export function editedRouterSectionPatch(
+  card: RouterSectionCard,
+  data: EditFormData,
+): Partial<ConfigData> | undefined {
+  const next = card.save(data)
+  let shown: Partial<ConfigData>
+  try {
+    shown = card.save(card.editData)
+  } catch {
+    // Shown values the form rejects cannot serve as a baseline.
+    return next
+  }
+  return changedSettingsValue(shown, next) as Partial<ConfigData> | undefined
 }

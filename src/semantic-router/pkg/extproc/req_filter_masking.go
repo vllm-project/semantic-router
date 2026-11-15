@@ -26,28 +26,28 @@ func (e *maskingDispatchError) Error() string { return "PII masking failed: " + 
 
 func (e *maskingDispatchError) Unwrap() error { return e.cause }
 
-// piiRuleSpans is the one signal method masking needs: the personal data a
-// pii rule finds in a text.
-type piiRuleSpans interface {
-	PIIRuleSpans(ctx context.Context, rule, text string) ([]modelservice.Span, error)
+// ruleSpans is the one signal method masking needs: what a pii rule, or a
+// rule that finds text, finds in a text.
+type ruleSpans interface {
+	RuleSpans(ctx context.Context, signalType, rule, text string) ([]modelservice.Span, error)
 }
 
 // maskingSpansFor resolves the signal layer of the request's recipe. It is a
 // variable so tests can supply spans without a model.
-var maskingSpansFor = func(r *OpenAIRouter, ctx *RequestContext) (piiRuleSpans, bool) {
+var maskingSpansFor = func(r *OpenAIRouter, ctx *RequestContext) (ruleSpans, bool) {
 	classifier := r.classifierForRequest(ctx)
 	return classifier, classifier != nil
 }
 
-// applyMaskingBeforeDispatch masks the neutral request in place when the
-// selected decision enables the masking plugin: every text position of the
-// request as it is sent, after every other rewrite, including content added
-// after routing such as retrieved documents and memory.
+// applyMaskingBeforeDispatch masks the neutral request in place when its
+// recipe's plugins enable masking: every text position of the request as it
+// is sent, after every other rewrite, including content added after routing
+// such as retrieved documents and memory.
 func (r *OpenAIRouter) applyMaskingBeforeDispatch(ctx *RequestContext) error {
-	if ctx == nil || ctx.SemanticRequest == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil || ctx.SemanticRequest == nil {
 		return nil
 	}
-	cfg := ctx.VSRSelectedDecision.GetMaskingConfig()
+	cfg := requestMasking(ctx)
 	if cfg == nil || !cfg.Enabled {
 		return nil
 	}
@@ -62,7 +62,7 @@ func (r *OpenAIRouter) applyMaskingBeforeDispatch(ctx *RequestContext) error {
 		// index sequence instead of reusing _0 for a different value (D5).
 		ctx.Masking = masking.NewAllocator(cfg)
 	}
-	scan := spanScannerFor(ctx.embeddingContext(), finder, cfg.Signal)
+	scan := spanScannerFor(ctx.embeddingContext(), finder, cfg)
 	result, err := masking.Apply(ctx.SemanticRequest, ctx.Masking, scan)
 	if err != nil {
 		return &maskingDispatchError{cause: err}
@@ -97,16 +97,26 @@ func recordMaskingObservability(ctx *RequestContext, result masking.Result) {
 	ctx.TraceContext = spanCtx
 }
 
-// spanScannerFor adapts the pii rule to masking.ScanFunc. The rule's spans
-// are code points into text; masking.Span offsets are bytes (D2).
-func spanScannerFor(requestCtx context.Context, finder piiRuleSpans, rule string) masking.ScanFunc {
+// spanScannerFor adapts the pii rule and the rules masking names to
+// masking.ScanFunc: their spans together, a pii span under its label and a
+// rule's under the rule's name. The spans are code points into text;
+// masking.Span offsets are bytes (D2).
+func spanScannerFor(requestCtx context.Context, finder ruleSpans, cfg *config.MaskingPluginConfig) masking.ScanFunc {
+	refs := cfg.Rules
+	if cfg.Signal != "" {
+		refs = append([]config.SignalRef{{Type: config.SignalTypePII, Name: cfg.Signal}}, refs...)
+	}
 	return func(text string) ([]masking.Span, error) {
-		detections, err := finder.PIIRuleSpans(requestCtx, rule, text)
-		if err != nil {
-			// Includes a scan that read only part of the text, whose spans
-			// cover only that part; the unscanned rest must not be dispatched
-			// (D4).
-			return nil, err
+		var detections []modelservice.Span
+		for _, ref := range refs {
+			found, err := finder.RuleSpans(requestCtx, ref.Type, ref.Name, text)
+			if err != nil {
+				// Includes a scan that read only part of the text, whose
+				// spans cover only that part; the unscanned rest must not be
+				// dispatched (D4).
+				return nil, err
+			}
+			detections = append(detections, found...)
 		}
 		offsets := modelservice.ByteOffsets(text)
 		spans := make([]masking.Span, len(detections))

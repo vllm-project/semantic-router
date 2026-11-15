@@ -205,6 +205,32 @@ func TestARAGSourceEmbeddingIsValidatedWhereItIsWritten(t *testing.T) {
 	}
 }
 
+// A request that matches no decision runs the RAG source of its recipe's
+// default plugins, so the source's query embedding is prepared even when no
+// decision runs it.
+func TestADefaultRAGSourcePreparesItsQueryEmbedding(t *testing.T) {
+	document := embeddingStoresBase + `        plugins:
+          - type: context
+            configuration: {enabled: false}
+global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: rag
+            backend: external_api
+            backend_config: {endpoint: "http://search:9200", request_format: pinecone}
+`
+	cfg, err := ParseYAMLBytes([]byte(document))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := embeddingRequirement(t, cfg, false, EmbeddingConsumerRAG); got.Deployment != EmbeddingDefaultDeployment {
+		t.Fatalf("rag = %+v", got)
+	}
+}
+
 // Decisions, signals and selectors ask System One questions: no decision path
 // demands, starts or prepares an embedding deployment; only recall does.
 func TestNoDecisionPathUsesTheEmbeddingModel(t *testing.T) {

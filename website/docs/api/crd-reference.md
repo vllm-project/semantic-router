@@ -914,7 +914,9 @@ _Appears in:_
 
 #### RuleConditionConfig
 
-RuleConditionConfig references a specific rule by type and name
+RuleConditionConfig is one condition of a decision's rules: a leaf that
+references a rule by type and name, or a subtree that combines its own
+conditions with an operator.
 
 _Appears in:_
 
@@ -922,8 +924,13 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type specifies the signal or projection type referenced by this condition. |  | Enum: [authz complexity context conversation domain fact_check hallucination input_modality jailbreak keyword language metadata modality pii projection refusal safety systemone turn_relation user_feedback] <br /> |
-| `name` _string_ | Name is the name of the rule to reference |  |  |
+| `type` _string_ | Type specifies the signal or projection type a leaf references: a type<br />the router accepts in decision rules. |  | Enum: [authz complexity context conversation domain fact_check input_modality jailbreak keyword language metadata modality pii projection safety systemone turn_relation user_feedback] <br />Optional: \{\} <br /> |
+| `name` _string_ | Name is the name of the rule a leaf references |  | Optional: \{\} <br /> |
+| `label` _string_ | Label matches one label of the referenced rule (systemone and<br />application signal conditions) |  | Optional: \{\} <br /> |
+| `predicate` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Predicate bounds the referenced rule's score, as \{gt, gte, lt, lte\}.<br />The router checks it when it loads the configuration. |  | Type: object <br />Optional: \{\} <br /> |
+| `on_error` _string_ | OnError resolves a systemone leaf whose model backend fails |  | Enum: [no_match match] <br />Optional: \{\} <br /> |
+| `operator` _string_ | Operator combines a subtree's conditions: "AND", "OR", or "NOT" (unary) |  | Enum: [AND OR NOT] <br />Optional: \{\} <br /> |
+| `conditions` _[RawExtension](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#rawextension-runtime-pkg) array_ | Conditions are a subtree's conditions, each of this same shape. They<br />are preserved as router-owned objects, since a CRD schema cannot<br />recurse; the router validates them when it loads the configuration. |  | Optional: \{\} <br /> |
 
 #### SamplingConfig
 

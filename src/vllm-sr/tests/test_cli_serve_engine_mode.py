@@ -48,7 +48,12 @@ def test_no_engine_flag_enables_routing_without_discarding_saved_policy():
     document = {
         "version": "v0.5",
         "recipes": [{"name": "default", "decisions": [{"name": "saved"}]}],
-        "listeners": [{"name": "public", "models": ["router/auto"]}],
+        "listeners": [
+            {
+                "name": "public",
+                "apis": {"chat_completions": {"models": ["router/auto"]}},
+            }
+        ],
     }
     original = deepcopy(document)
     assert apply_instance_options(document, engine=True)
@@ -65,7 +70,7 @@ def test_engine_bootstrap_has_native_grant_and_no_invented_provider():
     apply_instance_options(document, engine=True, model_options=options(MODEL))
     assert "setup" not in document
     assert "providers" not in document and "routing" not in document
-    assert document["listeners"][0]["systemone"]["models"] == [MODEL]
+    assert document["listeners"][0]["apis"]["systemone"]["models"] == [MODEL]
     assert document["global"]["model_catalog"]["system"]["decision_model"] == {
         "deployment": "primary"
     }
@@ -90,14 +95,16 @@ def test_a_state_once_d3_serves_at_its_built_in_release_without_the_hub(
     deployment = document["global"]["model_catalog"]["deployments"]["primary"]
     assert deployment["artifact"] == model
     assert deployment["revision"] == builtin_releases()[model]
-    assert document["listeners"][0]["systemone"]["models"] == [model]
+    assert document["listeners"][0]["apis"]["systemone"]["models"] == [model]
 
 
 def test_generated_engine_bootstrap_preserves_listener_settings():
     document = build_bootstrap_config()
     original = deepcopy(document["listeners"][0])
     apply_instance_options(document, engine=True, model_options=options(MODEL))
-    assert document["listeners"] == [{**original, "systemone": {"models": [MODEL]}}]
+    assert document["listeners"] == [
+        {**original, "apis": {"systemone": {"models": [MODEL]}}}
+    ]
 
 
 @pytest.mark.parametrize(
@@ -105,13 +112,13 @@ def test_generated_engine_bootstrap_preserves_listener_settings():
     [
         {"address": "127.0.0.1", "port": 9999},
         {"api_keys": ["private-test-key"]},
-        {"models": ["vllm-sr/auto"]},
-        {"systemone": {"models": [MODEL]}},
+        {"apis": {"chat_completions": {"models": ["vllm-sr/auto"]}}},
+        {"apis": {"systemone": {"models": [MODEL]}}},
         {
             "address": "127.0.0.1",
             "port": 9999,
             "api_keys": ["private-test-key"],
-            "systemone": {"models": [MODEL]},
+            "apis": {"systemone": {"models": [MODEL]}},
         },
     ],
 )
@@ -137,7 +144,7 @@ def declaration(resource):
                 "deployments": {"chosen": resource},
             }
         },
-        "listeners": [{"name": "main", "systemone": {"models": ["judge"]}}],
+        "listeners": [{"name": "main", "apis": {"systemone": {"models": ["judge"]}}}],
     }
 
 
@@ -166,7 +173,7 @@ def test_model_only_keeps_placement_engine_args_identity_and_grants():
     assert result["max_num_seqs"] == 64 and result["dtype"] == "bfloat16"
     assert result["input"] == {"max_tokens": 4096, "overflow": "window"}
     assert result["public_name"] == "judge"
-    assert document["listeners"][0]["systemone"]["models"] == ["judge"]
+    assert document["listeners"][0]["apis"]["systemone"]["models"] == ["judge"]
 
 
 def test_same_artifact_keeps_revision_and_engine_args_when_unspecified():
@@ -432,7 +439,7 @@ def test_startup_mode_preserves_source_and_resets_engine_without_flag(
     router = prepare()
     assert router["global"]["router"]["enabled"] is True
     assert router["recipes"][0]["strategy"] == "confidence"
-    assert "systemone" not in router["listeners"][0]
+    assert "apis" not in router["listeners"][0]
     assert source.read_bytes() == before
 
 
@@ -499,7 +506,7 @@ def test_serve_projects_host_ids_once_and_forwards_the_existing_mask(
     assert len(primary["revision"]) == 40
     assert deployed["env_vars"]["ROCR_VISIBLE_DEVICES"] == "7,3"
     assert document["global"]["router"]["enabled"] is False
-    assert "systemone" not in document["listeners"][0]
+    assert "apis" not in document["listeners"][0]
     assert source.read_bytes() == before
 
 

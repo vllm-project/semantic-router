@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 CLI_ROOT = Path(__file__).resolve().parents[1]
 if str(CLI_ROOT) not in sys.path:
@@ -12,6 +13,11 @@ if str(CLI_ROOT) not in sys.path:
 
 from cli.config_generator import generate_envoy_config_from_user_config  # noqa: E402
 from cli.durations import envoy_duration, parse_duration  # noqa: E402
+from cli.models import (  # noqa: E402
+    RETRY_ON_CONDITIONS,
+    DecisionReliability,
+    ProviderReliability,
+)
 from cli.parser import parse_user_config  # noqa: E402
 
 REPO_ROOT = CLI_ROOT.parents[1]
@@ -244,6 +250,17 @@ providers:
           provider: vllm
 """,
         )
+
+
+def test_retry_on_takes_the_names_envoy_documents():
+    assert list(RETRY_ON_CONDITIONS) == DEFAULTS["retry_on_conditions"]
+    ProviderReliability(retry_on=" 5xx, retriable-status-codes ")
+    DecisionReliability(retry_on="reset,envoy-ratelimited")
+    ProviderReliability(retry_on="unavailable,cancelled")
+    for model in (ProviderReliability, DecisionReliability):
+        for typo in ("5xx,retriable_status_codes", "5XX", "connect_failure"):
+            with pytest.raises(ValidationError, match="unknown condition"):
+                model(retry_on=typo)
 
 
 @pytest.mark.parametrize(

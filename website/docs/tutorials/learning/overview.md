@@ -66,9 +66,11 @@ configuration already sets these values. Existing settings, including explicit
 `false` values, custom identity headers, and tuning, are preserved. These are
 configuration-wide defaults; decision-level `bypass` controls still apply.
 
-Clients must send stable session and conversation identities for protection to
-retain a model. Missing identities leave routing unprotected and produce a
-diagnostic. See [session identification](../../api/session-identification).
+Clients must send a stable session identity for protection to retain a model;
+under `scope: conversation`, a request without a conversation identity is held
+per conversation, named by how it starts. A missing session identity leaves
+routing unprotected and produces a diagnostic. See
+[session identification](../../api/session-identification).
 
 The reference `config/config.yaml` enables both components. To also enable online
 adaptation and share protection state across replicas, configure:

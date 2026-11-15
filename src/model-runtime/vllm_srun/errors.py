@@ -166,7 +166,7 @@ class RuntimeServiceError(Exception):
     ``question`` names the question whose failure answers the request (a
     System One request answered as a whole, ``question_failed`` with the
     question's code as ``question_error``, or one in which no question is
-    valid).
+    valid), and ``state`` its entry when the request is a batch.
     """
 
     def __init__(
@@ -177,6 +177,7 @@ class RuntimeServiceError(Exception):
         limit: int | None = None,
         question: str | None = None,
         question_error: str | None = None,
+        state: str | None = None,
     ):
         if code not in REQUEST_ERROR_STATUS and code != QUESTION_FAILED:
             raise ValueError(f"unknown request error code {code!r}")
@@ -189,6 +190,7 @@ class RuntimeServiceError(Exception):
         self.limit = limit
         self.question = question
         self.question_error = question_error
+        self.state = state
 
     @classmethod
     def invalid(cls, exc: ValueError) -> RuntimeServiceError:
@@ -216,6 +218,8 @@ class RuntimeServiceError(Exception):
             error["limit"] = self.limit
         if self.question is not None:
             error["question"] = self.question
+        if self.state is not None:
+            error["state"] = self.state
         if self.question_error is not None:
             error["question_error"] = self.question_error
         return {"error": error}

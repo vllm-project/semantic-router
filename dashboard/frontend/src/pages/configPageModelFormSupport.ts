@@ -1,6 +1,7 @@
 import type {
   BackendRefAuth,
   BackendRefEntry,
+  BackendRefTLS,
   ConfigData,
   LoRAAdapter,
   EvaluationRecordConfig,
@@ -53,6 +54,17 @@ function backendRefAuth(value: unknown): BackendRefAuth | undefined {
   return auth
 }
 
+function backendRefTLS(value: unknown): BackendRefTLS | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const entry = value as Record<string, unknown>
+  const tls: BackendRefTLS = {}
+  for (const field of ['ca_file', 'server_name', 'cert_file', 'key_file'] as const) {
+    const fieldValue = entry[field]
+    if (typeof fieldValue === 'string' && fieldValue.trim()) tls[field] = fieldValue.trim()
+  }
+  return Object.keys(tls).length > 0 ? tls : undefined
+}
+
 export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
   if (!Array.isArray(value)) return []
 
@@ -82,6 +94,8 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
         normalized.chat_path = entry.chat_path.trim()
       if (typeof entry.api_key === 'string' && entry.api_key.trim())
         normalized.api_key = entry.api_key.trim()
+      const tls = backendRefTLS(entry.tls)
+      if (tls) normalized.tls = tls
       return normalized
     })
 }

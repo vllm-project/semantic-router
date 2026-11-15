@@ -194,3 +194,20 @@ func TestContextRAGOnFailure(t *testing.T) {
 		})
 	}
 }
+
+// A RAG judge that fails under on_error: skip lets this request use the
+// unjudged recall set, but cache_results keeps no copy of it: once the judge
+// is back, the next request is judged.
+func TestRAGSourceDoesNotCacheAnUnjudgedRecall(t *testing.T) {
+	resetRAGSingleton(10)
+	t.Cleanup(func() { resetRAGSingleton(10) })
+	router, storeID := contextRouter(t) // no decision model, so the judge fails
+	source := ragSource(storeID, nil)
+	source.CacheResults = true
+	ctx, request := contextRequestContext(config.ContextPluginConfig{Enabled: true, Sources: []config.ContextSource{source}})
+
+	require.NoError(t, router.retrieveContextSources(ctx, contextQuery, request))
+	require.Contains(t, ctx.RAGRetrievedContext, "refunds take 14 business days", "on_error: skip serves the recall set")
+	_, cached := router.getRAGCache(ctx.Routing.RecipeName(), contextQuery, &source)
+	require.False(t, cached, "the unjudged recall set was cached")
+}

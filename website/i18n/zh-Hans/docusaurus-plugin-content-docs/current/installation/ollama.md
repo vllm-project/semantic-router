@@ -25,7 +25,7 @@ Semantic Router 在 `vllm-sr serve` 期间运行在 Docker 中。名称 `host.do
 
 ## 前置条件
 
-- 已安装 Semantic Router，并且可以用 [`vllm-sr serve`](/zh-Hans/docs/installation) 运行（Linux、macOS，或带 Docker 的 WSL2）
+- 已安装 Semantic Router，并且可以用 [`vllm-sr serve`](/docs/installation) 运行（Linux、macOS，或带 Docker 的 WSL2）
 - Ollama 安装在运行 Docker 的**同一台机器**上
 - 至少有一个模型所需的磁盘空间（例如，`llama3.2:3b` 大约 2 GB）
 
@@ -227,6 +227,8 @@ recipes:
           - model: llama3.2:3b
             use_reasoning: false
 ```
+
+该后端不使用密钥。无论是路由的请求还是 Router 自身发起的调用（例如影子请求），Router 都不会向 `ollama` 后端发送密钥，并会忽略其上设置的 `api_key` 或 `auth.api_key_env`。如果服务位于会校验密钥的代理之后，请使用 provider `openai-compatible`。
 
 校验并启动服务：
 

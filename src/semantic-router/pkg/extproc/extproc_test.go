@@ -1749,7 +1749,7 @@ var _ = Describe("Metrics recording", func() {
 
 		respHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HttpHeaders{
-				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: "content-type", Value: "application/json"}}},
+				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "200"}, {Key: "content-type", Value: "application/json"}}},
 			},
 		}
 

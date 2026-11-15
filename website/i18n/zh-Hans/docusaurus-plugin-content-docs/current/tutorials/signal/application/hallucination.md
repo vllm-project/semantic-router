@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`hallucination` 找出模型答案中其依据上下文不支持的陈述。它在响应阶段提出 `hallucination` [预设](../../../system-one/reference#preset-catalog)问题，即针对答案、标签为 `unsupported` 的 span 问题。依据上下文是 RAG 检索到的文档和请求中的工具结果。
+`hallucination` 找出模型答案中其依据上下文不支持的陈述。它在响应阶段提出 `hallucination` [预设](../../../system-one/reference/presets#preset-catalog)问题，即针对答案、标签为 `unsupported` 的 span 问题。依据上下文是 RAG 检索到的文档和请求中的工具结果。
 
 ## 主要优势 {#key-advantages}
 
@@ -79,6 +79,6 @@ recipes:
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `hallucination` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有幻觉规则；见[选择部署](../../../system-one/deployments)。该问题需要 span：vela3-fast（默认）、Vela 3.0 的 d3 规格和 Vela 2.0 用它们自己的幻觉问题回答。解析到不支持 span 的部署（例如 d3 模型）的规则会以 `span_required` 加载失败。
+除非 `hallucination` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有幻觉规则；见[选择部署](../../../system-one/deploy/deployments)。该问题需要 span：vela3-fast（默认）、Vela 3.0 的 d3 规格和 Vela 2.0 用它们自己的幻觉问题回答。解析到不支持 span 的部署（例如 d3 模型）的规则会以 `span_required` 加载失败。
 
 这个问题会把请求、答案和依据上下文发给部署。完整示例见 [`config/fragments/signal/hallucination/grounded-answer.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/hallucination/grounded-answer.yaml)。

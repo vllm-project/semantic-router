@@ -176,7 +176,7 @@ export const SECTION_META: Record<
     title: 'Router Replay',
     eyebrow: 'Services',
     description:
-      'Shared Replay storage and capture defaults. Each decision can override capture settings through its Replay plugin.',
+      'Shared Replay storage. Capture settings belong to the router_replay plugin, in global.plugins for every request or in the plugins of a decision.',
   },
   authz: {
     title: 'Authorization',

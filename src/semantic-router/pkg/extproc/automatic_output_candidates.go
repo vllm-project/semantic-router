@@ -52,7 +52,7 @@ func (r *OpenAIRouter) prepareAutomaticCandidates(ctx *RequestContext, refs []co
 		if len(overflows) == 0 {
 			return automaticOutputUnsupported("at least one compatible configured candidate")
 		}
-		cfg := contextOverflowConfig(ctx)
+		cfg := contextOverflowConfig(r.Config, ctx)
 		if attempt > 0 || cfg == nil {
 			return overflowBudgetError("The provider-rendered input exceeds every candidate's context window")
 		}
@@ -157,7 +157,7 @@ func (r *OpenAIRouter) prepareAutomaticDispatch(ctx *RequestContext, request *ll
 	if !errors.As(err, &budget) || budget.Code != "context_length_exceeded" {
 		return err
 	}
-	cfg := contextOverflowConfig(ctx)
+	cfg := contextOverflowConfig(r.Config, ctx)
 	if cfg == nil {
 		return err
 	}

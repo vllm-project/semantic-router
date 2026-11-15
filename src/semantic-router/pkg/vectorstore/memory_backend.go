@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"sync"
 )
@@ -185,12 +186,7 @@ func (m *MemoryBackend) Search(
 	}
 
 	// Extract optional file_id filter.
-	var filterFileID string
-	if filter != nil {
-		if fid, ok := filter["file_id"].(string); ok {
-			filterFileID = fid
-		}
-	}
+	fileIDs := filterFileIDs(filter)
 
 	type scored struct {
 		result SearchResult
@@ -199,7 +195,7 @@ func (m *MemoryBackend) Search(
 
 	var candidates []scored
 	for _, chunk := range col.chunks {
-		if filterFileID != "" && chunk.FileID != filterFileID {
+		if len(fileIDs) > 0 && !slices.Contains(fileIDs, chunk.FileID) {
 			continue
 		}
 
@@ -256,17 +252,12 @@ func (m *MemoryBackend) HybridSearch(
 	}
 	config.applyDefaults()
 
-	var filterFileID string
-	if filter != nil {
-		if fid, ok := filter["file_id"].(string); ok {
-			filterFileID = fid
-		}
-	}
+	fileIDs := filterFileIDs(filter)
 
 	// Build the set of candidate chunk IDs (respecting file_id filter).
 	candidates := make(map[string]EmbeddedChunk)
 	for id, chunk := range col.chunks {
-		if filterFileID != "" && chunk.FileID != filterFileID {
+		if len(fileIDs) > 0 && !slices.Contains(fileIDs, chunk.FileID) {
 			continue
 		}
 		candidates[id] = chunk
@@ -285,7 +276,7 @@ func (m *MemoryBackend) HybridSearch(
 	var bm25Scores map[string]float64
 	if col.bm25Index != nil {
 		allBM25 := col.bm25Index.Score(query, config.BM25K1, config.BM25B)
-		if filterFileID != "" {
+		if len(fileIDs) > 0 {
 			bm25Scores = make(map[string]float64)
 			for id, s := range allBM25 {
 				if _, ok := candidates[id]; ok {
@@ -305,7 +296,7 @@ func (m *MemoryBackend) HybridSearch(
 	}
 	if ngramIdx != nil {
 		allNgram := ngramIdx.Score(query)
-		if filterFileID != "" {
+		if len(fileIDs) > 0 {
 			ngramScores = make(map[string]float64)
 			for id, s := range allNgram {
 				if _, ok := candidates[id]; ok {
@@ -373,11 +364,11 @@ func (m *MemoryBackend) LexicalSearch(
 	if col.bm25Index == nil {
 		return nil, nil
 	}
-	fileID, _ := filter["file_id"].(string)
+	fileIDs := filterFileIDs(filter)
 	scores := col.bm25Index.Score(query, DefaultBM25K1, DefaultBM25B)
 	ids := make([]string, 0, len(scores))
 	for id, score := range scores {
-		if (fileID == "" || col.chunks[id].FileID == fileID) && score >= float64(threshold) {
+		if (len(fileIDs) == 0 || slices.Contains(fileIDs, col.chunks[id].FileID)) && score >= float64(threshold) {
 			ids = append(ids, id)
 		}
 	}
@@ -411,10 +402,10 @@ func (m *MemoryBackend) ListChunks(
 	if !exists {
 		return nil, 0, fmt.Errorf("collection not found: %s", vectorStoreID)
 	}
-	fileID, _ := filter["file_id"].(string)
+	fileIDs := filterFileIDs(filter)
 	ids := make([]string, 0, len(col.chunks))
 	for id, chunk := range col.chunks {
-		if fileID == "" || chunk.FileID == fileID {
+		if len(fileIDs) == 0 || slices.Contains(fileIDs, chunk.FileID) {
 			ids = append(ids, id)
 		}
 	}

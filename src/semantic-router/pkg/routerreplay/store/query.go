@@ -3,7 +3,8 @@ package store
 import "context"
 
 // QueryFilters is the metadata-only filter contract shared by replay lists and
-// storage queries. Search is a literal, case-insensitive request-ID/recipe match.
+// storage queries. Search is a literal, case-insensitive match on the request
+// ID, the recipe or the session ID.
 type QueryFilters struct {
 	Search, Recipe, Decision, Model, CacheStatus, SessionID string
 	// RecipeSet distinguishes an explicit legacy empty recipe from no filter.

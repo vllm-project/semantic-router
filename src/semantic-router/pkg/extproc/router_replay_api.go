@@ -285,7 +285,8 @@ func matchesReplaySearch(record routerreplay.RoutingRecord, search string) bool 
 		return true
 	}
 	return strings.Contains(strings.ToLower(record.RequestID), search) ||
-		strings.Contains(strings.ToLower(record.Recipe), search)
+		strings.Contains(strings.ToLower(record.Recipe), search) ||
+		strings.Contains(strings.ToLower(record.SessionID), search)
 }
 
 func hasMatchingCacheStatus(record routerreplay.RoutingRecord, cacheStatus string) bool {

@@ -74,7 +74,7 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 		add("(selected_model = ? OR original_model = ?)", filters.Model)
 	}
 	if filters.Search != "" {
-		add("(strpos(lower(COALESCE(request_id, '')), lower(?)) > 0 OR strpos(lower(COALESCE(recipe, '')), lower(?)) > 0)", filters.Search)
+		add("(strpos(lower(COALESCE(request_id, '')), lower(?)) > 0 OR strpos(lower(COALESCE(recipe, '')), lower(?)) > 0 OR strpos(lower(COALESCE(session_id, '')), lower(?)) > 0)", filters.Search)
 	}
 	switch filters.CacheStatus {
 	case "cached":

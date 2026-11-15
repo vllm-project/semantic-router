@@ -39,7 +39,7 @@ func TestBackendReplyNamesTheModelTheBackendReports(t *testing.T) {
 		}
 		router, ctx = dispatched(false)
 		buffered := extProcResponseFixture(backend)
-		if mutation := router.handleNonStreamingResponseBody(buffered, ctx, 0).
+		if mutation := router.handleNonStreamingResponseBody(buffered, ctx, 0, false).
 			GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
 			buffered = mutation.GetBody()
 		}

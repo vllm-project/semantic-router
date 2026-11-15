@@ -81,21 +81,26 @@ func TestNativeGateRequiresCoverageAndKnownStatistics(t *testing.T) {
 	r, _ := ParseNativeRequest(json.RawMessage(batchRequest))
 	o := r.Observe(json.RawMessage(batchResponse))
 	zero := 0.0
-	partial := &config.EscalateAccept{Native: []config.NativeAcceptanceRule{{Question: "task", Field: "confidence", NumericPredicate: config.NumericPredicate{GTE: &zero}}}}
-	if acceptNative(o, partial, true) {
+	rules := &config.EscalateAccept{}
+	for _, question := range []string{"task", "risk", "difficulty"} {
+		rules.Native = append(rules.Native, config.NativeAcceptanceRule{Question: question, Field: "top_probability", NumericPredicate: config.NumericPredicate{GTE: &zero}})
+	}
+	if !acceptNative(o, rules, true) {
+		t.Fatal("covered answers rejected")
+	}
+	if acceptNative(o, &config.EscalateAccept{Native: rules.Native[:1]}, true) {
 		t.Fatal("uncovered answers accepted")
 	}
-	if !acceptNative(o, partial, false) {
-		t.Fatal("additional stage predicate failed")
+	if !acceptNative(o, &config.EscalateAccept{Native: rules.Native[:1]}, false) {
+		t.Fatal("a stage rule beside a covering quality rule failed")
 	}
-	partial.Native[0].Question = "risk"
-	if acceptNative(o, partial, false) {
+	rules.Native[1].Field = "confidence"
+	if acceptNative(o, rules, true) {
 		t.Fatal("absent Noul confidence was imputed as zero")
 	}
+	rules.Native[1].Field = "top_probability"
 	bad := strings.Replace(batchResponse, `"0":0.9,"1":0.1`, `"10":0.9,"11":0.1`, 1)
-	partial.Native[0].Question = "difficulty"
-	partial.Native[0].Field = "top_probability"
-	if acceptNative(r.Observe(json.RawMessage(bad)), partial, false) {
+	if acceptNative(r.Observe(json.RawMessage(bad)), rules, true) {
 		t.Fatal("invalid score level probabilities accepted")
 	}
 }

@@ -35,6 +35,7 @@ const sources = [
 ].map((path) => runtime + path)
 
 describe('Decision catalog generation boundary', () => {
+  // Twelve python3 runs of the generator take longer than vitest's 5 s default on CI runners.
   it('checks drift in sources and output without importing the ML runtime or rewriting files', () => {
     const fixture = mkdtempSync(join(tmpdir(), 'decision-catalog-projection-'))
     try {
@@ -96,5 +97,5 @@ describe('Decision catalog generation boundary', () => {
     } finally {
       rmSync(fixture, { recursive: true, force: true })
     }
-  })
+  }, 60_000)
 })

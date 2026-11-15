@@ -182,3 +182,32 @@ func TestValidateConversationRuleContract_ExistsWithoutPredicate(t *testing.T) {
 		t.Fatalf("expected exists without predicate to pass, got: %v", err)
 	}
 }
+
+// A count rule needs a predicate to match: without one it would match every
+// request, even one with nothing to count, so the config does not load.
+func TestConversationCountRuleWithoutPredicateDoesNotLoad(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`version: v0.5
+recipes:
+  - name: default
+    signals:
+      conversation:
+        - name: tool_heavy
+          feature:
+            type: count
+            source: {type: tool_definition}
+    decisions:
+      - name: agentic
+        priority: 100
+        rules: {operator: AND, conditions: [{type: conversation, name: tool_heavy}]}
+        modelRefs: [{model: local}]
+providers:
+  models:
+    - name: local
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+`))
+	if err == nil || !strings.Contains(err.Error(), "requires a predicate") {
+		t.Fatalf("err = %v, want a count rule without a predicate to be refused", err)
+	}
+}

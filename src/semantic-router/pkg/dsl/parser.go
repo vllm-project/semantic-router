@@ -331,7 +331,7 @@ func rawToProjectionScore(r *rawProjectionDecl) *ProjectionScoreDecl {
 				input.ValueSource = valueSource
 			}
 			if match, ok := getFloat64Field(ov.Fields, "match"); ok {
-				input.Match = match
+				input.Match = &match
 			}
 			if miss, ok := getFloat64Field(ov.Fields, "miss"); ok {
 				input.Miss = miss

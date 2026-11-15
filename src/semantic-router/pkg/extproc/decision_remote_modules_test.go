@@ -62,6 +62,7 @@ global:
     deployments:
       hosted-d3:
         provider: systemone
+        schema: vllm-sr/4.0
         endpoint: API/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: REMOTE_DECISION_TEST_KEY}
@@ -161,9 +162,8 @@ func (a *moduleSystemOneAPI) answered() [][]string {
 	return slices.Clone(a.calls)
 }
 
-func moduleSystemOneRouterConfig(t *testing.T, raw string) (*config.RouterConfig, *moduleSystemOneAPI) {
+func moduleSystemOneRouterConfig(t *testing.T, raw string, api http.Handler) *config.RouterConfig {
 	t.Helper()
-	api := &moduleSystemOneAPI{}
 	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
@@ -175,11 +175,12 @@ func moduleSystemOneRouterConfig(t *testing.T, raw string) (*config.RouterConfig
 	if err != nil {
 		t.Fatal(err)
 	}
-	return cfg, api
+	return cfg
 }
 
 func TestBuiltInSignalsAskASystemOneDecisionModelInOneCallPerStage(t *testing.T) {
-	cfg, api := moduleSystemOneRouterConfig(t, moduleSystemOneConfig)
+	api := &moduleSystemOneAPI{}
+	cfg := moduleSystemOneRouterConfig(t, moduleSystemOneConfig, api)
 	later := counterValue(t, "vsr_model_runtime_stage_decision_calls_total", map[string]string{"deployment": "hosted-d3", "round": "later"})
 	router := newLooperRouter(t, cfg)
 	prepared := len(api.answered())

@@ -6,6 +6,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func personalizedExactCacheEnabled(ctx *RequestContext) bool {
@@ -28,7 +29,7 @@ func (r *OpenAIRouter) lookupPersonalizedExactCache(
 		applyRequestCacheControls(ctx)
 		return nil, false
 	}
-	if !preparePersonalizedCacheIdentity(ctx, selectedModel) {
+	if !preparePersonalizedCacheIdentity(r.Config, ctx, selectedModel) {
 		return nil, false
 	}
 	applyRequestCacheControls(ctx)
@@ -53,7 +54,7 @@ func canUsePersonalizedExactCache(ctx *RequestContext) bool {
 	return ctx.SemanticRequest != nil
 }
 
-func preparePersonalizedCacheIdentity(ctx *RequestContext, selectedModel string) bool {
+func preparePersonalizedCacheIdentity(cfg *config.RouterConfig, ctx *RequestContext, selectedModel string) bool {
 	workingBody := cacheRequestBodyForContext(ctx)
 	identity, err := cacheIdentityForContext(ctx)
 	if err != nil {
@@ -67,7 +68,7 @@ func preparePersonalizedCacheIdentity(ctx *RequestContext, selectedModel string)
 	if err != nil || contextRevision == "" {
 		return false
 	}
-	policyFingerprint := responseCachePolicyFingerprint(ctx)
+	policyFingerprint := responseCachePolicyFingerprint(cfg, ctx)
 	ctx.CacheRequestModel = identity.Model
 	ctx.CacheQuery = identity.Query
 	ctx.CacheSelectedModel = selectedCacheModel(identity.Model, []string{selectedModel})

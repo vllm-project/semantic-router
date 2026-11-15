@@ -34,6 +34,9 @@ func DefaultResponseCacheServiceOptions() ResponseCacheServiceOptions {
 type inflightExact struct {
 	done      chan struct{}
 	expiresAt time.Time
+	// expiry ends the lease of a leader that never stores, such as one whose
+	// request failed or was canceled.
+	expiry *time.Timer
 }
 
 type SingleflightLease struct {
@@ -279,6 +282,9 @@ func (s *ResponseCacheService) RecordSemantic(identity CacheIdentity, hit CacheR
 	case hit.Found:
 		s.semanticHits.Add(1)
 		s.l2Hits.Add(1)
+		if adapter, ok := s.store.(*LegacyBackendAdapter); ok {
+			adapter.servedSemantic(hit)
+		}
 	default:
 		hit.HitKind = HitKindMiss
 		s.misses.Add(1)
@@ -340,26 +346,25 @@ func (s *ResponseCacheService) Stats(ctx context.Context) (CacheStats, error) {
 	return stats, nil
 }
 
+// Invalidate advances the epoch of one partition, which turns its entries
+// into misses. Advancing the global epoch is Flush's: a selector without a
+// partition is refused. No backend counts a partition's entries, so the
+// result says the count is unknown.
 func (s *ResponseCacheService) Invalidate(
 	_ context.Context,
 	selector CacheSelector,
 	dryRun bool,
 ) (InvalidationResult, error) {
-	if selector.Partition == nil && selector.Epoch == "" {
-		return InvalidationResult{}, fmt.Errorf("invalidation requires a partition or epoch selector")
+	if selector.Partition == nil {
+		return InvalidationResult{}, fmt.Errorf("invalidation requires selector.partition; flush advances the global epoch")
 	}
-	result := InvalidationResult{DryRun: dryRun}
+	result := InvalidationResult{DryRun: dryRun, CountUnknown: true}
 	if dryRun {
 		metrics.RecordResponseCacheInvalidation(string(s.Capabilities().Backend), "invalidate", true)
 		return result, nil
 	}
 	s.mu.Lock()
-	if selector.Partition != nil {
-		key := selector.Partition.Key()
-		s.partitionEpochs[key]++
-	} else {
-		s.globalEpoch++
-	}
+	s.partitionEpochs[selector.Partition.Key()]++
 	s.mu.Unlock()
 	s.l1.clear()
 	s.invalidations.Add(1)
@@ -381,7 +386,7 @@ func (s *ResponseCacheService) Flush(
 	s.l1.clear()
 	s.invalidations.Add(1)
 	metrics.RecordResponseCacheInvalidation(string(s.Capabilities().Backend), "flush", false)
-	return InvalidationResult{}, nil
+	return InvalidationResult{CountUnknown: true}, nil
 }
 
 func (s *ResponseCacheService) CurrentEpoch() string {
@@ -441,13 +446,19 @@ func (s *ResponseCacheService) acquireSingleflight(key string) (bool, <-chan str
 		if now.Before(active.expiresAt) {
 			return false, active.done
 		}
-		close(active.done)
-		delete(s.inflight, key)
+		s.endSingleflightLocked(key, active)
 	}
 	active := &inflightExact{
 		done:      make(chan struct{}),
 		expiresAt: now.Add(s.options.SingleflightLease),
 	}
+	active.expiry = time.AfterFunc(s.options.SingleflightLease, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.inflight[key] == active {
+			s.endSingleflightLocked(key, active)
+		}
+	})
 	s.inflight[key] = active
 	return true, active.done
 }
@@ -455,10 +466,15 @@ func (s *ResponseCacheService) acquireSingleflight(key string) (bool, <-chan str
 func (s *ResponseCacheService) completeSingleflight(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	active, ok := s.inflight[key]
-	if !ok {
-		return
+	if active, ok := s.inflight[key]; ok {
+		s.endSingleflightLocked(key, active)
 	}
+}
+
+// endSingleflightLocked wakes key's waiters and removes its entry. Callers
+// hold s.mu.
+func (s *ResponseCacheService) endSingleflightLocked(key string, active *inflightExact) {
+	active.expiry.Stop()
 	close(active.done)
 	delete(s.inflight, key)
 }

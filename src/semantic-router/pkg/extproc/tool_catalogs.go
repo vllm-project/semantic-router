@@ -14,20 +14,26 @@ type toolCatalog struct {
 	loadedAt time.Time
 }
 
-// loadToolCatalogs reads the catalog of every add-mode selection, once per
-// tools_db_path. A catalog the generation cannot read fails its build.
+// loadToolCatalogs reads the catalog of every add-mode selection a request
+// runs, a decision's or the default plugins', once per tools_db_path. A
+// catalog the generation cannot read fails its build.
 func loadToolCatalogs(cfg *config.RouterConfig) (map[string]*toolCatalog, error) {
 	catalogs := map[string]*toolCatalog{}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		spec := decision.GetToolsConfig().ActiveSelect()
-		if spec == nil || spec.Mode != config.ToolsSelectModeAdd || catalogs[spec.ToolsDBPath] != nil {
-			continue
+	var err error
+	cfg.VisitEveryPlugins(func(plugins []config.DecisionPlugin) {
+		spec := config.ToolsPluginOf(plugins).ActiveSelect()
+		if err != nil || spec == nil || spec.Mode != config.ToolsSelectModeAdd || catalogs[spec.ToolsDBPath] != nil {
+			return
 		}
-		tools, err := config.LoadToolCatalog(spec.ToolsDBPath)
-		if err != nil {
-			return nil, fmt.Errorf("decision %q: tools catalog %s: %w", decision.Name, spec.ToolsDBPath, err)
+		tools, loadErr := config.LoadToolCatalog(spec.ToolsDBPath)
+		if loadErr != nil {
+			err = fmt.Errorf("tools catalog %s: %w", spec.ToolsDBPath, loadErr)
+			return
 		}
 		catalogs[spec.ToolsDBPath] = &toolCatalog{tools: tools, loadedAt: time.Now()}
+	})
+	if err != nil {
+		return nil, err
 	}
 	return catalogs, nil
 }

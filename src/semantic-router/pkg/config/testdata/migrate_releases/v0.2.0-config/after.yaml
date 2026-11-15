@@ -349,6 +349,8 @@ recipes:
                   store:
                     auto: false
 global:
+  router:
+    strategy: "priority"
   services:
     response_api:
       enabled: true
@@ -409,5 +411,6 @@ global:
       max_entries: 1000 # Only applies to memory backend
       ttl_seconds: 3600
       eviction_policy: "fifo"
-  router:
-    strategy: "priority"
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

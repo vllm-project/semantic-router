@@ -2,6 +2,7 @@ package looper
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -103,6 +104,46 @@ func TestFormatEscalateStreamingResponseReplacesUpstreamUsage(t *testing.T) {
 	}
 	if !strings.Contains(string(resp.Body), "data: [DONE]") || strings.Contains(string(resp.Body), "data:[DONE]") {
 		t.Fatalf("stream did not normalize the no-space terminal marker: %s", resp.Body)
+	}
+}
+
+// A backend may name its model differently from the requested name, as a
+// snapshot does; the usage chunk must name the same model as the stream.
+func TestStreamWithUsageNamesTheStreamModel(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "backend reports its own name",
+			body: "data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":7,\"model\":\"large-2026-01-01\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"answer\"},\"finish_reason\":\"stop\"}]}\n\n" +
+				"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":7,\"model\":\"large-2026-01-01\",\"choices\":[],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1,\"total_tokens\":3}}\n\n" +
+				"data: [DONE]\n\n",
+			want: "large-2026-01-01",
+		},
+		{
+			name: "stream names no model",
+			body: "data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":7,\"choices\":[{\"index\":0,\"delta\":{\"content\":\"answer\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+			want: "large",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := StreamWithUsage([]byte(tc.body), "large", TokenUsage{PromptTokens: 4, CompletionTokens: 2, TotalTokens: 6})
+			var models []string
+			for _, line := range strings.Split(string(body), "\n") {
+				var chunk struct {
+					Model string          `json:"model"`
+					Usage json.RawMessage `json:"usage"`
+				}
+				if payload, ok := strings.CutPrefix(line, "data: {"); ok && json.Unmarshal([]byte("{"+payload), &chunk) == nil && len(chunk.Usage) > 0 {
+					models = append(models, chunk.Model)
+				}
+			}
+			if !slices.Equal(models, []string{tc.want}) {
+				t.Fatalf("usage chunk models = %v, want [%s]: %s", models, tc.want, body)
+			}
+		})
 	}
 }
 
@@ -254,6 +295,72 @@ func TestEscalateOrder(t *testing.T) {
 				"small": {ParamSize: "1b", Pricing: config.ModelPricing{PromptPer1M: 1}},
 			}
 			request.Algorithm.Escalate.Order = test.order
+			if _, err := NewEscalateLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), request); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if !slices.Equal(*calls, test.want) {
+				t.Fatalf("backend attempt order = %v, want %v", *calls, test.want)
+			}
+		})
+	}
+}
+
+// order: size and order: cost read the sizes and prices a loaded configuration
+// carries, built-in catalog sizes such as "397B (17B active)" and "1.6T (49B
+// active)" included, and try a model with neither last.
+func TestEscalateOrderTriesUnknownSizeAndPriceLast(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
+listeners: []
+providers:
+  defaults:
+    model: small
+  models:
+    - name: small
+      catalog: qwen/qwen3.6-27b
+      pricing: {currency: USD, prompt_per_1m: 3}
+      backend_refs: [{endpoint: 127.0.0.1:8000, provider: vllm}]
+    - name: huge
+      catalog: qwen/qwen3.5-397b-a17b
+      pricing: {currency: USD, prompt_per_1m: 0.1}
+      backend_refs: [{endpoint: 127.0.0.1:8000, provider: vllm}]
+    - name: giant
+      catalog: deepseek/deepseek-v4-pro
+      pricing: {currency: USD, prompt_per_1m: 1}
+      backend_refs: [{endpoint: 127.0.0.1:8000, provider: vllm}]
+    - name: unknown
+      backend_refs: [{endpoint: 127.0.0.1:8000, provider: vllm}]
+recipes:
+  - name: default
+    decisions:
+      - name: escalate
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: unknown}, {model: giant}, {model: huge}, {model: small}]
+        algorithm:
+          type: escalate
+          escalate:
+            order: size
+            accept: {confidence: {method: avg_logprob, gte: 0.99}}
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	for _, test := range []struct {
+		order string
+		want  []string
+	}{
+		{order: config.EscalateOrderSize, want: []string{"small", "huge", "giant", "unknown"}},
+		{order: config.EscalateOrderCost, want: []string{"huge", "giant", "small", "unknown"}},
+	} {
+		t.Run(test.order, func(t *testing.T) {
+			server, calls := newEscalateLogprobBackend(t, map[string]int{"small": 1, "huge": 1, "giant": 1, "unknown": 1}, true)
+			defer server.Close()
+			decision := cfg.Decisions[0]
+			escalate := *decision.Algorithm.Escalate
+			escalate.Order = test.order
+			request := escalateRequest(config.EscalateOnErrorLastAttempt, "")
+			request.ModelRefs, request.ModelParams = decision.ModelRefs, cfg.ModelConfig
+			request.Algorithm.Escalate = &escalate
+			// No answer reaches the threshold, so every model is called.
 			if _, err := NewEscalateLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), request); err != nil {
 				t.Fatalf("Execute() error = %v", err)
 			}

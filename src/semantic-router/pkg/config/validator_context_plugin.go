@@ -98,9 +98,23 @@ func validateContextSource(cfg *RouterConfig, path string, source *ContextSource
 		return err
 	}
 	if source.Type == ContextSourceRAG {
+		if searchesVectorStore(source) && (cfg.VectorStore == nil || !cfg.VectorStore.Enabled) {
+			return fmt.Errorf("%s: a vectorstore backend searches the Router's vector store; set global.stores.vector_store.enabled: true", path)
+		}
 		return validateRAGLexicalMatch(cfg, path, source)
 	}
 	return nil
+}
+
+// searchesVectorStore reports whether a rag source searches the Router's
+// vector store: a vectorstore source, or a hybrid one with a vectorstore
+// backend.
+func searchesVectorStore(source *ContextSource) bool {
+	if source.Backend != "hybrid" {
+		return source.Backend == "vectorstore"
+	}
+	hybrid, err := source.HybridBackendConfig()
+	return err == nil && (hybrid.Primary == "vectorstore" || hybrid.Fallback == "vectorstore")
 }
 
 // validateRAGLexicalMatch checks a rag source that recalls by BM25 or judges

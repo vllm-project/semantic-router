@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 )
 
 // ConfigDeploymentsHandler lists persisted deployment projections.
@@ -65,7 +67,7 @@ func ConfigDeploymentDetailHandler() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(deployment); err != nil {
+		if err := writeConfigDeploymentView(w, r, deployment); err != nil {
 			log.Printf("Error encoding config deployment detail: %v", err)
 		}
 	}
@@ -91,9 +93,31 @@ func ActiveConfigProjectionHandler() http.HandlerFunc {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(projection); err != nil {
+		if !callerCanViewConfigSecrets(r) {
+			projection.LastError = ""
+			if projection.Deployment != nil {
+				projection.Deployment.DSLSnapshot = ""
+				projection.Deployment.Validation.Diagnostics = nil
+			}
+		}
+		payload, err := json.Marshal(projection)
+		if err == nil {
+			err = writeConfigViewPayloadJSON(w, r, payload)
+		}
+		if err != nil {
 			log.Printf("Error encoding active config projection: %v", err)
 		}
 	}
+}
+
+func writeConfigDeploymentView(w http.ResponseWriter, r *http.Request, deployment *configprojection.DeploymentRecord) error {
+	if !callerCanViewConfigSecrets(r) {
+		deployment.DSLSnapshot = ""
+		deployment.Validation.Diagnostics = nil
+	}
+	payload, err := json.Marshal(deployment)
+	if err != nil {
+		return err
+	}
+	return writeConfigViewPayloadJSON(w, r, payload)
 }

@@ -54,10 +54,10 @@ Anthropic 一个请求支持至多四个显式缓存断点。这个插件故意�
 
 ## 运行时次序 {#runtime-order}
 
-标记插入跑在路由之后、请求/上下文/工具变换之后，紧挨着请求编码上 Anthropic 线上格式之前。它只碰发出去的 Anthropic 形状请求；路由和其他插件评估的那个中性请求，它永远不改。
+标记插入跑在路由之后、请求/上下文/工具变换之后，紧挨着请求编码上 Anthropic 线上格式之前。它只碰发出去的 Anthropic 形状请求；路由和其他插件评估的那个中性请求，它永远不改。回退尝试会按候选模型的线上格式执行同样的步骤。
 
 ## 可观测性 {#observability}
 
-每次评估记一条 `llm_plugin_execution_total`，`plugin_type=prompt_cache`，`status` 是 `inserted`、`preserved`、`skipped` 或 `rejected`。请求带 `x-vsr-debug: true` 时，同一个结果出现在 `x-vsr-trace` 的 `prompt_cache` 成员中，带有它的 `reason` 以及 `inserted` 和 `preserved` 标记计数；见 [VSR 路由头](../../troubleshooting/vsr-headers)。这个插件不碰 Router Replay 持久化。
+每次评估记一条 `llm_plugin_execution_total`，`plugin_type=prompt_cache`，`status` 是 `inserted`、`preserved`、`skipped` 或 `rejected`。请求带 `x-vsr-debug: true` 时，同一个结果出现在 `x-vsr-trace` 的 `prompt_cache` 成员中，带有它的 `reason` 以及 `inserted` 和 `preserved` 标记计数；见 [VSR 路由头](../../api/headers)。这个插件不碰 Router Replay 持久化。
 
 完整示例见 [`config/fragments/plugin/prompt-cache/anthropic-agent.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/prompt-cache/anthropic-agent.yaml)。

@@ -122,6 +122,7 @@ spec:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: SYSTEMONE_KEY}
         timeout_ms: 1500
       local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}

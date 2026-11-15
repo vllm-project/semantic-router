@@ -40,3 +40,6 @@ recipes:
           operator: OR
           conditions: [{type: keyword, name: math_keywords}]
         modelRefs: [{model: qwen3, use_reasoning: true}]
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

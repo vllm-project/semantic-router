@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 )
@@ -103,7 +104,7 @@ func Scalar(value string) *yaml.Node {
 // Looper model names (looperModelNameForms), whose recipe copies the default
 // recipe as migrated.
 func MigrateConfig(data []byte) ([]byte, []ConfigWarning, error) {
-	migrated, notes, err := migrateConfigForms(data, configForms)
+	migrated, notes, err := migrateConfigForms(data, slices.Concat(configForms, systemOneSchemaForms))
 	if err != nil {
 		return nil, nil, err
 	}

@@ -15,11 +15,13 @@ import (
 
 func init() {
 	pkgtestcases.Register("routing-error-codes", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "A request the Router cannot route gets the Router's own 400 with the documented reason code in error.code (issue #4653)",
 		Tags:        []string{"routing", "errors", "gateway"},
 		Fn:          testRoutingErrorCodes,
 	})
 	pkgtestcases.Register("unknown-model-error-codes", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Unknown provider and entrypoint names receive the Router's own model_not_found error even when a default backend exists",
 		Tags:        []string{"routing", "errors", "gateway"},
 		Fn: func(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {

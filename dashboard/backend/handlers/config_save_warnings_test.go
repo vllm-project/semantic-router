@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -181,5 +182,79 @@ global:
 	}
 	if requireMapValue(t, global, "router")["strategy"] != "priority" {
 		t.Fatal("the patch discarded a global setting it did not name")
+	}
+}
+
+// The Embedding Models card saves the remote deployment's auth as a merge
+// patch (configPageEmbeddingModelsSupport.test.ts lists the patch it sends for
+// each saved auth). With the API key cleared, the merged deployment loads: a
+// key goes with its header, while a delegated credential or a key file, which
+// the card does not show, stays. Removing only api_key_env would leave a
+// header with no key, which the Router refuses.
+func TestEmbeddingCardAuthPatchesLoad(t *testing.T) {
+	// The semantic response cache embeds each request with the deployment,
+	// so a delegated credential has a request to come from.
+	existing := func(auth string) []byte {
+		raw, err := os.ReadFile(createValidTestConfig(t, t.TempDir()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return append(raw, []byte(`global:
+  plugins:
+    - type: response_cache
+      configuration: {enabled: true, mode: semantic}
+  services:
+    authz:
+      delegated_credential: {enabled: true}
+  model_catalog:
+    deployments:
+      bge:
+        provider: openai_embeddings
+        endpoint: https://embedding.example.com/v1
+        model: BAAI/bge-m3
+        capabilities: {dimensions: 1024}
+        auth: `+auth+`
+    embeddings:
+      default: {deployment: bge}
+`)...)
+	}
+	for _, tc := range []struct {
+		name, saved, patch string
+		want               *routerconfig.DeploymentAuth
+		refused            string
+	}{
+		{name: "a key and its header", saved: "{api_key_env: EMBEDDING_API_KEY, header: X-Api-Key}", patch: "null"},
+		{
+			name: "a delegated credential", saved: "{credential: delegated, header: Authorization}", patch: `{"api_key_env":null}`,
+			want: &routerconfig.DeploymentAuth{Credential: routerconfig.CredentialDelegated, Header: "Authorization"},
+		},
+		{
+			name: "a key file", saved: "{api_key_file: /run/secrets/embedding, header: X-Api-Key}", patch: `{"api_key_env":null}`,
+			want: &routerconfig.DeploymentAuth{APIKeyFile: "/run/secrets/embedding", Header: "X-Api-Key"},
+		},
+		{
+			name: "a key whose header outlives it", saved: "{api_key_env: EMBEDDING_API_KEY, header: X-Api-Key}", patch: `{"api_key_env":null}`,
+			refused: "auth takes exactly one of api_key_env and api_key_file",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			merged, err := mergeGlobalOverridePatchYAML(existing(tc.saved), []byte(`{"model_catalog":{"deployments":{"bge":{"auth":`+tc.patch+`}}}}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := routerconfig.ParseYAMLBytes(merged)
+			if tc.refused != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.refused) {
+					t.Fatalf("load error = %v, want %q", err, tc.refused)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("the merged config does not load: %v\n%s", err, merged)
+			}
+			if got := cfg.ModelDeployments["bge"].Auth; !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("auth = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }

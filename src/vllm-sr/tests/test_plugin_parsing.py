@@ -7,11 +7,14 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 
 from cli.models import (
+    FastResponsePluginConfig,
     PluginConfig,
     PluginType,
+    RequestParamsPluginConfig,
     RouterReplayPluginConfig,
     ContextPluginConfig,
     ContextSource,
+    ResponseGuardPluginConfig,
     ToolsPluginConfig,
 )
 from cli.parser import ConfigParseError, parse_user_config
@@ -75,7 +78,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -94,7 +97,6 @@ decisions:
           blocked_params: ["logprobs"]
           max_tokens_limit: 256
           max_n: 1
-          strip_unknown: true
       - type: "response_guard"
         configuration:
           rules:
@@ -112,6 +114,15 @@ decisions:
             assert len(errors) == 0, f"Unexpected validation errors: {errors}"
         finally:
             os.unlink(temp_path)
+
+    @pytest.mark.parametrize(
+        "model", [FastResponsePluginConfig, ResponseGuardPluginConfig]
+    )
+    def test_enabled_false_alone_turns_off_an_inherited_plugin(self, model):
+        """A decision turns off an inherited plugin with enabled: false alone."""
+        assert model(enabled=False).enabled is False
+        with pytest.raises(PydanticValidationError):
+            model()
 
 
 class TestRouterReplayPluginConfig:
@@ -140,9 +151,12 @@ class TestRouterReplayPluginConfig:
         assert config.capture_request_body is None
         assert config.capture_response_body is None
         assert config.max_body_bytes is None
+        assert config.prompt_capture is None
         assert config.capture_personal_data is None
         assert config.capture_tool_results is None
+        assert config.max_prompt_bytes is None
         assert config.max_tool_trace_bytes is None
+        assert config.max_tool_trace_total_bytes is None
         assert config.max_tool_trace_steps is None
 
     @pytest.mark.parametrize(
@@ -150,11 +164,18 @@ class TestRouterReplayPluginConfig:
         [
             {},
             {"enabled": False},
+            {"prompt_capture": "none"},
+            {"prompt_capture": "raw", "capture_tool_results": True},
+            {"prompt_capture": "verified"},
             {"capture_personal_data": False},
             {"capture_tool_results": True},
             {"capture_request_body": False, "capture_response_body": False},
             {"max_tool_trace_bytes": 0, "max_tool_trace_steps": 0},
             {"max_records": 0, "max_body_bytes": 0},
+            {"max_prompt_bytes": 0},
+            {"prompt_capture": "raw", "max_prompt_bytes": 262144},
+            {"max_tool_trace_total_bytes": 0},
+            {"prompt_capture": "raw", "max_tool_trace_total_bytes": 1048576},
         ],
     )
     def test_router_replay_serialization_preserves_explicit_overrides(self, overrides):
@@ -164,11 +185,15 @@ class TestRouterReplayPluginConfig:
     @pytest.mark.parametrize(
         "overrides",
         [
+            {"prompt_capture": "full"},
+            {"prompt_capture": True},
             {"capture_personal_data": "false"},
             {"capture_tool_results": "true"},
             {"capture_request_body": 0},
             {"max_tool_trace_bytes": -1},
             {"max_tool_trace_steps": -1},
+            {"max_tool_trace_total_bytes": -1},
+            {"max_prompt_bytes": -1},
             {"max_records": -1},
             {"max_body_bytes": -1},
             {"replay_personal_data": False},
@@ -191,7 +216,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -271,6 +296,21 @@ class TestToolsPluginConfig:
             )
 
 
+class TestRequestParamsPluginConfig:
+    """Test the request_params plugin schema."""
+
+    def test_stream_cannot_be_blocked(self):
+        with pytest.raises(
+            PydanticValidationError, match="blocked_params cannot include stream"
+        ):
+            RequestParamsPluginConfig.model_validate(
+                {"blocked_params": ["logprobs", " stream "]}
+            )
+        assert RequestParamsPluginConfig.model_validate(
+            {"blocked_params": ["logprobs"]}
+        ).blocked_params == ["logprobs"]
+
+
 class TestPluginConfigurationValidation:
     """Test plugin configuration validation."""
 
@@ -287,7 +327,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -332,7 +372,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -507,7 +547,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"

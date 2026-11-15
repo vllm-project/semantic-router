@@ -201,6 +201,9 @@ func chatUpstreamAnswer(answer string, stream bool) *routing.UpstreamResponse {
 func assertGuardRefused(t *testing.T, format llmprotocol.WireFormat, stream bool, out *routing.Response) {
 	t.Helper()
 	body := drainResponse(t, out)
+	if path := out.Header.Get(headers.VSRResponsePath); path != headers.ResponsePathBlocked {
+		t.Fatalf("%s = %q, want %q", headers.VSRResponsePath, path, headers.ResponsePathBlocked)
+	}
 	if stream {
 		if out.Status != 200 {
 			t.Fatalf("status = %d, want the refusal as a 200 event stream", out.Status)

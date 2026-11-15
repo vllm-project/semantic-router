@@ -93,6 +93,9 @@ func emitFastResponsePluginConfig(sb *strings.Builder, p *config.DecisionPlugin)
 	if !ok {
 		return
 	}
+	if cfg.Enabled != nil {
+		fmt.Fprintf(sb, "    enabled: %v\n", *cfg.Enabled)
+	}
 	if cfg.Message != "" {
 		fmt.Fprintf(sb, "    message: %q\n", cfg.Message)
 	}
@@ -118,9 +121,6 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 	if cfg.MaxN != nil {
 		fmt.Fprintf(sb, "    max_n: %d\n", *cfg.MaxN)
-	}
-	if cfg.StripUnknown {
-		fmt.Fprintf(sb, "    strip_unknown: true\n")
 	}
 }
 

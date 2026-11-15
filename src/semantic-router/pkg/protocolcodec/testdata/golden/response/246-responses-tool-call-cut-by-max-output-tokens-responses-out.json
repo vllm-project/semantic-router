@@ -1,0 +1,39 @@
+{
+  "created_at": 100,
+  "error": null,
+  "id": "response_cut_2",
+  "incomplete_details": {
+    "reason": "max_output_tokens"
+  },
+  "instructions": null,
+  "metadata": {},
+  "model": "routed-model",
+  "object": "response",
+  "output": [
+    {
+      "arguments": "{\"city\":\"Paris\",\"days\":[1,2",
+      "call_id": "call_weather_2",
+      "id": "item_weather_2",
+      "name": "lookup_weather",
+      "type": "function_call"
+    }
+  ],
+  "parallel_tool_calls": true,
+  "status": "incomplete",
+  "temperature": null,
+  "tool_choice": "auto",
+  "tools": [],
+  "top_p": null,
+  "usage": {
+    "input_tokens": 12,
+    "input_tokens_details": {
+      "cache_write_tokens": 0,
+      "cached_tokens": 0
+    },
+    "output_tokens": 16,
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "total_tokens": 28
+  }
+}

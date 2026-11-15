@@ -8,8 +8,13 @@ import (
 )
 
 func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) (*routerconfig.CanonicalConfig, error) {
+	// Zero-valued fields serialize as explicit false/zero overrides, so start
+	// from the Router's defaults: what the Operator does not set keeps the
+	// Router's value. Tracing and the Response API stay off: the Operator
+	// deploys neither the trace collector nor the Redis their defaults name.
 	defaults := routerconfig.DefaultCanonicalGlobal()
-	catalog := defaults.ModelCatalog
+	defaults.Services.Observability.Tracing.Enabled = false
+	defaults.Services.ResponseAPI.Enabled = false
 	canonical := &routerconfig.CanonicalConfig{
 		Version: routerconfig.CanonicalConfigVersion,
 		Listeners: []routerconfig.Listener{
@@ -36,16 +41,7 @@ func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr 
 			Defaults: routerconfig.CanonicalProviderDefaults{},
 			Models:   []routerconfig.CanonicalProviderModel{},
 		},
-		Global: &routerconfig.CanonicalGlobal{
-			Router:       defaults.Router,
-			Services:     routerconfig.CanonicalServiceGlobal{},
-			Stores:       routerconfig.CanonicalStoreGlobal{},
-			Integrations: routerconfig.CanonicalIntegrationGlobal{},
-			// Zero-valued module fields serialize as explicit false/zero
-			// overrides. Start with the router's defaults so omitted operator
-			// settings keep the router's values.
-			ModelCatalog: catalog,
-		},
+		Global: &defaults,
 	}
 
 	if err := r.applyDiscoveredBackends(ctx, canonical, sr); err != nil {

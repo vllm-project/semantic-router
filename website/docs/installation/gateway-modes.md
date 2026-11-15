@@ -47,9 +47,11 @@ See the [release note](../release-notes/standalone-mode).
 ## What a standalone Router does
 
 - **Listeners:** each entry of `listeners` is served with HTTP/1.1 and HTTP/2
-  (h2c in cleartext), with its `timeout` bounding a whole call including its
-  streamed response, a stalled stream, and an idle connection, a 500 MiB request
-  body limit and at most 50,000 connections, the limits of the Envoy template.
+  (h2c in cleartext). Its `timeout` bounds reading a request, so a client that
+  stops sending its body gets 408, and how long an idle connection stays open;
+  it does not bound a response the backend is still streaming. A request body
+  is limited to 500 MiB and a listener to 50,000 connections, the limits of the
+  Envoy template.
 - **API keys:** with `api_keys` set, a client sends one of them as
   `Authorization: Bearer <key>` or `api-key: <key>`; other requests get an
   OpenAI-style 401. The key is removed before the request reaches a provider.
@@ -72,28 +74,36 @@ See the [release note](../release-notes/standalone-mode).
         key_file: certs/tls.key
   ```
 
-- **The edge's trust boundary:** client-sent identity headers (`x-authz-*`, and
-  the names `global.services.authz.identity` sets), unless the listener trusts
-  them (see [Identity headers](#identity-headers)), and the proxy-control
-  headers only a trusted proxy may set never reach routing or a backend. Those are
-  `x-envoy-internal` and Envoy's retry, timeout and tracing controls, such as
-  `x-envoy-max-retries`, `x-envoy-retry-on` and `x-envoy-upstream-rq-timeout-ms`.
-  Envoy-based layers behind the Router (sidecars, gateways in front of model
-  servers) obey them from a caller they trust, which the Router is, so a client
-  could otherwise set retries and timeouts there; the Router's reliability
-  policy stays the one retry and timeout authority. The list is the one Envoy
-  strips from external requests, and it stays that narrow.
+- **The edge's trust boundary:** two kinds of client-sent headers never reach
+  routing or a backend:
+  - identity headers (`x-authz-*`, and the names
+    `global.services.authz.identity` sets), unless the listener trusts them
+    (see [Identity headers](#identity-headers));
+  - proxy-control headers only a trusted proxy may set: `x-envoy-internal` and
+    Envoy's retry, timeout and tracing controls, such as
+    `x-envoy-max-retries`, `x-envoy-retry-on` and
+    `x-envoy-upstream-rq-timeout-ms`. The list is the one Envoy strips from
+    external requests.
+
+  Envoy-based layers behind the Router, such as sidecars or gateways in front
+  of model servers, obey those controls from the Router. Stripping them keeps
+  the Router's reliability policy the one retry and timeout authority.
 - **Probes:** `GET /health` answers while the process runs, and `GET /ready` once
   the routing core can take traffic. Prometheus metrics stay on the Router's
   metrics port (9190).
 - **Reloads:** the Router reloads its config in place. A change to a listener's
   address, port, timeout or `tls` paths, or a new or removed listener, is
-  rejected as `restart_required` until the Router restarts; API keys and model
-  allow-lists reload in place.
+  rejected as `restart_required` until the Router restarts; API keys, `apis`
+  with their model allow-lists, and identity trust reload in place.
+- **Shutdown:** on SIGTERM, `GET /ready` answers 503, the listeners stop
+  accepting connections, and every HTTP/2 connection, h2c included, gets a
+  GOAWAY. The requests in flight have `global.router.drain_timeout_seconds`
+  (25 by default) to finish; see [Draining on shutdown](#draining-on-shutdown).
 
 ### Model allow-list
 
-A listener's `models` lists the only request `model` values it accepts. Use it
+An API's `models` in a listener's `apis` lists the only request `model` values
+it accepts there. Use it
 to give a public key access to the router's auto model and nothing else, while
 an internal listener keeps every model:
 
@@ -106,7 +116,9 @@ listeners:
     address: 0.0.0.0
     port: 8899
     api_keys: ["${WORKSHOP_KEY}"]
-    models: [vllm-sr/auto]
+    apis:
+      chat_completions: {models: [vllm-sr/auto]}
+      responses: {models: [vllm-sr/auto]}
 ```
 
 - Names match exactly (case-sensitive, after trimming the request value), and
@@ -169,6 +181,58 @@ Memory and router replay record the user of each request. Without a trusting
 listener they still load and treat every request as anonymous, and the Router
 logs one warning at startup that names them.
 
+### Draining on shutdown
+
+When Kubernetes deletes a pod, it runs the container's `preStop` hook, if any,
+then sends the Router SIGTERM, and kills it `terminationGracePeriodSeconds`
+after the deletion began. The Router uses that time in three parts:
+
+1. **`preStop`:** the Router still serves while load balancers and the
+   Service's endpoints take the pod out of rotation.
+2. **The drain:** `GET /ready` answers 503, the listeners close, and the
+   requests in flight on every protocol (HTTP/1.1, HTTP/2 over TLS and h2c)
+   have `global.router.drain_timeout_seconds` to finish: 25 when it is unset,
+   and none for `0`, which leaves the requests in flight only the 5 s below.
+   The drain ends as soon as the last of them does.
+3. **5 s** for the Router's own resources to retire.
+
+Give the pod a grace period of at least preStop + drain + 5 s, with some
+margin: when it runs out, Kubernetes kills the Router whatever it is doing.
+The defaults, no preStop, a 25 s drain and Kubernetes' 30 s, fit with no
+margin. For requests that run longer, such as long generations or agent
+sessions, raise the drain and the grace period together. With requests of up
+to about 100 s, for example:
+
+```yaml
+global:
+  router:
+    drain_timeout_seconds: 120
+```
+
+and, in the Helm chart's values:
+
+```yaml
+# 10 s preStop + 120 s drain + 5 s, and 15 s of margin
+terminationGracePeriodSeconds: 150
+lifecycle:
+  preStop:
+    exec:
+      command: ["sleep", "10"]
+```
+
+- A drain that ends with requests still in flight logs
+  `standalone_drain_incomplete` with how many (`in_flight`); they are cut when
+  the Router exits. A drain whose requests all finished logs
+  `standalone_drain_completed` with its duration.
+- Only standalone mode honors `drain_timeout_seconds`: behind Envoy, Envoy
+  drains the client connections, and a config that sets it fails to load with
+  `--gateway extproc`.
+- The operator sets neither a grace period nor a `preStop` hook, so its pods
+  get Kubernetes' 30 s, which fits the default drain; it does not expose
+  `drain_timeout_seconds` yet.
+- `vllm-sr serve` stops its Router container with `docker stop --time 40`,
+  which fits a drain of up to 35 s.
+
 ### What needs `extproc`
 
 Policy that enforces access by a client identity needs an identity source. The
@@ -180,14 +244,22 @@ Router refuses it at startup and on reload when no listener sets
 - a rate limit rule that matches `user` or `group`;
 - `global.services.authz.providers`, which resolve per-user API keys.
 
-Turn on `identity.trust_headers` on a listener behind an authenticating proxy,
-or serve them with `--gateway extproc` behind a gateway that authenticates
-clients and removes the identity headers they send. With the Envoy listener the
-CLI generates, which authenticates no one, that again means
-`identity.trust_headers` behind an authenticating proxy; otherwise every request
-is anonymous, and a role binding refuses the requests it evaluates. Token-bucket rate limiting, mTLS,
-JWT or OIDC, and advanced route matching are planned for standalone mode; until
-then they need Envoy as well.
+Two setups provide one:
+
+- **Standalone:** set `identity.trust_headers` on a listener behind an
+  authenticating proxy.
+- **`--gateway extproc`:** run behind a gateway that authenticates clients and
+  removes the identity headers they send. The Envoy listener the CLI generates
+  authenticates no one, so it too needs `identity.trust_headers` behind an
+  authenticating proxy.
+
+Otherwise every request is anonymous, and a role binding refuses the requests
+it evaluates.
+
+:::note
+Token-bucket rate limiting, mTLS, JWT or OIDC, and advanced route matching are
+planned for standalone mode. Until then they need Envoy.
+:::
 
 ## Targets and platforms
 
@@ -224,7 +296,7 @@ message. GPU support through the host is tracked in
 - **Larger models:** a model needs about 4 bytes per parameter on the CPU, so a
   2B decision model needs about 8 GB. Raise the memory of Docker's VM (Docker
   Desktop: Settings, Resources) above what the config's models need, or pick a
-  smaller model. See [Choose a model](../model-runtime/choose-a-model).
+  smaller model. See [Choose a model](../model-runtime/get-started/choose-a-model).
 
 ## Options of `vllm-sr serve`
 

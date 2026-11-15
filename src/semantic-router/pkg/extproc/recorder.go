@@ -113,15 +113,18 @@ func (r *OpenAIRouter) startRouterReplay(
 
 	policy := ctx.RouterReplayPluginConfig
 	recorder = recorder.WithCapturePolicy(routerreplay.CapturePolicy{
-		CaptureRequestBody:  policy.CaptureRequestBody,
-		CaptureResponseBody: policy.CaptureResponseBody,
-		MaxBodyBytes:        resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
-		MaxToolTraceBytes:   policy.MaxToolTraceBytes,
-		MaxToolTraceSteps:   policy.MaxToolTraceSteps,
+		CaptureRequestBody:     policy.CapturesRequestText(),
+		CaptureResponseBody:    policy.CapturesResponseText(),
+		MaxBodyBytes:           resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
+		MaxPromptBytes:         policy.PromptByteLimit(),
+		MaxToolTraceBytes:      policy.ToolTraceByteLimit(),
+		MaxRawToolTraceBytes:   policy.RawToolTraceByteLimit(),
+		MaxToolTraceTotalBytes: policy.ToolTraceTotalByteLimit(),
+		MaxToolTraceSteps:      policy.MaxToolTraceSteps,
 	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
 	prompt := record.Prompt
-	ctx.RouterReplayContentOmitted = !r.personalDataReplayAllowed(ctx)
+	ctx.RouterReplayContentOmitted = !r.replayPromptAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
 	r.populateReplayIdentity(&record, ctx)
 	if !persistReplayRecord(ctx, recorder, record) {
@@ -149,8 +152,8 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 		return
 	}
 	record.SessionID = identity.sessionID
-	if identity.conversationID != "" {
-		record.ConversationID = identity.conversationID
+	if conversationID := identity.declaredConversationID(); conversationID != "" {
+		record.ConversationID = conversationID
 	}
 	// Persist the key the gate resolved, so outcome ingest can land feedback
 	// in the same window even when the session id alone keys it wider.
@@ -192,7 +195,9 @@ func (r *OpenAIRouter) resolveReplayRecorder(ctx *RequestContext, decisionName s
 
 // replayUserTurnIndex groups tool continuations with the user message that
 // started them. Protocol normalization represents tool results as RoleTool,
-// including Anthropic tool_result blocks and retained Responses history.
+// including Anthropic tool_result blocks and retained Responses history. Text
+// a client sent in the same message as tool results, such as a system reminder
+// next to an Anthropic tool_result, continues the loop as well.
 // Prefer the original snapshot so context trimming or Memory cannot renumber
 // turns. This history contains only messages actually available to the router.
 // Keep the invocation index as a fallback when no user history is visible.
@@ -205,7 +210,7 @@ func replayUserTurnIndex(ctx *RequestContext) int {
 	}
 	userMessages := 0
 	for _, message := range messages {
-		if message.Role == llmprotocol.RoleUser {
+		if message.Role == llmprotocol.RoleUser && !message.WithToolResults {
 			userMessages++
 		}
 	}
@@ -247,6 +252,7 @@ func buildReplayRoutingRecord(
 		ProjectionTrace:          cloneProjectionTraceForReplay(ctx.VSRProjectionTrace),
 		SignalConfidences:        cloneReplayFloat64Map(ctx.VSRSignalConfidences),
 		SignalErrorMatches:       cloneReplayBoolMap(ctx.VSRSignalErrorMatches),
+		ScanCoverage:             cloneReplayStringMap(ctx.VSRScanCoverage),
 		SignalValues:             cloneReplayFloat64Map(ctx.VSRSignalValues),
 		ToolTrace:                replayRequestToolTrace(ctx),
 		Streaming:                ctx.ExpectStreamingResponse,
@@ -324,10 +330,7 @@ func replayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
 // pre-mask request. Replay snapshots the neutral request before dispatch, so
 // omitting the body is the only option that cannot store it raw (D3, #3566).
 func replaySuppressesBody(ctx *RequestContext) bool {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return false
-	}
-	cfg := ctx.VSRSelectedDecision.GetMaskingConfig()
+	cfg := requestMasking(ctx)
 	return cfg != nil && cfg.Enabled
 }
 
@@ -394,13 +397,13 @@ func cloneReplayInterfaceMap(values map[string]interface{}) map[string]interface
 }
 
 func replayGuardrailState(ctx *RequestContext) (bool, bool, bool, bool) {
+	guard := requestResponseGuard(ctx)
+	hallucinationEnabled := guard != nil && guard.Reads(config.SignalTypeHallucination)
 	if ctx.VSRSelectedDecision == nil {
-		return false, false, false, false
+		return false, false, false, hallucinationEnabled
 	}
 	jailbreakEnabled := ctx.VSRSelectedDecision.HasSignalType("jailbreak")
 	piiEnabled := ctx.VSRSelectedDecision.HasSignalType("pii")
-	guard := ctx.VSRSelectedDecision.GetResponseGuardConfig()
-	hallucinationEnabled := guard != nil && guard.Reads(config.SignalTypeHallucination)
 	return jailbreakEnabled || piiEnabled, jailbreakEnabled, piiEnabled, hallucinationEnabled
 }
 
@@ -496,6 +499,7 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 		return
 	}
 
+	responseBody = redactCallerCredential(ctx, responseBody)
 	if len(responseBody) > 0 && replayResponseContentAllowed(ctx) {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}

@@ -229,6 +229,7 @@ func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[stri
 	// external[] is the deprecated way to declare a remote model: a
 	// deployment with a connection block replaces it.
 	assertMapCoversStructFields(t, modelCatalog, reflect.TypeOf(CanonicalModelCatalog{}), "global.model_catalog", "external")
+	assertMapCoversStructFields(t, mustMapAt(t, modelCatalog, "on_signal_overload"), reflect.TypeOf(SignalOverloadPolicy{}), "global.model_catalog.on_signal_overload")
 	assertReferenceConfigDeploymentCoverage(t, mustMapAt(t, modelCatalog, "deployments"))
 	assertReferenceConfigBindingsBySignalType(t, mustMapAt(t, modelCatalog, "bindings"), "global.model_catalog.bindings")
 	assertReferenceConfigEmbeddingCatalogCoverage(t, mustMapAt(t, modelCatalog, "embeddings"))
@@ -256,6 +257,7 @@ func assertReferenceConfigDeploymentCoverage(t testingT, deployments map[string]
 		{"limits", reflect.TypeOf(DeploymentLimits{})},
 		{"capabilities", reflect.TypeOf(DeploymentCapabilities{})},
 		{"generation", reflect.TypeOf(DeploymentGeneration{})},
+		{"outlier_detection", reflect.TypeOf(DeploymentOutlierDetection{})},
 	} {
 		assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, items, block.key, "global.model_catalog.deployments"), block.typ, "global.model_catalog.deployments[]."+block.key)
 	}

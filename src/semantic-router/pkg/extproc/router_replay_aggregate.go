@@ -171,29 +171,17 @@ func buildRouterReplaySignalDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		if n := len(record.Signals.Keyword); n > 0 {
-			counts["keyword"] += n
-		}
-		if n := len(record.Signals.Domain); n > 0 {
-			counts["domain"] += n
-		}
-		if n := len(record.Signals.FactCheck); n > 0 {
-			counts["fact_check"] += n
-		}
-		if n := len(record.Signals.UserFeedback); n > 0 {
-			counts["user_feedback"] += n
-		}
-		if n := len(record.Signals.TurnRelation); n > 0 {
-			counts["turn_relation"] += n
-		}
-		if n := len(record.Signals.Language); n > 0 {
-			counts["language"] += n
-		}
-		if n := len(record.Signals.Context); n > 0 {
-			counts["context"] += n
-		}
-		if n := len(record.Signals.Complexity); n > 0 {
-			counts["complexity"] += n
+		s := record.Signals
+		for name, matched := range map[string][]string{
+			"keyword": s.Keyword, "domain": s.Domain, "fact_check": s.FactCheck,
+			"user_feedback": s.UserFeedback, "turn_relation": s.TurnRelation, "language": s.Language,
+			"context": s.Context, "complexity": s.Complexity, "modality": s.Modality, "authz": s.Authz,
+			"jailbreak": s.Jailbreak, "safety": s.Safety, "pii": s.PII, "conversation": s.Conversation,
+			"metadata": s.Metadata, "input_modality": s.InputModality, "decision": s.Decision,
+		} {
+			if len(matched) > 0 {
+				counts[name] += len(matched)
+			}
 		}
 	}
 	return sortRouterReplayAggregateValues(counts, 0)

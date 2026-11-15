@@ -89,7 +89,7 @@ func validateFastResponsePlugin(
 	pluginType string,
 	typed *FastResponsePluginConfig,
 ) error {
-	if strings.TrimSpace(typed.Message) != "" {
+	if strings.TrimSpace(typed.Message) != "" || !typed.IsEnabled() {
 		return nil
 	}
 	return fmt.Errorf(

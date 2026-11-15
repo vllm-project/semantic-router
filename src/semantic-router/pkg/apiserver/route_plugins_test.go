@@ -172,3 +172,19 @@ func TestPluginOperationsKeepExplicitOwnershipAfterGrouping(t *testing.T) {
 		t.Fatal("context discovery did not reuse its memory, vector store and compression operations and the rag preview")
 	}
 }
+
+// A decision that turns its inherited fast_response off reaches its model,
+// so its binding previews no fixed text.
+func TestFastResponsePreviewOfATurnedOffBindingHasNoText(t *testing.T) {
+	off := false
+	decision := config.Decision{Name: "routed", Plugins: []config.DecisionPlugin{{
+		Type: config.DecisionPluginFastResponse, Configuration: config.MustStructuredPayload(config.FastResponsePluginConfig{Enabled: &off, Message: "MAINTENANCE"}),
+	}}}
+	cfg := &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: "alpha", Profile: config.RoutingProfile{Decisions: []config.Decision{decision}}}}}
+	server := &ClassificationAPIServer{config: &config.RouterConfig{}, runtimeRegistry: routerruntime.NewRegistry(cfg)}
+	recorder := httptest.NewRecorder()
+	pluginTestMux(server).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, apiPluginsPath+"/fast_response/preview", strings.NewReader(`{"binding":{"recipe":"alpha","decision":"routed"}}`)))
+	if recorder.Code != http.StatusOK || strings.Contains(recorder.Body.String(), "MAINTENANCE") {
+		t.Fatalf("preview of a turned-off fast_response: %d %s", recorder.Code, recorder.Body.String())
+	}
+}

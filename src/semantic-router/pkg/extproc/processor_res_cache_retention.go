@@ -22,11 +22,12 @@ const retentionDropReason = "retention.drop"
 //
 // Contract (issues #1747, #2009):
 //   - Only `retention.drop=true` triggers a write skip here.
-//   - `ttl_turns` is consumed separately as a per-entry TTL override
+//   - `ttl_turns` is consumed separately as a per-entry TTL bound
 //     (applyRetentionTTLOverride), not as a skip; `drop` and `ttl_turns` are
 //     mutually exclusive by validation.
-//   - `keep_current_model` is consumed by Router Learning protection;
-//     `prefer_prefix_retention` is emitted to the pool as a response header.
+//   - `keep_current_model` is only observed and reported in x-vsr-trace; no
+//     runtime path reads it. `prefer_prefix_retention` is emitted to the pool
+//     as a response header.
 //   - This gate does NOT affect cache reads; read-side gating lives in
 //     req_filter_cache.go.
 func ShouldSkipCacheWrite(ctx *RequestContext) (bool, string) {
@@ -63,13 +64,15 @@ func retentionTTLOverrideSeconds(ctx *RequestContext) (int, bool) {
 	return turns * retentionDefaultSecondsPerTurn, true
 }
 
-// applyRetentionTTLOverride returns the cache-write TTL (seconds) to use,
-// preferring the decision's retention `ttl_turns` override over the decision/global
-// default. Callers compute the base TTL (GetCacheTTLSecondsForDecision) first
-// and pass it here. This runs only after the drop gate (ShouldSkipCacheWrite);
-// drop and ttl_turns are mutually exclusive by validation.
+// applyRetentionTTLOverride returns the cache-write TTL (seconds) to use: the
+// decision's retention `ttl_turns` shortens the base TTL and never lengthens
+// it. A negative base (a store without expiry) takes ttl_turns, and a zero
+// base (no store) stays zero. Callers compute the base TTL (the plugin's
+// ttl_seconds, else the store's, bounded by the caller's ttl) first and pass
+// it here. This runs only after the drop gate (ShouldSkipCacheWrite); drop
+// and ttl_turns are mutually exclusive by validation.
 func applyRetentionTTLOverride(base int, ctx *RequestContext) int {
-	if override, ok := retentionTTLOverrideSeconds(ctx); ok {
+	if override, ok := retentionTTLOverrideSeconds(ctx); ok && (base < 0 || override < base) {
 		return override
 	}
 	return base

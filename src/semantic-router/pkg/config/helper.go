@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -166,19 +165,19 @@ func (c *RouterConfig) GetMostExpensivePricedModel() (modelName string, promptPe
 	return modelName, pricing.PromptPer1M, pricing.CompletionPer1M, pricing.Currency, true
 }
 
-// GetModelAPIFormat returns the explicitly configured wire format for the
-// model, or APIFormatOpenAI when the model has no override.
+// GetModelAPIFormat returns the API the model is reached on, by its canonical
+// name, or APIFormatChatCompletions when the model has no override.
 func (c *RouterConfig) GetModelAPIFormat(modelName string) string {
 	if c == nil || c.ModelConfig == nil {
-		return APIFormatOpenAI
+		return APIFormatChatCompletions
 	}
 	if modelConfig, ok := c.ModelConfig[modelName]; ok && modelConfig.APIFormat != "" {
-		return modelConfig.APIFormat
+		return CanonicalAPIFormat(modelConfig.APIFormat)
 	}
 	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok && baseConfig.APIFormat != "" {
-		return baseConfig.APIFormat
+		return CanonicalAPIFormat(baseConfig.APIFormat)
 	}
-	return APIFormatOpenAI
+	return APIFormatChatCompletions
 }
 
 // GetModelAccessKey returns the access key for the given model.
@@ -193,21 +192,21 @@ func (c *RouterConfig) GetModelAccessKeyForProvider(modelName, provider string) 
 	if c == nil || c.ModelConfig == nil {
 		return ""
 	}
+	// The loader already expanded each key once; it is used as it stands.
 	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		if rawKey := modelConfig.AccessKeys[provider]; rawKey != "" {
-			return os.ExpandEnv(rawKey)
+		if key := modelConfig.AccessKeys[provider]; key != "" {
+			return key
 		}
-		if rawKey := modelConfig.AccessKey; provider == "" && rawKey != "" {
-			expandedKey := os.ExpandEnv(rawKey)
-			return expandedKey
+		if provider == "" && modelConfig.AccessKey != "" {
+			return modelConfig.AccessKey
 		}
 	}
 	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok {
-		if rawKey := baseConfig.AccessKeys[provider]; rawKey != "" {
-			return os.ExpandEnv(rawKey)
+		if key := baseConfig.AccessKeys[provider]; key != "" {
+			return key
 		}
-		if provider == "" && baseConfig.AccessKey != "" {
-			return os.ExpandEnv(baseConfig.AccessKey)
+		if provider == "" {
+			return baseConfig.AccessKey
 		}
 	}
 	return ""

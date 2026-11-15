@@ -20,7 +20,8 @@ type Options struct {
 	// so do the pools of unchanged security domains; RootCAs and Dial are then
 	// inherited from Previous. The caller still closes Previous.
 	Previous *Set
-	// RootCAs replaces the system certificate pool for upstream TLS.
+	// RootCAs replaces the system certificate pool for upstream TLS; a
+	// cluster's CA file replaces it in turn.
 	RootCAs *x509.CertPool
 	// Dial opens connections; nil uses a net.Dialer.
 	Dial DialFunc
@@ -312,6 +313,11 @@ func (c *ClusterSpec) validate() error {
 	}
 	if h := c.HealthCheck; h != nil && (len(h.Path) == 0 || h.Path[0] != '/') {
 		return fmt.Errorf("health check path %q must start with /", h.Path)
+	}
+	if c.TLS != nil {
+		if _, _, err := c.TLS.clientFiles(); err != nil {
+			return err
+		}
 	}
 	for _, ep := range c.Endpoints {
 		wantTLS := ep.Scheme == schemeHTTPS

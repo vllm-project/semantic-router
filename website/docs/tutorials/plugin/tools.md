@@ -62,14 +62,25 @@ plugins:
 
 - `passthrough` (the default) leaves the request's tools as they are.
 - `filtered` keeps the tools `allow_tools` names, when it names any, and
-  removes the tools `block_tools` names.
-- `none` removes every tool and the request's `tool_choice`. With
+  removes the tools `block_tools` names. A Responses hosted tool goes by its
+  type, such as `image_generation`. A `tool_choice` that names a removed
+  tool, a hosted tool included, is removed with it, and the model chooses
+  among the tools left.
+- `none` removes every tool, a Responses hosted tool such as
+  `image_generation` included, and the request's `tool_choice`. With
   `strip_tool_history: true` it also removes prior assistant tool calls and
   tool results from the provider-bound request. The policy runs after signal
   and decision evaluation, so it never changes which route matched.
 - `trusted_facts` gates tool use on operator policy, gateway attestation and
   fresh runtime availability (the decision's catalog, when its selection adds
   from one). It is off unless enabled.
+
+A decision whose algorithm makes several model calls, such as `escalate`,
+`fusion` or `workflows`, applies the policy and the selection once to the
+request, and each call it makes carries at most the tools left. A workflow
+that resumes after a client tool call holds the calls it builds from the
+paused request to the policy in force when it resumes. With `trusted_facts`
+on, the selection of such a decision adds no catalog tools.
 
 ### Selection
 
@@ -103,7 +114,8 @@ The candidates and the result depend on the mode:
   `match.judge.max_candidates` tools (255 by default): the first as the
   request or the catalog lists them. More tools are never refused; a
   `recall: {method: bm25, top_k: ...}` stage instead narrows them to the ones
-  whose descriptions share the most terms with the request. Each truncation is
+  whose descriptions share the most terms with the request. Recall only
+  narrows, so a `match` block without a judge fails to load. Each truncation is
   a `match.judge.truncated` event on the request's trace span and a count in
   `vsr_match_judge_truncated_total`.
 - `timeout_ms` bounds the call, up to 60000. Without it a systemone

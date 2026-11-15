@@ -310,18 +310,18 @@ func resetListener(t *testing.T) string {
 	return listener.Addr().String()
 }
 
-// When every candidate fails, the client gets the primary's failure, and the
-// chain still tried each candidate exactly once: the response phases did not
-// fall back a second time behind the native gateway's chain.
-func TestExhaustedFallbackReturnsThePrimaryFailureInBothModes(t *testing.T) {
+// When every candidate fails, the client gets the last candidate's failure,
+// and the chain still tried each candidate exactly once: the response phases
+// did not fall back a second time behind the native gateway's chain.
+func TestExhaustedFallbackReturnsTheLastFailureInBothModes(t *testing.T) {
 	answers := map[bool]string{}
 	for _, native := range []bool{true, false} {
 		primary := &scriptedBackend{status: http.StatusServiceUnavailable, body: openAIError("primary overloaded")}
 		secondary := &scriptedBackend{status: http.StatusBadGateway, body: openAIError("secondary bad gateway")}
 		got := postChat(t, fallbackGateway(t, primary, secondary, native))
 
-		if got.status != http.StatusServiceUnavailable || !strings.Contains(got.body, "primary overloaded") {
-			t.Fatalf("native=%t: response = %s, want the primary's failure", native, got)
+		if got.status != http.StatusBadGateway || !strings.Contains(got.body, "secondary bad gateway") {
+			t.Fatalf("native=%t: response = %s, want the last candidate's failure", native, got)
 		}
 		if primary.hits.Load() != 1 || secondary.hits.Load() != 1 {
 			t.Fatalf("native=%t: backend hits primary=%d secondary=%d, want one each",

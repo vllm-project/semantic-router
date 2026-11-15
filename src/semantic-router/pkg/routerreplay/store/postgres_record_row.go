@@ -22,7 +22,8 @@ const postgresRecordSelectColumns = `
 	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
-	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache
+	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache,
+	prompt_original_bytes, prompt_original_sha256
 `
 
 type postgresRowScanner interface {
@@ -84,6 +85,8 @@ type postgresRecordRow struct {
 	recipe                       sql.NullString
 	endedAt                      sql.NullTime
 	terminalReason               sql.NullString
+	promptOriginalBytes          sql.NullInt64
+	promptOriginalSHA256         sql.NullString
 }
 
 func newPostgresInsertRecord(record Record) (postgresInsertRecord, error) {
@@ -224,6 +227,8 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.safetyEvidenceJSON,
 		record.routingMetadataJSON,
 		record.providerCacheJSON,
+		record.record.PromptOriginalBytes,
+		emptyStringSQL(record.record.PromptOriginalSHA256),
 	}
 }
 
@@ -324,6 +329,8 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.safetyEvidenceJSON,
 		&row.routingMetadataJSON,
 		&row.providerCacheJSON,
+		&row.promptOriginalBytes,
+		&row.promptOriginalSHA256,
 	}
 }
 
@@ -366,6 +373,12 @@ func (row *postgresRecordRow) decode() (Record, error) {
 	}
 	if row.terminalReason.Valid {
 		row.record.TerminalReason = row.terminalReason.String
+	}
+	if row.promptOriginalBytes.Valid {
+		row.record.PromptOriginalBytes = int(row.promptOriginalBytes.Int64)
+	}
+	if row.promptOriginalSHA256.Valid {
+		row.record.PromptOriginalSHA256 = row.promptOriginalSHA256.String
 	}
 	return row.record, nil
 }

@@ -400,7 +400,7 @@ type ProjectionScoreInputDecl struct {
 	SignalName  string
 	Weight      float64
 	ValueSource string
-	Match       float64
+	Match       *float64
 	Miss        float64
 }
 

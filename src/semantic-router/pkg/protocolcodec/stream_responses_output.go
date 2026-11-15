@@ -24,6 +24,10 @@ func (encoder *responsesStreamEncoder) collectCompletedResponsesContent(
 		if kind == "" {
 			kind = llmprotocol.ContentText
 		}
+		// An encrypted-only item completes without inventing a plaintext part.
+		if kind == llmprotocol.ContentReasoning && !encoder.contentStarted[key] && encoder.contentText[key] == nil {
+			continue
+		}
 		contentEvent := event
 		contentEvent.ContentIndex = key.content
 		completed, err := encoder.completeResponsesContent(contentEvent, outputKey, kind)
@@ -73,6 +77,7 @@ func marshalCompletedResponsesItem(
 		return item, err
 	}
 	item.Type, item.Role = "reasoning", ""
+	item.Summary = json.RawMessage(`[]`)
 	var err error
 	if len(parts.reasoningSummary) > 0 {
 		item.Summary, err = json.Marshal(parts.reasoningSummary)

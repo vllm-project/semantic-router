@@ -131,6 +131,17 @@ func DeployPreviewHandler(configPath string, readonlyMode bool) http.HandlerFunc
 			return
 		}
 
+		if !callerCanViewConfigSecrets(r) {
+			currentForDiffBytes, err = redactConfigYAML(currentForDiffBytes)
+			if err == nil {
+				previewBytes, err = redactConfigYAML(previewBytes)
+			}
+			if err != nil {
+				http.Error(w, "Failed to prepare configuration preview", http.StatusInternalServerError)
+				return
+			}
+		}
+		w.Header().Set("Cache-Control", "private, no-store")
 		currentForDiff := canonicalizeYAMLForDiff(currentForDiffBytes)
 		previewForDiff := canonicalizeYAMLForDiff(previewBytes)
 
@@ -428,7 +439,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
 	}
-	return mergedYAML, nil
+	return restoreConfigSecrets(currentData, mergedYAML)
 }
 
 // mergeDSLOwnedNodes applies only the configuration surface owned by the DSL:
@@ -437,7 +448,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 // replaced as one unit; in merge mode an omitted list remains untouched and a
 // supplied recipe keeps the fields of the base recipe of its name it omits.
 func mergeDSLOwnedNodes(baseRoot, fragmentRoot *yaml.Node, mode DeployMode) error {
-	preserveBaseDecisionAdaptations(baseRoot, fragmentRoot)
+	preserveBaseDecisionFields(baseRoot, fragmentRoot)
 	if mode == DeployModeReplace && mappingValueNode(fragmentRoot, "recipes") == nil {
 		return fmt.Errorf("compiled routing fragment must contain recipes")
 	}
@@ -703,7 +714,7 @@ func canonicalizeYAMLForDiff(raw []byte) string {
 	}
 
 	if looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(raw); err == nil && looksLikeFullBase {
-		if configData, decodeErr := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](raw); decodeErr == nil {
+		if configData, decodeErr := decodeConfigDocument[routerconfig.CanonicalConfig](raw); decodeErr == nil {
 			if canonical, marshalErr := marshalYAMLBytes(configData); marshalErr == nil {
 				return string(canonical)
 			}

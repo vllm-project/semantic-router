@@ -17,7 +17,7 @@ import {
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 import InsightsRecordSection from './InsightsRecordSection'
 import InsightsRecordTrace from './InsightsRecordTrace'
-import InsightsSessionRoutes from './InsightsSessionRoutes'
+import InsightsSessionRoutes, { InsightsSessionPosition } from './InsightsSessionRoutes'
 
 export default function InsightsRecordPage() {
   const navigate = useNavigate()
@@ -155,6 +155,7 @@ export default function InsightsRecordPage() {
                 <ProductIcon name="arrow-right" width={15} height={15} />
                 <span>{record.selected_model || 'No backend selected'}</span>
               </div>
+              <InsightsSessionPosition trajectory={trajectory} current={record.id} />
             </div>
             {lifecycle ? (
               <span
@@ -173,7 +174,7 @@ export default function InsightsRecordPage() {
                 sectionIndex={sectionIndex}
               />
             ))}
-            <InsightsSessionRoutes trajectory={trajectory} />
+            <InsightsSessionRoutes trajectory={trajectory} current={record.id} />
             <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
           </div>
         </>

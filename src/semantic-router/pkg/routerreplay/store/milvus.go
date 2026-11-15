@@ -456,10 +456,9 @@ func (m *MilvusStore) AttachResponse(ctx context.Context, id string, body string
 }
 
 // AttachPrompt stores the prompt of a record written without it.
-func (m *MilvusStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+func (m *MilvusStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
 	return m.updateRecord(ctx, id, func(record *Record) {
-		record.Prompt = prompt
-		record.PromptTruncated = truncated
+		prompt.Apply(record)
 	})
 }
 

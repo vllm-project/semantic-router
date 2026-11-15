@@ -64,6 +64,7 @@ global:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: SYSTEMONE_API_KEY}
         timeout_ms: 1500
     system:
@@ -80,7 +81,7 @@ intended device, the dev cases still preview to the intended decisions, and
 `routing_latency_ms` moved the way you wanted. The engine arguments
 (`vllm-sr serve --max-num-seqs`, `--max-num-batched-tokens`,
 `--batch-window-ms`, `--dtype`, `-dp N`) tune throughput; see
-[Choose a model, size and hardware](https://vllm-sr.ai/docs/model-runtime/choose-a-model).
+[Choose a model, size and hardware](https://vllm-sr.ai/docs/model-runtime/get-started/choose-a-model).
 
 ## Tune the recipe
 

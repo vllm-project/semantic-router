@@ -205,7 +205,7 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'predicate',
           label: 'Predicate',
           type: 'object',
-          description: 'Optional numeric comparison for count features.',
+          description: 'Numeric comparison a count feature requires; exists features take none.',
           fields: NUMERIC_PREDICATE_FIELDS,
         },
       ]

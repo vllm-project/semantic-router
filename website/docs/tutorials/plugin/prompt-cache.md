@@ -77,7 +77,8 @@ for the full provider-side contract.
 Marker insertion runs after routing and after request, context, and tool
 transformations, immediately before the request is encoded onto the Anthropic
 wire format. It only ever touches the outgoing Anthropic-shaped request; it
-never changes the neutral request that routing and other plugins evaluate.
+never changes the neutral request that routing and other plugins evaluate. A
+fallback attempt runs the same step for its candidate's wire format.
 
 ## Observability
 
@@ -86,7 +87,7 @@ Each evaluation records `llm_plugin_execution_total` with
 `skipped`, or `rejected`. With `x-vsr-debug: true` on the request, the same
 outcome appears in the `prompt_cache` member of `x-vsr-trace`, with its
 `reason` and its `inserted` and `preserved` marker counts; see
-[VSR routing headers](../../troubleshooting/vsr-headers).
+[VSR routing headers](../../api/headers).
 No Router Replay persistence is part of this plugin.
 
 See a complete example:

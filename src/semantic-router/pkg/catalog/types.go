@@ -215,6 +215,27 @@ type ProviderInstance struct {
 	// AuthCredential is the credential mode: delegated receives the
 	// requesting user's delegated credential in place of a configured one.
 	AuthCredential string `json:"auth_credential,omitempty" yaml:"auth_credential,omitempty"`
+	// TLS is how an https instance is verified; nil keeps the system roots
+	// and the endpoint's host.
+	TLS *ProviderTLS `json:"tls,omitempty" yaml:"tls,omitempty"`
+}
+
+// ProviderTLS verifies an https provider instance against CAFile (else the
+// system roots) under ServerName (else the endpoint's host), and presents
+// CertFile and KeyFile when set.
+type ProviderTLS struct {
+	CAFile     string `json:"ca_file,omitempty" yaml:"ca_file,omitempty"`
+	ServerName string `json:"server_name,omitempty" yaml:"server_name,omitempty"`
+	CertFile   string `json:"cert_file,omitempty" yaml:"cert_file,omitempty"`
+	KeyFile    string `json:"key_file,omitempty" yaml:"key_file,omitempty"`
+}
+
+func cloneProviderTLS(value *ProviderTLS) *ProviderTLS {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
 
 // ModelProviderBinding binds a request-facing model alias to one provider

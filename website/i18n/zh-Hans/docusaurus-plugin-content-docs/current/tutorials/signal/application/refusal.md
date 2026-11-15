@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`refusal` 询问决策模型，模型的答案是否拒绝了请求。它在响应阶段提出 `refusal` [预设](../../../system-one/reference#preset-catalog)问题：“Did the assistant refuse?”，选项为 `compliance` 和 `refusal`。它读取答案，所以拒答规则只在模型回答之后才存在：由响应插件读取，决策的规则永远不读取它。
+`refusal` 询问决策模型，模型的答案是否拒绝了请求。它在响应阶段提出 `refusal` [预设](../../../system-one/reference/presets#preset-catalog)问题：“Did the assistant refuse?”，选项为 `compliance` 和 `refusal`。它读取答案，所以拒答规则只在模型回答之后才存在：由响应插件读取，决策的规则永远不读取它。
 
 ## 主要优势 {#key-advantages}
 

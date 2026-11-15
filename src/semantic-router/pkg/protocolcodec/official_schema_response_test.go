@@ -19,7 +19,7 @@ func TestOfficialAnthropicTerminalReasonInventoryIsClosed(t *testing.T) {
 		{reason: "tool_use", neutral: llmprotocol.StopToolCall},
 		{reason: "pause_turn", neutral: llmprotocol.StopPaused, openAIClosed: true},
 		{reason: "refusal", neutral: llmprotocol.StopContentFilter},
-		{reason: "model_context_window_exceeded", neutral: llmprotocol.StopContextWindow, openAIClosed: true},
+		{reason: "model_context_window_exceeded", neutral: llmprotocol.StopContextWindow},
 	}
 	for _, test := range tests {
 		t.Run(test.reason, func(t *testing.T) { assertAnthropicTerminalReason(t, engine, test) })
@@ -44,8 +44,8 @@ type anthropicTerminalReasonCase struct {
 	// projectsToGenericStop marks terminals whose reply is complete and whose
 	// only unrepresentable detail is the matched stop string: for those the
 	// OpenAI targets receive the generic stop terminal with a dropped
-	// diagnostic. Terminals whose reply is not actually finished
-	// (pause_turn, context window) stay closed for OpenAI.
+	// diagnostic. A paused reply is not finished and stays closed for OpenAI.
+	// A full context window reaches OpenAI targets as a length stop.
 	projectsToGenericStop bool
 }
 
@@ -197,11 +197,12 @@ func assertResponsesUsageFields(t *testing.T, body json.RawMessage) {
 	if err := json.Unmarshal(body, &usage); err != nil {
 		t.Fatal(err)
 	}
-	if _, found := usage.InputDetails["cached_tokens"]; !found {
-		t.Error("Responses input usage omitted required cached_tokens")
+	// cached_tokens is a required integer. Cache writes are an optional
+	// extension: an unknown count is omitted, and a reported zero is an integer.
+	var cached *int64
+	if err := json.Unmarshal(usage.InputDetails["cached_tokens"], &cached); err != nil || cached == nil {
+		t.Errorf("Responses input usage needs an integer cached_tokens, got %s", usage.InputDetails["cached_tokens"])
 	}
-	// Cache writes are an optional extension: unknown counts must be omitted,
-	// while an explicitly reported zero is still a valid integer.
 	if value, found := usage.InputDetails["cache_write_tokens"]; found {
 		var count *int64
 		if err := json.Unmarshal(value, &count); err != nil || count == nil {

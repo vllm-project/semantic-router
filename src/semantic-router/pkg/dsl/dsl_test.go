@@ -1645,7 +1645,7 @@ func TestCompileAllPluginTypes(t *testing.T) {
 		{
 			name:       "request_params",
 			pluginType: "request_params",
-			body:       `blocked_params: ["logprobs", "top_logprobs"] max_tokens_limit: 500 max_n: 1 strip_unknown: true`,
+			body:       `blocked_params: ["logprobs", "top_logprobs"] max_tokens_limit: 500 max_n: 1`,
 			verifyType: "request_params",
 		},
 	}

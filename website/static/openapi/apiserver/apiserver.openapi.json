@@ -7387,6 +7387,50 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal Server Error",
             "content": {
@@ -14143,6 +14187,13 @@
                           "additionalProperties": false
                         }
                       },
+                      "roles": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
                       "state": {},
                       "states": {
                         "nullable": true,
@@ -14255,6 +14306,13 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              }
+                            },
+                            "roles": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
                               }
                             },
                             "state": {},
@@ -16139,6 +16197,13 @@
                           "additionalProperties": false
                         }
                       },
+                      "roles": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
                       "state": {},
                       "states": {
                         "nullable": true,
@@ -16251,6 +16316,13 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              }
+                            },
+                            "roles": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
                               }
                             },
                             "state": {},
@@ -20490,6 +20562,12 @@
                           "prompt": {
                             "type": "string"
                           },
+                          "prompt_original_bytes": {
+                            "type": "integer"
+                          },
+                          "prompt_original_sha256": {
+                            "type": "string"
+                          },
                           "prompt_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -21290,6 +21368,13 @@
                               }
                             }
                           },
+                          "scan_coverage": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "selected_model": {
                             "type": "string"
                           },
@@ -21501,6 +21586,9 @@
                                     },
                                     "raw_output": {
                                       "type": "string"
+                                    },
+                                    "raw_truncated": {
+                                      "type": "boolean"
                                     },
                                     "role": {
                                       "type": "string"
@@ -23721,6 +23809,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
                           "conversation_id": {
                             "type": "string"
                           },
@@ -25304,6 +25395,12 @@
                     "prompt": {
                       "type": "string"
                     },
+                    "prompt_original_bytes": {
+                      "type": "integer"
+                    },
+                    "prompt_original_sha256": {
+                      "type": "string"
+                    },
                     "prompt_tokens": {
                       "nullable": true,
                       "type": "integer"
@@ -26104,6 +26201,13 @@
                         }
                       }
                     },
+                    "scan_coverage": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "selected_model": {
                       "type": "string"
                     },
@@ -26315,6 +26419,9 @@
                               },
                               "raw_output": {
                                 "type": "string"
+                              },
+                              "raw_truncated": {
+                                "type": "boolean"
                               },
                               "role": {
                                 "type": "string"
@@ -28740,6 +28847,10 @@
                     "nullable": true,
                     "type": "object",
                     "properties": {
+                      "enabled": {
+                        "nullable": true,
+                        "type": "boolean"
+                      },
                       "message": {
                         "type": "string"
                       }
@@ -29571,9 +29682,6 @@
                       "max_tokens_limit": {
                         "nullable": true,
                         "type": "integer"
-                      },
-                      "strip_unknown": {
-                        "type": "boolean"
                       }
                     },
                     "additionalProperties": false
@@ -32905,6 +33013,13 @@
                     "routing_decision": {
                       "type": "string"
                     },
+                    "scan_coverage": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "selected_model": {
                       "type": "string"
                     },
@@ -34467,6 +34582,13 @@
                         },
                         "routing_decision": {
                           "type": "string"
+                        },
+                        "scan_coverage": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
                         },
                         "selected_model": {
                           "type": "string"
@@ -36849,7 +36971,7 @@
             }
           },
           "500": {
-            "description": "Management authentication configuration is invalid",
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -38949,6 +39071,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },
@@ -39659,6 +39784,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },
@@ -42368,7 +42496,7 @@
             }
           },
           "500": {
-            "description": "Management authentication configuration is invalid",
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -42747,7 +42875,7 @@
             }
           },
           "500": {
-            "description": "Management authentication configuration is invalid",
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -43472,6 +43600,50 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -44282,6 +44454,50 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -47673,6 +47889,9 @@
                         }
                       }
                     },
+                    "instance_id": {
+                      "type": "string"
+                    },
                     "message": {
                       "type": "string"
                     },
@@ -47890,6 +48109,9 @@
                           "type": "string"
                         }
                       }
+                    },
+                    "instance_id": {
+                      "type": "string"
                     },
                     "message": {
                       "type": "string"

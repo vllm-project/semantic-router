@@ -22,3 +22,6 @@ recipes:
               top_k: 12
               similarity_threshold: 0.72
               rerank: {deployment: vela-reranker, top_k: 4}
+global:
+  stores:
+    vector_store: {enabled: true, backend_type: memory}

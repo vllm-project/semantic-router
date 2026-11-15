@@ -1361,14 +1361,47 @@ type RuleCombinationConfig struct {
 	Conditions []RuleConditionConfig `json:"conditions" yaml:"conditions"`
 }
 
-// RuleConditionConfig references a specific rule by type and name
+// RuleConditionConfig is one condition of a decision's rules: a leaf that
+// references a rule by type and name, or a subtree that combines its own
+// conditions with an operator.
 type RuleConditionConfig struct {
-	// Type specifies the signal or projection type referenced by this condition.
-	// +kubebuilder:validation:Enum=authz;complexity;context;conversation;domain;fact_check;hallucination;input_modality;jailbreak;keyword;language;metadata;modality;pii;projection;refusal;safety;systemone;turn_relation;user_feedback
-	Type string `json:"type" yaml:"type"`
+	// Type specifies the signal or projection type a leaf references: a type
+	// the router accepts in decision rules.
+	// +optional
+	// +kubebuilder:validation:Enum=authz;complexity;context;conversation;domain;fact_check;input_modality;jailbreak;keyword;language;metadata;modality;pii;projection;safety;systemone;turn_relation;user_feedback
+	Type string `json:"type,omitempty" yaml:"type,omitempty"`
 
-	// Name is the name of the rule to reference
-	Name string `json:"name" yaml:"name"`
+	// Name is the name of the rule a leaf references
+	// +optional
+	Name string `json:"name,omitempty" yaml:"name,omitempty"`
+
+	// Label matches one label of the referenced rule (systemone and
+	// application signal conditions)
+	// +optional
+	Label string `json:"label,omitempty" yaml:"label,omitempty"`
+
+	// Predicate bounds the referenced rule's score, as {gt, gte, lt, lte}.
+	// The router checks it when it loads the configuration.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Predicate *apiextensionsv1.JSON `json:"predicate,omitempty" yaml:"predicate,omitempty"`
+
+	// OnError resolves a systemone leaf whose model backend fails
+	// +optional
+	// +kubebuilder:validation:Enum=no_match;match
+	OnError string `json:"on_error,omitempty" yaml:"on_error,omitempty"`
+
+	// Operator combines a subtree's conditions: "AND", "OR", or "NOT" (unary)
+	// +optional
+	// +kubebuilder:validation:Enum=AND;OR;NOT
+	Operator string `json:"operator,omitempty" yaml:"operator,omitempty"`
+
+	// Conditions are a subtree's conditions, each of this same shape. They
+	// are preserved as router-owned objects, since a CRD schema cannot
+	// recurse; the router validates them when it loads the configuration.
+	// +optional
+	Conditions []runtime.RawExtension `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 }
 
 // ModelRefConfig defines a model reference for routing

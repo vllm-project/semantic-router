@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`fact_check` 识别答案依赖于需要核查的事实陈述的请求。它提出 `fact_check` [预设](../../../system-one/reference#preset-catalog)问题：“Does answering this request require checking facts?”，选项为 `FACT_CHECK_NEEDED` 和 `NO_FACT_CHECK_NEEDED`。它只标记需要核查，并不核查任何事实。
+`fact_check` 识别答案依赖于需要核查的事实陈述的请求。它提出 `fact_check` [预设](../../../system-one/reference/presets#preset-catalog)问题：“Does answering this request require checking facts?”，选项为 `FACT_CHECK_NEEDED` 和 `NO_FACT_CHECK_NEEDED`。它只标记需要核查，并不核查任何事实。
 
 ## 主要优势 {#key-advantages}
 
@@ -66,6 +66,6 @@ vela3-fast 的事实核查适配器给出的概率接近 0 或 1，所以它的�
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `fact_check` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有事实核查规则；见[选择部署](../../../system-one/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 有该问题的训练形式。它读取当前用户轮次。
+除非 `fact_check` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有事实核查规则；见[选择部署](../../../system-one/deploy/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 有该问题的训练形式。它读取当前用户轮次。
 
 完整示例见 [`config/fragments/signal/fact-check/needs-verification.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/fact-check/needs-verification.yaml)。

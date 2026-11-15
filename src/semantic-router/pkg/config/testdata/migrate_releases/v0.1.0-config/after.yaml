@@ -337,6 +337,8 @@ recipes:
                     top_k: 3
                     min_similarity: 0.75
 global:
+  router:
+    strategy: "priority"
   services:
     response_api:
       enabled: true
@@ -386,5 +388,6 @@ global:
         device: cpu
         input:
           overflow: truncate
-  router:
-    strategy: "priority"
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

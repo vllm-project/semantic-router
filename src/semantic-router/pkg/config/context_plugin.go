@@ -199,7 +199,7 @@ func (c *RouterConfig) UsesMemory() bool {
 		return false
 	}
 	uses := false
-	c.visitEveryPlugins(func(plugins []DecisionPlugin) {
+	c.VisitEveryPlugins(func(plugins []DecisionPlugin) {
 		uses = uses || ContextPluginOf(plugins).Source(ContextSourceMemory) != nil
 	})
 	return uses

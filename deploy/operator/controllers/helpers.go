@@ -18,9 +18,7 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -40,79 +38,6 @@ func (r *SemanticRouterReconciler) getInt32OrDefault(val *int32, def int32) int3
 // parseQuantity parses a quantity string (e.g., "1Gi", "500Mi")
 func (r *SemanticRouterReconciler) parseQuantity(s string) (resource.Quantity, error) {
 	return resource.ParseQuantity(s)
-}
-
-// convertToConfigMap converts JSON-tagged config structs into YAML-ready maps or
-// slices, coercing numeric-looking strings into numbers for the router runtime.
-func (r *SemanticRouterReconciler) convertToConfigMap(v interface{}) interface{} {
-	// Marshal to JSON first (which respects json struct tags), then unmarshal to map[string]interface{}
-	// This preserves the JSON tag field names (snake_case) and structure
-	data, err := json.Marshal(v)
-	if err != nil {
-		return v
-	}
-
-	var result interface{}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return v
-	}
-
-	return r.normalizeConfigValue(result)
-}
-
-// convertStringsToFloats recursively converts string values to appropriate types
-// This handles the mismatch between Kubernetes CRD string fields (to avoid float precision issues)
-// and the semantic router app's expectation of actual numeric types in YAML
-func (r *SemanticRouterReconciler) convertStringsToFloats(m map[string]interface{}) {
-	for k, v := range m {
-		m[k] = r.normalizeConfigValue(v)
-	}
-}
-
-func (r *SemanticRouterReconciler) normalizeConfigValue(v interface{}) interface{} {
-	switch val := v.(type) {
-	case string:
-		return r.convertStringValue(val)
-	case map[string]interface{}:
-		r.convertStringsToFloats(val)
-		return val
-	case []interface{}:
-		for i, item := range val {
-			val[i] = r.normalizeConfigValue(item)
-		}
-		return val
-	default:
-		return v
-	}
-}
-
-// convertStringValue attempts to convert a string to the most appropriate type
-func (r *SemanticRouterReconciler) convertStringValue(s string) interface{} {
-	// Empty string stays as empty string
-	if s == "" {
-		return s
-	}
-
-	// Try to parse as integer first (for values like "100", "5", etc.)
-	if intVal, err := strconv.ParseInt(s, 10, 64); err == nil {
-		// Check if the string representation matches (no decimal point)
-		if strconv.FormatInt(intVal, 10) == s {
-			return intVal
-		}
-	}
-
-	// Try to parse as float (for values like "0.6", "1.0", "0.8", etc.)
-	if floatVal, err := strconv.ParseFloat(s, 64); err == nil {
-		return floatVal
-	}
-
-	// Try to parse as bool (for values like "true", "false")
-	if boolVal, err := strconv.ParseBool(s); err == nil {
-		return boolVal
-	}
-
-	// If none of the above, keep as string
-	return s
 }
 
 // getSecretValue retrieves a value from a Kubernetes Secret

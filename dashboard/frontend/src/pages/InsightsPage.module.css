@@ -116,6 +116,20 @@
   color: rgba(255, 255, 255, 0.24);
 }
 
+.recordSessionLink {
+  display: inline-block;
+  margin-top: 0.7rem;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  text-decoration: none;
+}
+
+.recordSessionLink:hover,
+.recordSessionLink:focus-visible {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
 .recordStatus {
   flex: 0 0 auto;
   padding: 0.38rem 0.68rem;
@@ -880,6 +894,8 @@
   display: inline-block;
   max-width: 100%;
   overflow: hidden;
+  /* an inline-block that hides its overflow sits on its bottom edge, above the row's other text */
+  vertical-align: middle;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1306,4 +1322,353 @@
 
 .projectionTraceMatchNo {
   color: var(--color-text-secondary);
+}
+
+/* A decision as a tinted pill: a soft tint and a thin border in its kind's color. */
+.decisionBadge {
+  --badge: #a1a1aa;
+  --badge-text: #e4e4e7;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.65rem 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--badge-text);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--badge) 18%, transparent),
+    color-mix(in srgb, var(--badge) 5%, transparent)
+  );
+  border: 1px solid color-mix(in srgb, var(--badge) 34%, transparent);
+  box-shadow: 0 0 12px -6px color-mix(in srgb, var(--badge) 60%, transparent);
+}
+
+.decisionBadge svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: none;
+  fill: none;
+  stroke: var(--badge);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* In a table where every row has one: the icon and a tinted name, nothing around them. */
+.decisionBadge[data-quiet] {
+  padding: 0;
+  font-weight: 500;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+.decisionBadge[data-tone='guard'] {
+  --badge: #e8798f;
+  --badge-text: #f5c7d0;
+}
+
+.decisionBadge[data-tone='privacy'] {
+  --badge: #e0a84f;
+  --badge-text: #f3dcb0;
+}
+
+.decisionBadge[data-tone='deep'] {
+  --badge: #a395e8;
+  --badge-text: #d9d3f7;
+}
+
+.decisionBadge[data-tone='fast'] {
+  --badge: #5cc8b8;
+  --badge-text: #bfeae3;
+}
+
+/* A row's signals: one line each, the name then a short bar filled to its probability,
+   the bars of a row lined up in one column. */
+.signalCell {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) 3rem;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  min-width: 0;
+}
+
+.signalItem {
+  display: contents;
+}
+
+.signalMore {
+  grid-column: 1 / -1;
+}
+
+.signalText {
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signalText > span {
+  color: var(--color-text-secondary);
+}
+
+.signalText > strong {
+  color: var(--color-text);
+  font-weight: 550;
+}
+
+.signalMeter {
+  display: block;
+  flex: none;
+  width: 3rem;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.signalMeter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.signalMore {
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+}
+
+/* Session routing history: a summary strip, then one compact row per request. */
+.historySummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.historySummary > div {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.historySummary dt {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.historySummary dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.historySummary dd[data-strong] {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.historyChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.historyChip > b {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.historyChip > i,
+.historyAgent > i {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  flex: none;
+}
+
+.historySummary [data-outcome='ok'],
+.historyResult[data-outcome='ok'] {
+  color: var(--color-success);
+}
+
+.historySummary [data-outcome='failed'],
+.historyResult[data-outcome='failed'] {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.historySummary [data-outcome='running'],
+.historyResult[data-outcome='running'] {
+  color: var(--color-warning);
+}
+
+.historyWrap {
+  overflow-x: auto;
+}
+
+.historyTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.historyTable th {
+  padding: 0 0.6rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.historyTable td {
+  padding: 0.45rem 0.6rem;
+  border-top: 1px solid var(--color-border);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.historyTable tbody tr[data-record-id]:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* The request this page shows. */
+.historyTable tr[data-current] {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 3px 0 0 var(--color-text);
+}
+
+.historyTable tr[data-current] .historyNumber:first-child {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/* A request that changed the session's model. */
+.historyTable tr[data-switch] .historyModel > strong {
+  color: var(--color-warning);
+}
+
+.historyGroup td {
+  padding-top: 0.9rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.historyNumber {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.historyNumber a {
+  color: inherit;
+}
+
+.historyAgent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.historyModel {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  max-width: 28rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.historyModel > strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.historyPrevious {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+}
+
+.historyVerb {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 5.4rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans, inherit);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.historyVerb svg {
+  width: 0.7rem;
+  height: 0.7rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+
+.historyVerb[data-action='switch'] {
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  color: var(--color-warning);
+}
+
+.historyReason {
+  max-width: 22rem;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+}
+
+.historyResult {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.historyResult::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
 }

@@ -37,8 +37,9 @@ const postgresInsertQueryTemplate = `
 			prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id,
-			cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68)
+			cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache,
+			prompt_original_bytes, prompt_original_sha256
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68, $69, $70)
 	`
 
 const postgresCreateTableQueryTemplate = `
@@ -99,6 +100,8 @@ const postgresCreateTableQueryTemplate = `
 			completion_tokens INTEGER,
 			total_tokens INTEGER,
 			provider_cache JSONB,
+			prompt_original_bytes INTEGER DEFAULT 0,
+			prompt_original_sha256 TEXT DEFAULT '',
 			actual_cost DOUBLE PRECISION,
 			baseline_cost DOUBLE PRECISION,
 			cost_savings DOUBLE PRECISION,
@@ -110,6 +113,8 @@ const postgresCreateTableQueryTemplate = `
  ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS safety_evidence JSONB;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS routing_metadata JSONB;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS provider_cache JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt_original_bytes INTEGER DEFAULT 0;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt_original_sha256 TEXT DEFAULT '';
 		ALTER TABLE {{table}} ALTER COLUMN recipe TYPE TEXT;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_tier INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_priority INTEGER DEFAULT 0;
@@ -491,23 +496,25 @@ func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body stri
 }
 
 // AttachPrompt stores the prompt of a record written without it.
-func (p *PostgresStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+func (p *PostgresStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
 	release, err := p.lifecycle.beginMutation()
 	if err != nil {
 		return err
 	}
 	defer release()
-	prompt = sanitizePostgresText(prompt)
+	text := sanitizePostgresText(prompt.Text)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET prompt = $2,
-		    prompt_truncated = $3
+		    prompt_truncated = $3,
+		    prompt_original_bytes = $4,
+		    prompt_original_sha256 = $5
 		WHERE id = $1
 	`, p.tableName)
 
 	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, prompt, truncated)
+		result, err := p.db.ExecContext(ctx, query, id, text, prompt.Truncated, prompt.OriginalBytes, prompt.OriginalSHA256)
 		if err != nil {
 			return fmt.Errorf("failed to update prompt: %w", err)
 		}

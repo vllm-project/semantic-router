@@ -76,9 +76,11 @@ backend, the Router rewrites the request to that backend's model name.
 | An `entrypoints[].model_names` value | Evaluate only the mapped recipe. |
 | `vllm-sr/auto`, in a document with one recipe and no entrypoint for it | Evaluate that recipe. |
 | An explicitly declared ReMoM, Fusion, or Flow entrypoint | Evaluate its recipe; the matched decision selects the looper algorithm. |
-| A concrete provider model or LoRA name | Send directly to that backend without recipe routing. |
+| A concrete provider model or LoRA name | Send directly to that backend without recipe routing. A LoRA name that more than one model declares is refused with `model_not_found`; a decision selects it through `model` and `lora_name`. |
 
-Entrypoints are listed by `/v1/models` with routing metadata. Successful routed
+Entrypoints are listed by `/v1/models` with routing metadata. With
+`global.router.list_backend_models: true` the list also names, sorted, every
+model and LoRA name a direct request is served for. Successful routed
 responses expose `x-vsr-selected-recipe`; Router Replay and Insights can also
 filter records by recipe.
 

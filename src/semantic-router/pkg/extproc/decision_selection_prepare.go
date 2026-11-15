@@ -80,13 +80,15 @@ func prepareEscalateCheck(cards map[string]modelservice.ModelCard, cfg *config.R
 	return err
 }
 
-// preparedCard is the card of a deployment: a systemone deployment's
-// declared one, or the model runtime's, read once per generation.
+// preparedCard is the card of a deployment, read once per generation from
+// provider: the model runtime's, or a systemone deployment's API listing,
+// else its declared card (serving.WithRemote). Without a provider a systemone
+// deployment has its declared card.
 func preparedCard(cards map[string]modelservice.ModelCard, cfg *config.RouterConfig, provider modelCardProvider, deployment string, timeout time.Duration) (modelservice.ModelCard, error) {
 	if card, exists := cards[deployment]; exists {
 		return card, nil
 	}
-	if remote := cfg.ModelDeployments[deployment]; remote.IsSystemOne() {
+	if remote := cfg.ModelDeployments[deployment]; remote.IsSystemOne() && provider == nil {
 		card := modelservice.RemoteCard(remote.Model, remote.DeclaredQuestionTypes(), remote.DeclaredPresets())
 		cards[deployment] = card
 		return card, nil
