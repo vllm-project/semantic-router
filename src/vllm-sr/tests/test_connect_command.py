@@ -6,6 +6,7 @@ import stat
 import subprocess
 import sys
 import threading
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -118,13 +119,28 @@ PLAIN_WARNINGS = (
 @pytest.fixture
 def gateway():
     """A stub gateway that records each request and answers like the Router: JSON
-    for a plain request, events for a streamed one."""
+    for a plain request, events for a streamed one. Its replay list, as the
+    Router's management API serves it, holds one record for each request."""
     seen = []
     replies = {path: dict(stages) for path, stages in STAGES.items()}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
+
+        def do_GET(self):
+            path, _, query = self.path.partition("?")
+            wanted = urllib.parse.parse_qs(query).get("model", [None])[0]
+            records = [
+                {"id": f"r{index}", "original_model": body.get("model")}
+                for index, (_, body, _) in enumerate(seen)
+                if wanted in (None, body.get("model"))
+            ]
+            found = path == "/api/v1/observability/replays"
+            self.send_response(200 if found else 404)
+            self.send_header("content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"data": records} if found else {}).encode())
 
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["content-length"])))
@@ -1923,3 +1939,572 @@ def test_a_recipe_that_drops_what_no_longer_fits_advertises_each_decisions_large
     easy["algorithm"] = {"type": "fusion"}
     assert rc.entrypoint_candidates(doc, "vllm-sr/auto")[0] == (["local", "big"], 2)
     assert connect_command._context_window(doc, "vllm-sr/auto", None)[0] == 8192
+
+
+# What claude -p --output-format stream-json and codex exec --json print for a
+# check that passes: the command's call, its output, and the answer to it.
+CLAUDE_EVENTS = [
+    {"type": "system", "subtype": "init", "model": "vllm-sr/auto"},
+    {
+        "type": "assistant",
+        "message": {
+            "model": "qwen36",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "t1",
+                    "name": "Bash",
+                    "input": {"command": "echo vsr-check"},
+                }
+            ],
+        },
+    },
+    {
+        "type": "user",
+        "message": {
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_use_id": "t1",
+                    "content": "vsr-check",
+                    "is_error": False,
+                }
+            ]
+        },
+    },
+    {
+        "type": "assistant",
+        "message": {"model": "qwen36", "content": [{"type": "text", "text": "ok"}]},
+    },
+    {"type": "result", "subtype": "success", "is_error": False, "result": "vsr-check"},
+]
+CODEX_EVENTS = [
+    {"type": "thread.started", "thread_id": "th1"},
+    {"type": "turn.started"},
+    {
+        "type": "item.completed",
+        "item": {
+            "type": "command_execution",
+            "command": "bash -lc 'echo vsr-check'",
+            "aggregated_output": "vsr-check\n",
+            "exit_code": 0,
+            "status": "completed",
+        },
+    },
+    {"type": "item.completed", "item": {"type": "agent_message", "text": "vsr-check"}},
+    {"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}},
+]
+
+
+@pytest.fixture
+def checked_harness(tmp_path, monkeypatch):
+    """A claude and a codex that answer --version, list a bundled gpt-5.5, and
+    otherwise act out one --check run: they record how they were started, send a
+    review request to $FAKE_REVIEW_URL when Codex reviews approvals, then print
+    $FAKE_EVENTS and exit with $FAKE_EXIT."""
+    bin_dir = tmp_path / "check-bin"
+    bin_dir.mkdir()
+    record = tmp_path / "check-ran.json"
+    versions = {"claude": "2.1.325 (Claude Code)", "codex": "codex-cli 0.166.0"}
+    for name, version in versions.items():
+        script = bin_dir / name
+        script.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, sys, time, urllib.request\n"
+            "args = sys.argv[1:]\n"
+            "if args == ['--version']:\n"
+            f"    print({version!r})\n"
+            "    sys.exit(0)\n"
+            "if args[:2] == ['debug', 'models']:\n"
+            f"    print(json.dumps({{'models': [{BUNDLED_GPT_55!r}]}}))\n"
+            "    sys.exit(0)\n"
+            "given = args[args.index('--settings') + 1] if '--settings' in args else None\n"
+            "catalog = [a.split('=', 1)[1] for a in args if a.startswith('model_catalog_json=')]\n"
+            "json.dump({'args': args, 'cwd': os.getcwd(),"
+            " 'settings': open(given).read() if given else None,"
+            " 'catalog': json.load(open(json.loads(catalog[0]))) if catalog else None,"
+            " 'stdin_closed': os.path.samestat(os.fstat(0), os.stat(os.devnull)),"
+            f" 'key': os.environ.get('VLLM_SR_API_KEY')}}, open({str(record)!r}, 'w'))\n"
+            "if os.environ.get('FAKE_REVIEW_URL') and '--approve-for-me' in args:\n"
+            "    body = json.dumps({'model': 'vllm-sr/review', 'input': 'review'}).encode()\n"
+            "    urllib.request.urlopen(urllib.request.Request(os.environ['FAKE_REVIEW_URL'],"
+            " body, {'content-type': 'application/json'})).read()\n"
+            "time.sleep(float(os.environ.get('FAKE_SLEEP', '0')))\n"
+            "for event in json.loads(os.environ.get('FAKE_EVENTS', '[]')):\n"
+            "    print(json.dumps(event))\n"
+            "sys.exit(int(os.environ.get('FAKE_EXIT', '0')))\n"
+        )
+        script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+    return record
+
+
+def _flat(output: str) -> str:
+    return " ".join(output.split())
+
+
+def test_check_runs_claude_code_on_the_settings_connect_wrote(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setenv("FAKE_EVENTS", json.dumps(CLAUDE_EVENTS))
+    args = ["connect", "claude-code", "--base-url", url, "--yes", "--check"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    output = _flat(result.output)
+    assert "spends a few short model calls on your login or key" in output
+    assert "Harness ok 2.1.325 (Claude Code) at " in output
+    assert "Login ok the gateway answered, as qwen36" in output
+    assert (
+        "Tool round trip ok ran echo vsr-check and answered with its output" in output
+    )
+    assert "sk-secret" not in result.output
+    ran = json.loads(checked_harness.read_text())
+    settings = tmp_path / "claude" / "settings.json"
+    assert ran["args"][:2] == ["-p", rc_prompt()]
+    assert ran["args"][ran["args"].index("--settings") + 1] == str(settings)
+    assert "Bash(echo vsr-check)" in ran["args"]
+    assert "--no-session-persistence" in ran["args"]
+    # its own temporary directory, gone afterwards, and no stdin to wait on
+    assert ran["stdin_closed"] and not Path(ran["cwd"]).exists()
+    assert ran["key"] == "sk-secret"  # the harness's own environment, unchanged
+
+    # a dry run checks the settings it would write, and writes none
+    settings.unlink()
+    result = CliRunner().invoke(
+        main, ["connect", "claude-code", "--base-url", url, "--dry-run", "--check"]
+    )
+    assert result.exit_code == 0, result.output
+    ran = json.loads(checked_harness.read_text())
+    assert json.loads(ran["settings"])["env"]["ANTHROPIC_BASE_URL"] == url
+    assert not Path(ran["args"][ran["args"].index("--settings") + 1]).exists()
+    assert not settings.exists()
+
+
+def rc_prompt():
+    return importlib.import_module("cli.harness_check").PROMPT
+
+
+def test_a_failed_check_names_the_step_and_hides_the_key(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    refused = "API Error: 401 the key sk-secret is not valid, Bearer sk-other-123"
+    events = [
+        {
+            "type": "assistant",
+            "message": {
+                "model": "<synthetic>",
+                "content": [{"type": "text", "text": refused}],
+            },
+        },
+        {"type": "result", "subtype": "success", "is_error": True, "result": refused},
+    ]
+    monkeypatch.setenv("FAKE_EVENTS", json.dumps(events))
+    monkeypatch.setenv("FAKE_EXIT", "1")
+    args = ["connect", "claude-code", "--base-url", url, "--yes", "--check"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 1
+    output = _flat(result.output)
+    assert "Login failed API Error: 401 the key <hidden> is not valid" in output
+    assert "Bearer <hidden>" in output and "sk-" not in output
+    assert "Tool round trip not run" in output
+    assert "The changes above stay written" in output
+
+    # a model that answers without running the command fails the round trip
+    monkeypatch.setenv("FAKE_EXIT", "0")
+    monkeypatch.setenv(
+        "FAKE_EVENTS", json.dumps([CLAUDE_EVENTS[3], {**CLAUDE_EVENTS[4]}])
+    )
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 1
+    assert "answered without running echo vsr-check" in _flat(result.output)
+
+
+def test_check_without_the_harness_or_in_time_fails(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    url, _, _ = gateway
+    hk = importlib.import_module("cli.harness_check")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    args = ["connect", "claude-code", "--base-url", url, "--yes", "--check"]
+    monkeypatch.setenv("FAKE_SLEEP", "30")
+    monkeypatch.setattr(hk, "TIMEOUT", 1)
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 1
+    assert "Login failed claude did not finish in 1 s" in _flat(result.output)
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 1
+    output = _flat(result.output)
+    assert "Harness failed claude is not on PATH" in output
+    assert "Login not run" in output
+
+    for other in (["--launch"], ["--undo"]):
+        result = CliRunner().invoke(main, ["connect", "codex", "--check", *other])
+        assert result.exit_code == 2 and "does not take --check" in result.output
+
+
+REVIEW_DOC = {
+    "version": "v0.5",
+    "providers": {
+        "defaults": {"model": "session"},
+        "models": [
+            {"name": "session", "context_window_size": 131072},
+            {"name": "reviewer", "context_window_size": 16384},
+        ],
+    },
+    "entrypoints": [
+        {
+            "model_names": ["vllm-sr/auto"],
+            "recipe": "main",
+            "default": True,
+            "review_model": "vllm-sr/review",
+        },
+        {"model_names": ["vllm-sr/review"], "recipe": "review"},
+    ],
+    "recipes": [
+        {"name": name, "decisions": [{"name": name, "modelRefs": [{"model": model}]}]}
+        for name, model in [("main", "session"), ("review", "reviewer")]
+    ],
+}
+
+
+def test_check_sees_codex_send_its_approval_review_to_the_review_entrypoint(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    url, _, _ = gateway
+    hk = importlib.import_module("cli.harness_check")
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump(REVIEW_DOC))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setenv("FAKE_EVENTS", json.dumps(CODEX_EVENTS))
+    monkeypatch.setenv("FAKE_REVIEW_URL", url + "/v1/responses")
+    monkeypatch.setattr(hk, "management_url", lambda gateway: url)
+    args = ["connect", "codex", "--config", str(config), "--base-url", url]
+    result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes", "--check"])
+    assert result.exit_code == 0, result.output
+    output = _flat(result.output)
+    assert "Harness ok codex-cli 0.166.0 at " in output
+    assert "Tool round trip ok ran echo vsr-check" in output
+    assert "Approval review ok went to vllm-sr/review (replay r" in output
+    ran = json.loads(checked_harness.read_text())
+    assert ran["args"][:3] == ["exec", "--profile", "vllm-sr"]
+    assert "--approve-for-me" in ran["args"] and "--ephemeral" in ran["args"]
+    assert ran["args"][-1] == hk.REVIEW_PROMPT and ran["stdin_closed"]
+
+    # without the Router's replay list the review is not observed, which passes
+    monkeypatch.setattr(hk, "management_url", lambda gateway: "http://127.0.0.1:9")
+    result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes", "--check"])
+    assert result.exit_code == 0, result.output
+    assert "Approval review not observed the replay list at" in _flat(result.output)
+
+    # a dry run passes the profile's settings as overrides, with its catalog
+    home = tmp_path / "codex-dry"
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    result = CliRunner().invoke(main, [*args, "--no-vsr", "--dry-run", "--check"])
+    assert result.exit_code == 0, result.output
+    ran = json.loads(checked_harness.read_text())
+    overrides = dict(a.split("=", 1) for a in ran["args"] if "=" in a)
+    assert overrides["model_providers.vllm-sr.base_url"] == json.dumps(url + "/v1")
+    assert [m["slug"] for m in ran["catalog"]["models"]] == [
+        "vllm-sr/auto",
+        "vllm-sr/review",
+    ]
+    assert not home.exists()
+
+
+def test_status_reports_each_connection_and_what_changed_since(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    url, seen, _ = gateway
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump(REVIEW_DOC))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    result = CliRunner().invoke(main, ["connect", "status"])
+    assert result.exit_code == 0, result.output
+    assert "claude-code: not connected (no record in" in result.output
+    assert "codex: not connected" in result.output
+
+    args = ["--config", str(config), "--base-url", url, "--no-vsr", "--yes"]
+    for harness in ("claude-code", "codex"):
+        result = CliRunner().invoke(main, ["connect", harness, *args])
+        assert result.exit_code == 0, result.output
+    asked = len(seen)
+    result = CliRunner().invoke(main, ["connect", "status"])
+    assert result.exit_code == 0, result.output
+    output = _flat(result.output)
+    settings = tmp_path / "claude" / "settings.json"
+    catalog = tmp_path / "codex" / "vllm-sr.models.json"
+    profile = tmp_path / "codex" / "vllm-sr.config.toml"
+    for part in [
+        "claude-code (user scope)",
+        f"gateway {url}",
+        "model vllm-sr/auto",
+        "context window 131,072 tokens",
+        "login gateway key, in the settings",
+        f"files {settings}: as written",
+        "gateway now ok: model agent-model",
+        "codex (profile vllm-sr)",
+        "review model vllm-sr/review",
+        "login gateway key from $VLLM_SR_API_KEY",
+        f"{catalog}: as written",
+    ]:
+        assert part in output, part
+    assert "sk-secret" not in result.output
+    # one short request each, with the key each harness sends
+    assert [(p, auth) for p, _, auth in seen[asked:]] == [
+        ("/v1/messages", "Bearer sk-secret"),
+        ("/v1/responses", "Bearer sk-secret"),
+    ]
+
+    held = json.loads(settings.read_text())
+    held["env"]["ANTHROPIC_MODEL"] = "opus"
+    settings.write_text(json.dumps(held))
+    catalog.unlink()
+    # the Codex TUI's own tables leave the profile as connect wrote it, as for --undo
+    profile.write_text(profile.read_text() + "\n[tui]\nscreen_reader = true\n")
+    monkeypatch.delenv("VLLM_SR_API_KEY")
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    claude, codex = json.loads(result.output)["connections"]
+    assert claude["files"] == [
+        {"path": str(settings), "state": "changed", "changed": ["ANTHROPIC_MODEL"]}
+    ]
+    assert codex["files"] == [
+        {"path": str(profile), "state": "as written"},
+        {"path": str(catalog), "state": "missing"},
+    ]
+    assert (codex["review_model"], codex["context_window"]) == (
+        "vllm-sr/review",
+        131072,
+    )
+    assert codex["probe"] == {
+        "state": "not probed",
+        "detail": "$VLLM_SR_API_KEY is not set, and Codex sends the key from it",
+    }
+    assert "sk-secret" not in result.output
+
+    assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert json.loads(result.output)["connections"][1]["connected"] is False
+
+
+def test_a_file_changed_after_the_preview_is_not_written(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    command = importlib.import_module("cli.commands.connect")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    settings = tmp_path / "settings.json"
+    settings.write_text('{"theme": "dark"}')
+
+    def edited_while_asking(*args, **kwargs):
+        settings.write_text('{"theme": "light"}')
+        return True
+
+    monkeypatch.setattr(command.click, "confirm", edited_while_asking)
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--base-url", url])
+    assert result.exit_code == 1
+    assert "changed after the changes above were worked out" in _flat(result.output)
+    assert settings.read_text() == '{"theme": "light"}'
+    assert not (tmp_path / hc.MANIFEST).exists()
+
+
+@pytest.mark.parametrize("failing", [2, 3])
+def test_a_write_that_fails_part_way_puts_back_what_it_wrote(
+    tmp_path, monkeypatch, failing
+):
+    profile = tmp_path / "p.config.toml"
+    profile.write_text("old = 1\n")
+    profile.chmod(0o640)
+    created = tmp_path / "vsr.json"
+    changes = [
+        hc.Change(profile, "file", {"file": "new = 1\n"}),
+        hc.Change(created, "json", {"runtimeUrl": "http://gw"}),
+    ]
+    replace, calls = hc.os.replace, []
+
+    def crash(*args):
+        calls.append(args)
+        if len(calls) == failing:  # the second file, or the record after both
+            raise OSError("disk full")
+        return replace(*args)
+
+    monkeypatch.setattr(hc.os, "replace", crash)
+    with pytest.raises(OSError, match="every file was left as it was"):
+        hc.apply_changes(changes, tmp_path)
+    assert profile.read_text() == "old = 1\n" and _mode(profile) == 0o640
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["p.config.toml"]
+
+    monkeypatch.setattr(hc.os, "replace", replace)
+    hc.apply_changes(changes, tmp_path)
+    assert profile.read_text() == "new = 1\n" and _mode(profile) == 0o640
+
+
+def test_status_fails_when_a_gateway_check_fails(tmp_path, gateway, monkeypatch):
+    url, _, replies = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    args = ["connect", "claude-code", "--base-url", url, "--context-window", "65536"]
+    assert CliRunner().invoke(main, [*args, "--no-vsr", "--yes"]).exit_code == 0
+    replies["/v1/messages"].pop("plain")
+    for shown in ([], ["--json"]):
+        result = CliRunner().invoke(main, ["connect", "status", *shown])
+        assert result.exit_code == 1, result.output
+        assert "failed" in result.output
+
+
+def test_status_sends_no_key_to_a_gateway_the_settings_no_longer_name(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    url, seen, _ = gateway
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump(REVIEW_DOC))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    args = ["--config", str(config), "--base-url", url, "--no-vsr", "--yes"]
+    for harness in ("claude-code", "codex"):
+        result = CliRunner().invoke(main, ["connect", harness, *args])
+        assert result.exit_code == 0, result.output
+    settings = tmp_path / "claude" / "settings.json"
+    profile = tmp_path / "codex" / "vllm-sr.config.toml"
+
+    # a key replaced in place still goes to the gateway the settings name
+    held = json.loads(settings.read_text())
+    held["env"][hc.TOKEN_KEY] = "sk-rotated"
+    settings.write_text(json.dumps(held))
+    asked = len(seen)
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    assert [auth for _, _, auth in seen[asked:]] == [
+        "Bearer sk-rotated",
+        "Bearer sk-secret",
+    ]
+
+    # moved to another gateway with that gateway's key: nothing goes to the one
+    # recorded, and the status says why
+    held["env"] |= {"ANTHROPIC_BASE_URL": "http://127.0.0.1:9", hc.TOKEN_KEY: "sk-b"}
+    settings.write_text(json.dumps(held))
+    profile.write_text(
+        profile.read_text().replace(f"{url}/v1", "http://127.0.0.1:9/v1")
+    )
+    asked = len(seen)
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    assert seen[asked:] == []
+    claude, codex = json.loads(result.output)["connections"]
+    assert claude["probe"] == {
+        "state": "not probed",
+        "detail": "the settings no longer hold the ANTHROPIC_BASE_URL connect"
+        f" wrote, so their key is not sent to {url}",
+    }
+    assert codex["probe"] == {
+        "state": "not probed",
+        "detail": "the profile no longer holds what connect wrote, so no key is"
+        f" sent to {url}",
+    }
+    assert "sk-b" not in result.output
+
+
+def test_a_file_edited_while_the_changes_are_written_is_kept(tmp_path, monkeypatch):
+    first, second = tmp_path / "p.config.toml", tmp_path / "vsr.json"
+    first.write_text("old = 1\n")
+    second.write_text('{"theme": "dark"}\n')
+    changes = [
+        hc.Change(first, "file", {"file": "new = 1\n"}),
+        hc.Change(second, "json", {"runtimeUrl": "http://gw"}),
+    ]
+    write, written = hc.write_private, []
+
+    def editor_saves(path, text, **kwargs):
+        # an editor saves the next file once the first is written
+        write(path, text, **kwargs)
+        written.append(path)
+        if len(written) == 1:
+            second.write_text('{"theme": "light"}\n')
+
+    monkeypatch.setattr(hc, "write_private", editor_saves)
+    with pytest.raises(hc.StaleWriteError, match=f"{second} changed while"):
+        hc.apply_changes(
+            changes, tmp_path, {first: "old = 1\n", second: '{"theme": "dark"}\n'}
+        )
+    assert second.read_text() == '{"theme": "light"}\n'
+    assert first.read_text() == "old = 1\n"
+    assert not (tmp_path / hc.MANIFEST).exists()
+
+    # putting back a write leaves alone a file edited after it was written
+    second.write_text('{"theme": "dark"}\n')
+    saved = []
+
+    def edited_then_full(path, text, **kwargs):
+        if path == second:
+            raise OSError("disk full")
+        write(path, text, **kwargs)
+        if not saved:  # an editor saves the first file once it is written
+            saved.append(first.write_text("mine = 1\n"))
+
+    monkeypatch.setattr(hc, "write_private", edited_then_full)
+    with pytest.raises(OSError, match="changed since it was written"):
+        hc.apply_changes(changes, tmp_path)
+    assert first.read_text() == "mine = 1\n"
+    assert second.read_text() == '{"theme": "dark"}\n'
+
+
+@pytest.mark.parametrize(
+    "harness, events, code, timed_out, why",
+    [
+        (
+            "codex",
+            [
+                *CODEX_EVENTS[:-1],
+                {"type": "turn.failed", "error": {"message": "stream closed"}},
+            ],
+            1,
+            False,
+            "codex exited with status 1 and reported a failure: stream closed",
+        ),
+        ("codex", CODEX_EVENTS, 0, True, "codex did not finish in 120 s"),
+        ("claude-code", CLAUDE_EVENTS, 2, False, "claude exited with status 2: boom"),
+    ],
+)
+def test_a_run_that_ends_badly_fails_the_check_after_steps_that_passed(
+    tmp_path, checked_harness, monkeypatch, harness, events, code, timed_out, why
+):
+    hk = importlib.import_module("cli.harness_check")
+    out = "\n".join(json.dumps(event) for event in events)
+    monkeypatch.setattr(hk, "_run_harness", lambda *_: (out, "boom\n", code, timed_out))
+    name = "claude" if harness == "claude-code" else "codex"
+    rows = hk.run(harness, [name, "exec"], dict(hk.os.environ), tmp_path, [])
+    states = {row.name: (row.state, row.detail) for row in rows}
+    assert states["Login"][0] == states["Tool round trip"][0] == "ok"
+    assert states["Exit"] == ("failed", why)
+
+    # the same harness that finishes well passes
+    passed = CLAUDE_EVENTS if harness == "claude-code" else CODEX_EVENTS
+    out = "\n".join(json.dumps(event) for event in passed)
+    monkeypatch.setattr(hk, "_run_harness", lambda *_: (out, "", 0, False))
+    rows = hk.run(harness, [name, "exec"], dict(hk.os.environ), tmp_path, [])
+    assert [row.state for row in rows] == ["ok"] * 4
+    assert rows[-1].detail == f"{name} exited with status 0"

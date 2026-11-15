@@ -610,6 +610,34 @@ def warning_notes(value: str) -> list[str]:
     return notes
 
 
+def _probe_target(harness: str, model: str, gateway: str, token: str):
+    path, extra, call = _probe_request(harness, model)
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        **extra,
+    }
+    return gateway.rstrip("/") + path, headers, call
+
+
+def basic_reply(
+    gateway: str, harness: str, model: str, token: str, timeout: float = 120
+) -> ProbeResult:
+    """A plain request in the harness's own protocol, and whether a finished
+    reply came back."""
+    url, headers, _ = _probe_target(harness, model, gateway, token)
+    response, answer, problem = _post(
+        url, headers, _plain_request(harness, model), timeout
+    )
+    return _result(
+        "Basic reply",
+        url,
+        response,
+        problem or _plain_problem(harness, answer),
+        "answered",
+    )
+
+
 def probe_gateway(
     gateway: str, harness: str, model: str, token: str, timeout: float = 120
 ) -> list[ProbeResult]:
@@ -617,23 +645,8 @@ def probe_gateway(
     passed: a plain reply, then a streamed tool loop, a tool call and the answer to
     its result, since both harnesses stream and some failures show only where a
     stream ends or once a tool result goes back."""
-    path, extra, call = _probe_request(harness, model)
-    url = gateway.rstrip("/") + path
-    headers = {
-        "content-type": "application/json",
-        "authorization": f"Bearer {token}",
-        **extra,
-    }
-    response, answer, problem = _post(
-        url, headers, _plain_request(harness, model), timeout
-    )
-    plain = _result(
-        "Basic reply",
-        url,
-        response,
-        problem or _plain_problem(harness, answer),
-        "answered",
-    )
+    url, headers, call = _probe_target(harness, model, gateway, token)
+    plain = basic_reply(gateway, harness, model, token, timeout)
     if not plain.ok:
         return [plain]
     response, events, problem = _post(url, headers, {**call, "stream": True}, timeout)
