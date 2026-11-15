@@ -53,15 +53,6 @@ func keywordSyllableMatch(text string, start, end int) bool {
 	return true
 }
 
-func containsCJK(text string) bool {
-	for _, r := range text {
-		if isCJK(r) {
-			return true
-		}
-	}
-	return false
-}
-
 func containsUnspacedScript(text string) bool {
 	for _, r := range text {
 		if isUnspacedScript(r) {
