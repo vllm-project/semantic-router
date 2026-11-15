@@ -393,6 +393,11 @@ recipes:
     cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["connect_timeout"] == "10s"
     assert cluster["type"] == "STATIC"
+    # an idle connection closes before a 5s keep-alive backend closes it
+    options = cluster["typed_extension_protocol_options"][
+        "envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
+    ]
+    assert options["common_http_protocol_options"]["idle_timeout"] == "4s"
     lb_endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
     assert [endpoint["load_balancing_weight"] for endpoint in lb_endpoints] == [
         75,
@@ -764,7 +769,11 @@ recipes:
         ]
         == "/etc/ssl/certs/ca-certificates.crt"
     )
-    assert "typed_extension_protocol_options" not in cluster
+    # the TLS backend stays on HTTP/1.1: only the idle timeout is set
+    options = cluster["typed_extension_protocol_options"][
+        "envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
+    ]
+    assert options["explicit_http_config"] == {"http_protocol_options": {}}
 
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
