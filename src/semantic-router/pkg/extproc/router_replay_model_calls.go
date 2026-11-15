@@ -24,7 +24,9 @@ func (r *OpenAIRouter) priceModelCall(measured modelservice.ModelCall) store.Rou
 	}
 	pricing, priced := r.Config.DeploymentPricing(measured.Deployment)
 	switch {
-	case measured.InputTokens < 0 || measured.OutputTokens < 0:
+	// a reply that reported one token counter and not the other
+	case measured.InputTokens < 0 || measured.OutputTokens < 0,
+		!measured.HasUsage && measured.InputTokens+measured.OutputTokens > 0:
 		addUnpricedRouterCalls(&call, store.UnpricedUsageIncomplete, 1)
 	case !measured.HasUsage:
 		addUnpricedRouterCalls(&call, store.UnpricedNoUsage, 1)

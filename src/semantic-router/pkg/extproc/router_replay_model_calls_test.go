@@ -21,6 +21,7 @@ func TestReplayModelCallsPricingAndCoverage(t *testing.T) {
 		{Deployment: "priced", Kind: "decision_model", Model: "decision", HasUsage: true, InputTokens: 1000, OutputTokens: 500},
 		{Deployment: "unpriced", Kind: "systemone", Model: "remote", HasUsage: true, InputTokens: 100},
 		{Deployment: "priced", Kind: "embeddings", Model: "embed"},
+		{Deployment: "priced", Kind: "systemone", Model: "partial", OutputTokens: 100},
 	}
 	ctx := &RequestContext{}
 	ctx.TraceContext, ctx.ModelCallMeter = modelservice.WithRequestMeter(context.Background())
@@ -29,21 +30,22 @@ func TestReplayModelCallsPricingAndCoverage(t *testing.T) {
 	}
 	accounting := r.replaceReplayModelCalls(ctx, nil)
 	calls := accounting.RouterCalls
-	if len(calls) != 3 || calls[0].Model != "decision" {
+	if len(calls) != 4 || calls[0].Model != "decision" {
 		t.Fatalf("calls = %+v", calls)
 	}
 	assertApproxFloat64(t, calls[0].Cost, 0.004)
-	if calls[1].UnpricedReasons[store.UnpricedPricingNotConfigured] != 1 || calls[2].UnpricedReasons[store.UnpricedNoUsage] != 1 {
+	if calls[1].UnpricedReasons[store.UnpricedPricingNotConfigured] != 1 || calls[2].UnpricedReasons[store.UnpricedNoUsage] != 1 ||
+		calls[3].UnpricedReasons[store.UnpricedUsageIncomplete] != 1 {
 		t.Fatalf("calls = %+v", calls)
 	}
 	// Refreshing at response/failure finalization replaces the meter snapshot.
 	accounting = r.replaceReplayModelCalls(ctx, accounting)
-	if len(accounting.RouterCalls) != 3 {
+	if len(accounting.RouterCalls) != 4 {
 		t.Fatal("snapshot duplicated calls")
 	}
 	for _, state := range []string{routerreplay.LifecycleCompleted, routerreplay.LifecycleFailed} {
 		summary := buildRouterReplayAggregateCostSummary([]routerreplay.RoutingRecord{{LifecycleState: state, CostAccounting: accounting}})
-		if summary.RouterCallSpend != 0.004 || summary.Coverage.RouterCalls != 3 || summary.Coverage.UnpricedRouterCalls != 2 {
+		if summary.RouterCallSpend != 0.004 || summary.Coverage.RouterCalls != 4 || summary.Coverage.UnpricedRouterCalls != 3 {
 			t.Fatalf("%s summary = %+v", state, summary)
 		}
 	}
