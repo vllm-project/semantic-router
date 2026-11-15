@@ -187,12 +187,15 @@ vllm-sr connect codex --config codex.yaml --launch -- exec "fix the failing test
 `--launch` runs the same checks and the same probe, then starts the harness
 through the gateway for that one session and exits with its status. Nothing is
 written: Claude Code gets the settings with `--settings` from a temporary file
-only you can read, which holds the key and is removed when Claude Code exits,
-and Codex gets them as `-c` overrides and reads the key from `VLLM_SR_API_KEY`,
-so it never appears on the command line. Both win over the user's and the
-project's settings, so the overrides above do not apply. Arguments after `--`
-go to the harness, and a gateway that fails the probe means the harness is not
-started.
+only you can read, and Codex gets them as `-c` overrides. Both read the key from
+`VLLM_SR_API_KEY` in their own environment (Claude Code through an
+`apiKeyHelper` that prints it), so it never appears on the command line or in a
+file. The temporary file is removed when the harness exits, also when its
+terminal closes. Both win over the user's and the project's settings, so the
+overrides above do not apply. Arguments after `--` go to the harness, and a
+gateway that fails the probe means the harness is not started. Claude Code's
+`--resume` hint on exit names the removed file, so resume a launched session
+with `vllm-sr connect claude-code --launch -- --resume <session id>`.
 
 ### Router settings for Claude Code
 
