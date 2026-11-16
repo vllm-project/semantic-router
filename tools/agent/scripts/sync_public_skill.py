@@ -28,6 +28,13 @@ DIAGNOSE_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-diagnose-rout
 BENCHMARK_SOURCE = ROOT / "tools/agent/skills/vllm-sr-benchmark"
 BENCHMARK_DESTINATION = ROOT / "website/static/install/agent/vllm-sr-benchmark"
 BENCHMARK_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-benchmark/"
+COMPARE_SOURCE = ROOT / "tools/agent/skills/vllm-sr-compare-configurations"
+COMPARE_DESTINATION = (
+    ROOT / "website/static/install/agent/vllm-sr-compare-configurations"
+)
+COMPARE_PUBLIC_ORIGIN = (
+    "https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/"
+)
 PUBLICATIONS = (
     (SOURCE, DESTINATION, PUBLIC_ORIGIN, "vllm-sr-agent-operations", "vllm-sr"),
     (
@@ -64,6 +71,13 @@ PUBLICATIONS = (
         BENCHMARK_PUBLIC_ORIGIN,
         "vllm-sr-benchmark",
         "vllm-sr-benchmark",
+    ),
+    (
+        COMPARE_SOURCE,
+        COMPARE_DESTINATION,
+        COMPARE_PUBLIC_ORIGIN,
+        "vllm-sr-compare-configurations",
+        "vllm-sr-compare-configurations",
     ),
 )
 MARKDOWN_LINK = re.compile(
