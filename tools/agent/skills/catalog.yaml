@@ -75,6 +75,21 @@ skills:
     handoff: Give one targeted next check or an evidence-backed issue reproduction.
     support: v0.5 route preview/probe and public header contract; debug trace requires permission.
 
+  - id: vllm-sr-benchmark
+    name: vllm-sr-benchmark
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-benchmark/SKILL.md
+    published: website/static/install/agent/vllm-sr-benchmark/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-benchmark/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Plan and run a reproducible sr-bench preview, replay, or live evaluation.
+    prerequisites: Prepared dataset, reachable targets, running sr-bench service, and live-call authorization when applicable.
+    inputs: Frozen cases, config hash, target revisions, request settings, judges, prices, and limits.
+    outputs: Frozen plan, run ID, coverage reconciliation, metrics, and provenance report.
+    handoff: Review expected calls and cost before any live run not already authorized.
+    support: sr-bench 1.0; preview and replay do not establish live answer quality.
+
   - id: router-contract-change
     name: router-contract-change
     audience: contributor
