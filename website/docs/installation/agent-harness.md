@@ -153,7 +153,8 @@ It then reports three checks, each on its own line:
 
 - `Router configuration`: what the configuration given with `--config` lacks
   for this harness and the models its entrypoint reaches, from the settings
-  below, without changing it.
+  below, without changing it. For every harness that includes
+  [the timeout and fallback an agent call needs](#keep-long-and-failed-calls-in-the-turn).
 - `Basic reply`: a plain request in the harness's protocol gets an answer, and
   the line names the model that gave it.
 - `Streamed tool loop`: a streamed tool call, then the answer once its result
@@ -1374,6 +1375,8 @@ scoring. This does not configure the harness's own context management. Follow
 [Virtual Models: limits for agent clients](../tutorials/global/entrypoints-and-recipes#limits-for-agent-clients)
 for the example and exact eligibility behavior.
 
+### Keep long and failed calls in the turn
+
 A listener's `timeout` (300 seconds by default) bounds a whole call, the
 streamed response included, and arriving output does not extend it. A call
 that reaches the limit is cut off: the stream is reset and the rest of the
@@ -1387,6 +1390,44 @@ In live Terminal-Bench 2.1 runs of Claude Code 2.1.304 at `xhigh` effort on
 Qwen3.8-27B-FP8 (vLLM 0.32, one MI300X), 2.5% to 4% of calls took more than
 300 seconds, and the longest about 17 minutes.
 :::
+
+In standalone mode and behind the Envoy the CLI renders, a backend that
+refuses a connection does not fail the call: the Router retries an attempt
+the backend never received twice, and never resends one it did. An Envoy
+configured elsewhere retries only as its routes say (see
+[model configuration](model-configuration#tune-timeouts-retries-and-endpoint-health)).
+A model that answers with an error, or keeps refusing, fails the call unless
+its decision falls back to its next model. Fallback is off by default, because
+the next model answers without the first one's prompt cache, and its default
+timeouts (30 seconds in all, 10 for each model) end an agent's slower answer;
+see [Fall back to another model](model-configuration#fall-back-to-another-model).
+
+`vllm-sr connect` reports both for the entrypoint it connects: each model, or
+decision override, whose whole call the Router bounds, with the
+`total_timeout: 0s` to add; each decision whose fallback is off or too short
+for an agent call, with the block to add where it is set (the decision's own
+`fallback`, its recipe's, or `global.router.fallback`); and each decision that
+names one model:
+
+```text
+- fallback on decision all, so a model call that fails moves to the decision's next model ... with 1200s for it: ...
+  global:
+    router:
+      fallback:
+        enabled: true
+        total_timeout: 1200s
+        per_attempt_timeout: 1200s
+- total_timeout: 0s on qwen-msg (300s, the listener's timeout): the Router cuts a call off ...
+  providers:
+    models:
+      - name: qwen-msg
+        reliability:
+          total_timeout: 0s
+```
+
+Behind Envoy a fallback answer also ends at the listener's `timeout` (300
+seconds by default), since the Router holds the response while the fallback
+call runs; raise it there for agents that fall back on long calls.
 
 ## Preserve tool and conversation continuity
 

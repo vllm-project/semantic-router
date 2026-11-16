@@ -8,14 +8,17 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
 import requests
 
+from cli.durations import parse_duration
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.model_catalog_types import ModelCatalogError
+from cli.models import _fallback_duration_seconds
 from cli.runtime_stack import resolve_runtime_stack
 
 CLAUDE_HEADERS = {
@@ -337,17 +340,7 @@ def entrypoint_candidates(doc: dict, model: str) -> list[tuple[list[str], int]] 
     for decision in recipe.get("decisions") or []:
         if not isinstance(decision, dict):
             continue
-        # a decision's modelRefs, and the models its candidateIterations walk
-        refs = [
-            *(decision.get("modelRefs") or []),
-            *(
-                one
-                for it in decision.get("candidateIterations") or []
-                if isinstance(it, dict)
-                for one in it.get("models") or []
-            ),
-        ]
-        names = [r.get("model") for r in refs if isinstance(r, dict) and r.get("model")]
+        names = _decision_models(decision)
         groups.append((names, _candidates_needed(decision, names)))
     fallback = _get(doc, "providers", "defaults", "model")
     if fallback:
@@ -361,6 +354,20 @@ def entrypoint_candidates(doc: dict, model: str) -> list[tuple[list[str], int]] 
         for names, need in groups
     ]
     return [(names, min(need, len(names))) for names, need in groups if names]
+
+
+def _decision_models(decision: dict) -> list[str]:
+    """A decision's modelRefs, and the models its candidateIterations walk."""
+    refs = [
+        *(decision.get("modelRefs") or []),
+        *(
+            one
+            for it in decision.get("candidateIterations") or []
+            if isinstance(it, dict)
+            for one in it.get("models") or []
+        ),
+    ]
+    return [r.get("model") for r in refs if isinstance(r, dict) and r.get("model")]
 
 
 def recipe_known_limits(doc: dict, model: str) -> bool:
@@ -428,6 +435,197 @@ def _catalog_windows() -> dict[str, int]:
     }
 
 
+# The fallback the check asks for: room for an agent call that runs for
+# minutes (the longest on the agent harness page took about 17). 1200s is also
+# the ext_proc message_timeout of the Envoy the CLI renders, the longest the
+# Router can hold a response there.
+AGENT_FALLBACK_TIMEOUT = "1200s"
+# pkg/fallback DefaultPolicy's timeouts, in seconds, which a 0 inherits
+FALLBACK_DEFAULT_SECONDS = {"total_timeout": 30, "per_attempt_timeout": 10}
+FALLBACK_WHY = (
+    " so a model call that fails moves to the decision's next model (which answers"
+    " without the first one's prompt cache) instead of returning the error to the"
+    f" agent, with {AGENT_FALLBACK_TIMEOUT} for it: the default 30s in all and 10s"
+    " for each model end a slower answer"
+)
+TIMEOUT_WHY = (
+    ": the Router cuts a call off at that time even while it streams, and long"
+    " agent calls run past it; the idle timeout still ends a stream that stalls"
+)
+
+
+def _agent_fallback(enable: bool) -> str:
+    """The fallback block with room for an agent call, and the switch when the
+    layer it goes in has to turn fallback on."""
+    lines = ["fallback:", *(["  enabled: true"] if enable else [])]
+    lines += [f"  {key}: {AGENT_FALLBACK_TIMEOUT}" for key in FALLBACK_DEFAULT_SECONDS]
+    return "\n".join(lines)
+
+
+def _reachable_decisions(doc: dict, model: str | None) -> list[tuple[dict, dict]]:
+    """The recipe and decision of each decision a request for model can take: the
+    entrypoint's recipe, every recipe when model is None or maps nowhere, and none
+    for a provider model asked by name."""
+    if model in _model_formats(doc):
+        return []
+    recipe = _entrypoint_recipe(doc, model) if model else None
+    recipes = (
+        [recipe]
+        if recipe is not None
+        else [r for r in doc.get("recipes") or [] if isinstance(r, dict)]
+    )
+    return [
+        (recipe, decision)
+        for recipe in recipes
+        for decision in recipe.get("decisions") or []
+        if isinstance(decision, dict)
+    ]
+
+
+def _fallback_fix(layers: list[dict]) -> tuple[int, bool] | None:
+    """Where to change fallback, given its layers from the most specific (the
+    decision's, its recipe's, global.router's): the most specific layer that
+    turns it off or gives it a timeout shorter than an agent call, and whether
+    the block there has to turn it on. None when it is on with room."""
+    last = len(layers) - 1
+    enabled_at = next(
+        (i for i, f in enumerate(layers) if f.get("enabled") is not None), None
+    )
+    off = enabled_at is None or layers[enabled_at]["enabled"] is not True
+    found = [last if enabled_at is None else enabled_at] if off else []
+    agent = float(parse_duration(AGENT_FALLBACK_TIMEOUT))
+    for key, default in FALLBACK_DEFAULT_SECONDS.items():
+        at, seconds = last, default
+        for i, layer in enumerate(layers):
+            try:
+                value = _fallback_duration_seconds(layer[key]) if layer.get(key) else 0
+            except ValueError:
+                value = 0
+            if value:
+                at, seconds = i, value
+                break
+        if float(seconds) < agent:
+            found.append(at)
+    if not found:
+        return None
+    fix = min(found)
+    return fix, off or enabled_at >= fix
+
+
+def _fallback_findings(doc: dict, decisions) -> list[RouterFinding]:
+    """Where to change fallback so that each decision moves a failed call to its
+    next model with room for an agent call, and each decision that names one
+    model, which leaves fallback nowhere to go."""
+    default = _get(doc, "global", "router", "fallback")
+    fixes: dict[tuple[str, bool], list[str]] = {}
+    one_model = []
+    for recipe, decision in decisions:
+        name = str(decision.get("name"))
+        places = [
+            (f"decision {name}'s own fallback", decision.get("fallback")),
+            (f"recipe {recipe.get('name')}'s own fallback", recipe.get("fallback")),
+            ("", default),
+        ]
+        layers = [f if isinstance(f, dict) else {} for _, f in places]
+        fix = _fallback_fix(layers)
+        if fix is not None:
+            fixes.setdefault((places[fix[0]][0], fix[1]), []).append(name)
+            continue
+        models = list(dict.fromkeys(_decision_models(decision)))
+        if len(models) <= 1:
+            one_model.append(
+                RouterFinding(
+                    f"a second model on decision {name}: fallback moves only to the"
+                    f" decision's next model, and decision {name} names one",
+                    "modelRefs:"
+                    + "".join(f"\n  - model: {m}" for m in models)
+                    + "\n  - model: <another model>",
+                )
+            )
+    findings = []
+    for (at, enable), names in fixes.items():
+        block = _agent_fallback(enable)
+        findings.append(
+            RouterFinding(
+                f"fallback on decision {', '.join(names)}"
+                + (f" (set in {at})" if at else "")
+                + f",{FALLBACK_WHY}",
+                (
+                    block
+                    if at
+                    else "global:\n  router:\n" + textwrap.indent(block, "    ")
+                ),
+            )
+        )
+    return findings + one_model
+
+
+def _total_timeout_findings(doc: dict, reach, model, decisions) -> list[RouterFinding]:
+    """What bounds a whole call to a model a request can reach: the decision's
+    reliability.total_timeout for the calls it routes, else the model's own,
+    else the listener timeout (300s unless set), which also bounds how long a
+    stream may stay silent."""
+    listeners = [one for one in doc.get("listeners") or [] if isinstance(one, dict)]
+    listener = next(iter(listeners), {}).get("timeout")
+    listener = "300s" if listener in (None, "") else str(listener)
+
+    def bounds(value) -> bool:
+        try:
+            return parse_duration(str(value)) > 0
+        except ValueError:
+            return False
+
+    # the models whose own timeout, or the listener's, bounds some call
+    covered = {_get(doc, "providers", "defaults", "model"), model}
+    by_decision = []
+    for _, decision in decisions:
+        own = _get(decision, "reliability", "total_timeout")
+        if own is None:
+            covered.update(_decision_models(decision))
+        elif bounds(own):
+            by_decision.append(f"{decision.get('name')} ({own})")
+    formats = _model_formats(doc)
+    if not decisions and model not in formats:
+        covered = None  # no decision names the models a request takes: all of them
+    by_model = []
+    for entry in _get(doc, "providers", "models") or []:
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if not name or not reach(name) or formats[name] in NOT_CHAT:
+            continue
+        if covered is not None and name not in covered:
+            continue
+        own = _get(entry, "reliability", "total_timeout")
+        value, where = (
+            (listener, "the listener's timeout")
+            if own is None
+            else (own, "its total_timeout")
+        )
+        if bounds(value):
+            by_model.append((name, f"{name} ({value}, {where})"))
+    findings = []
+    if by_model:
+        findings.append(
+            RouterFinding(
+                f"total_timeout: 0s on {', '.join(said for _, said in by_model)}"
+                + TIMEOUT_WHY,
+                "providers:\n  models:"
+                + "".join(
+                    f"\n    - name: {name}\n      reliability:\n        total_timeout: 0s"
+                    for name, _ in by_model
+                ),
+            )
+        )
+    if by_decision:
+        findings.append(
+            RouterFinding(
+                f"reliability.total_timeout: 0s on decision {', '.join(by_decision)}"
+                + TIMEOUT_WHY,
+                "reliability:\n  total_timeout: 0s",
+            )
+        )
+    return findings
+
+
 def check_router_config(
     doc: dict, harness: str, model: str | None = None
 ) -> list[RouterFinding]:
@@ -439,6 +637,9 @@ def check_router_config(
     reach = (lambda _: True) if reachable is None else set(reachable).__contains__
     findings = {"claude-code": _claude_findings, "pi": _pi_findings}
     found = findings.get(harness, _codex_findings)(doc, router, reach)
+    decisions = _reachable_decisions(doc, model)
+    found += _fallback_findings(doc, decisions)
+    found += _total_timeout_findings(doc, reach, model, decisions)
     # an entrypoint that reaches one model has no model to keep
     single = reachable is not None and len(set(reachable)) <= 1
     needs = (PROTECTION_NEED, IDENTITY_NEED)

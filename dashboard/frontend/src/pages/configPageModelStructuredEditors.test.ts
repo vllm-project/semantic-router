@@ -10,10 +10,23 @@ import {
   ModelExternalIdsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
+  ModelReliabilityEditor,
   ModelTagsEditor,
 } from './configPageModelStructuredEditors'
 
 describe('model structured editors', () => {
+  it('shows the retry count the gateways apply', () => {
+    const render = (value: object) =>
+      renderToStaticMarkup(createElement(ModelReliabilityEditor, { value, readOnly: true }))
+
+    expect(render({ retry_count: 0 })).toContain('0 retries')
+    expect(render({})).toContain('2 retries by default')
+    // retry_on without a count retries nothing
+    const conditionsOnly = render({ retry_on: '5xx' })
+    expect(conditionsOnly).toContain('0 retries')
+    expect(conditionsOnly).not.toContain('by default')
+  })
+
   it('renders model tags as discrete values', () => {
     const markup = renderToStaticMarkup(
       createElement(ModelTagsEditor, {

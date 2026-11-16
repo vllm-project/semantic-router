@@ -8,7 +8,7 @@
                   {% endif %}
                   {% if r.retry_count | default(0) > 0 or r.per_try_timeout %}
                   retry_policy:
-                    retry_on: {{ r.retry_on | default('connect-failure,refused-stream') }}
+                    retry_on: {{ r.retry_on | default('connect-failure,refused-stream', true) }}
                     num_retries: {{ r.retry_count | default(0) }}
                     {% if r.per_try_timeout %}
                     per_try_timeout: {{ r.per_try_timeout }}

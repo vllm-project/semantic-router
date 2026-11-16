@@ -17,7 +17,7 @@ from cli.envoy_backend_pool import (
     is_ip_address,
     project_envoy_backend_group,
 )
-from cli.models import Model, UserConfig
+from cli.models import Model, ProviderReliability, UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -55,13 +55,15 @@ _RELIABILITY_DURATIONS = (
 def _envoy_reliability(model: Model) -> dict:
     """Project a model's reliability block onto the template's inputs.
 
-    Durations take the seconds form Envoy requires. A field only the native
-    gateway can honor fails the render instead of being dropped silently.
+    Durations take the seconds form Envoy requires, and the retries are the
+    ones the Router applies, the default ones included. A field only the
+    native gateway can honor fails the render instead of being dropped
+    silently.
     """
 
-    if model.reliability is None:
-        return {}
-    reliability = model.reliability.model_dump()
+    block = model.reliability or ProviderReliability()
+    reliability = block.model_dump()
+    reliability["retry_count"] = block.retries()
     if reliability.get("first_byte_timeout"):
         raise ValueError(
             f"providers.models[{model.name!r}].reliability.first_byte_timeout is "

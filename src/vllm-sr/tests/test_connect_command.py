@@ -397,18 +397,40 @@ def test_undo_does_not_recreate_a_file_deleted_since(tmp_path):
     assert not path.exists()
 
 
+# the fallback the router check asks for, with room for a long agent call
+AGENT_FALLBACK = {
+    "enabled": True,
+    "total_timeout": "1200s",
+    "per_attempt_timeout": "1200s",
+}
+
+
 def _router(
-    lossy=(), learning=None, services=None, api_format="anthropic", plugins=None
+    lossy=(),
+    learning=None,
+    services=None,
+    api_format="anthropic",
+    plugins=None,
+    reliable=True,
 ):
+    """A configuration with one decision; reliable gives it what the reliability
+    findings ask for: fallback to a second model, and no total timeout."""
     model = {"name": "m"}
     if api_format:
         model["api_format"] = api_format
-    decision = {"name": "d", "modelRefs": [{"model": "m"}], "plugins": plugins or []}
+    models = [model]
+    if reliable:
+        model["reliability"] = {"total_timeout": "0s"}
+        models.append({**model, "name": "m2"})
+    refs = [{"model": m["name"]} for m in models]
+    decision = {"name": "d", "modelRefs": refs, "plugins": plugins or []}
     doc = {
-        "providers": {"models": [model]},
+        "providers": {"models": models},
         "recipes": [{"decisions": [decision]}],
         "global": {"router": {"allow_lossy_translation": list(lossy)}},
     }
+    if reliable:
+        doc["global"]["router"]["fallback"] = dict(AGENT_FALLBACK)
     if learning is not None:
         doc["global"]["router"]["learning"] = learning
     if services is not None:
@@ -3847,6 +3869,113 @@ def test_a_preview_shows_a_key_variable_by_name():
     assert "$VLLM_SR_API_KEY" in shown
     secret = change.shown('{"providers": {"vllm-sr": {"apiKey": "sk-live"}}}', "")
     assert "sk-live" not in secret and "<hidden>" in secret
+
+
+RELIABILITY_NEEDS = (
+    "fallback",
+    "a second model",
+    "total_timeout",
+    "reliability.total_timeout",
+)
+
+
+def _reliability_needs(doc, harness="claude-code", model=None):
+    found = rc.check_router_config(doc, harness, model)
+    return [f for f in found if f.need.startswith(RELIABILITY_NEEDS)]
+
+
+def _need(doc, prefix, model=None):
+    (found,) = [
+        f for f in _reliability_needs(doc, model=model) if f.need.startswith(prefix)
+    ]
+    return found.need, yaml.safe_load(found.snippet)
+
+
+def test_router_check_asks_every_harness_for_fallback_and_no_total_timeout():
+    for harness in ("claude-code", "codex", "pi"):
+        needs = _reliability_needs(_router(reliable=False), harness)
+        assert [f.need.split(" ")[0] for f in needs] == ["fallback", "total_timeout:"]
+        fallback, timeout = needs
+        assert "fallback on decision d," in fallback.need and "10s" in fallback.need
+        assert yaml.safe_load(fallback.snippet) == {
+            "global": {"router": {"fallback": AGENT_FALLBACK}}
+        }
+        assert "m (300s, the listener's timeout)" in timeout.need
+        assert yaml.safe_load(timeout.snippet) == {
+            "providers": {
+                "models": [{"name": "m", "reliability": {"total_timeout": "0s"}}]
+            }
+        }
+        assert _reliability_needs(_router(), harness) == []
+
+
+def test_fallback_finding_says_where_to_change_it():
+    # fallback on with its default timeouts still ends a slow candidate
+    doc = _router()
+    doc["global"]["router"]["fallback"] = {"enabled": True}
+    need, snippet = _need(doc, "fallback")
+    assert "decision d," in need and snippet["global"]["router"]["fallback"] == (
+        AGENT_FALLBACK
+    )
+    # fallback a decision turns on stays its own: the global block only adds room
+    doc = _router()
+    del doc["global"]["router"]["fallback"]
+    doc["recipes"][0]["decisions"][0]["fallback"] = {"enabled": True}
+    _, snippet = _need(doc, "fallback")
+    assert snippet["global"]["router"]["fallback"] == {
+        "total_timeout": "1200s",
+        "per_attempt_timeout": "1200s",
+    }
+    # a recipe or decision that turns it off itself is where to turn it on
+    doc = _router()
+    doc["recipes"][0].update(name="agent", fallback={"enabled": False})
+    need, snippet = _need(doc, "fallback")
+    assert "recipe agent's own fallback" in need and snippet == {
+        "fallback": AGENT_FALLBACK
+    }
+    decision = doc["recipes"][0]["decisions"][0]
+    decision["fallback"] = {"enabled": False}
+    need, snippet = _need(doc, "fallback")
+    assert "decision d's own fallback" in need and snippet == {
+        "fallback": AGENT_FALLBACK
+    }
+    decision["fallback"] = {"enabled": True, "per_attempt_timeout": "10s"}
+    assert "decision d's own fallback" in _need(doc, "fallback")[0]
+    decision["fallback"] = dict(AGENT_FALLBACK)
+    assert _reliability_needs(doc) == []
+    # one model leaves fallback nowhere to go
+    decision["modelRefs"] = [{"model": "m"}]
+    need, snippet = _need(doc, "a second model")
+    assert "decision d names one" in need
+    assert snippet == {"modelRefs": [{"model": "m"}, {"model": "<another model>"}]}
+    # a request for a provider model by name takes no decision
+    assert _reliability_needs(doc, model="m") == []
+
+
+def test_timeout_finding_reads_the_decision_then_the_model_then_the_listener():
+    doc = _router()
+    doc["providers"]["models"][0]["reliability"] = {"total_timeout": "2m"}
+    need, _ = _need(doc, "total_timeout")
+    assert "m (2m, its total_timeout)" in need and "m2" not in need
+    # a decision's override bounds the calls it routes instead
+    decision = doc["recipes"][0]["decisions"][0]
+    decision["reliability"] = {"total_timeout": "0s"}
+    assert _reliability_needs(doc) == []
+    decision["reliability"] = {"total_timeout": "120s"}
+    need, snippet = _need(doc, "reliability.total_timeout")
+    assert "decision d (120s)" in need and snippet == {
+        "reliability": {"total_timeout": "0s"}
+    }
+    assert [f.need.split(" ")[0] for f in _reliability_needs(doc)] == [
+        "reliability.total_timeout:"
+    ]
+    del decision["reliability"]
+    doc["providers"]["models"][0]["reliability"] = {}
+    doc["listeners"] = [{"name": "http", "port": 8899, "timeout": "900s"}]
+    assert "m (900s" in _need(doc, "total_timeout")[0]
+    for off in ("0s", 0):
+        doc["listeners"][0]["timeout"] = off
+        assert _reliability_needs(doc) == []
 
 
 def test_router_check_for_pi():
