@@ -335,6 +335,10 @@ recipes:
         assert pattern.fullmatch(path), path
     for path in ("/v1/responses", "/v1/systemone", "/v1/images/generations"):
         assert not pattern.fullmatch(path), path
+    # Envoy refuses a regex over 100 RE2 instructions by default, and the
+    # three model APIs with the model listing compile to about 200
+    runtime = rendered["layered_runtime"]["layers"][0]["static_layer"]
+    assert runtime["re2.max_program_size.error_level"] >= 1000
     refused = served[-1]
     assert (
         refused["match"] == {"prefix": "/"}
