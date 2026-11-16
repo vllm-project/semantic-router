@@ -35,6 +35,9 @@ COMPARE_DESTINATION = (
 COMPARE_PUBLIC_ORIGIN = (
     "https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/"
 )
+TUNE_SOURCE = ROOT / "tools/agent/skills/vllm-sr-tune-recipe"
+TUNE_DESTINATION = ROOT / "website/static/install/agent/vllm-sr-tune-recipe"
+TUNE_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-tune-recipe/"
 PUBLICATIONS = (
     (SOURCE, DESTINATION, PUBLIC_ORIGIN, "vllm-sr-agent-operations", "vllm-sr"),
     (
@@ -78,6 +81,13 @@ PUBLICATIONS = (
         COMPARE_PUBLIC_ORIGIN,
         "vllm-sr-compare-configurations",
         "vllm-sr-compare-configurations",
+    ),
+    (
+        TUNE_SOURCE,
+        TUNE_DESTINATION,
+        TUNE_PUBLIC_ORIGIN,
+        "vllm-sr-tune-recipe",
+        "vllm-sr-tune-recipe",
     ),
 )
 MARKDOWN_LINK = re.compile(

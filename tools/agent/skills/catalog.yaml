@@ -105,6 +105,21 @@ skills:
     handoff: Human reviews any candidate promotion or recipe-lab iteration.
     support: sr-bench 1.0 live comparison contract; replay and preview remain diagnostic.
 
+  - id: vllm-sr-tune-recipe
+    name: vllm-sr-tune-recipe
+    audience: contributor
+    source: tools/agent/skills/vllm-sr-tune-recipe/SKILL.md
+    published: website/static/install/agent/vllm-sr-tune-recipe/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-tune-recipe/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Move from diagnosed misroute to one measured recipe change and a calibration or recipe-lab handoff.
+    prerequisites: Reproducible route evidence, canonical recipe, frozen development cases, and guard floors.
+    inputs: Baseline config/hash, trace, candidate diff, probe manifest, and paired run IDs.
+    outputs: Validated candidate, before/after evidence, and keep/revert/inconclusive explanation.
+    handoff: Human reviews promotion; recipe-lab owns its ledger when available.
+    support: Maintained v0.5 recipes; #5497 owns automated recipe-lab implementation.
+
   - id: router-contract-change
     name: router-contract-change
     audience: contributor

@@ -18,6 +18,7 @@ Router behavior. Choose one by the task below. The development harness
 | Plan and run a bounded Router benchmark | [Benchmark](vllm-sr-benchmark/SKILL.md) | Freeze cases, targets, settings, prices and limits before dispatch. |
 | Compare two Router benchmark runs | [Compare configurations](vllm-sr-compare-configurations/SKILL.md) | Check paired cases and compatible settings before comparing. |
 | Calibrate a maintained recipe | [Routing calibration](routing-calibration/SKILL.md) | Validate the versioned probe manifest. |
+| Turn a diagnosed misroute into one tested recipe candidate | [Tune recipe](vllm-sr-tune-recipe/SKILL.md) | Freeze development cases and guard floors, then choose manual calibration or recipe-lab. |
 | Change a request-visible Router contract | [Router contract change](router-contract-change/SKILL.md) | Read the affected change surfaces and nearest `AGENTS.md`. |
 | Review issues, PRs, or releases | [Maintainer operations](maintainer-ops/SKILL.md) | Resolve the exact target and current revision. |
 | Set up the vSR Claude Code plugin | [Plugin setup](../../../src/agent-harness/claude-code/skills/setup/SKILL.md) | Detect the machine and current runtime. |
@@ -34,6 +35,8 @@ explains a selected route or failure. The
 freezes and reports a bounded evaluation. The
 [public comparison skill](https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/SKILL.md)
 interprets paired runs. The
+[public recipe-tuning skill](https://vllm-sr.ai/install/agent/vllm-sr-tune-recipe/SKILL.md)
+hands a diagnosed change to calibration or recipe-lab. The
 [public operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md)
 covers the broader lifecycle. Their authored sources are under
 `tools/agent/skills/`; `make agent-skill-sync` generates their website copies.
