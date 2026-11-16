@@ -80,14 +80,23 @@ export default Plugin.define({
     async function apps() {
       const snapshot = current();
       if (!snapshot) return;
-      const app = await ctx.ui.dialog.select({
+      const app = await ctx.ui.dialog.select<App | "follow">({
         title: "vSR apps",
-        options: APPS.map((value) => ({
-          value,
-          title: `${names[value]}: ${snapshot.apps[value] ? "on" : "off"}`,
-        })),
+        options: [
+          ...APPS.map((value) => ({
+            value,
+            title: `${names[value]}: ${snapshot.apps[value] ? "on" : "off"}`,
+          })),
+          {
+            value: "follow" as const,
+            title: "Follow the Router listener",
+            description:
+              "Apps changed here go back to the listener's profile; plugin options stay.",
+          },
+        ],
       });
-      if (app)
+      if (app === "follow") await controller.change({ follow: true });
+      else if (app)
         await controller.change({ apps: { [app]: !snapshot.apps[app] } });
     }
     async function waits() {
@@ -309,20 +318,23 @@ export default Plugin.define({
               width={panel.width}
               height={Math.max(1, height() - 3)}
             >
-              <text>vSR decisions · {panel.sessionID}</text>
-              <text fg={ctx.theme.textMuted}>
+              {/* The list scrolls; the summary lines keep their height instead of drawing over each other. */}
+              <text flexShrink={0}>vSR decisions · {panel.sessionID}</text>
+              <text flexShrink={0} fg={ctx.theme.textMuted}>
                 F6 apps · F7 waits · F8 feedback · F9 diagnose · F10 session
               </text>
               <Show when={view.error}>
-                <text fg={ctx.theme.warning}>{view.error}</text>
+                <text flexShrink={0} fg={ctx.theme.warning}>
+                  {view.error}
+                </text>
               </Show>
               <Show
                 when={current()}
-                fallback={<text>Loading vSR snapshot…</text>}
+                fallback={<text flexShrink={0}>Loading vSR snapshot…</text>}
               >
                 {(snapshot) => (
                   <>
-                    <text>
+                    <text flexShrink={0}>
                       Runtime:{" "}
                       {snapshot().runtime.retryAt > Date.now()
                         ? "offline; retry pending"
@@ -333,14 +345,14 @@ export default Plugin.define({
                             : "offline"}{" "}
                       · {snapshot().runtime.models.length} known models
                     </text>
-                    <text>
+                    <text flexShrink={0}>
                       Apps:{" "}
                       {APPS.map(
                         (app) =>
                           `${names[app]} ${snapshot().apps[app] ? "on" : "off"}`,
                       ).join(" · ")}
                     </text>
-                    <text>
+                    <text flexShrink={0}>
                       Waits:{" "}
                       {Object.entries(snapshot().waits)
                         .map(
@@ -350,20 +362,20 @@ export default Plugin.define({
                         .join(" · ")}{" "}
                       · Goal: {snapshot().controls.goal}
                     </text>
-                    <text>
+                    <text flexShrink={0}>
                       Controls: {snapshot().controls.persistence} ·{" "}
                       {view.busy ? "saving…" : "confirmed"}
                     </text>
-                    <text>
+                    <text flexShrink={0}>
                       {total().total} decisions · {total().masked} masking
                       findings · {total().outcomes.unverified ?? 0} unverified
                     </text>
-                    <text>
+                    <text flexShrink={0}>
                       Observed child tokens: {total().input} input /{" "}
                       {total().output} output / {total().cached} cached /{" "}
                       {total().reasoning} reasoning
                     </text>
-                    <text>
+                    <text flexShrink={0}>
                       {total().priced
                         ? `Estimated child cost (known prices): $${total().cost.toFixed(6)}`
                         : "Child cost: pricing unavailable"}{" "}

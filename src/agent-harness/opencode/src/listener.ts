@@ -188,7 +188,9 @@ export class Listener {
   rules: ListenerRules = NO_RULES;
   private askedAt = -Infinity;
   private reading: Promise<void> | undefined;
-  private readonly base: Record<App, boolean>;
+  private base: Record<App, boolean>;
+  private readonly defaults: Record<App, boolean>;
+  private readonly configured: ReadonlySet<App>;
   private readonly settings: Settings;
   private readonly runtime: Pick<
     RuntimeClient,
@@ -196,7 +198,7 @@ export class Listener {
   >;
   // The apps the person set in the plugin options or changed in the decision view: those stay theirs whatever the
   // listener says.
-  private readonly pinned: Set<App>;
+  private pinned: Set<App>;
   private readonly store: RuleStore | undefined;
   private restored = false;
   private readonly now: () => number;
@@ -209,9 +211,11 @@ export class Listener {
   ) {
     this.settings = settings;
     this.runtime = runtime;
+    this.configured = new Set(pinned);
     this.pinned = new Set(pinned);
     this.store = store;
     this.now = now;
+    this.defaults = { ...settings.apps };
     this.base = { ...settings.apps };
   }
   // The person set these apps: the profile leaves them alone from now on.
@@ -223,6 +227,12 @@ export class Listener {
       this.base[app] = value;
       this.settings.apps[app] = value;
     }
+  }
+  // Hands the apps changed in the decision view back to the listener; the ones named in the plugin options stay.
+  async unpin(): Promise<void> {
+    this.pinned = new Set(this.configured);
+    this.base = { ...this.defaults };
+    await this.follow();
   }
   // Reads the listing and applies it. A listing that does not answer keeps the profile and rules read before, so an
   // outage never drops a required rule; one that does not exist (HTTP 404, a plain decision runtime) sets none.

@@ -56,5 +56,23 @@ test(
       { saved: true, revision: 2 },
     );
     assert.equal((await snapshot()).apps.check, false);
+    assert.deepEqual(
+      await native.rpc("controls", {
+        instanceID: after.instanceID,
+        expectedRevision: 2,
+        apps: { check: !before.apps.check },
+      }),
+      { saved: true, revision: 3 },
+    );
+    // No listener answers here (404), so following hands the app back to the plugin's own default.
+    assert.deepEqual(
+      await native.rpc("controls", {
+        instanceID: after.instanceID,
+        expectedRevision: 3,
+        follow: true,
+      }),
+      { saved: true, revision: 4 },
+    );
+    assert.equal((await snapshot()).apps.check, before.apps.check);
   },
 );

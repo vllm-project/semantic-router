@@ -450,6 +450,70 @@ test("an app the person changes in the decision view stays theirs, across a rest
   assert.equal(restarted.apps.shield, false);
 });
 
+test("follow hands the apps changed in the decision view back to the listener, but not the plugin's options", async () => {
+  const settings = parseSettings({ apps: { check: false } });
+  const runtime = fake(
+    () => ok(listing({ guard: false, check: true })),
+    () => ok({}),
+  );
+  const listener = new Listener(settings, runtime, ["check"]);
+  let saved: Record<string, unknown> = {};
+  const controls = new Controls(
+    settings,
+    "instance",
+    async (value) => {
+      saved = value;
+    },
+    () => {},
+    (apps) => listener.pin(apps),
+    () => listener.unpin(),
+  );
+  await listener.follow();
+  await controls.update({
+    instanceID: "instance",
+    expectedRevision: 0,
+    apps: { guard: true },
+  });
+  await listener.follow();
+  assert.equal(settings.apps.guard, true);
+  assert.deepEqual(saved.pinned, ["guard"]);
+
+  assert.deepEqual(
+    await controls.update({
+      instanceID: "instance",
+      expectedRevision: 1,
+      follow: true,
+      apps: { guard: true },
+    }),
+    { saved: false, reason: "invalid" },
+    "follow and a change together are ambiguous",
+  );
+  assert.deepEqual(
+    await controls.update({
+      instanceID: "instance",
+      expectedRevision: 1,
+      follow: true,
+    }),
+    { saved: true, revision: 2 },
+  );
+  assert.equal(settings.apps.guard, false, "the listener sets guard again");
+  assert.equal(settings.apps.check, false, "an option the person named stays");
+  assert.equal(saved.pinned, undefined);
+  assert.equal(runtime.calls.listing, 3, "follow reads the listing at once");
+
+  const restarted = parseSettings({ apps: { check: false } });
+  const next = new Listener(restarted, runtime, ["check"]);
+  await new Controls(
+    restarted,
+    "next",
+    async () => {},
+    () => {},
+    (apps) => next.pin(apps),
+  ).load(async () => saved);
+  await next.follow();
+  assert.equal(restarted.apps.guard, false, "no pin survives the restart");
+});
+
 test("a restart during a listener outage keeps the rules the last run read", async () => {
   const kept = new Map<string, unknown>();
   const store = {

@@ -17,6 +17,7 @@ export type ControlPatch = {
   apps?: Partial<Settings["apps"]>;
   waits?: Partial<Settings["waits"]>;
   goal?: Settings["routing"]["goal"];
+  follow?: true;
 };
 export interface ViewService {
   snapshot(sessionID: string, signal: AbortSignal): Promise<ViewSnapshot>;

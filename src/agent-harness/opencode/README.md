@@ -183,7 +183,9 @@ plugin calls no runtime. Its `vsr` profile (`apis.systemone.vsr` in the Router's
 config, or Default, On or Off in the Dashboard under Config › Global Config › vSR
 agent plugins) turns `router`, `escalate`, `redact`, `shield`, `guard` and
 `check` on or off for every plugin pointed at it. An app you name under `apps` in
-this plugin's options, or turn on or off in the decision view, stays yours; the listener sets the others. A plain decision
+this plugin's options, or turn on or off in the decision view, stays yours; the listener sets the others.
+"Follow the Router listener" in the app dialog (F6) hands the apps you changed
+there back to the listener; the ones in the options stay yours. A plain decision
 runtime, whose listing answers HTTP 404, sets nothing.
 
 Rules the listener binds to guard and redact (`vsr.rules`) come with the same
@@ -241,7 +243,7 @@ server plugin. Open a session, then use these keys or slash/palette commands:
 | Key     | Command         | Action                                                     |
 | ------- | --------------- | ---------------------------------------------------------- |
 | F5      | `/vsr`          | Open decisions for the selected session                    |
-| F6      | `/vsr-apps`     | Enable or disable any of the six apps                      |
+| F6      | `/vsr-apps`     | Enable or disable an app, or follow the Router listener    |
 | F7      | `/vsr-waits`    | Choose Redact, Shield or Guard bounded/strict waits        |
 | F8      | `/vsr-feedback` | Label a retained decision; Router also offers model labels |
 | F9      | `/vsr-diagnose` | Query decision runtime capabilities                        |

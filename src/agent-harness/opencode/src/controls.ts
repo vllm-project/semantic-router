@@ -26,18 +26,21 @@ export class Controls {
   private persistence: "durable" | "unavailable" = "durable";
   private pinned: App[] = [];
   private readonly pin: (apps: Partial<Record<App, boolean>>) => void;
+  private readonly unpin: () => Promise<void>;
   constructor(
     settings: Settings,
     instanceID: string,
     persist: (value: Saved) => Promise<void>,
     changed: () => void,
     pin: (apps: Partial<Record<App, boolean>>) => void = () => {},
+    unpin: () => Promise<void> = async () => {},
   ) {
     this.settings = settings;
     this.instanceID = instanceID;
     this.persist = persist;
     this.changed = changed;
     this.pin = pin;
+    this.unpin = unpin;
     this.base = JSON.stringify(this.values());
   }
   private values(): Values {
@@ -136,9 +139,14 @@ export class Controls {
               "apps",
               "waits",
               "goal",
+              "follow",
             ].includes(key),
         ) ||
-        !["apps", "waits", "goal"].some((key) => Object.hasOwn(input, key))
+        !["apps", "waits", "goal", "follow"].some((key) =>
+          Object.hasOwn(input, key),
+        ) ||
+        (input.follow !== undefined &&
+          (input.follow !== true || input.apps !== undefined))
       )
         return { saved: false, reason: "invalid" };
       if (
@@ -153,11 +161,14 @@ export class Controls {
         return { saved: false, reason: "invalid" };
       }
       const revision = this.revision + 1;
-      const pinned = APPS.filter(
-        (app) =>
-          this.pinned.includes(app) ||
-          (isRecord(input.apps) && Object.hasOwn(input.apps, app)),
-      );
+      // `follow` hands every app changed here back to a Router listener's profile.
+      const pinned = input.follow
+        ? []
+        : APPS.filter(
+            (app) =>
+              this.pinned.includes(app) ||
+              (isRecord(input.apps) && Object.hasOwn(input.apps, app)),
+          );
       try {
         await this.persist({
           ...next,
@@ -174,6 +185,7 @@ export class Controls {
       this.assign(next);
       this.revision = revision;
       this.persistence = "durable";
+      if (input.follow) await this.unpin().catch(() => {});
       this.changed();
       return { saved: true, revision };
     };

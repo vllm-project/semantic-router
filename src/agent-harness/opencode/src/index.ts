@@ -57,6 +57,7 @@ export default Plugin.define({
       (value) => ctx.storage.set("controls.v1", value),
       () => decisions.changed(),
       (apps) => listener.pin(apps),
+      () => listener.unpin(),
     );
     await controls.load(() => ctx.storage.get("controls.v1"));
     const registration = await ctx.rpc.register(Vsr, {

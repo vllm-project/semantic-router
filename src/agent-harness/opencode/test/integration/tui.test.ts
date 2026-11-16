@@ -52,6 +52,11 @@ test(
       screen.text.includes("Redact") && screen.text.includes("Shield"),
       screen.text.slice(-8000),
     );
+    assert.ok(
+      screen.text.includes("Runtime: HTTP reachable") &&
+        screen.text.includes("Apps: Router"),
+      "summary lines must not overlap: " + screen.text.slice(-8000),
+    );
     const snapshot = (await native.rpc("snapshot", {
       sessionID: first.sessionID,
     })) as ViewSnapshot;

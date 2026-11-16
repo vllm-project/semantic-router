@@ -184,6 +184,7 @@ export const Vsr = Rpc.define({
             additionalProperties: false,
           },
           goal: { enum: ["balanced", "quality", "save"] },
+          follow: { const: true },
         },
         required: ["instanceID", "expectedRevision"],
         additionalProperties: false,
