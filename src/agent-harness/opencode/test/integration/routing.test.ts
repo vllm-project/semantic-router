@@ -19,6 +19,12 @@ async function fixture(t: TestContext, agentModel = false) {
   let retried = false;
   let offline = false;
   const server = createServer(async (req, res) => {
+    // A plain decision runtime: no Router listener, so no vsr profile or rules.
+    if (req.method === "GET" && req.url === "/v1/systemone/models") {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
     const body = JSON.parse(Buffer.concat(chunks).toString());

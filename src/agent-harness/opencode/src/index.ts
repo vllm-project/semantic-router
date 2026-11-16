@@ -6,7 +6,9 @@ import { DecisionStore } from "./decisions.ts";
 import type { Feedback } from "./decisions.ts";
 import { Vsr } from "./rpc.ts";
 import { RuntimeClient } from "./runtime.ts";
-import { isRecord, parseSettings } from "./settings.ts";
+import { Listener } from "./listener.ts";
+import { APPS, isRecord, parseSettings } from "./settings.ts";
+import type { App } from "./settings.ts";
 
 function sessionID(input: unknown): string {
   if (
@@ -23,6 +25,23 @@ export default Plugin.define({
   async setup(ctx) {
     const settings = parseSettings(ctx.options);
     const runtime = new RuntimeClient(settings);
+    const named = isRecord(ctx.options) ? ctx.options.apps : undefined;
+    const listener = new Listener(
+      settings,
+      runtime,
+      new Set<App>(
+        isRecord(named) ? APPS.filter((app) => named[app] !== undefined) : [],
+      ),
+    );
+    // The first prompt reads the listing: loading the plugin calls no runtime.
+    const prompts = new AbortController();
+    void (async () => {
+      for await (const _ of ctx.event.subscribe({
+        signal: prompts.signal,
+        types: ["session.execution.started"],
+      }))
+        listener.followLater();
+    })().catch(() => {});
     const decisions = new DecisionStore(
       settings.maxSessions,
       settings.maxDecisions,
@@ -79,6 +98,7 @@ export default Plugin.define({
       runtime,
       decisions,
       notify,
+      listener,
     );
     const closeOutput = await registerOutput(
       ctx,
@@ -86,11 +106,13 @@ export default Plugin.define({
       runtime,
       decisions,
       notify,
+      listener,
     );
     return async () => {
       closeRouting();
       closeGuard();
       closeOutput();
+      prompts.abort();
       runtime.close();
       await registration.dispose();
     };

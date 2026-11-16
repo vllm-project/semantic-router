@@ -11,12 +11,13 @@ import {
   ATTACHMENT_WITHHELD,
 } from "./output-policy.ts";
 import type { Inspection, OutputTool } from "./output-policy.ts";
-import type { Tag } from "./masking.ts";
+import { TAGS } from "./masking.ts";
+import type { Listener } from "./listener.ts";
 
 const covered = (tool: string): tool is OutputTool =>
   ["read", "shell", "webfetch"].includes(tool);
 interface State {
-  tags: Set<Tag>;
+  tags: Set<string>;
   controller: AbortController;
 }
 interface Rendered {
@@ -43,12 +44,16 @@ function render(content: unknown, output?: unknown): Rendered {
     files: [],
   };
 }
-const marker = /\[vsr:(name|email|phone|card|ip|ssn|iban|address|id|secret)\]/g;
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// The placeholders vSR puts in: its own tags and the names of the listener's redact rules. Other `[vsr:...]` text in a
+// source is the source's own and never activates write protection.
+const markerOf = (rules: readonly string[]) =>
+  new RegExp(`\\[vsr:(${[...TAGS, ...rules].map(escaped).join("|")})\\]`, "g");
 // Inspect only additions. Existing documentation tags in an edit/patch may remain unchanged.
 export function addedPlaceholders(
   tool: string,
   input: unknown,
-  tags: ReadonlySet<Tag>,
+  tags: ReadonlySet<string>,
 ): boolean {
   if (!isRecord(input)) return false;
   const pairs: { added: string; removed: string }[] = [];
@@ -99,6 +104,7 @@ export async function registerOutput(
   runtime: RuntimeClient,
   decisions: DecisionStore,
   notify: (sessionID: string) => Promise<void>,
+  listener?: Listener,
 ): Promise<() => void> {
   const sessions = new Map<string, State>(),
     cache = new Map<string, Inspection>();
@@ -106,7 +112,7 @@ export async function registerOutput(
   let bytes = 0;
   function state(sessionID: string): State {
     const value = sessions.get(sessionID) ?? {
-      tags: new Set<Tag>(),
+      tags: new Set<string>(),
       controller: new AbortController(),
     };
     sessions.delete(sessionID);
@@ -141,7 +147,7 @@ export async function registerOutput(
       config = structuredClone(settings);
     const hash = (text: string) =>
       createHash("sha256").update(text).digest("hex");
-    const prefix = `${sessionID}:${identity}:${tool}:${JSON.stringify([config.apps.redact, config.apps.shield, config.waits.redact, config.waits.shield, config.redact, config.shield])}:`;
+    const prefix = `${sessionID}:${identity}:${tool}:${JSON.stringify([config.apps.redact, config.apps.shield, config.waits.redact, config.waits.shield, config.redact, config.shield, listener?.rules.revision ?? ""])}:`;
     const key =
       prefix + hash(rendered.text) + (rendered.files.length ? ":files" : "");
     const cached = cache.get(key);
@@ -158,6 +164,8 @@ export async function registerOutput(
       config,
       runtime,
       AbortSignal.any([stop.signal, current.controller.signal]),
+      Date.now,
+      listener,
     );
     // Projection can append an image-omission explanation and remove the file
     // part. Retain its incomplete coverage across that text-only representation.
@@ -281,8 +289,10 @@ export async function registerOutput(
             rendered,
           );
           if (!result.withheld)
-            for (const match of result.text.matchAll(marker))
-              state(event.sessionID).tags.add(match[1] as Tag);
+            for (const match of result.text.matchAll(
+              markerOf(listener?.rules.redact.map((rule) => rule.name) ?? []),
+            ))
+              state(event.sessionID).tags.add(match[1]!);
           if (result.text === rendered.text && !result.withheld) continue;
           content[index] = {
             ...part,

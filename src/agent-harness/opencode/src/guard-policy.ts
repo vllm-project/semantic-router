@@ -4,6 +4,7 @@ import type { Settings } from "./settings.ts";
 import { alwaysHeld, partsOf } from "./shell.ts";
 import type { Risk } from "./shell.ts";
 import type { Outcome, Reason } from "./decisions.ts";
+import type { Listener, RuleView, Unchecked } from "./listener.ts";
 
 // Question framing retained from the Claude plugin at d7ab7f587.
 export const GUARD_QUESTIONS = {
@@ -71,13 +72,74 @@ export interface GuardVerdict {
   score?: number;
   labels?: string[];
   elapsedMs: number;
+  // The listener rule that holds the command, or the required one that could not be checked.
+  rule?: RuleView;
+  ruleReason?: string;
+  // Advisory listener rules that could not be checked; the command runs as the rest decide.
+  unchecked?: Unchecked[];
 }
+const budgetOf = (settings: Settings) =>
+  settings.waits.guard === "done" ? 60_000 : settings.waits.guard;
 export async function guard(
   command: string,
   settings: Settings,
   runtime: Pick<RuntimeClient, "decide">,
   signal?: AbortSignal,
   now: () => number = Date.now,
+  listener?: Pick<Listener, "rules" | "ask" | "unchecked" | "finds" | "ready">,
+): Promise<GuardVerdict> {
+  const start = now();
+  await listener?.ready();
+  const bound = listener?.rules.guard ?? [];
+  // The listener's rules read the whole command in one call, beside the model's questions and within the same wait.
+  const listened =
+    listener && bound.length > 0 && command.trim() && !signal?.aborted
+      ? listener.ask("guard", [command], budgetOf(settings), signal)
+      : undefined;
+  const verdict = await modelGuard(command, settings, runtime, signal, now);
+  if (!listened || !listener) return verdict;
+  const asked = await listened;
+  const elapsedMs = Math.max(0, now() - start);
+  if (verdict.effect === "deny" || verdict.reason === "fixed-rule")
+    return { ...verdict, elapsedMs };
+  // The rules as the call left them: a change in the Dashboard was read again there.
+  const matched = listener.finds(asked, 0)?.matches ?? [];
+  const ruled = listener.rules.guard.find((rule) =>
+    matched.includes(rule.name),
+  );
+  if (ruled)
+    return {
+      effect: "ask",
+      outcome: "held",
+      reason: "listener-rule",
+      labels: [ruled.name],
+      rule: ruled,
+      elapsedMs,
+    };
+  const unchecked = listener.unchecked("guard", asked, 0);
+  const required = unchecked.find((one) => one.rule.required);
+  if (required)
+    return {
+      effect: "ask",
+      outcome: "held",
+      reason: "listener-unchecked",
+      labels: [required.rule.name],
+      rule: required.rule,
+      ruleReason: required.reason,
+      elapsedMs,
+    };
+  return {
+    ...verdict,
+    elapsedMs,
+    ...(unchecked.length ? { unchecked } : {}),
+  };
+}
+async function modelGuard(
+  command: string,
+  settings: Settings,
+  runtime: Pick<RuntimeClient, "decide">,
+  signal: AbortSignal | undefined,
+  now: () => number,
 ): Promise<GuardVerdict> {
   const start = now();
   const elapsedMs = () => Math.max(0, now() - start);
@@ -125,8 +187,7 @@ export async function guard(
       reason: "coverage-limit",
       elapsedMs: elapsedMs(),
     };
-  const budget =
-    settings.waits.guard === "done" ? 60_000 : settings.waits.guard;
+  const budget = budgetOf(settings);
   let top: ReturnType<typeof parse>;
   let failure: Reason | undefined;
   for (const part of parts) {

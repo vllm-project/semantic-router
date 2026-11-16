@@ -33,6 +33,42 @@ interface Dependencies {
 }
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 
+// The models a listing names: the System One API's vllm-sr/4.0 schema and vllm-srun list them under `data`; the
+// vllm-sr/5.0 schema, a Router listener's default, lists them under `models`, each with its name, its question types
+// as `features` and the 4.0 entry as its `card`.
+export function listedModels(listing: unknown): unknown[] | undefined {
+  if (!isRecord(listing)) return undefined;
+  if (Array.isArray(listing.data)) return listing.data;
+  if (!Array.isArray(listing.models)) return undefined;
+  return listing.models.map((model) =>
+    isRecord(model) && isRecord(model.card)
+      ? model.card
+      : isRecord(model)
+        ? { id: model.name, question_types: model.features }
+        : model,
+  );
+}
+function modelsOf(listing: unknown): ModelInfo[] | undefined {
+  const items = listedModels(listing);
+  if (!items) return undefined;
+  const models: ModelInfo[] = [];
+  for (const item of items) {
+    if (
+      !isRecord(item) ||
+      typeof item.id !== "string" ||
+      (item.question_types !== undefined &&
+        (!Array.isArray(item.question_types) ||
+          item.question_types.some((type) => typeof type !== "string")))
+    )
+      return undefined;
+    models.push({
+      id: item.id,
+      questionTypes: (item.question_types as string[] | undefined) ?? [],
+    });
+  }
+  return models;
+}
+
 class ResponseError extends Error {}
 async function jsonBody(response: Response): Promise<unknown> {
   const reader = response.body?.getReader();
@@ -122,6 +158,7 @@ export class RuntimeClient {
     body: unknown | undefined,
     timeoutMs: number,
     signal?: AbortSignal,
+    queued = true,
   ): Promise<Result<unknown>> {
     const start = this.now();
     const elapsed = () => Math.max(0, this.now() - start);
@@ -138,11 +175,13 @@ export class RuntimeClient {
       this.closed.signal,
       ...(signal ? [signal] : []),
     ]);
-    const previous = this.tail;
-    let release!: () => void;
-    this.tail = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    // The listener's own APIs answer beside the decision model, so they do not wait in its queue.
+    const previous = queued ? this.tail : Promise.resolve();
+    let release: () => void = () => {};
+    if (queued)
+      this.tail = new Promise<void>((resolve) => {
+        release = resolve;
+      });
     this.pending++;
     let admitted = false;
     try {
@@ -245,7 +284,7 @@ export class RuntimeClient {
     signal?: AbortSignal,
   ): Promise<Result<ModelInfo[]>> {
     const started = this.now();
-    const base = this.settings.runtimeUrl.replace(/\/v1\/decisions$/, "");
+    const base = this.base();
     let result = await this.request(
       `${base}/v1/systemone/models`,
       undefined,
@@ -260,34 +299,57 @@ export class RuntimeClient {
         signal,
       );
     if (!result.ok) return result;
-    if (!isRecord(result.value) || !Array.isArray(result.value.data))
-      return failure("invalid-response", this.now() - started);
-    const models: ModelInfo[] = [];
-    for (const item of result.value.data) {
-      if (
-        !isRecord(item) ||
-        typeof item.id !== "string" ||
-        (item.question_types !== undefined &&
-          (!Array.isArray(item.question_types) ||
-            item.question_types.some((type) => typeof type !== "string")))
-      )
-        return failure("invalid-response", this.now() - started);
-      models.push({
-        id: item.id,
-        questionTypes: (item.question_types as string[] | undefined) ?? [],
-      });
-    }
-    if (
-      !models.length ||
-      (this.settings.runtimeModel &&
-        !models.some((model) => model.id === this.settings.runtimeModel))
-    )
-      return failure("invalid-response", this.now() - started);
-    this.state.models = models;
+    const models = this.adopt(result.value);
+    if (!models) return failure("invalid-response", this.now() - started);
     return {
       ok: true,
       value: structuredClone(models),
       elapsedMs: this.now() - started,
     };
+  }
+  private base(): string {
+    return this.settings.runtimeUrl.replace(/\/v1\/decisions$/, "");
+  }
+  // Keeps a listing's models for the question-type check when it names the configured one.
+  private adopt(listing: unknown): ModelInfo[] | undefined {
+    const models = modelsOf(listing);
+    if (
+      !models?.length ||
+      (this.settings.runtimeModel &&
+        !models.some((model) => model.id === this.settings.runtimeModel))
+    )
+      return undefined;
+    this.state.models = models;
+    return models;
+  }
+  // A Router listener's System One listing: its models, and the `vsr` profile and rules it sets for the plugins.
+  async listing(
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<Result<unknown>> {
+    const result = await this.request(
+      `${this.base()}/v1/systemone/models`,
+      undefined,
+      timeoutMs,
+      signal,
+      false,
+    );
+    if (result.ok) this.adopt(result.value);
+    return result;
+  }
+  // One call to the listener's rules for one app about each text.
+  async rules(
+    app: "guard" | "redact",
+    parts: { id: string; text: string }[],
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<Result<unknown>> {
+    return await this.request(
+      `${this.base()}/v1/systemone/rules`,
+      { app, parts },
+      timeoutMs,
+      signal,
+      false,
+    );
   }
 }

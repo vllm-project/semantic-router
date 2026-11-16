@@ -176,7 +176,43 @@ masked values. This protection is session-scoped, with active tags inherited by
 children. It covers these file-writing tools, not arbitrary writes through shell
 programs or custom tools. Disabling Redact disables this write-back protection.
 
-The HTTP client serializes requests and includes queue time in deadlines. A
+## A Router listener's switches and rules
+
+Pointed at a Router listener that publishes a System One model, vSR reads the
+listener's listing (`GET /v1/systemone/models`) at the first prompt, which the
+first check waits for, and again at a prompt a minute or more later; loading the
+plugin calls no runtime. Its `vsr` profile (`apis.systemone.vsr` in the Router's
+config, or Default, On or Off in the Dashboard under Config › Global Config › vSR
+agent plugins) turns `router`, `escalate`, `redact`, `shield`, `guard` and
+`check` on or off for every plugin pointed at it. An app you name under `apps` in
+this plugin's options stays yours; the listener sets the others. A plain decision
+runtime, whose listing answers HTTP 404, sets nothing.
+
+Rules the listener binds to guard and redact (`vsr.rules`) come with the same
+listing, by name and description only, and the listener evaluates them at
+`POST /v1/systemone/rules`, beside the decision model's questions and within the
+same wait. Guard sends the whole command: a rule that matches holds it for
+native approval with the rule's description. Redact sends the output with its
+secrets hidden, the same text the PII question reads, and hides what either
+finds at once, a rule's find as `[vsr:<rule name>]`. Where a rule and a PII span
+cover the same text, the rule's name is the tag. A `required` rule the listener
+could not check holds the command or withholds the output, whatever the wait; an
+advisory one is recorded as skipped. An output over 256 KiB of UTF-8 is past what
+one rules call reads, so its rules count as not checked. An answer for another
+revision of the rules reads the listing again and asks once more. An outage keeps
+the rules read before, so it never drops a required rule; a restart forgets them
+until the listing answers again. Rule-name tags get the same write-back
+protection as vSR's own.
+
+When Redact rewrites an output it tells the model that the tags are vSR's, not
+part of the source, and that the values are hidden on purpose and not to be read
+another way.
+
+The listing may use the `vllm-sr/4.0` form (`data`) or the `vllm-sr/5.0` form
+(`models`, each with its `name`, `features` and `card`).
+
+The HTTP client serializes decision requests and includes queue time in
+deadlines; the listing and rules calls do not wait in that queue. A
 network failure opens a 60-second breaker; HTTP errors, malformed replies and
 caller cancellation are reported separately. Discovery tries
 `/v1/systemone/models`, falling back to `/v1/models` only on HTTP 404. The selected

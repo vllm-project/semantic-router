@@ -5,6 +5,7 @@ import type { RuntimeClient } from "./runtime.ts";
 import type { DecisionStore } from "./decisions.ts";
 import { guard } from "./guard-policy.ts";
 import type { GuardVerdict } from "./guard-policy.ts";
+import type { Listener } from "./listener.ts";
 
 interface Pending {
   sessionID: string;
@@ -19,6 +20,7 @@ export async function registerGuard(
   runtime: RuntimeClient,
   decisions: DecisionStore,
   notify: (sessionID: string) => Promise<void>,
+  listener?: Listener,
 ): Promise<() => void> {
   const pending = new Map<string, Pending>();
   const key = (sessionID: string, messageID: string, id: string) =>
@@ -110,19 +112,26 @@ export async function registerGuard(
       settings,
       runtime,
       entry.controller.signal,
+      Date.now,
+      listener,
     ));
     // Only tighten. Native ask/deny rules retain their authority even for a low score.
     const nativeAsk = event.effect === "ask" && verdict.effect === "allow";
     if (verdict.effect !== "allow") {
       event.effect = verdict.effect;
+      const words = verdict.rule?.description.replace(/[.\s]+$/, "");
       const message =
-        verdict.reason === "fixed-rule"
-          ? "a built-in rule flags a destructive or downloaded-code pattern"
-          : verdict.reason === "model-risk"
-            ? "the decision model flags a potentially harmful command"
-            : verdict.reason === "coverage-limit"
-              ? "this command exceeds the guard's checking limit"
-              : "the guard could not finish checking this command";
+        verdict.reason === "listener-rule"
+          ? `${words || `listener rule ${verdict.rule?.name}`}, a rule of the Router listener, holds it`
+          : verdict.reason === "listener-unchecked"
+            ? `the listener's required rule ${verdict.rule?.name} could not be checked (${verdict.ruleReason})`
+            : verdict.reason === "fixed-rule"
+              ? "a built-in rule flags a destructive or downloaded-code pattern"
+              : verdict.reason === "model-risk"
+                ? "the decision model flags a potentially harmful command"
+                : verdict.reason === "coverage-limit"
+                  ? "this command exceeds the guard's checking limit"
+                  : "the guard could not finish checking this command";
       event.message =
         verdict.effect === "deny"
           ? "vSR guard: check cancelled."
@@ -139,6 +148,15 @@ export async function registerGuard(
       ...(verdict.labels ? { labels: verdict.labels } : {}),
     });
     entry.decisionID = decision.id;
+    for (const { rule } of verdict.unchecked ?? [])
+      decisions.record({
+        sessionID: event.sessionID,
+        toolCallID: event.source.id,
+        app: "guard",
+        outcome: "skipped",
+        reason: "listener-unchecked",
+        labels: [rule.name],
+      });
     // Only execution state/metadata is needed while the native approval dialog is pending.
     entry.command = "";
     await notify(event.sessionID);

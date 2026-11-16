@@ -9,6 +9,9 @@ npm test
 npm run test:integration
 ```
 
+CI runs `make agent-opencode-test` (install, check and unit tests) as part of the
+Agent Plugins contract, `make agent-plugins-test`.
+
 `src/index.ts` owns host registration and cleanup. `settings.ts` validates options,
 `runtime.ts` owns bounded HTTP calls and capability discovery, `decisions.ts`
 retains session-scoped metadata, and `rpc.ts` defines server/UI messages.
@@ -20,6 +23,8 @@ copied into `questions.ts`; sibling plugin imports remain forbidden.
 precedence, `shell.ts` retains the baseline shell scanner and its adversarial
 fixtures, and `guard-hooks.ts` tightens native permissions and observes terminal
 outcomes. Pending guards reject saturation instead of dropping active checks.
+`listener.ts` reads a Router listener's `vsr` profile and rules and asks those
+rules, ported from the Claude Code plugin's `lib/profile.ts` and `lib/rules.ts`.
 `masking.ts` owns fixed secret patterns, validated Unicode spans and interval
 masking. `output-policy.ts` owns Redact/Shield scanning, coverage and attachment
 policy. `output-hooks.ts` adapts tool results/outgoing context and prevents

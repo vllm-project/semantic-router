@@ -8,5 +8,8 @@
   Return neither credentials nor prompt/tool-output text in diagnostics.
 - Keep tests fixture-based. Live runtime/model tests require explicit input and
   must not download models as part of `npm test`.
-- Run `npm ci`, `npm run check`, and `npm test`. Test the packed artifact with
+- Run `make agent-opencode-test` from the repository root, or `npm ci`,
+  `npm run check`, and `npm test` here. CI runs it in the Agent Plugins contract.
+- When the Claude Code plugin changes how it reads a listener's profile or
+  rules (`lib/profile.ts`, `lib/rules.ts`), port the change to `listener.ts`. Test the packed artifact with
   the pinned OpenCode release whenever registration or package exports change.

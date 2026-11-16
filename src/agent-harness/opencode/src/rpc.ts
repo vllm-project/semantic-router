@@ -1,5 +1,4 @@
 import { Rpc } from "@opencode/plugin/rpc";
-import { TAGS } from "./masking.ts";
 import { APPS } from "./settings.ts";
 import { FEEDBACK, OUTCOMES, REASONS } from "./decisions.ts";
 const id = { type: "string", minLength: 1, maxLength: 256 } as const;
@@ -26,9 +25,8 @@ const decision = {
   properties: {
     counts: {
       type: "object",
-      propertyNames: {
-        enum: [...TAGS],
-      },
+      // A tag or a listener rule's name; DecisionStore.record checks its form (OpenCode RPC refuses `pattern`).
+      propertyNames: { type: "string", minLength: 1, maxLength: 128 },
       additionalProperties: { type: "integer", minimum: 0 },
     },
     coverage: {

@@ -14,10 +14,13 @@ export const TAGS = [
   "secret",
 ] as const;
 export type Tag = (typeof TAGS)[number];
+// A tag in a placeholder: one of TAGS, or a listener rule's name, which the Router does not restrict beyond this.
+export const isTagName = (value: string) => /^[^\]\s]{1,128}$/.test(value);
+// A PII or secret tag, or the name of a listener rule that found the text.
 export type Found = {
   from: number;
   to: number;
-  tag: Tag;
+  tag: string;
   probability?: number;
 };
 export type Span = {
@@ -285,11 +288,12 @@ export function piiIn(
   });
 }
 
-export type Hidden = { text: string; counts: Partial<Record<Tag, number>> };
+export type Counts = Partial<Record<string, number>>;
+export type Hidden = { text: string; counts: Counts };
 
 // What stands where a value was hidden: `[vsr:email]`, a tag no code holds, so writing one back is always a lost value.
 // The Router's masking plugin leaves text of this shape alone (placeholderPattern in pkg/masking), so keep it.
-export const tagText = (tag: Tag) => `[vsr:${tag}]`;
+export const tagText = (tag: string) => `[vsr:${tag}]`;
 
 // Union overlapping intervals so an intersecting span cannot leave a sensitive suffix exposed.
 export function hide(text: string, found: readonly Found[]): Hidden {
@@ -311,7 +315,7 @@ export function hide(text: string, found: readonly Found[]): Hidden {
       if (item.tag === "secret") prior.tag = "secret";
     } else merged.push({ ...item });
   }
-  const counts: Partial<Record<Tag, number>> = {};
+  const counts: Counts = {};
   let out = "",
     at = 0;
   for (const item of merged) {
@@ -322,12 +326,10 @@ export function hide(text: string, found: readonly Found[]): Hidden {
   return { text: out + text.slice(at), counts };
 }
 
-export function addCounts(
-  ...all: Partial<Record<Tag, number>>[]
-): Partial<Record<Tag, number>> {
-  const sum: Partial<Record<Tag, number>> = {};
+export function addCounts(...all: Counts[]): Counts {
+  const sum: Counts = {};
   for (const counts of all) {
-    for (const [tag, n] of Object.entries(counts) as [Tag, number][])
+    for (const [tag, n] of Object.entries(counts) as [string, number][])
       sum[tag] = (sum[tag] ?? 0) + n;
   }
   return sum;

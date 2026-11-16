@@ -1,5 +1,5 @@
-import { TAGS } from "./masking.ts";
-import type { Tag } from "./masking.ts";
+import { isTagName } from "./masking.ts";
+import type { Counts } from "./masking.ts";
 import { APPS } from "./settings.ts";
 import type { App } from "./settings.ts";
 
@@ -43,6 +43,8 @@ export const REASONS = [
   "coverage-limit",
   "native-permission",
   "placeholder-write",
+  "listener-rule",
+  "listener-unchecked",
 ] as const;
 export type Reason = (typeof REASONS)[number];
 export interface Usage {
@@ -53,7 +55,7 @@ export interface Usage {
   cost: number;
 }
 export interface Decision {
-  counts?: Partial<Record<Tag, number>>;
+  counts?: Counts;
   coverage?: { checked: number; total: number };
   reason?: Reason;
   observedModel?: string;
@@ -152,9 +154,7 @@ export class DecisionStore {
       input.counts &&
       Object.entries(input.counts).some(
         ([key, value]) =>
-          !TAGS.some((tag) => tag === key) ||
-          !Number.isInteger(value) ||
-          value! < 0,
+          !isTagName(key) || !Number.isInteger(value) || value! < 0,
       )
     )
       throw new Error("Invalid masking counts");
