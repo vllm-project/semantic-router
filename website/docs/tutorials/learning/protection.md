@@ -532,7 +532,7 @@ Router Replay stores the full protection trace: identity source and hash,
 protected model, base model, proposal model, final model, switch cost, cache
 evidence, tool-loop state, mode, scope, action, and reason.
 
-## Migrating from v0.3 Session-Aware Algorithm
+## Migrating from v0.3 Session-Aware Algorithm {#migrating-from-v03-session-aware-algorithm}
 
 In v0.3, session continuity was implemented as a decision-level selector (`algorithm.type: session_aware`) that wrapped a base selection method (such as `hybrid` or `latency_aware`). This coupled route eligibility and scoring with multi-turn session state.
 
