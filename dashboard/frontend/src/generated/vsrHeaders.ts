@@ -16,7 +16,7 @@ export const OCP_APIM_SUBSCRIPTION_KEY = 'ocp-apim-subscription-key'
 /** Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it. Surface: control. */
 export const SESSION_ID = 'session-id'
 
-/** Thread id Codex sends on every call, equal to `session-id` on a root thread, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. Surface: control. */
+/** Thread id Codex sends on every call, which protection and Router Replay read as the agent when `identity.headers.agent` is unset, except on a root thread, where it equals `session-id`; providers receive it. Surface: control. */
 export const THREAD_ID = 'thread-id'
 
 /** Provider credential of Anthropic-style APIs. Surface: internal. */

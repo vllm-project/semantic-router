@@ -50,7 +50,10 @@ configured, because protection reads what they send:
   session the request pins, `x-vsr-session-id` or a `session_id_headers`
   header, and without one Codex's `session-id`.
 - **Agent.** With `identity.headers.agent` unset, protection reads
-  `x-claude-code-agent-id`, then `thread-id`.
+  `x-claude-code-agent-id`, then `thread-id`. A `thread-id` equal to the
+  request's `session-id` marks Codex's root thread, the main agent, and names no
+  agent, also when the request pins another session, as
+  `vllm-sr connect codex --launch` does.
 - **Codex's turn metadata.** Without those headers, protection reads the
   `session_id` and `thread_id` of Codex's `x-codex-turn-metadata`, or of a
   Responses request's `client_metadata`.

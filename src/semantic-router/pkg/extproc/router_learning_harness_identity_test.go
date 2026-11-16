@@ -13,7 +13,8 @@ import (
 // x-claude-code-agent-id on a subagent's; Codex sends session-id and thread-id
 // on every request, a root thread its session id as both, and the same ids in
 // its turn metadata. With no identity headers configured, protection, Replay
-// and Insights read them all.
+// and Insights read them all, and a Codex root thread is the main
+// conversation, not an agent, also in a session the request pins.
 func TestProtectionIdentityReadsSupportedHarnessesWithoutConfig(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
@@ -37,7 +38,7 @@ func TestProtectionIdentityReadsSupportedHarnessesWithoutConfig(t *testing.T) {
 		{
 			name:    "codex root thread",
 			headers: map[string]string{"session-id": "cx-session", "thread-id": "cx-session"},
-			session: "cx-session", agent: "cx-session", agentHeader: "thread-id",
+			session: "cx-session", agentHeader: "thread-id",
 		},
 		{
 			name:    "codex subagent thread",
@@ -49,6 +50,17 @@ func TestProtectionIdentityReadsSupportedHarnessesWithoutConfig(t *testing.T) {
 			headers: map[string]string{},
 			turn:    codexreview.Turn{SessionID: "cx-session", ThreadID: "cx-child", TurnID: "turn"},
 			session: "cx-session", agent: "cx-child", agentHeader: "x-codex-turn-metadata", insightAgent: true,
+		},
+		{
+			name:    "a pinned codex root thread is the main conversation",
+			headers: map[string]string{"x-vsr-session-id": "pinned", "session-id": "cx-session", "thread-id": "cx-session"},
+			session: "pinned", agentHeader: "thread-id",
+		},
+		{
+			name:    "a pinned codex root thread in turn metadata alone",
+			headers: map[string]string{"x-vsr-session-id": "pinned"},
+			turn:    codexreview.Turn{SessionID: "cx-session", ThreadID: "cx-session", TurnID: "turn"},
+			session: "pinned", agentHeader: "x-codex-turn-metadata",
 		},
 		{
 			name:    "a pinned session comes first",
