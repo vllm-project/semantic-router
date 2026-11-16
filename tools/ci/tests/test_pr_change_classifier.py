@@ -420,7 +420,7 @@ class SelectionTests(unittest.TestCase):
         ):
             with self.subTest(path=path):
                 self.assertTrue(components <= set(classify([path]).selected_jobs))
-        python_consumers = components - {"e2e-unit", "soak-tools", "opencode-plugin"}
+        python_consumers = components - {"e2e-unit", "soak-tools"}
         self.assertTrue(
             python_consumers
             <= set(classify(["tools/ci/python_test_evidence.py"]).selected_jobs)

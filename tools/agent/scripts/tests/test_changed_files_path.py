@@ -213,7 +213,6 @@ class ImpactTests(unittest.TestCase):
                 "harness-tools",
                 "e2e-unit",
                 "soak-tools",
-                "opencode-plugin",
             },
         )
         self.assertEqual(result["optional_e2e_profiles"], [])

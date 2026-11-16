@@ -27,27 +27,6 @@ SHA = "a" * 40
 
 
 class ComponentBatchTests(unittest.TestCase):
-    def test_opencode_sources_select_node_contract_with_junit_receipts(self):
-        plan = make_plan(["src/agent-harness/opencode/src/runtime.ts"], source_sha=SHA)
-        record = next(
-            row for row in plan["verifications"] if row["id"] == "opencode-plugin"
-        )
-        self.assertEqual(record["worker"], "cli")
-        with tempfile.TemporaryDirectory() as tmp:
-            output = Path(tmp)
-            commands = runner.commands(record["target"], output)
-            self.assertEqual(commands[0][0], "npm")
-            self.assertIn("--test-reporter=junit", commands[-1])
-            self.assertTrue(
-                any(arg.endswith("runtime.test.ts") for arg in commands[-1])
-            )
-            (output / "tests.xml").write_text(
-                '<testsuites><testsuite><testcase name="timeout cancels request" classname="runtime" /></testsuite></testsuites>'
-            )
-            evidence = runner.contract_evidence(record, output)
-            self.assertEqual(len(evidence["cases"]), 1)
-            self.assertEqual(evidence["cases"][0]["status"], "passed")
-
     def test_component_workers_have_bounded_inventory_and_reject_metadata_changes(self):
         row = make_plan([], source_sha=SHA, requested=("cli-unit",))["verifications"][0]
         row = {**row, "batch_policy": "shared-components"}

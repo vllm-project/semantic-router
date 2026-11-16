@@ -50,23 +50,6 @@ def validate_batch(batch: dict) -> None:
 def commands(target: str, output: Path) -> list[list[str]]:
     """Keep the maintained Make entrypoints as the owners of discovery."""
     python = str(ROOT / ".venv-agent/bin/python")
-    if target == "opencode-plugin-test":
-        package = ROOT / "src/agent-harness/opencode"
-        tests = sorted((package / "test").glob("*.test.ts"))
-        if not tests:
-            raise ValueError("OpenCode unit test inventory is empty")
-        return [
-            ["npm", "--prefix", str(package), "ci", "--ignore-scripts"],
-            ["npm", "--prefix", str(package), "run", "check"],
-            [
-                "node",
-                "--experimental-strip-types",
-                "--test",
-                "--test-reporter=junit",
-                f"--test-reporter-destination={output / 'tests.xml'}",
-                *map(str, tests),
-            ],
-        ]
     if target == "test-learning-tools":
         return [["make", target], ["make", "test-calibration"]]
     if target == "soak-test":
@@ -123,15 +106,6 @@ def run_command(command: list[str], env: dict, log: Path, deadline: float) -> No
 
 
 def contract_evidence(record: dict, output: Path) -> dict:
-    if record["target"] == "opencode-plugin-test":
-        cases = junit_cases(output / "tests.xml")
-        return {
-            "runtime": "none",
-            "device": "none",
-            "platform": actual_platform(),
-            "expected_cases": [case["id"] for case in cases],
-            "cases": cases,
-        }
     if record["target"] == "test-e2e-unit":
         return json.loads((output / "evidence.json").read_text())
     if record["target"] == "soak-test":
@@ -212,7 +186,7 @@ def run_batch(batch: dict, output: Path) -> bool:
                 ):
                     run_command(command, env, log, deadline)
             test_env = dict(env)
-            if target not in {"test-e2e-unit", "soak-test", "opencode-plugin-test"}:
+            if target not in {"test-e2e-unit", "soak-test"}:
                 test_env.update(
                     CI_REPO_ROOT=str(ROOT),
                     CI_PYTHON_TEST_EVENTS=str(raw / "python-events.jsonl"),
