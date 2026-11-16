@@ -506,16 +506,15 @@ def codex_memories(model: str, memory_model: str | None = None) -> dict[str, str
     return {"extract_model": memory, "consolidation_model": memory}
 
 
-def _memories_table(settings: dict[str, Any]) -> str:
-    lines = ["[memories]"]
+def _table(name: str, settings: dict[str, Any]) -> str:
+    """settings as the TOML table name, a table among them as one under it."""
+    lines, under = [f"[{name}]"], []
     for key, value in settings.items():
         if isinstance(value, dict):
-            raise ValueError(
-                f"[memories].{key} is a table, which connect cannot carry over;"
-                " set extract_model and consolidation_model there yourself"
-            )
-        lines.append(f"{key} = {json.dumps(value)}")
-    return "\n".join(lines)
+            under.append(_table(f"{name}.{key}", value))
+        else:
+            lines.append(f"{key} = {json.dumps(value)}")
+    return "\n\n".join(["\n".join(lines), *under])
 
 
 def codex_change(
@@ -536,7 +535,7 @@ def codex_change(
         gateway, model, key_env, context_window, login, catalog, key_command
     )
     lines = [f"{k} = {json.dumps(v)}" for k, v in top.items()]
-    memories = _memories_table(codex_memories(model, memory_model))
+    memories = _table("memories", codex_memories(model, memory_model))
     text = (
         "\n".join(lines) + "\n\n" + _provider_table(provider) + "\n\n" + memories + "\n"
     )
@@ -593,7 +592,7 @@ def codex_app_change(
     held = harness_toml.values(text, ["[memories]"])["[memories]"]
     settings = harness_toml.loads(held).get("memories", {}) if held else {}
     memories = codex_memories(model, memory_model)
-    values["[memories]"] = _memories_table({**settings, **memories})
+    values["[memories]"] = _table("memories", {**settings, **memories})
     return Change(path, "toml", values)
 
 
@@ -641,6 +640,129 @@ def codex_model_overrides(cwd: Path) -> list[Path]:
         if directory == stop:
             break
     return found
+
+
+# --- handing work between Claude Code and Codex ------------------------------------
+
+# OpenAI's Claude Code plugin that hands a task to Codex (openai/codex-plugin-cc
+# 1.0.6). It runs `codex app-server` with Codex's default config and no profile.
+CODEX_PLUGIN = "codex@openai-codex"
+CODEX_MARKETPLACE = "openai-codex"
+CODEX_PLUGIN_SOURCE = "openai/codex-plugin-cc"
+# Claude Code's settings env reaches every program it starts, the plugin's Codex
+# among them, and Codex passes its whole environment to its shell (0.166)
+SHELL_POLICY = "[shell_environment_policy]"
+CLAUDE_VARIABLES = "ANTHROPIC_*"
+# The MCP server Codex asks Claude Code through: Claude Code's own `claude mcp
+# serve`, with only its Agent tool, which reads and answers but cannot edit
+# (2.1.325). Codex 0.166 asks before an MCP tool call unless the tool is approved.
+CLAUDE_MCP = "mcp_servers.claude"
+CLAUDE_MCP_TABLE = f"""\
+[{CLAUDE_MCP}]
+command = "claude"
+args = ["mcp", "serve"]
+env_vars = ["CLAUDE_CONFIG_DIR"]
+enabled_tools = ["Agent"]
+tool_timeout_sec = 300
+
+[{CLAUDE_MCP}.tools.Agent]
+approval_mode = "approve\""""
+# The skill, in a folder Codex 0.166 loads skills from, that hands Claude Code
+# a task that may edit files
+CLAUDE_SKILL = "vllm-sr-claude-code"
+CLAUDE_SKILL_TEXT = f"""\
+---
+name: {CLAUDE_SKILL}
+description: Hand one task to Claude Code with `claude -p` when the user asks Claude Code (or Claude) to answer, review or change something. Never use it on your own initiative, or for a task Claude Code handed to you.
+---
+
+# Hand a task to Claude Code
+
+Claude Code works in its own official client, on its own login or key from its
+own settings (`$CLAUDE_CONFIG_DIR`, else `~/.claude`). Never pass it a key,
+token or login, and never set an `ANTHROPIC_` variable for it.
+
+Run one command for the task, in the directory it is about. By default Claude
+Code may only read:
+
+    claude -p --output-format json --max-turns 10 --tools Read,Grep,Glob -- "<the task>"
+
+Only when the user asked for Claude Code to change files, give it the edit
+tools too:
+
+    claude -p --output-format json --max-turns 10 --tools Read,Grep,Glob,Edit,Write --permission-mode acceptEdits -- "<the task>"
+
+Claude Code reaches its model over the network and keeps its session in its
+own home, so the command cannot run in the sandbox. Run it with
+`sandbox_permissions: "require_escalated"` and a `justification` that asks,
+such as "Let Claude Code work on this task outside the sandbox?". Suggest no
+`prefix_rule`. When the user declines, stop and say so.
+
+It prints one JSON object. Give the user its `result`, say it came from Claude
+Code, and after edits list the files that changed. When `is_error` is true or
+`subtype` is `error_max_turns`, say so rather than doing the task yourself, and
+do not run it again.
+"""
+
+
+def codex_shell_change(home: Path) -> Change:
+    """Codex's config.toml with Claude Code's variables left out of every command
+    Codex runs, beside the shell settings it holds already."""
+    path = home / "config.toml"
+    held = harness_toml.values(read(path) or "", [SHELL_POLICY])[SHELL_POLICY]
+    name = SHELL_POLICY[1:-1]
+    policy = harness_toml.loads(held).get(name, {}) if held else {}
+    exclude = policy.get("exclude") or []
+    if CLAUDE_VARIABLES not in exclude:
+        exclude = [*exclude, CLAUDE_VARIABLES]
+    return Change(
+        path, "toml", {SHELL_POLICY: _table(name, {**policy, "exclude": exclude})}
+    )
+
+
+def codex_default_gateway(home: Path) -> str | None:
+    """The gateway Codex's config.toml sends to by default, the one a Codex
+    started without a profile uses; None when it sends elsewhere."""
+    try:
+        doc = harness_toml.loads(read(home / "config.toml") or "")
+    except ValueError:
+        return None
+    provider = (doc.get("model_providers") or {}).get(PROVIDER) or {}
+    if doc.get("model_provider") != PROVIDER or not provider.get("base_url"):
+        return None
+    return str(provider["base_url"]).removesuffix("/v1")
+
+
+def with_claude_mcp(change: Change) -> Change:
+    """The Codex change with the MCP server it asks Claude Code through: at the
+    end of the profile connect writes whole, or as a table of config.toml."""
+    if change.kind == "file":
+        change.values["file"] += f"\n{CLAUDE_MCP_TABLE}\n"
+    else:
+        change.values[CLAUDE_MCP] = CLAUDE_MCP_TABLE
+    return change
+
+
+def claude_skill(home: Path) -> Change:
+    return Change(
+        home / "skills" / CLAUDE_SKILL / "SKILL.md", "file", {"file": CLAUDE_SKILL_TEXT}
+    )
+
+
+def record_install(manifest_dir: Path, kind: str, name: str) -> None:
+    """Record a plugin or marketplace (kind) connect added, so --undo removes
+    it, and only what connect added."""
+    manifest_path = manifest_dir / MANIFEST
+    record = _record(manifest_path) or {"files": []}
+    added = record.setdefault("installed", {}).setdefault(kind, [])
+    if name not in added:
+        added.append(name)
+    write_private(manifest_path, json.dumps(record, indent=2) + "\n", always=True)
+
+
+def installed(manifest_dir: Path) -> dict[str, list[str]]:
+    """The plugins and marketplaces connect added, by kind."""
+    return (_record(manifest_dir / MANIFEST) or {}).get("installed") or {}
 
 
 # --- writing and undo --------------------------------------------------------------
@@ -831,6 +953,8 @@ def undo_changes(manifest_dir: Path) -> list[str]:
                 continue
         if item["created"] and not text.strip():
             path.unlink()
+            if path.parent.name == CLAUDE_SKILL and not any(path.parent.iterdir()):
+                path.parent.rmdir()  # the skill's own folder
             report.append(f"removed {path}")
         else:
             write_private(path, text)
@@ -887,6 +1011,9 @@ def connections(manifest_dir: Path, cwd: Path) -> list[dict[str, Any]]:
     entry holds a secret."""
     record = _record(manifest_dir / MANIFEST) or {}
     items = record.get("files") or []
+    # Codex's shell settings that --delegate codex wrote, beside Claude Code's
+    shell = [item for item in items if SHELL_POLICY in item["keys"]]
+    skill = [item for item in items if Path(item["path"]).parent.name == CLAUDE_SKILL]
     found = []
     for item in items:
         path = Path(item["path"])
@@ -912,18 +1039,32 @@ def connections(manifest_dir: Path, cwd: Path) -> list[dict[str, Any]]:
                         for other in items
                         if other is item
                         or Path(other["path"]).name == STATUS_LINE_SCRIPT
+                        or other in shell
                     ],
                     "plugins": sorted(record.get("plugins") or {}),
+                    "delegate": (
+                        {
+                            "to": "codex",
+                            "plugin": CODEX_PLUGIN,
+                            "installed_by_connect": CODEX_PLUGIN
+                            in installed(manifest_dir).get("plugins", []),
+                        }
+                        if shell
+                        else None
+                    ),
                     "overrides": [
                         {"path": str(other), "keys": keys} for other, keys in overrides
                     ],
                 }
             )
-        elif item["kind"] == "toml" or (
+        elif (item["kind"] == "toml" and "model_provider" in item["keys"]) or (
             item["kind"] == "file" and path.name.endswith(".config.toml")
         ):
-            # the profile, or the entries --app wrote into config.toml
+            # the profile, or the entries --app wrote into config.toml, up to the
+            # MCP server --delegate claude-code puts last, whose keys are not the
+            # provider's
             text = "\n".join(str(value) for value in written.values() if value)
+            text, mcp, _ = text.partition(f"[{CLAUDE_MCP}]")
             profile = profile_values(text)
             catalog = profile.get("model_catalog_json")
             # the auth table connect writes: the shell, then -c and the command
@@ -936,6 +1077,7 @@ def connections(manifest_dir: Path, cwd: Path) -> list[dict[str, Any]]:
                 if other is item
                 or other["path"] == catalog
                 or Path(other["path"]).name == "vsr.json"
+                or other in skill
             ]
             found.append(
                 {
@@ -959,6 +1101,9 @@ def connections(manifest_dir: Path, cwd: Path) -> list[dict[str, Any]]:
                     "key_env": profile.get("env_key"),
                     "key_command": helper,
                     "files": [file_state(other) for other in paired],
+                    "delegate": (
+                        {"to": "claude-code", "edits": bool(skill)} if mcp else None
+                    ),
                     "overrides": [
                         {"path": str(other), "keys": ["model"]}
                         for other in codex_model_overrides(cwd)
