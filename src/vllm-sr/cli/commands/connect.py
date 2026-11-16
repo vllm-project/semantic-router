@@ -260,8 +260,10 @@ def claude_code(
         # it resumes a conversation, which keeps its id
         carried = [hs.SESSION_HEADER]
         if own:
-            carried.append(hs.HARNESS_SESSION_HEADERS["claude-code"])
-        headers = hs.claude_headers(session.get(hs.CLAUDE_HEADERS), session_id)
+            carried.append(rc.CLAUDE_HEADERS["session"])
+        # the settings Claude Code reads where it starts; for a new worktree,
+        # those of the checkout it is made from
+        headers = hs.claude_headers(session, where.here, session_id)
         launched = {**values, hs.CLAUDE_HEADERS: headers}
         if from_env:
             helper = f"printenv {shlex.quote(api_key_env)}"
@@ -701,9 +703,10 @@ def sessions(as_json):
     """List the sessions --launch started and what is left of their worktrees.
 
     The newest comes first. For a worktree connect made, the steps that remove
-    it are shown, but nothing is removed here, and no step is offered while the
-    worktree has uncommitted changes or its branch has commits no other branch
-    or remote has.
+    it are shown, but nothing is removed here. No step is offered while the
+    worktree has uncommitted changes or commits on a detached HEAD, the branch
+    is not deleted while it has commits no other branch or remote has, and the
+    steps say first when the removal deletes files git ignores there.
     """
     try:
         found = [{**session, "state": hs.state(session)} for session in hs.recorded()]
@@ -1197,11 +1200,6 @@ def _launch(
         except (OSError, ValueError) as exc:
             raise click.ClickException(f"{exc}, so {argv[0]} was not started.") from exc
         shown = [*hs.rows(session), ("requests", f"{', '.join(carried)}: {session_id}")]
-        if doc is not None:
-            keys = ("global", "router", "learning", "protection", "identity")
-            named = rc._get(doc, *keys, "headers", "session")
-            filed = hs.filed_under(named, harness, list(carried))
-            shown.append(("replay", f"files its calls under {filed}"))
         heading(f"Session {session_id}")
         _aligned(shown)
         child = subprocess.Popen([found, *argv[1:]], cwd=where.path, env=env)

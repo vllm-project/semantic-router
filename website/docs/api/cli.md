@@ -1079,9 +1079,10 @@ Usage: vllm-sr connect sessions [OPTIONS]
 List the sessions --launch started and what is left of their worktrees.
 
 The newest comes first. For a worktree connect made, the steps that remove
-it are shown, but nothing is removed here, and no step is offered while the
-worktree has uncommitted changes or its branch has commits no other branch
-or remote has.
+it are shown, but nothing is removed here. No step is offered while the
+worktree has uncommitted changes or commits on a detached HEAD, the branch
+is not deleted while it has commits no other branch or remote has, and the
+steps say first when the removal deletes files git ignores there.
 
 | Parameter | Description |
 | --- | --- |
