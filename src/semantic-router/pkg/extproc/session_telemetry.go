@@ -40,13 +40,26 @@ func (r *OpenAIRouter) sessionTurnPricing(model string) sessiontelemetry.TurnPri
 	}
 }
 
-func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing sessiontelemetry.TurnPricing) {
-	recordSessionTurnOutcome(ctx, usage, pricing)
-	if ctx == nil || usage.invalid || usage.promptTokens+usage.completionTokens <= 0 {
-		return
-	}
+func recordSessionLastModel(ctx *RequestContext) {
 	sessiontelemetry.RecordLastModel(routingSessionStateKey(ctx), ctx.RequestModel)
 	sessiontelemetry.RecordLastModel(promptCacheKeyStateKey(ctx), ctx.RequestModel)
+}
+
+func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing sessiontelemetry.TurnPricing) {
+	recordSessionTurnOutcome(ctx, usage, pricing)
+	if ctx == nil {
+		return
+	}
+	if usage.invalid {
+		// The turn was served, so continuity follows its model even though
+		// partial usage must not reach the session totals.
+		recordSessionLastModel(ctx)
+		return
+	}
+	if usage.promptTokens+usage.completionTokens <= 0 {
+		return
+	}
+	recordSessionLastModel(ctx)
 	accounting := estimateRouterCacheAccounting(ctx, usage, pricing)
 	// Routing ownership follows the dispatch identity; protocol telemetry keeps
 	// its own Chat fingerprint or Responses lineage without creating an owner.

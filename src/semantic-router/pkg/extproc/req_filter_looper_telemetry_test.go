@@ -156,6 +156,32 @@ func TestRecordSuccessfulLooperExecutionSkipsUnreportedUsageTotals(t *testing.T)
 	_, ok := sessiontelemetry.GetRouterSessionSnapshot("session-unreported", time.Now())
 	assert.False(t, ok, "unreported looper usage must not create complete-looking session totals")
 }
+
+func TestRecordSuccessfulLooperExecutionKeepsLastModelForUnreportedUsage(t *testing.T) {
+	sessiontelemetry.ResetForTesting()
+	sessiontelemetry.ResetLastModelForTesting()
+	t.Cleanup(sessiontelemetry.ResetForTesting)
+	t.Cleanup(sessiontelemetry.ResetLastModelForTesting)
+
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	decision := &config.Decision{Name: "panel"}
+	first := &RequestContext{RequestID: "req-looper-a", SessionID: "session-switch", RequestModel: "model-a"}
+	router.recordSuccessfulLooperExecution(&looper.Response{
+		Model: "model-a",
+		Usage: looper.TokenUsage{PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120},
+	}, "vllm-sr/auto", decision, first, nil)
+
+	second := &RequestContext{RequestID: "req-looper-b", SessionID: "session-switch", RequestModel: "model-b"}
+	router.recordSuccessfulLooperExecution(&looper.Response{
+		Model: "model-b",
+		Usage: looper.TokenUsage{PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120, Unreported: true},
+	}, "vllm-sr/auto", decision, second, nil)
+
+	model, ok := sessiontelemetry.GetLastModel(routingSessionStateKey(second))
+	require.True(t, ok)
+	assert.Equal(t, "model-b", model)
+}
+
 func TestRecordSuccessfulLooperExecutionRecordsReportedZeroOutput(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
