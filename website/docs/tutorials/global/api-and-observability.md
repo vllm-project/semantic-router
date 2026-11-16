@@ -128,7 +128,7 @@ global:
   services:
     response_api:
       enabled: true
-      store_backend: redis        # default; use "memory" only for local development
+      store_backend: redis
       redis:
         address: "redis:6379"
 ```
@@ -137,8 +137,10 @@ The `store_backend` field controls where response and conversation history is pe
 
 | Backend | Durability | Use case |
 |---------|-----------|----------|
-| `redis` | Survives router restart, shared across replicas | Production (default) |
-| `memory` | Lost on router restart | Local development only |
+| `redis` | Survives router restart, shared across replicas | Production |
+| `memory` | Lost on router restart | Local development (the default when no Redis server is named) |
+
+A configuration that names no store gets `redis` when its `redis` block names a server (`address`, `cluster_addresses` or `config_path`), as configurations written when `redis` was the default do, and `memory` otherwise, so the Responses API works without another service. `vllm-sr serve` runs Redis for its stack and selects it when the configuration names no store.
 
 The `redis` store needs `redis.address` (or `cluster_addresses` in cluster mode). When the store cannot start, the router still starts, logs `response_api_store_init_failed`, and answers every `/v1/responses` request with 503 and code `response_store_unavailable`. Set `enabled: false` to serve no Responses API at all, which answers 404.
 

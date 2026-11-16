@@ -247,7 +247,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
 	cfg.API = services.API
-	cfg.ResponseAPI = services.ResponseAPI
+	cfg.ResponseAPI = services.ResponseAPI.withDefaultStoreBackend()
 	cfg.Observability = services.Observability
 	cfg.MaskingIdentity = services.MaskingIdentity
 	cfg.Authz = services.Authz
