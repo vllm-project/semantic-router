@@ -313,10 +313,15 @@ exchanges, and `embeddings`, `classify` or `rerank` for other runtime tasks.
 Each entry names its model, input and output tokens, cost and currency, or an
 unpriced reason. Fused runtime tasks count once; cached results and startup or
 warmup calls add no request spend. Calls spent before a decision fails remain
-in its record and in aggregate router spend. Generation cost and savings keep
-their existing meaning; router spend is added to total spend separately.
-Auxiliary model calls made by internal Looper hops count in the parent
-request's router spend and coverage; hop generation costs count there once.
+in its record and in aggregate router spend. A record's generation cost and
+`cost_savings` keep their meaning, while the savings Insights and the aggregate
+API report are net of the Router calls of the requests they compare, with the
+figure before them kept as `gross_saved`. A request whose Router call has no
+price leaves the savings instead of being netted as free. Router spend is also
+added to total spend. Auxiliary model calls made by internal Looper hops count
+in the parent request's router spend and coverage; hop generation costs count
+there once. See the
+[aggregate fields](../../api/router#configured-rate-cost-estimates).
 
 Set deployment rates under `global.model_catalog.deployments.<name>.pricing`,
 using the same per-million-token fields as `providers.models[].pricing`:
@@ -334,9 +339,10 @@ global:
 Explicit deployment pricing wins. Otherwise, a deployment's `model` may name a
 provider model whose pricing is used. Omitted currency defaults to USD; an
 explicit empty pricing block declares zero rates. An unpriced deployment or a
-call without complete usage remains unpriced, never implicitly free. Remote
-System One usage must include both input and output token counters, even when
-zero. These are token rate estimates; they do not measure local compute or GPU
+call without complete usage remains unpriced, never implicitly free, so the
+requests that call it are left out of savings: give a self-hosted deployment an
+empty `pricing: {}` block to count its calls as free. Remote System One usage
+must include both input and output token counters, even when zero. These are token rate estimates; they do not measure local compute or GPU
 costs.
 
 ### Keep personal data out of Replay

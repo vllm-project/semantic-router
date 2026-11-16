@@ -22741,6 +22741,12 @@
                               "currency": {
                                 "type": "string"
                               },
+                              "gross_saved": {
+                                "type": "number"
+                              },
+                              "netted_router_call_spend": {
+                                "type": "number"
+                              },
                               "router_call_spend": {
                                 "type": "number"
                               },
@@ -22754,6 +22760,8 @@
                             "required": [
                               "currency",
                               "total_saved",
+                              "gross_saved",
+                              "netted_router_call_spend",
                               "baseline_spend",
                               "actual_spend",
                               "router_call_spend",
@@ -22790,6 +22798,20 @@
                             },
                             "looper_hop_records": {
                               "type": "integer"
+                            },
+                            "net_unavailable": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "netted_router_calls": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
                             },
                             "partly_priced_records": {
                               "type": "integer"
@@ -22831,6 +22853,12 @@
                         "excluded_record_count": {
                           "type": "integer"
                         },
+                        "gross_saved": {
+                          "type": "number"
+                        },
+                        "netted_router_call_spend": {
+                          "type": "number"
+                        },
                         "router_call_spend": {
                           "type": "number"
                         },
@@ -22843,6 +22871,8 @@
                       },
                       "required": [
                         "total_saved",
+                        "gross_saved",
+                        "netted_router_call_spend",
                         "baseline_spend",
                         "actual_spend",
                         "router_call_spend",

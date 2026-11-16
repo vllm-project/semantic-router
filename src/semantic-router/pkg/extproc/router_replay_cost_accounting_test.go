@@ -237,3 +237,79 @@ func TestRouterReplayAggregateAPIStreamsTheSameCostSummary(t *testing.T) {
 		t.Fatalf("API summary = %+v\nwant %+v", got.Summary, want)
 	}
 }
+
+// netSavingsRecords are requests compared with a baseline whose Router calls
+// are priced, free, unpriced or in another currency, and a failed request
+// whose Router call is spend but not part of any saving.
+func netSavingsRecords() []routerreplay.RoutingRecord {
+	compared := func(id string, calls ...store.RouterCallCost) routerreplay.RoutingRecord {
+		record := routerreplay.RoutingRecord{ID: id, Timestamp: time.Unix(int64(len(id)), 0).UTC(), LifecycleState: routerreplay.LifecycleCompleted, TotalTokens: replayIntPtr(100)}
+		record.ActualCost, record.BaselineCost, record.CostSavings = replayFloat64Ptr(1), replayFloat64Ptr(3), replayFloat64Ptr(2)
+		record.Currency, record.BaselineModel = replayStringPtr("USD"), replayStringPtr("base")
+		record.CostAccounting = &store.CostAccounting{PricingSource: store.PricingSourceConfigured, BaselineSource: store.BaselineSourceConfigured, RouterCalls: calls}
+		return record
+	}
+	priced := func(kind string, calls int, cost float64, currency string) store.RouterCallCost {
+		return store.RouterCallCost{Kind: kind, Calls: calls, Cost: replayFloat64Ptr(cost), Currency: currency}
+	}
+	failed := compared("failed", priced("decision_model", 1, 0.125, "USD"))
+	failed.LifecycleState = routerreplay.LifecycleFailed
+	return []routerreplay.RoutingRecord{
+		compared("routed", priced("systemone", 1, 0.25, "USD"), priced("decision_model", 2, 0.5, "USD")),
+		compared("free", priced("classify", 1, 0, "USD")),
+		compared("unpriced", store.RouterCallCost{Kind: "systemone", Calls: 1, UnpricedCalls: 1, UnpricedReasons: map[string]int{store.UnpricedNoUsage: 1}}),
+		failed,
+		compared("euro-call", priced("systemone", 1, 0.25, "EUR")),
+	}
+}
+
+func replayAggregateSummaryJSON(t *testing.T, records []routerreplay.RoutingRecord) map[string]interface{} {
+	t.Helper()
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(len(records), 0))
+	for _, record := range records {
+		if _, err := recorder.AddRecord(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"route": recorder}}
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
+	return decodeJSONBody(t, response.GetImmediateResponse().Body)["summary"].(map[string]interface{})
+}
+
+// Savings are net of the Router's own calls on the compared requests. A
+// request whose Router call has no price in its currency leaves savings,
+// gross and net, and is counted by why instead of being netted at zero.
+func TestRouterReplayAggregateNetsRouterCallsOutOfSavings(t *testing.T) {
+	records := netSavingsRecords()
+	summary := replayAggregateSummaryJSON(t, records[:4])
+	want := map[string]interface{}{
+		"total_saved": 3.25, "gross_saved": 4.0, "netted_router_call_spend": 0.75,
+		"baseline_spend": 6.0, "actual_spend": 2.0, "router_call_spend": 0.875, "total_spend": 4.875,
+		"cost_record_count": 2.0, "excluded_record_count": 2.0,
+	}
+	for key, value := range want {
+		if summary[key] != value {
+			t.Errorf("summary[%q] = %v, want %v", key, summary[key], value)
+		}
+	}
+	coverage := summary["coverage"].(map[string]interface{})
+	if got, want := coverage["netted_router_calls"], map[string]interface{}{"systemone": 1.0, "decision_model": 2.0, "classify": 1.0}; !reflect.DeepEqual(got, want) {
+		t.Errorf("netted_router_calls = %v, want %v", got, want)
+	}
+	if got, want := coverage["net_unavailable"], map[string]interface{}{store.UnpricedNoUsage: 1.0}; !reflect.DeepEqual(got, want) {
+		t.Errorf("net_unavailable = %v, want %v", got, want)
+	}
+
+	// A Router call priced in another currency cannot be netted either.
+	summary = replayAggregateSummaryJSON(t, records)
+	coverage = summary["coverage"].(map[string]interface{})
+	if got, _ := coverage["net_unavailable"].(map[string]interface{}); got[store.UnpricedCurrencyMismatch] != 1.0 {
+		t.Errorf("net_unavailable = %v, want currency_mismatch 1", got)
+	}
+	for _, group := range summary["by_currency"].([]interface{}) {
+		group := group.(map[string]interface{})
+		if group["currency"] == "USD" && (group["total_saved"] != 3.25 || group["gross_saved"] != 4.0 || group["netted_router_call_spend"] != 0.75 || group["cost_record_count"] != 2.0) {
+			t.Errorf("USD group = %v", group)
+		}
+	}
+}

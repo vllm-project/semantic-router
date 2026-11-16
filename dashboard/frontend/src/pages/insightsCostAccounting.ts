@@ -22,6 +22,12 @@ const BASELINE_SOURCES: Record<string, string> = {
   unrecorded: 'an unrecorded rule (older records)',
 }
 
+const ROUTER_CALL_LABELS: Record<string, string> = {
+  looper: 'Looper',
+  systemone: 'System One',
+  decision_model: 'Decision model',
+}
+
 export const CALLER_LOGIN_NOTE = 'API-price equivalent, not what the plan charges'
 
 export const SET_PRICING_HINT =
@@ -86,13 +92,7 @@ export function describeRouterCalls(accounting?: InsightsCostAccounting): string
   }
   return calls
     .map((call) => {
-      const label =
-        (
-          { looper: 'Looper', systemone: 'System One', decision_model: 'Decision model' } as Record<
-            string,
-            string
-          >
-        )[call.kind] ?? call.kind
+      const label = ROUTER_CALL_LABELS[call.kind] ?? call.kind
       const priced = call.calls - (call.unpriced_calls ?? 0)
       const parts = [
         `${call.calls} ${label} call${call.calls === 1 ? '' : 's'}${call.model ? ` (${call.model})` : ''}`,
@@ -109,11 +109,40 @@ export function describeRouterCalls(accounting?: InsightsCostAccounting): string
     .join('; ')
 }
 
+function sortedCounts(counts?: Record<string, number>): [string, number][] {
+  return Object.entries(counts ?? {}).sort(
+    ([a, left], [b, right]) => right - left || a.localeCompare(b),
+  )
+}
+
 function formatReasonCounts(counts?: Record<string, number>): string {
-  return Object.entries(counts ?? {})
-    .sort(([a, left], [b, right]) => right - left || a.localeCompare(b))
+  return sortedCounts(counts)
     .map(([reason, count]) => `${count} ${describeUnpricedReason(reason)}`)
     .join(', ')
+}
+
+/** Which Router calls the savings are net of, and the requests a missing price leaves out. */
+function buildNetSavingsLines(coverage: InsightsAggregateCostCoverage): string[] {
+  const lines: string[] = []
+  const netted = sortedCounts(coverage.netted_router_calls)
+  if (netted.length > 0) {
+    lines.push(
+      `Savings are net of the Router’s own calls for these requests: ${netted
+        .map(([kind, count]) => plural(count, `${ROUTER_CALL_LABELS[kind] ?? kind} call`))
+        .join(', ')}.`,
+    )
+  }
+  const left = sortedCounts(coverage.net_unavailable)
+  if (left.length > 0) {
+    const count = left.reduce((sum, [, value]) => sum + value, 0)
+    const hint = coverage.net_unavailable?.pricing_not_configured
+      ? ' Set global.model_catalog.deployments.<name>.pricing; an empty block declares a free deployment.'
+      : ''
+    lines.push(
+      `${plural(count, 'request')} left out of savings for a Router call without a price (${formatReasonCounts(coverage.net_unavailable)}).${hint}`,
+    )
+  }
+  return lines
 }
 
 function plural(count: number, noun: string): string {
@@ -149,6 +178,7 @@ export function buildCostCoverageLines(
         .join(', ')}.`,
     )
   }
+  lines.push(...buildNetSavingsLines(coverage))
   if (coverage.list_price_records > 0) {
     lines.push(
       `${plural(coverage.list_price_records, 'request')} priced at a catalog list price: an estimate, not a configured rate.`,

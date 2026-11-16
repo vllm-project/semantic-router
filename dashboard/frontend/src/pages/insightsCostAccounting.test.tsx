@@ -185,6 +185,39 @@ describe('Insights cost coverage', () => {
     expect(html).not.toContain('Estimated Router Calls')
   })
 
+  it('says savings are net of the Router calls and keeps the gross figure', () => {
+    const summary = {
+      total_saved: 3.25,
+      gross_saved: 4,
+      netted_router_call_spend: 0.75,
+      baseline_spend: 6,
+      actual_spend: 2,
+      router_call_spend: 0.875,
+      total_spend: 4.875,
+      currency: 'USD',
+      cost_record_count: 2,
+      excluded_record_count: 2,
+      coverage: {
+        ...coverage,
+        baseline_sources: { configured_model: 2 },
+        netted_router_calls: { systemone: 1, decision_model: 2, classify: 1 },
+        net_unavailable: { no_usage: 1 },
+      },
+    }
+    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
+    expect(html).toContain('Estimated Gross Savings')
+    expect(html).toContain('$4.00')
+    expect(html).toContain('Router Calls Netted')
+    expect(html).toContain('$0.75')
+    expect(html).toContain('$3.25')
+    expect(html).toContain(
+      'Savings are net of the Router’s own calls for these requests: 2 Decision model calls, 1 classify call, 1 System One call.',
+    )
+    expect(html).toContain(
+      '1 request left out of savings for a Router call without a price (1 no token usage reported).',
+    )
+  })
+
   it('leaves savings unknown where nothing was compared with a baseline', () => {
     const summary = {
       total_saved: 0,
@@ -237,5 +270,10 @@ describe('Router decision costs', () => {
       '1 System One call (remote), 10 input / 0 output tokens, 1 unpriced',
     )
     expect(field(priced, 'Router calls')).toBeUndefined()
+    const savings = createInsightsTableColumns().find((column) => column.key === 'cost_savings')!
+    expect(renderToStaticMarkup(<>{savings.render!(record)}</>)).toContain(
+      'Before its Router calls',
+    )
+    expect(renderToStaticMarkup(<>{savings.render!(priced)}</>)).not.toContain('Router calls')
   })
 })

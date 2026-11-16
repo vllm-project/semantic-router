@@ -675,8 +675,9 @@ questions and selections, `systemone` for remote System One exchanges, and
 dispatched task counts once, including fused tasks; result-cache hits, startup,
 warmup and background work do not add request spend. Usage returned with a
 failed decision is retained. Aggregate router call spend and coverage include
-these calls even when the request fails, while savings still require a
-completed request.
+these calls even when the request fails. Aggregate savings are net of the
+calls made for the completed requests they compare (below); a record's own
+`cost_savings` stays the model comparison alone.
 
 Deployment pricing is `global.model_catalog.deployments.<name>.pricing`, with
 the same per-million-token rates as provider model pricing. An explicit block
@@ -740,16 +741,34 @@ its record has no `provider_cache`; Insights identifies it separately instead
 of showing replayed provider usage as new provider savings.
 
 Aggregates use `summary.by_currency`, a sorted array with `currency`,
-`total_saved`, `baseline_spend`, `actual_spend`, `router_call_spend`,
-`total_spend`, and `cost_record_count` for each currency. With one currency,
-the flat summary fields mirror that group. With multiple currencies, flat
-`currency` is omitted and flat amounts are zero placeholders: use
-`by_currency`, not those placeholders. There is no combined cross-currency
-total.
+`total_saved`, `gross_saved`, `netted_router_call_spend`, `baseline_spend`,
+`actual_spend`, `router_call_spend`, `total_spend`, and `cost_record_count` for
+each currency. With one currency, the flat summary fields mirror that group.
+With multiple currencies, flat `currency` is omitted and flat amounts are zero
+placeholders: use `by_currency`, not those placeholders. There is no combined
+cross-currency total.
 
-`total_saved`, `baseline_spend`, and `actual_spend` cover the
-`cost_record_count` completed records compared with a baseline. `total_spend`
-adds every priced cost, with or without a baseline, including
+`gross_saved`, `baseline_spend`, and `actual_spend` cover the
+`cost_record_count` completed records compared with a baseline. `gross_saved`
+is `baseline_spend - actual_spend`, the saving of the model choice alone.
+`total_saved`, the saving Insights shows, is net of the calls the Router made
+itself for those same records: `total_saved = gross_saved -
+netted_router_call_spend`. For example, a request whose selected model costs
+`0.00010` against a `0.00100` baseline saves `0.00090` gross; a System One call
+priced at `0.00012` for it leaves `0.00078` net.
+
+Every `router_calls` kind of a compared record is netted, and
+`coverage.netted_router_calls` counts them by kind. A Looper request is never
+compared with a baseline, since it has no selected-model cost: its calls are
+its answer and stay in `router_call_spend`. Codex approval reviews and memory
+requests sent to a `review_model` or `memory_model` entrypoint are not Router
+calls: the client sends them, and each is a record compared with a baseline
+like any other request. A record with a Router call that has no price, or a
+price in another currency, is left out of savings, gross and net, and counted
+in `coverage.net_unavailable`: an unknown cost is never netted as zero. A call
+priced at zero rates is netted at zero.
+
+`total_spend` adds every priced cost, with or without a baseline, including
 `router_call_spend`, the priced calls the Router made itself. A request that
 failed or has not finished still counts the calls it paid for, such as the
 attempts of an escalation that then failed.
@@ -771,6 +790,8 @@ request lacks pricing.
 | `router_calls`, `unpriced_router_calls` | Calls the Router made itself, and how many have no price. |
 | `baseline_sources` | The records compared with a baseline, by `baseline_source` (`unrecorded` for older records). |
 | `baseline_unavailable` | Priced completed records without a baseline, by why. |
+| `netted_router_calls` | The Router calls netted out of savings, by `kind`. |
+| `net_unavailable` | Records with a baseline left out of savings because a Router call they made has no price in their currency, by the reason of the first one, such as `pricing_not_configured`, `no_usage` or `currency_mismatch`. |
 
 ### Net provider prompt-cache saving
 

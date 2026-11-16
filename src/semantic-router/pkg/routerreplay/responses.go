@@ -43,20 +43,24 @@ type LifecycleSummary struct {
 	Unknown    int `json:"unknown"`
 }
 
-// AggregateCostSummary compares the records with a baseline (TotalSaved,
-// BaselineSpend and ActualSpend over CostRecordCount completed records) and
-// totals every priced cost of every record, failed ones included
+// AggregateCostSummary compares the records with a baseline over
+// CostRecordCount completed records: GrossSaved is BaselineSpend minus
+// ActualSpend, the selected models' cost, and TotalSaved is GrossSaved minus
+// NettedRouterCallSpend, the calls the Router made itself for those records.
+// It also totals every priced cost of every record, failed ones included
 // (TotalSpend), the calls the Router made itself included apart as
 // RouterCallSpend.
 type AggregateCostSummary struct {
-	TotalSaved          float64 `json:"total_saved"`
-	BaselineSpend       float64 `json:"baseline_spend"`
-	ActualSpend         float64 `json:"actual_spend"`
-	RouterCallSpend     float64 `json:"router_call_spend"`
-	TotalSpend          float64 `json:"total_spend"`
-	Currency            string  `json:"currency,omitempty"`
-	CostRecordCount     int     `json:"cost_record_count"`
-	ExcludedRecordCount int     `json:"excluded_record_count"`
+	TotalSaved            float64 `json:"total_saved"`
+	GrossSaved            float64 `json:"gross_saved"`
+	NettedRouterCallSpend float64 `json:"netted_router_call_spend"`
+	BaselineSpend         float64 `json:"baseline_spend"`
+	ActualSpend           float64 `json:"actual_spend"`
+	RouterCallSpend       float64 `json:"router_call_spend"`
+	TotalSpend            float64 `json:"total_spend"`
+	Currency              string  `json:"currency,omitempty"`
+	CostRecordCount       int     `json:"cost_record_count"`
+	ExcludedRecordCount   int     `json:"excluded_record_count"`
 	// ByCurrency retains every complete estimate without converting or summing
 	// currencies. Flat amounts are populated only when exactly one currency exists.
 	ByCurrency []CurrencyCostSummary `json:"by_currency,omitempty"`
@@ -65,13 +69,15 @@ type AggregateCostSummary struct {
 }
 
 type CurrencyCostSummary struct {
-	Currency        string  `json:"currency"`
-	TotalSaved      float64 `json:"total_saved"`
-	BaselineSpend   float64 `json:"baseline_spend"`
-	ActualSpend     float64 `json:"actual_spend"`
-	RouterCallSpend float64 `json:"router_call_spend"`
-	TotalSpend      float64 `json:"total_spend"`
-	CostRecordCount int     `json:"cost_record_count"`
+	Currency              string  `json:"currency"`
+	TotalSaved            float64 `json:"total_saved"`
+	GrossSaved            float64 `json:"gross_saved"`
+	NettedRouterCallSpend float64 `json:"netted_router_call_spend"`
+	BaselineSpend         float64 `json:"baseline_spend"`
+	ActualSpend           float64 `json:"actual_spend"`
+	RouterCallSpend       float64 `json:"router_call_spend"`
+	TotalSpend            float64 `json:"total_spend"`
+	CostRecordCount       int     `json:"cost_record_count"`
 }
 
 // AggregateCostCoverage counts the filtered records whose every cost has a
@@ -85,7 +91,11 @@ type CurrencyCostSummary struct {
 // a price shown for one is what its tokens cost at API prices, not what the
 // client's plan charges. BaselineSources counts the records compared with a
 // baseline by how it was chosen; BaselineUnavailable, the priced completed
-// records without one, by why.
+// records without one, by why. NettedRouterCalls counts the Router calls
+// netted out of savings by kind. NetUnavailable counts the records with a
+// baseline left out of savings because a Router call they made has no price
+// in their currency, by the reason of the first such call: an unknown cost is
+// never netted as zero.
 type AggregateCostCoverage struct {
 	PricedRecords       int            `json:"priced_records"`
 	PartlyPricedRecords int            `json:"partly_priced_records"`
@@ -98,6 +108,8 @@ type AggregateCostCoverage struct {
 	UnpricedRouterCalls int            `json:"unpriced_router_calls"`
 	BaselineSources     map[string]int `json:"baseline_sources,omitempty"`
 	BaselineUnavailable map[string]int `json:"baseline_unavailable,omitempty"`
+	NettedRouterCalls   map[string]int `json:"netted_router_calls,omitempty"`
+	NetUnavailable      map[string]int `json:"net_unavailable,omitempty"`
 }
 
 // AggregateProviderCacheSummary totals the same-model provider prompt-cache
