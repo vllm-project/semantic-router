@@ -478,18 +478,20 @@ func validateCanonicalDecisions(path string, decisions []Decision, aliases map[s
 	return nil
 }
 
-// canonicalDecisionNamesAModel reports whether a decision names a model of its
-// own: a modelRef, a candidate iteration's model or an algorithm's candidates.
+// canonicalDecisionNamesAModel reports whether a decision answers with a model
+// of its own: a modelRef, or an answer that needs none. A fast_response refusal
+// answers with its message and a route answers with a declared destination, so
+// neither reaches the default-model fallback. A candidate iteration's models
+// are not one of these: the runtime resolves those turns through the default
+// model, so a decision that names only iterations still needs the fallback.
 func canonicalDecisionNamesAModel(decision Decision) bool {
 	if len(decision.ModelRefs) > 0 {
 		return true
 	}
-	for _, iteration := range decision.CandidateIterations {
-		if len(iteration.Models) > 0 {
-			return true
-		}
+	if decision.GetFastResponseConfig() != nil {
+		return true
 	}
-	return false
+	return decision.Action != nil && decision.Action.Type == DecisionActionRoute
 }
 
 // validateCanonicalDecisionModelRefs checks the models a decision names: its
