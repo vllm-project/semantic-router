@@ -49,7 +49,7 @@ func structuredToolResultFailed(request *llmprotocol.Request) bool {
 	if request == nil {
 		return false
 	}
-	for _, message := range currentTurnMessages(request.Messages) {
+	for _, message := range unansweredTurnMessages(request.Messages) {
 		for _, content := range message.Content {
 			if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
 				continue
@@ -62,11 +62,15 @@ func structuredToolResultFailed(request *llmprotocol.Request) bool {
 	return false
 }
 
-func currentTurnMessages(messages []llmprotocol.Message) []llmprotocol.Message {
+// An agent turn spans many tool calls; a result the assistant has already
+// answered belongs to an earlier step, not to this request.
+func unansweredTurnMessages(messages []llmprotocol.Message) []llmprotocol.Message {
 	start := 0
 	for index, message := range messages {
 		if llmprotocol.StartsConversationTurn(message) {
 			start = index
+		} else if message.Role == llmprotocol.RoleAssistant {
+			start = index + 1
 		}
 	}
 	return messages[start:]

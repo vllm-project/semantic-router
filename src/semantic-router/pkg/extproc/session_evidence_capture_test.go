@@ -228,6 +228,47 @@ func TestAnthropicDecodeToContextClassifiesCurrentTurnToolFailure(t *testing.T) 
 	}
 }
 
+func TestAnthropicDecodeToContextScopesToolFailureToUnansweredResults(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want sessiontelemetry.TurnOutcomeCategory
+	}{
+		{
+			name: "answered failure earlier in a multi-step turn",
+			body: `{"model":"test-model","max_tokens":32,"messages":[
+				{"role":"user","content":"fix the build"},
+				{"role":"assistant","content":[{"type":"tool_use","id":"call-1","name":"run","input":{}}]},
+				{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-1","content":"boom","is_error":true}]},
+				{"role":"assistant","content":[{"type":"tool_use","id":"call-2","name":"run","input":{}}]},
+				{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-2","content":"ok"}]}
+			]}`,
+			want: sessiontelemetry.TurnProgress,
+		},
+		{
+			name: "unanswered failure at the latest step of a multi-step turn",
+			body: `{"model":"test-model","max_tokens":32,"messages":[
+				{"role":"user","content":"fix the build"},
+				{"role":"assistant","content":[{"type":"tool_use","id":"call-1","name":"run","input":{}}]},
+				{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-1","content":"ok"}]},
+				{"role":"assistant","content":[{"type":"tool_use","id":"call-2","name":"run","input":{}}]},
+				{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-2","content":"boom","is_error":true}]}
+			]}`,
+			want: sessiontelemetry.TurnToolError,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := &RequestContext{UpstreamStatusCode: 200}
+			attachSemanticRequest(ctx, decodeSignalRequest(t, llmprotocol.AnthropicMessagesV1, tc.body))
+			got := classifyTurnOutcome(ctx, responseUsageMetrics{completionTokens: 8, completionTokensReported: true})
+			if got != tc.want {
+				t.Fatalf("category = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestClassifyTurnOutcomeAttributionMatchesCategory(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	ctx := &RequestContext{
