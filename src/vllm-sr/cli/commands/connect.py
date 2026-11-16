@@ -7,6 +7,7 @@ import os
 import shlex
 import shutil
 import signal
+import socket
 import subprocess
 import tempfile
 import textwrap
@@ -22,6 +23,7 @@ from cli import harness_pi as hp
 from cli import harness_router_check as rc
 from cli import harness_session as hs
 from cli.chat_client import resolve_chat_base_url
+from cli.commands import runtime
 from cli.runtime_management_config import _configured_management_port
 from cli.runtime_stack import resolve_runtime_stack
 from cli.terminal import echo, fields, heading, output_width, success, warning
@@ -61,6 +63,12 @@ def _options(command, launch_and_vsr: bool = True):
                 "--base-url",
                 default=None,
                 help="The gateway's origin; otherwise derived from --config.",
+            ),
+            click.option(
+                "--serve/--no-serve",
+                default=True,
+                help="Start the Router with vllm-sr serve --config when nothing answers"
+                " at the configuration's first listener. Never with --base-url.",
             ),
             click.option(
                 "--model",
@@ -210,6 +218,7 @@ def connect() -> None:
 def claude_code(
     router_config,
     base_url,
+    serve,
     model,
     api_key_env,
     dry_run,
@@ -249,6 +258,7 @@ def claude_code(
     if delegate:
         _require_clients("claude", "codex")
     gateway, doc = _gateway(router_config, base_url)
+    _start_router(gateway, router_config, base_url, serve, dry_run)
     token, from_env = hc.token_from(env, api_key_env)
     login = _caller_login("claude-code", doc, model)
     # a key command gives the key, so the variable may be unset
@@ -450,6 +460,7 @@ def claude_code(
 def codex(
     router_config,
     base_url,
+    serve,
     model,
     api_key_env,
     dry_run,
@@ -495,6 +506,7 @@ def codex(
     if delegate:
         _require_clients("claude")
     gateway, doc = _gateway(router_config, base_url)
+    _start_router(gateway, router_config, base_url, serve, dry_run)
     token, from_env = hc.token_from(env, api_key_env)
     context_window, notes = _context_window(doc, model, context_window)
     entrypoint = next(
@@ -1344,6 +1356,32 @@ def _gateway(router_config: Path, base_url: str | None) -> tuple[str, dict | Non
     except (FileNotFoundError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
     return gateway, doc
+
+
+def _start_router(
+    gateway: str, router_config: Path, base_url, serve: bool, dry_run: bool
+) -> None:
+    """Start the Router from the configuration with vllm-sr serve when nothing
+    answers at its first listener; a gateway named by --base-url is never started."""
+    if not serve or base_url or not router_config.is_file() or _answers(gateway):
+        return
+    command = f"vllm-sr serve --config {shlex.quote(str(router_config))}"
+    if dry_run:
+        echo(f"Router: nothing answers at {gateway}; would start it with {command}.")
+        return
+    echo(f"Router: nothing answers at {gateway}; starting it with {command}.")
+    click.get_current_context().invoke(runtime.serve, config=str(router_config))
+
+
+def _answers(gateway: str) -> bool:
+    """Whether anything accepts a connection at the gateway's host and port."""
+    url = urllib.parse.urlsplit(gateway)
+    port = url.port or (443 if url.scheme == "https" else 80)
+    try:
+        with socket.create_connection((url.hostname, port), timeout=2):
+            return True
+    except OSError:
+        return False
 
 
 def _require_key(doc, base_url, from_env, api_key_env, login) -> None:

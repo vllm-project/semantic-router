@@ -111,9 +111,12 @@ codex --profile vllm-sr
 Here each harness has its own Router, served from `claude-code.yaml` and
 `codex.yaml`. The command reaches the gateway at the first listener of the
 configuration it is given (`config.yaml` by default); `--base-url` names
-another origin. When that listener has `api_keys` or `api_key_files` and the
-variable is unset, the command stops before writing anything, so a key written
-before is never replaced.
+another origin. When nothing answers at that listener, the command first starts
+the Router with `vllm-sr serve --config <the same file>` and goes on once it is
+healthy; `--dry-run` only says it would, `--no-serve` leaves it stopped, and a
+gateway named by `--base-url` is never started. When that listener has
+`api_keys` or `api_key_files` and the variable is unset, the command stops
+before writing anything, so a key written before is never replaced.
 
 The command shows the changes and asks before writing them:
 

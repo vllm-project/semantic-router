@@ -13,6 +13,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import click
 import pytest
 import yaml
 from click.testing import CliRunner
@@ -177,6 +178,15 @@ def pi_home(tmp_path, monkeypatch):
     home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(home))
     return home
+
+
+@pytest.fixture(autouse=True)
+def router_answers(monkeypatch):
+    """A Router answers at every configuration's listener, so connect starts none;
+    the tests of starting one say otherwise."""
+    monkeypatch.setattr(
+        importlib.import_module("cli.commands.connect"), "_answers", lambda _: True
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -1233,6 +1243,48 @@ def test_cli_reads_the_context_window_from_the_configuration(tmp_path, monkeypat
     result = CliRunner().invoke(main, ["connect", "codex", "--dry-run"])
     assert "model_context_window" not in result.output
     assert "not set: small, which vllm-sr/auto can reach, states no" in result.output
+
+
+def test_connect_starts_the_router_only_when_nothing_answers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    (tmp_path / "config.yaml").write_text(ROUTER)
+    answering = []
+    monkeypatch.setattr(
+        importlib.import_module("cli.commands.connect"),
+        "_answers",
+        lambda _: bool(answering),
+    )
+    started = []
+
+    def serve(config):
+        started.append(config)
+
+    monkeypatch.setattr(
+        importlib.import_module("cli.commands.runtime"),
+        "serve",
+        click.Command("serve", params=[click.Option(["--config"])], callback=serve),
+    )
+    args = ["connect", "claude-code", "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert (
+        "Router: nothing answers at http://localhost:8899; would start it with"
+        " vllm-sr serve --config config.yaml." in result.output
+    )
+    # --no-serve, and a gateway named by --base-url, never start one
+    for extra in (["--no-serve"], ["--base-url", "http://localhost:8899"]):
+        result = CliRunner().invoke(main, [*args, *extra])
+        assert result.exit_code == 0, result.output
+    assert started == []
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    assert started == ["config.yaml"]
+    # a Router that answers is left alone
+    answering.append(True)
+    assert CliRunner().invoke(main, ["connect", "codex", "--yes"]).exit_code == 0
+    assert started == ["config.yaml"]
 
 
 def test_a_shell_api_key_stays_off_the_gateway_and_is_never_shown(

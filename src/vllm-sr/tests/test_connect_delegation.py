@@ -64,6 +64,12 @@ class FakeClaude:
         return subprocess.CompletedProcess(argv, 0, out, "")
 
 
+@pytest.fixture(autouse=True)
+def router_answers(monkeypatch):
+    """A Router answers at every configuration's listener, so connect starts none."""
+    monkeypatch.setattr(command, "_answers", lambda _: True)
+
+
 def _installs(fake):
     """The commands that changed Claude Code's plugins or marketplaces."""
     changing = (["marketplace", "add"], ["marketplace", "remove"])

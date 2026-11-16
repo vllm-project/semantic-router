@@ -27,6 +27,7 @@ def _pi_options(command):
 def pi(
     router_config,
     base_url,
+    serve,
     model,
     api_key_env,
     dry_run,
@@ -44,6 +45,7 @@ def pi(
         base._undo(home)
         return
     gateway, doc = base._gateway(router_config, base_url)
+    base._start_router(gateway, router_config, base_url, serve, dry_run)
     login = _login(home, rc.caller_provider(doc, model))
     if hp.stored_key(home):
         raise click.ClickException(
