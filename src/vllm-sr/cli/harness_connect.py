@@ -856,11 +856,12 @@ def still_written(key: str, now: Any, written: Any) -> bool:
 # --- status ------------------------------------------------------------------------
 
 
-def connections(manifest_dir: Path) -> list[dict[str, Any]]:
+def connections(manifest_dir: Path, cwd: Path) -> list[dict[str, Any]]:
     """What the undo record in manifest_dir says connect set up, one entry for each
     Claude Code settings file, Codex profile and Codex config.toml: the gateway,
-    model and window written there, and whether each file written still holds
-    them. No entry holds a secret."""
+    model and window written there, whether each file written still holds them,
+    and the project settings in cwd that win over them, as connect warns. No
+    entry holds a secret."""
     record = _record(manifest_dir / MANIFEST) or {}
     items = record.get("files") or []
     found = []
@@ -870,12 +871,13 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
         if item["kind"] == "json-env":
             token, helper = written.get(TOKEN_KEY), written.get(KEY_HELPER)
             window = str(written.get("CLAUDE_CODE_MAX_CONTEXT_TOKENS") or "")
+            scope = "project" if path.name == "settings.local.json" else "user"
+            owned = [key for key, value in written.items() if value is not None]
+            overrides = claude_overrides(cwd, owned, path) if scope == "user" else []
             found.append(
                 {
                     "harness": "claude-code",
-                    "scope": (
-                        "project" if path.name == "settings.local.json" else "user"
-                    ),
+                    "scope": scope,
                     "gateway": written.get("ANTHROPIC_BASE_URL"),
                     "model": written.get("ANTHROPIC_MODEL"),
                     "context_window": int(window) if window.isdigit() else None,
@@ -889,6 +891,9 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                         or Path(other["path"]).name == STATUS_LINE_SCRIPT
                     ],
                     "plugins": sorted(record.get("plugins") or {}),
+                    "overrides": [
+                        {"path": str(other), "keys": keys} for other, keys in overrides
+                    ],
                 }
             )
         elif item["kind"] == "toml" or (
@@ -931,6 +936,10 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                     "key_env": profile.get("env_key"),
                     "key_command": helper,
                     "files": [file_state(other) for other in paired],
+                    "overrides": [
+                        {"path": str(other), "keys": ["model"]}
+                        for other in codex_model_overrides(cwd)
+                    ],
                 }
             )
     return found
