@@ -4,12 +4,14 @@ The command owns the env keys it sets in Claude Code's settings, the whole of
 one Codex profile file or, for the Codex app, a few keys of Codex's shared
 config.toml, and one provider of Pi's models.json. It records what each held
 before and what it wrote, so --undo puts back only what still holds what it
-wrote and leaves every other edit in place.
+wrote and leaves every other edit in place. A file nothing changed since the
+command wrote it gets back the very text it had.
 """
 
 from __future__ import annotations
 
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -689,7 +691,8 @@ def apply_changes(
     no longer holds that is refused before anything is written, since the
     changes shown were worked out from it. A second run keeps each key's first
     "before", so --undo still returns to what was there before vllm-sr connect
-    first touched it.
+    first touched it, and to the whole file as it was then while nothing else
+    changed the file between the runs.
     """
     now = {change.path: read(change.path) for change in changes}
     moved = [p for p, text in now.items() if seen is not None and text != seen.get(p)]
@@ -714,8 +717,13 @@ def apply_changes(
                 "kind": change.kind,
                 "created": old is None,
                 "keys": {},
+                "file_before": old,
             }
             record["files"].append(item)
+        elif item.get("file_written") != _digest(old or ""):
+            # changed since connect wrote it, so only the keys go back
+            item.pop("file_before", None)
+        item["file_written"] = _digest(new)
         before, written = change.raw(old or ""), change.raw(new)
         for key in change.values:
             entry = item["keys"].setdefault(key, {"before": before[key]})
@@ -813,24 +821,14 @@ def undo_changes(manifest_dir: Path) -> list[str]:
             report.append(f"skipped {path}: it no longer exists")
             continue
         probe = Change(path, item["kind"], dict.fromkeys(item["keys"], ""))
-        current = probe.raw(probe.old_text())
-        restore = {}
-        for key, entry in item["keys"].items():
-            now, written = current[key], entry["written"]
-            if not still_written(key, now, written):
-                what = path if key == "file" else f"{key} in {path}"
-                report.append(f"kept {what}: it was changed after vllm-sr connect")
+        text = probe.old_text()
+        if "file_before" in item and _digest(text) == item.get("file_written"):
+            # as connect wrote it: back to the text it had, byte for byte
+            text = item["file_before"] or ""
+        else:
+            text = _restored(item, probe, text, report)
+            if text is None:
                 continue
-            restore[key] = entry["before"]
-            if now != written:
-                tail = now[len(written) :].lstrip("\n")
-                before = entry["before"] or ""
-                if before and not before.endswith("\n"):
-                    before += "\n"
-                restore[key] = before + tail
-        if not restore:
-            continue
-        text = probe.new_text(restore)
         if item["created"] and not text.strip():
             path.unlink()
             report.append(f"removed {path}")
@@ -839,6 +837,31 @@ def undo_changes(manifest_dir: Path) -> list[str]:
             report.append(f"restored {path}")
     manifest_path.unlink()
     return report
+
+
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _restored(item: dict, probe: Change, text: str, report: list[str]) -> str | None:
+    """text with each owned key that still holds what connect wrote set back to
+    its value before, None when no key does."""
+    path, current = probe.path, probe.raw(text)
+    restore = {}
+    for key, entry in item["keys"].items():
+        now, written = current[key], entry["written"]
+        if not still_written(key, now, written):
+            what = path if key == "file" else f"{key} in {path}"
+            report.append(f"kept {what}: it was changed after vllm-sr connect")
+            continue
+        restore[key] = entry["before"]
+        if now != written:
+            tail = now[len(written) :].lstrip("\n")
+            before = entry["before"] or ""
+            if before and not before.endswith("\n"):
+                before += "\n"
+            restore[key] = before + tail
+    return probe.new_text(restore, text) if restore else None
 
 
 def still_written(key: str, now: Any, written: Any) -> bool:

@@ -1082,7 +1082,8 @@ The newest comes first. For a worktree connect made, the steps that remove
 it are shown, but nothing is removed here. No step is offered while the
 worktree has uncommitted changes or commits on a detached HEAD, the branch
 is not deleted while it has commits no other branch or remote has, and the
-steps say first when the removal deletes files git ignores there.
+steps say first when the removal deletes files git ignores there. Without
+git on PATH, each session is listed with that state unknown and no step.
 
 | Parameter | Description |
 | --- | --- |
@@ -1809,10 +1810,12 @@ Usage: vllm-sr usage [OPTIONS]
 Show the requests, spend and savings the Router recorded in a window.
 
 Read from Router Replay's list and aggregate, the figures Insights shows,
-with $VSR_MGMT_TOKEN as the bearer token when it is set. Top models and
-entrypoints are those with the most requests, by selected model and by the
-model the client asked for; each row adds its requests' own priced costs,
-the Router's calls for them included, as the window's spend does.
+with $VSR_MGMT_TOKEN as the bearer token when it is set. Requests count each
+client request once: the record of a Looper hop counts in the request that
+made it. Top models and entrypoints are those with the most requests, by
+selected model and by the model the client asked for; each row adds its
+requests' own priced costs, the Router's calls for them included, as the
+window's spend does.
 
 | Parameter | Description |
 | --- | --- |

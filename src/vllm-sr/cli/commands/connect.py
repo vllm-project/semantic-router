@@ -435,18 +435,6 @@ def codex(
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    login = _caller_login("codex", doc, model)
-    _require_key(doc, base_url, from_env, api_key_env, login or key_command)
-    if login or key_command:
-        # the Router presents Codex's own ChatGPT login or API key to OpenAI, or
-        # Codex runs the key command itself, and a gateway key would go in its place
-        token, from_env = "", False
-    # the harness runs the key command in its session, so the probe's run does too
-    session = hs.session_env("codex", env, harness_home)
-    key = _key(
-        "codex", key_command, login, session, where and where.here, check or not dry_run
-    )
-    key_env = api_key_env if from_env else None
     context_window, notes = _context_window(doc, model, context_window)
     entrypoint = next(
         (
@@ -490,6 +478,26 @@ def codex(
         memory_model,
         memory_window,
     )
+    # the entrypoints Codex calls: reviews go to review_model only through the
+    # catalog, memories always to memory_model
+    login = _caller_login(
+        "codex",
+        doc,
+        model,
+        review_model=review_model if catalog else None,
+        memory_model=memory_model,
+    )
+    _require_key(doc, base_url, from_env, api_key_env, login or key_command)
+    if login or key_command:
+        # the Router presents Codex's own ChatGPT login or API key to OpenAI, or
+        # Codex runs the key command itself, and a gateway key would go in its place
+        token, from_env = "", False
+    # the harness runs the key command in its session, so the probe's run does too
+    session = hs.session_env("codex", env, harness_home)
+    key = _key(
+        "codex", key_command, login, session, where and where.here, check or not dry_run
+    )
+    key_env = api_key_env if from_env else None
     if launch:
         # Codex reads the key from key_env or its command, so it stays off the
         # command line
@@ -706,7 +714,8 @@ def sessions(as_json):
     it are shown, but nothing is removed here. No step is offered while the
     worktree has uncommitted changes or commits on a detached HEAD, the branch
     is not deleted while it has commits no other branch or remote has, and the
-    steps say first when the removal deletes files git ignores there.
+    steps say first when the removal deletes files git ignores there. Without
+    git on PATH, each session is listed with that state unknown and no step.
     """
     try:
         found = [{**session, "state": hs.state(session)} for session in hs.recorded()]
@@ -1502,21 +1511,29 @@ def _json_of(argv: list[str], env: dict[str, str]):
         return None
 
 
-def _caller_login(harness: str, doc: dict | None, model: str) -> bool:
-    """Whether the gateway presents the harness's own login upstream for model.
-    A gateway that presents another provider's login refuses every call of the
-    harness, so nothing is written for it."""
-    provider = rc.caller_provider(doc, model)
-    if provider is None:
-        return False
+def _caller_login(harness: str, doc: dict | None, model: str, **called) -> bool:
+    """Whether the gateway presents the harness's own login upstream for model
+    or another entrypoint the harness calls, given in called by its setting
+    (Codex's review_model and memory_model). A gateway that presents another
+    provider's login for one of them refuses every call to it, so nothing is
+    written for it."""
     name, own = HARNESS_LOGINS[harness]
-    if provider != own:
-        raise click.ClickException(
-            f"The gateway presents each client's own {provider} login upstream, and"
-            f" {name} sends its {own} login, so every call would be refused. Point"
-            f" {name} at a gateway whose caller backends name {own}."
-        )
-    return True
+    login = False
+    for setting, entrypoint in {None: model, **called}.items():
+        provider = rc.caller_provider(doc, entrypoint) if entrypoint else None
+        if provider is not None and provider != own:
+            reached = (
+                f" for {entrypoint}, the {setting} of {model}," if setting else ","
+            )
+            calls = "every call to it" if setting else "every call"
+            raise click.ClickException(
+                f"The gateway presents each client's own {provider} login upstream"
+                f"{reached} and {name} sends its {own} login, so {calls} would be"
+                f" refused. Point {name} at a gateway whose caller backends name"
+                f" {own}."
+            )
+        login = login or provider == own
+    return login
 
 
 def _probe_or_say_why(gateway, harness, model, token, doc, written=True) -> None:
