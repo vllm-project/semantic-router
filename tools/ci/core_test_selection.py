@@ -37,6 +37,7 @@ INPUTS = {
     "src/vllm-sr/cli/templates/": ("pkg/config",),
     # Cross-package fixture reads do not appear in Go's import graph.
     MODULE_PATH + "/pkg/config/testdata/": ("pkg/classification",),
+    MODULE_PATH + "/pkg/codexreview/testdata/": ("pkg/extproc",),
     MODULE_PATH + "/pkg/protocolcodec/testdata/": ("pkg/extproc",),
     MODULE_PATH
     + "/pkg/routing/parity/testdata/": (
