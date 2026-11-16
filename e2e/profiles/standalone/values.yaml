@@ -5,12 +5,31 @@ decisionModel:
 # The chart's default gateway mode (standalone): clients reach the Router's own
 # listener through its Service; no gateway runs in the cluster.
 configOverride:
-  version: v0.3
+  version: v0.5
   listeners:
     - name: http-8899
       address: 0.0.0.0
       port: 8899
       timeout: 300s
+    # The vSR agent plugins' listener: its listing names the rules guard and
+    # redact enforce, and POST /v1/systemone/rules evaluates them
+    # (standalone-listener-rules).
+    - name: agents
+      address: 0.0.0.0
+      port: 8898
+      timeout: 300s
+      api_keys: [e2e-rules-key]
+      apis:
+        systemone:
+          models: [vllm-sr/Vela-2.0-0.3B]
+          vsr:
+            rules:
+              recipe: default
+              guard:
+                - {type: keyword, name: prod_database, enforce: required}
+              redact:
+                - {type: keyword, name: employee_id}
+                - {type: keyword, name: long_number}
   providers:
     # Positive requests use explicit decisions below. Keep the global fallback
     # unset so the isolated, decisionless error fixture can exercise no_route.
@@ -31,52 +50,66 @@ configOverride:
           - name: provider-mocker
             endpoint: provider-mocker.default.svc.cluster.local:8000
             provider: vllm
-  routing:
-    modelCards:
-      - name: primary-model
-      - name: unreachable-model
-      - name: fallback-model
-    signals:
-      keywords:
-        - name: failover_marker
-          operator: OR
-          keywords:
-            - standalonefailover
-    decisions:
-      - name: standalone_failover
-        description: The first candidate's backend refuses connections; the second serves.
-        priority: 200
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: failover_marker
-        algorithm:
-          type: static
-        modelRefs:
-          - model: unreachable-model
-            use_reasoning: false
-          - model: fallback-model
-            use_reasoning: false
-      - name: standalone_default
-        description: Every other request.
-        priority: 100
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: primary-model
-            use_reasoning: false
   entrypoints:
+    - model_names: [vllm-sr/auto]
+      recipe: default
+      default: true
     - model_names: [e2e-no-route]
       recipe: no-route
   recipes:
+    - name: default
+      signals:
+        keywords:
+          - name: failover_marker
+            operator: OR
+            keywords:
+              - standalonefailover
+          # Bound to the agents listener's guard and redact; no decision
+          # reads them.
+          - name: prod_database
+            description: Touches the production database.
+            operator: OR
+            method: regex
+            keywords: ['prod-db\.internal']
+          - name: employee_id
+            description: An employee ID.
+            operator: OR
+            method: regex
+            keywords: ['\bE-\d{6}\b']
+          - name: long_number
+            description: A number of four digits or more.
+            operator: OR
+            method: regex
+            keywords: ['\d{4,}']
+      decisions:
+        - name: standalone_failover
+          description: The first candidate's backend refuses connections; the second serves.
+          priority: 200
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: failover_marker
+          algorithm:
+            type: static
+          modelRefs:
+            - model: unreachable-model
+              use_reasoning: false
+            - model: fallback-model
+              use_reasoning: false
+        - name: standalone_default
+          description: Every other request.
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: primary-model
+              use_reasoning: false
     - name: no-route
-      routing:
-        decisions: []
+      decisions: []
   global:
     model_catalog:
-      kbs: []
       deployments:
         primary:
           provider: model_runtime

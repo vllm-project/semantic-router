@@ -74,7 +74,7 @@ class NetlifyPreviewWorkflowTests(unittest.TestCase):
         self.assertEqual(self.jobs["build"]["permissions"], {"contents": "read"})
         self.assertEqual(
             self.jobs["publish"]["permissions"],
-            {"contents": "read", "pull-requests": "read", "statuses": "write"},
+            {"contents": "read", "pull-requests": "write", "statuses": "write"},
         )
 
     def test_pr_code_builds_without_secrets_at_the_authorized_sha(self) -> None:
@@ -153,6 +153,8 @@ class NetlifyPreviewWorkflowTests(unittest.TestCase):
     def test_community_command_handler_leaves_netlify_to_its_owner(self) -> None:
         condition = self.workflows["community.yml"].jobs["issue-manager"]["if"]
         self.assertIn("github.event.comment.body != '/netlify'", condition)
+        # /ci commands belong to Requested CI, not the generic handler.
+        self.assertIn("!startsWith(github.event.comment.body, '/ci ')", condition)
 
 
 class NetlifyAutomaticBuildTests(unittest.TestCase):

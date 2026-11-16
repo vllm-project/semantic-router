@@ -1,0 +1,162 @@
+/* The homepage in the style of System Duo (app.vllm-sr.ai): one serif display face and Duo's section heads, navbar and
+ * footer over the site-wide paper and ink (tokens.css). Everything here is scoped to html.duo-home, which the homepage
+ * sets in its server-rendered HTML. */
+
+/* The @font-face rules live in static/fonts/cormorant.css, a head tag in docusaurus.config.ts: the production CSS
+ * minifier drops any face whose family is named only through a custom property such as --serif. */
+
+html.duo-home {
+  --r-s: 12px;
+  --r: 18px;
+  --r-lg: 28px;
+  --wrap: 1120px;
+  --gut: clamp(20px, 5vw, 48px);
+  --serif: 'Cormorant Garamond', 'Cormorant Fallback', Georgia, serif;
+  --sans: var(--ifm-font-family-base);
+  --mono: var(--ifm-font-family-monospace);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duo-pad: clamp(88px, 11vw, 144px);
+  --site-section-pad: var(--duo-pad);
+  /* The homepage's grounds are the full paper; long-form pages read on the lighter --paper-doc. */
+  --site-bg: var(--paper);
+  --site-surface-glass: rgba(246, 241, 231, 0.84);
+  --ifm-background-color: var(--paper);
+  scroll-padding-top: calc(var(--site-header-height) + 24px);
+  background: var(--paper);
+}
+
+html.duo-home[data-theme='dark'] {
+  --site-surface-glass: rgba(18, 20, 25, 0.84);
+}
+
+html.duo-home body {
+  background: var(--paper);
+  color: var(--ink);
+  font-feature-settings: 'cv11', 'ss01', 'calt';
+  letter-spacing: -0.011em;
+}
+
+html.duo-home ::selection {
+  background: rgba(217, 68, 31, 0.22);
+  color: var(--ink);
+}
+
+html.duo-home :focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 3px;
+}
+
+html.duo-home .main-wrapper {
+  padding-top: 0;
+}
+
+/* Section heads: centred, an ember mono eyebrow, a serif title and an ink-2 lede. */
+html.duo-home .site-section-intro {
+  justify-items: center;
+  gap: 0;
+  max-width: 52rem;
+  margin-inline: auto;
+  margin-bottom: clamp(40px, 5vw, 64px);
+  text-align: center;
+}
+
+html.duo-home .site-section-intro .site-label {
+  margin-bottom: 16px;
+}
+
+html.duo-home .site-section-intro h2,
+html.duo-home .site-section-intro .site-section-intro__title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: clamp(44px, 5.4vw, 72px);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+html.duo-home .site-section-intro > p,
+html.duo-home .site-section-intro .site-section-intro__lede {
+  max-width: 40rem;
+  margin: 20px auto 0;
+  color: var(--ink-2);
+  font-size: clamp(18px, 1.7vw, 21px);
+  line-height: 1.5;
+  letter-spacing: -0.014em;
+  text-wrap: balance;
+}
+
+html.duo-home .site-label {
+  gap: 0;
+  color: var(--ember-text);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+}
+
+html.duo-home .site-label::after {
+  content: none;
+}
+
+/* CJK has no Cormorant glyphs: a serif CJK stack, without the Latin tracking. */
+html.duo-home[lang='zh-Hans'] {
+  --serif: 'Cormorant Garamond', 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'STSong', serif;
+}
+
+html.duo-home[lang='zh-Hans'] .site-section-intro h2 {
+  font-size: clamp(36px, 5vw, 68px);
+  letter-spacing: 0;
+}
+
+/* The navbar: transparent over the masthead, frosted paper once the page scrolls; its ink pill waits until the
+ * masthead's actions have passed under it. */
+html.duo-home .navbar {
+  border-bottom-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background-color 0.4s var(--ease), box-shadow 0.4s var(--ease), border-color 0.4s var(--ease);
+}
+
+html.duo-home[data-duo-scrolled] .navbar,
+html.duo-home .navbar.navbar-sidebar--show {
+  border-bottom-color: var(--hair);
+  background: var(--site-surface-glass);
+  backdrop-filter: saturate(160%) blur(18px);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+}
+
+html.duo-home .navbar__item.navbar__link.nav-dashboard-cta {
+  border-radius: 999px;
+  transition: opacity 0.4s var(--ease), transform 0.5s var(--ease), background-color 0.2s;
+}
+
+html[data-js].duo-home:not([data-duo-cta]) .navbar__items--right > .navbar__item.navbar__link.nav-dashboard-cta {
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  html.duo-home {
+    --duo-pad: clamp(72px, 18vw, 96px);
+  }
+
+  html.duo-home .site-section-intro h2 {
+    font-size: clamp(40px, 11vw, 48px);
+  }
+
+  html.duo-home[lang='zh-Hans'] .site-section-intro h2 {
+    font-size: clamp(32px, 9vw, 40px);
+  }
+
+  html.duo-home .site-section-intro > p {
+    margin-top: 14px;
+    font-size: 17px;
+  }
+}

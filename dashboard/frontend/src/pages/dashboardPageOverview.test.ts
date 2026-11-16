@@ -6,9 +6,11 @@ describe('dashboard overview row models', () => {
     expect(buildSignalBreakdownRows({
       pii: 2,
       custom: 1,
+      role_bindings: 3,
       keywords: 4,
     })).toEqual([
       { type: 'keywords', count: 4, percent: 100, color: '#4EC9B0' },
+      { type: 'role_bindings', count: 3, percent: 75, color: '#F48771' },
       { type: 'pii', count: 2, percent: 50, color: '#FF6B6B' },
       { type: 'custom', count: 1, percent: 25, color: '#999' },
     ])
@@ -16,7 +18,7 @@ describe('dashboard overview row models', () => {
 
   it('omits empty signal breakdown entries', () => {
     expect(buildSignalBreakdownRows({
-      embeddings: 0,
+      turn_relation: 0,
       keywords: 0,
     })).toEqual([])
   })

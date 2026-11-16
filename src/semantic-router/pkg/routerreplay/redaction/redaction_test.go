@@ -59,6 +59,7 @@ func TestRedactResponseBodyRemovesRecordFreeTextAndPrivacySurfaces(t *testing.T)
 		"request_body":"private-canary",
 		"response_body":"private-canary",
 		"prompt":"private-canary",
+		"prompt_original_sha256":"private-canary",
 		"tool_definitions":"private-canary",
 		"pii_entities":["private-canary"],
 		"hallucination_spans":["private-canary"],
@@ -201,5 +202,67 @@ func TestRedactResponseBodyRetainsFusionQuorumDiagnostics(t *testing.T) {
 	if second["model"] != "panel-b" || second["state"] != "unusable" ||
 		second["prompt_tokens"] != float64(20) || second["completion_tokens"] != float64(3) || second["total_tokens"] != float64(23) {
 		t.Fatalf("Fusion attempt diagnostics changed during redaction: %#v", second)
+	}
+}
+
+func TestRedactResponseBodyRemovesCapturedToolResults(t *testing.T) {
+	const private = "private-tool-result"
+	body := []byte(`{"object":"list","data":[{
+		"id":"replay-tool-result",
+		"request_body":"{\"messages\":[{\"role\":\"tool\",\"content\":\"private-tool-result\"}]}",
+		"tool_trace":{"steps":[{"type":"client_tool_result","tool_call_id":"call-1","status":"failed","output":"private-tool-result","truncated":true}]}
+	}]}`)
+
+	redacted := mustRedactChanged(t, body)
+	if bytes.Contains(redacted, []byte(private)) {
+		t.Fatalf("redacted list still contains the captured tool result: %s", redacted)
+	}
+	var payload struct {
+		Data []store.Record `json:"data"`
+	}
+	if err := json.Unmarshal(redacted, &payload); err != nil {
+		t.Fatalf("decode redacted list: %v", err)
+	}
+	step := payload.Data[0].ToolTrace.Steps[0]
+	if !step.ContentRedacted || step.Status != RedactedToolResultStatusFailed || step.Output != "" {
+		t.Fatalf("captured tool result step = %+v, want redacted with its status", step)
+	}
+}
+
+func TestRedactResponseBodyRemovesTrajectoryRouteReasonsAndAgent(t *testing.T) {
+	body := []byte(`{"object":"router_replay.trajectory","messages":[],"routes":[{"record_id":"replay-1","selected_model":"model-a","selection_reasoning":"private-canary","session_reason":"private-canary","agent":"private-canary"}]}`)
+
+	redacted, changed, err := RedactResponseBody(body)
+	if err != nil || !changed {
+		t.Fatalf("RedactResponseBody() changed = %v, err = %v", changed, err)
+	}
+	if bytes.Contains(redacted, []byte("private-canary")) || !bytes.Contains(redacted, []byte(`"selected_model":"model-a"`)) {
+		t.Fatalf("trajectory route kept private fields or lost routing metadata: %s", redacted)
+	}
+}
+
+// A viewer without replay detail access sees a review's status, verdict and
+// tool, in a single record and in a list, but none of its free text.
+func TestRedactResponseBodyKeepsReviewVerdictAndClearsItsText(t *testing.T) {
+	const private = "private-canary"
+	review := store.Review{
+		SchemaVersion: 1, IdentificationSource: "entrypoint", Status: "completed", ReviewedSessionID: "session-1",
+		Assessment: &store.ReviewAssessment{Outcome: "deny", RiskLevel: "high", UserAuthorization: "low", Rationale: private},
+		Action:     &store.ReviewAction{Tool: "exec_command", Summary: private, Cwd: private, Arguments: private},
+	}
+	record, err := json.Marshal(store.Record{ID: "replay-1", RequestKind: store.RequestKindCodexApprovalReview, Review: &review})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range [][]byte{record, append(append([]byte(`{"object":"router_replay.list","data":[`), record...), "]}"...)} {
+		redacted, changed, err := RedactResponseBody(body)
+		if err != nil || !changed || bytes.Contains(redacted, []byte(private)) {
+			t.Fatalf("redacted = %s changed=%v err=%v", redacted, changed, err)
+		}
+		for _, kept := range []string{`"outcome":"deny"`, `"risk_level":"high"`, `"tool":"exec_command"`, `"status":"completed"`, `"reviewed_session_id":"session-1"`, `"content_redacted":true`} {
+			if !bytes.Contains(redacted, []byte(kept)) {
+				t.Fatalf("redaction dropped %s: %s", kept, redacted)
+			}
+		}
 	}
 }

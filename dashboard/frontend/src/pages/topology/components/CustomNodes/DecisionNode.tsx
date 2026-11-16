@@ -6,6 +6,7 @@ import { DecisionConfig } from '../../types'
 import { NODE_COLORS } from '../../constants'
 import { buildRulePreviewLines, summarizeRuleNode } from '../../utils/ruleTree'
 import { formatRoutingMetadataValue } from '../../../../components/routingMetadataDisplay'
+import { X_VSR_SELECTED_DECISION } from '../../../../generated/vsrHeaders'
 import styles from './CustomNodes.module.css'
 
 interface DecisionNodeData {
@@ -127,7 +128,7 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
     onFocusDecision,
   } = data
   const { name, priority, rules, modelRefs, algorithm, plugins } = decision
-  const displayName = formatRoutingMetadataValue('x-vsr-selected-decision', name)
+  const displayName = formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, name)
 
   const hasReasoning = modelRefs.some((m) => m.use_reasoning)
   const hasPlugins = plugins && plugins.length > 0

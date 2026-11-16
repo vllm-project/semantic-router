@@ -12,7 +12,7 @@ import (
 func TestHandleCaching_SkipsGlobalCacheWhenDecisionsConfiguredButNoDecisionMatched(t *testing.T) {
 	mockCache := &mockStreamingCache{}
 	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
+		SemanticCache: config.SemanticCache{InUse: true},
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{
 				{
@@ -37,14 +37,15 @@ func TestHandleCaching_SkipsGlobalCacheWhenDecisionsConfiguredButNoDecisionMatch
 
 func TestHandleCaching_UsesGlobalCacheWhenNoDecisionsConfigured(t *testing.T) {
 	mockCache := &mockStreamingCache{}
-	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
-	}
+	cfg := withGlobalPlugins(t, &config.RouterConfig{
+		SemanticCache: config.SemanticCache{InUse: true},
+	}, testPlugin(config.DecisionPluginResponseCache, map[string]interface{}{"enabled": true, "scope": "global"}))
 	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
 	ctx := &RequestContext{
 		RequestID:       "req-1",
 		SemanticRequest: testNeutralRequest("vllm-sr/auto", "hello"),
 	}
+	ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
 
 	resp, hit := router.handleCaching(ctx, "")
 	assert.Nil(t, resp)
@@ -57,13 +58,15 @@ func TestHandleCaching_PartitionsNamedRecipeWithoutChangingSemanticQuery(t *test
 	mockCache := &mockStreamingCache{}
 	router := &OpenAIRouter{
 		Cache:  mockCache,
-		Config: &config.RouterConfig{SemanticCache: config.SemanticCache{Enabled: true}},
+		Config: &config.RouterConfig{SemanticCache: config.SemanticCache{InUse: true}},
 	}
 	ctx := &RequestContext{
 		RequestID:       "req-1",
 		SemanticRequest: testNeutralRequest("vllm-sr/auto", "hello"),
 	}
-	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy"})
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy", Profile: config.RoutingProfile{
+		DefaultPlugins: []config.DecisionPlugin{testPlugin(config.DecisionPluginResponseCache, map[string]interface{}{"enabled": true, "scope": "global"})},
+	}})
 
 	resp, hit := router.handleCaching(ctx, "")
 	assert.Nil(t, resp)
@@ -105,7 +108,7 @@ func TestHandleCaching_ExactHitSkipsSemanticEmbeddingLookup(t *testing.T) {
 	router := &OpenAIRouter{
 		Cache: mockCache,
 		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
+			SemanticCache: config.SemanticCache{InUse: true},
 			IntelligentRouting: config.IntelligentRouting{
 				Decisions: []config.Decision{decision},
 			},
@@ -148,7 +151,7 @@ func TestHandleCaching_ReplaysExactHitForAnthropicClient(t *testing.T) {
 	router := &OpenAIRouter{
 		Cache: mockCache,
 		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
+			SemanticCache: config.SemanticCache{InUse: true},
 			IntelligentRouting: config.IntelligentRouting{
 				Decisions: []config.Decision{decision},
 			},
@@ -195,7 +198,7 @@ func TestHandleCaching_NoCacheControlSkipsReadsButKeepsWritePath(t *testing.T) {
 	router := &OpenAIRouter{
 		Cache: mockCache,
 		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
+			SemanticCache: config.SemanticCache{InUse: true},
 			IntelligentRouting: config.IntelligentRouting{
 				Decisions: []config.Decision{decision},
 			},
@@ -235,7 +238,7 @@ func TestHandleCaching_HardPartitionsTenantSelectedModelAndCompatibility(t *test
 	router := &OpenAIRouter{
 		Cache: mockCache,
 		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
+			SemanticCache: config.SemanticCache{InUse: true},
 			IntelligentRouting: config.IntelligentRouting{
 				Decisions: []config.Decision{decision},
 			},

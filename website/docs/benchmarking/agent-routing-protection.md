@@ -31,12 +31,16 @@ cd src/semantic-router
 go test ./pkg/extproc -run '^TestRouterLearningSession' -count=1 -v
 ```
 
-CI runs these tests with `make test-core-unit` in the `Router Contracts` job,
-before it starts external services or downloads model weights, with
-`ROUTER_PROTECTION_REPORT` set. Their exit status gates the job. The
-`agent-routing-protection` artifact contains the JSON report, including per-turn
-failures when a contract regresses. Upload is attempted even after failure;
-if setup fails before a report exists, the upload warns about the missing file.
+In CI:
+
+- **Where.** The `Router Contracts` job runs these tests with
+  `make test-core-unit` and `ROUTER_PROTECTION_REPORT` set, before it starts
+  external services or downloads model weights. Their exit status gates the
+  job.
+- **The report.** The `agent-routing-protection` artifact contains the JSON
+  report, including per-turn failures when a contract regresses.
+- **On failure.** Upload is attempted even after failure; if setup fails
+  before a report exists, the upload warns about the missing file.
 
 The tests also run in the normal core `make test-semantic-router` gate. Any
 per-turn model, sampling permission, hard-lock status, preflight reason, Replay
@@ -46,35 +50,55 @@ Each run executes the corpus twice and compares report bytes.
 ## What runs
 
 The corpus lives at
-`src/semantic-router/pkg/extproc/testdata/router_learning_sessions.v2.yaml`.
-The YAML accepts comments, rejects unknown fields and duplicate keys, and must contain exactly one document. Each scenario declares its scope and protection mode. Each step appends semantic
-messages and supplies the already-eligible candidates, the upstream algorithm's
-proposal and scores, and any provider-state reference or cache-warmth input.
-Expected results are separate grading fields and never supply routing state.
-Progress-gate scenarios also declare an explicit versioned calibration and
-script content-minimal typed outcomes after dispatch. Those outcomes drive the
-production evidence evaluator; they do not directly select the expected route.
+`src/semantic-router/pkg/extproc/testdata/router_learning_sessions.v2.yaml`:
+
+- **The file.** The YAML accepts comments, rejects unknown fields and
+  duplicate keys, and must contain exactly one document.
+- **Scenarios** declare their scope and protection mode.
+- **Steps** append semantic messages, and supply the already-eligible
+  candidates, the upstream algorithm's proposal and scores, and any
+  provider-state reference or cache-warmth input.
+- **Expected results** are separate grading fields, and never supply routing
+  state.
+- **Progress-gate scenarios** also declare an explicit versioned calibration,
+  and script content-minimal typed outcomes after dispatch. Those outcomes
+  drive the production evidence evaluator; they don't directly select the
+  expected route.
 
 The runner uses production message fact extraction, protection preflight,
-switch protection, Replay diagnostic conversion and session-memory writes.
-The next turn reads the previous **actual** model selection. Memory is reset
-between scenarios and repetitions. A companion integration test sends the maintained tool-loop history through the production Router Learning orchestration with adaptation enabled. It checks actual sampling invocations and final-model continuity, plus a bypass control that samples during the same tool loop. This covers the in-process orchestration, not HTTP or Envoy dispatch.
+switch protection, Replay diagnostic conversion and session-memory writes:
 
-The model-choice proposal is scripted;
-the protection decision is not simulated or reimplemented in the runner.
-Accepted corpus steps explicitly commit the staged session decision to model a
-successful dispatch. In the request pipeline, selection only stages ownership;
-provider preparation, credential resolution and final encoding must succeed
-before ownership is committed. Cancellation and immediate rejections do not
-replace the previous owner or increment its turn and switch counters.
+- **Real state between turns.** The next turn reads the previous **actual**
+  model selection, and memory is reset between scenarios and repetitions.
+- **Scripted proposals, real protection.** The model-choice proposal is
+  scripted; the protection decision isn't simulated or reimplemented in the
+  runner.
+- **Commits.** Accepted corpus steps explicitly commit the staged session
+  decision, to model a successful dispatch. In the request pipeline, selection
+  only stages ownership: provider preparation, credential resolution and final
+  encoding must succeed before ownership is committed.
+- **Rejections.** Cancellation and immediate rejections don't replace the
+  previous owner, or increment its turn and switch counters.
 
-`selection_decision_paths_test.go` separately guards component-error composition:
-observe protection preserves an applied adaptation proposal even on policy
-rejection; preflight reads protection-scoped warm state; rescue respects score
-direction; cancellation covers selector shortcuts and successful returns; Eval
-preserves ambiguous-candidate rejection. In-process dispatch tests cover late
-rejection, successful ownership commitment and an older failure arriving after a
-newer dispatch. These checks do not invoke live model backends.
+A companion integration test sends the maintained tool-loop history through
+the production Router Learning orchestration, with adaptation enabled. It
+checks actual sampling invocations and final-model continuity, plus a bypass
+control that samples during the same tool loop; it covers the in-process
+orchestration, not HTTP or Envoy dispatch.
+
+`selection_decision_paths_test.go` separately guards component-error
+composition:
+
+- observe protection preserves an applied adaptation proposal, even on policy
+  rejection;
+- preflight reads protection-scoped warm state;
+- rescue respects score direction;
+- cancellation covers selector shortcuts and successful returns;
+- Eval preserves ambiguous-candidate rejection.
+
+In-process dispatch tests cover late rejection, successful ownership
+commitment, and an older failure arriving after a newer dispatch. None of
+these checks invoke live model backends.
 
 Covered contracts include:
 
@@ -101,48 +125,70 @@ cache-cost and history-penalty tuning; it is not a production tuning recommendat
 
 ## Read the report
 
-The report identifies its schema and the SHA-256 of the exact corpus bytes.
-It contains every proposed/final model, preflight reason, Replay action/reason,
-hard-lock result, scripted cache warmth and assertion failure. Rejected steps
-use `rejected: true`, an empty final model, and a terminal rejection outcome.
-They do not write a new session owner and are not counted as model switches.
+The report identifies its schema and the SHA-256 of the exact corpus bytes:
 
-Metrics include contract pass rate, switches, blocked-switch violations, unsafe
-sampling violations, unnecessary switches, missed **scripted** opportunities,
-Replay explanation coverage, progress-gate contract/explanation coverage,
-safe enforced-suppression application and avoided holds of ineligible current
-models. Every rate carries its count and denominator; an empty denominator is
-`null`, not a successful zero-violation measurement.
-A scripted opportunity means the fixture specifies a permitted, sufficiently
-advantageous proposal. It is not a counterfactual estimate of real task quality.
+- **Per step:** every proposed and final model, preflight reason, Replay
+  action and reason, hard-lock result, scripted cache warmth and assertion
+  failure.
+- **Rejected steps** use `rejected: true`, an empty final model and a terminal
+  rejection outcome. They don't write a new session owner, and aren't counted
+  as model switches.
 
+Its metrics:
+
+- the contract pass rate and switches;
+- blocked-switch violations, unsafe sampling violations and unnecessary
+  switches;
+- missed **scripted** opportunities;
+- Replay explanation coverage, and progress-gate contract and explanation
+  coverage;
+- safe enforced-suppression application, and avoided holds of ineligible
+  current models.
+
+Every rate carries its count and denominator; an empty denominator is `null`,
+not a successful zero-violation measurement. A scripted opportunity means the
+fixture specifies a permitted, sufficiently advantageous proposal; it's not a
+counterfactual estimate of real task quality.
+
+:::caution
 Quality benefit, billed cost, inference latency, measured cache savings and
 statistical uncertainty are explicitly unavailable. A deterministic contract
 corpus is not a sample of real agent sessions, and test execution time is not
-model latency. Those claims require paired task runs and measured outcomes.
+model latency; those claims need paired task runs and measured outcomes.
+:::
 
 ## Extend coverage
 
-Add short scenarios with stable IDs and incremental message histories. Pair a
-blocked state with its released state so a policy that never switches cannot
-pass. Include exact expectations for the final model, sampling permission, hard-lock
-status, preflight reason and Replay explanation. Steps carry semantic coverage
-tags; validation rejects missing required capabilities and unknown tags. Adding
-or renaming scenarios does not require a fixed scenario count. Preserve scenario isolation and deterministic reports.
+- **Keep scenarios short,** with stable IDs and incremental message
+  histories.
+- **Pair a blocked state with its released state,** so a policy that never
+  switches can't pass.
+- **Give exact expectations** for the final model, sampling permission,
+  hard-lock status, preflight reason and Replay explanation.
+- **Tag coverage.** Steps carry semantic coverage tags; validation rejects
+  missing required capabilities and unknown tags.
+- **No fixed count.** Adding or renaming scenarios doesn't require a fixed
+  scenario count.
+- **Keep scenarios isolated,** and reports deterministic.
 
-The corpus carries an explicit missing-coverage list, copied into every report.
-It includes adaptation learning and delayed outcome delivery, rescue and failed
-dispatch/fallback paths, timeouts, idle expiry, upstream
-authorization/residency/budget eligibility, real model measurements, transport
-and external state stores. Delegated roles and multi-arm shadow execution must
-be added only when their owning features land.
+The corpus carries an explicit missing-coverage list, copied into every
+report:
 
-Keep issue #2338 open after this baseline: these gaps are not passing results.
+- adaptation learning and delayed outcome delivery;
+- rescue and failed dispatch or fallback paths;
+- timeouts and idle expiry;
+- upstream authorization, residency and budget eligibility;
+- real model measurements;
+- transport and external state stores.
+
+Delegated roles and multi-arm shadow execution are added only when their
+owning features land. These gaps are not passing results, so
+[issue #2338](https://github.com/vllm-project/semantic-router/issues/2338) stays open for them.
 
 ## Remaining issue criteria
 
-This PR gates the current protection baseline and leaves issue #2338 open.
-Follow-up work is split by the evidence it must produce:
+The corpus gates the current protection baseline. The rest of
+[issue #2338](https://github.com/vllm-project/semantic-router/issues/2338) is split by the evidence it must produce:
 
 | Issue criterion | Follow-up evidence |
 | --- | --- |

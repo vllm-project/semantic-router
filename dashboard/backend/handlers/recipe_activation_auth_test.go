@@ -20,7 +20,7 @@ func TestBearerBindingAddsTheDashboardCredential(t *testing.T) {
 		{name: "other_role", tokens: "        tokens:\n          - env: " + recipe.ManagementCredentialEnv + "\n            role: viewer\n", want: 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			config := "version: v0.3\nglobal:\n  services:\n    management_api:\n" +
+			config := "version: v0.5\nglobal:\n  services:\n    management_api:\n" +
 				"      bind_address: 0.0.0.0\n      port: 8080\n      auth:\n        mode: bearer\n" + test.tokens
 			bound, ok, err := bindActivationManagementCredential([]byte(config))
 			if err != nil || !ok {

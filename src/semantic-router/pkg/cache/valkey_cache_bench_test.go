@@ -48,15 +48,13 @@ func setupValkeyCacheBench(b *testing.B) *ValkeyCache {
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
 		EmbeddingProvider: cacheTestEmbeddingProvider(),
-		// Gate at raw cosine >= 0.8 to match the in-memory backend, so
-		// BenchmarkCacheComparison compares equivalent hit paths. Valkey reports
-		// COSINE distance and maps it to similarity = (1 + cos) / 2
-		// (distanceToSimilarity), so a raw cos >= 0.8 cutoff is similarity >= 0.9.
-		SimilarityThreshold: 0.9,
+		// Gate at cosine >= 0.8, as the in-memory backend does, so
+		// BenchmarkCacheComparison compares equivalent hit paths.
+		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
 		Enabled:             true,
 		Config:              valkeyConfig,
-		EmbeddingModel:      "qwen3",
+		EmbeddingDeployment: "qwen3-embedding",
 	})
 	if err != nil {
 		unavailable("valkey server not available: %v", err)

@@ -13,7 +13,6 @@ coverage from a numbered script or a saved check mark in this directory.
   OpenAI and Anthropic protocol fixtures and deterministic scenario responses.
 - [`tiny-model`](../../tools/test/services/tiny-model/) provides optional real
   Qwen3-0.6B inference through an upstream serving image.
-- [`hallucination-demo/`](hallucination-demo/) runs a focused mock-tool demo.
 - [`vllm-sr-cli/`](vllm-sr-cli/) documents CLI unit and container integration
   tests.
 - `run_response_api_suite.sh` drives the manual Responses API storage matrix.

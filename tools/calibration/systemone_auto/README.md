@@ -7,7 +7,7 @@ answers the original System One request; Vega 27B answers the same request only
 when Kai does not pass the configured early-exit gate.** It does not call Kai
 again to classify the task, and it does not call an LLM.
 
-Use the [cascade guide](../../../website/docs/tutorials/algorithm/native/cascade.md)
+Use the [escalate guide](../../../website/docs/tutorials/algorithm/looper/escalate.md#on-system-one)
 for the native provider bindings, explicit entrypoint, and two-call algorithm
 budget. Its first example uses a frozen pilot operating point, not a universal
 default. For your own workload, choose gates using independent calibration

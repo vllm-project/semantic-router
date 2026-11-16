@@ -263,13 +263,16 @@ func (v *ValkeyBackend) Search(
 
 	// Build filter expression.
 	filterExpr := "*"
-	if filter != nil {
-		if fid, ok := filter["file_id"].(string); ok && fid != "" {
-			if !safeIdentifierPattern.MatchString(fid) {
-				return nil, fmt.Errorf("invalid file_id filter: contains disallowed characters")
-			}
-			filterExpr = fmt.Sprintf("@file_id:{%s}", escapeTagValue(fid))
+	fileIDs, err := safeFilterFileIDs(filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(fileIDs) > 0 {
+		tags := make([]string, len(fileIDs))
+		for i, fid := range fileIDs {
+			tags[i] = escapeTagValue(fid)
 		}
+		filterExpr = fmt.Sprintf("@file_id:{%s}", strings.Join(tags, " | "))
 	}
 
 	// Build KNN query with AS alias. The filter expression is wrapped in parentheses

@@ -28,12 +28,13 @@ func TestBlockedResponseRecordsMemoryPersistenceReceipt(t *testing.T) {
 		{name: "no_extractor", status: "disabled", reason: "no_extractor", noExtractor: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server := newJailbreakScoreServer(t, 0.95, 0.05)
+			server := newJailbreakDecider(0.95)
 			if tc.classifyFailure {
-				server = newJailbreakFailingServer(t)
+				server = newFailingDecider()
 			}
-			router, ctx := newResponseStageRouter(t, server, config.OnErrorBlock, "block")
-			router.Config.Memory.Enabled = true
+			router, ctx := newResponseStageRouter(t, server, config.ResponseGuardBlock, config.ResponseGuardBlock)
+			router.Config.Memory.InUse = true
+			ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, memoryTestPlugin())
 			router.Config.Memory.AutoStore = true
 			if !tc.noExtractor {
 				router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
@@ -53,7 +54,7 @@ func TestBlockedResponseRecordsMemoryPersistenceReceipt(t *testing.T) {
 			counter := metrics.PluginExecutionTotal.WithLabelValues("memory_persistence", requestDecisionStateKey(ctx), tc.status)
 			before := testutil.ToFloat64(counter)
 
-			response := router.handleNonStreamingResponseBody(extProcResponseFixture(ctx.SourceFormat), ctx, 0)
+			response := router.handleNonStreamingResponseBody(extProcResponseFixture(ctx.SourceFormat), ctx, 0, false)
 			require.NotNil(t, response.GetImmediateResponse(), "the safety policy must still block the response")
 			assert.EqualValues(t, 403, response.GetImmediateResponse().GetStatus().GetCode())
 			require.NoError(t, recorder.DrainOutcomes())
@@ -83,7 +84,7 @@ func TestUnscheduledResponseMemoryStoreRecordsTerminalReceipt(t *testing.T) {
 		autoStoreOff         bool
 		noExtractor          bool
 	}{
-		{name: "blocked", status: "policy_blocked", reason: "hallucination_blocked"},
+		{name: "blocked", status: "policy_blocked", reason: "response_blocked"},
 		{name: "opt_out", status: "disabled", reason: "auto_store_off", autoStoreOff: true},
 		{name: "no_extractor", status: "disabled", reason: "no_extractor", noExtractor: true},
 	} {
@@ -91,7 +92,7 @@ func TestUnscheduledResponseMemoryStoreRecordsTerminalReceipt(t *testing.T) {
 			recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
 			t.Cleanup(func() { assert.NoError(t, recorder.Close()) })
 			router := &OpenAIRouter{
-				Config: &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
+				Config: &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, AutoStore: true}},
 			}
 			if !tc.noExtractor {
 				router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
@@ -106,7 +107,7 @@ func TestUnscheduledResponseMemoryStoreRecordsTerminalReceipt(t *testing.T) {
 			_, err := recorder.AddRecord(routerreplay.RoutingRecord{ID: tc.name})
 			require.NoError(t, err)
 
-			router.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
+			router.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "response_blocked", false)
 			require.NoError(t, recorder.DrainOutcomes())
 			record, found := recorder.GetRecord(tc.name)
 			require.True(t, found)

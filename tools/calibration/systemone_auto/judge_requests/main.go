@@ -63,7 +63,7 @@ func generate(input io.Reader, output io.Writer, model string) error {
 		for i, candidate := range record.Candidates {
 			candidates[i] = systemone.Candidate{Stage: candidate.Stage, Model: candidate.Model, Body: candidate.Body}
 		}
-		stage := config.CascadeStage{Model: model, Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}}
+		stage := config.EscalateStage{Model: model, Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}}
 		body, err := systemone.JudgeRequest(request, stage, candidates)
 		if err != nil {
 			return fmt.Errorf("judge request %s: %w", record.RecordID, err)

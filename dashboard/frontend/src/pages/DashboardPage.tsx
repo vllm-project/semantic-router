@@ -27,6 +27,7 @@ import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequ
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import { useInstanceDeployment } from './useInstanceDeployment'
 import { describeServingMode } from './dashboardServingMode'
+import { withRoutingView } from './configPageCanonicalLayout'
 import styles from './DashboardPage.module.css'
 
 const DashboardPage: React.FC = () => {
@@ -46,7 +47,7 @@ const DashboardPage: React.FC = () => {
   }, [])
 
   const fetchConfig = useCallback(async () => {
-    setConfig(await fetchDashboardJson<RouterConfig>('/api/router/config/all', 'Router config'))
+    setConfig(withRoutingView(await fetchDashboardJson<RouterConfig>('/api/router/config/all', 'Router config')))
   }, [])
 
   const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])

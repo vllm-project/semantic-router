@@ -112,14 +112,14 @@ def complete_agent_task_summary() -> dict:
             "x-vsr-selected-model": 0,
             "x-vsr-selected-decision": 0,
             "x-vsr-replay-id": 0,
-            "x-vsr-session-phase": 0,
-            "x-vsr-selected-confidence": 0,
-            "x-vsr-context-token-count": 0,
+            "session_phase": 0,
+            "confidence": 0,
+            "context_tokens": 0,
         },
         "invalid_router_header_counts": {
-            "x-vsr-session-phase": 0,
-            "x-vsr-selected-confidence": 0,
-            "x-vsr-context-token-count": 0,
+            "session_phase": 0,
+            "confidence": 0,
+            "context_tokens": 0,
         },
     }
 
@@ -644,7 +644,7 @@ def test_stale_agent_task_suite_blocks_ga(tmp_path):
     report_mod = load_report_module()
     inputs = complete_inputs(tmp_path)
     stale_tasks = complete_agent_task_summary()
-    stale_tasks["missing_router_header_counts"].pop("x-vsr-session-phase")
+    stale_tasks["missing_router_header_counts"].pop("session_phase")
     stale_tasks.update(
         {
             "requests": 96,
@@ -696,8 +696,7 @@ def test_stale_agent_task_suite_blocks_ga(tmp_path):
     assert "task_count 6.0 < 28" in task_requirement["failures"]
     assert "task_instances 18.0 < 84" in task_requirement["failures"]
     assert (
-        "missing router headers: {'x-vsr-session-phase': 96}"
-        in task_requirement["failures"]
+        "missing router headers: {'session_phase': 96}" in task_requirement["failures"]
     )
     assert any(
         failure.startswith("missing task names:")

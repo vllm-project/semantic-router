@@ -46,10 +46,10 @@ func TestRouterExtensionEmitterContract(t *testing.T) {
 			return formatWorkflowStreamingResponse(tools, nil, 1, trace, usage, workflowCfg)
 		}},
 		{"remom_text_json", "reasoning_mom_responses", func() (*Response, error) {
-			return (&ReMoMLooper{}).formatReMoMJSONResponse(IntermediateResp{Model: "fixture", Content: "A useful answer"}, rounds, nil, 1, usage, &config.ReMoMAlgorithmConfig{IncludeIntermediateResponses: true})
+			return (&ReMoMLooper{}).formatReMoMJSONResponse(IntermediateResp{Model: "fixture", Content: "A useful answer", FinishReason: "stop"}, rounds, nil, 1, usage, &config.ReMoMAlgorithmConfig{IncludeIntermediateResponses: true})
 		}},
 		{"remom_text_sse", "reasoning_mom_responses", func() (*Response, error) {
-			return (&ReMoMLooper{}).formatReMoMStreamingResponse(IntermediateResp{Model: "fixture", Content: "A useful answer"}, rounds, nil, 1, usage, &config.ReMoMAlgorithmConfig{IncludeIntermediateResponses: true})
+			return (&ReMoMLooper{}).formatReMoMStreamingResponse(IntermediateResp{Model: "fixture", Content: "A useful answer", FinishReason: "stop"}, rounds, nil, 1, usage, &config.ReMoMAlgorithmConfig{IncludeIntermediateResponses: true})
 		}},
 	}
 	for _, tc := range cases {

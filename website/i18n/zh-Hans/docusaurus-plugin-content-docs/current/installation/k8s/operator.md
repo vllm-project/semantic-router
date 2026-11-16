@@ -14,7 +14,7 @@ translation:
 
 Semantic Router Operator 将 `SemanticRouter` 自定义资源协调为 Router 工作负载、Service、配置、存储和可选平台集成。当 Kubernetes 应负责 Router 生命周期，且模型后端已作为 Kubernetes 服务、KServe `InferenceService` 或 Llama Stack 服务暴露时，使用它。
 
-Operator 不部署模型服务器。它发现或引用它们，并生成 Router 使用的提供商 binding。
+Operator 不部署模型服务器。它发现或引用它们，并生成 Router 使用的请求后端（`providers.models`）。
 
 ## Operator 管理什么
 
@@ -101,33 +101,35 @@ kubectl get deployment,service \
   -l app.kubernetes.io/instance=my-router
 ```
 
-用具体模型名称发送直接请求，或在 `spec.config.routing` 下添加规范路由，以暴露自动或策略驱动行为。
+用具体模型名称发送直接请求，或在 `spec.config.recipes` 下添加规范配方，以暴露自动或策略驱动行为。
 
 ## 添加路由策略
 
-`spec.config.routing` 接受规范路由对象。下面的示例为已发现的模型添加兜底决策：
+`spec.config.recipes` 接受规范配方；名为 `default` 的配方所设置的字段替换 Operator 默认配方的字段。`spec.config.entrypoints` 和 `spec.config.plugins` 接受规范的 `entrypoints` 和 `global.plugins`，`spec.config.models` 按名称声明已发现模型的事实。下面的示例为已发现的模型添加兜底决策：
 
 ```yaml
 spec:
   config:
-    routing:
-      strategy: priority
-      modelCards:
-        - name: local/model
-          modality: text
-          capabilities: [chat]
-      decisions:
-        - name: default-route
-          description: Route unmatched requests to the discovered local model.
-          priority: 1
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/model
+    models:
+      - name: local/model
+        capabilities: [chat]
+    recipes:
+      - name: default
+        strategy: priority
+        decisions:
+          - name: default-route
+            description: Route unmatched requests to the discovered local model.
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: local/model
 ```
 
-其余 `spec.config` 字段是 Operator 对共享 Router 设置的 adapter，例如响应缓存、分类器、工具、可观测性和推理家族。它们会被转换为规范 `global` 和提供商段落。查阅 CRD 参考，不要把本地 `config.yaml` 中的字段复制到任意 CR 路径。
+`spec.config.routing` 已移除；设置它的资源会被拒绝。
+
+其余 `spec.config` 字段是 Operator 对共享 Router 设置的 adapter，例如响应缓存、推理强度、API 和可观测性。它们会被转换为规范 `global` 和提供商段落。查阅 CRD 参考，不要把本地 `config.yaml` 中的字段复制到任意 CR 路径。
 
 ## 后端发现
 
@@ -209,7 +211,7 @@ spec:
 kubectl -n vllm-serving get httproute semantic-router-gateway -o yaml
 kubectl -n vllm-serving get service semantic-router-gateway -o jsonpath='{.spec.ports}'
 kubectl -n vllm-serving port-forward service/semantic-router-gateway 8801:8801
-# 在另一个终端中，通过这个本地数据面验证同一请求。
+# In another terminal, verify the same request through this local data plane.
 curl --fail-with-body http://localhost:8801/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"local/model","messages":[{"role":"user","content":"Hello"}]}'
@@ -248,6 +250,8 @@ spec:
 ```
 
 省略主机名可让 OpenShift 分配一个，或提供由你的 DNS 和证书配置覆盖的主机名。
+
+在独立模式下，Route 将客户端发送到 Router 的推理监听器，即 Service 端口 8801（`http-8801`），未设置 `servicePort` 的 `spec.ingress` 路径也是如此。使用 `spec.gateway.existingRef` 时，Router 不提供 HTTP 推理端口，请通过该 Gateway 访问。
 
 ## 密钥
 

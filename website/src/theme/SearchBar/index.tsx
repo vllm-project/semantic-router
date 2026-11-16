@@ -363,6 +363,11 @@ const STRINGS = {
   navigate: translate({ id: 'theme.SearchBar.hintNavigate', message: 'navigate' }),
   openHint: translate({ id: 'theme.SearchBar.hintOpen', message: 'open' }),
   closeHint: translate({ id: 'theme.SearchBar.hintClose', message: 'close' }),
+  trigger: translate({
+    id: 'theme.SearchBar.triggerLabel',
+    message: 'Search',
+    description: 'Visible label of the navbar search trigger',
+  }),
 }
 
 type IndexState = 'idle' | 'loading' | 'ready' | 'failed'
@@ -692,9 +697,14 @@ export default function SearchBar(): ReactNode {
     return (
       <div className="site-search-state">
         <p className="site-search-state__title">
-          No results for “
-          {term}
-          ”
+          {translate(
+            {
+              id: 'theme.SearchBar.noResults',
+              message: 'No results for “{term}”',
+              description: 'Headline shown when a query matches nothing; {term} is the query',
+            },
+            { term },
+          )}
         </p>
         <p className="site-search-state__hint">{STRINGS.emptyHint}</p>
         <button className="site-search-state__action" onClick={goToSearchPage} type="button">
@@ -877,7 +887,7 @@ export default function SearchBar(): ReactNode {
           <circle cx="11" cy="11" r="7" />
           <path d="M20 20l-3.5-3.5" />
         </svg>
-        <span className="site-search-trigger__label">Search</span>
+        <span className="site-search-trigger__label">{STRINGS.trigger}</span>
         <kbd className="site-search-trigger__key">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
       </button>
       {modal}

@@ -8,10 +8,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
-// ragQueryEmbedding embeds the RAG query once. A query past the embedding
-// model's input budget is cut by the model's own input policy.
-func (r *OpenAIRouter) ragQueryEmbedding(ctx context.Context, query string, request *RequestContext) ([]float32, error) {
-	provider, err := r.embeddingsForRequest(request).Get(config.RAGQueryEmbeddingModel, 0, 0)
+// ragQueryEmbedding embeds the RAG query once with the deployment the
+// collection was indexed with, at its dimension; the set's default is
+// embeddings.default. A query past the embedding model's input budget is cut
+// by the model's own input policy.
+func (r *OpenAIRouter) ragQueryEmbedding(ctx context.Context, query string, request *RequestContext, binding *config.EmbeddingBinding) ([]float32, error) {
+	deployment, dimension := "", 0
+	if binding != nil {
+		deployment, dimension = binding.Deployment, binding.Dimension
+	}
+	provider, err := r.embeddingsForRequest(request).Get(deployment, dimension, 0)
 	if err != nil {
 		return nil, err
 	}

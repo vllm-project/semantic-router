@@ -130,7 +130,7 @@ def test_live_benchmark_records_router_headers_and_violations(tmp_path):
     assert summary["missing_router_header_counts"]["x-vsr-selected-model"] == 0
     assert summary["missing_router_header_counts"]["x-vsr-selected-decision"] == 0
     assert summary["missing_router_header_counts"]["x-vsr-replay-id"] == len(rows)
-    assert summary["missing_router_header_counts"]["x-vsr-session-phase"] == len(rows)
+    assert summary["missing_router_header_counts"]["session_phase"] == len(rows)
 
     decision_args = make_args(
         "http://unused/v1",
@@ -161,12 +161,12 @@ def test_dry_run_can_gate_router_diagnostics(tmp_path):
     rows = live.run_benchmark(args)
     summary = live.summarize(rows)
 
-    assert summary["missing_router_header_counts"]["x-vsr-selected-confidence"] == 0
-    assert summary["missing_router_header_counts"]["x-vsr-context-token-count"] == 0
-    assert summary["missing_router_header_counts"]["x-vsr-session-phase"] == 0
-    assert summary["invalid_router_header_counts"]["x-vsr-session-phase"] == 0
-    assert summary["invalid_router_header_counts"]["x-vsr-selected-confidence"] == 0
-    assert summary["invalid_router_header_counts"]["x-vsr-context-token-count"] == 0
+    assert summary["missing_router_header_counts"]["confidence"] == 0
+    assert summary["missing_router_header_counts"]["context_tokens"] == 0
+    assert summary["missing_router_header_counts"]["session_phase"] == 0
+    assert summary["invalid_router_header_counts"]["session_phase"] == 0
+    assert summary["invalid_router_header_counts"]["confidence"] == 0
+    assert summary["invalid_router_header_counts"]["context_tokens"] == 0
     assert live.validate_summary(args, summary, None) == []
 
 
@@ -186,10 +186,10 @@ def test_router_diagnostics_validate_header_values(tmp_path):
             "headers": {
                 "x-vsr-selected-model": "small",
                 "x-vsr-selected-decision": "agentic",
-                "x-vsr-session-phase": "unknown",
-                "x-vsr-selected-confidence": "1.5",
+                "session_phase": "unknown",
+                "confidence": "1.5",
                 "x-vsr-replay-id": "replay-1",
-                "x-vsr-context-token-count": "-1",
+                "context_tokens": "-1",
             },
             "json": {"id": "resp_0", "model": "small", "usage": {}},
             "error": "",
@@ -198,13 +198,13 @@ def test_router_diagnostics_validate_header_values(tmp_path):
     )
     summary = live.summarize([row])
 
-    assert summary["invalid_router_header_counts"]["x-vsr-session-phase"] == 1
-    assert summary["invalid_router_header_counts"]["x-vsr-selected-confidence"] == 1
-    assert summary["invalid_router_header_counts"]["x-vsr-context-token-count"] == 1
+    assert summary["invalid_router_header_counts"]["session_phase"] == 1
+    assert summary["invalid_router_header_counts"]["confidence"] == 1
+    assert summary["invalid_router_header_counts"]["context_tokens"] == 1
     assert live.validate_summary(args, summary, None) == [
-        "invalid_router_header x-vsr-session-phase: 1 successful requests",
-        "invalid_router_header x-vsr-selected-confidence: 1 successful requests",
-        "invalid_router_header x-vsr-context-token-count: 1 successful requests",
+        "invalid_router_header session_phase: 1 successful requests",
+        "invalid_router_header confidence: 1 successful requests",
+        "invalid_router_header context_tokens: 1 successful requests",
     ]
 
 

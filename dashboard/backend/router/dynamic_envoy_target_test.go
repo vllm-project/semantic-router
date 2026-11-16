@@ -9,7 +9,7 @@ import (
 func TestResolveDynamicEnvoyTargetFollowsManagedListenerPort(t *testing.T) {
 	directory := t.TempDir()
 	configPath := filepath.Join(directory, "runtime.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 9999\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 9999\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_ENVOY_CONTAINER_NAME", "demo-envoy")
@@ -22,7 +22,7 @@ func TestResolveDynamicEnvoyTargetFollowsManagedListenerPort(t *testing.T) {
 func TestResolveDynamicEnvoyTargetAppliesHostPortOffset(t *testing.T) {
 	directory := t.TempDir()
 	configPath := filepath.Join(directory, "runtime.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 9999\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 9999\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_ENVOY_CONTAINER_NAME", "demo-envoy")
@@ -48,7 +48,7 @@ func TestResolveDynamicEnvoyTargetSkipsOffsetForManagedRouter(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			configPath := filepath.Join(t.TempDir(), "runtime.yaml")
-			if err := os.WriteFile(configPath, []byte("version: v0.3\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 9999\n"), 0o600); err != nil {
+			if err := os.WriteFile(configPath, []byte("version: v0.5\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 9999\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			t.Setenv("VLLM_SR_STACK_NAME", tc.stack)

@@ -172,6 +172,21 @@ func (m *MemoryStore) AttachResponse(ctx context.Context, id string, body string
 	return nil
 }
 
+// AttachPrompt stores the prompt of a record written without it.
+func (m *MemoryStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	prompt.Apply(rec)
+
+	return nil
+}
+
 // AppendOutcome links post-route feedback to a record.
 func (m *MemoryStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
 	m.mu.Lock()
@@ -215,6 +230,7 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 		return fmt.Errorf("record with ID %s not found", id)
 	}
 
+	rec.ProviderCache = cloneProviderCacheAccounting(usage.ProviderCache)
 	rec.PromptTokens = cloneIntPtr(usage.PromptTokens)
 	rec.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 	rec.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
@@ -225,6 +241,7 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	rec.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 	rec.Currency = cloneStringPtr(usage.Currency)
 	rec.BaselineModel = cloneStringPtr(usage.BaselineModel)
+	rec.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 
 	return nil
 }
@@ -240,6 +257,20 @@ func (m *MemoryStore) UpdateToolTrace(ctx context.Context, id string, trace Tool
 	}
 
 	rec.ToolTrace = cloneToolTrace(&trace)
+	return nil
+}
+
+// UpdateReview replaces the approval review of a record.
+func (m *MemoryStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.Review = CloneReview(&review)
 	return nil
 }
 

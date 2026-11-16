@@ -13,11 +13,9 @@ func stickyEnabledDecision(t *testing.T, name string) config.Decision {
 	return config.Decision{
 		Name: name,
 		Plugins: []config.DecisionPlugin{
-			mustToolSelectionDecisionPlugin(t, &config.ToolSelectionPluginConfig{
-				Enabled: true,
-				Mode:    config.ToolSelectionModeAdd,
-				Sticky:  &config.StickyToolSelectionConfig{Enabled: true},
-			}),
+			mustToolsDecisionPlugin(t, &config.ToolsPluginConfig{Enabled: true, Select: &config.ToolsSelectConfig{
+				Mode: config.ToolsSelectModeAdd, ToolsDBPath: "tools.json", Sticky: &config.StickyToolSelectionConfig{Enabled: true},
+			}}),
 		},
 	}
 }
@@ -27,10 +25,7 @@ func stickyDisabledDecision(t *testing.T, name string) config.Decision {
 	return config.Decision{
 		Name: name,
 		Plugins: []config.DecisionPlugin{
-			mustToolSelectionDecisionPlugin(t, &config.ToolSelectionPluginConfig{
-				Enabled: true,
-				Mode:    config.ToolSelectionModeAdd,
-			}),
+			mustToolsDecisionPlugin(t, &config.ToolsPluginConfig{Enabled: true, Select: &config.ToolsSelectConfig{Mode: config.ToolsSelectModeAdd, ToolsDBPath: "tools.json"}}),
 		},
 	}
 }
@@ -109,6 +104,19 @@ func TestValidateStickyToolSelectionPhaseSupport_NoStickyDecisions_OK(t *testing
 	}
 	if err := validateStickyToolSelectionPhaseSupport(cfg); err != nil {
 		t.Fatalf("no decision enables sticky, expected no error, got: %v", err)
+	}
+}
+
+// global.plugins reach a request that matches no decision, so sticky
+// selection there needs the phase support and the secret a decision's does.
+func TestStickyToolSelectionOfTheDefaultPluginsIsChecked(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "")
+	cfg := &config.RouterConfig{GlobalPlugins: stickyEnabledDecision(t, "unused").Plugins}
+	if err := validateStickyToolSelectionPhaseSupport(cfg); !errors.Is(err, config.ErrToolSelectionStickyUnsupported) {
+		t.Fatalf("sticky selection in global.plugins: phase support = %v, want ErrToolSelectionStickyUnsupported", err)
+	}
+	if err := validateStickyToolSelectionSecret(cfg); err == nil {
+		t.Fatal("sticky selection in global.plugins passed without USER_SCOPE_NAMESPACE_SECRET")
 	}
 }
 

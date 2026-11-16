@@ -19,7 +19,7 @@ var entrypointsRecipesRequiredDocs = []docNeedles{
 		needles: []string{
 			"`entrypoints[].recipe`",
 			"`entrypoints[].model_names`",
-			"`recipes[].routing`",
+			"`entrypoints[].default`",
 		},
 	},
 	{

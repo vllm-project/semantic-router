@@ -5,6 +5,7 @@ import type {
   ReplaySessionPolicy,
 } from './insightsPageRoutingTypes'
 import type { SignalType } from '../generated/routerConfigContract'
+import type { InsightsReview, InsightsReviewAggregate } from './insightsReviewTypes'
 
 export type Signal = Partial<Record<SignalType, string[]>> & Record<string, string[] | undefined>
 
@@ -29,8 +30,10 @@ export interface ToolTraceStep {
   arguments?: string
   raw_arguments?: string
   raw_output?: string
+  output?: string
   status?: string
   content_redacted?: boolean
+  truncated?: boolean
 }
 
 export interface ToolTrace {
@@ -79,8 +82,6 @@ export interface ProjectionTraceMapping {
 export interface ProjectionTraceScoreInput {
   type: string
   name?: string
-  kb?: string
-  metric?: string
   weight: number
   value: number
   contribution: number
@@ -100,11 +101,23 @@ export interface ProjectionTrace {
 }
 
 export interface InsightsRecord {
+  provider_cache?: ProviderCacheAccounting
   conversation_id?: string
   id: string
   timestamp: string
   request_id?: string
+  /** codex_approval_review for an agent approval review; absent otherwise. */
+  request_kind?: string
+  review?: InsightsReview
   session_id?: string
+  /**
+   * The Codex thread and turn that sent the request. parent_turn_id is the
+   * turn that started the thread, such as the turn a review judges or a
+   * subagent was spawned from.
+   */
+  thread_id?: string
+  turn_id?: string
+  parent_turn_id?: string
   turn_index: number
   recipe?: string
   decision?: string
@@ -157,10 +170,6 @@ export interface InsightsRecord {
   jailbreak_type?: string
   jailbreak_confidence?: number | null
   jailbreak_score_available?: boolean
-  response_jailbreak_detected?: boolean
-  response_jailbreak_type?: string
-  response_jailbreak_confidence?: number | null
-  response_jailbreak_score_available?: boolean
   pii_detected?: boolean
   pii_entities?: string[]
   pii_blocked?: boolean
@@ -186,6 +195,48 @@ export interface InsightsRecord {
   cost_savings?: number
   currency?: string
   baseline_model?: string
+  cost_accounting?: InsightsCostAccounting
+}
+
+/** Model calls the Router made itself to serve a request. */
+export interface InsightsRouterCallCost {
+  model?: string
+  kind: string
+  calls: number
+  prompt_tokens?: number
+  completion_tokens?: number
+  cost?: number
+  currency?: string
+  unpriced_calls?: number
+  unpriced_reasons?: Record<string, number>
+}
+
+/** Where a record's cost figures came from and what they leave out. */
+export interface InsightsCostAccounting {
+  pricing_source?: 'configured' | 'catalog_list_price'
+  caller_login?: boolean
+  unpriced_reason?: string
+  baseline_source?: 'configured_model' | 'recipe_most_expensive' | 'selected_model'
+  baseline_unavailable?: string
+  router_calls?: InsightsRouterCallCost[]
+}
+
+export interface TokenCostComponent {
+  tokens?: number
+  provenance: 'unknown' | 'estimated' | 'derived' | 'authoritative'
+  cost?: number
+}
+
+export interface ProviderCacheAccounting {
+  state: 'complete' | 'partial' | 'unavailable' | 'invalid'
+  uncached_input: TokenCostComponent
+  cache_read: TokenCostComponent
+  cache_write: TokenCostComponent
+  output: TokenCostComponent
+  cache_write_5m: TokenCostComponent
+  cache_write_1h: TokenCostComponent
+  no_cache_cost?: number
+  cache_savings?: number
 }
 
 export interface InsightsTrajectoryToolCall {
@@ -206,6 +257,7 @@ export interface InsightsTrajectoryMessage {
   tool_name?: string
   status?: 'succeeded' | 'failed'
   content_redacted?: boolean
+  content_truncated?: boolean
   turn_index: number
 }
 
@@ -256,21 +308,77 @@ export interface InsightsAggregateValue {
 }
 
 export interface InsightsAggregateCurrencySummary {
+  /** Savings net of the Router calls of the compared requests. */
   total_saved: number
+  /** baseline_spend minus actual_spend, before those Router calls. */
+  gross_saved?: number
+  netted_router_call_spend?: number
   baseline_spend: number
   actual_spend: number
+  router_call_spend?: number
+  total_spend?: number
   currency: string
   cost_record_count: number
 }
 
+/** How much of the filtered traffic the cost figures leave out, and why. */
+export interface InsightsAggregateCostCoverage {
+  priced_records: number
+  partly_priced_records: number
+  unpriced_records: number
+  unpriced_reasons?: Record<string, number>
+  looper_hop_records: number
+  list_price_records: number
+  caller_login_records: number
+  router_calls: number
+  unpriced_router_calls: number
+  baseline_sources?: Record<string, number>
+  baseline_unavailable?: Record<string, number>
+  /** Router calls netted out of savings, by kind. */
+  netted_router_calls?: Record<string, number>
+  /** Requests left out of savings for a Router call without a price, by why. */
+  net_unavailable?: Record<string, number>
+}
+
 export interface InsightsAggregateSummary {
+  /** Savings net of the Router calls of the compared requests. */
   total_saved: number
+  /** baseline_spend minus actual_spend, before those Router calls. */
+  gross_saved?: number
+  netted_router_call_spend?: number
   baseline_spend: number
   actual_spend: number
+  router_call_spend?: number
+  total_spend?: number
   currency?: string
   cost_record_count: number
   excluded_record_count: number
   by_currency?: InsightsAggregateCurrencySummary[]
+  coverage?: InsightsAggregateCostCoverage
+}
+
+export interface InsightsProviderCacheCurrencyTotal {
+  currency: string
+  no_cache_spend: number
+  actual_spend: number
+  net_savings: number
+  priced_records: number
+}
+
+export interface InsightsProviderCacheSpendEntry extends InsightsProviderCacheCurrencyTotal {
+  name: string
+}
+
+export interface InsightsAggregateProviderCache {
+  no_cache_spend: number
+  actual_spend: number
+  net_savings: number
+  currency?: string
+  priced_records: number
+  excluded_records: number
+  by_currency?: InsightsProviderCacheCurrencyTotal[]
+  by_decision: InsightsProviderCacheSpendEntry[]
+  by_selected_model: InsightsProviderCacheSpendEntry[]
 }
 
 export interface InsightsAggregateTokenVolume {
@@ -303,6 +411,7 @@ export interface InsightsAggregateResponse {
     unknown: number
   }
   summary: InsightsAggregateSummary
+  provider_cache?: InsightsAggregateProviderCache
   model_selection: InsightsAggregateValue[]
   decision_distribution: InsightsAggregateValue[]
   signal_distribution: InsightsAggregateValue[]
@@ -311,4 +420,6 @@ export interface InsightsAggregateResponse {
   available_recipes: string[]
   available_decisions: string[]
   available_models: string[]
+  reviews?: InsightsReviewAggregate
+  available_review_models?: string[]
 }

@@ -93,3 +93,87 @@ Report per-class precision and recall, the confusion matrix, multilingual
 coverage, and failure cases such as requests that mention an image without
 asking to create one. Validate the exported adapter through the router's actual
 modality signal path before treating it as supported.
+
+## Same-run Evaluation Harness (#3856)
+
+`same_run_harness.py` and `same_run_pair.py` run a candidate and its baseline
+on the same frozen QSL one prompt at a time, then report latency, peak RSS,
+CPU seconds, and per-row routing output. Pairs are joined on `row_id` and must
+run on the same host.
+
+**Run BERT baseline:**
+
+```bash
+python same_run_harness.py \
+  --qsl exported_modality_routing_dataset/test.jsonl \
+  --model vllm-sr/Vela-1.0-Encoder-307M-Modality \
+  --binding hf \
+  --role baseline \
+  --warmup 20 --max-length 256 --min-duration-s 60 \
+  --output same_run_bert_singlestream.json
+```
+
+**Run candidate (e.g. DistilBERT):**
+
+```bash
+python same_run_harness.py \
+  --qsl exported_modality_routing_dataset/test.jsonl \
+  --model <your-checkpoint> \
+  --binding hf \
+  --role candidate \
+  --warmup 20 --max-length 256 --min-duration-s 60 \
+  --output same_run_distilbert_singlestream.json
+```
+
+**Pair the two runs (same host required):**
+
+```bash
+python same_run_pair.py \
+  --baseline same_run_bert_singlestream.json \
+  --candidate same_run_distilbert_singlestream.json \
+  --output same_run_paired.json
+```
+
+The pair script exits non-zero and writes no output file if the two runs came
+from different machines (`cpu_model`, `core_count`, or `ram_gb` differ).
+
+**Run production baseline (`--binding model-runtime`, `vllm-sr/Vela-1.0-Encoder-307M-Modality`):**
+
+The production path serves models through a standalone HTTP service
+(`vllm-srun`, the model runtime that replaced the in-process native bindings
+in [#4512](https://github.com/vllm-project/semantic-router/pull/4512)).
+Install it once, from the repository root:
+
+```bash
+pip install ./src/model-runtime
+```
+
+Then run the harness — it spawns and manages its own `vllm-srun serve`
+subprocess for the run, and downloads the model from the Hub on first use (no
+token needed, it's public):
+
+```bash
+python same_run_harness.py \
+  --qsl exported_modality_routing_dataset/test.jsonl \
+  --model vllm-sr/Vela-1.0-Encoder-307M-Modality \
+  --binding model-runtime \
+  --role baseline \
+  --warmup 20 --max-length 256 --min-duration-s 60 \
+  --output same_run_model_runtime_singlestream.json
+```
+
+`cpu_s` and `peak_rss_mb` for this binding include the model-runtime
+subprocess's own resource usage, read from `/proc/<pid>` after every request
+(`run.includes_helper_resources: true`), since inference happens in that
+child process over HTTP, not in the Python harness itself.
+
+Quality metrics (per-class precision, recall, threshold selection) are defined
+by [#3194](https://github.com/vllm-project/semantic-router/issues/3194). The
+harness emits `records[].label` and `records[].output` per row.
+
+**Unit tests (no real-model download; spins up a tiny local `vllm-srun`
+fixture for the model-runtime adapter):**
+
+```bash
+python test_same_run.py
+```

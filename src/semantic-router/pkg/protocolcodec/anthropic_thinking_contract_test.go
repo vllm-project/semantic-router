@@ -23,6 +23,11 @@ func TestAnthropicThinkingDisplaySurvivesSemanticMutation(t *testing.T) {
 			body: `{"model":"source-model","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"omitted"}}`,
 			mode: llmprotocol.ReasoningModeAdaptive,
 		},
+		{
+			name: "adaptive updates",
+			body: `{"model":"source-model","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"updates"}}`,
+			mode: llmprotocol.ReasoningModeAdaptive,
+		},
 	}
 	engine := NewBuiltinEngine()
 	for _, test := range tests {
@@ -104,6 +109,7 @@ func TestAnthropicThinkingValueDomainIsExplicit(t *testing.T) {
 	valid := []string{
 		`{"model":"m","max_tokens":2048,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"enabled","budget_tokens":1024,"display":"summarized"}}`,
 		`{"model":"m","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"omitted"}}`,
+		`{"model":"m","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"updates"}}`,
 	}
 	for index, body := range valid {
 		if _, _, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(body)); err != nil {

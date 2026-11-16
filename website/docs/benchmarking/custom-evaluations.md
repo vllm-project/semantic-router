@@ -34,8 +34,7 @@ is then its canonical Model Card identity and is also used by
 `evaluation.records[].model`:
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   models:
     - name: private-chat
@@ -46,7 +45,8 @@ providers:
           provider: vllm
           endpoint: model-gateway.example:8000
           protocol: http
-
+      display_name: Private Chat
+      capabilities: [chat, tools, coding]
 evaluation:
   records:
     - model: private-chat
@@ -56,12 +56,8 @@ evaluation:
       metrics: {pass_at_1: 0.61}
       measured_at: 2026-09-09
       source: https://benchmarks.example/runs/private-chat-lcb6
-
-routing:
-  modelCards:
-    - name: private-chat
-      display_name: Private Chat
-      capabilities: [chat, tools, coding]
+recipes:
+  - name: default
 ```
 
 For an alias backed by a built-in card, set `model` to the canonical

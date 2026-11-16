@@ -8,7 +8,7 @@ from shutil import copy2
 from setuptools.command.build_py import build_py
 from setuptools.command.sdist import sdist
 
-SCHEMA_FILENAME = "router-config-v0.3.schema.json"
+SCHEMA_FILENAME = "router-config-v0.5.schema.json"
 PROJECT_ROOT = Path(__file__).resolve().parent
 PACKAGE_SCHEMA = PROJECT_ROOT / "cli" / "config_schema" / SCHEMA_FILENAME
 REPOSITORY_SCHEMA = (

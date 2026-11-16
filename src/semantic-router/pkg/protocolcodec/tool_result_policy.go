@@ -11,7 +11,7 @@ func appendToolResultErrorLoss(diagnostics *llmprotocol.Diagnostics, request llm
 		for _, content := range message.Content {
 			if content.Kind == llmprotocol.ContentToolResult && content.ToolResult != nil && content.ToolResult.IsError != nil && *content.ToolResult.IsError {
 				return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, target,
-					"tool_result.is_error", "target format cannot represent tool-result failure status")
+					llmprotocol.LossyFieldToolResultError, "target format cannot represent tool-result failure status")
 			}
 		}
 	}

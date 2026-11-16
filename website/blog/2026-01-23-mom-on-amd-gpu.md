@@ -169,7 +169,7 @@ After each response, the UI displays:
 
 **Thinking Topology Visualization**
 
-One highlight worth emphasizing: we've implemented a [topology visualization](https://app.vllm-sr.ai/topology) capability. Beyond displaying static signal-decision relations, it reveals **real-time thinking chains** triggered by different queries—like watching a giant neural network built from semantics come alive. Each question illuminates different pathways through the model constellation, making the MoM routing logic intuitive and debuggable.
+One highlight worth emphasizing: we've implemented a [topology visualization](https://app.vllm-sr.ai/#try) capability. Beyond displaying static signal-decision relations, it reveals **real-time thinking chains** triggered by different queries—like watching a giant neural network built from semantics come alive. Each question illuminates different pathways through the model constellation, making the MoM routing logic intuitive and debuggable.
 
 ![Building Mixture-of-Models on AMD GPUs with vLLM-SR: Mom 7](/img/blog/vllm/semantic-router/mom-7.png)
 

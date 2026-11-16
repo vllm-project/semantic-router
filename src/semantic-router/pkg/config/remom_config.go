@@ -51,10 +51,7 @@ func ValidateReMoMAlgorithmConfig(cfg *ReMoMAlgorithmConfig) error {
 	if err := validateReMoMCompactionStrategy(cfg.CompactionStrategy); err != nil {
 		return err
 	}
-	if err := validateReMoMPositiveControls(cfg); err != nil {
-		return err
-	}
-	return validateReMoMOnError(cfg.OnError)
+	return validateReMoMPositiveControls(cfg)
 }
 
 func validateReMoMBreadthSchedule(schedule []int) error {
@@ -130,14 +127,5 @@ func validateReMoMCompactionStrategy(strategy string) error {
 			ReMoMCompactionLastNTokens,
 			strategy,
 		)
-	}
-}
-
-func validateReMoMOnError(onError string) error {
-	switch strings.TrimSpace(onError) {
-	case "", ReMoMOnErrorSkip, ReMoMOnErrorFail:
-		return nil
-	default:
-		return fmt.Errorf("on_error must be one of %q or %q, got %q", ReMoMOnErrorSkip, ReMoMOnErrorFail, onError)
 	}
 }

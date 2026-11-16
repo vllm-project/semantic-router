@@ -36,21 +36,22 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  decisions:
-    - name: urgent_business_route
-      description: Match only when business intent and urgent language appear together.
-      priority: 140
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-          - type: keyword
-            name: urgent_keywords
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: urgent_business_route
+        description: Match only when business intent and urgent language appear together.
+        priority: 140
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 ```
 
 当模型只应为一小段高置信度流量激活时，使用 `AND`。

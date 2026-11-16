@@ -53,7 +53,7 @@ decisions:
               - type: image_fixture
                 fixture: routing_pixel
         expected_signals:
-          conversation: [feedback_has_images]
+          input_modality: [feedback_has_images]
         tags: [language:en, multimodal, image, shape:messages]
 
   - id: feedback_verified_recovery
@@ -90,9 +90,10 @@ decisions:
           - role: user
             content: 'Verify this with sources: when did Apollo 11 land on the Moon?'
         expected_signals:
-          reask:
+          conversation: [two_prior_answers]
+          turn_relation:
             - persistently_dissatisfied
-          decision:
+          systemone:
             - sources
         tags:
           - language:en
@@ -131,7 +132,7 @@ decisions:
           - role: user
             content: "That is still wrong. Fix this Python function. It crashes with TypeError: list indices must be integers, not str."
         expected_signals:
-          decision: [code, wrong]
+          systemone: [code, wrong]
         tags: [feedback, code, boundary, messages, one-reask]
       - id: code_without_verification
         query: "The previous code is wrong and still raises TypeError. Fix it directly; do not research or cite sources."
@@ -160,7 +161,8 @@ decisions:
           - role: user
             content: "Still wrong. Fix this same Python function. It crashes with TypeError: list indices must be integers, not str."
         expected_signals:
-          reask: [persistently_dissatisfied]
+          conversation: [two_prior_answers]
+          turn_relation: [persistently_dissatisfied]
         tags: [feedback, code, persistent, messages]
       - id: repeated_javascript_type_error
         messages:
@@ -175,7 +177,8 @@ decisions:
           - role: user
             content: "Still wrong. Fix this same JavaScript function. It throws TypeError: cannot read properties of undefined."
         expected_signals:
-          reask: [persistently_dissatisfied]
+          conversation: [two_prior_answers]
+          turn_relation: [persistently_dissatisfied]
         tags: [feedback, code, persistent, messages, javascript]
       - id: repeated_code_with_sources
         messages:
@@ -190,9 +193,10 @@ decisions:
           - role: user
             content: Fix this Python function. It raises ValueError when parsing a date. Verify this with sources.
         expected_signals:
-          reask:
+          conversation: [two_prior_answers]
+          turn_relation:
             - persistently_dissatisfied
-          decision:
+          systemone:
             - code
             - sources
         tags:
@@ -229,7 +233,7 @@ decisions:
           - role: user
             content: Eso no es correcto, un huevo pasado por agua no se cocina veinte minutos. Explica otra vez la receta.
         expected_signals:
-          decision: [wrong]
+          systemone: [wrong]
         tags: [language:es, multi-turn, feedback]
       - id: compound_interest_retry
         query: "That answer was wrong. Explain compound interest vs simple interest again in plain English."
@@ -257,7 +261,8 @@ decisions:
           - role: user
             content: "Still wrong. Explain inflation vs recession in plain English."
         expected_signals:
-          reask: [persistently_dissatisfied]
+          conversation: [two_prior_answers]
+          turn_relation: [persistently_dissatisfied]
         tags: [feedback, general, persistent, messages]
       - id: repeated_pythagorean_retry
         messages:
@@ -272,7 +277,8 @@ decisions:
           - role: user
             content: "请问如何证明勾股定理？"
         expected_signals:
-          reask: [persistently_dissatisfied]
+          conversation: [two_prior_answers]
+          turn_relation: [persistently_dissatisfied]
         tags: [feedback, general, persistent, messages, zh, math]
       - id: repeated_integer_sum_proof
         messages:
@@ -287,7 +293,8 @@ decisions:
           - role: user
             content: Prove that the sum of the first n positive integers is n(n+1)/2.
         expected_signals:
-          reask:
+          conversation: [two_prior_answers]
+          turn_relation:
             - persistently_dissatisfied
         tags:
           - language:en
@@ -308,7 +315,8 @@ decisions:
           - role: user
             content: 为朋友写四句毕业祝福。
         expected_signals:
-          reask:
+          conversation: [two_prior_answers]
+          turn_relation:
             - persistently_dissatisfied
         tags:
           - language:zh
@@ -347,7 +355,7 @@ decisions:
           - role: user
             content: もう少し分かりやすく、簡単な例を一つ挙げて説明してください。
         expected_signals:
-          decision: [clarify]
+          systemone: [clarify]
         tags: [language:ja, multi-turn, clarification]
       - id: rainbow_clarification
         query: Explain your previous description of rainbows more clearly, with one example.
