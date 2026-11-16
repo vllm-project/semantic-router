@@ -1,12 +1,14 @@
 package classification
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -38,57 +40,120 @@ type ConversationFacts struct {
 const toolFailureRecoveryRun = 2
 
 // ToolFailureCount is the failed_tool_result fact: the failed tool results
-// of the current user turn since the last two consecutive successful ones.
-// The client resends the history every turn, so the count needs no session
-// state and reads the same on every replica.
+// of the current user turn since the last two successes with no failure
+// between them. The client resends the history every turn, so the count
+// needs no session state and reads the same on every replica.
 type ToolFailureCount struct {
 	Failed     int
 	successRun int
 }
 
-// Observe counts one tool result, in conversation order.
-func (c *ToolFailureCount) Observe(failed bool) {
-	if failed {
+// ToolResultStatus is what a tool result says about its call.
+type ToolResultStatus int
+
+const (
+	// ToolResultUnknown is a result that says neither, such as a command
+	// still running or a tool whose results carry no status.
+	ToolResultUnknown ToolResultStatus = iota
+	ToolResultFailed
+	ToolResultSucceeded
+)
+
+// Observe counts one tool result, in conversation order. An unknown result
+// changes nothing.
+func (c *ToolFailureCount) Observe(status ToolResultStatus) {
+	switch status {
+	case ToolResultFailed:
 		c.Failed++
 		c.successRun = 0
-		return
-	}
-	c.successRun++
-	if c.successRun >= toolFailureRecoveryRun {
-		c.Failed = 0
+	case ToolResultSucceeded:
+		c.successRun++
+		if c.successRun >= toolFailureRecoveryRun {
+			c.Failed = 0
+		}
 	}
 }
 
-// codexExitStatusPrefixes are the header lines in which Codex reports a
-// shell command's exit code: the shell tool's and exec_command's.
-var codexExitStatusPrefixes = []string{"Exit code: ", "Process exited with code "}
+// codexShellTools are the Codex tools that run a command, above whose
+// output Codex writes the command's exit code.
+var codexShellTools = map[string]bool{"shell": true, "shell_command": true, "exec_command": true, "write_stdin": true}
 
-// ToolResultFailed reports whether a tool result says it failed. The
-// client's flag, Anthropic is_error, decides when it is set. OpenAI Chat and
-// Responses tool outputs have no such field, so only the exit code Codex
-// writes into the header above a shell command's output counts. Codex ends
-// that header with an "Output:" line and the command's own output follows
-// it, so nothing the command prints is read as a status.
-func ToolResultFailed(isError *bool, text string) bool {
-	if isError != nil {
-		return *isError
+// codexHeaderKeys start the lines Codex writes above a command's output.
+var codexHeaderKeys = []string{
+	"Chunk ID: ", "Wall time: ", "Exit code: ", "Process exited with code ",
+	"Process running with session ID ", "Original token count: ", "Total output lines: ",
+}
+
+// ToolResultStatusOf reads the status of one tool result of a request in
+// format. call is the call it answers, nil when the request does not carry
+// it. A result whose flag, Anthropic is_error, is set failed. Claude Code
+// sets the flag on every failure, but a clear flag says the work succeeded
+// only for its Bash tool run in the foreground: a read, a plan update or a
+// command started in the background prove nothing. OpenAI Chat and Responses
+// outputs have no flag, so there only the exit code Codex writes above a
+// shell command's output counts.
+func ToolResultStatusOf(format llmprotocol.WireFormat, call *llmprotocol.ToolCall, isError *bool, text string) ToolResultStatus {
+	switch {
+	case isError != nil && *isError:
+		return ToolResultFailed
+	case call == nil || call.Namespace != "":
+		return ToolResultUnknown
+	case format == llmprotocol.AnthropicMessagesV1:
+		if call.Name == "Bash" && !runsInBackground(call.Arguments) {
+			return ToolResultSucceeded
+		}
+		return ToolResultUnknown
+	case codexShellTools[call.Name]:
+		return codexExitStatus(text)
+	default:
+		return ToolResultUnknown
 	}
+}
+
+func runsInBackground(arguments string) bool {
+	var input struct {
+		RunInBackground bool `json:"run_in_background"`
+	}
+	return json.Unmarshal([]byte(arguments), &input) == nil && input.RunInBackground
+}
+
+// codexExitStatus reads the header Codex ends with an "Output:" line above a
+// command's output. Every line of it must be a Codex header line, so neither
+// the command's output nor text from elsewhere passes for a status. A zero
+// exit code succeeded, any other failed, and a command still running has
+// none yet.
+func codexExitStatus(text string) ToolResultStatus {
 	header, _, found := strings.Cut(text, "\nOutput:\n")
 	if !found {
-		header, found = strings.CutSuffix(text, "\nOutput:")
+		return ToolResultUnknown
 	}
-	if !found {
-		return false
-	}
+	status := ToolResultUnknown
 	for _, line := range strings.Split(header, "\n") {
-		for _, prefix := range codexExitStatusPrefixes {
-			if status, ok := strings.CutPrefix(line, prefix); ok {
-				code, err := strconv.Atoi(status)
-				return err == nil && code != 0
+		key := codexHeaderKey(line)
+		switch key {
+		case "":
+			return ToolResultUnknown
+		case "Exit code: ", "Process exited with code ":
+			code, err := strconv.Atoi(line[len(key):])
+			if err != nil {
+				return ToolResultUnknown
+			}
+			status = ToolResultFailed
+			if code == 0 {
+				status = ToolResultSucceeded
 			}
 		}
 	}
-	return false
+	return status
+}
+
+func codexHeaderKey(line string) string {
+	for _, key := range codexHeaderKeys {
+		if strings.HasPrefix(line, key) {
+			return key
+		}
+	}
+	return ""
 }
 
 func (c *Classifier) evaluateConversationSignal(
