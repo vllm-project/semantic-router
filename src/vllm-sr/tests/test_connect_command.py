@@ -388,6 +388,47 @@ def test_undo_removes_what_it_created_and_keeps_what_changed_since(tmp_path):
     assert any(line.startswith("kept ") for line in report)
 
 
+@pytest.mark.parametrize("kind", ["toml", "json-env"])
+def test_undo_gives_back_the_file_byte_for_byte(tmp_path, kind):
+    pytest.importorskip("tomllib")
+    if kind == "toml":
+        # Codex's config.toml whose last line has no newline
+        path = tmp_path / "config.toml"
+        before = 'model = "gpt-5"\n\n[projects."/src/app"]\ntrust_level = "trusted"'
+        mine, theirs = '"trusted"', '"untrusted"'
+
+        def change(gateway):
+            return hc.codex_app_change(tmp_path, gateway, "vllm-sr/auto", "K")
+
+    else:
+        # Claude Code's settings as another tool wrote them, compact
+        path = tmp_path / "settings.json"
+        before = '{"theme": "dark", "env": {"FOO": "1"}}'
+        mine, theirs = '"dark"', '"light"'
+
+        def change(gateway):
+            return _claude(path, gateway)
+
+    path.write_text(before)
+    hc.apply_changes([change("http://a")], tmp_path)
+    hc.apply_changes([change("http://b")], tmp_path)
+    assert path.read_text() != before
+    hc.undo_changes(tmp_path)
+    assert path.read_bytes() == before.encode()
+
+    # an edit after connect wrote the file, or between two runs, is kept
+    for edit_before_second_run in (False, True):
+        path.write_text(before)
+        hc.apply_changes([change("http://a")], tmp_path)
+        if edit_before_second_run:
+            path.write_text(path.read_text().replace(mine, theirs))
+            hc.apply_changes([change("http://b")], tmp_path)
+        else:
+            path.write_text(path.read_text().replace(mine, theirs))
+        hc.undo_changes(tmp_path)
+        assert theirs in path.read_text() and "http://" not in path.read_text()
+
+
 def test_undo_does_not_recreate_a_file_deleted_since(tmp_path):
     path = tmp_path / "settings.json"
     path.write_text("{}")
@@ -2244,8 +2285,19 @@ def test_a_recipe_that_drops_what_no_longer_fits_advertises_each_decisions_large
     assert connect_command._context_window(doc, "vllm-sr/auto", None)[0] == 8192
 
 
-# What claude -p --output-format stream-json and codex exec --json print for a
-# check that passes: the command's call, its output, and the answer to it.
+# What the check's file holds in every run here, and what claude -p
+# --output-format stream-json and codex exec --json print for a check that
+# passes: the command's call, its output, and the answer to it.
+TOKEN = "vsr-check-0a1b2c3d"
+
+
+@pytest.fixture(autouse=True)
+def check_token(monkeypatch):
+    monkeypatch.setattr(
+        importlib.import_module("cli.harness_check"), "_token", lambda: TOKEN
+    )
+
+
 CLAUDE_EVENTS = [
     {"type": "system", "subtype": "init", "model": "vllm-sr/auto"},
     {
@@ -2257,7 +2309,7 @@ CLAUDE_EVENTS = [
                     "type": "tool_use",
                     "id": "t1",
                     "name": "Bash",
-                    "input": {"command": "echo vsr-check"},
+                    "input": {"command": "cat vsr-check.txt"},
                 }
             ],
         },
@@ -2269,7 +2321,7 @@ CLAUDE_EVENTS = [
                 {
                     "type": "tool_result",
                     "tool_use_id": "t1",
-                    "content": "vsr-check",
+                    "content": TOKEN,
                     "is_error": False,
                 }
             ]
@@ -2279,7 +2331,7 @@ CLAUDE_EVENTS = [
         "type": "assistant",
         "message": {"model": "qwen36", "content": [{"type": "text", "text": "ok"}]},
     },
-    {"type": "result", "subtype": "success", "is_error": False, "result": "vsr-check"},
+    {"type": "result", "subtype": "success", "is_error": False, "result": TOKEN},
 ]
 CODEX_EVENTS = [
     {"type": "thread.started", "thread_id": "th1"},
@@ -2288,13 +2340,13 @@ CODEX_EVENTS = [
         "type": "item.completed",
         "item": {
             "type": "command_execution",
-            "command": "bash -lc 'echo vsr-check'",
-            "aggregated_output": "vsr-check\n",
+            "command": "bash -lc 'cat vsr-check.txt'",
+            "aggregated_output": TOKEN + "\n",
             "exit_code": 0,
             "status": "completed",
         },
     },
-    {"type": "item.completed", "item": {"type": "agent_message", "text": "vsr-check"}},
+    {"type": "item.completed", "item": {"type": "agent_message", "text": TOKEN}},
     {"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}},
 ]
 
@@ -2304,8 +2356,8 @@ def checked_harness(tmp_path, monkeypatch):
     """A claude, a codex and a pi that answer --version, list a bundled gpt-5.5,
     and otherwise act out one --check run: they record how they were started and
     the models.json in Pi's agent directory, send a review request to
-    $FAKE_REVIEW_URL when Codex reviews approvals, then print $FAKE_EVENTS and
-    exit with $FAKE_EXIT."""
+    $FAKE_REVIEW_URL when Codex reviews approvals, then print $FAKE_EVENTS, and
+    $FAKE_STDERR on stderr, and exit with $FAKE_EXIT."""
     bin_dir = tmp_path / "check-bin"
     bin_dir.mkdir()
     record = tmp_path / "check-ran.json"
@@ -2331,6 +2383,7 @@ def checked_harness(tmp_path, monkeypatch):
             "agent = os.environ.get('PI_CODING_AGENT_DIR') or ''\n"
             "models = os.path.join(agent, 'models.json')\n"
             "json.dump({'args': args, 'cwd': os.getcwd(), 'agent': agent,"
+            " 'file': open('vsr-check.txt').read() if os.path.exists('vsr-check.txt') else None,"
             " 'models': open(models).read() if os.path.exists(models) else None,"
             " 'settings': open(given).read() if given else None,"
             " 'catalog': json.load(open(json.loads(catalog[0]))) if catalog else None,"
@@ -2343,6 +2396,7 @@ def checked_harness(tmp_path, monkeypatch):
             "time.sleep(float(os.environ.get('FAKE_SLEEP', '0')))\n"
             "for event in json.loads(os.environ.get('FAKE_EVENTS', '[]')):\n"
             "    print(json.dumps(event))\n"
+            "sys.stderr.write(os.environ.get('FAKE_STDERR', ''))\n"
             "sys.exit(int(os.environ.get('FAKE_EXIT', '0')))\n"
         )
         script.chmod(0o755)
@@ -2370,14 +2424,20 @@ def test_check_runs_claude_code_on_the_settings_connect_wrote(
     assert "Harness ok 2.1.325 (Claude Code) at " in output
     assert "Login ok the gateway answered, as qwen36" in output
     assert (
-        "Tool round trip ok ran echo vsr-check and answered with its output" in output
+        "Tool round trip ok ran cat vsr-check.txt and answered with its output"
+        in output
     )
     assert "sk-secret" not in result.output
     ran = json.loads(checked_harness.read_text())
     settings = tmp_path / "claude" / "settings.json"
-    assert ran["args"][:2] == ["-p", rc_prompt()]
+    assert ran["args"][:2] == ["-p", rc_prompt("Bash")]
+    # each harness is told the name its own shell tool has
+    assert "with your Bash tool," in ran["args"][1]
     assert ran["args"][ran["args"].index("--settings") + 1] == str(settings)
-    assert "Bash(echo vsr-check)" in ran["args"]
+    assert "Bash(cat vsr-check.txt)" in ran["args"]
+    # the file it shows holds a token the prompt does not, so a model cannot
+    # answer without running the command
+    assert ran["file"] == TOKEN + "\n" and TOKEN not in ran["args"][1]
     assert "--no-session-persistence" in ran["args"]
     # its own temporary directory, gone afterwards, and no stdin to wait on
     assert ran["stdin_closed"] and not Path(ran["cwd"]).exists()
@@ -2395,8 +2455,8 @@ def test_check_runs_claude_code_on_the_settings_connect_wrote(
     assert not settings.exists()
 
 
-def rc_prompt():
-    return importlib.import_module("cli.harness_check").PROMPT
+def rc_prompt(tool):
+    return importlib.import_module("cli.harness_check").PROMPT.format(tool=tool)
 
 
 def test_a_failed_check_names_the_step_and_hides_the_key(
@@ -2435,7 +2495,7 @@ def test_a_failed_check_names_the_step_and_hides_the_key(
     )
     result = CliRunner().invoke(main, args)
     assert result.exit_code == 1
-    assert "answered without running echo vsr-check" in _flat(result.output)
+    assert "answered without running cat vsr-check.txt" in _flat(result.output)
 
 
 def test_check_without_the_harness_or_in_time_fails(
@@ -2464,6 +2524,31 @@ def test_check_without_the_harness_or_in_time_fails(
     for other in (["--launch"], ["--undo"]):
         result = CliRunner().invoke(main, ["connect", "codex", "--check", *other])
         assert result.exit_code == 2 and "does not take --check" in result.output
+
+
+def test_a_harness_that_stops_before_its_run_is_no_login_failure(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    # Codex 0.166 on a config.toml it cannot load prints this and no event
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv(
+        "FAKE_STDERR",
+        "WARNING: proceeding, even though we could not create PATH aliases\n"
+        "Error loading config.toml: invalid transport\n"
+        "in `mcp_servers.other`\n\n",
+    )
+    monkeypatch.setenv("FAKE_EXIT", "1")
+    args = ["connect", "codex", "--app", "--base-url", url, "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, [*args, "--check"])
+    assert result.exit_code == 1
+    output = _flat(result.output)
+    assert (
+        "Harness failed codex exited with status 1 before it ran the task: Error"
+        " loading config.toml: invalid transport in `mcp_servers.other`" in output
+    )
+    assert "Login not run" in output and "Tool round trip not run" in output
+    assert "Login failed" not in output
 
 
 REVIEW_DOC = {
@@ -2512,12 +2597,14 @@ def test_check_sees_codex_send_its_approval_review_to_the_review_entrypoint(
     assert result.exit_code == 0, result.output
     output = _flat(result.output)
     assert "Harness ok codex-cli 0.166.0 at " in output
-    assert "Tool round trip ok ran echo vsr-check" in output
+    assert "Tool round trip ok ran cat vsr-check.txt" in output
     assert "Approval review ok went to vllm-sr/review (replay r" in output
     ran = json.loads(checked_harness.read_text())
     assert ran["args"][:3] == ["exec", "--profile", "vllm-sr"]
     assert "--approve-for-me" in ran["args"] and "--ephemeral" in ran["args"]
-    assert ran["args"][-1] == hk.REVIEW_PROMPT and ran["stdin_closed"]
+    assert ran["args"][-1] == hk.REVIEW_PROMPT.format(tool="exec_command")
+    assert "with your exec_command tool outside" in ran["args"][-1]
+    assert ran["stdin_closed"]
 
     # without the Router's replay list the review is not observed, which passes
     management["management_api"]["port"] = 9
@@ -3283,6 +3370,36 @@ def test_a_launch_needs_git_only_for_a_worktree(
         assert "a worktree needs git, which is not on PATH" in result.output
 
 
+def test_connect_sessions_lists_a_launch_without_git_and_its_state_as_unknown(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home"))
+    # a worktree connect made while git was there, then a launch without git
+    made = hs.Workspace(tmp_path / "repo-fix", "vllm-sr/fix", tmp_path / "repo", "a1")
+    hs.record("s-made", "codex", made, tmp_path / "home", url, "vllm-sr/auto")
+    monkeypatch.setenv("PATH", str(harness_bin.parent / "bin"))
+    launch = ["connect", "codex", "--base-url", url, "--launch"]
+    assert CliRunner().invoke(main, launch).exit_code == 3
+    result = CliRunner().invoke(main, ["connect", "sessions"])
+    assert result.exit_code == 0, result.output
+    text = _flat(result.output)
+    unknown = "git state unknown: git is not on PATH, and the state needs it"
+    assert f"worktree {tmp_path} home" in text
+    assert f"state {unknown} cleanup none: this launch did not make the" in text
+    assert (
+        f"state worktree removed, {unknown} cleanup unknown: git is not on PATH,"
+        " and the cleanup steps need it" in text
+    )
+    result = CliRunner().invoke(main, ["connect", "sessions", "--json"])
+    states = [s["state"] for s in json.loads(result.output)["sessions"]]
+    assert states == [
+        {"worktree": "present", "git": "not on PATH"},
+        {"worktree": "removed", "git": "not on PATH"},
+    ]
+
+
 def test_a_key_command_gets_no_longer_than_the_harness_gives_it(
     tmp_path, gateway, monkeypatch
 ):
@@ -3476,7 +3593,7 @@ PI_EVENTS = [
                     "type": "toolCall",
                     "id": "c1",
                     "name": "bash",
-                    "arguments": {"command": "echo vsr-check"},
+                    "arguments": {"command": "cat vsr-check.txt"},
                 }
             ],
             "model": "vllm-sr/auto",
@@ -3488,14 +3605,14 @@ PI_EVENTS = [
         "type": "tool_execution_end",
         "toolCallId": "c1",
         "toolName": "bash",
-        "result": {"content": [{"type": "text", "text": "vsr-check\n"}]},
+        "result": {"content": [{"type": "text", "text": TOKEN + "\n"}]},
         "isError": False,
     },
     {
         "type": "message_end",
         "message": {
             "role": "assistant",
-            "content": [{"type": "text", "text": "vsr-check"}],
+            "content": [{"type": "text", "text": TOKEN}],
             "model": "vllm-sr/auto",
             "responseModel": "qwen36",
             "stopReason": "stop",
@@ -3968,6 +4085,39 @@ def test_claude_code_and_codex_check_the_login_of_their_own_entrypoint(
     assert auto.exit_code == 1 and f"own {other} login upstream" in _flat(auto.output)
 
 
+@pytest.mark.parametrize("role", ["review_model", "memory_model"])
+def test_codex_checks_the_login_of_its_review_and_memory_entrypoints(
+    tmp_path, gateway, harness_bin, monkeypatch, role
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    doc = _two_entrypoints(caller=True)
+    # Codex asks vllm-sr/chat, whose models take a key, and calls vllm-sr/auto,
+    # which reaches the caller backend, for its reviews or memories
+    doc["entrypoints"][1][role] = "vllm-sr/auto"
+    login = doc["providers"]["models"][1]["backend_refs"][0]
+    login["provider"] = "anthropic"
+    config = tmp_path / "router.yaml"
+    config.write_text(yaml.safe_dump(doc))
+    args = ["connect", "codex", "--config", str(config), "--base-url", url]
+    args += ["--model", "vllm-sr/chat", "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 1, result.output
+    assert (
+        f"own anthropic login upstream for vllm-sr/auto, the {role} of vllm-sr/chat,"
+        " and Codex sends its openai login, so every call to it would be refused"
+    ) in _flat(result.output)
+    assert not (tmp_path / "codex" / "vllm-sr.config.toml").exists()
+    # one that takes Codex's own login has Codex send it to every entrypoint
+    login["provider"] = "openai"
+    config.write_text(yaml.safe_dump(doc))
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    written = (tmp_path / "codex" / "vllm-sr.config.toml").read_text()
+    assert "requires_openai_auth = true" in written and "env_key" not in written
+
+
 def test_claude_code_asks_for_no_more_output_than_its_models_allow(
     tmp_path, gateway, monkeypatch
 ):
@@ -4152,9 +4302,11 @@ def test_check_runs_pi_on_the_provider_connect_wrote(
     assert "Harness ok 1.5.2 at " in output
     assert "Login ok the gateway answered, as qwen36" in output
     assert (
-        "Tool round trip ok ran echo vsr-check and answered with its output" in output
+        "Tool round trip ok ran cat vsr-check.txt and answered with its output"
+        in output
     )
     ran = json.loads(checked_harness.read_text())
+    assert ran["file"] == TOKEN + "\n" and TOKEN not in ran["args"][-1]
     assert ran["args"][:7] == [
         "--mode",
         "json",
@@ -4164,7 +4316,9 @@ def test_check_runs_pi_on_the_provider_connect_wrote(
         "vllm-sr/auto",
         "--tools",
     ]
-    assert "--no-session" in ran["args"] and ran["args"][-1] == rc_prompt()
+    assert "--no-session" in ran["args"] and ran["args"][-1] == rc_prompt("bash")
+    # Pi's only tool is bash: a model told of a shell tool answered without it
+    assert "with your bash tool," in ran["args"][-1]
     # the user's own agent directory, with the provider written there
     assert ran["agent"] == str(pi_home)
     assert ran["stdin_closed"] and not Path(ran["cwd"]).exists()
@@ -4370,6 +4524,7 @@ def test_codex_app_check_runs_codex_without_a_profile(
     assert result.exit_code == 0, result.output
     ran = json.loads(checked_harness.read_text())
     assert ran["args"][0] == "exec" and "--profile" not in ran["args"]
+    assert "with your exec_command tool," in ran["args"][-1]
     assert (tmp_path / "codex" / "config.toml").exists()
 
 

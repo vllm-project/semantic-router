@@ -1,9 +1,9 @@
 """Run the harness itself once through the gateway, as `vllm-sr connect --check` does.
 
-The run is one small task in a temporary directory: the harness runs a harmless
-shell command and answers with its output. The harness reads its own settings
-and credentials; this module only reads what the harness prints, and hides any
-secret in a line before showing it.
+The run is one small task in a temporary directory: the harness shows a file
+the check writes there with a harmless shell command and answers with what it
+holds. The harness reads its own settings and credentials; this module only
+reads what the harness prints, and hides any secret in a line before showing it.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import signal
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from secrets import token_hex
 
 from cli.harness_connect import SECRET_NAME
 from cli.router_management_client import (
@@ -25,16 +26,22 @@ from cli.router_management_client import (
 )
 
 WORD = "vsr-check"
-COMMAND = f"echo {WORD}"
+# The file holds a token new for each run, so a model cannot answer without
+# running the command: told to run echo vsr-check, qwen36 in Pi answered
+# vsr-check without a tool call in most runs.
+FILE = f"{WORD}.txt"
+COMMAND = f"cat {FILE}"
+# {tool} is the harness's own name for its shell tool: Bash in Claude Code,
+# exec_command in Codex (0.166) and bash in Pi.
 PROMPT = (
-    f"Run the shell command `{COMMAND}` with your shell tool, then reply with its"
-    " output and nothing else."
+    f"Run the shell command `{COMMAND}` with your {{tool}} tool, then reply with"
+    " its output and nothing else."
 )
 # A reviewer sees a command only once it asks to leave the sandbox.
 REVIEW_PROMPT = (
-    f"Run the shell command `{COMMAND}` with your shell tool outside the sandbox,"
-    ' asking for escalated permissions with the justification "vllm-sr connect'
-    ' check", then reply with its output and nothing else.'
+    f"Run the shell command `{COMMAND}` with your {{tool}} tool outside the"
+    ' sandbox, asking for escalated permissions with the justification "vllm-sr'
+    ' connect check", then reply with its output and nothing else.'
 )
 # Seconds for the whole run: a start, a tool call and the answer to its result.
 TIMEOUT = 120
@@ -55,7 +62,7 @@ def claude_argv(settings: Path) -> list[str]:
     return [
         "claude",
         "-p",
-        PROMPT,
+        PROMPT.format(tool="Bash"),
         "--settings",
         str(settings),
         "--output-format",
@@ -83,7 +90,7 @@ def codex_argv(config: list[str], workdir: Path, review: bool) -> list[str]:
         "--skip-git-repo-check",
         "-C",
         str(workdir),
-        REVIEW_PROMPT if review else PROMPT,
+        (REVIEW_PROMPT if review else PROMPT).format(tool="exec_command"),
     ]
 
 
@@ -91,7 +98,7 @@ def pi_argv(provider: str, model: str) -> list[str]:
     """pi in JSON mode on the provider connect wrote, with its shell tool only
     and nothing of its own loaded: no session file, extension, skill or
     instruction file. Pi has no per-command allowlist, so it runs whatever the
-    model asks for in the check's empty directory."""
+    model asks for in the check's directory, which holds only its file."""
     return [
         "pi",
         "--mode",
@@ -106,7 +113,7 @@ def pi_argv(provider: str, model: str) -> list[str]:
         "--no-extensions",
         "--no-skills",
         "--no-context-files",
-        PROMPT,
+        PROMPT.format(tool="bash"),
     ]
 
 
@@ -130,16 +137,25 @@ def run(
         return [Row("Harness", "failed", f"{argv[0]} is not on PATH"), *later]
     harness_row = Row("Harness", "ok", f"{_version(found, env) or argv[0]} at {found}")
     before = _reviews(management, review_model) if review_model else None
+    token = _token()
+    (workdir / FILE).write_text(f"{token}\n", encoding="utf-8")
     try:
         out, err, code, timed_out = _run_harness([found, *argv[1:]], env, workdir)
     except OSError as exc:
         return [Row("Harness", "failed", f"{found} did not start: {exc}"), *later]
     events = _json_lines(out)
+    hidden = [*secrets, *(v for k, v in env.items() if SECRET_NAME.search(k))]
+    if not events and not timed_out:
+        # no event: it stopped before it ran the task, so no login was tried,
+        # as when Codex cannot load its config.toml
+        why = f"{argv[0]} exited with status {code} before it ran the task"
+        cause = _cause(err)
+        failed = Row("Harness", "failed", f"{why}: {cause}" if cause else why)
+        return _hide([failed, *later], hidden)
     rows_of = {"claude-code": _claude_rows, "pi": _pi_rows}.get(harness, _codex_rows)
-    login, tool = rows_of(events)
+    login, tool = rows_of(events, token)
     if login.state == "failed" and not login.detail:
-        last = [line for line in err.splitlines() if line.strip()]
-        login.detail = last[-1] if last else f"{argv[0]} exited with status {code}"
+        login.detail = _cause(err) or f"{argv[0]} exited with status {code}"
     rows = [harness_row, login, tool]
     if review_model:
         rows.append(_review_row(management, review_model, before))
@@ -153,10 +169,26 @@ def run(
             for row in rows
         ]
     rows.append(_exit_row(argv[0], events, err, code, timed_out))
-    hidden = [*secrets, *(v for k, v in env.items() if SECRET_NAME.search(k))]
+    return _hide(rows, hidden)
+
+
+def _hide(rows: list[Row], secrets: list[str]) -> list[Row]:
     for row in rows:
-        row.detail = shown(row.detail, hidden)
+        row.detail = shown(row.detail, secrets)
     return rows
+
+
+def _cause(err: str) -> str:
+    """Why a harness stopped, from its stderr: the last line that starts with
+    "error" and those after it, where Codex says what the error is in, else the
+    last line."""
+    lines = [line.strip() for line in err.splitlines() if line.strip()]
+    errors = [i for i, line in enumerate(lines) if line.lower().startswith("error")]
+    return " ".join(lines[errors[-1] if errors else -1 :]) if lines else ""
+
+
+def _token() -> str:
+    return f"{WORD}-{token_hex(4)}"
 
 
 def shown(text: str, secrets: list[str]) -> str:
@@ -229,7 +261,7 @@ def _json_lines(text: str) -> list[dict]:
     return events
 
 
-def _claude_rows(events: list[dict]) -> tuple[Row, Row]:
+def _claude_rows(events: list[dict], token: str) -> tuple[Row, Row]:
     """From claude -p's stream-json: a reply the gateway gave, and the command's
     call, its result and the answer to it."""
     replies = [e.get("message") or {} for e in events if e.get("type") == "assistant"]
@@ -256,14 +288,14 @@ def _claude_rows(events: list[dict]) -> tuple[Row, Row]:
         if isinstance(b, dict) and b.get("type") == "tool_result"
     ]
     ran = any(
-        WORD in json.dumps(b.get("content")) and not b.get("is_error") for b in results
+        token in json.dumps(b.get("content")) and not b.get("is_error") for b in results
     )
     answer = str(result.get("result") or "")
-    final = not result.get("is_error") and WORD in answer
+    final = not result.get("is_error") and token in answer
     return login, _tool_row(called, ran, final, results and results[0].get("content"))
 
 
-def _codex_rows(events: list[dict]) -> tuple[Row, Row]:
+def _codex_rows(events: list[dict], token: str) -> tuple[Row, Row]:
     """From codex exec --json: a turn the gateway answered, and the command run,
     its output and the answer after it."""
     items = [e.get("item") or {} for e in events if e.get("type") == "item.completed"]
@@ -288,13 +320,13 @@ def _codex_rows(events: list[dict]) -> tuple[Row, Row]:
         (
             i
             for i in commands
-            if i.get("exit_code") == 0 and WORD in str(i.get("aggregated_output"))
+            if i.get("exit_code") == 0 and token in str(i.get("aggregated_output"))
         ),
         None,
     )
     after = items[items.index(ran) + 1 :] if ran else []
     final = any(
-        i.get("type") == "agent_message" and WORD in str(i.get("text")) for i in after
+        i.get("type") == "agent_message" and token in str(i.get("text")) for i in after
     )
     first = commands[0].get("aggregated_output") if commands else None
     return login, _tool_row(bool(commands), ran is not None, final, first)
@@ -324,9 +356,9 @@ def _exit_row(name: str, events: list[dict], err: str, code: int, timed_out) -> 
     why += [f"reported a failure: {text}" for text in failures[-1:]]
     if not why:
         return Row("Exit", "ok", f"{name} exited with status 0")
-    last = [line for line in err.splitlines() if line.strip()]
-    if code and not failures and last:
-        why[0] += f": {last[-1]}"
+    cause = _cause(err)
+    if code and not failures and cause:
+        why[0] += f": {cause}"
     return Row("Exit", "failed", f"{name} {' and '.join(why)}")
 
 
@@ -334,7 +366,7 @@ def _exit_row(name: str, events: list[dict], err: str, code: int, timed_out) -> 
 FAILED_STOPS = ("error", "aborted")
 
 
-def _pi_rows(events: list[dict]) -> tuple[Row, Row]:
+def _pi_rows(events: list[dict], token: str) -> tuple[Row, Row]:
     """From pi --mode json: a reply the gateway gave, and the command's call, its
     run and the answer after it."""
     ended = [
@@ -369,12 +401,12 @@ def _pi_rows(events: list[dict]) -> tuple[Row, Row]:
         (
             i
             for i, e in runs
-            if not e.get("isError") and WORD in json.dumps(e.get("result"))
+            if not e.get("isError") and token in json.dumps(e.get("result"))
         ),
         None,
     )
     final = ran is not None and any(
-        index > ran and WORD in _text_of(message.get("content"))
+        index > ran and token in _text_of(message.get("content"))
         for index, message in answered
     )
     output = (runs[0][1].get("result") or {}).get("content") if runs else None

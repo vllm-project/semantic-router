@@ -193,6 +193,8 @@ sits beside the settings as `vllm-sr-status-line.py`, and `--undo` puts back
 the status line you had before.
 `--undo` puts back what each key, or the Codex profile, held before the first
 run, leaves alone what changed since, and keeps everything else in the files.
+A file nothing else changed since the command wrote it gets back the very bytes
+it had, its formatting and a missing final newline included.
 
 ### Check and status
 
@@ -206,14 +208,19 @@ vllm-sr connect status
 with the settings the command wrote, `codex exec --profile vllm-sr`, or
 `pi --mode json --provider vllm-sr` ([Pi](#pi)), and with `--dry-run` the
 settings it would write, given for that run only. The
-harness works in a temporary directory, is asked to run `echo vsr-check` and
-answer with its output, and is stopped after 120 seconds. This spends a few
-short model calls on your login or key. The harness reads its own credentials
+harness works in a temporary directory, where the check writes `vsr-check.txt`
+with a token new for each run, is asked to run `cat vsr-check.txt` with its
+shell tool, named as the harness names it (`Bash` in Claude Code,
+`exec_command` in Codex, `bash` in Pi), and answer with its output, which the
+model cannot know without running the command, and is stopped after 120
+seconds. This spends a few short model calls on your login or key. The harness reads its own credentials
 as it always does, and the lines shown hide the gateway key, the value of any
 variable whose name says it holds a secret, and bearer tokens. Each step gets a
 line, and a failed one fails the command:
 
-- `Harness`: found on `PATH`, with its version.
+- `Harness`: found on `PATH`, with its version. A harness that exits before
+  it runs the task, as Codex does on a `config.toml` it cannot load, fails
+  here with the error it printed, and the steps after it do not run.
 - `Login`: the gateway answered, so the key or login the harness sent was
   accepted.
 - `Tool round trip`: the command ran and the model answered with its output.
@@ -372,7 +379,9 @@ changes and unmerged commits too, but `git worktree remove` deletes the files
 git ignores there, such as build output or a `.env`, so the steps then start by
 saying how many paths it deletes. A launch with `--worktree <path>` or none is
 listed but never offered for removal, since that launch did not make the
-worktree. The record stays after the cleanup, so the list keeps the session id
+worktree. Without git on `PATH`, as for a launch with no `--worktree`, each
+session is listed with its state unknown and no cleanup step, since both come
+from git. The record stays after the cleanup, so the list keeps the session id
 to look up in Insights.
 
 ### Fetch the key with a command
@@ -588,8 +597,12 @@ and does not probe the gateway, which answers only on Codex's own login. Each
 `connect` command stops before writing anything when the caller backends of the
 models its `--model` entrypoint reaches name the other provider: the Router takes
 an `anthropic` login only on Messages and an `openai` one only on Responses or
-Chat, so every call would be refused. A caller backend only another entrypoint
-reaches does not stop it. The plan's usage limits apply to each call, and a cost and the login
+Chat, so every call would be refused. For Codex this covers the entrypoint's
+`memory_model` and, when the catalog sends reviews there, its `review_model`,
+and the message names the one that failed; a caller backend of Codex's own
+provider on either has Codex send its login too. A caller backend only another
+entrypoint reaches does not stop it. The plan's usage limits apply to each
+call, and a cost and the login
 work as for Claude Code above, with `gpt-6.1-sol` on an `openai` backend for
 example.
 
