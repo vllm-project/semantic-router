@@ -158,6 +158,7 @@ class TestRouterReplayPluginConfig:
         assert config.max_tool_trace_bytes is None
         assert config.max_tool_trace_total_bytes is None
         assert config.max_tool_trace_steps is None
+        assert config.cost_baseline_model is None
 
     @pytest.mark.parametrize(
         "overrides",
@@ -176,6 +177,7 @@ class TestRouterReplayPluginConfig:
             {"prompt_capture": "raw", "max_prompt_bytes": 262144},
             {"max_tool_trace_total_bytes": 0},
             {"prompt_capture": "raw", "max_tool_trace_total_bytes": 1048576},
+            {"cost_baseline_model": "premium-model"},
         ],
     )
     def test_router_replay_serialization_preserves_explicit_overrides(self, overrides):
@@ -197,6 +199,8 @@ class TestRouterReplayPluginConfig:
             {"max_records": -1},
             {"max_body_bytes": -1},
             {"replay_personal_data": False},
+            {"cost_baseline_model": ""},
+            {"cost_baseline_model": 3},
         ],
     )
     def test_router_replay_rejects_invalid_capture_overrides(self, overrides):

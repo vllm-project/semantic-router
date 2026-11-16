@@ -123,7 +123,15 @@ harness-markdown-bootstrap: harness-node-bootstrap ## Install repo-local markdow
 		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" --no-audit --no-fund --loglevel=error markdownlint-cli@$(AGENT_MARKDOWNLINT_VERSION); \
 	fi
 
-agent-plugins-test: harness-node-bootstrap ## Run the vSR agent plugins' tests: Claude Code's engine tests and both plugins' Python tests
+agent-vscode-test: harness-node-bootstrap ## Run the VS Code extension's tests against a fake gateway
+	@$(LOG_TARGET)
+	@NODE_PATH="$$PATH"; \
+	if ! command -v npm >/dev/null 2>&1; then NODE_PATH="$(AGENT_NODEENV)/bin:$$NODE_PATH"; fi; \
+	cd src/agent-harness/vscode && \
+		PATH="$$NODE_PATH" npm ci --no-audit --no-fund --loglevel=error && \
+		PATH="$$NODE_PATH" npm test
+
+agent-plugins-test: harness-node-bootstrap agent-vscode-test ## Run the agent plugins' tests: Claude Code's engine tests, both vSR plugins' Python tests and the VS Code extension's tests
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/setup/scripts
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts

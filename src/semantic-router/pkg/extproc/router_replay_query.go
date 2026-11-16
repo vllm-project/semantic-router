@@ -37,6 +37,9 @@ func (filters routerReplayFilters) storageFilters() store.QueryFilters {
 	return store.QueryFilters{
 		Search: filters.search, Recipe: filters.recipe, Decision: filters.decision,
 		Model: filters.model, CacheStatus: filters.cacheStatus, SessionID: filters.sessionID,
+		RequestKind: filters.review.requestKind, ReviewStatus: filters.review.status,
+		ReviewOutcome: filters.review.outcome, ReviewRisk: filters.review.risk,
+		TurnID: filters.turnID,
 	}
 }
 

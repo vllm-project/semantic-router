@@ -31,6 +31,9 @@ export const X_AUTHZ_USER_ID = 'x-authz-user-id'
 /** Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_SESSION_ID = 'x-claude-code-session-id'
 
+/** Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it, files an approval review under the session it judged, and providers receive it. Surface: control. */
+export const X_CODEX_TURN_METADATA = 'x-codex-turn-metadata'
+
 /** `nosniff` on Router Replay management responses. Surface: public. */
 export const X_CONTENT_TYPE_OPTIONS = 'x-content-type-options'
 

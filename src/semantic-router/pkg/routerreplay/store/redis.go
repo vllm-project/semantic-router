@@ -352,6 +352,7 @@ func (r *RedisStore) UpdateUsageCost(ctx context.Context, id string, usage Usage
 		record.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 		record.Currency = cloneStringPtr(usage.Currency)
 		record.BaselineModel = cloneStringPtr(usage.BaselineModel)
+		record.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 		return true
 	})
 }
@@ -360,6 +361,14 @@ func (r *RedisStore) UpdateUsageCost(ctx context.Context, id string, usage Usage
 func (r *RedisStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	return r.updateRecord(ctx, id, func(record *Record) bool {
 		record.ToolTrace = cloneToolTrace(&trace)
+		return true
+	})
+}
+
+// UpdateReview replaces the approval review of a record.
+func (r *RedisStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.Review = CloneReview(&review)
 		return true
 	})
 }

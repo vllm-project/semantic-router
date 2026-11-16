@@ -1,6 +1,10 @@
 package config
 
-import "strings"
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
 
 // InferenceAPI identifies an inference contract independently of its HTTP path.
 // Chat and System One have separate routing namespaces; neither inherits the
@@ -79,4 +83,54 @@ func (c *RouterConfig) DefaultEntrypointNames() []string {
 		}
 	}
 	return append(marked, others...)
+}
+
+// ValidateDelegateModels checks the approval-review and memory bindings in the
+// public routing table. Their targets use the same inference namespace and
+// cannot delegate again.
+func (c *RouterConfig) ValidateDelegateModels() error {
+	for index, entrypoint := range c.Entrypoints {
+		api := entrypoint.API
+		if api == "" {
+			api = ChatAPI
+		}
+		for _, delegate := range []struct{ field, model string }{
+			{"review_model", entrypoint.ReviewModel},
+			{"memory_model", entrypoint.MemoryModel},
+		} {
+			field, model := delegate.field, strings.TrimSpace(delegate.model)
+			if model == "" {
+				continue
+			}
+			if slices.Contains(entrypoint.ModelNames, model) {
+				return fmt.Errorf("entrypoints[%d].%s: cannot reference its own model name %q", index, field, model)
+			}
+			target, ok := c.ResolveEntrypoint(api, model)
+			if !ok {
+				return fmt.Errorf("entrypoints[%d].%s: unknown entrypoint model %q in %s API", index, field, model, api)
+			}
+			if strings.TrimSpace(target.ReviewModel) != "" || strings.TrimSpace(target.MemoryModel) != "" {
+				return fmt.Errorf("entrypoints[%d].%s: target %q must not have a review_model or memory_model", index, field, model)
+			}
+		}
+	}
+	return nil
+}
+
+// IsReviewEntrypoint reports whether model names an entrypoint that another
+// entrypoint uses as its review_model, under any of the target's names.
+func (c *RouterConfig) IsReviewEntrypoint(api InferenceAPI, model string) bool {
+	if c == nil {
+		return false
+	}
+	target, ok := c.ResolveEntrypoint(api, model)
+	if !ok {
+		return false
+	}
+	for _, entrypoint := range c.EffectiveEntrypoints(api) {
+		if review := strings.TrimSpace(entrypoint.ReviewModel); review != "" && slices.Contains(target.ModelNames, review) {
+			return true
+		}
+	}
+	return false
 }

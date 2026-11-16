@@ -133,6 +133,7 @@
           "remove": [
             "api-key",
             "api-subscription-key",
+            "chatgpt-account-id",
             "content-length",
             "ocp-apim-subscription-key",
             "x-api-key",

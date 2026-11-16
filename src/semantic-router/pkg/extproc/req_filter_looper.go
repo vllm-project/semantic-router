@@ -34,6 +34,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
@@ -727,7 +728,7 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	// Replay; the public response surface keeps only aggregate Looper headers.
 	reqCtx.VSRLooperDiagnostics = looperReplayDiagnostics(resp.ExecutionTrace)
 	r.startRouterReplay(reqCtx, originalModel, resp.Model, decision.Name)
-	r.updateLooperReplayUsage(reqCtx, resp.Usage)
+	r.updateLooperReplayUsage(reqCtx, resp.Usage, resp.Iterations)
 	if resp.Usage.PromptTokens > 0 || resp.Usage.CompletionTokens > 0 {
 		// Looper usage is an aggregate across potentially differently priced
 		// calls. Preserve continuity and token totals without charging the whole
@@ -747,7 +748,7 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	plan.commit()
 }
 
-func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper.TokenUsage) {
+func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper.TokenUsage, calls int) {
 	promptTokens := int(usage.PromptTokens)
 	completionTokens := int(usage.CompletionTokens)
 	totalTokens := int(usage.TotalTokens)
@@ -756,12 +757,16 @@ func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper
 	}
 
 	// A looper result can aggregate differently priced model calls. Persist its
-	// exact reported token counts, but leave pricing fields unset rather than
-	// attributing the whole cascade to the selected model's price.
+	// exact reported token counts, but leave the model cost unset rather than
+	// attributing the whole cascade to the selected model's price: each
+	// attempt's own price is the request's router-call cost.
 	r.updateRouterReplayUsageCost(ctx, routerreplay.UsageCost{
 		PromptTokens:     replayIntPtr(promptTokens),
 		CompletionTokens: replayIntPtr(completionTokens),
 		TotalTokens:      replayIntPtr(totalTokens),
+		CostAccounting: &store.CostAccounting{
+			RouterCalls: []store.RouterCallCost{looperRouterCalls(ctx.VSRLooperDiagnostics, usage, calls)},
+		},
 	})
 }
 

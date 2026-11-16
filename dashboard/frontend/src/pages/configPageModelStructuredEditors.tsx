@@ -19,8 +19,9 @@ interface StructuredModelFieldProps {
   maskSensitive?: boolean
 }
 
-/** A backend ref as the editor shows it: its auth block as three fields. */
+/** A backend ref as the editor shows it: its auth block as four fields. */
 type EditableBackendRef = Omit<BackendRefEntry, 'auth'> & {
+  auth_credential?: NonNullable<BackendRefEntry['auth']>['credential']
   auth_header?: string
   auth_prefix?: string
   api_key_env?: string
@@ -28,6 +29,7 @@ type EditableBackendRef = Omit<BackendRefEntry, 'auth'> & {
 
 function editableBackendRef({ auth, ...backendRef }: BackendRefEntry): EditableBackendRef {
   const editable: EditableBackendRef = { ...backendRef }
+  if (auth?.credential !== undefined) editable.auth_credential = auth.credential
   if (auth?.header !== undefined) editable.auth_header = auth.header
   if (auth?.prefix !== undefined) editable.auth_prefix = auth.prefix
   if (auth?.api_key_env !== undefined) editable.api_key_env = auth.api_key_env
@@ -35,12 +37,14 @@ function editableBackendRef({ auth, ...backendRef }: BackendRefEntry): EditableB
 }
 
 function backendRefFromEditor({
+  auth_credential: credential,
   auth_header: header,
   auth_prefix: prefix,
   api_key_env: apiKeyEnv,
   ...backendRef
 }: EditableBackendRef): BackendRefEntry {
   const auth: NonNullable<BackendRefEntry['auth']> = {}
+  if (credential) auth.credential = credential
   if (header?.trim()) auth.header = header.trim()
   if (prefix !== undefined) auth.prefix = prefix.trim()
   if (apiKeyEnv?.trim()) auth.api_key_env = apiKeyEnv.trim()
@@ -72,6 +76,14 @@ const backendRefFields: ObjectEditorField<EditableBackendRef>[] = [
     type: 'password',
     placeholder: 'Stored in configuration',
     fullWidth: true,
+  },
+  {
+    key: 'auth_credential',
+    label: 'Credential',
+    type: 'select',
+    options: ['delegated', 'caller'],
+    helpText:
+      "delegated sends the authenticated user's credential, caller the provider login the client sent. Either replaces the key.",
   },
   { key: 'auth_header', label: 'Authentication header', placeholder: 'Authorization' },
   {

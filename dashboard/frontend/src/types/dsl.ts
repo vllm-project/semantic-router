@@ -173,6 +173,8 @@ export interface ASTTestBlockDecl {
 }
 
 export interface ASTEntrypointDecl {
+  reviewModel?: string
+  memoryModel?: string
   modelNames: string[]
   recipe: string
   pos: ASTPosition

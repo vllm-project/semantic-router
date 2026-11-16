@@ -64,7 +64,12 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 		add("COALESCE(recipe, '') = ?", filters.Recipe)
 	}
 	for _, field := range []struct{ column, value string }{
-		{"decision", filters.Decision}, {"session_id", filters.SessionID},
+		{"decision", filters.Decision},
+		{"session_id", filters.SessionID},
+		{"request_kind", filters.RequestKind},
+		{"review_status", filters.ReviewStatus},
+		{"review_outcome", filters.ReviewOutcome},
+		{"review_risk", filters.ReviewRisk},
 	} {
 		if field.value != "" {
 			add(field.column+" = ?", field.value)
@@ -72,6 +77,9 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 	}
 	if filters.Model != "" {
 		add("(selected_model = ? OR original_model = ?)", filters.Model)
+	}
+	if filters.TurnID != "" {
+		add("(turn_id = ? OR parent_turn_id = ?)", filters.TurnID)
 	}
 	if filters.Search != "" {
 		add("(strpos(lower(COALESCE(request_id, '')), lower(?)) > 0 OR strpos(lower(COALESCE(recipe, '')), lower(?)) > 0 OR strpos(lower(COALESCE(session_id, '')), lower(?)) > 0)", filters.Search)
@@ -96,6 +104,8 @@ func postgresSummarySelectColumns() string {
 			columns[i] = "''"
 		case "projection_trace":
 			columns[i] = "NULL"
+		case "review":
+			columns[i] = postgresReviewSummaryColumn
 		case "tool_trace":
 			// Tool names remain discoverable without returning arguments/results.
 			columns[i] = `CASE WHEN tool_trace IS NULL OR tool_trace = 'null'::jsonb THEN NULL ELSE
@@ -123,8 +133,8 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 		COALESCE(original_model,''), COALESCE(selected_model,''), COALESCE(session_id,''),
 		from_cache, streaming, lifecycle_state, COALESCE(signals, '{}'::jsonb),
 		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-		provider_cache
-		FROM %s ORDER BY timestamp DESC, id DESC`, p.tableName)
+		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s, COALESCE(turn_id, ''), COALESCE(parent_turn_id, ''), cost_accounting
+		FROM %s ORDER BY timestamp DESC, id DESC`, postgresReviewMetadataColumn, p.tableName)
 	rows, err := p.db.QueryContext(ctx, query)
 	if err != nil {
 		return err
@@ -136,13 +146,21 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 			&row.record.OriginalModel, &row.record.SelectedModel, &row.record.SessionID,
 			&row.record.FromCache, &row.record.Streaming, &row.record.LifecycleState, &row.signalsJSON,
 			&row.promptTokens, &row.completionTokens, &row.totalTokens, &row.actualCost,
-			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel, &row.providerCacheJSON); err != nil {
+			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel, &row.providerCacheJSON,
+			&row.record.Timestamp, &row.record.DurationMS, &row.review.requestKind, &row.review.reviewJSON,
+			&row.record.TurnID, &row.record.ParentTurnID, &row.costAccountingJSON); err != nil {
+			return err
+		}
+		if err = row.review.assign(&row.record); err != nil {
 			return err
 		}
 		if err = json.Unmarshal(row.signalsJSON, &row.record.Signals); err != nil {
 			return err
 		}
 		if err = unmarshalReplayOptionalJSON(row.providerCacheJSON, &row.record.ProviderCache); err != nil {
+			return err
+		}
+		if err = unmarshalReplayOptionalJSON(row.costAccountingJSON, &row.record.CostAccounting); err != nil {
 			return err
 		}
 		assignUsageCostFields(&row.record, row.promptTokens, sql.NullInt64{}, sql.NullInt64{}, row.completionTokens,

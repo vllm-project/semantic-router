@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -120,6 +121,11 @@ func startRequestHeaderSpan(
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	ctx.TraceContext = spanCtx
+	// Internal hops charge auxiliary calls to the inherited parent meter;
+	// their own replay records defer generation costs to that parent too.
+	if ctx.Hop == nil {
+		ctx.TraceContext, ctx.ModelCallMeter = modelservice.WithRequestMeter(spanCtx)
+	}
 	ctx.RequestSpan = span
 	return span
 }

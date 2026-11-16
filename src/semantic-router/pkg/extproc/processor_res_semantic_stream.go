@@ -662,6 +662,7 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 	}
 
 	if responseErr != nil {
+		observeStreamedApprovalReviewFailure(ctx)
 		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"error":      responseErr.Error(),
@@ -680,6 +681,7 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 // Router Replay only.
 func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticResponse *llmprotocol.Response) {
 	recordPrimaryOutputDigest(ctx, semanticResponse)
+	observeApprovalReviewVerdict(ctx, semanticResponse)
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	if ctx.ResponseGuard != nil {
 		ctx.ResponseGuard.live = true
