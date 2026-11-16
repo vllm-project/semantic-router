@@ -20,11 +20,11 @@ if TYPE_CHECKING:
     from starlette.responses import AsyncContentStream
 
 SESSION_HEADER = "x-vsr-test-session-id"
-FAULT_INJECTED_HEADER = "x-vsr-fault-injected"
+FAULT_INJECTED_HEADER = "x-mock-fault-injected"
 FAULT_SCHEDULE_ID_HEADER = "x-vsr-fault-schedule-id"
 FAULT_SESSION_ID_HEADER = "x-vsr-fault-session-id"
 FAULT_CALL_INDEX_HEADER = "x-vsr-fault-call-index"
-FAULT_RECEIPT_HEADER = "x-vsr-fault-receipt"
+FAULT_RECEIPT_HEADER = "x-mock-fault-receipt"
 _STREAM_TERMINATORS: tuple[bytes, ...] = (
     b"data: [DONE]",
     b"event: response.completed",

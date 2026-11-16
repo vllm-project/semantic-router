@@ -16,7 +16,12 @@ from cli.sr_bench.contracts import plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.report import _comparison_protocol, fault_summary, make_report
 from cli.sr_bench.store import TERMINAL, Store
-from cli.sr_bench.transport import FAULT_RECEIPT_HEADER, CallFailure, fault_receipt
+from cli.sr_bench.transport import (
+    FAULT_INJECTED_HEADER,
+    FAULT_RECEIPT_HEADER,
+    CallFailure,
+    fault_receipt,
+)
 
 
 def wait_run(store, run_id, timeout=10):
@@ -84,7 +89,7 @@ class FaultInjectingTarget(BaseHTTPRequestHandler):
                 status_code = active_fault["status"]
                 self.send_response(status_code)
                 self.send_header("Content-Type", "application/json")
-                self.send_header("x-vsr-fault-injected", "true")
+                self.send_header(FAULT_INJECTED_HEADER, "true")
                 self.send_header(FAULT_RECEIPT_HEADER, json.dumps(active_fault))
                 self.send_header("x-vsr-selected-model", selected_model)
                 self.send_header("x-vsr-selected-decision", decision)
@@ -108,7 +113,7 @@ class FaultInjectingTarget(BaseHTTPRequestHandler):
             if active_fault.get("stream_cut_short"):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
-                self.send_header("x-vsr-fault-injected", "true")
+                self.send_header(FAULT_INJECTED_HEADER, "true")
                 self.send_header(FAULT_RECEIPT_HEADER, json.dumps(active_fault))
                 self.send_header("x-vsr-selected-model", selected_model)
                 self.send_header("x-vsr-selected-decision", decision)
@@ -131,7 +136,7 @@ class FaultInjectingTarget(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         if active_fault:
-            self.send_header("x-vsr-fault-injected", "true")
+            self.send_header(FAULT_INJECTED_HEADER, "true")
             self.send_header(FAULT_RECEIPT_HEADER, json.dumps(active_fault))
         self.send_header("x-vsr-selected-model", selected_model)
         self.send_header("x-vsr-selected-decision", decision)
@@ -1118,7 +1123,7 @@ def test_fault_summary_does_not_guess_an_unobserved_model() -> None:
     ],
 )
 def test_fault_receipt_rejects_unverifiable_metadata(raw: str | None) -> None:
-    headers = {"x-vsr-fault-injected": "true"}
+    headers = {FAULT_INJECTED_HEADER: "true"}
     if raw is not None:
         headers[FAULT_RECEIPT_HEADER] = raw
     with pytest.raises(CallFailure, match="fault receipt"):

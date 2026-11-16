@@ -111,8 +111,8 @@ sr-bench sends these headers only for scheduled subject tasks, with independent
 counters for each run, target and case. Unscheduled tasks and auxiliary calls do
 not receive fault identifiers.
 
-The response carries `x-vsr-fault-injected: true` and a JSON
-`x-vsr-fault-receipt` for an applied fault. The receipt identifies its call index,
+The response carries `x-mock-fault-injected: true` and a JSON
+`x-mock-fault-receipt` for an applied fault. The receipt identifies its call index,
 actual parameters and provider model. A successful retry repeats the receipt for
 that logical request, so Router fallback does not hide an earlier injected fault.
 Cuts preserve the response prefix but omit the terminal frame, including on

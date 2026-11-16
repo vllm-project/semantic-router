@@ -12,6 +12,7 @@ from provider_mocker import ollama_fixture, openrouter_fixture, vllm_fixture
 from provider_mocker.app import create_app
 from provider_mocker.fault_schedule import (
     FAULT_INJECTED_HEADER,
+    FAULT_RECEIPT_HEADER,
     FAULT_SCHEDULE_ID_HEADER,
     FAULT_SESSION_ID_HEADER,
     FaultEntry,
@@ -236,7 +237,7 @@ async def test_retry_preserves_one_logical_request_fault(
     assert retried.status_code == HTTPStatus.OK
     assert b"[DONE]" in retried.content
     assert retried.headers.get(FAULT_INJECTED_HEADER) == "true"
-    receipt = json.loads(retried.headers["x-vsr-fault-receipt"])
+    receipt = json.loads(retried.headers[FAULT_RECEIPT_HEADER])
     assert receipt == {"call_index": 0, "provider_model": "primary", **fault}
     assert FAULT_INJECTED_HEADER not in next_call.headers
 

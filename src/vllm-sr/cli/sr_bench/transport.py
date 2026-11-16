@@ -30,7 +30,8 @@ UNKNOWN_PHASE = "unknown"
 SESSION_PHASES = frozenset({USER_TURN_PHASE, TOOL_LOOP_PHASE, PROVIDER_STATE_PHASE})
 SESSION_ID_HEADER = "x-vsr-session-id"
 CONVERSATION_ID_HEADER = "x-conversation-id"
-FAULT_RECEIPT_HEADER = "x-vsr-fault-receipt"
+FAULT_INJECTED_HEADER = "x-mock-fault-injected"
+FAULT_RECEIPT_HEADER = "x-mock-fault-receipt"
 FAULT_CALL_INDEX_HEADER = "x-vsr-fault-call-index"
 
 
@@ -43,7 +44,7 @@ class CallFailure(RuntimeError):  # noqa: N818
 
 def fault_receipt(headers: Mapping[str, str]) -> dict[str, Any] | None:
     raw = headers.get(FAULT_RECEIPT_HEADER)
-    if headers.get("x-vsr-fault-injected") != "true":
+    if headers.get(FAULT_INJECTED_HEADER) != "true":
         if raw is not None:
             raise CallFailure("Provider fault receipt has no injection acknowledgement")
         return None
