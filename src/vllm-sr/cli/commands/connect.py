@@ -125,18 +125,19 @@ def _options(command, launch_and_vsr: bool = True):
                     "--launch",
                     is_flag=True,
                     help="Start the harness through the gateway for this session only,"
-                    " writing no file; arguments after -- go to the harness.",
+                    " writing none of its settings; arguments after -- go to the"
+                    " harness.",
                 )
             ),
             theirs(
                 click.option(
                     "--worktree",
-                    type=click.Path(
-                        exists=True, file_okay=False, resolve_path=True, path_type=Path
-                    ),
+                    metavar="DIRECTORY|new[:NAME]",
                     default=None,
                     help="With --launch, start the harness in this existing git"
-                    " worktree. No branch or worktree is created, switched or removed.",
+                    " worktree, or with new (new:NAME) in a new one: branch"
+                    " vllm-sr/NAME and the worktree <checkout>-NAME beside this"
+                    " checkout, from its HEAD. Nothing is switched or removed.",
                 )
             ),
             theirs(
@@ -215,7 +216,14 @@ def claude_code(
     env = dict(os.environ)
     path = hc.claude_settings_path(scope, Path.cwd(), env)
     where = _check_launch(
-        launch, harness_args, undo, status_line, check, worktree, harness_home
+        launch,
+        harness_args,
+        undo,
+        status_line,
+        check,
+        worktree,
+        harness_home,
+        "claude-code",
     )
     if undo:
         _undo(path.parent)
@@ -231,7 +239,14 @@ def claude_code(
         token, from_env = "", False
     # the harness runs the key command in its session, so the probe's run does too
     session = hs.session_env("claude-code", env, harness_home)
-    key = _key("claude-code", key_command, login, session, where, check or not dry_run)
+    key = _key(
+        "claude-code",
+        key_command,
+        login,
+        session,
+        where and where.here,
+        check or not dry_run,
+    )
     context_window, notes = _context_window(doc, model, context_window)
     values = hc.claude_env(gateway, model, token, key_command)
     values["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(_output_limit(doc, model))
@@ -240,13 +255,21 @@ def claude_code(
     if launch:
         # the key stays off the command line and out of the settings file: Claude
         # Code prints it from the variable its own session inherits
-        launched = values
+        session_id = hs.session_id()
+        own = hs.claude_session_args(harness_args, session_id)
+        # the headers that carry the session: Claude Code's own one too, unless
+        # it resumes a conversation, which keeps its id
+        carried = [hs.SESSION_HEADER]
+        if own:
+            carried.append(hs.HARNESS_SESSION_HEADERS["claude-code"])
+        headers = hs.claude_headers(session.get(hs.CLAUDE_HEADERS), session_id)
+        launched = {**values, hs.CLAUDE_HEADERS: headers}
         if from_env:
             helper = f"printenv {shlex.quote(api_key_env)}"
-            launched = {**values, hc.TOKEN_KEY: "", hc.KEY_HELPER: helper}
+            launched = {**launched, hc.TOKEN_KEY: "", hc.KEY_HELPER: helper}
         _launch(
             "claude-code",
-            ["claude", *harness_args],
+            ["claude", *own, *harness_args],
             doc,
             gateway,
             model,
@@ -256,6 +279,8 @@ def claude_code(
             json.loads(hc.set_json_env("", launched)),
             where,
             session,
+            session_id,
+            carried,
         )
     # the undo manifest beside the settings records the key too
     keyed = (path, path.parent / hc.MANIFEST) if scope == "project" and from_env else ()
@@ -396,7 +421,13 @@ def codex(
     if app and launch:
         raise click.UsageError("--launch writes nothing, so it does not take --app")
     where = _check_launch(
-        launch, harness_args, undo, check=check, worktree=worktree, home=harness_home
+        launch,
+        harness_args,
+        undo,
+        check=check,
+        worktree=worktree,
+        home=harness_home,
+        harness="codex",
     )
     if undo:
         _undo(home)
@@ -411,7 +442,9 @@ def codex(
         token, from_env = "", False
     # the harness runs the key command in its session, so the probe's run does too
     session = hs.session_env("codex", env, harness_home)
-    key = _key("codex", key_command, login, session, where, check or not dry_run)
+    key = _key(
+        "codex", key_command, login, session, where and where.here, check or not dry_run
+    )
     key_env = api_key_env if from_env else None
     context_window, notes = _context_window(doc, model, context_window)
     entrypoint = next(
@@ -462,6 +495,8 @@ def codex(
         overrides = hc.codex_launch_args(
             gateway, model, key_env, context_window, login, key_command, memory_model
         )
+        session_id = hs.session_id()
+        overrides += hs.codex_headers(session_id)
         _launch(
             "codex",
             ["codex", *overrides, *harness_args],
@@ -474,6 +509,8 @@ def codex(
             catalog or None,
             where,
             session,
+            session_id,
+            [hs.SESSION_HEADER],
         )
     catalog_name = f"{hc.PROVIDER}-app" if app else profile
     catalog_path = home / f"{catalog_name}.models.json" if catalog else None
@@ -657,6 +694,41 @@ def status(as_json):
     # a script can tell a gateway that stopped answering from one that answers
     if any(entry.get("probe", {}).get("state") == "failed" for entry in found):
         raise click.exceptions.Exit(1)
+
+
+@connect.command("sessions")
+@click.option("--json", "as_json", is_flag=True, help="Print the sessions as JSON.")
+def sessions(as_json):
+    """List the sessions --launch started and what is left of their worktrees.
+
+    The newest comes first. For a worktree connect made, the steps that remove
+    it are shown, but nothing is removed here, and no step is offered while the
+    worktree has uncommitted changes or its branch has commits no other branch
+    or remote has.
+    """
+    try:
+        found = [{**session, "state": hs.state(session)} for session in hs.recorded()]
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    for session in found:
+        session["cleanup"] = hs.cleanup(session, session["state"])
+    if as_json:
+        echo(json.dumps({"sessions": found}, indent=2))
+        return
+    if not found:
+        echo("No sessions: connect <harness> --launch records each one it starts.")
+    for session in found:
+        heading(f"Session {session['id']}")
+        state = hs.describe(session["state"])
+        steps = ", then ".join(session["cleanup"])
+        _aligned([*hs.rows(session), ("state", state), ("cleanup", steps)])
+
+
+def _aligned(rows: list[tuple[str, str]]) -> None:
+    """Label and value rows, not wrapped, so a path stays whole to copy."""
+    width = max(len(label) for label, _ in rows)
+    for label, value in rows:
+        echo(f"  {label:<{width}}  {value}")
 
 
 def _connections(folder: Path) -> list[dict]:
@@ -908,9 +980,10 @@ def _check_launch(
     check=False,
     worktree=None,
     home=None,
-) -> Path | None:
+    harness="",
+) -> hs.Workspace | None:
     """Refuse options that do not go together, and give the worktree --launch
-    starts the harness in, checked to be one."""
+    starts the harness in: checked to be one, or planned when it is new."""
     if (worktree or home) and not launch:
         flag = "--worktree" if worktree else "--home"
         raise click.UsageError(f"{flag} goes with --launch, which starts the harness")
@@ -929,10 +1002,10 @@ def _check_launch(
     if launch and (undo or status_line):
         flag = "--undo" if undo else "--status-line"
         raise click.UsageError(f"--launch writes nothing, so it does not take {flag}")
-    if not worktree:
+    if not launch:
         return None
     try:
-        return hs.worktree(worktree)
+        return hs.workspace(worktree, harness)
     except ValueError as exc:
         raise click.BadParameter(str(exc), param_hint="--worktree") from exc
 
@@ -1079,10 +1152,12 @@ def _launch(
     settings=None,
     where=None,
     env=None,
+    session_id="",
+    carried=(),
 ):
-    """Probe the gateway, then run the harness through it, in where (default: here)
-    with the session environment env (default: this one), and exit with its
-    status."""
+    """Probe the gateway, then run the harness through it, in where (a new
+    worktree made first) with the session environment env (default: this one),
+    record the session, and exit with its status."""
     heading(f"vllm-sr connect {harness} --launch")
     _check_router(harness, doc, model)
     for note in notes:
@@ -1104,6 +1179,8 @@ def _launch(
                 ),
                 *argv[1:],
             ]
+        if where.new:
+            echo(f"Creates: {shlex.join(hs.add_argv(where))}")
         echo(f"Starts: {shlex.join(argv)}")
         if dry_run:
             echo("Dry run: nothing was started.")
@@ -1112,9 +1189,22 @@ def _launch(
             hc.write_private(path, json.dumps(settings, indent=2))
         _probe_or_say_why(gateway, harness, model, token, doc, written=False)
         env = dict(os.environ) if env is None else env
-        where = where or Path.cwd()
-        echo(hs.receipt(where, hs.home_of(harness, env), gateway, model))
-        child = subprocess.Popen([found, *argv[1:]], cwd=where, env=env)
+        try:
+            if where.new:
+                hs.add(where)
+            home = hs.home_of(harness, env)
+            session = hs.record(session_id, harness, where, home, gateway, model)
+        except (OSError, ValueError) as exc:
+            raise click.ClickException(f"{exc}, so {argv[0]} was not started.") from exc
+        shown = [*hs.rows(session), ("requests", f"{', '.join(carried)}: {session_id}")]
+        if doc is not None:
+            keys = ("global", "router", "learning", "protection", "identity")
+            named = rc._get(doc, *keys, "headers", "session")
+            filed = hs.filed_under(named, harness, list(carried))
+            shown.append(("replay", f"files its calls under {filed}"))
+        heading(f"Session {session_id}")
+        _aligned(shown)
+        child = subprocess.Popen([found, *argv[1:]], cwd=where.path, env=env)
 
         # Ctrl-C belongs to the harness while it runs, and a closed terminal or a
         # stop reaches it through this process, which outlives it to remove the

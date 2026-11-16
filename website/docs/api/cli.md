@@ -74,6 +74,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr connect claude-code`](#vllm-sr-connect-claude-code) | Route Claude Code's model calls through the gateway. |
 | [`vllm-sr connect codex`](#vllm-sr-connect-codex) | Route Codex through the gateway, with a profile or (--app) as its default. |
 | [`vllm-sr connect pi`](#vllm-sr-connect-pi) | Route Pi's model calls through the gateway, as a provider in its models.json. |
+| [`vllm-sr connect sessions`](#vllm-sr-connect-sessions) | List the sessions --launch started and what is left of their worktrees. |
 | [`vllm-sr connect status`](#vllm-sr-connect-status) | Show what connect manages for each harness now, and whether it still holds. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
 | [`vllm-sr instance`](#vllm-sr-instance) | Inspect the serving state of an existing local instance. |
@@ -1005,8 +1006,8 @@ Route Claude Code's model calls through the gateway.
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |
 | `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
-| `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
-| `--worktree DIRECTORY` | With --launch, start the harness in this existing git worktree. No branch or worktree is created, switched or removed. |
+| `--launch` | Start the harness through the gateway for this session only, writing none of its settings; arguments after -- go to the harness. Default: false. |
+| `--worktree DIRECTORY\|new[:NAME]` | With --launch, start the harness in this existing git worktree, or with new (new:NAME) in a new one: branch vllm-sr/NAME and the worktree &lt;checkout&gt;-NAME beside this checkout, from its HEAD. Nothing is switched or removed. |
 | `--home DIRECTORY` | With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR or $CODEX_HOME) in place of yours, for another login. Nothing is copied into it. |
 | `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
@@ -1037,8 +1038,8 @@ The default is what the Codex app reads, and the Codex CLI without --profile.
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |
 | `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
-| `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
-| `--worktree DIRECTORY` | With --launch, start the harness in this existing git worktree. No branch or worktree is created, switched or removed. |
+| `--launch` | Start the harness through the gateway for this session only, writing none of its settings; arguments after -- go to the harness. Default: false. |
+| `--worktree DIRECTORY\|new[:NAME]` | With --launch, start the harness in this existing git worktree, or with new (new:NAME) in a new one: branch vllm-sr/NAME and the worktree &lt;checkout&gt;-NAME beside this checkout, from its HEAD. Nothing is switched or removed. |
 | `--home DIRECTORY` | With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR or $CODEX_HOME) in place of yours, for another login. Nothing is copied into it. |
 | `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
@@ -1066,6 +1067,24 @@ Route Pi's model calls through the gateway, as a provider in its models.json.
 | `--yes` | Write without asking. Default: false. |
 | `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
 | `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect sessions` {#vllm-sr-connect-sessions}
+
+```text
+Usage: vllm-sr connect sessions [OPTIONS]
+```
+
+List the sessions --launch started and what is left of their worktrees.
+
+The newest comes first. For a worktree connect made, the steps that remove
+it are shown, but nothing is removed here, and no step is offered while the
+worktree has uncommitted changes or its branch has commits no other branch
+or remote has.
+
+| Parameter | Description |
+| --- | --- |
+| `--json` | Print the sessions as JSON. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr connect status` {#vllm-sr-connect-status}

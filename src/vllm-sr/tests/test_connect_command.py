@@ -2,6 +2,7 @@ import difflib
 import importlib
 import json
 import os
+import re
 import signal
 import stat
 import subprocess
@@ -160,6 +161,8 @@ def _stage(body: dict) -> str:
     return "result" if any(word in sent for word in answered) else "tool"
 
 
+UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
 # A translation loss whose reason holds a comma, as the Router writes it: an RFC 8941 list.
 PLAIN_WARNINGS = (
     'protocol;action=approximated;reason="stop_sequence, absent, read as null";'
@@ -173,6 +176,14 @@ def pi_home(tmp_path, monkeypatch):
     home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(home))
     return home
+
+
+@pytest.fixture(autouse=True)
+def state_home(tmp_path_factory, monkeypatch):
+    """The CLI's state directory, where --launch records its sessions."""
+    state = tmp_path_factory.mktemp("state")
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    return state
 
 
 @pytest.fixture
@@ -1251,7 +1262,7 @@ def test_launch_starts_the_harness_through_the_gateway_and_writes_nothing(
     assert result.exit_code == 3, result.output
     assert "Streamed tool loop: ok" in result.output
     ran = json.loads(harness_bin.read_text())
-    assert ran["args"][-2:] == ["--resume", "x"]
+    assert ran["args"][-2:] == ["--resume", "x"] and "--session-id" not in ran["args"]
     settings = json.loads(ran["settings"])
     assert settings["env"]["ANTHROPIC_BASE_URL"] == url
     assert settings["env"]["ANTHROPIC_AUTH_TOKEN"] == ""
@@ -2842,18 +2853,16 @@ def test_launch_starts_the_harness_in_a_worktree_with_its_home_or_another(
         ran = json.loads(harness_bin.read_text())
         # the user's own home, so the harness keeps its own login
         assert ran["cwd"] == str(linked) and ran["homes"][index] == str(own)
-        assert "Session: started=" in result.output
-        assert (
-            f"worktree={linked} home={own} gateway={url} model=vllm-sr/auto"
-            in result.output
-        )
+        header = " ".join(result.output.split())
+        assert f"harness {harness} model vllm-sr/auto gateway {url} " in header
+        assert f"worktree {linked} branch linked home {own} started " in header
 
         result = CliRunner().invoke(
             main, [*args, "--worktree", str(linked), "--home", str(other)]
         )
         assert result.exit_code == 3, result.output
         assert json.loads(harness_bin.read_text())["homes"][index] == str(other)
-        assert f"home={other} " in result.output
+        assert f"home {other} " in " ".join(result.output.split())
     # nothing was put in either home, and no branch or worktree changed
     assert list(other.iterdir()) == [] and not own.exists()
     assert _git_state(repo) == before
@@ -2893,6 +2902,204 @@ def test_launch_runs_the_key_command_in_the_worktree_and_home_it_starts(
     assert ran_in.read_text() == f"{repo}\n"
     assert json.loads(harness_bin.read_text())["cwd"] == str(repo)
     assert "sk-" not in result.output
+
+
+def _committed_repo(tmp_path, monkeypatch) -> tuple[Path, list[str], str]:
+    """A repository on main with one commit, the git command that commits in
+    it, and that commit."""
+    repo = tmp_path / "repo"
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-C"]
+    start = [*git, str(repo), "commit", "-q", "--allow-empty", "-m", "start"]
+    subprocess.run(start, check=True)
+    head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    return repo, git, head
+
+
+@pytest.mark.parametrize("harness", ["claude-code", "codex"])
+def test_launch_in_a_new_worktree_branches_from_head_and_tags_every_request(
+    tmp_path, gateway, harness_bin, monkeypatch, harness
+):
+    url, _, _ = gateway
+    tmp_path = tmp_path.resolve()
+    repo, _, head = _committed_repo(tmp_path, monkeypatch)
+    (repo / "uncommitted.txt").write_text("stays in the checkout\n")
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "home"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ANTHROPIC_CUSTOM_HEADERS", "x-team: red\nx-vsr-session-id: old")
+    args = ["connect", harness, "--base-url", url, "--launch", "--worktree"]
+    linked, before = tmp_path / "repo-fix", _git_state(repo)
+
+    # a dry run, and a gateway that fails the probe, make nothing
+    result = CliRunner().invoke(main, [*args, "new:fix", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert f"git -C {repo} worktree add -b vllm-sr/fix {linked} {head}" in result.output
+    result = CliRunner().invoke(main, [*args[:3], url + "/nope", *args[4:], "new:fix"])
+    assert result.exit_code == 1, result.output
+    assert _git_state(repo) == before and not linked.exists()
+    assert not harness_bin.exists()
+
+    result = CliRunner().invoke(main, [*args, "new:fix"])
+    assert result.exit_code == 3, result.output
+    ran = json.loads(harness_bin.read_text())
+    assert ran["cwd"] == str(linked)
+    assert not (linked / "uncommitted.txt").exists()
+    listed = subprocess.run(
+        ["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert f"worktree {linked}\nHEAD {head}\nbranch refs/heads/vllm-sr/fix\n" in listed
+    session = re.search(rf"^Session ({UUID})$", result.output, re.M)[1]
+    header = " ".join(result.output.split())
+    assert f"harness {harness} model vllm-sr/auto gateway {url} " in header
+    made = f"worktree {linked} (made by connect from {head[:12]}) branch vllm-sr/fix "
+    assert made in header
+    # every request carries the session: the Router pins it from
+    # x-vsr-session-id, and Claude Code's own session id is the same one
+    if harness == "claude-code":
+        sent = json.loads(ran["settings"])["env"]["ANTHROPIC_CUSTOM_HEADERS"]
+        assert sent == f"x-team: red\nx-vsr-session-id: {session}"
+        assert ran["args"][2:4] == ["--session-id", session]
+        carried = "x-vsr-session-id, x-claude-code-session-id"
+    else:
+        tag = f"model_providers.vllm-sr.http_headers.x-vsr-session-id={session!r}"
+        assert tag.replace("'", '"') in ran["args"]
+        carried = "x-vsr-session-id"
+    assert header.endswith(f"requests {carried}: {session}")
+    assert "replay" not in header  # without --config the Router's reading is unknown
+
+    # with it, the header says where Router Replay files the calls
+    named = hs.HARNESS_SESSION_HEADERS[harness]
+    learning = {"protection": {"identity": {"headers": {"session": named}}}}
+    config = tmp_path / "router.yaml"
+    config.write_text(yaml.safe_dump(_router(learning=learning)))
+    result = CliRunner().invoke(main, [*args[:-1], "--config", str(config)])
+    assert result.exit_code == 3, result.output
+    filed = (
+        "this session"
+        if harness == "claude-code"
+        else ("the session-id codex sends itself, not this session")
+    )
+    assert f"replay files its calls under {filed}" in " ".join(result.output.split())
+
+    # the branch is taken now; without a name one is made up
+    harness_bin.unlink()
+    result = CliRunner().invoke(main, [*args, "new:fix"])
+    assert result.exit_code == 2 and "vllm-sr/fix already exists" in result.output
+    assert not harness_bin.exists()
+    result = CliRunner().invoke(main, [*args, "new"])
+    assert result.exit_code == 3, result.output
+    made = re.search(rf"branch\s+vllm-sr/({harness}-\d{{8}}-\d{{6}})", result.output)
+    assert json.loads(harness_bin.read_text())["cwd"] == f"{repo}-{made[1]}"
+    for bad in ("new:../up", "new:"):
+        result = CliRunner().invoke(main, [*args, bad])
+        assert result.exit_code == 2 and "is not a worktree name" in result.output
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(main, [*args, "new"])
+    assert result.exit_code == 2 and "not inside a git checkout" in result.output
+
+
+def test_the_header_says_which_session_router_replay_files_the_calls_under():
+    # protection's identity header wins in Replay when the harness sends it
+    # itself; Claude Code's carries the launch's id, Codex's its own
+    own = hs.HARNESS_SESSION_HEADERS
+    claude = ["x-vsr-session-id", own["claude-code"]]
+    assert hs.filed_under(None, "codex", ["x-vsr-session-id"]) == "this session"
+    assert hs.filed_under(own["claude-code"], "claude-code", claude) == "this session"
+    assert hs.filed_under(own["claude-code"], "codex", claude[:1]) == "this session"
+    assert hs.filed_under("session-id", "codex", claude[:1]) == (
+        "the session-id codex sends itself, not this session"
+    )
+    # a conversation Claude Code resumes keeps its own id
+    assert hs.claude_session_args(["-p", "hi"], "s") == ["--session-id", "s"]
+    for picked in (["--resume", "x"], ["-c"], ["--session-id=x"], ["--fork-session"]):
+        assert hs.claude_session_args(picked, "s") == []
+
+
+def test_connect_sessions_lists_each_launch_and_how_to_clean_it_up(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    tmp_path = tmp_path.resolve()
+    repo, git, head = _committed_repo(tmp_path, monkeypatch)
+    linked = tmp_path / "repo-fix"
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "home"))
+    launch = ["connect", "claude-code", "--base-url", url, "--launch"]
+    result = CliRunner().invoke(main, launch)
+    assert result.exit_code == 3, result.output
+    first = re.search(r"^Session (\S+)$", result.output, re.M)[1]
+    result = CliRunner().invoke(main, [*launch, "--worktree", "new:fix"])
+    assert result.exit_code == 3, result.output
+    made = re.search(r"^Session (\S+)$", result.output, re.M)[1]
+
+    def listed():
+        result = CliRunner().invoke(main, ["connect", "sessions"])
+        assert result.exit_code == 0, result.output
+        return " ".join(result.output.split())
+
+    remove = f"git -C {repo} worktree remove {linked}"
+    delete = f"git -C {repo} branch -d vllm-sr/fix"
+    text = listed()
+    # the newest first; a launch in a checkout of the user's own is not cleaned up
+    assert text.index(f"Session {made}") < text.index(f"Session {first}")
+    assert f"worktree {linked} (made by connect from {head[:12]})" in text
+    assert f"state no uncommitted changes, no unmerged commits cleanup {remove}" in text
+    assert f"then {delete}" in text
+    assert f"worktree {repo} branch main" in text
+    assert "none: this launch did not make the worktree" in text
+
+    # connect never suggests removing work: a change, then a commit, stop it
+    (linked / "notes.txt").write_text("work\n")
+    text = listed()
+    assert "state 1 uncommitted change, no unmerged commits cleanup" in text
+    assert "commit or discard the changes in it first" in text and remove not in text
+    subprocess.run([*git, str(linked), "add", "notes.txt"], check=True)
+    subprocess.run([*git, str(linked), "commit", "-q", "-m", "work"], check=True)
+    text = listed()
+    assert f"state no uncommitted changes, 1 unmerged commit cleanup {remove}" in text
+    assert (
+        "then push or merge vllm-sr/fix before deleting it" in text
+        and delete not in text
+    )
+
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "remove", str(linked)], check=True
+    )
+    text = listed()
+    assert "state worktree removed, 1 unmerged commit cleanup push or merge" in text
+    # merged into main, the branch holds nothing main lacks, and the step works
+    merge = [*git, str(repo), "merge", "-q", "--ff-only", "vllm-sr/fix"]
+    subprocess.run(merge, check=True)
+    text = listed()
+    assert f"state worktree removed, no unmerged commits cleanup {delete}" in text
+    subprocess.run(delete.split(), check=True, capture_output=True)
+    assert "state worktree removed, branch deleted cleanup nothing left" in listed()
+
+    result = CliRunner().invoke(main, ["connect", "sessions", "--json"])
+    assert result.exit_code == 0, result.output
+    sessions = json.loads(result.output)["sessions"]
+    assert sessions[0]["id"] == made
+    assert sessions[0] | {"state": None} == {
+        **sessions[0],
+        "harness": "claude-code",
+        "worktree": str(linked),
+        "branch": "vllm-sr/fix",
+        "repository": str(repo),
+        "base": head,
+        "made_by_connect": True,
+        "state": None,
+    }
+    assert sessions[0]["state"]["worktree"] == "removed"
 
 
 def test_a_key_command_gets_no_longer_than_the_harness_gives_it(
@@ -3774,3 +3981,23 @@ def test_a_failed_probe_says_what_failed_in_words():
         f"{url}/v1/responses: no connection (Connection refused)."
         " Is the gateway running there?"
     )
+
+
+def test_a_branch_git_cannot_count_is_never_offered_for_deletion(tmp_path, monkeypatch):
+    repo, _, head = _committed_repo(tmp_path.resolve(), monkeypatch)
+    subprocess.run(["git", "-C", str(repo), "branch", "vllm-sr/x"], check=True)
+    session = {
+        "worktree": str(repo.parent / "gone"),
+        "made_by_connect": True,
+        "repository": str(repo),
+        "branch": "vllm-sr/x",
+        "base": head,
+    }
+    found = hs.state(session)
+    assert found == {"worktree": "removed", "unmerged": 0}
+    assert hs.cleanup(session, found) == [f"git -C {repo} branch -d vllm-sr/x"]
+    # a start commit git does not have: the count fails, and no step deletes
+    found = hs.state({**session, "base": "0" * 40})
+    assert found == {"worktree": "removed", "unmerged": None}
+    assert hs.describe(found) == "worktree removed, unmerged commits unknown"
+    assert hs.cleanup(session, found) == ["push or merge vllm-sr/x before deleting it"]
