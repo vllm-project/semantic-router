@@ -339,15 +339,29 @@ type MemoryQdrantConfig struct {
 }
 
 // ResponseAPIConfig controls response and conversation history storage.
-// StoreBackend defaults to "redis" for durable storage that survives router
-// restarts. Set to "memory" only for local development — all history is lost
-// when the router process exits.
+// An omitted StoreBackend is "redis" when the Redis block names a server, as a
+// configuration written when Redis was the default does, and "memory"
+// otherwise, which needs no service but loses all history when the router
+// process exits. vllm-sr serve selects the Redis it runs when the
+// configuration names no store.
 type ResponseAPIConfig struct {
 	Enabled      bool                   `yaml:"enabled"`
 	StoreBackend string                 `yaml:"store_backend,omitempty"`
 	TTLSeconds   int                    `yaml:"ttl_seconds"`
 	MaxResponses int                    `yaml:"max_responses"`
 	Redis        ResponseAPIRedisConfig `yaml:"redis,omitempty"`
+}
+
+// withDefaultStoreBackend resolves an omitted StoreBackend.
+func (c ResponseAPIConfig) withDefaultStoreBackend() ResponseAPIConfig {
+	if c.StoreBackend != "" {
+		return c
+	}
+	c.StoreBackend = "memory"
+	if c.Redis.Address != "" || len(c.Redis.ClusterAddresses) > 0 || c.Redis.ConfigPath != "" {
+		c.StoreBackend = "redis"
+	}
+	return c
 }
 
 type ResponseAPIRedisConfig struct {
