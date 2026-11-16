@@ -414,5 +414,9 @@ layered_runtime:
   layers:
   - name: static_layer
     static_layer:
+      # A listener's served path regex grows with its APIs: chat completions,
+      # responses and messages with the model listing compile to about 200
+      # RE2 instructions, over Envoy's default limit of 100.
+      re2.max_program_size.error_level: 1000
       overload:
         global_downstream_max_connections: 50000
