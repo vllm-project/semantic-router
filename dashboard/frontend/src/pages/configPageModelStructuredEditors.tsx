@@ -245,7 +245,9 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
     min: 0,
     max: 5,
     step: 1,
-    placeholder: '0',
+    placeholder: 'Default',
+    helpText:
+      'Empty retries a failed connection twice, or not at all when retry conditions are set.',
   },
   {
     key: 'retry_on',
@@ -498,6 +500,15 @@ export function ModelPricingEditor({
   )
 }
 
+// The retries the Router and the Envoy the CLI renders apply: the count,
+// else two by default unless retry conditions are set without one.
+function reliabilityDescription(item: ProviderReliability): string {
+  if (item.retry_count !== undefined) return `${item.retry_count} retries`
+  return item.retry_on?.trim()
+    ? '0 retries: retry conditions without a count'
+    : '2 retries by default'
+}
+
 export function ModelReliabilityEditor({
   value,
   onChange,
@@ -513,9 +524,7 @@ export function ModelReliabilityEditor({
       fields={reliabilityFields}
       createItem={() => ({})}
       itemLabel={() => 'Delivery policy'}
-      itemDescription={(item) =>
-        item.retry_count ? `${item.retry_count} retries` : 'Use platform defaults'
-      }
+      itemDescription={reliabilityDescription}
       minItems={1}
       maxItems={1}
       disabled={disabled}

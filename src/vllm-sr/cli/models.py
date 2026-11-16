@@ -1737,6 +1737,8 @@ RETRY_ON_CONDITIONS = (
 
 
 def _known_retry_on(value: str) -> str:
+    """value, trimmed as the Router reads it, when it names only known
+    conditions; a blank one is unset."""
     for raw in value.split(","):
         token = raw.strip()
         if token and token not in RETRY_ON_CONDITIONS:
@@ -1744,10 +1746,15 @@ def _known_retry_on(value: str) -> str:
                 f"has unknown condition {token!r}; expected any of "
                 + ", ".join(RETRY_ON_CONDITIONS)
             )
-    return value
+    return value.strip()
 
 
 RetryOn = Annotated[str, AfterValidator(_known_retry_on)]
+
+# The Router's config.DefaultProviderRetryCount: a provider model whose block
+# names no retries retries twice, on the template's default retry_on, which
+# retries only an attempt the backend never received.
+DEFAULT_RETRY_COUNT = 2
 
 # Decision reliability fields Envoy cannot apply to one request.
 DECISION_RELIABILITY_NATIVE_ONLY = (
@@ -2077,8 +2084,8 @@ class ProviderReliability(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     lb_policy: Literal["round_robin", "least_request"] = "round_robin"
-    retry_count: int = Field(default=0, ge=0, le=5)
-    retry_on: RetryOn = "connect-failure,refused-stream"
+    retry_count: Optional[int] = Field(default=None, ge=0, le=5)
+    retry_on: Optional[RetryOn] = None
     consecutive_5xx: int = Field(default=0, ge=0)
     base_ejection_time: str = "30s"
     max_ejection_percent: int = Field(default=50, ge=0, le=100)
@@ -2135,6 +2142,13 @@ class ProviderReliability(BaseModel):
         if parse_duration(self.retry_back_off_max) < base:
             raise ValueError("retry_back_off_max must not be below retry_back_off_base")
         return self
+
+    def retries(self) -> int:
+        """retry_count, else the default retries when retry_on is unset too, as
+        the Router's ProviderReliability.Retries reads it."""
+        if self.retry_count is not None:
+            return self.retry_count
+        return 0 if self.retry_on else DEFAULT_RETRY_COUNT
 
 
 TOKENIZER_BUILTINS = ("o200k_base", "cl100k_base")

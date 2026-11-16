@@ -418,7 +418,7 @@ type Pricing struct {
 
 type Reliability struct {
 	LBPolicy            string `json:"lb_policy,omitempty" yaml:"lb_policy,omitempty"`
-	RetryCount          int    `json:"retry_count,omitempty" yaml:"retry_count,omitempty"`
+	RetryCount          *int   `json:"retry_count,omitempty" yaml:"retry_count,omitempty"`
 	RetryOn             string `json:"retry_on,omitempty" yaml:"retry_on,omitempty"`
 	Consecutive5xx      int    `json:"consecutive_5xx,omitempty" yaml:"consecutive_5xx,omitempty"`
 	BaseEjectionTime    string `json:"base_ejection_time,omitempty" yaml:"base_ejection_time,omitempty"`
