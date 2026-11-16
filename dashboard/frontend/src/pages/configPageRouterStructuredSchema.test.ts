@@ -276,6 +276,30 @@ describe('router defaults structured schemas', () => {
     }
   })
 
+  it('edits the protection cache economics with their bounds', () => {
+    const economics =
+      ROUTER_STRUCTURED_FIELDS.learning?.protection.schema.fields?.tuning.fields?.cache_economics
+    expect(economics?.label).toBe('Cache Economics')
+    expect(Object.keys(economics?.fields ?? {})).toEqual([
+      'enabled',
+      'cache_ttl_seconds',
+      'default_remaining_turns',
+    ])
+    expect(
+      normalizeRouterStructuredValue(economics!, {
+        enabled: true,
+        cache_ttl_seconds: 3600,
+        default_remaining_turns: 5,
+      }),
+    ).toEqual({ enabled: true, cache_ttl_seconds: 3600, default_remaining_turns: 5 })
+    expect(() => normalizeRouterStructuredValue(economics!, { cache_ttl_seconds: 0 })).toThrow(
+      /at least 1/i,
+    )
+    expect(() => normalizeRouterStructuredValue(economics!, { default_remaining_turns: 0 })).toThrow(
+      /at least 1/i,
+    )
+  })
+
   it('recursively augments specialized controls with every generated nested field', () => {
     for (const [key, fields] of Object.entries(ROUTER_STRUCTURED_FIELDS)) {
       for (const name of Object.keys(fields ?? {})) {
