@@ -9,6 +9,7 @@ wrote and leaves every other edit in place.
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import re
@@ -92,10 +93,36 @@ class Change:
             return harness_toml.values(text, self.values)
         return {"file": text or None}
 
+    def diff(self, old: str | None, new: str, key_label: str) -> str:
+        """The change from old (None: no file) to new, for display, with no key in
+        it. A TOML file is compared whole and with no context, so each line stands
+        where it is written and patch applies the diff, and any line of it that is
+        not in one of the command's entries is shown as NOT_SHOWN."""
+        label = str(self.path)
+        before, old = (label if old is not None else "/dev/null"), old or ""
+        if self.kind != "toml":
+            texts = (self.shown(text, key_label) for text in (old, new))
+            a, b = (text.splitlines(keepends=True) for text in texts)
+            return "".join(difflib.unified_diff(a, b, before, label))
+        mine = {
+            line
+            for text in (old, new)
+            for held in self.raw(text).values()
+            for line in (held or "").splitlines()
+        }
+        a, b = (text.splitlines(keepends=True) for text in (old, new))
+        diff = list(difflib.unified_diff(a, b, before, label, n=0))
+        for index, line in enumerate(diff[2:], 2):
+            body = line[1:].rstrip("\r\n")
+            if line[0] in "+-":
+                shown = body if body in mine or not body.strip() else NOT_SHOWN
+                diff[index] = line[0] + hide_secrets(shown + "\n")
+        return "".join(diff)
+
     def shown(self, text: str, key_label: str) -> str:
-        """The part of text the command owns, for display, with no key in it. A
-        TOML file is shown whole, so its diff places each entry where it is written."""
-        if self.kind in ("file", "toml"):
+        """The part of text the command owns, for display, with no key in it, for
+        every kind but toml, whose lines diff shows."""
+        if self.kind == "file":
             return hide_secrets(text)
         if self.kind == "json":
             shown: dict[str, Any] = {}
@@ -129,6 +156,9 @@ SETTING_LINE = re.compile(r'(\s*"?([\w.-]+)"?\s*[=:]\s*)(.*?)(,?\s*)$')
 # Characters of a line a preview shows; Codex's model catalog holds its base
 # instructions as one line of tens of thousands.
 SHOWN_LINE = 160
+# What a TOML preview shows for a line of the file that is not the command's,
+# which can hold a secret no setting name gives away
+NOT_SHOWN = "(a line that is not connect's)"
 
 
 def _at(held: dict, path: list[str]) -> Any:

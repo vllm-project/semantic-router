@@ -161,7 +161,10 @@ It then reports three checks, each on its own line:
   it, and the check runs only after the basic reply passed.
 
 On a failure the line says what failed in words: a key the gateway refused, no
-connection at that address, or no answer in time. The written changes stay, so
+connection at that address, or no answer in time. Only the listener's own
+refusal (`invalid_api_key`) is read as a refused key. Any other 401, such as
+the Router's when it holds no credential for the selected backend or the
+backend's own, is shown as its body says. The written changes stay, so
 fix what failed and run the command again, or take them back with `--undo`.
 With the vSR plugin installed it warns
 while the plugin's router app is on, and when the listener also serves System
@@ -412,6 +415,11 @@ the default, in place of the profile:
   that way, such as one where a key it sets spans several lines or one that is
   not valid TOML, is refused and left alone. Reading TOML needs Python 3.11 or
   later.
+- the preview is a diff of the whole file with no context lines: the lines the
+  command writes or takes out, at their line numbers, so `patch` applies it.
+  It never prints a line of yours, which can hold a secret no setting name
+  gives away, such as an MCP server's `env`. One it changes, such as a last line
+  that gets its missing newline, reads `(a line that is not connect's)`.
 
 This changes the default for the Codex CLI too: every `codex` started without
 `--profile` uses the gateway, and the command says so before it writes and
