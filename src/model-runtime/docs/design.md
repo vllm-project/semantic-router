@@ -1109,10 +1109,11 @@ without a description are defined before the span pass when
 LM head) or `grafted_head` (vela3-flash: `labeldef_lm_head.safetensors`, cast
 to the embedding dtype). The native engine generates each definition with
 every adapter off and causal attention: a user turn, thinking off, the label
-set as context for at most 60 labels, greedy, at most 40 new tokens. The
-family keeps the first line and caches it per label set (per label above 60),
-after the definitions already in `label_definitions.json`. Rows are
-right-padded in batches of at most 64. A row's positions are its attention-mask
+set as context for at most 60 labels, greedy, at most 40 new tokens, ending
+at the checkpoint's `eos_token_id`. The family keeps the first line and
+caches it per label set (per label above 60). Generated definitions live in a
+4,096-entry least-recently-used cache; the entries of `label_definitions.json`
+are never evicted. Rows are right-padded in batches of at most 64. A row's positions are its attention-mask
 cumsum, with padding at position 0, and the next token is read at the last
 position; that is what makes one definition differ from generating that label
 alone. `names` (vela3-lite and vela3-turbo)
@@ -1131,8 +1132,10 @@ bundle  -> plan every task -> submit all at once -> await each -> results in tas
 
 Each model has its own scheduler and worker thread. Validation and rendering
 happen on the request thread, so malformed requests never take queue
-capacity. The batcher plans the rows of every queued job together (section
-5.4). A bundle's tasks for one model are queued at once as one job group,
+capacity. A small request plans on the event loop unless a served model runs
+forwards while it plans (`plans_run_forwards`: a vela3_d3 model that writes
+label definitions); then every request plans in a thread-pool task. The
+batcher plans the rows of every queued job together (section 5.4). A bundle's tasks for one model are queued at once as one job group,
 whatever their deadlines (each job keeps its own, measured from when the HTTP
 request arrived), so one forward serves every head and consumer that reads
 the same input. On a batch-invariant model the batcher runs the queued jobs

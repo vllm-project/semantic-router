@@ -272,6 +272,56 @@ def test_describe_ties_the_head_for_base_and_names_the_grafted_file(
     assert head.weight_file == grafted / "labeldef_lm_head.safetensors"
 
 
+def test_a_base_writer_ends_definitions_at_the_checkpoint_eos(
+    written, tmp_path, monkeypatch
+) -> None:
+    """An open label without a description is defined, decoding to the base's eos, not <|im_end|>."""
+    import asyncio
+
+    from .conftest import start_runtime
+
+    root = copy(written, tmp_path, "eos-writer")
+    edit_config(root, lambda config: config["definitions"].update(writer="base"))
+    text = json.loads((base_of(root) / "config.json").read_text())["text_config"]
+    runtime = start_runtime(root, base_path=str(base_of(root)))
+    try:
+        model = runtime.lookup(None).model
+        assert model.plans_run_forwards
+        engine = model.engine_model
+        real, ends = engine.generate, []
+
+        def generate(rows, **kwargs):
+            ends.append(kwargs["eos_token_id"])
+            return real(rows, **kwargs)
+
+        monkeypatch.setattr(engine, "generate", generate)
+        question = {"type": "span", "criteria": ["zebra"]}
+        body = {"state": "Adults can take 2 tablets.", "questions": {"s": question}}
+        status, _ = asyncio.run(runtime.call("decisions", body))
+        assert status == 200
+        assert ends == [text["eos_token_id"]]
+        assert ends[0] != model.tokenizer.token_to_id("<|im_end|>")
+    finally:
+        runtime.stop()
+
+
+def test_a_base_writer_needs_the_base_eos(written, tmp_path, monkeypatch) -> None:
+    from vllm_srun.families.vela3_d3 import family as d3
+
+    base = copy(written, tmp_path, "no-eos")
+    edit_config(base, lambda config: config["definitions"].update(writer="base"))
+    describe = Decision3Family.describe
+
+    def without_eos(self, package):
+        spec = describe(self, package)
+        config = {k: v for k, v in spec.backbone.config.items() if k != "eos_token_id"}
+        return replace(spec, backbone=replace(spec.backbone, config=config))
+
+    monkeypatch.setattr(d3.Decision3Family, "describe", without_eos)
+    with pytest.raises(PackageError, match="eos_token_id"):
+        family(base).describe(family(base).verify(PackageRef(base)))
+
+
 def test_an_unpinned_package_needs_sha256sums(written, tmp_path) -> None:
     root = copy(written, tmp_path)
     (root / "SHA256SUMS").unlink()

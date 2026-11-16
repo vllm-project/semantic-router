@@ -2,7 +2,8 @@
 
 A user turn only, thinking off, with the label set as context when it holds at
 most 60 labels. The base generates greedily, every adapter off, up to 40 new
-tokens; the first line is the definition. Definitions are cached per sorted
+tokens, stopping at the checkpoint config's ``eos_token_id`` as the package's
+``generate`` does; the first line is the definition. Definitions are cached per sorted
 label set (per label above 60), and a package's ``label_definitions.json``
 fills that cache. ``names`` and ``labeldef_writer`` do not come here: the
 former stays name-only, and no released package selects the latter.
@@ -16,6 +17,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
+from ...errors import PackageError
 from ...plugins.base import EngineModel, LMHeadSpec
 
 CTX_MAX = 60
@@ -24,7 +26,6 @@ BATCH = 64
 # Generated cache entries kept (label sets, or single labels above CTX_MAX); the
 # least recently used goes first. Request labels are open, so the cache is bounded.
 MAX_CACHED = 4096
-IM_END = "<|im_end|>"
 PROMPT = (
     "You are writing annotation guidelines for named entity recognition.{ctx}\n"
     'Define the entity type "{label}" in one short sentence: what kind of text span it covers. '
@@ -101,6 +102,16 @@ def lm_head_spec(
     return None
 
 
+def writer_eos(text: dict[str, Any]) -> int:
+    """The checkpoint's ``eos_token_id``, which ends a definition; a writer's base must name one id."""
+    eos = text.get("eos_token_id")
+    if isinstance(eos, bool) or not isinstance(eos, int):
+        raise PackageError(
+            f"a definition writer needs the base's eos_token_id as one token id, not {eos!r}"
+        )
+    return eos
+
+
 class LabelDefiner:
     """The package's ``LabelDefiner.define`` over an engine that can ``generate``."""
 
@@ -110,6 +121,8 @@ class LabelDefiner:
         tokenizer: Any,
         pad_id: int,
         cache: Path | None,
+        *,
+        eos_token_id: int,
         batch: int = BATCH,
         max_cached: int = MAX_CACHED,
     ):
@@ -117,7 +130,7 @@ class LabelDefiner:
         self.tokenizer = tokenizer
         self.pad_id = pad_id
         self.batch = batch
-        self.eos = tokenizer.token_to_id(IM_END)
+        self.eos = eos_token_id
         # The package's label_definitions.json stays; generated entries are an LRU.
         self.shipped: dict[Any, dict[str, str]] = (
             load_cache(cache) if cache is not None else {}
@@ -196,8 +209,14 @@ def writer_of(
     tokenizer: Any,
     pad_id: int,
     cache: Path | None,
+    *,
+    eos_token_id: int | None,
 ) -> LabelDefiner | None:
-    """The definition writer for ``mode``; None for ``names`` and anything without an LM head."""
-    if mode not in ("base", "grafted_head") or engine.lm_head is None:
+    """The definition writer for ``mode``; None for ``names`` and anything without an LM head or end token."""
+    if (
+        mode not in ("base", "grafted_head")
+        or engine.lm_head is None
+        or eos_token_id is None
+    ):
         return None
-    return LabelDefiner(engine, tokenizer, pad_id, cache)
+    return LabelDefiner(engine, tokenizer, pad_id, cache, eos_token_id=eos_token_id)

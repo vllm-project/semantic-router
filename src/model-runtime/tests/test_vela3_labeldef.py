@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+from vllm_srun.errors import PackageError
 from vllm_srun.families.decision3 import prompt
 from vllm_srun.families.vela3_d3.labeldef import (
     BATCH,
@@ -13,7 +15,11 @@ from vllm_srun.families.vela3_d3.labeldef import (
     first_line,
     prompt_for,
     user_turn,
+    writer_eos,
+    writer_of,
 )
+
+EOS = 248044
 
 
 class Recording:
@@ -27,6 +33,7 @@ class Recording:
     def generate(self, rows, *, max_new_tokens, eos_token_id, pad_token_id):
         self.calls.append([list(row) for row in rows])
         assert max_new_tokens == 40
+        assert eos_token_id == EOS
         return [self._ids("A short code.\nignored") for _ in rows]
 
     @staticmethod
@@ -43,10 +50,6 @@ class Letters:
 
     def decode(self, ids, skip_special_tokens: bool = True) -> str:
         return "".join(chr(i) for i in ids)
-
-    def token_to_id(self, token: str) -> int:
-        assert token == "<|im_end|>"
-        return 7
 
 
 def test_the_prompt_adds_the_label_set_only_up_to_sixty() -> None:
@@ -65,7 +68,7 @@ def test_the_user_turn_is_thinking_off_with_no_system_turn() -> None:
 
 def test_definitions_keep_the_first_line_and_the_set_cache() -> None:
     engine = Recording()
-    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=None)  # type: ignore[arg-type]
+    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=None, eos_token_id=EOS)  # type: ignore[arg-type]
     assert writer.define(["dose", "drug"], {"drug"}) == {"drug": "A short code."}
     encoded = "".join(chr(i) for i in engine.calls[0][0])
     assert "The full label set is: dose, drug." in encoded
@@ -94,14 +97,14 @@ def test_a_recorded_set_is_not_generated(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     engine = Recording()
-    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=cache)  # type: ignore[arg-type]
+    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=cache, eos_token_id=EOS)  # type: ignore[arg-type]
     assert writer.define(["drug", "dose"], {"drug"}) == {"drug": "from the file"}
     assert engine.calls == []
 
 
 def test_more_than_one_batch_is_split() -> None:
     engine = Recording()
-    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=None, batch=2)  # type: ignore[arg-type]
+    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=None, eos_token_id=EOS, batch=2)  # type: ignore[arg-type]
     names = ["a", "b", "c"]
     assert set(writer.define(names, set(names))) == set(names)
     assert [len(call) for call in engine.calls] == [2, 1]
@@ -110,7 +113,7 @@ def test_more_than_one_batch_is_split() -> None:
 
 def test_a_large_set_is_cached_per_label_without_the_context_line() -> None:
     engine = Recording()
-    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=None)  # type: ignore[arg-type]
+    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=None, eos_token_id=EOS)  # type: ignore[arg-type]
     names = [f"n{index}" for index in range(CTX_MAX + 1)]
     assert writer.define(names, {names[0]})[names[0]] == "A short code."
     encoded = "".join(chr(i) for i in engine.calls[0][0])
@@ -130,7 +133,7 @@ def test_generated_definitions_are_a_bounded_lru_and_the_file_stays(
         encoding="utf-8",
     )
     engine = Recording()
-    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=cache, max_cached=2)  # type: ignore[arg-type]
+    writer = LabelDefiner(engine, Letters(), pad_id=0, cache=cache, eos_token_id=EOS, max_cached=2)  # type: ignore[arg-type]
     for name in ("a", "b"):
         writer.define([name], {name})
     writer.define(["a"], {"a"})  # a is now the most recently used
@@ -158,3 +161,19 @@ def test_the_real_tokenizer_round_trips_the_user_turn(tmp_path: Path) -> None:
     ids = tokenizer.encode(text, add_special_tokens=False).ids
     assert pad != tokenizer.token_to_id("<|im_end|>")
     assert "<|im_start|>user" in tokenizer.decode(ids, skip_special_tokens=False)
+
+
+def test_a_writer_ends_at_one_eos_id_from_the_config() -> None:
+    assert writer_eos({"eos_token_id": EOS}) == EOS
+    for bad in (
+        {},
+        {"eos_token_id": None},
+        {"eos_token_id": [EOS]},
+        {"eos_token_id": True},
+    ):
+        with pytest.raises(PackageError, match="eos_token_id"):
+            writer_eos(bad)
+    engine = Recording()
+    assert writer_of("names", engine, Letters(), 0, None, eos_token_id=EOS) is None  # type: ignore[arg-type]
+    writer = writer_of("base", engine, Letters(), 0, None, eos_token_id=EOS)  # type: ignore[arg-type]
+    assert writer is not None and writer.eos == EOS

@@ -18,6 +18,7 @@ import torch
 from ...errors import PackageError
 from ...heads.span import SpanHead
 from ...plugins.base import (
+    BackboneSpec,
     DeviceInfo,
     EngineModel,
     GatedAdapterSpec,
@@ -34,7 +35,7 @@ from ..decision3.package import is_state_once
 from ..vela3_shared import PRESETS
 from . import package as pkg
 from .gates import Gates
-from .labeldef import LabelDefiner, lm_head_spec, writer_of
+from .labeldef import LabelDefiner, lm_head_spec, writer_eos, writer_of
 from .model import GatedDecisions, TurboDecisions, Vela3D3Model
 from .span_policy import Policy
 from .span_read import SpanReader
@@ -207,14 +208,14 @@ class Vela3D3Family(ModelFamily):
             )
             for name, adapter in details.adapters.items()
         }
+        lm_head = lm_head_spec(details.root, details.vela3, spec.backbone.config)
+        if lm_head is not None:
+            # A writer's base must name its end token; refused here, before any weight loads.
+            writer_eos(spec.backbone.config)
         return replace(
             spec,
             name=package.model_name,
-            backbone=replace(
-                spec.backbone,
-                gated=gated,
-                lm_head=lm_head_spec(details.root, details.vela3, spec.backbone.config),
-            ),
+            backbone=replace(spec.backbone, gated=gated, lm_head=lm_head),
         )
 
     def load(
@@ -225,7 +226,7 @@ class Vela3D3Family(ModelFamily):
         model = Decision3Family(self.options).load_as(
             base, spec, engine_model, _model_class(base)
         )
-        definer = _definer(details, model)
+        definer = _definer(details, model, spec.backbone)
         # Writing a definition decodes with the base while the request plans.
         model.plans_run_forwards = definer is not None
         heads = {
@@ -278,8 +279,10 @@ def _names_only(names: list[str], only: set[str]) -> dict[str, str]:
     return {}
 
 
-def _definer(details: pkg.Vela3D3Package, model: Vela3D3Model) -> LabelDefiner | None:
-    """The package's definition writer; None for ``names`` and a base with no head."""
+def _definer(
+    details: pkg.Vela3D3Package, model: Vela3D3Model, backbone: BackboneSpec
+) -> LabelDefiner | None:
+    """The package's definition writer; None for ``names`` and a base with no LM head."""
     definitions = details.vela3.get("definitions") or {}
     cache = definitions.get("cache_file") if isinstance(definitions, dict) else None
     return writer_of(
@@ -292,6 +295,9 @@ def _definer(details: pkg.Vela3D3Package, model: Vela3D3Model) -> LabelDefiner |
         model.tokenizer,
         model.pad_id,
         details.root / cache if isinstance(cache, str) else None,
+        eos_token_id=(
+            writer_eos(backbone.config) if backbone.lm_head is not None else None
+        ),
     )
 
 
