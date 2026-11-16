@@ -1,5 +1,9 @@
 # Deploy vLLM Semantic Router
 
+For the focused local-image Router or Engine first start, use the
+[Serve skill](https://vllm-sr.ai/install/agent/vllm-sr-serve/SKILL.md).
+This reference also covers the broader Docker and Kubernetes paths.
+
 Steps 1 to 5 take a host with Docker to a checked stack; run them in order after
 the [main skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md)'s preflight. The later sections cover GPU platforms,
 engine mode, Envoy, Kubernetes, Dashboard access, a second stack, a pinned
