@@ -318,7 +318,9 @@ func (a *Allocator) Placeholder(entityType, value string) string {
 			config.MaskingPlaceholderIndexToken,
 			strconv.Itoa(index),
 		)
-		if a.reserved[placeholder] {
+		// Different templates can intersect even when the templates themselves
+		// are distinct. A new value must not reuse another type's placeholder.
+		if a.reserved[placeholder] || a.issued[placeholder] {
 			continue
 		}
 		a.assigned[key] = placeholder
