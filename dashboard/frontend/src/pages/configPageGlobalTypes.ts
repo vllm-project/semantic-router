@@ -356,6 +356,11 @@ export interface RouterLearningConfig {
       min_turns_before_switch?: number
       switch_margin?: number
       stability_weight?: number
+      cache_economics?: {
+        enabled?: boolean
+        cache_ttl_seconds?: number
+        default_remaining_turns?: number
+      }
     }
     release?: {
       enabled?: boolean

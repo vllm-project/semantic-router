@@ -128,7 +128,45 @@ type RouterLearningProtectionTuning struct {
 	SwitchMargin         *float64 `yaml:"switch_margin,omitempty"`
 	StabilityWeight      *float64 `yaml:"stability_weight,omitempty"`
 
-	ProgressGate *ProgressGateTuning `yaml:"progress_gate,omitempty"`
+	ProgressGate   *ProgressGateTuning   `yaml:"progress_gate,omitempty"`
+	CacheEconomics *CacheEconomicsTuning `yaml:"cache_economics,omitempty"`
+}
+
+// CacheEconomicsTuning prices a switch protection would make against the
+// prompt cache the session's last receipt left warm on its current model.
+// Omitting the section keeps it on with the defaults.
+type CacheEconomicsTuning struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
+	// CacheTTLSeconds is how long a cache entry lives after its last use. A
+	// receipt that wrote 1-hour entries extends it to 3600.
+	CacheTTLSeconds *int `yaml:"cache_ttl_seconds,omitempty" jsonschema:"minimum=1,maximum=86400"`
+	// DefaultRemainingTurns is the turns a switch has to repay its rewrite in
+	// when no remaining-turn prior applies.
+	DefaultRemainingTurns *int `yaml:"default_remaining_turns,omitempty" jsonschema:"minimum=1"`
+}
+
+// CacheEconomicsConfig is the resolved policy shared by validation and execution.
+type CacheEconomicsConfig struct {
+	Enabled               bool
+	CacheTTLSeconds       int
+	DefaultRemainingTurns int
+}
+
+func (tuning *CacheEconomicsTuning) EffectiveConfig() CacheEconomicsConfig {
+	cfg := CacheEconomicsConfig{Enabled: true, CacheTTLSeconds: 300, DefaultRemainingTurns: 3}
+	if tuning == nil {
+		return cfg
+	}
+	if tuning.Enabled != nil {
+		cfg.Enabled = *tuning.Enabled
+	}
+	if tuning.CacheTTLSeconds != nil {
+		cfg.CacheTTLSeconds = *tuning.CacheTTLSeconds
+	}
+	if tuning.DefaultRemainingTurns != nil {
+		cfg.DefaultRemainingTurns = *tuning.DefaultRemainingTurns
+	}
+	return cfg
 }
 
 // ProgressGateTuning gates session model switches on recent-window progress

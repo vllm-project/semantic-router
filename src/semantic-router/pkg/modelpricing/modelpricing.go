@@ -1,6 +1,8 @@
 // Package modelpricing calculates token costs from provider-reported usage.
 package modelpricing
 
+import "time"
+
 const tokensPerMillion = 1_000_000.0
 
 // Rates contains the active per-million-token prices for one model.
@@ -52,6 +54,17 @@ type Usage struct {
 	CacheWrite5mTokens int
 	CacheWrite1hTokens int
 	CompletionTokens   int
+}
+
+// Receipt is one response's provider-reported usage on Model, kept so the next
+// routing decision can price the prompt cache that response left warm.
+type Receipt struct {
+	Model string
+	Usage Usage
+	// CacheReported is false when the backend reported no cache counts, so a
+	// zero cache read means unknown rather than cold.
+	CacheReported bool
+	At            time.Time
 }
 
 // Breakdown is the normalized, mutually exclusive token allocation.

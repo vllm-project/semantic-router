@@ -190,6 +190,11 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
           min_turns_before_switch: number('Minimum Turns Before Switch', { min: 0 }),
           switch_margin: number('Switch Margin', { min: 0 }),
           stability_weight: number('Stability Weight', { min: 0 }),
+          cache_economics: object('Cache Economics', {
+            enabled: boolean('Enabled'),
+            cache_ttl_seconds: number('Cache TTL Seconds', { min: 1, max: 86400 }),
+            default_remaining_turns: number('Default Remaining Turns', { min: 1 }),
+          }),
         }),
       }),
     },

@@ -658,6 +658,7 @@ func protectionSelectionConfig(cfg config.RouterLearningProtectionConfig) *selec
 	if tuning.SwitchMargin != nil {
 		result.SwitchMargin = *tuning.SwitchMargin
 	}
+	result.CacheEconomics = tuning.CacheEconomics.EffectiveConfig()
 	applyProtectionStabilityWeight(result, learningProtectionStabilityWeight(cfg))
 	return result
 }
