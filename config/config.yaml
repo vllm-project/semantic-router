@@ -2342,11 +2342,13 @@ global:
         scope: conversation
         identity:
           headers:
-            # Unset, protection keys on the session id the request pins.
+            # Unset, protection keys on the session id the request pins, else
+            # on the session-id Codex sends.
             session: x-session-id
             conversation: x-conversation-id
             # Optional: holds each named agent (a delegated subagent) on its own
-            # model inside the session. Claude Code sends this on subagent calls.
+            # model inside the session. Unset, protection reads the agent Claude
+            # Code (this header, on subagent calls) or Codex (thread-id) sends.
             agent: x-claude-code-agent-id
         tuning:
           idle_timeout_seconds: 300

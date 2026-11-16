@@ -25,6 +25,14 @@ CLAUDE_HEADERS = {
 CODEX_HEADERS = {"session": "session-id", "agent": "thread-id"}
 # what Pi sends with the session-affinity compat connect writes; it names no agent
 PI_HEADERS = {"session": "x-session-id"}
+# what the Router reads when protection's identity.headers names none: the session
+# a request pins with a session_id_headers default, then these, as
+# defaultIdentityHeaders in its config package lists them
+SESSION_ID_HEADERS = ("x-session-id", "x-claude-code-session-id")
+IDENTITY_DEFAULTS = {
+    "session": ("session-id",),
+    "agent": ("x-claude-code-agent-id", "thread-id"),
+}
 MAYBE_ANTHROPIC = (
     " (if a model it can pick is served over Anthropic Messages;"
     " its api_format is not set here)"
@@ -70,26 +78,49 @@ def _get(doc: Any, *keys: str) -> Any:
     return doc
 
 
-PROTECTION_NEED = "session protection on this harness's identity headers, so each session and subagent keeps its model"
+PROTECTION_NEED = "session protection, so each session and subagent keeps its model"
+IDENTITY_NEED = (
+    "session protection on this harness's identity headers, which the configuration"
+    " names otherwise, so each session and subagent keeps its model"
+)
+
+
+def _reads_identity(router: dict, headers: dict[str, str]) -> bool:
+    """Whether protection reads the harness's identity headers: as identity.headers
+    names them, or, where it names none, by the Router's defaults."""
+    named = _get(router, "learning", "protection", "identity", "headers") or {}
+    pinned = _get(router, "headers", "session_id_headers") or SESSION_ID_HEADERS
+    return all(
+        (
+            named[key] == name
+            if named.get(key)
+            else name in IDENTITY_DEFAULTS[key] or (key == "session" and name in pinned)
+        )
+        for key, name in headers.items()
+    )
 
 
 def _protection_finding(router: dict, headers: dict[str, str]) -> RouterFinding | None:
     learning = router.get("learning") or {}
     protection = learning.get("protection") or {}
-    configured = _get(protection, "identity", "headers") or {}
+    reads = _reads_identity(router, headers)
     if (
         learning.get("enabled") is True
         and protection.get("enabled") is True
         and protection.get("scope") == "session"
-        and all(configured.get(k) == v for k, v in headers.items())
+        and reads
     ):
         return None
+    snippet = (
+        "global:\n  router:\n    learning:\n      enabled: true\n      protection:\n"
+        "        enabled: true\n        scope: session"
+    )
+    if reads:
+        return RouterFinding(PROTECTION_NEED, snippet)
     lines = "\n".join(f"            {k}: {v}" for k, v in headers.items())
     return RouterFinding(
-        PROTECTION_NEED,
-        "global:\n  router:\n    learning:\n      enabled: true\n      protection:\n"
-        "        enabled: true\n        scope: session\n        identity:\n          headers:\n"
-        + lines,
+        IDENTITY_NEED,
+        snippet + "\n        identity:\n          headers:\n" + lines,
     )
 
 
@@ -402,7 +433,8 @@ def check_router_config(
     found = findings.get(harness, _codex_findings)(doc, router, reach)
     # an entrypoint that reaches one model has no model to keep
     single = reachable is not None and len(set(reachable)) <= 1
-    return [f for f in found if f and not (single and f.need == PROTECTION_NEED)]
+    needs = (PROTECTION_NEED, IDENTITY_NEED)
+    return [f for f in found if f and not (single and f.need in needs)]
 
 
 def output_limit(doc: dict | None, entrypoint: str) -> int | None:

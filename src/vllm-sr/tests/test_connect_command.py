@@ -442,6 +442,33 @@ def _learning(headers, enabled=True):
     }
 
 
+def test_router_check_needs_no_identity_headers_the_router_reads_by_default():
+    session = {"enabled": True, "protection": {"enabled": True, "scope": "session"}}
+    max_tokens = [
+        {"type": "request_params", "configuration": {"default_max_tokens": 32000}}
+    ]
+    assert (
+        rc.check_router_config(_router(["tools.defer_loading"], session), "claude-code")
+        == []
+    )
+    codex = _router(["reasoning.signature"], session, plugins=max_tokens)
+    assert rc.check_router_config(codex, "codex") == []
+    assert rc.check_router_config(_router(["reasoning.signature"], session), "pi") == []
+    # without protection, the advice turns it on and names no identity headers
+    (finding,) = rc.check_router_config(_router(["tools.defer_loading"]), "claude-code")
+    assert "scope: session" in finding.snippet and "identity" not in finding.snippet
+    # identity headers that name others replace the defaults, so the advice names
+    # the harness's own
+    other = _router(["tools.defer_loading"], _learning({"agent": "x-agent-id"}))
+    (finding,) = rc.check_router_config(other, "claude-code")
+    assert "agent: x-claude-code-agent-id" in finding.snippet
+    # Claude Code's session is read from session_id_headers when identity names none
+    narrowed = _router(["tools.defer_loading"], session)
+    narrowed["global"]["router"]["headers"] = {"session_id_headers": ["x-session-id"]}
+    (finding,) = rc.check_router_config(narrowed, "claude-code")
+    assert "session: x-claude-code-session-id" in finding.snippet
+
+
 def test_router_check_for_claude_code():
     needs = [f.need for f in rc.check_router_config(_router(), "claude-code")]
     assert any("tools.defer_loading" in n for n in needs)
