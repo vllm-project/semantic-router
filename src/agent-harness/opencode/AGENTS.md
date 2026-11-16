@@ -11,5 +11,8 @@
 - Run `make agent-opencode-test` from the repository root, or `npm ci`,
   `npm run check`, and `npm test` here. CI runs it in the Agent Plugins contract.
 - When the Claude Code plugin changes how it reads a listener's profile or
-  rules (`lib/profile.ts`, `lib/rules.ts`), port the change to `listener.ts`. Test the packed artifact with
+  rules (`lib/profile.ts`, `lib/rules.ts`), port the change to `listener.ts`.
+  When it bumps the runtime pin (`COMMIT` in `skills/setup/scripts/local.py`),
+  bump the same commit in `skills/vsr-setup/SKILL.md`: both plugins install
+  one shared runtime. Test the packed artifact with
   the pinned OpenCode release whenever registration or package exports change.

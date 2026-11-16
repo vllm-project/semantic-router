@@ -3,6 +3,7 @@ import { isRecord } from "./settings.ts";
 import type { Settings } from "./settings.ts";
 import type { RuntimeStatus } from "./runtime.ts";
 import type { ControlResult } from "./controls.ts";
+import type { Verification } from "./verify.ts";
 export interface ViewSnapshot extends Snapshot {
   apps: Settings["apps"];
   waits: Settings["waits"];
@@ -29,7 +30,7 @@ export interface ViewService {
     decisionID: string,
     feedback: Feedback,
   ): Promise<unknown>;
-  diagnose(): Promise<{ ok: boolean }>;
+  diagnose(): Promise<Verification>;
 }
 export interface ViewState {
   sessionID: string | undefined;
@@ -192,23 +193,23 @@ export class DecisionView {
     this.emit();
     return saved;
   }
-  async diagnose(): Promise<boolean> {
-    if (this.state.busy || this.closed) return false;
+  async diagnose(): Promise<Verification | undefined> {
+    if (this.state.busy || this.closed) return undefined;
     const operation = ++this.operation;
     this.state.busy = true;
     this.emit();
-    let ok = false;
+    let found: Verification | undefined;
     try {
-      ok = (await this.service.diagnose()).ok;
+      found = await this.service.diagnose();
     } catch {
       /* Transport status is shown by refresh. */
     }
-    if (this.closed || operation !== this.operation) return ok;
+    if (this.closed || operation !== this.operation) return found;
     await this.refresh();
-    if (this.closed || operation !== this.operation) return ok;
+    if (this.closed || operation !== this.operation) return found;
     this.state.busy = false;
     this.emit();
-    return ok;
+    return found;
   }
   close(): void {
     this.closed = true;
@@ -267,4 +268,39 @@ export function summary(decisions: readonly Decision[]) {
     priced,
     unpriced,
   };
+}
+export const APP_NAMES = {
+  router: "Router",
+  escalate: "Escalate",
+  redact: "Redact",
+  shield: "Shield",
+  guard: "Guard",
+  check: "Check",
+} as const;
+export function median(values: readonly number[]): number | undefined {
+  if (!values.length) return undefined;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = sorted.length >> 1;
+  return sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1]! + sorted[middle]!) / 2;
+}
+// One line per app: ✓ when it decides the case as it does on vela3-lite, ✗ when it does not or cannot.
+export function report(found: Verification): string {
+  const asked = found.probes.filter((probe) => probe.verdict !== "off");
+  const lines = [
+    `Runtime: ${found.source === "connect" ? "from /connect" : "from the plugin options"} · ${found.models.length ? `models ${found.models.join(", ")}` : "no model listed"}`,
+    ...found.probes.map((probe) =>
+      probe.verdict === "off"
+        ? `– ${APP_NAMES[probe.app]} off`
+        : `${probe.verdict === probe.expected ? "✓" : "✗"} ${APP_NAMES[probe.app]} ${probe.verdict} · ${probe.detail} · ${Math.round(probe.elapsedMs)} ms`,
+    ),
+  ];
+  const middle = median(asked.map((probe) => probe.elapsedMs));
+  if (middle !== undefined) lines.push(`Median ${Math.round(middle)} ms`);
+  if (asked.some((probe) => probe.verdict === "no answer"))
+    lines.push(
+      "No answer: offline, timeout or HTTP 401/403 mean the runtime is down, slower than the app's wait (F7) or refuses the token; HTTP 503 that its model did not load.",
+    );
+  return lines.join("\n");
 }

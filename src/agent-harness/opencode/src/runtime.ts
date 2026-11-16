@@ -1,5 +1,6 @@
 import { isRecord } from "./settings.ts";
 import type { Settings } from "./settings.ts";
+import type { Target } from "./connection.ts";
 
 export type Failure =
   | "cancelled"
@@ -24,6 +25,8 @@ export interface RuntimeStatus {
   reachable: boolean | null;
   retryAt: number;
   models: ModelInfo[];
+  // Where the runtime came from: the plugin options, or a `/connect` credential.
+  source: "options" | "connect";
 }
 interface Dependencies {
   fetch?: typeof fetch;
@@ -132,20 +135,50 @@ function waitFor(turn: Promise<void>, signal: AbortSignal): Promise<void> {
 export class RuntimeClient {
   private readonly fetcher: typeof fetch;
   private readonly now: () => number;
-  private readonly token: () => string | undefined;
+  private token: () => string | undefined;
+  private readonly configured: { url: string; model: string };
+  private readonly configuredToken: () => string | undefined;
   private readonly retryMs: number;
   private tail: Promise<void> = Promise.resolve();
   private pending = 0;
   private closed = new AbortController();
-  private state: RuntimeStatus = { reachable: null, retryAt: 0, models: [] };
+  private state: RuntimeStatus = {
+    reachable: null,
+    retryAt: 0,
+    models: [],
+    source: "options",
+  };
   private readonly settings: Settings;
   constructor(settings: Settings, dependencies: Dependencies = {}) {
     this.settings = structuredClone(settings);
     this.fetcher = dependencies.fetch ?? fetch;
     this.now = dependencies.now ?? Date.now;
-    this.token =
+    this.configuredToken =
       dependencies.token ?? (() => process.env[this.settings.runtimeTokenEnv]);
+    this.token = this.configuredToken;
+    this.configured = {
+      url: this.settings.runtimeUrl,
+      model: this.settings.runtimeModel,
+    };
     this.retryMs = dependencies.retryMs ?? 60_000;
+  }
+  // A `/connect` credential replaces the runtime the options name, and removing it brings that one back. Another
+  // runtime starts unknown: what the previous one listed and its breaker do not carry over. Says whether it changed.
+  connect(target: Target | undefined): boolean {
+    const next = target ?? this.configured;
+    const token = target ? () => target.token : this.configuredToken;
+    const source = target ? "connect" : "options";
+    const changed =
+      next.url !== this.settings.runtimeUrl ||
+      next.model !== this.settings.runtimeModel ||
+      source !== this.state.source ||
+      token() !== this.token();
+    this.settings.runtimeUrl = next.url;
+    this.settings.runtimeModel = next.model;
+    this.token = token;
+    if (changed)
+      this.state = { reachable: null, retryAt: 0, models: [], source };
+    return changed;
   }
   status(): RuntimeStatus {
     return structuredClone(this.state);

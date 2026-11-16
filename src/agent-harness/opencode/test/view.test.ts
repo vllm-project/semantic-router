@@ -17,7 +17,7 @@ const snapshot = (
   apps: { ...config.apps },
   waits: { ...config.waits },
   controls: { revision: 0, persistence: "durable", goal: "balanced" },
-  runtime: { reachable: null, retryAt: 0, models: [] },
+  runtime: { reachable: null, retryAt: 0, models: [], source: "options" },
 });
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -31,7 +31,7 @@ function service(extra: Partial<ViewService> = {}): ViewService {
     snapshot: async (id) => snapshot(id),
     controls: async () => ({ saved: false, reason: "storage" }),
     feedback: async () => {},
-    diagnose: async () => ({ ok: true }),
+    diagnose: async () => ({ source: "options", models: [], probes: [] }),
     ...extra,
   };
 }

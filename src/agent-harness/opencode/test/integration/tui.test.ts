@@ -35,13 +35,19 @@ test(
         { at: 8500, keys: "\u001b[19~" }, // F8: feedback
         { at: 9000, keys: "\r" },
         { at: 9500, keys: "\u001b[B\r" }, // Wrong decision.
-        { at: 11000, keys: "\u001b[20~" }, // F9: diagnose
-        { at: 12500, keys: "\u001b[21~" }, // F10: sessions
-        { at: 13000, keys: "\u001b[B\r" },
-        { at: 14500, keys: "\u001b[15~" },
-        { at: 15500, resize: [46, 161] },
+        { at: 11000, keys: "\u001b[20~" }, // F9: check the runtime
+        { at: 12500, keys: "\r" }, // Close its report.
+        { at: 13500, keys: "\u001b[21~" }, // F10: sessions
+        { at: 14000, keys: "\u001b[B\r" },
+        { at: 15500, keys: "\u001b[15~" },
+        { at: 16500, resize: [46, 161] },
       ],
-      16.5,
+      17.5,
+    );
+    assert.ok(
+      screen.text.includes("vSR decision runtime") &&
+        screen.text.includes("Runtime: from the plugin options"),
+      "F9 reports the runtime check: " + screen.text.slice(-8000),
     );
     assert.ok(screen.text.includes("vSR decisions"), screen.text.slice(-8000));
     assert.ok(
@@ -75,10 +81,16 @@ test(
       generations,
       "UI rendering and controls must not generate model requests",
     );
-    assert.equal(
-      native.states.length,
-      classifications,
-      "rendering must not classify",
+    const asked = native.states.slice(classifications);
+    assert.ok(asked.length > 0, "F9 asks the runtime");
+    assert.ok(
+      asked.every((state) =>
+        ["Ticket #1042", "Acme Payments SDK", "No, task 2 is wrong"].some(
+          (sample) => state.includes(sample),
+        ),
+      ),
+      "only F9's cases are classified, never the rendering: " +
+        JSON.stringify(asked),
     );
     assert.notEqual(second.data.id, first.sessionID);
   },

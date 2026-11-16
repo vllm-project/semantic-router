@@ -96,6 +96,7 @@ test("offline breaker suppresses repeats, recovers after its deadline and never 
     reachable: true,
     retryAt: 0,
     models: [],
+    source: "options",
   });
 });
 

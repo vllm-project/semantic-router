@@ -228,6 +228,12 @@ export class Listener {
       this.settings.apps[app] = value;
     }
   }
+  // Another runtime: the rules read from the previous one no longer apply, and the next prompt reads the new listing.
+  forget(): void {
+    this.rules = NO_RULES;
+    this.restored = false;
+    this.askedAt = -Infinity;
+  }
   // Hands the apps changed in the decision view back to the listener; the ones named in the plugin options stay.
   async unpin(): Promise<void> {
     this.pinned = new Set(this.configured);

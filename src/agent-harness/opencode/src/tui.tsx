@@ -3,19 +3,13 @@ import { createEffect, createSignal, For, Show } from "solid-js";
 import { Vsr } from "./rpc.ts";
 import { APPS } from "./settings.ts";
 import type { App, Wait } from "./settings.ts";
-import { DecisionView, emptyView, summary } from "./view.ts";
+import { APP_NAMES, DecisionView, emptyView, report, summary } from "./view.ts";
 import type { ViewSnapshot, ViewState } from "./view.ts";
 import type { ControlResult } from "./controls.ts";
 import type { Decision, Feedback } from "./decisions.ts";
+import type { Verification } from "./verify.ts";
 
-const names: Record<App, string> = {
-  router: "Router",
-  escalate: "Escalate",
-  redact: "Redact",
-  shield: "Shield",
-  guard: "Guard",
-  check: "Check",
-};
+const names: Record<App, string> = APP_NAMES;
 const outcome = (decision: Decision) =>
   decision.outcome === "verified"
     ? "VERIFIED against supplied evidence"
@@ -48,11 +42,12 @@ export default Plugin.define({
             { sessionID, decisionID, feedback },
             { ...options, signal: AbortSignal.timeout(5000) },
           ),
+        // Six cases, each within its app's own wait.
         diagnose: async () =>
-          (await remote.diagnose(
+          (await remote.verify(
             {},
-            { ...options, signal: AbortSignal.timeout(5000) },
-          )) as { ok: boolean },
+            { ...options, signal: AbortSignal.timeout(60_000) },
+          )) as Verification,
       },
       (state) => update((draft) => Object.assign(draft, state)),
     );
@@ -206,17 +201,23 @@ export default Plugin.define({
         },
         {
           id: "vsr.diagnose",
-          title: "vSR runtime diagnosis",
+          title: "vSR check the decision runtime",
           bind: "f9",
-          slash: { name: "vsr-diagnose" },
+          slash: { name: "vsr-check" },
           palette: true,
           run: async () => {
-            const ok = await controller.diagnose();
-            ctx.ui.toast.show({
-              message: ok
-                ? "Decision runtime capabilities checked."
-                : "Decision runtime check unavailable.",
-              variant: ok ? "success" : "warning",
+            ctx.ui.toast.show({ message: "vSR: asking the decision runtime…" });
+            const found = await controller.diagnose();
+            if (!found) {
+              ctx.ui.toast.show({
+                message: "Decision runtime check unavailable.",
+                variant: "warning",
+              });
+              return;
+            }
+            await ctx.ui.dialog.alert({
+              title: "vSR decision runtime",
+              message: report(found),
             });
           },
         },
@@ -321,7 +322,7 @@ export default Plugin.define({
               {/* The list scrolls; the summary lines keep their height instead of drawing over each other. */}
               <text flexShrink={0}>vSR decisions · {panel.sessionID}</text>
               <text flexShrink={0} fg={ctx.theme.textMuted}>
-                F6 apps · F7 waits · F8 feedback · F9 diagnose · F10 session
+                F6 apps · F7 waits · F8 feedback · F9 check · F10 session
               </text>
               <Show when={view.error}>
                 <text flexShrink={0} fg={ctx.theme.warning}>

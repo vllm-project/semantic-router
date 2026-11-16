@@ -25,6 +25,13 @@ fixtures, and `guard-hooks.ts` tightens native permissions and observes terminal
 outcomes. Pending guards reject saturation instead of dropping active checks.
 `listener.ts` reads a Router listener's `vsr` profile and rules and asks those
 rules, ported from the Claude Code plugin's `lib/profile.ts` and `lib/rules.ts`.
+`connection.ts` defines the `/connect` integration and reads its credential;
+`index.ts` switches the runtime client to it on load, at each prompt and when a
+credential changes, and drops the previous runtime's listener rules.
+`verify.ts` asks F9's cases through each app's own policy path; its cases and
+expected verdicts are the Claude Code plugin's smoke probes. `skills/vsr-setup`
+is registered as an OpenCode skill and carries no scripts: its commands mirror
+the Claude Code plugin's `local.py` and share its pin, venv and port.
 `masking.ts` owns fixed secret patterns, validated Unicode spans and interval
 masking. `output-policy.ts` owns Redact/Shield scanning, coverage and attachment
 policy. `output-hooks.ts` adapts tool results/outgoing context and prevents

@@ -2,8 +2,9 @@
 
 This package is under development for OpenCode 2.2.0. Router, Escalate, Guard,
 Redact, Shield and Check are implemented, with a native terminal decision panel
-and durable app/wait controls. Setup, durable feedback/calibration and full
-combined qualification remain later implementation stages.
+and durable app/wait controls, and set up through OpenCode's `/connect` and a
+`vsr-setup` skill. Durable feedback/calibration and full combined qualification
+remain later implementation stages.
 
 From this directory, install dependencies and check the package:
 
@@ -38,7 +39,42 @@ For development, configure a local package directory in `opencode.jsonc`:
 }
 ```
 
-Start an existing `vllm-srun` runtime separately. `runtimeModel` selects one model
+## Set up the decision runtime
+
+vSR needs a decision runtime: `vllm-srun serve` on this machine, or a Router
+listener that publishes a System One model.
+
+1. **No runtime yet?** Ask the agent to use the `vsr-setup` skill. It looks at
+   the machine, installs `vllm-srun` pinned to the commit vSR was tested against
+   in `~/.local/share/vsr/venv`, and starts vela3-lite on port 8790 on the GPU
+   or CPU, for this login or as a user service. OpenCode asks before each
+   command it runs. It is the same runtime the Claude Code plugin installs, so
+   one runtime serves every agent on the machine.
+2. **Connect it.** Run `/connect` and pick **vSR decision runtime**: **Runtime
+   without a token** for `http://127.0.0.1:8790/v1/decisions`, or **Runtime with
+   a token** for one that needs a key. The form asks the `/v1/decisions` URL and,
+   when the runtime serves several, the model. OpenCode keeps the token in its
+   own credential store, and vSR switches to the connected runtime at once,
+   without a restart. A connected runtime takes the place of `runtimeUrl`,
+   `runtimeModel` and the token variable below; disconnect it to return to them.
+3. **Check it.** Press **F9** in a session. vSR lists the runtime's models and
+   asks one case per enabled app through the path that app's hook takes (a
+   force push for guard, a support ticket for redact, a page with hidden
+   instructions for shield, an easy task for router, pushback for escalate, an
+   invented summary for check). Each line says whether the app decides it as it
+   does on vela3-lite and how long it took, with the median. An app with no
+   answer means the runtime is offline, refuses the token, or is slower than the
+   app's wait (F7).
+
+A remote runtime receives everything the enabled apps check: each read and shell
+output, fetched page, prompt, child task, shell command and answer.
+
+To remove vSR: take the plugin out of `opencode.json`, remove the credential in
+`/connect`, and, if `vsr-setup` installed a runtime, stop it
+(`systemctl --user disable --now vsr-runtime` for the user service) and delete
+`~/.local/share/vsr`, unless the Claude Code plugin still uses it.
+
+Without `/connect`, the options name the runtime. `runtimeModel` selects one model
 when an endpoint serves several. Remote URLs use the same `/v1/decisions` API.
 Set the named environment variable in the OpenCode server's environment if the
 endpoint needs a token. Credentials, URL query tokens and embedded URL passwords
@@ -46,9 +82,9 @@ are not accepted as options. No token is returned in diagnostics or decision
 snapshots. Redirects are refused so authorization cannot move to another host.
 A remote decision runtime receives the text supplied for classification.
 
-The server registers RPC `vsr.opencode.v1` with `snapshot`, `diagnose`, `controls` and
-`feedback` methods. `diagnose` explicitly queries runtime capabilities; loading
-the package alone sends no content to a model. Import the exported `./rpc`
+The server registers RPC `vsr.opencode.v1` with `snapshot`, `diagnose`, `verify`,
+`controls` and `feedback` methods. `diagnose` queries runtime capabilities and
+`verify` asks F9's cases; loading the package alone sends no content to a model. Import the exported `./rpc`
 definition to call these through an OpenCode client. Snapshots are scoped to the
 requested session. Only decision metadata is retained, not raw prompts, commands
 or output. Decision counts and feedback are currently memory-only and bounded
@@ -246,7 +282,7 @@ server plugin. Open a session, then use these keys or slash/palette commands:
 | F6      | `/vsr-apps`     | Enable or disable an app, or follow the Router listener    |
 | F7      | `/vsr-waits`    | Choose Redact, Shield or Guard bounded/strict waits        |
 | F8      | `/vsr-feedback` | Label a retained decision; Router also offers model labels |
-| F9      | `/vsr-diagnose` | Query decision runtime capabilities                        |
+| F9      | `/vsr-check`    | Check the decision runtime: one case per enabled app       |
 | F10     | `/vsr-sessions` | Select from the latest 100 accessible sessions             |
 | Palette | `/vsr-goal`     | Choose balanced, quality or save                           |
 | Palette | `/vsr-refresh`  | Refresh the authoritative snapshot                         |

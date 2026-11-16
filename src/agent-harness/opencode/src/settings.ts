@@ -54,6 +54,28 @@ function wait(value: unknown, fallback: Wait): Wait {
     return value;
   throw new Error("Invalid wait; use 1000, 2000, 3000 or done");
 }
+export const DEFAULT_RUNTIME_URL = "http://127.0.0.1:8790/v1/decisions";
+// A decision runtime's URL, from the options or from `/connect`.
+export function runtimeUrlOf(text: string): string {
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    throw new Error("Invalid runtimeUrl");
+  }
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    !url.pathname.endsWith("/v1/decisions")
+  )
+    throw new Error(
+      "runtimeUrl must end in /v1/decisions without embedded credentials, query or fragment",
+    );
+  return url.href;
+}
 export function parseSettings(input: unknown): Settings {
   if (input !== undefined && !isRecord(input))
     throw new Error("Invalid plugin options");
@@ -74,28 +96,9 @@ export function parseSettings(input: unknown): Settings {
   ]);
   for (const key of Object.keys(options))
     if (!known.has(key)) throw new Error(`Unknown option: ${key}`);
-  const urlText = string(
-    options.runtimeUrl,
-    "http://127.0.0.1:8790/v1/decisions",
-    "runtimeUrl",
+  const runtimeUrl = runtimeUrlOf(
+    string(options.runtimeUrl, DEFAULT_RUNTIME_URL, "runtimeUrl"),
   );
-  let url: URL;
-  try {
-    url = new URL(urlText);
-  } catch {
-    throw new Error("Invalid runtimeUrl");
-  }
-  if (
-    !["http:", "https:"].includes(url.protocol) ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    !url.pathname.endsWith("/v1/decisions")
-  )
-    throw new Error(
-      "runtimeUrl must end in /v1/decisions without embedded credentials, query or fragment",
-    );
   const tokenEnv = string(
     options.runtimeTokenEnv,
     "VSR_RUNTIME_TOKEN",
@@ -184,7 +187,7 @@ export function parseSettings(input: unknown): Settings {
       injectionThreshold: threshold("shield", "injectionThreshold", 0.9),
     },
     routing: parseRouting(options.routing),
-    runtimeUrl: url.href,
+    runtimeUrl,
     runtimeModel: string(options.runtimeModel, "", "runtimeModel"),
     runtimeTokenEnv: tokenEnv,
     apps,

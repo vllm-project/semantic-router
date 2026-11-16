@@ -123,8 +123,9 @@ export const Vsr = Rpc.define({
               reachable: { type: ["boolean", "null"] },
               retryAt: { type: "number" },
               models,
+              source: { enum: ["options", "connect"] },
             },
-            required: ["reachable", "retryAt", "models"],
+            required: ["reachable", "retryAt", "models", "source"],
             additionalProperties: false,
           },
         },
@@ -169,6 +170,33 @@ export const Vsr = Rpc.define({
             additionalProperties: false,
           },
         ],
+      },
+    },
+    verify: {
+      input: { type: "object", additionalProperties: false },
+      output: {
+        type: "object",
+        properties: {
+          source: { enum: ["options", "connect"] },
+          models: { type: "array", items: { type: "string" } },
+          probes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                app: { type: "string", enum: [...APPS] },
+                verdict: { enum: ["acts", "passes", "no answer", "off"] },
+                expected: { const: "acts" },
+                elapsedMs: { type: "number", minimum: 0 },
+                detail: { type: "string" },
+              },
+              required: ["app", "verdict", "expected", "elapsedMs", "detail"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["source", "models", "probes"],
+        additionalProperties: false,
       },
     },
     controls: {

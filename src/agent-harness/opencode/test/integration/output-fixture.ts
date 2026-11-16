@@ -20,7 +20,8 @@ export const secret = ["SYNTHETIC", "12345678", "SECRET"].join("");
 export const email = "alice@example.test";
 export async function fixture(t: TestContext, strict = false) {
   const requests: Request[] = [],
-    states: string[] = [];
+    states: string[] = [],
+    asked: { host?: string; authorization?: string }[] = [];
   let root = "",
     fail = false;
   let stalled = false,
@@ -49,7 +50,15 @@ export async function fixture(t: TestContext, strict = false) {
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
     const body = JSON.parse(Buffer.concat(chunks).toString());
     if (req.url === "/v1/decisions") {
-      states.push(String(body.state));
+      states.push(
+        typeof body.state === "string"
+          ? body.state
+          : JSON.stringify(body.state),
+      );
+      asked.push({
+        host: req.headers.host,
+        authorization: req.headers.authorization,
+      });
       if (stalled) {
         waiting = true;
         res.on("close", () => {
@@ -235,6 +244,8 @@ export async function fixture(t: TestContext, strict = false) {
     ...native,
     requests,
     states,
+    asked,
+    port: address.port,
     fail(value = true) {
       fail = value;
     },
