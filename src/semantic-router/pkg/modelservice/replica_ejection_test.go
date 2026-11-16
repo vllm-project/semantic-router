@@ -3,7 +3,9 @@ package modelservice
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -29,7 +31,14 @@ type fakeReplica struct {
 // deployment that declares detection, once every one of them is ready.
 func ejectionPool(t *testing.T, detection *config.DeploymentOutlierDetection, names ...string) (*Lease, *replicaPool, map[string]*fakeReplica) {
 	t.Helper()
-	declaration := config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: poolArtifact, OutlierDetection: detection}
+	return replicaDeployment(t, config.ModelDeployment{OutlierDetection: detection}, names...)
+}
+
+// replicaDeployment serves the named fake workers as the replicas of
+// declaration, once every one of them is ready.
+func replicaDeployment(t *testing.T, declaration config.ModelDeployment, names ...string) (*Lease, *replicaPool, map[string]*fakeReplica) {
+	t.Helper()
+	declaration.Provider, declaration.Artifact = config.ModelRuntimeProvider, poolArtifact
 	replicas := make(map[string]*fakeReplica, len(names))
 	for _, name := range names {
 		replica := &fakeReplica{runtime: runtimetest.New(runtimetest.Model{ID: name, Repo: poolArtifact, ModelSHA256: strings.Repeat("a", 64)})}
@@ -294,26 +303,71 @@ func TestReplicaEjectionHoldsAtMaxEjectionPercent(t *testing.T) {
 }
 
 // One replica's forward hangs while its /health stays ready (the Nov 10
-// incident): every exchange it takes runs out of the caller's deadline.
+// incident): every exchange it takes runs out of its deadline, the caller's
+// or, sooner, the deployment's timeout_ms, which also backs it off between
+// exchanges; calls 25 ms apart reach it again after each backoff.
 func TestReplicaPoolStopsDispatchingToAHungReplica(t *testing.T) {
-	lease, pool, replicas := ejectionPool(t, nil, "healthy", "hung")
-	replicas["hung"].runtime.SetDelay(300 * time.Millisecond)
-	failed := 0
-	for i := range 12 {
-		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	for _, timeoutMs := range []int{0, 50} {
+		t.Run(fmt.Sprintf("timeout_ms %d", timeoutMs), func(t *testing.T) {
+			lease, pool, replicas := replicaDeployment(t, config.ModelDeployment{TimeoutMs: timeoutMs}, "healthy", "hung")
+			hung := replicas["hung"]
+			hung.runtime.SetDelay(300 * time.Millisecond)
+			timeouts := replicaRequestsTotal.WithLabelValues(pool.name, hung.worker.id, string(replicaTimeout))
+			before := testutil.ToFloat64(timeouts)
+			failed := 0
+			for i := 0; i < 80 && !hung.ejected(); i++ {
+				ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+				body := json.RawMessage(fmt.Sprintf(`{"state":"request %d","questions":{"q":{"type":"noul","instructions":"Relevant?"}}}`, i))
+				if _, err := lease.SystemOne(ctx, "primary", body); err != nil {
+					failed++
+				}
+				cancel()
+				time.Sleep(25 * time.Millisecond)
+			}
+			if calls := hung.runtime.Calls("decisions"); calls != 3 || failed != 3 || testutil.ToFloat64(timeouts)-before != 3 {
+				t.Fatalf("the hung replica took %d exchanges, %d failed and %v timed out, want 3", calls, failed, testutil.ToFloat64(timeouts)-before)
+			}
+			waitFor(t, func() bool { return hung.state(pool).State == "ejected" }, "the hung replica was not ejected")
+			if status := lease.Statuses()[0]; status.State != "degraded" || status.ReadyReplicas != 1 {
+				t.Fatalf("pool %+v", status)
+			}
+		})
+	}
+}
+
+// An exchange past the deployment's timeout_ms backs the replica off and
+// probes it, as a failure does, so with ejection off a hung replica still
+// leaves dispatch between its timeouts instead of taking every other call.
+func TestReplicaPoolBacksOffAReplicaPastTimeoutMs(t *testing.T) {
+	off := &config.DeploymentOutlierDetection{ConsecutiveTimeouts: intPtr(0)}
+	lease, pool, replicas := replicaDeployment(t, config.ModelDeployment{TimeoutMs: 50, OutlierDetection: off}, "healthy", "hung")
+	hung := replicas["hung"]
+	hung.runtime.SetDelay(300 * time.Millisecond)
+	probes := hung.probes.Load()
+	for i := 0; i < 4 && hung.runtime.Calls("decisions") == 0; i++ {
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		body := json.RawMessage(fmt.Sprintf(`{"state":"request %d","questions":{"q":{"type":"noul","instructions":"Relevant?"}}}`, i))
-		if _, err := lease.SystemOne(ctx, "primary", body); err != nil {
-			failed++
-		}
+		_, _ = lease.SystemOne(ctx, "primary", body)
 		cancel()
 	}
-	if calls := replicas["hung"].runtime.Calls("decisions"); calls != 3 || failed != 3 {
-		t.Fatalf("the hung replica took %d exchanges and %d failed, want 3", calls, failed)
+	if replica := hung.state(pool); replica.State != "backoff" {
+		t.Fatalf("after an exchange past timeout_ms the hung replica is %+v, want backoff", replica)
 	}
-	if replica := replicas["hung"].state(pool); replica.State != "ejected" {
-		t.Fatalf("hung replica %+v", replica)
+	waitFor(t, func() bool { return hung.probes.Load() > probes }, "the replica was not probed")
+}
+
+// A connection the dialer gave up on stays a failure, with its backoff and
+// probe: only an exchange past its deadline counts toward ejection.
+func TestReplicaTransportErrorKeepsADialTimeoutAFailure(t *testing.T) {
+	client := &http.Client{Transport: &http.Transport{DialContext: (&net.Dialer{Timeout: time.Nanosecond}).DialContext}}
+	response, err := client.Get("http://127.0.0.1:1")
+	if err == nil {
+		response.Body.Close()
 	}
-	if status := lease.Statuses()[0]; status.State != "degraded" || status.ReadyReplicas != 1 {
-		t.Fatalf("pool %+v", status)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("not a dial timeout: %v", err)
+	}
+	if outcome := replicaTransportError(context.Background(), err); outcome != replicaFailed {
+		t.Fatalf("a dial timeout is %s", outcome)
 	}
 }

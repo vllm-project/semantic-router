@@ -63,7 +63,7 @@ as the model's answer and every other part as context.
 | `candidate` | The item a judge scores: a document, a segment, a cached request | `relevance` and `same_request` judges |
 | `answer` | The model's answer | Response-stage rules; `answer_check` |
 | `context` | The answer's grounding context: retrieved documents and tool results | Response-stage rules with `input.context`; `hallucination` |
-| `images`, `videos` | The current turn's image and video parts | Rules with `input.image` or `input.video` |
+| `images`, `videos` | Every image the request carries, and the current turn's video parts | Rules with `input.image` or `input.video` |
 
 A part with nothing in it is left out, so a rule that reads the history of a
 first turn asks about the request alone.
@@ -109,11 +109,14 @@ Every model answers a preset in its canonical form. Where a model family was
 trained on a preset, the Router asks it in the trained form instead:
 
 - **Trained bindings.** The Vela 3.0 d3 sizes turn a trained adapter on by
-  exact question ID (`domain`, `attack`, `factcheck`, ...); vela3-fast and
+  exact question ID (`domain`, `factcheck`, `modality`, ...); vela3-fast and
   Vela 2.0 pick it by exact wording, which for every preset they were trained
   on is the canonical wording. Trained option keys are mapped back: the
   modality question's trained `AR`, `DIFFUSION` and `BOTH` come back as
-  `text`, `image` and `text_image`.
+  `text`, `image` and `text_image`. The d3 sizes answer the guards (jailbreak,
+  and harm at the request stage) with their base instead, which their
+  adapters do worse than
+  ([support matrix](../reference/support-matrix.md#support-matrix)).
 - **Router-owned IDs.** A question without a trained form goes out under an ID
   with a `:` in it, which cannot collide with a trained ID and so never turns
   on an adapter by accident.
@@ -156,8 +159,8 @@ recipes[default].signals.pii[personal_data]: span_required: resolves to deployme
 
 ## Media inputs
 
-A rule reads the current turn's images with `input.image` and its videos with
-`input.video`. The answering deployment must declare that it reads the medium,
+A rule reads every image the request carries with `input.image` and the
+current turn's videos with `input.video`. The answering deployment must declare that it reads the medium,
 or the configuration fails to load with `input_modality_unsupported`.
 
 - The d3 family and the Vela 3.0 d3 sizes read images.
@@ -175,7 +178,7 @@ or the configuration fails to load with `input_modality_unsupported`.
 | Levels of a `score` | 2 to 10 |
 | Questions in one call | No protocol limit |
 | Candidates of a choice judge (`tool_rank`) | At most 255, the option limit |
-| Candidates of a per-candidate judge (`relevance`, `same_request`) | `judge.max_candidates`, 64 by default |
+| Candidates of a per-candidate judge (`relevance`, `same_request`) | `judge.max_candidates`, 64 by default, at most 4096 |
 
 A judge over more candidates than its cap truncates; it never fails the
 request. Input length is a property of the model: vela3-fast reads 32,768

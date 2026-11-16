@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"bytes"
+	"cmp"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -97,8 +98,9 @@ type looperFixture struct {
 	// algorithm, indented for the config above.
 	decision string
 	request  string
-	// failing names models whose backend answers 503.
-	failing []string
+	// failing names models whose backend answers failStatus, or 503.
+	failing    []string
+	failStatus int
 	// slow delays every successful answer, so a failure always arrives first
 	// where the algorithm stops once it has enough answers.
 	slow time.Duration
@@ -209,12 +211,13 @@ type looperReply struct {
 // request, and records each request. Like a provider that honors
 // Accept-Encoding, it gzips a buffered reply to a request that accepts gzip.
 type looperBackend struct {
-	failing []string
-	slow    time.Duration
-	mu      sync.Mutex
-	calls   []looperCall
-	running int
-	peak    int
+	failing    []string
+	failStatus int
+	slow       time.Duration
+	mu         sync.Mutex
+	calls      []looperCall
+	running    int
+	peak       int
 }
 
 func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -259,7 +262,7 @@ func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// The headers and body http.Error writes.
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Header().Set("X-Content-Type-Options", "nosniff")
-			writeScriptedBody(w, http.StatusServiceUnavailable,
+			writeScriptedBody(w, cmp.Or(b.failStatus, http.StatusServiceUnavailable),
 				[]byte(`{"error":{"message":"overloaded","type":"server_error"}}`+"\n"), call.askedGzip)
 			return
 		}
@@ -372,7 +375,7 @@ type looperHarness struct {
 
 func newLooperHarness(t *testing.T, fixture looperFixture) *looperHarness {
 	t.Helper()
-	backend := &looperBackend{failing: fixture.failing, slow: fixture.slow}
+	backend := &looperBackend{failing: fixture.failing, failStatus: fixture.failStatus, slow: fixture.slow}
 	backendServer := httptest.NewServer(backend)
 	t.Cleanup(backendServer.Close)
 	configYAML := strings.NewReplacer(

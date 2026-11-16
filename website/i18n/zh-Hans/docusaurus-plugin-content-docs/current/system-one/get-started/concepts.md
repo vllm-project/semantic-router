@@ -58,7 +58,7 @@ translation:
 | `candidate` | 评审打分的对象：文档、片段或缓存请求 | `relevance` 和 `same_request` 评审 |
 | `answer` | 模型的回答 | 响应阶段的规则；`answer_check` |
 | `context` | 回答的依据上下文：检索到的文档和工具结果 | 设置了 `input.context` 的响应阶段规则；`hallucination` |
-| `images`、`videos` | 当前轮次的图像和视频部分 | 设置了 `input.image` 或 `input.video` 的规则 |
+| `images`、`videos` | 请求携带的全部图像，以及当前轮次的视频部分 | 设置了 `input.image` 或 `input.video` 的规则 |
 
 内容为空的部分会被省略，因此一条读取历史的规则在第一轮时只针对请求本身提问。
 
@@ -89,7 +89,7 @@ translation:
 
 每个模型都以规范形式回答预设。如果某个模型家族针对某个预设训练过，Router 会改用训练形式提问：
 
-- **训练绑定。** Vela 3.0 d3 规格按精确的问题 ID（`domain`、`attack`、`factcheck` 等）开启训练过的适配器；vela3-fast 和 Vela 2.0 按精确措辞选择，而它们训练过的每个预设的措辞就是规范措辞。训练选项的键会被映射回来：modality 问题训练用的 `AR`、`DIFFUSION` 和 `BOTH` 分别返回为 `text`、`image` 和 `text_image`。
+- **训练绑定。** Vela 3.0 d3 规格按精确的问题 ID（`domain`、`factcheck`、`modality` 等）开启训练过的适配器；vela3-fast 和 Vela 2.0 按精确措辞选择，而它们训练过的每个预设的措辞就是规范措辞。训练选项的键会被映射回来：modality 问题训练用的 `AR`、`DIFFUSION` 和 `BOTH` 分别返回为 `text`、`image` 和 `text_image`。d3 规格的防护问题（jailbreak，以及 request 阶段的 harm）改由基座模型回答，它们的适配器在这些问题上表现更差（[支持矩阵](../reference/support-matrix.md#support-matrix)）。
 - **Router 自有 ID。** 没有训练形式的问题以带 `:` 的 ID 发出，它不会与训练 ID 冲突，因此不会意外开启适配器。
 - **校准阈值。** 在 vela3-fast 和 Vela 2.0 上，预设的默认谓词是在 router signal suite 上保持 Vela 1.0 专用模型工作点的阈值。
 
@@ -120,7 +120,7 @@ recipes[default].signals.pii[personal_data]: span_required: resolves to deployme
 
 ## 媒体输入 {#media-inputs}
 
-规则用 `input.image` 读取当前轮次的图像，用 `input.video` 读取视频。回答的部署必须声明自己能读取该媒体，否则配置加载以 `input_modality_unsupported` 失败。
+规则用 `input.image` 读取请求携带的全部图像，用 `input.video` 读取当前轮次的视频。回答的部署必须声明自己能读取该媒体，否则配置加载以 `input_modality_unsupported` 失败。
 
 - d3 家族和 Vela 3.0 d3 规格能读取图像。
 - `input.audio` 和 `input.video` 是 schema 的一部分，声明支持它们的模型无需修改 schema 即可回答这类规则。
@@ -135,6 +135,6 @@ recipes[default].signals.pii[personal_data]: span_required: resolves to deployme
 | `score` 的等级数 | 2 到 10 |
 | 一次调用中的问题数 | 协议无限制 |
 | choice 评审（`tool_rank`）的候选数 | 最多 255，即选项上限 |
-| 逐候选评审（`relevance`、`same_request`）的候选数 | `judge.max_candidates`，默认 64 |
+| 逐候选评审（`relevance`、`same_request`）的候选数 | `judge.max_candidates`，默认 64，最多 4096 |
 
 候选数超过上限的评审会截断，绝不会让请求失败。输入长度是模型的属性：vela3-fast 每次决策读取 32,768 个 token，路由和 span 问题使用 8,192 token 的窗口；较大的 Vela 3.0 规格每次决策最多读取 262,144 个 token，每个 span 目标 32,768 个。[性能与成本](../deploy/performance.md#long-inputs)介绍长输入。

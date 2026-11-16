@@ -222,7 +222,7 @@ var (
 	ModelFirstResponseObservation = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "llm_model_first_response_observation_seconds",
-			Help:    "Time from request processing to first stream chunk or non-stream response headers, not necessarily the first output token",
+			Help:    "Time from request processing to first stream chunk or non-stream response headers of a successful response, not necessarily the first output token",
 			Buckets: prometheus.DefBuckets,
 		},
 		[]string{"model"},

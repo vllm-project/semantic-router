@@ -82,9 +82,9 @@ func TestDelegatedBackendIsRejectedWhenTheContractIsOff(t *testing.T) {
 }
 
 func TestDelegatedBackendRejectsAStaticKey(t *testing.T) {
-	for _, key := range []string{"          api_key: shared-secret\n", "            api_key_env: GATEWAY_KEY\n"} {
+	for _, key := range []string{"          api_key: shared-secret\n", "            api_key_env: GATEWAY_KEY\n", "            api_key_file: /run/secrets/gateway-key\n"} {
 		_, err := ParseYAMLBytes([]byte(delegatedBackendConfig(delegatedGatewayBackend+key, true)))
-		if err == nil || !strings.Contains(err.Error(), "auth.credential: delegated cannot combine with a static key (api_key or auth.api_key_env)") {
+		if err == nil || !strings.Contains(err.Error(), "auth.credential: delegated cannot combine with a static key (api_key, auth.api_key_env or auth.api_key_file)") {
 			t.Fatalf("%s: error = %v, want the static key rejection", key, err)
 		}
 	}
@@ -238,6 +238,40 @@ func TestDelegatedDeploymentRefusals(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, test.want)
 			}
 		})
+	}
+}
+
+// A global block parsed on its own has no recipe to ask a delegated
+// deployment, so the check waits for the whole config, which still runs it.
+func TestGlobalBlockDefersTheDelegatedDeploymentCheck(t *testing.T) {
+	global := `
+version: v0.5
+global:
+  services:
+    authz:
+      delegated_credential: {enabled: true}
+  model_catalog:
+    deployments:
+      hosted-d3:
+        provider: systemone
+        endpoint: https://hosted.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth: {credential: delegated}
+`
+	cfg, err := ParseGlobalYAMLBytesWithoutEnvExpansion([]byte(global))
+	if err != nil {
+		t.Fatalf("global block refused: %v", err)
+	}
+	if !cfg.ModelDeployments["hosted-d3"].Auth.Delegated() {
+		t.Fatalf("deployment auth = %+v", cfg.ModelDeployments["hosted-d3"].Auth)
+	}
+	want := "global.model_catalog.deployments.hosted-d3: auth.credential: delegated, but only Router-own calls reach it"
+	if _, err := ParseYAMLBytesWithoutEnvExpansion([]byte(global)); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("whole config error = %v, want %q", err, want)
+	}
+	reserved := strings.Replace(global, "hosted-d3:", `"`+ImplicitDeploymentPrefix+`d3":`, 1)
+	if _, err := ParseGlobalYAMLBytesWithoutEnvExpansion([]byte(reserved)); err == nil || !strings.Contains(err.Error(), "are reserved for module defaults") {
+		t.Fatalf("global block error = %v, want the reserved deployment name refused", err)
 	}
 }
 

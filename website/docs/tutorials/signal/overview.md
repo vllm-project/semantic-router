@@ -173,7 +173,11 @@ global:
   them.
 
 The routing text is the last user message that is not skipped and still has
-text after stripping. It takes the place of the last user message for:
+text after stripping. When no user message is left, every one skipped or
+stripped to nothing, the routing text is the last user message with text, as
+the Router reads it without `routing_input`, and the Router logs
+`routing_input_fallback`: such a request is routed, never refused. The routing
+text takes the place of the last user message for:
 
 - every routing signal, and the conversation facts they read;
 - the semantic-cache lookup query;

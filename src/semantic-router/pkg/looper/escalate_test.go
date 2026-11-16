@@ -2,6 +2,7 @@ package looper
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -103,6 +104,46 @@ func TestFormatEscalateStreamingResponseReplacesUpstreamUsage(t *testing.T) {
 	}
 	if !strings.Contains(string(resp.Body), "data: [DONE]") || strings.Contains(string(resp.Body), "data:[DONE]") {
 		t.Fatalf("stream did not normalize the no-space terminal marker: %s", resp.Body)
+	}
+}
+
+// A backend may name its model differently from the requested name, as a
+// snapshot does; the usage chunk must name the same model as the stream.
+func TestStreamWithUsageNamesTheStreamModel(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "backend reports its own name",
+			body: "data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":7,\"model\":\"large-2026-01-01\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"answer\"},\"finish_reason\":\"stop\"}]}\n\n" +
+				"data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":7,\"model\":\"large-2026-01-01\",\"choices\":[],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1,\"total_tokens\":3}}\n\n" +
+				"data: [DONE]\n\n",
+			want: "large-2026-01-01",
+		},
+		{
+			name: "stream names no model",
+			body: "data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":7,\"choices\":[{\"index\":0,\"delta\":{\"content\":\"answer\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n",
+			want: "large",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := StreamWithUsage([]byte(tc.body), "large", TokenUsage{PromptTokens: 4, CompletionTokens: 2, TotalTokens: 6})
+			var models []string
+			for _, line := range strings.Split(string(body), "\n") {
+				var chunk struct {
+					Model string          `json:"model"`
+					Usage json.RawMessage `json:"usage"`
+				}
+				if payload, ok := strings.CutPrefix(line, "data: {"); ok && json.Unmarshal([]byte("{"+payload), &chunk) == nil && len(chunk.Usage) > 0 {
+					models = append(models, chunk.Model)
+				}
+			}
+			if !slices.Equal(models, []string{tc.want}) {
+				t.Fatalf("usage chunk models = %v, want [%s]: %s", models, tc.want, body)
+			}
+		})
 	}
 }
 

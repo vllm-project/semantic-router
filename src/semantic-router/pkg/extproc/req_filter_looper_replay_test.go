@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -123,6 +124,62 @@ func TestHandleEscalatePartialFailurePersistsAccountingWithoutCandidateBody(t *t
 	appendRoutedResponseHeaders(response, ctx)
 	record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
 	assertConfidencePartialFailureReplay(t, response, record, found, ctx.RouterReplayID)
+}
+
+// An escalation that fails after two paid attempts keeps their spend and
+// calls in the aggregate, and stays out of the savings comparison.
+func TestFailedEscalationPaidAttemptsStayInTheAggregateSpend(t *testing.T) {
+	server := newConfidencePartialFailureServer(t)
+	defer server.Close()
+
+	replayConfig := config.DefaultRouterReplayPluginConfig()
+	pricing := config.ModelPricing{Currency: "USD", PromptPer1M: 1000, CompletionPer1M: 2000}
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			Looper: config.LooperConfig{Endpoint: server.URL},
+			BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+				"small": {ParamSize: "1b", Pricing: pricing},
+				"large": {ParamSize: "10b", Pricing: pricing},
+			}},
+		},
+		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
+	}
+	gte := 0.0
+	decision := &config.Decision{
+		Name:      "escalate-paid-failure",
+		ModelRefs: []config.ModelRef{{Model: "small"}, {Model: "large"}},
+		Algorithm: &config.AlgorithmConfig{
+			Type: "escalate", OnError: "fail",
+			Escalate: &config.EscalateAlgorithmConfig{
+				Order:  config.EscalateOrderSize,
+				Accept: &config.EscalateAccept{Confidence: &config.EscalateConfidence{Method: "avg_logprob", GTE: &gte}},
+			},
+		},
+	}
+	request := testNeutralRequest("router-entrypoint", "hello")
+	ctx := &RequestContext{
+		RequestID: "replay-paid-failure", Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIChatV1,
+		SemanticRequest: request, RouterReplayPluginConfig: &replayConfig, VSRSelectedDecision: decision,
+	}
+	if _, err := router.handleLooperExecution(context.Background(), request, decision, ctx); err != nil {
+		t.Fatalf("handleLooperExecution: %v", err)
+	}
+
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
+	var aggregate routerreplay.AggregateResponse
+	if err := json.Unmarshal(response.GetImmediateResponse().Body, &aggregate); err != nil {
+		t.Fatal(err)
+	}
+	summary := aggregate.Summary
+	// Each attempt is 5 prompt and 2 completion tokens: 0.005 + 0.004.
+	assertApproxFloat64(t, &summary.TotalSpend, 0.018)
+	assertApproxFloat64(t, &summary.RouterCallSpend, 0.018)
+	if aggregate.Lifecycle.Failed != 1 || summary.CostRecordCount != 0 || summary.Currency != "USD" ||
+		summary.Coverage.RouterCalls != 2 || summary.Coverage.UnpricedRouterCalls != 0 ||
+		summary.Coverage.PartlyPricedRecords != 1 || summary.Coverage.UnpricedReasons[store.UnpricedNotCompleted] != 1 ||
+		len(summary.Coverage.BaselineUnavailable) != 0 {
+		t.Fatalf("failed escalation aggregate = lifecycle %+v summary %+v", aggregate.Lifecycle, summary)
+	}
 }
 
 func newConfidencePartialFailureServer(t *testing.T) *httptest.Server {
@@ -282,6 +339,24 @@ func assertFinalLooperReplay(
 	assertLooperResponseFinalModel(t, response, ctx)
 	assertReplayFinalModel(t, record, found)
 	assertReplayAggregateUsage(t, record)
+	assertLooperCallsUnpriced(t, record)
+}
+
+// assertLooperCallsUnpriced checks the ratings request's router calls: ratings
+// traces no attempts, so neither of its two calls has a price.
+func assertLooperCallsUnpriced(t *testing.T, record store.Record) {
+	t.Helper()
+	accounting := record.CostAccounting
+	if accounting == nil || len(accounting.RouterCalls) != 1 {
+		t.Fatalf("looper calls were not recorded as router calls: %+v", accounting)
+	}
+	want := store.RouterCallCost{
+		Kind: store.RouterCallKindLooper, Calls: 2, PromptTokens: 6, CompletionTokens: 4, UnpricedCalls: 2,
+		UnpricedReasons: map[string]int{store.UnpricedAttemptNotTraced: 2},
+	}
+	if !reflect.DeepEqual(accounting.RouterCalls[0], want) {
+		t.Fatalf("looper router calls = %+v, want %+v", accounting.RouterCalls[0], want)
+	}
 }
 
 func assertLooperResponseFinalModel(t *testing.T, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
@@ -472,9 +547,19 @@ func assertLooperInternalReplayScope(
 	if record.DecisionTier != 2 {
 		t.Fatalf("replay decision tier = %d, want 2", record.DecisionTier)
 	}
+	assertHopCostCountedInParent(t, record)
 
 	if records := firstRecorder.ListAllRecords(); len(records) != 0 {
 		t.Fatalf("first recipe recorder received %d records, want 0", len(records))
+	}
+}
+
+// assertHopCostCountedInParent checks that a hop's own record defers its cost
+// to the record of the request that made the hop.
+func assertHopCostCountedInParent(t *testing.T, record store.Record) {
+	t.Helper()
+	if record.CostAccounting == nil || record.CostAccounting.UnpricedReason != store.UnpricedCountedInParent {
+		t.Fatalf("hop record cost accounting = %+v, want it counted in its parent", record.CostAccounting)
 	}
 }
 

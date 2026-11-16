@@ -41,8 +41,8 @@ vllm-sr serve --target kubernetes --config config.yaml
 
 ## standalone 模式下 Router 做什么
 
-- **listener：** `listeners` 中的每一项都以 HTTP/1.1 和 HTTP/2（明文下为 h2c）提供服务，`timeout` 作为空闲超时，
-  请求体上限 500 MiB，最多 50,000 个连接，与 Envoy 模板的限制一致。
+- **listener：** `listeners` 中的每一项都以 HTTP/1.1 和 HTTP/2（明文下为 h2c）提供服务。`timeout` 限制读取请求的时间（客户端停止发送请求体时返回 408）和空闲连接保持的时间，
+  不限制后端仍在流式返回的响应。请求体上限 500 MiB，每个 listener 最多 50,000 个连接，与 Envoy 模板的限制一致。
 - **API key：** 设置 `api_keys` 后，客户端需以 `Authorization: Bearer <key>` 或 `api-key: <key>` 发送其中之一；
   其他请求得到 OpenAI 风格的 401。key 在请求到达 provider 之前被移除。
 - **模型白名单：** 设置 `models` 后，该 listener 只接受这些请求模型（见[模型白名单](#model-allow-list)）。
@@ -68,11 +68,13 @@ vllm-sr serve --target kubernetes --config config.yaml
 - **探针：** 进程运行时 `GET /health` 就会应答；路由核心可以接收流量后 `GET /ready` 才应答。Prometheus 指标仍在
   Router 的指标端口（9190）。
 - **重新加载：** Router 原地重新加载配置。修改 listener 的地址、端口、超时或 `tls` 路径，或者新增、删除 listener，
-  都会以 `restart_required` 被拒绝，直到 Router 重启；API key 和模型白名单可原地重新加载。
+  都会以 `restart_required` 被拒绝，直到 Router 重启；API key、`apis` 及其模型白名单和身份信任可原地重新加载。
+- **关闭：** 收到 SIGTERM 后，`GET /ready` 返回 503，listener 停止接受连接，每个 HTTP/2 连接（包括 h2c）都会收到
+  GOAWAY。正在处理的请求有 `global.router.drain_timeout_seconds` 秒（默认 25）完成；见[关闭时的排空](#draining-on-shutdown)。
 
 ### 模型白名单 {#model-allow-list}
 
-listener 的 `models` 列出它接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
+listener `apis` 中某个 API 的 `models` 列出该 API 接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
 listener 仍可使用所有模型：
 
 ```yaml
@@ -84,7 +86,9 @@ listeners:
     address: 0.0.0.0
     port: 8899
     api_keys: ["${WORKSHOP_KEY}"]
-    models: [vllm-sr/auto]
+    apis:
+      chat_completions: {models: [vllm-sr/auto]}
+      responses: {models: [vllm-sr/auto]}
 ```
 
 - 名称精确匹配（区分大小写，请求值去除首尾空白后比较），不展开别名：请列出客户端可能发送的每个名称。为空或不设置时，
@@ -128,6 +132,45 @@ listeners:
 
 Memory 和 router replay 会记录每个请求的用户。没有信任身份的 listener
 时，它们仍会加载，并把每个请求视为匿名请求；Router 会在启动时记录一条点名这些功能的警告。
+
+### 关闭时的排空 {#draining-on-shutdown}
+
+Kubernetes 删除 pod 时，先运行容器的 `preStop` hook（如果有），再向 Router 发送 SIGTERM，并在删除开始
+`terminationGracePeriodSeconds` 秒后强制终止它。Router 把这段时间分成三部分：
+
+1. **`preStop`：** Router 仍在服务，负载均衡器和 Service 的 endpoints 在此期间把 pod 移出轮转。
+2. **排空：** `GET /ready` 返回 503，listener 关闭，所有协议（HTTP/1.1、基于 TLS 的 HTTP/2 和 h2c）上正在处理的请求有
+   `global.router.drain_timeout_seconds` 秒完成：未设置时为 25 秒；设置为 `0` 时不排空，正在处理的请求只剩下面的 5 秒。最后一个请求一结束，排空就结束。
+3. **5 秒**，供 Router 自身的资源退役。
+
+请给 pod 至少 preStop + 排空 + 5 秒的宽限期，并留出余量：宽限期用完时，Kubernetes 会强制终止 Router，不管它在做什么。
+默认值（没有 preStop、25 秒排空、Kubernetes 的 30 秒）刚好用满，没有余量。对于运行更久的请求，例如长时间生成或 agent
+会话，请同时调大排空时间和宽限期。例如请求最长约 100 秒时：
+
+```yaml
+global:
+  router:
+    drain_timeout_seconds: 120
+```
+
+并在 Helm chart 的 values 中设置：
+
+```yaml
+# 10 秒 preStop + 120 秒排空 + 5 秒，再留 15 秒余量
+terminationGracePeriodSeconds: 150
+lifecycle:
+  preStop:
+    exec:
+      command: ["sleep", "10"]
+```
+
+- 排空结束时仍有请求在处理，Router 会记录 `standalone_drain_incomplete` 并给出数量（`in_flight`）；这些请求会在
+  Router 退出时被中断。所有请求都完成的排空会记录 `standalone_drain_completed` 及其耗时。
+- 只有 standalone 模式支持 `drain_timeout_seconds`：在 Envoy 之后，由 Envoy 排空客户端连接，设置了它的配置在
+  `--gateway extproc` 下无法加载。
+- operator 既不设置宽限期，也不设置 `preStop` hook，因此它的 pod 使用 Kubernetes 的 30 秒，正好适合默认的排空时间；
+  它暂时还不能设置 `drain_timeout_seconds`。
+- `vllm-sr serve` 用 `docker stop --time 40` 停止 Router 容器，可容纳最长 35 秒的排空。
 
 ### 哪些需要 `extproc`
 
@@ -177,7 +220,7 @@ GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/
 `vllm-sr serve [MODEL]` 每次默认启动 Router；`--engine`（`-e`）启动 Engine。
 两者使用同一前端和模型池，保留已保存的路由配置。Dashboard 只展示启动模式，
 不提供运行时切换入口。MODEL 只覆盖默认判断 deployment 的 artifact；未填写的
-引擎参数和副本位置保留原值，全新配置默认 Vela 2.0 0.3B。
+引擎参数和副本位置保留原值，全新配置默认 Vela 3.0 vela3-fast。
 
 | 范围 | 选项 |
 | --- | --- |

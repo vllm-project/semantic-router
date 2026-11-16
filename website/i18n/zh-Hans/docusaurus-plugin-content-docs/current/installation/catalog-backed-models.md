@@ -74,7 +74,7 @@ recipes:
           endpoint: http://127.0.0.1:8000/v1
 ```
 
-该映射解析到 `MiniMaxAI/MiniMax-M3.1-Flash`，将 effort 放入 `chat_template_kwargs`。请使用 [vLLM 配方](https://recipes.vllm.ai/MiniMaxAI/MiniMax-M3.1-Flash)：本次核对的版本要求 vLLM 0.33.0 nightly、专用 `minimax-m31-flash` 镜像、`--block-size 128` 和 `minimax_m3` reasoning/tool parser，普通稳定版 pip 安装不足以部署。Hopper 示例将上下文限制为 262,144 并关闭 video；应在 canonical 模型卡 override 中声明实际提供的窗口和能力。映射为实验性，不代表任何具体部署已通过验证。
+该映射解析到 `MiniMaxAI/MiniMax-M3.1-Flash`，将 effort 放入 `chat_template_kwargs`。请使用 [vLLM 配方](https://recipes.vllm.ai/MiniMaxAI/MiniMax-M3.1-Flash)：本次核对的版本要求 vLLM 0.33.0 nightly、专用 `minimax-m31-flash` 镜像、`--block-size 128` 和 `minimax_m3` reasoning/tool parser，普通稳定版 pip 安装不足以部署。Hopper 示例将上下文限制为 262,144 并关闭 video；应按下文所述，在别名上声明实际提供的窗口和能力。映射为实验性，不代表任何具体部署已通过验证。
 
 五条已发布评测记录来自[固定版本的官方模型卡](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md)，推理档位为 `unspecified`，属于厂商声明而非 vLLM-SR 复测。Terminal-Bench 4.0 与 2.1 分开记录，各可选 effort 档位尚无完整 Intelligence 1.0 证据。
 
@@ -94,21 +94,29 @@ providers:
           auth: {api_key_env: FOUNDRY_API_KEY}
 ```
 
-仅当所选映射需要时，控制面板才会显示 **Deployment name** 或 **Provider model ID**。它是上游标识符，而不是第二个目录身份。
+仅当所选映射需要时，控制面板才会显示 **Deployment name** 或 **Provider model ID**。它是上游标识符，而不是第二个目录身份，因此映射中的定价、推理传输和 effort 限制仍然适用。自部署服务以其他名称提供该模型时（例如 vLLM 的 `--served-model-name`），也以同样方式设置它。
 
 ## 仅覆盖运维人员拥有的元数据
 
-你可以添加本地标签、描述、能力或评估，而无需分叉内置 card。覆盖必须使用 canonical `catalog` ID，而不是本地别名：
+你可以设置本地标签、描述、更窄的能力列表或实际提供的上限，而无需分叉内置 card。请在目录支持的别名上设置它们；每个值只替换该别名对应的 card 值：
 
 ```yaml
-recipes:
-  - name: default
+version: v0.5
 providers:
   models:
-    - name: openai/gpt-5.6-sol
+    - name: production
+      catalog: openai/gpt-5.6-sol
       tags: [production, approved]
       description: Approved for production reasoning traffic.
+      backend_refs:
+        - name: openai-primary
+          provider: openai
+          auth: {api_key_env: OPENAI_API_KEY}
+recipes:
+  - name: default
 ```
+
+以目录 ID 命名的单独 `providers.models` 条目（例如 `name: openai/gpt-5.6-sol`）不会作用于该别名：与绑定该 card 的别名同时存在时会因歧义被拒绝，单独存在时则声明了一个没有后端的独立 Model。
 
 不要在目录支持的 Model 上设置 `providers.models[].reasoning`。该组合会被拒绝，以免别名悄悄更改仓库拥有的推理契约。
 

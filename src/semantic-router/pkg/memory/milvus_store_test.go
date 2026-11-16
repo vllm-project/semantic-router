@@ -4,6 +4,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -367,7 +368,7 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 				entity.NewColumnVarChar("id", []string{"mem_1"}),
 				entity.NewColumnVarChar("content", []string{"The budget is $50k"}),
 				entity.NewColumnVarChar("memory_type", []string{"semantic"}),
-				entity.NewColumnVarChar("metadata", []string{`{"source": "slack", "importance": "high"}`}),
+				entity.NewColumnVarChar("metadata", []string{`{"source":"slack","importance":"high","created_by_user_id":"user-origin","conversation_id":"conversation-123","created_via":"llm_extraction"}`}),
 			},
 		},
 	}
@@ -388,8 +389,35 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 	assert.Equal(t, "The budget is $50k", results[0].Memory.Content)
 	assert.Equal(t, MemoryTypeSemantic, results[0].Memory.Type)
 	assert.Equal(t, "slack", results[0].Memory.Source)
+	assert.Equal(t, "user-origin", results[0].Memory.CreatedByUserID)
+	assert.Equal(t, "conversation-123", results[0].Memory.ConversationID)
+	assert.Equal(t, "llm_extraction", results[0].Memory.CreatedVia)
 	assert.Equal(t, float32(0.95), results[0].Score)
 	// Note: "importance": "high" is a string, so it won't be set in Memory.Importance (which is float32)
+}
+
+func TestMemoryMetadataJSON_ProvenanceRoundTrip(t *testing.T) {
+	input := &Memory{
+		UserID:          "owner",
+		CreatedByUserID: "user-origin",
+		ConversationID:  "conversation-123",
+		CreatedVia:      "llm_extraction",
+	}
+
+	raw, err := memoryMetadataJSON(input)
+	require.NoError(t, err)
+
+	var metadata map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &metadata))
+	assert.Equal(t, "user-origin", metadata["created_by_user_id"])
+	assert.Equal(t, "conversation-123", metadata["conversation_id"])
+	assert.Equal(t, "llm_extraction", metadata["created_via"])
+
+	got := &Memory{}
+	populateMemoryFromMetadataString(got, string(raw))
+	assert.Equal(t, input.CreatedByUserID, got.CreatedByUserID)
+	assert.Equal(t, input.ConversationID, got.ConversationID)
+	assert.Equal(t, input.CreatedVia, got.CreatedVia)
 }
 
 func TestMilvusStore_Retrieve_FilterByThreshold(t *testing.T) {

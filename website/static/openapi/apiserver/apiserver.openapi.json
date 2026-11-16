@@ -7387,6 +7387,50 @@
               }
             }
           },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal Server Error",
             "content": {
@@ -14143,6 +14187,13 @@
                           "additionalProperties": false
                         }
                       },
+                      "roles": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
                       "state": {},
                       "states": {
                         "nullable": true,
@@ -14255,6 +14306,13 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              }
+                            },
+                            "roles": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
                               }
                             },
                             "state": {},
@@ -16139,6 +16197,13 @@
                           "additionalProperties": false
                         }
                       },
+                      "roles": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
                       "state": {},
                       "states": {
                         "nullable": true,
@@ -16251,6 +16316,13 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              }
+                            },
+                            "roles": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
                               }
                             },
                             "state": {},
@@ -19203,6 +19275,14 @@
             }
           },
           {
+            "name": "turn_id",
+            "in": "query",
+            "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -19212,6 +19292,63 @@
                 "all",
                 "cached",
                 "streamed"
+              ]
+            }
+          },
+          {
+            "name": "request_kind",
+            "in": "query",
+            "description": "Filter by request kind; codex_approval_review selects Codex approval reviews.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "codex_approval_review"
+              ]
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "description": "Filter approval reviews by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "completed",
+                "tool_call",
+                "invalid",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "review_outcome",
+            "in": "query",
+            "description": "Filter completed approval reviews by verdict.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "allow",
+                "deny"
+              ]
+            }
+          },
+          {
+            "name": "review_risk",
+            "in": "query",
+            "description": "Filter completed approval reviews by reported risk.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "medium",
+                "high",
+                "critical"
               ]
             }
           },
@@ -19317,6 +19454,72 @@
                           },
                           "conversation_id": {
                             "type": "string"
+                          },
+                          "cost_accounting": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "baseline_source": {
+                                "type": "string"
+                              },
+                              "baseline_unavailable": {
+                                "type": "string"
+                              },
+                              "caller_login": {
+                                "type": "boolean"
+                              },
+                              "pricing_source": {
+                                "type": "string"
+                              },
+                              "router_calls": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "calls": {
+                                      "type": "integer"
+                                    },
+                                    "completion_tokens": {
+                                      "type": "integer"
+                                    },
+                                    "cost": {
+                                      "nullable": true,
+                                      "type": "number"
+                                    },
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "kind": {
+                                      "type": "string"
+                                    },
+                                    "model": {
+                                      "type": "string"
+                                    },
+                                    "prompt_tokens": {
+                                      "type": "integer"
+                                    },
+                                    "unpriced_calls": {
+                                      "type": "integer"
+                                    },
+                                    "unpriced_reasons": {
+                                      "nullable": true,
+                                      "type": "object",
+                                      "additionalProperties": {
+                                        "type": "integer"
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "calls"
+                                  ]
+                                }
+                              },
+                              "unpriced_reason": {
+                                "type": "string"
+                              }
+                            }
                           },
                           "cost_savings": {
                             "nullable": true,
@@ -20275,6 +20478,9 @@
                               ]
                             }
                           },
+                          "parent_turn_id": {
+                            "type": "string"
+                          },
                           "pii_blocked": {
                             "type": "boolean"
                           },
@@ -20490,6 +20696,12 @@
                           "prompt": {
                             "type": "string"
                           },
+                          "prompt_original_bytes": {
+                            "type": "integer"
+                          },
+                          "prompt_original_sha256": {
+                            "type": "string"
+                          },
                           "prompt_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -20664,6 +20876,9 @@
                           "request_id": {
                             "type": "string"
                           },
+                          "request_kind": {
+                            "type": "string"
+                          },
                           "response_body": {
                             "type": "string"
                           },
@@ -20672,6 +20887,86 @@
                           },
                           "response_status": {
                             "type": "integer"
+                          },
+                          "review": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "action": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "arguments": {
+                                    "type": "string"
+                                  },
+                                  "arguments_truncated": {
+                                    "type": "boolean"
+                                  },
+                                  "cwd": {
+                                    "type": "string"
+                                  },
+                                  "summary": {
+                                    "type": "string"
+                                  },
+                                  "tool": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "assessment": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "outcome": {
+                                    "type": "string"
+                                  },
+                                  "rationale": {
+                                    "type": "string"
+                                  },
+                                  "rationale_truncated": {
+                                    "type": "boolean"
+                                  },
+                                  "risk_level": {
+                                    "type": "string"
+                                  },
+                                  "user_authorization": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "outcome"
+                                ]
+                              },
+                              "identification_source": {
+                                "type": "string"
+                              },
+                              "latency_ms": {
+                                "type": "integer"
+                              },
+                              "parent_turn_id": {
+                                "type": "string"
+                              },
+                              "reviewed_session_id": {
+                                "type": "string"
+                              },
+                              "schema_version": {
+                                "type": "integer"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "thread_id": {
+                                "type": "string"
+                              },
+                              "turn_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "schema_version",
+                              "identification_source",
+                              "status"
+                            ]
                           },
                           "route_diagnostics": {
                             "nullable": true,
@@ -21290,6 +21585,13 @@
                               }
                             }
                           },
+                          "scan_coverage": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "selected_model": {
                             "type": "string"
                           },
@@ -21455,6 +21757,9 @@
                           "terminal_reason": {
                             "type": "string"
                           },
+                          "thread_id": {
+                            "type": "string"
+                          },
                           "timestamp": {
                             "type": "string",
                             "format": "date-time"
@@ -21502,6 +21807,9 @@
                                     "raw_output": {
                                       "type": "string"
                                     },
+                                    "raw_truncated": {
+                                      "type": "boolean"
+                                    },
                                     "role": {
                                       "type": "string"
                                     },
@@ -21547,6 +21855,9 @@
                           "total_tokens": {
                             "nullable": true,
                             "type": "integer"
+                          },
+                          "turn_id": {
+                            "type": "string"
                           },
                           "turn_index": {
                             "type": "integer"
@@ -21896,6 +22207,14 @@
             }
           },
           {
+            "name": "turn_id",
+            "in": "query",
+            "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -21905,6 +22224,63 @@
                 "all",
                 "cached",
                 "streamed"
+              ]
+            }
+          },
+          {
+            "name": "request_kind",
+            "in": "query",
+            "description": "Filter by request kind; codex_approval_review selects Codex approval reviews.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "codex_approval_review"
+              ]
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "description": "Filter approval reviews by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "completed",
+                "tool_call",
+                "invalid",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "review_outcome",
+            "in": "query",
+            "description": "Filter completed approval reviews by verdict.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "allow",
+                "deny"
+              ]
+            }
+          },
+          {
+            "name": "review_risk",
+            "in": "query",
+            "description": "Filter completed approval reviews by reported risk.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "medium",
+                "high",
+                "critical"
               ]
             }
           }
@@ -21938,6 +22314,13 @@
                       }
                     },
                     "available_recipes": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "available_review_models": {
                       "nullable": true,
                       "type": "array",
                       "items": {
@@ -22148,6 +22531,170 @@
                     "record_count": {
                       "type": "integer"
                     },
+                    "reviews": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "allowed": {
+                          "type": "integer"
+                        },
+                        "approval_rate": {
+                          "nullable": true,
+                          "type": "number"
+                        },
+                        "bucket": {
+                          "type": "string"
+                        },
+                        "by_model": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "cost": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "amount": {
+                                      "type": "number"
+                                    },
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "requests": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "currency",
+                                    "amount",
+                                    "requests"
+                                  ]
+                                }
+                              },
+                              "model": {
+                                "type": "string"
+                              },
+                              "requests": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "model",
+                              "requests",
+                              "cost"
+                            ]
+                          }
+                        },
+                        "cancelled": {
+                          "type": "integer"
+                        },
+                        "cost": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "amount": {
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "requests": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "currency",
+                              "amount",
+                              "requests"
+                            ]
+                          }
+                        },
+                        "denied": {
+                          "type": "integer"
+                        },
+                        "failed": {
+                          "type": "integer"
+                        },
+                        "invalid": {
+                          "type": "integer"
+                        },
+                        "latency_p50_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "latency_p95_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "over_time": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "allowed": {
+                                "type": "integer"
+                              },
+                              "cancelled": {
+                                "type": "integer"
+                              },
+                              "denied": {
+                                "type": "integer"
+                              },
+                              "failed": {
+                                "type": "integer"
+                              },
+                              "invalid": {
+                                "type": "integer"
+                              },
+                              "start": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "start",
+                              "allowed",
+                              "denied",
+                              "invalid",
+                              "failed",
+                              "cancelled"
+                            ]
+                          }
+                        },
+                        "pending": {
+                          "type": "integer"
+                        },
+                        "reviews": {
+                          "type": "integer"
+                        },
+                        "tool_calls": {
+                          "type": "integer"
+                        },
+                        "unpriced_requests": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "reviews",
+                        "allowed",
+                        "denied",
+                        "invalid",
+                        "failed",
+                        "cancelled",
+                        "pending",
+                        "tool_calls",
+                        "cost",
+                        "unpriced_requests",
+                        "over_time",
+                        "by_model"
+                      ]
+                    },
                     "signal_distribution": {
                       "nullable": true,
                       "type": "array",
@@ -22194,15 +22741,31 @@
                               "currency": {
                                 "type": "string"
                               },
+                              "gross_saved": {
+                                "type": "number"
+                              },
+                              "netted_router_call_spend": {
+                                "type": "number"
+                              },
+                              "router_call_spend": {
+                                "type": "number"
+                              },
                               "total_saved": {
+                                "type": "number"
+                              },
+                              "total_spend": {
                                 "type": "number"
                               }
                             },
                             "required": [
                               "currency",
                               "total_saved",
+                              "gross_saved",
+                              "netted_router_call_spend",
                               "baseline_spend",
                               "actual_spend",
+                              "router_call_spend",
+                              "total_spend",
                               "cost_record_count"
                             ]
                           }
@@ -22210,22 +22773,113 @@
                         "cost_record_count": {
                           "type": "integer"
                         },
+                        "coverage": {
+                          "type": "object",
+                          "properties": {
+                            "baseline_sources": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "baseline_unavailable": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "caller_login_records": {
+                              "type": "integer"
+                            },
+                            "list_price_records": {
+                              "type": "integer"
+                            },
+                            "looper_hop_records": {
+                              "type": "integer"
+                            },
+                            "net_unavailable": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "netted_router_calls": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "partly_priced_records": {
+                              "type": "integer"
+                            },
+                            "priced_records": {
+                              "type": "integer"
+                            },
+                            "router_calls": {
+                              "type": "integer"
+                            },
+                            "unpriced_reasons": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "unpriced_records": {
+                              "type": "integer"
+                            },
+                            "unpriced_router_calls": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "priced_records",
+                            "partly_priced_records",
+                            "unpriced_records",
+                            "looper_hop_records",
+                            "list_price_records",
+                            "caller_login_records",
+                            "router_calls",
+                            "unpriced_router_calls"
+                          ]
+                        },
                         "currency": {
                           "type": "string"
                         },
                         "excluded_record_count": {
                           "type": "integer"
                         },
+                        "gross_saved": {
+                          "type": "number"
+                        },
+                        "netted_router_call_spend": {
+                          "type": "number"
+                        },
+                        "router_call_spend": {
+                          "type": "number"
+                        },
                         "total_saved": {
+                          "type": "number"
+                        },
+                        "total_spend": {
                           "type": "number"
                         }
                       },
                       "required": [
                         "total_saved",
+                        "gross_saved",
+                        "netted_router_call_spend",
                         "baseline_spend",
                         "actual_spend",
+                        "router_call_spend",
+                        "total_spend",
                         "cost_record_count",
-                        "excluded_record_count"
+                        "excluded_record_count",
+                        "coverage"
                       ]
                     },
                     "token_breakdown": {
@@ -22630,6 +23284,14 @@
             }
           },
           {
+            "name": "turn_id",
+            "in": "query",
+            "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -22639,6 +23301,63 @@
                 "all",
                 "cached",
                 "streamed"
+              ]
+            }
+          },
+          {
+            "name": "request_kind",
+            "in": "query",
+            "description": "Filter by request kind; codex_approval_review selects Codex approval reviews.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "codex_approval_review"
+              ]
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "description": "Filter approval reviews by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "completed",
+                "tool_call",
+                "invalid",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "review_outcome",
+            "in": "query",
+            "description": "Filter completed approval reviews by verdict.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "allow",
+                "deny"
+              ]
+            }
+          },
+          {
+            "name": "review_risk",
+            "in": "query",
+            "description": "Filter completed approval reviews by reported risk.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "medium",
+                "high",
+                "critical"
               ]
             }
           },
@@ -23171,6 +23890,14 @@
             }
           },
           {
+            "name": "turn_id",
+            "in": "query",
+            "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -23180,6 +23907,63 @@
                 "all",
                 "cached",
                 "streamed"
+              ]
+            }
+          },
+          {
+            "name": "request_kind",
+            "in": "query",
+            "description": "Filter by request kind; codex_approval_review selects Codex approval reviews.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "codex_approval_review"
+              ]
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "description": "Filter approval reviews by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "completed",
+                "tool_call",
+                "invalid",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "review_outcome",
+            "in": "query",
+            "description": "Filter completed approval reviews by verdict.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "allow",
+                "deny"
+              ]
+            }
+          },
+          {
+            "name": "review_risk",
+            "in": "query",
+            "description": "Filter completed approval reviews by reported risk.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "medium",
+                "high",
+                "critical"
               ]
             }
           },
@@ -23721,6 +24505,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
                           "conversation_id": {
                             "type": "string"
                           },
@@ -23731,6 +24518,9 @@
                             "type": "integer"
                           },
                           "lifecycle_state": {
+                            "type": "string"
+                          },
+                          "parent_turn_id": {
                             "type": "string"
                           },
                           "previous_model": {
@@ -23763,6 +24553,9 @@
                           "timestamp": {
                             "type": "string",
                             "format": "date-time"
+                          },
+                          "turn_id": {
+                            "type": "string"
                           },
                           "turn_index": {
                             "type": "integer"
@@ -24131,6 +24924,72 @@
                     },
                     "conversation_id": {
                       "type": "string"
+                    },
+                    "cost_accounting": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "baseline_source": {
+                          "type": "string"
+                        },
+                        "baseline_unavailable": {
+                          "type": "string"
+                        },
+                        "caller_login": {
+                          "type": "boolean"
+                        },
+                        "pricing_source": {
+                          "type": "string"
+                        },
+                        "router_calls": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "calls": {
+                                "type": "integer"
+                              },
+                              "completion_tokens": {
+                                "type": "integer"
+                              },
+                              "cost": {
+                                "nullable": true,
+                                "type": "number"
+                              },
+                              "currency": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": "string"
+                              },
+                              "prompt_tokens": {
+                                "type": "integer"
+                              },
+                              "unpriced_calls": {
+                                "type": "integer"
+                              },
+                              "unpriced_reasons": {
+                                "nullable": true,
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "calls"
+                            ]
+                          }
+                        },
+                        "unpriced_reason": {
+                          "type": "string"
+                        }
+                      }
                     },
                     "cost_savings": {
                       "nullable": true,
@@ -25089,6 +25948,9 @@
                         ]
                       }
                     },
+                    "parent_turn_id": {
+                      "type": "string"
+                    },
                     "pii_blocked": {
                       "type": "boolean"
                     },
@@ -25304,6 +26166,12 @@
                     "prompt": {
                       "type": "string"
                     },
+                    "prompt_original_bytes": {
+                      "type": "integer"
+                    },
+                    "prompt_original_sha256": {
+                      "type": "string"
+                    },
                     "prompt_tokens": {
                       "nullable": true,
                       "type": "integer"
@@ -25478,6 +26346,9 @@
                     "request_id": {
                       "type": "string"
                     },
+                    "request_kind": {
+                      "type": "string"
+                    },
                     "response_body": {
                       "type": "string"
                     },
@@ -25486,6 +26357,86 @@
                     },
                     "response_status": {
                       "type": "integer"
+                    },
+                    "review": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "arguments": {
+                              "type": "string"
+                            },
+                            "arguments_truncated": {
+                              "type": "boolean"
+                            },
+                            "cwd": {
+                              "type": "string"
+                            },
+                            "summary": {
+                              "type": "string"
+                            },
+                            "tool": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "assessment": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "rationale": {
+                              "type": "string"
+                            },
+                            "rationale_truncated": {
+                              "type": "boolean"
+                            },
+                            "risk_level": {
+                              "type": "string"
+                            },
+                            "user_authorization": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "outcome"
+                          ]
+                        },
+                        "identification_source": {
+                          "type": "string"
+                        },
+                        "latency_ms": {
+                          "type": "integer"
+                        },
+                        "parent_turn_id": {
+                          "type": "string"
+                        },
+                        "reviewed_session_id": {
+                          "type": "string"
+                        },
+                        "schema_version": {
+                          "type": "integer"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "thread_id": {
+                          "type": "string"
+                        },
+                        "turn_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "identification_source",
+                        "status"
+                      ]
                     },
                     "route_diagnostics": {
                       "nullable": true,
@@ -26104,6 +27055,13 @@
                         }
                       }
                     },
+                    "scan_coverage": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "selected_model": {
                       "type": "string"
                     },
@@ -26269,6 +27227,9 @@
                     "terminal_reason": {
                       "type": "string"
                     },
+                    "thread_id": {
+                      "type": "string"
+                    },
                     "timestamp": {
                       "type": "string",
                       "format": "date-time"
@@ -26316,6 +27277,9 @@
                               "raw_output": {
                                 "type": "string"
                               },
+                              "raw_truncated": {
+                                "type": "boolean"
+                              },
                               "role": {
                                 "type": "string"
                               },
@@ -26361,6 +27325,9 @@
                     "total_tokens": {
                       "nullable": true,
                       "type": "integer"
+                    },
+                    "turn_id": {
+                      "type": "string"
                     },
                     "turn_index": {
                       "type": "integer"
@@ -32906,6 +33873,13 @@
                     "routing_decision": {
                       "type": "string"
                     },
+                    "scan_coverage": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "selected_model": {
                       "type": "string"
                     },
@@ -34468,6 +35442,13 @@
                         },
                         "routing_decision": {
                           "type": "string"
+                        },
+                        "scan_coverage": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
                         },
                         "selected_model": {
                           "type": "string"
@@ -36850,7 +37831,7 @@
             }
           },
           "500": {
-            "description": "Management authentication configuration is invalid",
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -38950,6 +39931,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },
@@ -39660,6 +40644,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "count_unknown": {
+                      "type": "boolean"
+                    },
                     "deleted": {
                       "type": "integer"
                     },
@@ -42369,7 +43356,7 @@
             }
           },
           "500": {
-            "description": "Management authentication configuration is invalid",
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -42748,7 +43735,7 @@
             }
           },
           "500": {
-            "description": "Management authentication configuration is invalid",
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -43473,6 +44460,50 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -44283,6 +45314,50 @@
           },
           "404": {
             "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -47674,6 +48749,9 @@
                         }
                       }
                     },
+                    "instance_id": {
+                      "type": "string"
+                    },
                     "message": {
                       "type": "string"
                     },
@@ -47892,6 +48970,9 @@
                         }
                       }
                     },
+                    "instance_id": {
+                      "type": "string"
+                    },
                     "message": {
                       "type": "string"
                     },
@@ -48032,6 +49113,9 @@
                               },
                               "default_route": {
                                 "type": "boolean"
+                              },
+                              "delegate": {
+                                "type": "string"
                               },
                               "recipe": {
                                 "type": "string"

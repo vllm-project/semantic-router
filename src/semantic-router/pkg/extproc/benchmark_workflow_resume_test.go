@@ -110,8 +110,10 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 			// a resumed aggregate is proof of complete request-local accounting.
 			assertBenchmarkWorkflowReceipt(t, resume, hash, "verifier-model")
 			if !streaming {
+				// Each turn reports the calls it made: the resumed turn does not
+				// bill the preparation step again.
 				assertWorkflowBufferedUsage(t, pause, 2, tc.cached)
-				assertWorkflowBufferedUsage(t, resume, 3, tc.cached)
+				assertWorkflowBufferedUsage(t, resume, 2, tc.cached)
 			}
 			mu.Lock()
 			defer mu.Unlock()
@@ -123,7 +125,7 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 	}
 }
 
-func assertWorkflowBufferedUsage(t *testing.T, resp *ext_proc.ProcessingResponse, cumulativeCalls, cached int64) {
+func assertWorkflowBufferedUsage(t *testing.T, resp *ext_proc.ProcessingResponse, calls, cached int64) {
 	t.Helper()
 	var body struct {
 		Usage looper.TokenUsage `json:"usage"`
@@ -132,9 +134,9 @@ func assertWorkflowBufferedUsage(t *testing.T, resp *ext_proc.ProcessingResponse
 		t.Fatal(err)
 	}
 	usage := body.Usage
-	if usage.PromptTokens != 100*cumulativeCalls || usage.CompletionTokens != 10*cumulativeCalls ||
-		usage.TotalTokens != 110*cumulativeCalls || usage.CachedInputTokens != cached*cumulativeCalls ||
-		usage.CacheWriteTokens != 20*cumulativeCalls {
+	if usage.PromptTokens != 100*calls || usage.CompletionTokens != 10*calls ||
+		usage.TotalTokens != 110*calls || usage.CachedInputTokens != cached*calls ||
+		usage.CacheWriteTokens != 20*calls {
 		t.Fatalf("workflow aggregate lost cache buckets: %+v", usage)
 	}
 }

@@ -88,14 +88,13 @@ func projectionInputConfidenceValue(input config.ProjectionScoreInput, results *
 }
 
 func projectionInputBinaryValue(input config.ProjectionScoreInput, results *SignalResults) float64 {
-	matchValue := input.Match
-	if matchValue == 0 {
-		matchValue = 1.0
+	if !projectionInputMatched(input.Type, input.Name, results) {
+		return input.Miss
 	}
-	if projectionInputMatched(input.Type, input.Name, results) {
-		return matchValue
+	if input.Match == nil {
+		return 1.0
 	}
-	return input.Miss
+	return *input.Match
 }
 
 func projectionInputProjectionValue(input config.ProjectionScoreInput, results *SignalResults) float64 {

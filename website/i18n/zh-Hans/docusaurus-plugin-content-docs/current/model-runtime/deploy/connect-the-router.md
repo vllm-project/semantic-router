@@ -182,8 +182,10 @@ listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
-    systemone:
-      models: [vllm-sr/vela3-fast]
+    apis:
+      chat_completions: {}
+      systemone:
+        models: [vllm-sr/vela3-fast]
 global:
   model_catalog:
     deployments:
@@ -195,6 +197,6 @@ global:
 - 用 `GET /v1/systemone/models` 发现已发布的原生模型，然后用那个 `model` ID 发送 `POST /v1/systemone` 或 `POST /v1/decisions`。
 - 部署使用其 Hub 制品 ID，除非你设置了 `public_name`；本地制品需要显式的公共名称。
 - 当客户端必须认证时，添加监听器的 `api_keys`。
-- 原生授权与 Chat 的 `listeners[].models` 允许列表相互独立，在两种启动模式下都有效。替换或扩展模型时，已有授权保持不变；当你打算发布另一个模型时再更新它。
+- 原生授权与 Chat API 的 `listeners[].apis.<api>.models` 允许列表相互独立，在两种启动模式下都有效。替换或扩展模型时，已有授权保持不变；当你打算发布另一个模型时再更新它。
 
 完整的原生请求见[快速开始](../get-started/quickstart.md#3-send-a-request)。发布并不保证就绪；用 `vllm-sr instance --config config.yaml models` 检查。

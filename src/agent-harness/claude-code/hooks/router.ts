@@ -1,10 +1,10 @@
 import { atom, read, update } from 'claude-code'
-import type { AgentSpawnInput, EngineInterface, Hook, TurnCompleteInput, TurnStepInput } from 'claude-code'
+import type { AgentSpawnInput, EngineInterface, Hook, TurnCompleteInput, TurnStepInput, TurnUsage } from 'claude-code'
 
 import type { Model, Spend, Steps, Tiers } from '../types'
-import { classify, numberAt, failureOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
+import { classify, modelOf, numberAt, failureOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
 import { effortFor, type Picked, pickEffort, raised, type StepsLines } from './lib/effort'
-import type { Settings } from './lib/settings'
+import type { Runtime, Settings } from './lib/settings'
 import { costOf } from './lib/prices'
 import { readEscalation } from './escalate'
 import { record, updateDecision } from './lib/state'
@@ -14,7 +14,7 @@ import { stamp } from './lib/env'
 const ROUTED_TYPES = new Set(['general-purpose'])
 
 // The Router's built-in `complexity` task, asked word for word.
-const COMPLEXITY = {
+export const COMPLEXITY = {
   type: 'score',
   instructions: 'How difficult is this request to solve correctly?',
   criteria: [
@@ -25,29 +25,49 @@ const COMPLEXITY = {
 }
 
 // The `steps` question: how many reasoning steps the task needs, asked in the same request as `complexity`.
-const STEPS = {
+export const STEPS = {
   type: 'score',
   instructions: 'How many reasoning steps does this task need?',
   criteria: ['one or two steps', 'several steps that build on each other', 'many steps or long careful reasoning'],
 }
 
+// A runtime model that answers no `score` question, such as vela3-fast: both router questions would fail on every
+// subagent, so the router steps aside for the session. Set once, at session start.
+const noScore = atom({ plugin: 'vsr', key: 'noScoreModel' } as const, '')
+
+// The runtime model that answers no `score` question, or '' when the router can ask.
+export async function readNoScore($: EngineInterface): Promise<string> {
+  return read($, noScore)
+}
+
+// Reads which questions the runtime's model answers and, when it answers no `score` question, says once why the
+// router steps aside: a subagent keeps its default model unless escalate moves it up.
+export async function checkRouterModel($: EngineInterface, runtime: Runtime) {
+  const model = await modelOf($, runtime)
+  if (model === undefined || model.types.includes('score')) return
+  await update($, noScore, () => model.id)
+  $.ui.toast(
+    `vSR router: ${model.id} answers no score questions, so the router app steps aside · vela3-lite does · /vsr:setup`,
+  )
+}
+
 // `floor`: the effort never drops below the one the subagent would have had.
-type Route = { model: Model; floor: boolean }
+export type Route = { model: Model; floor: boolean }
 
 // By the expected difficulty level (the Score answer's `score`, 0 to 2).
-function routeOf(score: number, { easyBelow, hardFrom }: Tiers): Route {
+export function routeOf(score: number, { easyBelow, hardFrom }: Tiers): Route {
   if (score < easyBelow) return { model: 'haiku', floor: false }
   if (score < hardFrom) return { model: 'sonnet', floor: false }
   return { model: 'opus', floor: true }
 }
 
 // The models a subagent can be routed to, cheapest first.
-const MODELS: readonly Model[] = ['haiku', 'sonnet', 'opus']
-const RANK = Object.fromEntries(MODELS.map((model, rank) => [model, rank])) as Record<Model, number>
+export const MODELS: readonly Model[] = ['haiku', 'sonnet', 'opus']
+export const RANK = Object.fromEntries(MODELS.map((model, rank) => [model, rank])) as Record<Model, number>
 
 // The model a subagent has when the router leaves it alone: the session's, by its id. A model above Opus
 // (Fable, say) ranks above every route, so `model` is undefined: the router never names it.
-function defaultOf(parentModel: string): { model: Model | undefined; rank: number } {
+export function defaultOf(parentModel: string): { model: Model | undefined; rank: number } {
   const model = MODELS.find(name => parentModel.includes(name))
   return model === undefined ? { model, rank: MODELS.length } : { model, rank: RANK[model] }
 }
@@ -80,7 +100,7 @@ function scoreOf(answer: unknown): Steps | undefined {
 }
 
 // Only a failed complexity answer fails the parse; a failed steps answer is `null`.
-function parseAnswers({ answers }: Reply) {
+export function parseAnswers({ answers }: Reply) {
   const complexity = scoreOf(answers.complexity)
   return complexity === undefined ? undefined : { complexity, steps: scoreOf(answers.steps) ?? null }
 }
@@ -124,7 +144,11 @@ export async function routeSpawn(
   const tiers = { easyBelow: router.easyBelow, hardFrom: router.hardFrom }
   const fallback = defaultOf(e.parentModel)
   const isEscalated = (await readEscalation($)) !== null
-  const asked = await classify($, settings.runtime, e.prompt, { complexity: COMPLEXITY, steps: STEPS }, QUICK_ANSWER_MS, parseAnswers)
+  const without = await read($, noScore)
+  const asked =
+    without === ''
+      ? await classify($, settings.runtime, e.prompt, { complexity: COMPLEXITY, steps: STEPS }, QUICK_ANSWER_MS, parseAnswers)
+      : { ok: false as const, why: `${without} answers no score questions`, latencyMs: 0 }
   const anchor = { id: e.tool_use_id, toolUseId: e.tool_use_id, at: await stamp($) }
   if (!asked.ok) {
     const why = isEscalated ? `${asked.why} · escalated, so one step up anyway` : asked.why
@@ -174,15 +198,18 @@ export async function readSpend($: EngineInterface): Promise<Spend> {
   return read($, spend)
 }
 
-// A routed subagent's turn, priced at list price on the model that answered and on the session's model.
+// A routed turn, a subagent's or yours, priced at list price on the model that answered and on the session's model.
+export async function addSpend($: EngineInterface, usage: TurnUsage, sessionModel: string) {
+  const actual = costOf(usage.model, usage)
+  const baseline = costOf(sessionModel, usage)
+  if (actual === undefined || baseline === undefined) return
+  await update($, spend, now => ({ actual: now.actual + actual, baseline: now.baseline + baseline, turns: now.turns + 1, sessionModel }))
+}
+
 export async function countSpend($: EngineInterface, e: TurnCompleteInput) {
   if (e.agentId === undefined || e.usage === undefined) return
   const sessionModel = (await read($, routedFrom))[e.agentId]
-  if (sessionModel === undefined) return
-  const actual = costOf(e.usage.model, e.usage)
-  const baseline = costOf(sessionModel, e.usage)
-  if (actual === undefined || baseline === undefined) return
-  await update($, spend, now => ({ actual: now.actual + actual, baseline: now.baseline + baseline, turns: now.turns + 1, sessionModel }))
+  if (sessionModel !== undefined) await addSpend($, e.usage, sessionModel)
 }
 
 export async function* routeStep(

@@ -125,6 +125,7 @@
             "api-key",
             "api-subscription-key",
             "authorization",
+            "chatgpt-account-id",
             "content-length",
             "ocp-apim-subscription-key",
             "x-api-key",
@@ -180,6 +181,10 @@
             {
               "name": "x-vsr-selected-model",
               "value": "general-small"
+            },
+            {
+              "name": "x-vsr-replay-id",
+              "value": "<volatile>"
             }
           ],
           "remove": [
@@ -302,6 +307,10 @@
       {
         "name": "x-vsr-selected-model",
         "value": "general-small"
+      },
+      {
+        "name": "x-vsr-replay-id",
+        "value": "<volatile>"
       }
     ],
     "chunks": [

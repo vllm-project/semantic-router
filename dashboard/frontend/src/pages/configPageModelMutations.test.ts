@@ -124,7 +124,7 @@ describe('effective model edit round trips', () => {
     expect(form.tags).toEqual(builtIn.tags ?? [])
     expect(model.reasoning_family).toBe('glm-5.3')
     expect(form.reasoning_family).toBe('')
-    expect(model.api_format).toBe('openai')
+    expect(model.api_format).toBe('chat_completions')
     expect(form.api_format).toBe('')
     validateModelStructuredFields(form)
     expect(serialized(buildEditedModelConfig(initial, model, form))).toEqual(initial)

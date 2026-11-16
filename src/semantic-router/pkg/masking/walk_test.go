@@ -631,6 +631,79 @@ func TestApply_PlainTextToolResultStillMasked(t *testing.T) {
 	}
 }
 
+// Auto mode's classifier context reaches an Anthropic backend, so a value in
+// it is masked like one in a structured tool result.
+func TestApply_SafeguardsStringLeavesMasked(t *testing.T) {
+	request := &llmprotocol.Request{Safeguards: json.RawMessage(`[{"type":"auto_mode","classifier_context":{"live_cwd":"/home/alice@example.com/repo","v":1}}]`)}
+	result, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := string(request.Safeguards)
+	if !result.Changed || strings.Contains(got, "alice@example.com") || !strings.Contains(got, "/home/[EMAIL_ADDRESS_0]/repo") {
+		t.Fatalf("safeguards = %s, want the address masked", got)
+	}
+}
+
+// A tool result that only begins with a bracket is text, not malformed JSON:
+// it is masked like any other text rather than refusing the request, and with
+// it every later turn of the session that carries it.
+func TestApply_BracketPrefixedTextToolResultMasked(t *testing.T) {
+	for _, text := range []string{
+		"[INFO] mailed alice@example.com",
+		"[2026-11-14 10:00:00] mailed alice@example.com",
+		"[1/3] mailed alice@example.com",
+		"[vsr:employee_id] mailed alice@example.com",
+		"[nullable] alice@example.com",
+		"{not json alice@example.com",
+	} {
+		t.Run(text, func(t *testing.T) {
+			request := toolResultRequest(text)
+			if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+				t.Fatalf("text tool result was refused: %v", err)
+			}
+			got := request.Messages[0].Content[0].ToolResult.Content[0].Text
+			if want := strings.Replace(text, "alice@example.com", "[EMAIL_ADDRESS_0]", 1); got != want {
+				t.Fatalf("got %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestIsJSONShapedPayload(t *testing.T) {
+	for _, tc := range []struct {
+		text string
+		want bool
+	}{
+		{`{"a":1}`, true},
+		{" {}", true},
+		{"[]", true},
+		{`["a"]`, true},
+		{`[{"a":1}]`, true},
+		{"[[1]]", true},
+		{"[1, 2]", true},
+		{"[-1.5e3]", true},
+		{"[true]", true},
+		{"[null ,1]", true},
+		{"[", true},
+		{"{", true},
+		{`{"a": alice`, true},
+		{"[INFO] ok", false},
+		{"[2026-11-14 10:00:00] ok", false},
+		{"[1/3] ok", false},
+		{"[vsr:employee_id]", false},
+		{"[EMAIL_ADDRESS_0]", false},
+		{"{not json", false},
+		{"[nullable] x", false},
+		{"plain", false},
+		{"42", false},
+	} {
+		if got := isJSONShapedPayload(tc.text); got != tc.want {
+			t.Errorf("isJSONShapedPayload(%q) = %v, want %v", tc.text, got, tc.want)
+		}
+	}
+}
+
 // A custom tool's result is free-form text even when it looks like JSON.
 func TestApply_CustomToolResultKeepsTextMasking(t *testing.T) {
 	request := &llmprotocol.Request{
@@ -812,5 +885,96 @@ func TestApply_ToolResultSiblingMembersStayStructured(t *testing.T) {
 				t.Fatalf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// Case: a client-written placeholder in an earlier block keeps its meaning:
+// the value a later block holds gets the next index instead (#6513).
+func TestApply_ClientPlaceholderInEarlierBlockIsNotReissued(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "[EMAIL_ADDRESS_0] then"}}},
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "write to alice@example.com"}}},
+		},
+	}
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := request.Messages[0].Content[0].Text, "[EMAIL_ADDRESS_0] then"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got, want := request.Messages[1].Content[0].Text, "write to [EMAIL_ADDRESS_1]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Case: an agent's later request. The tool result still holds the real name,
+// and the agent's own tool call echoes the placeholder it got for that name
+// one turn earlier. A detector that also reads the placeholder's inner text
+// as a name must not turn the echo into a nested placeholder, or the agent
+// sees its own earlier output change and its edits stop matching the file.
+func TestApply_EchoedPlaceholderInLaterTurnUnchanged(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+					CallID:  "call_1",
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "customer: Minji Kim"}},
+				}},
+			}},
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+					ID: "call_2", Name: "Write", Arguments: `{"content":"Hi [PERSON_0],"}`,
+				}},
+			}},
+		},
+	}
+	result, err := Apply(request, NewAllocator(defaultCfg()), scanEchoAndName)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// only the real name counts as masked, not the echo left as it was
+	if result.MaskedCount != 1 {
+		t.Fatalf("MaskedCount: got %d, want 1", result.MaskedCount)
+	}
+	if got, want := request.Messages[0].Content[0].ToolResult.Content[0].Text, "customer: [PERSON_0]"; got != want {
+		t.Fatalf("tool result: got %q, want %q", got, want)
+	}
+	if got, want := request.Messages[1].Content[0].ToolCall.Arguments, `{"content":"Hi [PERSON_0],"}`; got != want {
+		t.Fatalf("tool call arguments: got %q, want %q", got, want)
+	}
+}
+
+// scanEchoAndName reads the name, and the echoed placeholder both whole and
+// by its index alone.
+func scanEchoAndName(text string) ([]Span, error) {
+	var spans []Span
+	for _, value := range []string{"Minji Kim", "PERSON_0", "0"} {
+		if idx := strings.Index(text, value); idx >= 0 {
+			spans = append(spans, Span{EntityType: "PERSON", Start: idx, End: idx + len(value), Confidence: 1.0})
+		}
+	}
+	return spans, nil
+}
+
+// Case: the echo comes before the value it stands for, as after a compacted
+// history. Nothing issued it yet, so it is reserved like a typed one: the
+// name gets the next index, and a detector reading the echo's index alone
+// masks it (#6513).
+func TestApply_EchoBeforeItsValueIsReserved(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Hi [PERSON_0],"}}},
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "customer: Minji Kim"}}},
+		},
+	}
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanEchoAndName); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := request.Messages[0].Content[0].Text, "Hi [PERSON_[PERSON_1]],"; got != want {
+		t.Fatalf("echo: got %q, want %q", got, want)
+	}
+	if got, want := request.Messages[1].Content[0].Text, "customer: [PERSON_2]"; got != want {
+		t.Fatalf("name: got %q, want %q", got, want)
 	}
 }

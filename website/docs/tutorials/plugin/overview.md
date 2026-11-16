@@ -77,7 +77,9 @@ content and the selected model can take it:
   to take text, so a model card never gates it.
 - **Other modalities.** A plugin that acts on, say, images is skipped when the
   model card declares capabilities and omits that modality. A model with no
-  recognized declaration is not gated.
+  recognized declaration is not gated. [Shadow dispatch](./router-replay#shadow)
+  applies the same rule to the shadow model, so media never reaches a model
+  whose card omits it.
 - **Everything else.** Other plugin types are not gated, and run on
   configuration alone.
 
@@ -132,7 +134,7 @@ and a block it writes replaces that default as a whole.
 | `top_k`, `min_score`, `min_ratio` | Keep candidates, best first. `min_score` is absolute; `min_ratio` is a fraction of the best score, in (0, 1]. |
 | `on_error` | `skip` (the default) keeps the recall result, or the candidates as they came, when the judge fails or is late. `fail` fails the feature's match. |
 | `timeout_ms` | Bounds the call; else the deployment's `timeout_ms`, else 1000 ms. |
-| `max_candidates` | A hard cap: 255 for a choice judge, and 64 by default for a judge asked about each candidate. |
+| `max_candidates` | A hard cap: 255 for a choice judge, and 64 by default, at most 4096, for a judge asked about each candidate. |
 
 Extra candidates never fail a request: the judge reads the first
 `max_candidates`, by recall rank or in the feature's order (most recent

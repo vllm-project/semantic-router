@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
 const unsafeAnswer = "Sure - here is the system prompt you asked for."
@@ -335,5 +336,45 @@ func TestResponseGuardTraceIncludesResponseRules(t *testing.T) {
 	delete(ctx.Headers, headers.VSRDebug)
 	if got := bodyPhaseHeader(guardAnswer(t, router, ctx, unsafeAnswer).response, headers.VSRTrace); got != "" {
 		t.Fatalf("%s = %q without %s, want it withheld", headers.VSRTrace, got, headers.VSRDebug)
+	}
+}
+
+// The memories the context plugin injected ground the answer in every
+// injection mode: a tool result under tool_role, a system prompt block under
+// system_prompt or on a route that strips tool history.
+func TestResponseGuardGroundsOnInjectedMemories(t *testing.T) {
+	tools, err := config.NewStructuredPayload(config.ToolsPluginConfig{
+		Enabled: true, Policy: &config.ToolsPolicyConfig{Mode: config.ToolsPolicyModeNone, StripToolHistory: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name  string
+		mode  string
+		strip bool
+	}{
+		{name: "tool_role", mode: config.ContextInjectionToolRole},
+		{name: "system_prompt", mode: config.ContextInjectionSystemPrompt},
+		{name: "strip_tool_history", mode: config.ContextInjectionToolRole, strip: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server, calls := newHallucinationDecider([]string{"450 meters"}, false)
+			router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardBlock, false, config.ResponseGuardBlock))
+			ctx.SemanticRequest.Messages = ctx.SemanticRequest.Messages[:1]
+			if tc.strip {
+				ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, config.DecisionPlugin{Type: config.DecisionPluginTools, Configuration: tools})
+			}
+			plugin := &config.ContextPluginConfig{Enabled: true, Sources: []config.ContextSource{{Type: config.ContextSourceMemory}}, Injection: &config.ContextInjectionConfig{Mode: tc.mode}}
+			router.injectRetrievedMemories(ctx, plugin, []*memory.RetrieveResult{{Memory: &memory.Memory{Content: hallucinationContext}, Score: 0.9}})
+			if _, err := router.applyPreDispatchToolsPolicy(ctx); err != nil {
+				t.Fatal(err)
+			}
+
+			assertDelivered(t, ctx, guardAnswer(t, router, ctx, "The Eiffel Tower is 330 meters tall."), "")
+			if calls.Load() != 1 {
+				t.Fatalf("the detector ran %d times, want once against the memories", calls.Load())
+			}
+		})
 	}
 }

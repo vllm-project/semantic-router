@@ -310,6 +310,11 @@ spec:
 Omit the hostname to let OpenShift allocate one, or provide a hostname covered
 by your DNS and certificate configuration.
 
+In standalone mode the Route sends clients to the Router's inference listener,
+Service port 8801 (`http-8801`), and so does a `spec.ingress` path without
+`servicePort`. With `spec.gateway.existingRef` the Router serves no HTTP
+inference port, so send clients through that Gateway.
+
 ## Secrets
 
 Use Kubernetes Secrets for provider, registry, and model-download credentials.

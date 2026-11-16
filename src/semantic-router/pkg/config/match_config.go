@@ -63,7 +63,7 @@ type MatchJudge struct {
 	// recall rank, or, without recall, as the feature lists them, most
 	// recent first. A choice judge reads at most 255, the options of one
 	// question, and does by default; one asked about each candidate reads
-	// 64 by default.
+	// 64 by default and at most 4096.
 	MaxCandidates int `json:"max_candidates,omitempty" yaml:"max_candidates,omitempty"`
 	// OnError is what a failed or late judge does: skip (the default) keeps
 	// the recall result, or the candidates as they came without recall;
@@ -85,6 +85,12 @@ const (
 // DefaultMatchJudgeCandidates is how many candidates a judge asked about
 // each candidate reads without max_candidates: one batch entry each.
 const DefaultMatchJudgeCandidates = 64
+
+// MaxMatchJudgeCandidates is the most candidates a judge asked about each
+// candidate reads: the states one /v1/bundle request to a model runtime
+// carries at its default --max-bundle-tasks, 64 tasks of 64 states. More go
+// in several bundles at once, and the runtime runs one and refuses the rest.
+const MaxMatchJudgeCandidates = 64 * 64
 
 // EffectiveMethod is the recall method.
 func (r MatchRecall) EffectiveMethod() string {

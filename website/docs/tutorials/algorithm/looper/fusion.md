@@ -129,7 +129,7 @@ recipes:
 | Field | Use it for |
 | --- | --- |
 | `output_contract` | Decision-scoped prompt text: benchmark or application format requirements that apply across Fusion, Flow and ReMoM, instead of task-specific prompts hard-coded in an algorithm. |
-| `output_contract_spec` | Typed normalization and post-processing the Router executes, such as choice extraction, terminal-action JSON normalization or reference dereferencing. |
+| `output_contract_spec` | Typed normalization and post-processing the Router executes, such as choice extraction, terminal-action JSON normalization or reference dereferencing, which serves the content of the panel response the judge names by its number, and keeps the judge's answer when that response has reasoning only. Only Fusion, ReMoM and Flow decisions accept it. |
 
 Extraction defaults to exact `content` matching. Use `extract.sources` or
 `extract.mode: json_object` only when the decision explicitly permits a wider

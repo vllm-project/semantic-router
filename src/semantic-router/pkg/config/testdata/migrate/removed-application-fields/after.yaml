@@ -27,7 +27,7 @@ recipes:
       safety:
         - {name: harmful, predicate: {gte: 0.6}}
       pii:
-        - {name: personal, predicate: {gte: 0.8}, ignore_labels: [EMAIL_ADDRESS], input: {history: true, tool_results: true}}
+        - {name: personal, predicate: {gte: 0.8}, ignore_labels: [EMAIL_ADDRESS], input: {tool_results: true, request: false}}
     decisions:
       - name: guarded
         priority: 600

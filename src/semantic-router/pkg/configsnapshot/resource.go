@@ -69,6 +69,8 @@ type Spec interface{ specKind() Kind }
 type SecretSpec struct {
 	// Env names the environment variables the values are read from.
 	Env []string `json:"env,omitempty"`
+	// Files names the key files the values are read from.
+	Files []string `json:"files,omitempty"`
 	// Inline counts values written in the document itself.
 	Inline int `json:"inline,omitempty"`
 }

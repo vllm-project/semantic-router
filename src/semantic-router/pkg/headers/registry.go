@@ -170,10 +170,10 @@ var registryByName = func() map[string]Header {
 var registry = []Header{
 	// The response contract.
 	{VSRSchemaVersion, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "Response-header contract revision; currently `3`."},
-	{VSRResponsePath, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`."},
+	{VSRResponsePath, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`."},
 	{VSRConfigVersion, ToClient, SurfacePublic, SensitivityNone, "config", "v0.5", "Version of the configuration snapshot that served the request."},
 	{VSRConfigHash, ToClient, SurfacePublic, SensitivityNone, "config", "v0.4", "SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`."},
-	{VSRWarnings, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.5", "Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."},
+	{VSRWarnings, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.5", "Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, `guard_overloaded` on the retryable error answered instead of a refusal or a forward that rules unread on an overloaded decision runtime decide, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."},
 
 	// Final routing facts.
 	{VSRSelectedRecipe, ToClient, SurfacePublic, SensitivityNone, "routing", "v0.4", "Recipe the effective entrypoint selected; omitted for concrete backend models."},
@@ -197,6 +197,10 @@ var registry = []Header{
 	{VSRSessionID, FromClient, SurfaceControl, SensitivityNone, "session", "v0.5", "Session id the client pins; without it the Router reads the headers `global.router.headers.session_id_headers` names, in order."},
 	{XSessionID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "session", "v0.3", "Client session id `session_id_headers` accepts by default; providers receive it."},
 	{XClaudeCodeSessionID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "session", "v0.3", "Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it."},
+	{XClaudeCodeAgentID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "router_learning", "v0.5", "Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it."},
+	{CodexSessionID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "router_learning", "v0.5", "Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it."},
+	{CodexThreadID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "router_learning", "v0.5", "Thread id Codex sends on every call, equal to `session-id` on a root thread, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it."},
+	{XCodexTurnMetadata, FromClient | ToProvider, SurfaceControl, SensitivityNone, "router_replay", "v0.5", "Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it."},
 	{XConversationID, FromClient | ToProvider, SurfaceControl, SensitivityNone, "router_learning", "v0.4", "Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it."},
 	{VSRMemory, FromClient, SurfaceControl, SensitivityNone, "memory", "v0.5", "`off` keeps Router-managed memory out of the request."},
 	{VSRSkipProcessing, FromClient, SurfaceControl, SensitivityNone, "skip_processing", "v0.3", "`true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set."},

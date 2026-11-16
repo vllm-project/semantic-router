@@ -9,7 +9,7 @@ import (
 )
 
 // targetConversationDecision is one of the decisions configured to route on
-// the conversation signal (see e2e/profiles/conversation-routing/values.yaml).
+// the conversation signal (see the conversation recipe in e2e/profiles/signal-routing/values.yaml).
 const targetConversationDecision = "multi_turn_user_routing"
 
 func init() {
@@ -27,5 +27,6 @@ func testConversationRouting(ctx context.Context, client *kubernetes.Clientset, 
 		TargetDecision: targetConversationDecision,
 		ResultsTitle:   "CONVERSATION ROUTING TEST RESULTS",
 		LogLabel:       "Conversation",
+		Entrypoint:     "vllm-sr/conversation",
 	})
 }

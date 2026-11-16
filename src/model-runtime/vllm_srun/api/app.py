@@ -21,12 +21,12 @@ from ..errors import RequestError, RuntimeServiceError
 from ..plugins.decisions import as_systemone
 from ..runtime import Runtime
 from ..timing import ServerTiming
-from . import wire
+from . import schemas, wire
 
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
 _SURROGATE_ESCAPE = re.compile(rb"\\u[dD][89a-fA-F]")
 # The contract version (``info.version`` in openapi.yaml), reported to clients.
-API_VERSION = "4.0.0"
+API_VERSION = "5.0.0"
 # Recorded for a request whose client disconnected before its answer (nginx's code).
 CLIENT_CLOSED = 499
 
@@ -81,7 +81,12 @@ def stamped(response: Response, timing: ServerTiming, started: float) -> Respons
     return response
 
 
-def create_app(runtime: Runtime) -> Starlette:
+def create_app(runtime: Runtime, systemone_schema: str | None = None) -> Starlette:
+    """The runtime's routes; ``systemone_schema`` overrides the process's System One schema."""
+    schema: str = systemone_schema or str(
+        getattr(runtime.config, "systemone_schema", schemas.SCHEMA_50)
+    )
+
     def observe(endpoint: str, status: int, started: float) -> None:
         runtime.metrics.requests.labels(endpoint=endpoint, status=str(status)).inc()
         runtime.metrics.request_seconds.labels(endpoint=endpoint).observe(
@@ -96,10 +101,18 @@ def create_app(runtime: Runtime) -> Starlette:
             started = time.perf_counter()
             timing = ServerTiming()
             status = 200
+            decisions = surface == "decisions"
             try:
                 body, size = await _read_json(
-                    request, runtime.config.max_request_bytes, surface == "decisions"
+                    request, runtime.config.max_request_bytes, decisions
                 )
+                read: schemas.Read | None = None
+                if decisions:
+                    try:
+                        read = schemas.read(schema, endpoint, body, request.headers)
+                    except schemas.ReadError as exc:
+                        raise RuntimeServiceError("invalid_request", str(exc)) from exc
+                    body = read.body
                 timing.parse = time.perf_counter() - started
                 outcome = await until_disconnect(
                     request, runtime.call(surface, body, size, timing)
@@ -110,16 +123,36 @@ def create_app(runtime: Runtime) -> Starlette:
                 status, response = outcome
                 if systemone:
                     status, response = as_systemone(status, response)
+                headers: dict[str, str] = {}
+                if decisions and status == HTTPStatus.OK:
+                    response = schemas.answer(read, response)
+                elif decisions:
+                    status, response, headers = schemas.error(
+                        schema,
+                        endpoint,
+                        status,
+                        response,
+                        endpoint == schemas.PATH_BATCH,
+                    )
                 serializing = time.perf_counter()
                 answer = respond(response, status)
+                answer.headers.update(headers)
                 timing.serialize = time.perf_counter() - serializing
                 status = answer.status_code
                 return stamped(answer, timing, started)
             except RuntimeServiceError as exc:
-                status = exc.status
-                return stamped(
-                    JSON(exc.body(), status_code=exc.status), timing, started
-                )
+                status, failure, headers = exc.status, exc.body(), {}
+                if decisions:
+                    status, failure, headers = schemas.error(
+                        schema,
+                        endpoint,
+                        status,
+                        failure,
+                        endpoint == schemas.PATH_BATCH,
+                    )
+                refused = JSON(failure, status_code=status)
+                refused.headers.update(headers)
+                return stamped(refused, timing, started)
             finally:
                 observe(endpoint, status, started)
 
@@ -165,11 +198,15 @@ def create_app(runtime: Runtime) -> Starlette:
                     "max_bundle_tasks": runtime.config.max_bundle_tasks,
                     "max_request_bytes": runtime.config.max_request_bytes,
                 },
-                "models": [
-                    listed(card)
-                    for card in cards
-                    if "decisions" in card.get("surfaces", [])
-                ],
+                "models": schemas.listing(
+                    schema,
+                    cards,
+                    [
+                        listed(card)
+                        for card in cards
+                        if "decisions" in card.get("surfaces", [])
+                    ],
+                ),
             }
         )
 
@@ -225,6 +262,11 @@ def create_app(runtime: Runtime) -> Starlette:
             Route("/v1/decisions", surface_route("decisions"), methods=["POST"]),
             Route(
                 "/v1/systemone",
+                surface_route("decisions", systemone=True),
+                methods=["POST"],
+            ),
+            Route(
+                "/v1/systemone/batch",
                 surface_route("decisions", systemone=True),
                 methods=["POST"],
             ),

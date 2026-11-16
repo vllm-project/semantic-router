@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -35,6 +36,55 @@ func TestStandaloneReloadNeedsARestartOnlyForListeners(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "Envoy") {
 		t.Fatalf("the standalone message names Envoy: %v", err)
+	}
+}
+
+// A standalone Router's management API takes the listener changes its file
+// watcher takes: keys, APIs and identity reload in place, and only what the
+// Router bound at startup needs a restart.
+func TestStandaloneConfigUpdateReloadsListenerKeysInPlace(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		change  func(*config.Listener)
+		restart string
+	}{
+		{name: "api_keys", change: func(l *config.Listener) { l.APIKeys = []string{"rotated-key"} }},
+		{name: "apis", change: func(l *config.Listener) {
+			l.APIs = config.ListenerAPIs{"chat_completions": {Models: []string{"qwen-test"}}}
+		}},
+		{name: "identity", change: func(l *config.Listener) { l.Identity = &config.ListenerIdentity{TrustHeaders: true} }},
+		{name: "port", change: func(l *config.Listener) { l.Port = 8898 }, restart: "listeners[http-8899].port"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configPath := writeDeployTestBaseConfig(t)
+			before, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			candidate, err := config.ParseYAMLBytes(before)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.change(&candidate.Listeners[0])
+			body, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(mustMarshalCanonicalConfigYAML(t, candidate))})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := httptest.NewRequest(http.MethodPut, apiConfigPath, bytes.NewReader(body))
+			request.Header.Set("If-Match", configDocumentETag(before))
+			response := httptest.NewRecorder()
+			(&ClassificationAPIServer{configPath: configPath, gatewayMode: config.GatewayStandalone}).handleConfigPut(response, request)
+			if tc.restart == "" {
+				if response.Code != http.StatusOK {
+					t.Fatalf("a listener's %s reloads in place, got %d: %s", tc.name, response.Code, response.Body.String())
+				}
+				return
+			}
+			if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "RESTART_REQUIRED") ||
+				!strings.Contains(response.Body.String(), tc.restart) {
+				t.Fatalf("a listener's %s needs a restart at %s, got %d: %s", tc.name, tc.restart, response.Code, response.Body.String())
+			}
+		})
 	}
 }
 

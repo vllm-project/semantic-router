@@ -57,9 +57,11 @@ decision, algorithm, plugin and global block.
 | --- | --- | --- |
 | `timeout` | The whole call, including its streamed response; it also bounds a stalled stream. `0s` lifts both limits. To lift only one model's call limit, set that model's `total_timeout: 0s`. | `300s` |
 | `api_keys` | Client API keys the listener requires. | none |
-| `models` | The chat models the listener accepts. | empty: all |
-| `systemone.models` | The native System One models the listener publishes, separate from `models`. | none |
-| `systemone.max_deadline_ms` | The longest a System One request waits for a model. | 10 minutes |
+| `apis` | The APIs the listener serves, by API name: `chat_completions`, `responses`, `messages`, `images` and `systemone` (`openai` and `anthropic` are accepted as aliases of `chat_completions` and `messages`). Any other API path answers `404` with a `detail` naming the listener. Standalone mode serves `systemone`; `--gateway extproc` refuses a listener that serves it. | the four LLM APIs, no `systemone` |
+| `apis.<api>.models` | The only request models an API accepts. | every model of its kind |
+| `apis.systemone.schema` | The System One schema the listener speaks to its clients: `vllm-sr/5.0`, or `vllm-sr/4.0`, which also accepts every request form of the earlier contract. See [System One schemas](../system-one/use/schemas.md). | `vllm-sr/5.0` |
+| `apis.systemone.max_deadline_ms` | The longest a System One request waits for a model. | 10 minutes |
+| `apis.systemone.vsr` | What the vSR agent plugins pointed at the listener do: `redact`, `shield`, `guard`, `check`, `escalate`, `router` and `router_turns` on or off, and `router_goal` (`quality`, `balanced` or `save`). The listing (`GET /v1/systemone/models`) hands it to the plugins, and each field set here wins over the plugin's own option. The Dashboard edits each field as Default (left out), On or Off under Config › Global Config › vSR agent plugins. See [Agent harnesses](agent-harness.md). | the plugins' own options |
 | `tls.cert_file`, `tls.key_file` | One-way TLS. | off |
 | `identity.trust_headers`, `identity.trusted_peers` | The identity sources the listener trusts, in standalone mode. | none |
 
@@ -69,7 +71,9 @@ decision, algorithm, plugin and global block.
   `providers.models[]` entry.
 - **Pricing.** `providers.models[].pricing` takes an optional uppercase
   three-letter `currency`, plus non-negative `prompt_per_1m`,
-  `completion_per_1m`, `cached_input_per_1m` and `cache_write_per_1m` rates.
+  `completion_per_1m`, `cached_input_per_1m`, `cache_write_per_1m` and
+  `cache_write_1h_per_1m` rates. A model without it takes its provider's
+  [list price](catalog-backed-models#list-prices) when the catalog lists one.
 - **Backend format.** [Protocol Compatibility](protocol-compatibility) helps
   you choose a backend's `api_format`. Check
   [Backend Target Compatibility](backend-target-compatibility) before moving
@@ -295,6 +299,9 @@ api_key: ${MODEL_API_KEY}
 | `${VAR-default}` | `default` when `VAR` is unset |
 | `$$` | A literal `$` |
 
+- `VAR` is an uppercase name: `A`-`Z`, digits and `_`, not starting with a
+  digit. Any other `$` text stays as written, such as `$100`, a template's
+  `{{range $i := ...}}` or a `${user_content}` placeholder.
 - A custom recipe must authorize the host variables it needs with
   `--recipe-env NAME`.
 - On Kubernetes, put sensitive values in Secrets, not ConfigMaps or Helm
@@ -329,6 +336,8 @@ entrypoints:
 | `entrypoints[].model_names` | The public model aliases. |
 | `entrypoints[].recipe` | The recipe those aliases enter. |
 | `entrypoints[].default` | Marks the default chat entrypoint. |
+| `entrypoints[].review_model` | Optional model name of another entrypoint in the same API namespace for agent approval reviews. The target cannot have its own `review_model` or `memory_model`. See [Approve for me](agent-harness#approve-for-me-reviews). |
+| `entrypoints[].memory_model` | Optional model name of another entrypoint in the same API namespace for agent memory extraction and consolidation. The target cannot have its own `review_model` or `memory_model`. See [Codex memories](agent-harness#codex-memories). |
 | `recipes[]` | One recipe's policy: its signals, projections, decisions, algorithms, plugins, cache, learning and routing state. |
 
 Providers, stores and the model catalog's deployments can be shared without
@@ -463,14 +472,20 @@ every recipe.
 | Where | What it sets |
 | --- | --- |
 | `global.services.router_replay` | Shared storage and retention. |
+| No `router_replay` plugin on any layer | A record of each request's routing data, with no request or response text. |
 | A `router_replay` plugin in `global.plugins` | Whether capture is on, and the capture defaults. |
 | A recipe's or decision's `router_replay` plugin | Only the fields it sets. `enabled: false` turns capture off there; `enabled: true` opts in when the default is off. |
 
-- **Personal data.** `capture_personal_data: false` keeps routing evidence but
-  omits content when PII is detected or its status is unknown. Without a PII
-  detector, content is suppressed rather than blocking startup.
+- **Prompt text.** `prompt_capture` says what a record keeps besides routing
+  evidence. `none`, the default, keeps no request or response text and reads
+  nothing for personal data. `raw` keeps the text the capture switches allow,
+  unverified. `verified` keeps the prompt alone once the PII rules find it
+  clean, and omits it when PII is detected or its status is unknown; without a
+  PII detector the prompt is omitted rather than blocking startup.
+  `capture_personal_data` is the deprecated form: `false` loads as `verified`
+  and `true` as `raw`, with a warning.
 - **Tool results** stay redacted unless `capture_tool_results: true`, which
-  needs `capture_personal_data: true`.
+  stores them under `prompt_capture: raw` only.
 - **Rejected requests** without a selected decision use their recipe's
   capture defaults.
 

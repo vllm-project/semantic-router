@@ -93,10 +93,7 @@ func DeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment {
 		mark(name)
 	}
 	for _, listener := range cfg.Listeners {
-		if listener.SystemOne == nil {
-			continue
-		}
-		for _, publicName := range listener.SystemOne.Models {
+		for _, publicName := range cfg.SystemOneModels(listener) {
 			if cfg.IsSystemOneBackend(publicName) {
 				if deployment := cfg.ModelConfig[publicName].Deployment; deployment != "" {
 					mark(deployment)

@@ -9,7 +9,7 @@ import (
 )
 
 // targetContextDecision is the decision configured to route on the context
-// signal's long_context rule (see e2e/profiles/long-context-routing/values.yaml).
+// signal's long_context rule (see the context recipe in e2e/profiles/signal-routing/values.yaml).
 const targetContextDecision = "long_context_routing"
 
 func init() {
@@ -27,5 +27,6 @@ func testContextRouting(ctx context.Context, client *kubernetes.Clientset, opts 
 		TargetDecision: targetContextDecision,
 		ResultsTitle:   "CONTEXT ROUTING TEST RESULTS",
 		LogLabel:       "Context",
+		Entrypoint:     "vllm-sr/context",
 	})
 }

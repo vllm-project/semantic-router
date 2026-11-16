@@ -67,7 +67,9 @@ func (s *ClassificationAPIServer) handleSystemOneForward(w http.ResponseWriter, 
 	if forwarded.BackendRequest {
 		request.Header.Set(headers.VSRSystemOneBackend, "1")
 	}
-	systemone.Handler(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name))(w, request)
+	// The router of the retained generation evaluates the listener's rules.
+	rules, _ := router.(systemone.ListenerRules)
+	systemone.HandlerWithRules(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name), rules)(w, request)
 }
 
 // retainedSystemOneInvoker uses only services from the caller's acquired
@@ -81,7 +83,8 @@ func retainedSystemOneInvoker(snapshot *configsnapshot.Snapshot, router systemon
 		}
 		return localSystemOneAnswer(models.SystemOne(ctx, deployment, body))
 	}
-	return systemone.ServingInvoker(snapshot.Config(), listener, router, local, remote)
+	cards, _ := snapshot.Part(configsnapshot.ComponentModelService).(systemone.Cards)
+	return systemone.ServingInvoker(snapshot.Config(), listener, router, local, remote, cards)
 }
 
 // Runtime-style answers for a refusal that happened before any worker answered.

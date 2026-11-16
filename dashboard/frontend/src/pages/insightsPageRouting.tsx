@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 
-import type { ViewSection } from '../components/ViewPanel'
+import type { ViewField, ViewSection } from '../components/ViewPanel'
 import type { InsightsRecord } from './insightsPageTypes'
 import type { ReplaySessionPolicy } from './insightsPageRoutingTypes'
+import { getTurnPath } from './insightsReviewSupport'
 import InsightsSelectionTrace from './InsightsSelectionTrace'
 import styles from './InsightsPage.module.css'
 
@@ -89,6 +91,19 @@ function protectionCandidates(policy: ReplaySessionPolicy): ViewSection[] {
   ]
 }
 
+// The Codex ids a request carries, when it has them; each turn opens the list of that
+// turn's calls, reviews and subagents' calls.
+function codexTurnFields(record: InsightsRecord): ViewField[] {
+  const turnLink = (turn: string) => <Link to={getTurnPath(turn)}>{turn}</Link>
+  const fields: ViewField[] = []
+  if (record.thread_id) fields.push({ label: 'Codex thread', value: record.thread_id })
+  if (record.turn_id) fields.push({ label: 'Codex turn', value: turnLink(record.turn_id) })
+  if (record.parent_turn_id) {
+    fields.push({ label: 'Parent turn', value: turnLink(record.parent_turn_id) })
+  }
+  return fields
+}
+
 export function buildRoutingExplanationSections(record: InsightsRecord): ViewSection[] {
   const sections: ViewSection[] = []
   const diagnostics = record.route_diagnostics
@@ -111,13 +126,15 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
   }
   const policy =
     record.learning?.protection ?? record.session_policy ?? record.learning?.protection_preflight
-  if (record.session_id || policy) {
+  const codexFields = codexTurnFields(record)
+  if (record.session_id || policy || codexFields.length > 0) {
     sections.push({
       title: 'Session Routing',
       fields: [
         { label: 'Session', value: record.session_id || 'Not recorded' },
         { label: 'Conversation', value: record.conversation_id || 'Not recorded' },
         { label: 'Turn', value: record.turn_index + 1 },
+        ...codexFields,
         {
           label: 'Previous model',
           value: diagnostics?.previous_model || policy?.current_model || 'Not recorded',

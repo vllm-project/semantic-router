@@ -13,6 +13,12 @@ export const AUTHORIZATION = 'authorization'
 /** Azure API Management credential, which a model connection sets through `auth`. Surface: internal. */
 export const OCP_APIM_SUBSCRIPTION_KEY = 'ocp-apim-subscription-key'
 
+/** Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it. Surface: control. */
+export const SESSION_ID = 'session-id'
+
+/** Thread id Codex sends on every call, equal to `session-id` on a root thread, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. Surface: control. */
+export const THREAD_ID = 'thread-id'
+
 /** Provider credential of Anthropic-style APIs. Surface: internal. */
 export const X_API_KEY = 'x-api-key'
 
@@ -28,8 +34,14 @@ export const X_AUTHZ_USER_GROUPS = 'x-authz-user-groups'
 /** Authenticated user id; `identity.user_id_header` names another header. Surface: internal. */
 export const X_AUTHZ_USER_ID = 'x-authz-user-id'
 
+/** Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. Surface: control. */
+export const X_CLAUDE_CODE_AGENT_ID = 'x-claude-code-agent-id'
+
 /** Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_SESSION_ID = 'x-claude-code-session-id'
+
+/** Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it. Surface: control. */
+export const X_CODEX_TURN_METADATA = 'x-codex-turn-metadata'
 
 /** `nosniff` on Router Replay management responses. Surface: public. */
 export const X_CONTENT_TYPE_OPTIONS = 'x-content-type-options'
@@ -196,7 +208,7 @@ export const X_VSR_PROTECTION_RELEASE = 'x-vsr-protection-release'
 /** Router Replay record id, when the record was persisted. Surface: public. */
 export const X_VSR_REPLAY_ID = 'x-vsr-replay-id'
 
-/** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
+/** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
 export const X_VSR_RESPONSE_PATH = 'x-vsr-response-path'
 
 /** Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own. Surface: internal. */
@@ -229,7 +241,7 @@ export const X_VSR_TRACE = 'x-vsr-trace'
 /** Endpoint Envoy reports on the provider response for KV registry writes; removed before the client. Surface: internal. */
 export const X_VSR_UPSTREAM_HOST = 'x-vsr-upstream-host'
 
-/** Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. Surface: public. */
+/** Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, `guard_overloaded` on the retryable error answered instead of a refusal or a forward that rules unread on an overloaded decision runtime decide, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. Surface: public. */
 export const X_VSR_WARNINGS = 'x-vsr-warnings'
 
 // The members of x-vsr-trace, from src/semantic-router/pkg/headers/trace.go.
@@ -272,6 +284,9 @@ export const TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS = 'effective_max_output_tokens'
 
 /** Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. */
 export const TRACE_SIGNALS = 'signals'
+
+/** Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. */
+export const TRACE_SCAN_COVERAGE = 'scan_coverage'
 
 /** Token count the `context` signal measured. */
 export const TRACE_CONTEXT_TOKENS = 'context_tokens'
@@ -333,6 +348,7 @@ export const TRACE_MEMBERS = [
   TRACE_EFFECTIVE_INPUT_TOKENS,
   TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS,
   TRACE_SIGNALS,
+  TRACE_SCAN_COVERAGE,
   TRACE_CONTEXT_TOKENS,
   TRACE_CATEGORY,
   TRACE_REASONING,

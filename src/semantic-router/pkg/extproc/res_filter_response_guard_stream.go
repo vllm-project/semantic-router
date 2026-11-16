@@ -74,6 +74,7 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 	}
 	hold.read += len(body)
 	buffers := semanticStreamBuffers{}
+	body, endOfStream = r.bridgeBufferedBody(&buffers, body, endOfStream, ctx)
 	buffers.push(body, ctx)
 	if endOfStream {
 		buffers.finalize(ctx)

@@ -89,3 +89,18 @@ func TestRequestParamsRejectsNonPositiveLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestParamsRefusesToBlockStream(t *testing.T) {
+	_, err := ParseRoutingYAMLBytes([]byte(`recipes:
+  - name: default
+    decisions:
+      - name: bounded
+        plugins:
+          - type: request_params
+            configuration:
+              blocked_params: [temperature, " stream "]
+`))
+	if err == nil || !strings.Contains(err.Error(), "blocked_params cannot include stream") {
+		t.Fatalf("blocked_params [stream] loaded: err=%v", err)
+	}
+}

@@ -61,7 +61,7 @@ components otherwise default to enabled when the master switch is enabled.
 
 | Scope | What is protected | What can re-route |
 | --- | --- | --- |
-| `conversation` | Turns sharing one `x-conversation-id`. | A new `x-conversation-id` in the same `x-session-id`, or an explicit release. |
+| `conversation` | Turns sharing one `x-conversation-id`; without one, turns of the session that share how their conversation starts. | A new `x-conversation-id` or a new conversation in the same `x-session-id`, or an explicit release. |
 | `session` | Turns sharing one `x-session-id`. | Idle timeout, a decision with `adaptations.mode: bypass`, or an explicit release. |
 
 - **Use `conversation`** when each agent run should be routed on its own. A
@@ -73,54 +73,47 @@ components otherwise default to enabled when the master switch is enabled.
 - **Neither scope** can keep a previous model outside the admitted candidate
   set.
 
-If the configured identity headers are missing, protection fails open and
-records diagnostics instead of failing the request.
+If the session header is missing, protection fails open and records
+diagnostics instead of failing the request. A missing conversation header is
+not a failure: under `scope: conversation` the Router names the conversation by
+how it starts, its first instructions and user message, so each conversation of
+the session keeps its own key. See
+[Session identification](../../api/session-identification#choose-the-identity-you-need).
 
 ### Agents that delegate to subagents
 
 A harness such as Claude Code sends one session ID for a run and its subagents.
-Under `scope: session` that holds every subagent on the model its parent was
-given, even when a decision routes the subagent's request elsewhere. Name the
-header that identifies each agent to hold them separately:
+Protection reads the agent each request is for and holds each agent on its own
+model, so a subagent keeps the model chosen for its first request, under the
+same rules as a session, while its parent keeps its own. Claude Code and Codex
+CLI need no identity headers configured for this:
 
 ```yaml
 protection:
   enabled: true
   scope: session
-  identity:
-    headers:
-      session: x-claude-code-session-id
-      agent: x-claude-code-agent-id
 ```
 
-Claude Code sends `x-claude-code-agent-id` only on subagent requests, so the
-main agent keeps its session key and each subagent gets its own. A subagent is
-held on the model chosen for its first request, under the same rules as a
-session. Without `agent`, protection behaves as before.
+- **Claude Code** sends `x-claude-code-session-id` on every request and
+  `x-claude-code-agent-id` only on subagent requests, so the main agent keeps
+  its session key and each subagent gets its own.
+- **Codex CLI** sends `session-id` and `thread-id` on every request. A root
+  thread sends its own ID in both, and a subagent or review child that Codex
+  starts on it keeps the root's `session-id` and sends its own `thread-id`.
+  The root's key therefore holds both its session ID and its thread ID.
+- **Both Codex IDs stay the same** across tool continuations and across turns
+  after `codex exec resume`, so protection holds the root and each child on
+  their own models for the whole session. `codex exec review` starts a new
+  session, so its review child gets its own key either way.
 
-Codex CLI sends `session-id` and `thread-id` on every request. A root thread
-sends its own ID in both. A review child that Codex starts on that thread keeps
-the root's `session-id` and sends its own `thread-id`:
+[Session identification](../../api/session-identification#choose-the-identity-you-need)
+lists the headers read by default. `identity.headers` replaces them: naming
+`agent` holds agents by that header alone, and an `agent` header your harness
+does not send holds every subagent on the model its parent was given, even
+when a decision routes the subagent's request elsewhere.
 
-```yaml
-protection:
-  enabled: true
-  scope: session
-  identity:
-    headers:
-      session: session-id
-      agent: thread-id
-```
-
-- **The root's key** holds both its session ID and its thread ID, because the
-  root also sends `thread-id`.
-- **Both IDs stay the same** across tool continuations and across turns after
-  `codex exec resume`, so protection holds the root and each review child on
-  their own models for the whole session.
-- **`codex exec review`** starts a new session, so its review child gets its
-  own key either way.
-
-These headers were checked with Codex CLI 0.167.0, configured as the
+These headers were checked with Codex CLI 0.167.0 and 0.166.0 and Claude Code
+2.1.325, configured as the
 [protocol compatibility guide](../../installation/protocol-compatibility)
 requires.
 

@@ -1,11 +1,16 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -235,4 +240,36 @@ func hasDecisionAdaptations(adaptations map[string]routerconfig.DecisionAdaptati
 		}
 	}
 	return false
+}
+
+// The Builder sends no base for a draft loaded from the Router, so a deploy
+// keeps a Global Config change saved after the Builder loaded.
+func TestBuilderDeployKeepsGlobalChangeSavedAfterLoad(t *testing.T) {
+	dir := t.TempDir()
+	configPath := createValidTestConfig(t, dir)
+	w := httptest.NewRecorder()
+	UpdateGlobalConfigYAMLHandler(configPath, false, dir)(w, httptest.NewRequest(http.MethodPost, "/api/router/config/global/raw",
+		strings.NewReader("services:\n  response_api:\n    enabled: false\n")))
+	if w.Code != http.StatusOK {
+		t.Fatalf("global save = %d %s", w.Code, w.Body.String())
+	}
+
+	fragment := "recipes:\n  - name: default\n    decisions:\n      - name: deployed-route\n        priority: 2\n        rules: {operator: AND, conditions: []}\n        modelRefs: [{model: test-model}]\n"
+	body, _ := json.Marshal(DeployRequest{YAML: fragment, Mode: DeployModeReplace})
+	w = httptest.NewRecorder()
+	DeployHandler(configPath, false, dir)(w, httptest.NewRequest(http.MethodPost, "/api/router/config/deploy", bytes.NewReader(body)))
+	if w.Code != http.StatusOK {
+		t.Fatalf("deploy = %d %s", w.Code, w.Body.String())
+	}
+
+	deployed, err := routerconfig.ParseYAMLBytes(mustReadFile(t, configPath))
+	if err != nil {
+		t.Fatalf("parse deployed config: %v", err)
+	}
+	if deployed.ResponseAPI.Enabled {
+		t.Fatal("deploy reverted global.services.response_api.enabled to true")
+	}
+	if len(deployed.Decisions) != 1 || deployed.Decisions[0].Name != "deployed-route" || deployed.Decisions[0].Priority != 2 {
+		t.Fatalf("decisions = %+v, want only deployed-route at priority 2", deployed.Decisions)
+	}
 }

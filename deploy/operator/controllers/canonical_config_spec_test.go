@@ -8,6 +8,7 @@ import (
 	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 
@@ -475,5 +476,106 @@ rules:
 	}}
 	if got := defaultRecipe(canonical).Decisions[0].Rules; !reflect.DeepEqual(got, want) {
 		t.Fatalf("decision rules = %#v, want %#v", got, want)
+	}
+}
+
+// The CRD keeps fractional values as strings. They reach the Router's number
+// fields as numbers, while a Router string field keeps the text as written.
+func TestOperatorConvertsStringsOnlyForRouterNumberFields(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{Spec: vllmv1alpha1.SemanticRouterSpec{Config: vllmv1alpha1.ConfigSpec{
+		API: &vllmv1alpha1.APIConfig{BatchClassification: &vllmv1alpha1.BatchClassificationConfig{
+			Metrics: &vllmv1alpha1.BatchMetricsConfig{SampleRate: "0.5", DurationBuckets: []string{"0.001", "2.5", "30"}},
+		}},
+		Observability: &vllmv1alpha1.ObservabilityConfig{Tracing: &vllmv1alpha1.TracingConfig{
+			Sampling: &vllmv1alpha1.SamplingConfig{Type: "probabilistic", Rate: "0.25"},
+			Resource: &vllmv1alpha1.ResourceConfig{ServiceName: "2026", ServiceVersion: "1.10", DeploymentEnvironment: "true"},
+		}},
+	}}}
+	data, err := r.generateConfigYAML(context.Background(), sr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := routerconfig.ParseYAMLBytes([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	metrics := cfg.API.BatchClassification.Metrics
+	if metrics.SampleRate != 0.5 || !reflect.DeepEqual(metrics.DurationBuckets, []float64{0.001, 2.5, 30}) {
+		t.Errorf("sample_rate = %v, duration_buckets = %v, want 0.5 and [0.001 2.5 30]", metrics.SampleRate, metrics.DurationBuckets)
+	}
+	tracing := cfg.Observability.Tracing
+	if tracing.Sampling.Rate != 0.25 {
+		t.Errorf("sampling rate = %v, want 0.25", tracing.Sampling.Rate)
+	}
+	if got := tracing.Resource; got.ServiceName != "2026" || got.ServiceVersion != "1.10" || got.DeploymentEnvironment != "true" {
+		t.Errorf("tracing resource = %+v, want service_name 2026, service_version 1.10, deployment_environment true as written", got)
+	}
+}
+
+// A plugin payload has no Router type to decide, so a string the CR writes
+// stays a string, even one that reads as a number.
+func TestOperatorKeepsStringsInPluginPayloads(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{Spec: vllmv1alpha1.SemanticRouterSpec{Config: vllmv1alpha1.ConfigSpec{
+		Decisions: []vllmv1alpha1.DecisionConfig{{
+			Name:      "tagged",
+			Rules:     vllmv1alpha1.RuleCombinationConfig{Operator: "AND"},
+			ModelRefs: []vllmv1alpha1.ModelRefConfig{{Model: "m"}},
+			Plugins: []runtime.RawExtension{{Raw: []byte(`{"type":"header_mutation","configuration":{"add":[` +
+				`{"name":"x-version","value":"1.10"},{"name":"x-port","value":"08080"},{"name":"x-flag","value":"true"}]}}`)}},
+		}},
+	}}}
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mutation routerconfig.HeaderMutationPluginConfig
+	if err := defaultRecipe(canonical).Decisions[0].Plugins[0].Configuration.DecodeInto(&mutation); err != nil {
+		t.Fatalf("the Router cannot read the header_mutation payload: %v", err)
+	}
+	want := []routerconfig.HeaderPair{{Name: "x-version", Value: "1.10"}, {Name: "x-port", Value: "08080"}, {Name: "x-flag", Value: "true"}}
+	if !reflect.DeepEqual(mutation.Add, want) {
+		t.Fatalf("header_mutation add = %+v, want %+v", mutation.Add, want)
+	}
+}
+
+// The Operator has no CRD field for most of global.services and global.stores.
+// What it does not set keeps the Router's default, the value the Router uses
+// when a configuration leaves global out.
+func TestOperatorConfigKeepsTheRouterDefaultsItDoesNotSet(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	data, err := r.generateConfigYAML(context.Background(), &vllmv1alpha1.SemanticRouter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := routerconfig.ParseYAMLBytes([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := routerconfig.ParseYAMLBytes([]byte(`version: v0.5
+listeners: [{name: http-8801, address: 0.0.0.0, port: 8801, timeout: 300s}]
+recipes: [{name: default, signals: {domains: [{name: general, description: General queries, labels: [other]}]}}]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []struct {
+		name      string
+		got, want interface{}
+	}{
+		{"stores.response_cache.ttl_seconds", got.SemanticCache.TTLSeconds, want.SemanticCache.TTLSeconds},
+		{"stores.memory.default_retrieval_limit", got.Memory.DefaultRetrievalLimit, want.Memory.DefaultRetrievalLimit},
+		{"services.router_replay.ttl_seconds", got.RouterReplay.TTLSeconds, want.RouterReplay.TTLSeconds},
+		{"services.startup_status.store_backend", got.StartupStatus.StoreBackend, want.StartupStatus.StoreBackend},
+	} {
+		if field.got != field.want {
+			t.Errorf("%s = %v, want the Router default %v", field.name, field.got, field.want)
+		}
+	}
+	// Both stay off as before: the Operator deploys neither the trace
+	// collector nor the Redis their defaults name.
+	if got.Observability.Tracing.Enabled || got.ResponseAPI.Enabled {
+		t.Errorf("tracing enabled = %v, response_api enabled = %v, want both off", got.Observability.Tracing.Enabled, got.ResponseAPI.Enabled)
 	}
 }

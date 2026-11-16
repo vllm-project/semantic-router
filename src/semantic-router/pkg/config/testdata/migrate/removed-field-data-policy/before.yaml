@@ -2,7 +2,7 @@
 # every request of the recipe, even where a decision's router_replay plugin
 # recorded: the recipe's router_replay plugin is disabled now, and so is the
 # decision's. replay_personal_data: false forbade capturing personal data, as
-# capture_personal_data: false does now. A policy that forbade nothing goes.
+# prompt_capture: verified does now. A policy that forbade nothing goes.
 version: v0.5
 providers:
   defaults: {model: general}

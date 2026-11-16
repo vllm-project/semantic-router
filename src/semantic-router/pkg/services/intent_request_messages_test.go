@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -510,6 +511,31 @@ func TestIntentRequestResolveSignalInput_DropsUnsafeImageURL(t *testing.T) {
 	assert.Empty(t, input.imageURL, "non-data-URI image references must be rejected to prevent SSRF")
 	assert.Equal(t, 1, input.requestFacts.InputModality.ImageContentCount,
 		"image input is a shape fact and must not depend on URL fetch safety")
+	assert.Equal(t, []string{""}, input.requestFacts.Images,
+		"a rule that reads images must be unknown, not asked about the text alone")
+}
+
+func TestIntentRequestResolveSignalInput_ImageRulesReadEveryTurnsImages(t *testing.T) {
+	const dataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	for name, url := range map[string]string{"inline": dataURI, "remote": "https://example.com/cat.png"} {
+		t.Run(name, func(t *testing.T) {
+			req := IntentRequest{Messages: []IntentMessage{
+				{Role: "user", Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "text", "text": "Describe it."},
+					{"type": "image_url", "image_url": map[string]string{"url": url}},
+				})},
+				{Role: "assistant", Content: mustMessageContent(t, "A cat.")},
+				{Role: "user", Content: mustMessageContent(t, "Tell me more.")},
+			}}
+
+			input, err := req.resolveSignalInput()
+			require.NoError(t, err)
+
+			want := map[string][]string{"inline": {dataURI}, "remote": {""}}[name]
+			assert.Equal(t, want, input.requestFacts.Images,
+				"an image rule reads the images of earlier turns, which the backend also gets")
+		})
+	}
 }
 
 func TestIntentRequestResolveSignalInput_AcceptsMetadataOnly(t *testing.T) {
@@ -584,4 +610,29 @@ func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t
 
 	assert.Equal(t, "That was not clear. Explain compound interest in one paragraph.", resp.OriginalText)
 	assert.NotNil(t, resp.Metrics)
+}
+
+// The classify API counts failed tool results the way the data plane does,
+// so a preview of a failing Codex loop matches the live route.
+func TestIntentRequestResolveSignalInput_FailedToolResultsMatchTheDataPlane(t *testing.T) {
+	exec := func(code int) json.RawMessage {
+		return mustMessageContent(t, fmt.Sprintf("Chunk ID: a\nProcess exited with code %d\nOutput:\nmake\n", code))
+	}
+	call := func(id string) IntentMessage {
+		return IntentMessage{Role: "assistant", Content: mustMessageContent(t, nil), ToolCalls: []json.RawMessage{json.RawMessage(`{"id":"` + id + `"}`)}}
+	}
+	messages := []IntentMessage{
+		{Role: "user", Content: mustMessageContent(t, "fix the build")},
+		call("c0"),
+		{Role: "tool", ToolCallID: "c0", Content: exec(2)},
+		call("c1"),
+		{Role: "tool", ToolCallID: "c1", Content: exec(1)},
+	}
+	input, err := IntentRequest{Messages: messages}.resolveSignalInput()
+	require.NoError(t, err)
+	assert.Equal(t, 2, input.conversationFacts.FailedToolResults)
+
+	input, err = IntentRequest{Messages: append(messages, IntentMessage{Role: "user", Content: mustMessageContent(t, "try again")})}.resolveSignalInput()
+	require.NoError(t, err)
+	assert.Zero(t, input.conversationFacts.FailedToolResults, "a new user turn resets the count")
 }

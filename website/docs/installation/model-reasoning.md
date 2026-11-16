@@ -120,7 +120,9 @@ recipes:
 The effort must be listed by the family and allowed by every Provider binding
 for that Model. `reasoning_mode` must agree with `use_reasoning`. Omit an effort
 to use the family default, or set `providers.defaults.reasoning_effort` when
-one valid deployment-wide default should take precedence.
+one valid deployment-wide default should take precedence. The default applies
+to every Model whose family lists it, so those Models' Provider bindings must
+allow it too; a Model whose family does not list it keeps the family default.
 
 A `modelRefs` entry without `use_reasoning` counts as `use_reasoning: false`.
 For a Model with a family, the decision's choice replaces the client's: the

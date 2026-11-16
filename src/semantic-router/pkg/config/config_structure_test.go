@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -197,5 +199,131 @@ func TestPreviousVersionIsRefusedWithOneLine(t *testing.T) {
 	want := "version: invalid_value: config schema v0.3 is removed; run `vllm-sr config migrate` (version: v0.5)"
 	if err == nil || err.Error() != want {
 		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+func TestEntrypointDelegateModels(t *testing.T) {
+	recipes := "recipes:\n  - name: main\n" + structureDecision
+	for _, field := range []string{"review_model", "memory_model"} {
+		otherField := "memory_model"
+		if field == otherField {
+			otherField = "review_model"
+		}
+		for _, tc := range []struct{ name, model, extra, target, err string }{
+			{name: "omitted"},
+			{name: "other entrypoint alias", model: "review-alias", target: "  - model_names: [review, review-alias]\n    recipe: main\n"},
+			{name: "normalized", model: " review ", target: "  - model_names: [review]\n    recipe: main\n"},
+			{name: "both calls to one target", model: "review", extra: "    OTHER: review\n", target: "  - model_names: [review]\n    recipe: main\n"},
+			{name: "unknown", model: "missing", err: "unknown entrypoint model"},
+			{name: "backend is not an entrypoint", model: "m", err: "unknown entrypoint model"},
+			{name: "self alias", model: "main-alias", err: "own model name"},
+			{name: "chain", model: "review", target: "  - model_names: [review]\n    recipe: main\n    FIELD: third\n  - model_names: [third]\n    recipe: main\n", err: "must not have a review_model or memory_model"},
+			{name: "chain through the other field", model: "review", target: "  - model_names: [review]\n    recipe: main\n    OTHER: third\n  - model_names: [third]\n    recipe: main\n", err: "must not have a review_model or memory_model"},
+			{name: "cycle", model: "review", target: "  - model_names: [review]\n    recipe: main\n    FIELD: main\n", err: "must not have a review_model or memory_model"},
+			{name: "wrong API", model: "review", target: "  - api: systemone\n    model_names: [review]\n    recipe: main\n", err: "unknown entrypoint model"},
+		} {
+			t.Run(field+"/"+tc.name, func(t *testing.T) {
+				fields := strings.NewReplacer("FIELD", field, "OTHER", otherField)
+				entries := "entrypoints:\n  - model_names: [main, main-alias]\n    recipe: main\n    default: true\n"
+				if tc.model != "" {
+					entries += "    " + field + ": \"" + tc.model + "\"\n"
+				}
+				cfg, err := parseStructure(t, recipes+entries+fields.Replace(tc.extra+tc.target))
+				if tc.err != "" {
+					if err == nil || !strings.Contains(err.Error(), "entrypoints[0]."+field) || !strings.Contains(err.Error(), tc.err) {
+						t.Fatalf("error = %v, want path and %s", err, tc.err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := map[string]string{field: strings.TrimSpace(tc.model)}
+				if tc.extra != "" {
+					want[otherField] = "review"
+				}
+				main := cfg.Entrypoints[0]
+				exported := CanonicalConfigFromRouterConfig(cfg).Entrypoints[0]
+				for name, got := range map[string]map[string]string{
+					"normalized": {"review_model": main.ReviewModel, "memory_model": main.MemoryModel},
+					"exported":   {"review_model": exported.ReviewModel, "memory_model": exported.MemoryModel},
+				} {
+					for _, key := range []string{field, otherField} {
+						if got[key] != want[key] {
+							t.Fatalf("%s %s = %q, want %q", name, key, got[key], want[key])
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+// Every name of the review_model target is a review entrypoint; the main
+// entrypoint, a backend model and another API are not.
+func TestIsReviewEntrypointMatchesTargetAliases(t *testing.T) {
+	recipes := "recipes:\n  - name: main\n" + structureDecision
+	cfg, err := parseStructure(t, recipes+"entrypoints:\n"+
+		"  - model_names: [main]\n    recipe: main\n    default: true\n    review_model: review-alias\n"+
+		"  - model_names: [review, review-alias]\n    recipe: main\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for model, want := range map[string]bool{"review": true, "review-alias": true, "main": false, "m": false, "": false} {
+		if got := cfg.IsReviewEntrypoint(ChatAPI, model); got != want {
+			t.Errorf("IsReviewEntrypoint(chat, %q) = %v, want %v", model, got, want)
+		}
+	}
+	if cfg.IsReviewEntrypoint(SystemOneAPI, "review") {
+		t.Error("a review_model binds within its own API")
+	}
+	var empty *RouterConfig
+	if empty.IsReviewEntrypoint(ChatAPI, "review") {
+		t.Error("a nil config has no review entrypoint")
+	}
+}
+
+// The documented configs must resolve a review or memory request to its own
+// recipe and backend.
+func TestCodexDelegateExamplesRouteToTheirRecipes(t *testing.T) {
+	page := filepath.Join("..", "..", "..", "..", "website", "docs", "installation", "agent-harness.md")
+	content, err := os.ReadFile(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		recipe, target, backend string
+		delegate                func(EntrypointMapping) string
+	}{
+		{"review", "vllm-sr/review", "codex-auto-review", func(e EntrypointMapping) string { return e.ReviewModel }},
+		{"memory", "vllm-sr/memory", "local-memory", func(e EntrypointMapping) string { return e.MemoryModel }},
+	} {
+		t.Run(tc.recipe, func(t *testing.T) {
+			for _, fence := range docFences(string(content)) {
+				if fence.lang != "yaml" || !strings.Contains(fence.body, tc.recipe+"_model: "+tc.target) {
+					continue
+				}
+				cfg, err := ParseYAMLBytes([]byte(fence.body))
+				if err != nil {
+					t.Fatal(err)
+				}
+				main, ok := cfg.ResolveEntrypoint(ChatAPI, "vllm-sr/auto")
+				if !ok || !main.Default || tc.delegate(main) != tc.target {
+					t.Fatalf("main entrypoint = %+v", main)
+				}
+				recipe, ok := cfg.RecipeForRequestModel(tc.target)
+				if !ok || string(recipe.Name) != tc.recipe || len(recipe.Profile.Decisions) != 1 {
+					t.Fatalf("%s recipe = %+v", tc.recipe, recipe)
+				}
+				if got := recipe.Profile.Decisions[0].ModelRefs[0].Model; got != tc.backend {
+					t.Fatalf("%s backend = %q", tc.recipe, got)
+				}
+				if tc.recipe == "review" && (!cfg.IsReviewEntrypoint(ChatAPI, tc.target) || cfg.IsReviewEntrypoint(ChatAPI, "vllm-sr/auto")) {
+					t.Fatal("only the review_model target is a review entrypoint")
+				}
+				return
+			}
+			t.Fatalf("complete Codex %s example missing", tc.recipe)
+		})
 	}
 }

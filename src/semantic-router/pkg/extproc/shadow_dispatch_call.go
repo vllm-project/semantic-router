@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
@@ -113,8 +114,8 @@ func (d *shadowDispatcher) prepareShadowCall(job *shadowJob) (*preparedShadowCal
 // connectorFor returns the shared connector for a target and decision bounds,
 // creating it on first use. The key includes the router config identity so a
 // rebuilt configuration never reuses a connector bound to the old one.
-// Certificate verification is skipped only when the operator opted in for
-// that decision.
+// Certificate verification follows the backend's tls block, and is skipped
+// only when the operator opted in for that decision.
 func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*connector.Client, string, error) {
 	key := fmt.Sprintf("%p|%s|%s|%d|%d|%d|%t",
 		job.routerConfig, target.baseURL, target.logicalModel,
@@ -128,7 +129,11 @@ func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*
 	if err != nil {
 		return nil, shadowReasonCredentialUnresolved, err
 	}
-	client, err := connector.New(target.baseURL, authorize, shadowConnectorOptions(job.cfg))
+	backendTLS, err := providerTLSConfig(target.profile)
+	if err != nil {
+		return nil, shadowReasonBackendUnresolved, fmt.Errorf("shadow model %q: %w", target.logicalModel, err)
+	}
+	client, err := connector.New(target.baseURL, authorize, shadowConnectorOptions(job.cfg, backendTLS))
 	if err != nil {
 		return nil, shadowReasonBackendUnresolved, fmt.Errorf("shadow model %q: %w", target.logicalModel, err)
 	}
@@ -136,13 +141,14 @@ func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*
 	return client, "", nil
 }
 
-func shadowConnectorOptions(cfg config.RouterReplayShadowConfig) connector.Options {
+func shadowConnectorOptions(cfg config.RouterReplayShadowConfig, backendTLS *tls.Config) connector.Options {
 	options := connector.Options{
 		AttemptTimeout:   time.Duration(cfg.TimeoutSeconds) * time.Second,
 		MaxRetries:       cfg.MaxRetries,
 		MaxRequestBytes:  shadowDispatchMaxRequestBytes,
 		MaxResponseBytes: int64(cfg.MaxResponseBytes),
 		MaxErrorBytes:    shadowDispatchErrorBodyBytes,
+		TLSConfig:        backendTLS,
 	}
 	if cfg.TLSSkipVerify {
 		options.TLSConfig = insecureShadowTLSConfig()

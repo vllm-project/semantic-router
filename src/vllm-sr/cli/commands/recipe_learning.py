@@ -56,12 +56,28 @@ def load_replay_records(
 
 
 def fetch_replay_payload(endpoint: str, limit: int, timeout: int) -> Any:
+    """Fetch up to limit records, following next_offset past the Router's page cap.
+
+    The list is newest first, so a record stored between two pages shifts the
+    next one and repeats a record; records are kept once by id."""
     client = RouterManagementClient(endpoint or None, timeout=timeout)
-    return client.request(
-        "GET",
-        OBSERVABILITY_REPLAYS_PATH,
-        params={"limit": str(max(1, min(limit, _MAX_REPLAY_LIMIT)))},
-    ).payload
+    limit = max(1, min(limit, _MAX_REPLAY_LIMIT))
+    records: dict[Any, dict[str, Any]] = {}
+    params = {"limit": str(limit)}
+    offset = 0
+    while True:
+        payload = client.request(
+            "GET", OBSERVABILITY_REPLAYS_PATH, params=params
+        ).payload
+        for record in normalize_replay_payload(payload):
+            records.setdefault(record.get("id") or len(records), record)
+        next_offset = payload.get("next_offset") if isinstance(payload, dict) else None
+        stalled = not isinstance(next_offset, int) or next_offset <= offset
+        if stalled or len(records) >= limit:
+            break
+        offset = next_offset
+        params = {"limit": str(limit - len(records)), "offset": str(offset)}
+    return {"object": "router_replay.list", "data": list(records.values())[:limit]}
 
 
 def normalize_replay_payload(payload: Any) -> list[dict[str, Any]]:

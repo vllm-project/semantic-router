@@ -9,6 +9,7 @@
 - Caps expensive parameters (`max_tokens`, `n`) per route.
 - Blocks sensitive parameters such as `logprobs` / `top_logprobs` for tiers that should not expose token distributions.
 - Can remove a client `prompt_cache_key` with `blocked_params: [prompt_cache_key]` before backend dispatch.
+- Can remove `min_p` and `logit_bias` with `blocked_params: [min_p, logit_bias]` when every backend of a route rejects them, as vLLM does with speculative decoding. To remove them for one model only, list them in [its `unsupported_capabilities`](../../installation/protocol-compatibility#sampling-controls-a-backend-rejects).
 
 ## What Problem Does It Solve?
 
@@ -43,6 +44,15 @@ PLUGIN request_params {
   max_n: 1
 }
 ```
+
+`max_tokens_limit` bounds the whole output, thinking included. When it lowers
+`max_tokens` to or below an Anthropic `thinking.budget_tokens`, the budget drops
+to one token below the cap. Anthropic needs a budget of at least 1024, so an
+Anthropic route capped at 1024 or less still refuses a thinking budget.
+
+`blocked_params` cannot include `stream`. The Router streams the answer exactly
+when the client asks for a stream, so a configuration that lists it fails at
+load.
 
 This plugin enforces a bounded set of OpenAI Chat Completions fields. It is not
 a general JSON-schema firewall and does not authorize a caller. The Router

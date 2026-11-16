@@ -53,6 +53,9 @@ type TaskPlan struct {
 	Implementation string
 	Questions      []Question
 	Canonical      map[string]string
+	// base marks a preset's question the card's family answers with its
+	// base model, every adapter off (presets.BaseOnly).
+	base bool
 }
 
 // TaskResult keeps unknown separate from a negative answer. Coverage describes
@@ -97,6 +100,9 @@ func compileTask(definition TaskDefinition, question Question, card ModelCard) (
 	if err != nil {
 		return plan, err
 	}
+	if question.RequireFullInput && !card.ReportsInputCoverage() {
+		return plan, fmt.Errorf("%w: model %s answers over %s, which has no input_coverage to prove that %s read its whole input; read it truncated (coverage: truncate), or bind it to a deployment that reports coverage", ErrRejected, card.ID, card.Schema, definition.ID)
+	}
 	if question.Preset != "" {
 		if !card.HasPreset(question.Preset) {
 			return plan, fmt.Errorf("%w: model %s does not define preset %s", ErrRejected, card.ID, question.Preset)
@@ -105,7 +111,7 @@ func compileTask(definition TaskDefinition, question Question, card ModelCard) (
 		return plan, nil
 	}
 	if form, ok := presetPlan(definition, question, card); ok {
-		plan.Questions, plan.Implementation, plan.Canonical = form.questions, form.implementation, form.canonical
+		plan.Questions, plan.Implementation, plan.Canonical, plan.base = form.questions, form.implementation, form.canonical, form.base
 		if form.semantic.ID != "" {
 			plan.Question = form.semantic
 		}

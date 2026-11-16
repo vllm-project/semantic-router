@@ -33,21 +33,6 @@ type Signal struct {
 	Decision      []string `json:"decision,omitempty"`
 }
 
-// UsageCost captures token usage and pricing-derived cost details for a record.
-type UsageCost struct {
-	ProviderCache      *ProviderCacheAccounting `json:"provider_cache,omitempty"`
-	PromptTokens       *int                     `json:"prompt_tokens,omitempty"`
-	CachedPromptTokens *int                     `json:"cached_prompt_tokens,omitempty"`
-	CacheWriteTokens   *int                     `json:"cache_write_tokens,omitempty"`
-	CompletionTokens   *int                     `json:"completion_tokens,omitempty"`
-	TotalTokens        *int                     `json:"total_tokens,omitempty"`
-	ActualCost         *float64                 `json:"actual_cost,omitempty"`
-	BaselineCost       *float64                 `json:"baseline_cost,omitempty"`
-	CostSavings        *float64                 `json:"cost_savings,omitempty"`
-	Currency           *string                  `json:"currency,omitempty"`
-	BaselineModel      *string                  `json:"baseline_model,omitempty"`
-}
-
 // Outcome captures typed post-route feedback linked to a replay record.
 type Outcome struct {
 	Timestamp      time.Time         `json:"timestamp,omitempty"`
@@ -76,8 +61,9 @@ type ToolTrace struct {
 	ToolNames []string        `json:"tool_names,omitempty"`
 	Steps     []ToolTraceStep `json:"steps,omitempty"`
 	// StepsTruncated is true when older Steps were dropped to enforce the
-	// MaxToolTraceSteps cap. Long agent sessions can otherwise produce
-	// hundreds of steps per record and OOM the router (see issue #1835).
+	// MaxToolTraceSteps cap or the MaxToolTraceTotalBytes budget. Long agent
+	// sessions can otherwise produce hundreds of steps per record and OOM the
+	// router (see issue #1835).
 	StepsTruncated bool `json:"steps_truncated,omitempty"`
 	// DroppedStepCount records how many steps were dropped from the head of
 	// the timeline when StepsTruncated is true. Zero when no truncation
@@ -112,8 +98,11 @@ type ToolTraceStep struct {
 	// APIType indicates the API variant this step was extracted from:
 	// "chat_completions" or "responses".
 	APIType string `json:"api_type,omitempty"`
-	// Truncated is true when Arguments or Output was cut to MaxToolTraceBytes.
+	// Truncated is true when Text, Arguments or Output was cut to MaxToolTraceBytes.
 	Truncated bool `json:"truncated,omitempty"`
+	// RawTruncated is true when RawArguments or RawOutput was cut too, which
+	// only the default trace limit does: a configured one keeps them whole.
+	RawTruncated bool `json:"raw_truncated,omitempty"`
 }
 
 // LooperUsage is content-free token accounting for one Looper attempt.
@@ -280,6 +269,8 @@ type Record struct {
 	ID                       string                 `json:"id"`
 	Timestamp                time.Time              `json:"timestamp"`
 	RequestID                string                 `json:"request_id,omitempty"`
+	RequestKind              string                 `json:"request_kind,omitempty"`
+	Review                   *Review                `json:"review,omitempty"`
 	SessionID                string                 `json:"session_id,omitempty"`
 	TurnIndex                int                    `json:"turn_index"`
 	PreviousResponseID       string                 `json:"previous_response_id,omitempty"`
@@ -304,6 +295,7 @@ type Record struct {
 	ProjectionTrace          *projectiontrace.Trace `json:"projection_trace,omitempty"`
 	SignalConfidences        map[string]float64     `json:"signal_confidences,omitempty"`
 	SignalErrorMatches       map[string]bool        `json:"signal_error_matches,omitempty"`
+	ScanCoverage             map[string]string      `json:"scan_coverage,omitempty"`
 	ConfidenceScoreAvailable bool                   `json:"confidence_score_available"`
 	SignalValues             map[string]float64     `json:"signal_values,omitempty"`
 	ToolTrace                *ToolTrace             `json:"tool_trace,omitempty"`
@@ -318,6 +310,13 @@ type Record struct {
 	Streaming                bool                   `json:"streaming,omitempty"`
 	RequestBodyTruncated     bool                   `json:"request_body_truncated,omitempty"`
 	ResponseBodyTruncated    bool                   `json:"response_body_truncated,omitempty"`
+
+	// The agent's own ids for the thread and turn a request belongs to, as
+	// Codex names them in its turn metadata. ParentTurnID is the turn that
+	// started the thread, such as the turn an approval review judges.
+	ThreadID     string `json:"thread_id,omitempty"`
+	TurnID       string `json:"turn_id,omitempty"`
+	ParentTurnID string `json:"parent_turn_id,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -341,6 +340,11 @@ type Record struct {
 	// that they are complete even when the raw body is truncated by MaxBodyBytes.
 	Prompt          string `json:"prompt,omitempty"`
 	PromptTruncated bool   `json:"prompt_truncated,omitempty"`
+	// PromptOriginalBytes and PromptOriginalSHA256 are the size in bytes and
+	// the hex SHA-256 of the whole prompt, set when Prompt was cut to the
+	// record's limit (PromptTruncated).
+	PromptOriginalBytes  int    `json:"prompt_original_bytes,omitempty"`
+	PromptOriginalSHA256 string `json:"prompt_original_sha256,omitempty"`
 	// ToolDefinitions is the JSON array of tool schemas from the request
 	// (the "tools" field in Chat Completions, or ResponseAPIRequest.Tools).
 	ToolDefinitions string `json:"tool_definitions,omitempty"`
@@ -392,6 +396,7 @@ type Record struct {
 	CostSavings        *float64                 `json:"cost_savings,omitempty"`
 	Currency           *string                  `json:"currency,omitempty"`
 	BaselineModel      *string                  `json:"baseline_model,omitempty"`
+	CostAccounting     *CostAccounting          `json:"cost_accounting,omitempty"`
 }
 
 // RecordWriter creates records and advances their routing lifecycle.
@@ -417,7 +422,7 @@ type BodyWriter interface {
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
 
 	// AttachPrompt stores the prompt of an existing record that was written without it.
-	AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error
+	AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error
 }
 
 // OutcomeWriter appends post-route feedback to replay records.
@@ -454,11 +459,28 @@ type Enricher interface {
 	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
 }
 
+// StoredPrompt is a record's prompt as it is kept: the text and, when the text
+// was cut to the record's limit, the size in bytes and the hex SHA-256 of the
+// whole prompt.
+type StoredPrompt struct {
+	Text           string
+	Truncated      bool
+	OriginalBytes  int
+	OriginalSHA256 string
+}
+
+// Apply writes the prompt into rec.
+func (p StoredPrompt) Apply(rec *Record) {
+	rec.Prompt, rec.PromptTruncated = p.Text, p.Truncated
+	rec.PromptOriginalBytes, rec.PromptOriginalSHA256 = p.OriginalBytes, p.OriginalSHA256
+}
+
 // Storage is the interface that all storage backends must implement.
 type Storage interface {
 	Writer
 	Reader
 	Enricher
+	ReviewWriter
 	io.Closer
 }
 
@@ -582,6 +604,7 @@ func cloneRecord(record Record) Record {
 	cloned.SignalValues = cloneFloat64Map(record.SignalValues)
 	cloned.SessionPolicy = cloneInterfaceMap(record.SessionPolicy)
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
+	cloned.Review = CloneReview(record.Review)
 	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
 	cloned.HallucinationSpanDetails = cloneHallucinationSpanDetails(record.HallucinationSpanDetails)
@@ -596,6 +619,7 @@ func cloneRecord(record Record) Record {
 	cloned.CostSavings = cloneFloat64Ptr(record.CostSavings)
 	cloned.Currency = cloneStringPtr(record.Currency)
 	cloned.BaselineModel = cloneStringPtr(record.BaselineModel)
+	cloned.CostAccounting = cloneCostAccounting(record.CostAccounting)
 	cloned.EndedAt = cloneTimePtr(record.EndedAt)
 	return cloned
 }

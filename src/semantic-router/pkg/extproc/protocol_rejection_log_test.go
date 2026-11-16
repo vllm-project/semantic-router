@@ -52,7 +52,9 @@ func TestIngressRejectionLogsCodeAndMessage(t *testing.T) {
 	if fields["request_id"] != "req-1" || fields["code"] != "unsupported_tools_defer_loading" || fields["status"] != int64(400) {
 		t.Fatalf("rejection fields = %v", fields)
 	}
-	if message, _ := fields["message"].(string); message != "tools.defer_loading is not supported by the protocol-neutral request contract" {
+	// the hint is empty until tools.defer_loading becomes a loss an operator may accept
+	want := "tools.defer_loading is not supported by the protocol-neutral request contract" + llmprotocol.OptInHint("tools.defer_loading")
+	if message, _ := fields["message"].(string); message != want {
 		t.Fatalf("rejection message = %q", message)
 	}
 }

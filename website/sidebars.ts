@@ -435,6 +435,7 @@ const sidebars: SidebarsConfig = {
             'proposals/standalone-mode',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
+            'proposals/system-one-api-schemas',
           ],
         },
         {
@@ -541,6 +542,15 @@ const sidebars: SidebarsConfig = {
         'community/documentation',
         'community/translation-guide',
         'community/code-style',
+        {
+          type: 'category',
+          label: 'System One schemas',
+          items: [
+            'community/system-one-schemas/adding-a-schema-codec',
+            'community/system-one-schemas/adding-a-deviation',
+            'community/system-one-schemas/adding-an-extension-field',
+          ],
+        },
       ],
     },
     'faq',

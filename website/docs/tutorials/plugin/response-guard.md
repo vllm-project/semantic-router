@@ -88,8 +88,9 @@ that matched, or among all of them when the rule could not be decided. A
 blocked answer is replaced with a message that names what was found, never
 that a check failed.
 
-The grounding context is the documents the [context plugin](./context.md) retrieved and
-the request's own tool results.
+The grounding context is the documents and memories the
+[context plugin](./context.md) injected, in either injection mode, and the
+request's own tool results.
 
 `POST /api/v1/plugins/response_guard/preview` reads an active binding's guard
 over a supplied question, context and answer; `mode: probe` asks the

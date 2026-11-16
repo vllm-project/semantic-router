@@ -19,6 +19,7 @@ import torch
 
 from ...plugins.base import AdapterGate, ForwardBatch
 from ..decision3.family import Item
+from ..vela2.words import without_separators
 from .decode import decode, evidence_spans
 from .package import Route
 from .span_render import Window
@@ -122,12 +123,17 @@ def answer(item: SpanItem, offsets: np.ndarray, logits: np.ndarray) -> dict[str,
         label = names.index(span["label"])
         # The released span_answer's probability: the mean over every word the trimmed span overlaps.
         overlap = (offsets[:, 0] < span["end"]) & (offsets[:, 1] > span["start"])
+        start, end = span["start"], span["end"]
+        if item.evidence is None:
+            start, end = without_separators(item.text, start, end)
+            if end <= start:
+                continue
         spans.append(
             {
                 "label": span["label"],
-                "start": span["start"],
-                "end": span["end"],
-                "text": item.text[span["start"] : span["end"]],
+                "start": start,
+                "end": end,
+                "text": item.text[start:end],
                 "probability": (
                     float(probabilities[overlap, label].mean())
                     if overlap.any()

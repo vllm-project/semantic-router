@@ -2,7 +2,6 @@ package config
 
 import (
 	"slices"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
@@ -14,8 +13,7 @@ import (
 func (ic IdentityConfig) HeaderNames() []string {
 	names := []string{headers.AuthzUserID, headers.AuthzUserGroups, headers.AuthzTeamID, headers.AuthzTenantID}
 	for _, name := range []string{ic.GetUserIDHeader(), ic.GetUserGroupsHeader()} {
-		name = strings.ToLower(strings.TrimSpace(name))
-		if name != "" && !slices.Contains(names, name) {
+		if !slices.Contains(names, name) {
 			names = append(names, name)
 		}
 	}

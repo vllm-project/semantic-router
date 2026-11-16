@@ -16,6 +16,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -147,6 +148,7 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	describeRouterReplayCapture(schema)
 	setResponseGuardConditionSchema(schema, append(routerconfig.SupportedSignalTypes(), routerconfig.SignalTypeProjection))
 	addPluginPayloadConditions(schema, pluginRefs)
 	addAlgorithmExtensionBlocks(reflector, schema)
@@ -301,15 +303,21 @@ func modelBindingSchema() *jsonschema.Schema {
 
 func setCoreEnums(root *jsonschema.Schema) {
 	setPropertyConst(root, root, "version", ConfigVersion)
+	setDefinitionPropertyEnum(root, "CanonicalProviderModel", "api_format", apiregistry.AcceptedNames())
+	setDefinitionPropertyEnum(root, "CanonicalProviderModel", "schema", apiregistry.SchemaIDs())
+	if apis := definitionProperty(root, "Listener", "apis"); apis != nil {
+		names := make([]any, 0, len(apiregistry.AcceptedNames()))
+		for _, name := range apiregistry.AcceptedNames() {
+			names = append(names, name)
+		}
+		apis.PropertyNames = &jsonschema.Schema{Enum: names}
+	}
 	setDefinitionPropertyEnum(root, "CanonicalRouterGlobal", "config_source", []string{
 		string(routerconfig.ConfigSourceFile),
 		string(routerconfig.ConfigSourceKubernetes),
 	})
-	if lossy := definitionProperty(root, "CanonicalRouterGlobal", "allow_lossy_translation"); lossy != nil && lossy.Items != nil {
-		for _, field := range llmprotocol.OptInLossyFields() {
-			lossy.Items.Enum = append(lossy.Items.Enum, field)
-		}
-	}
+	setDefinitionPropertyItemsEnum(root, "CanonicalRouterGlobal", "allow_lossy_translation", llmprotocol.OptInLossyFields())
+	setDefinitionPropertyItemsEnum(root, "CanonicalProviderModel", "unsupported_capabilities", llmprotocol.UnsupportedCapabilityNames())
 	setDefinitionPropertyEnum(root, "RouterHeadersConfig", "debug", routerconfig.SupportedDebugHeadersModes())
 	setDefinitionPropertyEnum(root, "AlgorithmConfig", "type", routerconfig.SupportedDecisionAlgorithmTypes())
 	setDefinitionPropertyEnum(root, "CandidateRequirements", "capabilities", []string{routerconfig.CandidateCapabilitiesDeclared})
@@ -443,6 +451,29 @@ func setDefinitionPropertyEnum(root *jsonschema.Schema, definition, property str
 	field.Enum = make([]any, len(values))
 	for index, value := range values {
 		field.Enum[index] = value
+	}
+}
+
+func setDefinitionPropertyItemsEnum(root *jsonschema.Schema, definition, property string, values []string) {
+	field := definitionProperty(root, definition, property)
+	if field == nil || field.Items == nil {
+		return
+	}
+	for _, value := range values {
+		field.Items.Enum = append(field.Items.Enum, value)
+	}
+}
+
+// describeRouterReplayCapture describes router_replay's prompt_capture modes
+// and marks capture_personal_data, which loads as prompt_capture with a
+// warning, deprecated.
+func describeRouterReplayCapture(root *jsonschema.Schema) {
+	if mode := definitionProperty(root, "RouterReplayPluginConfig", "prompt_capture"); mode != nil {
+		mode.Description = "What a record keeps besides routing data: none (the default) keeps no request or response text; raw keeps the text the capture switches allow, unverified; verified keeps the prompt alone, once the pii rules read it whole and find it clean."
+	}
+	if deprecated := definitionProperty(root, "RouterReplayPluginConfig", "capture_personal_data"); deprecated != nil {
+		deprecated.Deprecated = true
+		deprecated.Description = "Deprecated: write prompt_capture. false loads as prompt_capture: verified and true as prompt_capture: raw."
 	}
 }
 

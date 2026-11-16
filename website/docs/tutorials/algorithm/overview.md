@@ -112,7 +112,7 @@ Every executor reads two shared settings beside its type:
 | Setting | Meaning |
 | --- | --- |
 | `budget` | `deadline` is the run's wall-clock limit, and `max_calls` the model calls it may make, below the Router's per-request limit. A run that exhausts its budget fails rather than serving a partial answer. |
-| `on_error` | What a failed call does. `fusion`, `remom`, `ratings` and `workflows` take `skip` (continue with the calls that succeeded) or `fail`. `escalate` takes `last_attempt` (serve the last judged answer when none is accepted) or `fail`. |
+| `on_error` | What a failed call does. `fusion`, `remom`, `ratings` and `workflows` take `skip` (continue with the calls that succeeded) or `fail`. `escalate` takes `last_attempt` (serve the last judged answer when none is accepted) or `fail`. When a model's answer ends the run, the client gets that model's status if it is a rate limit (429) or a server error (5xx), and 500 otherwise. |
 
 To give an executor its own public model name, publish an entrypoint whose
 `model_names` point to a recipe with a decision that runs it.

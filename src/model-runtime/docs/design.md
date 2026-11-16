@@ -252,6 +252,14 @@ A work item (`WorkItem`) has `ids` (its token IDs) and may have `cost`, the
 tokens it costs a forward when it has no token IDs (images, audio), and
 `cache_key`, a content hash of everything its result depends on: the runtime
 then answers a repeated item from the model's result cache without a forward.
+A family with expensive materialization may implement `plan_cached_surface`;
+its default delegates to `plan_surface`. Omni audio uses this hook to read the
+same result cache before preparing features. Hits are retained by item position
+in `SurfacePlan.cache_lookups`, so eviction cannot send an unmaterialized hit
+to the scheduler. Miss items are fully prepared and use the ordinary later
+cache lookup, allowing results published during preparation to avoid a forward.
+Media format validation still runs before lookup. Reference/golden execution always
+uses `plan_surface` without the cache.
 `Results` are one value per item or `DEADLINE` (the `Expired` instance) for an
 expired item or plan. Results are shared with the cache, so `finish_surface`
 never mutates them. `mypy --strict` checks the plugin interfaces, the
@@ -1220,6 +1228,12 @@ surfaces count values. Without a reference the runtime checks
 determinism and well-formed answers and reports `golden: unverified`. A
 failed model does not stop the others; `/health` reports the process
 degraded and the router treats only that model's deployments as unavailable.
+An unexpected model scheduler worker failure closes that model's admission,
+fails every outstanding job (including work being planned), and marks the model
+degraded before answering those jobs. Subsequent requests receive `not_ready`.
+It uses the same clean-restart policy as a device fault, even if all affected
+clients have disconnected; with `exit_on_device_error` disabled, other models
+continue serving while the failed model remains unavailable.
 A device fault during serving exits the process so the supervisor restarts it
 with a clean device context. The accelerator decides what is one (on CUDA and
 ROCm: a CUDA or HIP error, a device-side assert or an illegal memory access;

@@ -55,3 +55,4 @@ global:
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: SYSTEMONE_KEY}
+        schema: vllm-sr/5.0

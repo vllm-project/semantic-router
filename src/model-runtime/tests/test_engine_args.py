@@ -454,7 +454,7 @@ def test_system_one_refuses_a_question_over_the_process_max_model_len(
     )
     runtime.start(background=False)
     try:
-        client = TestClient(create_app(runtime))
+        client = TestClient(create_app(runtime, systemone_schema="vllm-sr/4.0"))
         question = {"q": QUESTIONS["reasoning"]}
         response = client.post(
             "/v1/systemone", json={"state": LONG_STATE, "questions": question}

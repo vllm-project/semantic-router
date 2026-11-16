@@ -64,7 +64,7 @@ func TestPopulateSessionTransitionFieldsUsesNeutralMessages(t *testing.T) {
 		t.Fatalf("neutral session state = %+v", ctx)
 	}
 	// No AuthzUserID header, so extractUserID returns "" and the session
-	// falls to the message-structure fingerprint, not the userID+message
+	// falls to the conversation-start fingerprint, not the userID+message
 	// hash — both are SessionProvenanceMessageHash regardless.
 	if ctx.SessionProvenance != SessionProvenanceMessageHash {
 		t.Fatalf("provenance = %q, want %q", ctx.SessionProvenance, SessionProvenanceMessageHash)

@@ -131,6 +131,17 @@ func DeployPreviewHandler(configPath string, readonlyMode bool) http.HandlerFunc
 			return
 		}
 
+		if !callerCanViewConfigSecrets(r) {
+			currentForDiffBytes, err = redactConfigYAML(currentForDiffBytes)
+			if err == nil {
+				previewBytes, err = redactConfigYAML(previewBytes)
+			}
+			if err != nil {
+				http.Error(w, "Failed to prepare configuration preview", http.StatusInternalServerError)
+				return
+			}
+		}
+		w.Header().Set("Cache-Control", "private, no-store")
 		currentForDiff := canonicalizeYAMLForDiff(currentForDiffBytes)
 		previewForDiff := canonicalizeYAMLForDiff(previewBytes)
 
@@ -289,7 +300,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+	if _, err = checkConfigMapMutationFresh(configPath); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -314,7 +325,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
+	if yamlBytes, err = persistConfig(configPath, yamlBytes); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -428,7 +439,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
 	}
-	return mergedYAML, nil
+	return restoreConfigSecrets(currentData, mergedYAML)
 }
 
 // mergeDSLOwnedNodes applies only the configuration surface owned by the DSL:
@@ -621,7 +632,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+	if _, err = checkConfigMapMutationFresh(configPath); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -643,7 +654,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if err := writeConfigAtomically(configPath, backupData); err != nil {
+	if backupData, err = persistConfig(configPath, backupData); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -703,7 +714,7 @@ func canonicalizeYAMLForDiff(raw []byte) string {
 	}
 
 	if looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(raw); err == nil && looksLikeFullBase {
-		if configData, decodeErr := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](raw); decodeErr == nil {
+		if configData, decodeErr := decodeConfigDocument[routerconfig.CanonicalConfig](raw); decodeErr == nil {
 			if canonical, marshalErr := marshalYAMLBytes(configData); marshalErr == nil {
 				return string(canonical)
 			}

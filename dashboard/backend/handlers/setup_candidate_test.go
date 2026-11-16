@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
@@ -153,7 +154,12 @@ func jsonValue(t *testing.T, value interface{}) interface{} {
 func TestSetupCandidateRepeatedSerializationPreservesAuthoredManagement(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
-	for _, listener := range []interface{}{map[string]interface{}{}, nil, map[string]interface{}{"bind_address": "127.0.0.1"}} {
+	// The Dashboard writes no empty listener itself, and the Router refuses one.
+	empty := map[string]interface{}{"services": map[string]interface{}{"management_api": nil}}
+	if _, err := decodeStrictSetupConfig(mustJSONRaw(t, map[string]interface{}{"version": "v0.5", "global": empty})); err == nil || !strings.Contains(err.Error(), "global.services.management_api is empty") {
+		t.Fatalf("empty management listener error = %v", err)
+	}
+	for _, listener := range []interface{}{map[string]interface{}{}, map[string]interface{}{"bind_address": "127.0.0.1"}} {
 		global := map[string]interface{}{"services": map[string]interface{}{"management_api": listener}}
 		candidate, err := decodeStrictSetupConfig(mustJSONRaw(t, map[string]interface{}{"version": "v0.5", "global": global}))
 		if err != nil {

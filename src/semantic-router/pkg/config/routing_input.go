@@ -27,6 +27,8 @@ type RoutingInputConfig struct {
 	// matches one is never routing text and does not count as a user turn.
 	// A pattern matches anywhere in the text unless anchored with ^ and $. A
 	// message that also carries images, audio or tool results is never skipped.
+	// When no user message would be left with routing text, routing reads the
+	// last user message with text instead of refusing the request.
 	SkipUserMessagesMatching []string `yaml:"skip_user_messages_matching,omitempty" jsonschema:"maxItems=32"`
 	// StripBlocks cuts spans from the routing text, markers included. Markers
 	// are literal and case-sensitive. Blocks do not nest: a block ends at the

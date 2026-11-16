@@ -424,6 +424,8 @@ func validatePluginContracts(
 			err = validateContextPlugin(cfg, path, typed)
 		case *ResponseCachePluginConfig:
 			err = validateMatch(cfg, path+".semantic.match", typed.SemanticMatch(), MatchResponseCache)
+		case *RouterReplayPluginConfig:
+			err = validateRouterReplayCostBaseline(cfg, path, typed)
 		}
 		if err != nil {
 			return err

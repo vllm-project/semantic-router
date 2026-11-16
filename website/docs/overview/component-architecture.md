@@ -113,7 +113,7 @@ Native recipes support fewer signals and algorithms than chat recipes; see
 | Surface | Endpoints | Access and purpose |
 | --- | --- | --- |
 | Public Chat APIs | `/v1/chat/completions`, `/v1/responses`, `/v1/messages`; discovery at `/v1/models` | Router mode. Listener access and the API's own requirements apply. |
-| Public System One API | `/v1/systemone`, alias `/v1/decisions`; discovery at `/v1/systemone/models` | Either mode. Needs explicit publication in `listeners[].systemone.models`, and the listener's API keys when set. |
+| Public System One API | `/v1/systemone`, alias `/v1/decisions`; discovery at `/v1/systemone/models` | Either mode. Needs explicit publication in `listeners[].apis.systemone.models`, and the listener's API keys when set. |
 | Worker API | Classify, embeddings, rerank, decisions and bundle APIs, as the loaded model supports | An independently operated `vllm-srun` endpoint or a private managed socket. The frontend never publishes it. |
 
 - Dashboard sessions do not replace listener credentials.

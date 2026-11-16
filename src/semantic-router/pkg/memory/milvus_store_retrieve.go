@@ -354,6 +354,7 @@ func populateMemoryFromRetrieveMetadata(mem *Memory, metadata map[string]interfa
 	if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
 		mem.LastAccessed = time.Unix(int64(lastAccessed), 0)
 	}
+	applyProvenanceMetadata(mem, metadata)
 }
 
 func hybridRerankCandidates(candidates []*RetrieveResult, opts RetrieveOptions) []*RetrieveResult {

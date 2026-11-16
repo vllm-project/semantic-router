@@ -9,6 +9,10 @@ import (
 
 func TestDSLMergePreservesDecisionFieldsTheDSLCannotExpress(t *testing.T) {
 	base := []byte(`version: v0.5
+providers:
+  models:
+    - name: model-a
+      backend_refs: [{name: fake-a, endpoint: 127.0.0.1:8000, protocol: http}]
 recipes:
   - name: default
     decisions:
@@ -25,6 +29,8 @@ recipes:
         reliability: {per_try_timeout: 5s}
         fallback: {enabled: false}
         output_contract_spec: {type: choice, choice_set: {values: ["yes", "no"]}}
+        modelRefs: [{model: model-a}]
+        algorithm: {type: remom, remom: {breadth_schedule: [2]}}
 entrypoints:
   - model_names: [vllm-sr/auto]
     recipe: default

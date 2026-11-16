@@ -202,6 +202,15 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         help="largest accepted request body in bytes (default: %(default)s)",
     )
     parser.add_argument(
+        "--systemone-schema",
+        choices=("vllm-sr/5.0", "vllm-sr/4.0"),
+        default=SERVE_DEFAULTS.systemone_schema,
+        help=(
+            "the System One schema /v1/systemone and /v1/systemone/batch speak: vllm-sr/5.0, or vllm-sr/4.0, "
+            "which also accepts the earlier contract's request forms (default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
         "--max-bundle-tasks",
         type=int,
         default=SERVE_DEFAULTS.max_bundle_tasks,
@@ -359,6 +368,7 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         max_queued_tokens=args.max_queued_tokens,
         engine_args=engine_args,
         max_request_bytes=args.max_request_bytes,
+        systemone_schema=args.systemone_schema,
         cache_dir=args.cache_dir,
         offline=args.offline,
         base_path=args.base_path,

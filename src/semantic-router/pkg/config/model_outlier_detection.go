@@ -14,9 +14,9 @@ const (
 )
 
 // DeploymentOutlierDetection takes a model_runtime replica whose exchanges
-// keep running out of their caller's deadline out of dispatch for a while, as
-// a provider model's consecutive_5xx does for a backend. An unset field keeps
-// its default.
+// keep running out of their deadline, the caller's or timeout_ms, out of
+// dispatch for a while, as a provider model's consecutive_5xx does for a
+// backend. An unset field keeps its default.
 type DeploymentOutlierDetection struct {
 	// ConsecutiveTimeouts is how many exchanges in a row that run out of
 	// their deadline eject a replica (default 3); 0 turns ejection off. A

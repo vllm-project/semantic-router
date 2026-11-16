@@ -479,12 +479,16 @@ def test_engine_summary_uses_published_native_name_port_and_key_placeholder(caps
     }
     runtime_lifecycle.log_runtime_summary(
         [
-            {"name": "chat-only", "port": 8899, "models": ["vllm-sr/auto"]},
+            {
+                "name": "chat-only",
+                "port": 8899,
+                "apis": {"chat_completions": {"models": ["vllm-sr/auto"]}},
+            },
             {
                 "name": "native",
                 "port": 8900,
                 "tls": {"cert_file": "server.crt"},
-                "systemone": {"models": ["judgment"]},
+                "apis": {"systemone": {"models": ["judgment"]}},
                 "api_keys": ["secret-do-not-print"],
             },
         ],
@@ -512,5 +516,5 @@ def test_engine_summary_without_native_grants_does_not_invent_an_example(
         listeners, resolve_runtime_stack(), {"global": {"router": {"enabled": False}}}
     )
     output = capsys.readouterr().out
-    assert "Configure listeners[].systemone.models" in output
+    assert "Configure listeners[].apis.systemone" in output
     assert "curl" not in output and '"model"' not in output

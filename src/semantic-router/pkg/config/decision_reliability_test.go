@@ -186,6 +186,29 @@ func TestDecisionReliabilityErrorsNameTheDecision(t *testing.T) {
 	}
 }
 
+// A retry_on name Envoy does not know used to be dropped without a word, so a
+// typo such as retriable_status_codes silently turned off the retries it
+// named. It fails the load in either reliability block, while every name
+// Envoy documents loads, such as the gRPC ones in Istio's default policy.
+func TestReliabilityRejectsUnknownRetryOnConditions(t *testing.T) {
+	providerTypo := strings.Replace(decisionReliabilityDoc, "      api_format: openai\n",
+		"      api_format: openai\n      reliability:\n        retry_count: 2\n        retry_on: 5xx,retriable_status_codes\n", 1)
+	decisionTypo := strings.Replace(decisionReliabilityDoc, "retry_on: reset,5xx", "retry_on: reset, 5XX", 1)
+	for name, tc := range map[string]struct{ doc, want string }{
+		"provider": {providerTypo, `providers.models[model-a].reliability.retry_on has unknown condition "retriable_status_codes"`},
+		"decision": {decisionTypo, `decision 'slow_route': reliability.retry_on has unknown condition "5XX"`},
+	} {
+		_, err := ParseYAMLBytes([]byte(tc.doc))
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error = %v, want one containing %q", name, err, tc.want)
+		}
+	}
+	grpc := strings.Replace(decisionReliabilityDoc, "retry_on: reset,5xx", "retry_on: connect-failure,refused-stream,unavailable,cancelled", 1)
+	if _, err := ParseYAMLBytes([]byte(grpc)); err != nil {
+		t.Fatalf("Envoy's gRPC names must load: %v", err)
+	}
+}
+
 // A request that matches no decision runs the recipe's plugins layered over
 // global.plugins, and a request for a concrete model runs global.plugins, so
 // a header the Router owns fails the load at the layer that writes it, even

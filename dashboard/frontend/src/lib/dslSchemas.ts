@@ -184,6 +184,7 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
                     'assistant_tool_cycle',
                     'active_tool_loop',
                     'flow_tool_state',
+                    'failed_tool_result',
                   ],
                   required: true,
                 },
@@ -205,7 +206,7 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'predicate',
           label: 'Predicate',
           type: 'object',
-          description: 'Optional numeric comparison for count features.',
+          description: 'Numeric comparison a count feature requires; exists features take none.',
           fields: NUMERIC_PREDICATE_FIELDS,
         },
       ]

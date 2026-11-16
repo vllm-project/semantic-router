@@ -168,17 +168,21 @@ global:
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | Router Memory | `llm_memory_retrieval_total` （`backend`、`status`）, `llm_memory_retrieval_latency_seconds`, `llm_memory_retrieval_results`, `llm_memory_store_operations_total`, `llm_memory_cache_hits_total`, `llm_memory_cache_misses_total`, `llm_memory_extraction_total` |
 | 会话 | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
-| 翻译与请求参数策略 | `llm_translation_lossy_total`, `sr_request_params_blocked_total` |
+| 翻译与请求参数策略 | `llm_translation_lossy_total`（按 `reason`，其中的数量写作 `N`）, `sr_request_params_blocked_total` |
 | 信号 | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
 | 配置生命周期 | `llm_config_updates_total` （`source`、`result`、`stage`）, `llm_config_update_duration_seconds`, `llm_config_active_version`, `llm_config_active_info` （`version`、`hash`）, `llm_config_last_rejection_timestamp_seconds` |
 | 远程模型调用 | `llm_remote_connector_requests_total` （按 `operation`、`outcome`）, `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
 | Recipe 路由 | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` （阶段 `signals`、`decision`、`algorithm`、`prompt_compression`）, `llm_prompt_compression_total` （按 `recipe` 和 `outcome`：`compressed`、`skipped_disabled`、`skipped_min_length`、`skipped_max_tokens`） |
+| 上下文窗口 | `llm_context_window_checks_total` （按 `count`：`exact` 或 `proxy`，以及 `verdict`：`fits`、`in_band` 或 `exceeds`）, `llm_context_window_refusals_total` （按 `count`）, `llm_context_window_margin` （按 `count`）, `llm_context_window_wait_seconds`, `llm_context_window_tokenizer_loaded` （按 `tokenizer`），来自[上下文窗口检查](../../installation/model-configuration#check-prompts-against-the-context-window) |
 | 路由输入 | `llm_routing_input_removed_total` （按 `kind`：`skipped_message`、`stripped_block`），来自 [`global.router.routing_input`](../signal/overview#choose-the-user-text-signals-read) |
 | 流式请求体 | `llm_streamed_body_arrival_seconds`, `llm_streamed_body_bytes`, `llm_streamed_body_chunks` （按 `recipe`；仅 STREAMED 和 FULL_DUPLEX_STREAMED 模式） |
 | 投影 | `llm_projection_score` （按配置中的 Recipe 和投影名称） |
 | Trace 导出 | `llm_trace_export_spans_total` （按导出批次结果） |
 
 Router Memory 计数器只使用有界标签。参见 [Router Memory Prometheus 标签发布说明](../../release-notes/router-memory-prometheus-labels)。
+
+请求指定了配置中不提供的模型时，`llm_request_errors_total` 以 `model="unknown"`、`reason="model_not_found"` 计数；
+`specified_model_not_found` 日志事件保留请求中发送的模型名。
 
 `llm_request_graph_node_duration_seconds` 为请求图的每个步骤计时，例如 Looper 模板的算法步骤和响应步骤；包含其他步骤的步骤也会计入它们的耗时。`template` 是图的名称（例如 `looper.fusion`），`node_type` 是步骤的注册类型。
 
@@ -192,7 +196,7 @@ Router Memory 计数器只使用有界标签。参见 [Router Memory Prometheus 
 
 | 指标 | 测量 |
 | --- | --- |
-| `llm_model_first_response_observation_seconds` | 首个流式响应块，或非流式响应的响应头 |
+| `llm_model_first_response_observation_seconds` | 首个流式响应块，或非流式响应的响应头，仅统计成功响应 |
 | `llm_model_response_duration_per_output_token_seconds` | 完整响应耗时除以上报的输出 token 数 |
 
 两者都不等同于首 token 延迟或仅解码阶段的逐 token 延迟。可选的窗口指标每个模型最多汇总 10,000 次已完成的响应，不估算利用率、队列深度或提供方错误率。

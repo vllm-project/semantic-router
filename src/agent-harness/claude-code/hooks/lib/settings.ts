@@ -2,11 +2,13 @@ import type { PluginOptions } from 'claude-code'
 
 import type { App, Tiers } from '../../types'
 import { APP_NAMES } from './apps'
+import { type ListenerRules, NO_RULES } from './rules'
 
 export type RuntimeKind = 'local-cpu' | 'local-gpu' | 'remote'
 
-// Where the classifier answers: `token`, when not empty, rides as a bearer header.
-export type Runtime = { kind: RuntimeKind; url: string; token: string }
+// Where the classifier answers: `token`, when not empty, rides as a bearer header, and `model`, when not empty,
+// names the model a runtime that serves several answers with (a hosted System One API).
+export type Runtime = { kind: RuntimeKind; url: string; token: string; model: string }
 
 // The host a runtime URL names when that is another machine; undefined for this one (loopback: `localhost`, `[::1]`
 // or a literal IPv4 address in 127.0.0.0/8, not a name that only starts `127.`) or a URL that does not parse.
@@ -73,7 +75,11 @@ export type Settings = {
   log: { path: string; calibrateEvery: number }
   logo: LogoMode
   routerGoal: RouterGoal
+  // The router also picks the model and effort of each prompt you send, not only of subagents.
+  routerTurns: boolean
   display: Display
+  // The rules the listener binds to guard and redact, from its listing (lib/profile.ts).
+  rules: ListenerRules
 }
 
 export const DIFFICULTY_MAX = 2
@@ -88,7 +94,7 @@ export function parseSettings(options: PluginOptions): Settings {
   const easyBelow = difficulty(options.routerEasyBelow)
   const stepsLow = difficulty(options.routerStepsLow)
   return {
-    runtime: { kind: options.runtime as RuntimeKind, url: String(options.runtimeUrl).trim(), token: String(options.runtimeToken).trim() },
+    runtime: { kind: options.runtime as RuntimeKind, url: String(options.runtimeUrl).trim(), token: String(options.runtimeToken).trim(), model: String(options.runtimeModel ?? '').trim() },
     apps: Object.fromEntries(APP_NAMES.map(app => [app, options[app] === true])) as Record<App, boolean>,
     waits: Object.fromEntries(WAIT_APPS.map(app => [app, waitOf(options[`${app}Wait`])])) as Record<WaitApp, Wait>,
     thresholds: {
@@ -110,6 +116,8 @@ export function parseSettings(options: PluginOptions): Settings {
     log: { path: String(options.logPath).trim(), calibrateEvery: Math.max(0, Math.round(options.calibrateEvery as number)) },
     logo: options.logo as LogoMode,
     routerGoal: options.routerGoal as RouterGoal,
+    routerTurns: options.routerTurns === true,
     display: options.display as Display,
+    rules: NO_RULES,
   }
 }

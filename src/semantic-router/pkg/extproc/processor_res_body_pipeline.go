@@ -20,6 +20,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	responseBody []byte,
 	ctx *RequestContext,
 	completionLatency time.Duration,
+	bodyReplaced bool,
 ) *ext_proc.ProcessingResponse {
 	diagnosticsBeforeBody := len(ctx.ProtocolDiagnostics)
 	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
@@ -83,7 +84,8 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	if hasBufferedWarnings {
 		setResponseBodyHeaderOverwrite(response, headers.VSRWarnings, warnings)
 	}
-	if (rewriteClientBody || !bytes.Equal(finalBody, clientBody)) && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
+	if (rewriteClientBody || bodyReplaced || !bytes.Equal(finalBody, clientBody)) &&
+		response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
 		setResponseBodyMutation(response, finalBody)
 	}
 	return response
@@ -168,6 +170,7 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	// is recorded before a block returns, so a blocked response leaves the same
 	// evidence in Router Replay as a delivered one.
 	recordPrimaryOutputDigest(ctx, semanticResponse)
+	observeApprovalReviewVerdict(ctx, semanticResponse)
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	logResponseGuard(ctx, ctx.ResponseGuard)
 	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {

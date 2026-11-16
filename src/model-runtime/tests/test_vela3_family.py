@@ -273,6 +273,77 @@ def test_pii_threshold_missing_bucket_raises_value_error(model) -> None:
         model.router.span["pii_buckets"] = original_buckets
 
 
+def test_span_threshold_without_pii_buckets_serves_non_pii_routes(model) -> None:
+    """A package whose span block carries no ``pii_buckets`` still answers every non-PII span question.
+
+    Only a PII question reads that field, so a generic Span route must not fail
+    on a package that verifies and loads without it.
+    """
+    generic = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set=None,
+        evidence=False,
+        relation_wording=False,
+        text="Which spans are named entities of these types?",
+        labels=(("drug", "a medicine"),),
+        window=128,
+    )
+
+    original_buckets = model.router.span.pop("pii_buckets")
+    try:
+        threshold, temperature = model.router.span_threshold(generic, 2)
+        assert threshold == 0.6
+        assert temperature == 1.0
+    finally:
+        model.router.span["pii_buckets"] = original_buckets
+
+
+def test_span_set_threshold_without_pii_buckets_serves_non_pii_routes(model) -> None:
+    """The same holds when the ``span_set`` head has no buckets of its own."""
+    hallucinated = routing.SpanRoute(
+        adapter="span_set",
+        head="span_set",
+        label_set="halu",
+        evidence=False,
+        relation_wording=False,
+        text="Which spans of the answer are not supported by the context?",
+        labels=(("unsupported", ""),),
+        window=128,
+    )
+
+    original_buckets = model.router.span["set_adapter"].pop("pii_buckets")
+    try:
+        threshold, temperature = model.router.span_threshold(hallucinated, 2)
+        assert threshold == 0.4
+        assert temperature == 0.25
+    finally:
+        model.router.span["set_adapter"]["pii_buckets"] = original_buckets
+
+
+def test_pii_threshold_without_pii_buckets_still_reports_the_missing_field(
+    model,
+) -> None:
+    """A PII route over a package with no ``pii_buckets`` keeps failing, and only there."""
+    pii = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set="pii",
+        evidence=False,
+        relation_wording=False,
+        text="PII",
+        labels=(("email", ""),),
+        window=128,
+    )
+
+    original_buckets = model.router.span.pop("pii_buckets")
+    try:
+        with pytest.raises(KeyError, match="pii_buckets"):
+            model.router.span_threshold(pii, 2)
+    finally:
+        model.router.span["pii_buckets"] = original_buckets
+
+
 def test_evidence_threshold_missing_bucket_raises_value_error(model) -> None:
     route = routing.SpanRoute(
         adapter="span",

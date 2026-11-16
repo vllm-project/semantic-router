@@ -20,7 +20,9 @@ translation:
 
 | 端点 | 用途 |
 | --- | --- |
-| `POST /v1/decisions` | 就一个状态答 Choice、Noul、Score、Set 和 Span 问题。`POST /v1/systemone` 是一样的。 |
+| `POST /v1/decisions` | 就一个状态答 Choice、Noul、Score、Set 和 Span 问题，失败的问题在其答案中返回。它读取运行时的内部请求形式（下文的形式加上 `roles`），与进程的 System One schema 无关。 |
+| `POST /v1/systemone` | 一个按进程 System One schema 发送的请求，按 System One 的方式回答：有问题失败时整个请求失败（[System One 兼容性](#system-one-compatibility)）。 |
+| `POST /v1/systemone/batch` | 一次调用中的多个具名请求，每个的回答与单独发送时相同，放在 `responses` 下。 |
 | `POST /v1/classify` | 对文本、文本对或 grounded 答案跑分类头：标签概率、独立标签分或 token 片段。 |
 | `POST /v1/embeddings` | 文本、图像、音频的 OpenAI 兼容嵌入，带 `dimensions` 和 `layer`。 |
 | `POST /v1/rerank` | 就一个查询给文档打分。 |
@@ -70,7 +72,7 @@ Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur
 
 唯一的字节限额是 `--max-request-bytes`，作用于整个请求。
 
-router 通过 Vela 2.0 用两种方式读长请求。路由问题（domain、fact check、feedback、modality、决策问题和决策模型选择器）截断。安全问题（jailbreak、safety、PII 和 hallucination）整读，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。超出部分是没读到的内容：越狱或 PII 规则把它匹配为 `unscanned`。没赶上信号截止时间（`global.model_catalog.signal_timeout_ms`）的安全扫描没有答案：越狱或 PII 规则此时不匹配，除非它设置了 `on_unknown: match`。
+router 在模型读取之前用两种方式读长请求（参见[长输入](../../system-one/deploy/performance.md#long-inputs)）。路由问题（domain、fact check、feedback、modality、没有 `coverage: full` 的 `systemone` 问题和决策模型选择器）读取有界视图，即部署 `routing_view` 以内的开头和结尾。防护问题（jailbreak、safety 和 PII）整读，按部署的 `scan_window` 分窗口读取，模型完整读取每个窗口，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。信号截止时间（`global.model_catalog.signal_timeout_ms`）提前结束扫描时，越狱或 PII 规则根据已读窗口作出判断（`on_unscanned: best_effort`）；没有任何窗口作答时，规则匹配，除非它设置了 `on_unknown: no_match`。hallucination 问题整读其输入，上限是模型的扫描预算；超出部分没有被读到。
 
 ## 分类 {#classify}
 
@@ -249,7 +251,14 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 
 ## System One 兼容性 {#system-one-compatibility}
 
-`POST /v1/systemone` 接受 JSON、压缩 JSON 或 multipart 形式的 System One 请求，并以 System One 字段作答。它也接受上文的扩展（`images`、`videos`、`states` 中的批量请求、Set 和 Span、`choices` / `levels` / `labels`、`options`）。进程不提供的模型会收到一个列出所提供模型的错误。
+`POST /v1/systemone` 和 `POST /v1/systemone/batch` 使用进程的 System One schema，由 `vllm-srun serve --systemone-schema` 设置：
+
+- **`vllm-sr/5.0`**（默认）：System One 标准加上 vllm-sr 扩展。请求被严格解析，其他成员以 400 拒绝并写明名称；没有 `roles` 的对象 state 中没有任何部分有角色；占位符位于 state 前面的资源（依次为图片、视频，然后恰好一个其他元素）在该元素前面读取；`TypeSafe-Danger-Zone-Long-Context: true` 读取长上下文。错误是标准的 `detail`（422 时为列表）加平铺的 `code`、`question`、`state`、`reason` 和 `limit`，过载的进程返回 529 并带 `Retry-After`。见 [System One schema](../../system-one/use/schemas.md)。
+- **`vllm-sr/4.0`**：原样接受下文的形式以及所有 5.0 形式；错误在 `error` 旁增加 `detail` 和平铺字段。用于直接服务旧契约客户端的运行时。
+
+在自己的 `instructions` 或 `criteria` 旁写明 `preset` 的类型化问题（5.0 形式），在模型卡列出该 preset 时使用模型训练过的 preset，否则按问题本身回答。
+
+内部形式由 `/v1/decisions`、`/v1/bundle` 和 `vllm-sr/4.0` 进程读取，接受 JSON、压缩 JSON 或 multipart 形式的 System One 请求，并以 System One 字段作答。它也接受上文的扩展（`images`、`videos`、`states` 中的批量请求、Set 和 Span、`choices` / `levels` / `labels`、`options`）以及 `roles`：省略时，对象 state 的键表示其各部分；`null` 时没有任何部分有角色；对象时为每个键的角色。进程不提供的模型会收到一个列出所提供模型的错误。
 
 **请求体。** 请求体可以用一层 `Content-Encoding` 压缩：`gzip`（或 `x-gzip`），或窗口不超过 8 MiB 的 `zstd`；大小限制同时适用于发送时的请求体和解码后的请求体。其他编码或多层编码返回 415。请求体也可以是 `multipart/form-data`：第一部分 `request` 包含 JSON 请求，其余每个部分包含一张图像的字节，并且恰好被一个 asset 引用。
 

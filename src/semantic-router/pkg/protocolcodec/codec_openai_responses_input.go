@@ -180,25 +180,22 @@ func decodeResponsesInputItem(
 	if err := validateResponsesInputItemMetadata(item); err != nil {
 		return err
 	}
+	if err := flattenResponsesHistoryCall(&item, request, policy); err != nil {
+		return err
+	}
 	return decodeResponsesInputItemKind(item, index, request, policy)
 }
 
 func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"input.async":             item.Async,
-		"input.caller":            item.Caller,
-		"input.encrypted_content": item.EncryptedContent,
-		"input.phase":             item.Phase,
+		"input.async":  item.Async,
+		"input.caller": item.Caller,
+		"input.phase":  item.Phase,
 	}); err != nil {
 		return err
 	}
-	if item.Namespace != "" {
+	if item.Namespace != "" && item.Type != "function_call" && item.Type != "custom_tool_call" {
 		return rejectUnsupportedRequestField("input.namespace", json.RawMessage(`true`))
-	}
-	if item.Status != "" && item.Type != "" && item.Type != "message" &&
-		item.Type != "function_call" && item.Type != "function_call_output" &&
-		item.Type != "custom_tool_call" && item.Type != "custom_tool_call_output" && item.Type != "image_generation_call" {
-		return rejectUnsupportedRequestField("input.status", json.RawMessage(`true`))
 	}
 	return nil
 }
@@ -313,7 +310,7 @@ func decodeResponsesToolResult(item responsesItemWire, request *llmprotocol.Requ
 }
 
 func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
-	content, err := decodeResponsesReasoning(item.Summary, policy, false)
+	summary, err := decodeResponsesReasoning(item.Summary, policy, false)
 	if err != nil {
 		return err
 	}
@@ -321,7 +318,28 @@ func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.R
 	if err != nil {
 		return err
 	}
-	content = append(content, reasoning...)
+	var content []llmprotocol.Content
+	for _, part := range append(summary, reasoning...) {
+		if part.Text != "" {
+			content = append(content, part)
+		}
+	}
+	encrypted, err := decodeResponsesEncryptedReasoning(item, policy, false)
+	if err != nil {
+		return err
+	}
+	if encrypted != nil {
+		content = append(content, *encrypted)
+	} else if len(item.EncryptedContent) > 0 {
+		// Null and empty ciphertext carry no state and are omitted on re-encoding.
+		request.Generation++
+	}
+	// Stored ID-only references have no canonical provider scope yet.
+	if len(content) == 0 && (len(item.EncryptedContent) > 0 || len(reasoning) > 0 || item.ID != "") {
+		// Retire the source envelope so it cannot resurrect the omitted item.
+		request.Generation++
+		return nil
+	}
 	request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: llmprotocol.RoleAssistant, Content: content})
 	return nil
 }

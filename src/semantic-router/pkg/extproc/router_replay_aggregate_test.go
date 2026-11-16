@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -28,6 +30,24 @@ func TestHandleRouterReplayAPIListAppliesFilters(t *testing.T) {
 	data := mustReplayData(t, body["data"])
 	if got := data[0]["id"]; got != "replay-2" {
 		t.Fatalf("expected filtered replay-2, got %#v", got)
+	}
+}
+
+// An agent harness names its session in a header; pasting that session id
+// into the search finds the session's requests.
+func TestHandleRouterReplayAPIListSearchesSessionIDs(t *testing.T) {
+	router := newReplayAggregateTestRouter(t)
+
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?search=6582A295-CLAUDE&limit=10")
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal("expected immediate replay list response")
+	}
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	if got := int(body["count"].(float64)); got != 1 {
+		t.Fatalf("expected count=1, got %d", got)
+	}
+	if got := mustReplayData(t, body["data"])[0]["id"]; got != "replay-2" {
+		t.Fatalf("expected the session's replay-2, got %#v", got)
 	}
 }
 
@@ -235,6 +255,7 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 			ID:               "replay-2",
 			Timestamp:        time.Unix(2, 0).UTC(),
 			RequestID:        "req-beta",
+			SessionID:        "6582a295-claude-code-session",
 			Recipe:           "beta",
 			Decision:         "decision-b",
 			OriginalModel:    "gpt-4",
@@ -260,5 +281,35 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 		ReplayRecorders: map[string]*routerreplay.Recorder{
 			"decision-a": recorder,
 		},
+	}
+}
+
+func TestRouterReplayAggregateCountsEverySignalFamily(t *testing.T) {
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{ID: "every-family", Decision: "guarded", Signals: routerreplay.Signal{
+		Keyword: []string{"a"}, Domain: []string{"a"}, FactCheck: []string{"a"}, UserFeedback: []string{"a"},
+		TurnRelation: []string{"a"}, Language: []string{"a"}, Context: []string{"a"}, Complexity: []string{"a"},
+		Modality: []string{"a"}, Authz: []string{"a"}, Jailbreak: []string{"a"}, Safety: []string{"a"},
+		PII: []string{"a"}, Conversation: []string{"a"}, Metadata: []string{"a"}, InputModality: []string{"a"},
+		Decision: []string{"a", "b"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{ReplayRecorder: recorder}
+	payload := routerreplay.AggregateResponse{}
+	if err := json.Unmarshal(router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate").GetImmediateResponse().GetBody(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]int{}
+	for _, value := range payload.SignalDistribution {
+		got[value.Name] = value.Value
+	}
+	want := map[string]int{
+		"keyword": 1, "domain": 1, "fact_check": 1, "user_feedback": 1, "turn_relation": 1, "language": 1,
+		"context": 1, "complexity": 1, "modality": 1, "authz": 1, "jailbreak": 1, "safety": 1, "pii": 1,
+		"conversation": 1, "metadata": 1, "input_modality": 1, "decision": 2,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("signal_distribution = %v, want %v", got, want)
 	}
 }

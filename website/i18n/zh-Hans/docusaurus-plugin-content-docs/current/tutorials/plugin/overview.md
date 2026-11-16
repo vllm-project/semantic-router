@@ -113,7 +113,7 @@ match:
 | `top_k`、`min_score`、`min_ratio` | 决定保留哪些候选，按分数从高到低排列。`min_score` 是绝对值；`min_ratio` 是相对最高分的比例，取值 (0, 1]。 |
 | `on_error` | `skip`（缺省）在 judge 失败或超时时保留召回结果，没有召回时保持候选原样。`fail` 让该功能的匹配失败。 |
 | `timeout_ms` | 限定这次调用；未设置时取部署的 `timeout_ms`，再缺省为 1000 毫秒。 |
-| `max_candidates` | 硬上限：choice judge 为 255，逐个候选提问的 judge 缺省为 64。 |
+| `max_candidates` | 硬上限：choice judge 为 255，逐个候选提问的 judge 缺省为 64、最多 4096。 |
 
 候选再多也不会让请求失败：judge 按召回排名，或按功能的顺序（最新的在前），读取前 `max_candidates` 个。每次截断都会在 trace span 上记一个 `match.judge.truncated` 事件，并计入 `vsr_match_judge_truncated_total`。
 

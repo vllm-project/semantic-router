@@ -3,7 +3,9 @@ package controllers
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -74,7 +76,7 @@ func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical 
 		return err
 	}
 	if responseCache != nil {
-		typedCache, err := convertToTypedConfig[routerconfig.ResponseCacheStoreConfig](r, responseCache)
+		typedCache, err := convertToTypedConfig[routerconfig.ResponseCacheStoreConfig](responseCache)
 		if err != nil {
 			return fmt.Errorf("config.response_cache: %w", err)
 		}
@@ -183,14 +185,14 @@ func (r *SemanticRouterReconciler) applyOperatorProviderDefaults(canonical *rout
 
 func (r *SemanticRouterReconciler) applyOperatorServices(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
 	if spec.API != nil {
-		api, err := convertToTypedConfig[routerconfig.APIConfig](r, spec.API)
+		api, err := convertToTypedConfig[routerconfig.APIConfig](spec.API)
 		if err != nil {
 			return fmt.Errorf("config.api: %w", err)
 		}
 		canonical.Global.Services.API = api
 	}
 	if spec.Observability != nil {
-		observability, err := convertToTypedConfig[routerconfig.ObservabilityConfig](r, spec.Observability)
+		observability, err := convertToTypedConfig[routerconfig.ObservabilityConfig](spec.Observability)
 		if err != nil {
 			return fmt.Errorf("config.observability: %w", err)
 		}
@@ -216,7 +218,7 @@ func (r *SemanticRouterReconciler) applyOperatorRouting(canonical *routerconfig.
 		defaultRecipe(canonical).Signals.Complexity = complexity
 	}
 	if len(spec.Decisions) > 0 {
-		decisions, err := convertToTypedConfig[[]routerconfig.Decision](r, spec.Decisions)
+		decisions, err := convertToTypedConfig[[]routerconfig.Decision](spec.Decisions)
 		if err != nil {
 			return fmt.Errorf("config.decisions: %w", err)
 		}
@@ -232,7 +234,7 @@ func (r *SemanticRouterReconciler) convertComplexityRules(spec []vllmv1alpha1.Co
 			entry.Threshold != "" || entry.HardAbove != "" || entry.EasyBelow != "" || entry.HardBelow != "" || entry.EasyAbove != "" {
 			return nil, fmt.Errorf("%s: a complexity rule no longer scores example banks; the decision model answers it (write labels)", entry.Name)
 		}
-		rule, err := convertToTypedConfig[routerconfig.ComplexityRule](r, entry)
+		rule, err := convertToTypedConfig[routerconfig.ComplexityRule](entry)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", entry.Name, err)
 		}
@@ -241,17 +243,100 @@ func (r *SemanticRouterReconciler) convertComplexityRules(spec []vllmv1alpha1.Co
 	return rules, nil
 }
 
-func convertToTypedConfig[T any](r *SemanticRouterReconciler, value interface{}) (T, error) {
+// convertToTypedConfig decodes a CRD struct into the Router's type. The CRD
+// keeps fractional values such as thresholds as strings, so a string that
+// reads as a number or boolean is decoded as a plain value where the Router
+// field is a number or boolean. Everywhere else, in a string field such as a
+// password read from a Secret and in an untyped plugin payload, the text
+// stays as written.
+func convertToTypedConfig[T any](value interface{}) (T, error) {
 	var result T
-
-	normalized := r.convertToConfigMap(value)
-	data, err := yaml.Marshal(normalized)
+	data, err := json.Marshal(value)
 	if err != nil {
 		return result, err
 	}
-	if err := yaml.Unmarshal(data, &result); err != nil {
+	var node yaml.Node
+	if err = yaml.Unmarshal(data, &node); err != nil {
 		return result, err
 	}
+	unquoteNumberFields(&node, reflect.TypeOf(result))
+	err = node.Decode(&result)
+	return result, err
+}
 
-	return result, nil
+var (
+	yamlUnmarshaler       = reflect.TypeOf((*yaml.Unmarshaler)(nil)).Elem()
+	legacyYAMLUnmarshaler = reflect.TypeOf((*interface {
+		UnmarshalYAML(func(interface{}) error) error
+	})(nil)).Elem()
+)
+
+func unquoteNumberFields(node *yaml.Node, target reflect.Type) {
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	// A type that decodes itself, such as a plugin payload, has no field
+	// type to decide by.
+	if pointer := reflect.PointerTo(target); pointer.Implements(yamlUnmarshaler) || pointer.Implements(legacyYAMLUnmarshaler) {
+		return
+	}
+	switch node.Kind {
+	case yaml.DocumentNode:
+		for _, child := range node.Content {
+			unquoteNumberFields(child, target)
+		}
+	case yaml.SequenceNode:
+		if target.Kind() == reflect.Slice || target.Kind() == reflect.Array {
+			for _, child := range node.Content {
+				unquoteNumberFields(child, target.Elem())
+			}
+		}
+	case yaml.MappingNode:
+		for index := 0; index+1 < len(node.Content); index += 2 {
+			if field := yamlFieldType(target, node.Content[index].Value); field != nil {
+				unquoteNumberFields(node.Content[index+1], field)
+			}
+		}
+	case yaml.ScalarNode:
+		switch target.Kind() {
+		case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
+			if node.Tag != "!!str" {
+				return
+			}
+			switch tag := (&yaml.Node{Kind: yaml.ScalarNode, Value: node.Value}).ShortTag(); tag {
+			case "!!int", "!!float", "!!bool":
+				node.Style, node.Tag = 0, tag
+			}
+		}
+	}
+}
+
+// yamlFieldType is the type the YAML decoder fills for key in target.
+func yamlFieldType(target reflect.Type, key string) reflect.Type {
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	switch target.Kind() {
+	case reflect.Map:
+		return target.Elem()
+	case reflect.Struct:
+		for index := 0; index < target.NumField(); index++ {
+			field := target.Field(index)
+			name, options, _ := strings.Cut(field.Tag.Get("yaml"), ",")
+			if strings.Contains(options, "inline") {
+				if inner := yamlFieldType(field.Type, key); inner != nil {
+					return inner
+				}
+				continue
+			}
+			if name == "" {
+				name = strings.ToLower(field.Name)
+			}
+			if field.IsExported() && name == key {
+				return field.Type
+			}
+		}
+	}
+	return nil
 }

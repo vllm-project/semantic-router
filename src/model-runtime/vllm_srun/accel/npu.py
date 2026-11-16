@@ -7,6 +7,7 @@ from typing import Any
 
 import torch
 
+from ..engines.native.encoder import graph_module
 from ..plugins.base import Accelerator, DeviceInfo
 from . import npu_fla, npu_fused
 from .kernels import Kernel, KernelSet, reference_kernels
@@ -94,7 +95,13 @@ class NPUAccelerator(Accelerator):
         return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:
-        return {"bf16_autocast": True, "graphs": False, "triton": False}
+        return {
+            "bf16_autocast": True,
+            # Graph capture (the encoder's bucketed graphs) once torch_npu's
+            # NPUGraph APIs registered; torch.cuda's are not mapped on npu.
+            "graphs": _npu() is not None and graph_module("npu") is not None,
+            "triton": False,
+        }
 
     def autocast(
         self, device: DeviceInfo, dtype: str | None

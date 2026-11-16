@@ -113,17 +113,22 @@ func (r *OpenAIRouter) startRouterReplay(
 
 	policy := ctx.RouterReplayPluginConfig
 	recorder = recorder.WithCapturePolicy(routerreplay.CapturePolicy{
-		CaptureRequestBody:  policy.CaptureRequestBody,
-		CaptureResponseBody: policy.CaptureResponseBody,
-		MaxBodyBytes:        resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
-		MaxToolTraceBytes:   policy.MaxToolTraceBytes,
-		MaxToolTraceSteps:   policy.MaxToolTraceSteps,
+		CaptureRequestBody:     policy.CapturesRequestText(),
+		CaptureResponseBody:    policy.CapturesResponseText(),
+		MaxBodyBytes:           resolveReplayMaxBodyBytes(policy.MaxBodyBytes),
+		MaxPromptBytes:         policy.PromptByteLimit(),
+		MaxToolTraceBytes:      policy.ToolTraceByteLimit(),
+		MaxRawToolTraceBytes:   policy.RawToolTraceByteLimit(),
+		MaxToolTraceTotalBytes: policy.ToolTraceTotalByteLimit(),
+		MaxToolTraceSteps:      policy.MaxToolTraceSteps,
 	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	record.CostAccounting = r.replaceReplayModelCalls(ctx, record.CostAccounting)
 	prompt := record.Prompt
-	ctx.RouterReplayContentOmitted = !r.personalDataReplayAllowed(ctx)
+	ctx.RouterReplayContentOmitted = !r.replayPromptAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
-	r.populateReplayIdentity(&record, ctx)
+	headerSession := r.populateReplayIdentity(&record, ctx) || ctx.SessionProvenance == SessionProvenanceHeader
+	applyReplayReviewSession(&record, headerSession)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
 	}
@@ -135,10 +140,11 @@ func (r *OpenAIRouter) startRouterReplay(
 
 // populateReplayIdentity records the same explicit identity used by protection,
 // including custom header names, without enabling protection or changing request
-// state. Optional Responses lineage remains the fallback for older clients.
-func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) {
+// state. Optional Responses lineage remains the fallback for older clients. It
+// reports whether a header named the session.
+func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) bool {
 	if r == nil || ctx == nil || record == nil {
-		return
+		return false
 	}
 	cfg := config.RouterLearningProtectionConfig{}
 	if r.Config != nil {
@@ -146,17 +152,18 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 	}
 	identity, ok := r.protectionIdentity(ctx, cfg)
 	if !ok {
-		return
+		return false
 	}
 	record.SessionID = identity.sessionID
-	if identity.conversationID != "" {
-		record.ConversationID = identity.conversationID
+	if conversationID := identity.declaredConversationID(); conversationID != "" {
+		record.ConversationID = conversationID
 	}
 	// Persist the key the gate resolved, so outcome ingest can land feedback
 	// in the same window even when the session id alone keys it wider.
 	if record.Learning != nil {
 		record.Learning.ProtectionStateKey = routingLearningStateKey(ctx)
 	}
+	return true
 }
 
 func shouldStartRouterReplay(ctx *RequestContext) bool {
@@ -192,7 +199,9 @@ func (r *OpenAIRouter) resolveReplayRecorder(ctx *RequestContext, decisionName s
 
 // replayUserTurnIndex groups tool continuations with the user message that
 // started them. Protocol normalization represents tool results as RoleTool,
-// including Anthropic tool_result blocks and retained Responses history.
+// including Anthropic tool_result blocks and retained Responses history. Text
+// a client sent in the same message as tool results, such as a system reminder
+// next to an Anthropic tool_result, continues the loop as well.
 // Prefer the original snapshot so context trimming or Memory cannot renumber
 // turns. This history contains only messages actually available to the router.
 // Keep the invocation index as a fallback when no user history is visible.
@@ -205,7 +214,7 @@ func replayUserTurnIndex(ctx *RequestContext) int {
 	}
 	userMessages := 0
 	for _, message := range messages {
-		if message.Role == llmprotocol.RoleUser {
+		if message.Role == llmprotocol.RoleUser && !message.WithToolResults {
 			userMessages++
 		}
 	}
@@ -247,6 +256,7 @@ func buildReplayRoutingRecord(
 		ProjectionTrace:          cloneProjectionTraceForReplay(ctx.VSRProjectionTrace),
 		SignalConfidences:        cloneReplayFloat64Map(ctx.VSRSignalConfidences),
 		SignalErrorMatches:       cloneReplayBoolMap(ctx.VSRSignalErrorMatches),
+		ScanCoverage:             cloneReplayStringMap(ctx.VSRScanCoverage),
 		SignalValues:             cloneReplayFloat64Map(ctx.VSRSignalValues),
 		ToolTrace:                replayRequestToolTrace(ctx),
 		Streaming:                ctx.ExpectStreamingResponse,
@@ -282,6 +292,8 @@ func buildReplayRoutingRecord(
 		record.PreviousResponseID = state.PreviousResponseID
 		record.ConversationID = state.ConversationID
 	}
+	record.RequestKind, record.Review = replayApprovalReview(ctx)
+	record.ThreadID, record.TurnID, record.ParentTurnID = ctx.AgentTurn.ThreadID, ctx.AgentTurn.TurnID, ctx.AgentTurn.ParentTurnID
 	// The sanitiser drops tool-result payloads unless the route captures tool
 	// results; a masking route persists no request text at all, because Replay
 	// snapshots the request before masking runs (D3, #3566).
@@ -469,6 +481,7 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 		return
 	}
 
+	r.refreshReplayModelCalls(ctx, recorder)
 	if err := recorder.FinalizeLifecycle(ctx.RouterReplayID, state, reason); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_lifecycle_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -477,6 +490,21 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 			"error":      err.Error(),
 		})
 	}
+	settleReplayApprovalReview(ctx, recorder, state)
+}
+
+// failAnsweredRouterReplay fails a record whose client already got an error
+// the response phases never see: the Router's own refusal, or the gateway's
+// local reply for a backend that did not answer. The record keeps what the
+// client got, since the stream then ends without a terminal response, which
+// would otherwise read as a client abort.
+func (r *OpenAIRouter) failAnsweredRouterReplay(ctx *RequestContext, status int, body []byte, reason string) {
+	if status < 400 {
+		return
+	}
+	r.updateRouterReplayStatus(ctx, status, false)
+	r.attachRouterReplayResponse(ctx, body, false)
+	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, reason)
 }
 
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.
@@ -493,6 +521,7 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 		return
 	}
 
+	responseBody = redactCallerCredential(ctx, responseBody)
 	if len(responseBody) > 0 && replayResponseContentAllowed(ctx) {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}
@@ -527,7 +556,16 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 }
 
 func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
-	if ctx == nil || ctx.RouterReplayID == "" || (usage.TotalTokens == nil && usage.ProviderCache == nil) {
+	if usage.TotalTokens == nil && usage.ProviderCache == nil {
+		return
+	}
+	r.writeRouterReplayUsageCost(ctx, usage)
+}
+
+// writeRouterReplayUsageCost replaces the record's usage and cost, even with
+// none.
+func (r *OpenAIRouter) writeRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
+	if ctx == nil || ctx.RouterReplayID == "" {
 		return
 	}
 
@@ -539,6 +577,7 @@ func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage ro
 		return
 	}
 
+	usage.CostAccounting = r.replaceReplayModelCalls(ctx, usage.CostAccounting)
 	if err := recorder.UpdateUsageCost(ctx.RouterReplayID, usage); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_usage_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

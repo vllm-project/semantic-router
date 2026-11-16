@@ -77,6 +77,9 @@ def parse_value(name: str, raw: object) -> object:
                 f"{name} must be absolute or start with ~/; a relative path would land in each project's folder"
             )
         return str(text)
+    if name == "runtimeModel":
+        # Empty means the runtime's only model; a hosted System One API needs one named.
+        return str(text).strip()
     if not isinstance(text, str) or text == "":
         raise SettingsError(f"{name} takes a non-empty string")
     if name == "runtimeUrl" and not text.startswith(("http://", "https://")):

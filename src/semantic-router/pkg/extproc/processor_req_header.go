@@ -10,7 +10,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -25,6 +27,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// so a restricted listener does not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
 	r.captureDelegatedCredential(ctx)
+	r.captureCallerCredential(ctx)
 	if r.Config != nil {
 		ctx.sessionIDHeaders = r.Config.Headers.SessionIDHeaderNames()
 		ctx.identity = r.Config.Authz.Identity
@@ -53,7 +56,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		mutation := buildLooperInternalHeaderRemovalMutation()
+		mutation := buildLooperInternalHeaderRemovalMutation(ctx.identity)
 		r.appendDelegatedCredentialRemoval(mutation)
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 		// Per-user keys reach a provider only as its credential, which a
@@ -88,7 +91,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if requiresBody && v.RequestHeaders.GetEndOfStream() {
 		return r.rejectBodylessInferenceRequest(ctx), nil
 	}
-	mutation := buildIdentityEncodingRequestMutation()
+	mutation := buildIdentityEncodingRequestMutation(ctx.identity)
 	r.appendDelegatedCredentialRemoval(mutation)
 	mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 	if isAzureOpenAIPath(path) {
@@ -118,6 +121,11 @@ func startRequestHeaderSpan(
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	ctx.TraceContext = spanCtx
+	// Internal hops charge auxiliary calls to the inherited parent meter;
+	// their own replay records defer generation costs to that parent too.
+	if ctx.Hop == nil {
+		ctx.TraceContext, ctx.ModelCallMeter = modelservice.WithRequestMeter(spanCtx)
+	}
 	ctx.RequestSpan = span
 	return span
 }
@@ -244,7 +252,7 @@ func extractHeaderValue(header interface {
 	return headerValue
 }
 
-func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
+func buildIdentityEncodingRequestMutation(identity config.IdentityConfig) *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
 		SetHeaders: []*core.HeaderValueOption{{
 			Header: &core.HeaderValue{
@@ -252,7 +260,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: providerBoundRemovals(),
+		RemoveHeaders: providerBoundRemovals(identity),
 	}
 }
 

@@ -227,8 +227,10 @@ listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
-    systemone:
-      models: [vllm-sr/vela3-fast]
+    apis:
+      chat_completions: {}
+      systemone:
+        models: [vllm-sr/vela3-fast]
 global:
   model_catalog:
     deployments:
@@ -242,7 +244,7 @@ global:
 - A deployment uses its Hub artifact ID unless you set `public_name`; local
   artifacts need an explicit public name.
 - Add listener `api_keys` when clients must authenticate.
-- The native grant is separate from the Chat `listeners[].models` allowlist and
+- The native grant is separate from the Chat APIs' `listeners[].apis.<api>.models` allow-lists and
   works in either startup mode. An existing grant stays unchanged when a model
   is replaced or scaled; update it when you intend to publish another model.
 

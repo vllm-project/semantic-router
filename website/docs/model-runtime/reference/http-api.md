@@ -26,13 +26,14 @@ several models. The contract is the OpenAPI document served at
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /v1/decisions` | Answer Choice, Noul, Score, Box, Set and Span questions about a state; a failed question is answered in place. |
-| `POST /v1/systemone` | The same requests, answered as System One answers them: a request with a failed question fails as a whole ([System One compatibility](#system-one-compatibility)). |
+| `POST /v1/decisions` | Answer Choice, Noul, Score, Box, Set and Span questions about a state; a failed question is answered in place. It reads the runtime's internal request form, the forms below plus `roles`, whatever the process's System One schema. |
+| `POST /v1/systemone` | One request in the process's System One schema, answered as System One answers it: a request with a failed question fails as a whole ([System One compatibility](#system-one-compatibility)). |
+| `POST /v1/systemone/batch` | Named requests in one call, each answered as it would be alone, under `responses`. |
 | `POST /v1/classify` | Run a classification head over texts, text pairs or grounded answers: label probabilities, independent label scores or token spans. |
 | `POST /v1/embeddings` | OpenAI-compatible embeddings of text, images and audio, with `dimensions` and `layer`. |
 | `POST /v1/rerank` | Score documents against a query. |
 | `POST /v1/bundle` | Several of the above, for one or more models, in one call. |
-| `GET /v1/models` | What each model is, what it serves, its labels, limits, device and self-check status, and the process's `limits`: the most tasks one `/v1/bundle` may carry and the largest request body. With `/health` and `/health/live`, it reports the contract's `api_version`. `models` lists the decision models as `{name, description, release_date}`, the shape the System One SDKs read. |
+| `GET /v1/models` | What each model is, what it serves, its labels, limits, device and self-check status, and the process's `limits`: the most tasks one `/v1/bundle` may carry and the largest request body. With `/health` and `/health/live`, it reports the contract's `api_version` (`5.0.0`). `models` lists the decision models as `{name, description, release_date}`, the shape the System One SDKs read, with `version`, `features` and `card` under `vllm-sr/5.0`. |
 | `GET /health` | Readiness: 200 when every model is ready, 503 otherwise. `status` is `starting`, `loading`, `warming`, `ready`, `degraded` or `failed`, and a process that serves several models lists each model's state. |
 | `GET /health/live` | Liveness: 200 with `"status": "alive"` while the process serves requests, whether or not its models are ready; 503 with `"status": "stalled"` and a `reason` while a forward has run longer than `--forward-timeout-seconds`. |
 | `GET /metrics` | Prometheus metrics. |
@@ -88,7 +89,7 @@ The Router answers a deployment whose workers are all busy the same way, 429
 Router's 30-second budget returns 504 `systemone_deadline_exceeded`, with a
 message that names `options.deadline_ms`; a request whose `options.deadline_ms`
 is longer waits that long instead, and a long-context request without one
-waits the listener's whole `systemone.max_deadline_ms` (10 minutes by default),
+waits the listener's whole `apis.systemone.max_deadline_ms` (10 minutes by default),
 which bounds both.
 A failed item of a request (one input or one question) carries its own error
 code and never fails the others; a failed question also carries a fixed
@@ -139,15 +140,19 @@ in windows. An input over its scan budget fails instead of being read:
 
 The only byte limit is `--max-request-bytes`, on a request as a whole.
 
-The router reads a long request through Vela 2.0 in two ways. A routing
+The router reads a long request in two ways before the model does (see
+[Long inputs](../../system-one/deploy/performance.md#long-inputs)). A routing
 question (domain, fact check, feedback, modality, `systemone` questions
-without `coverage: full`, and the `systemone` selector) truncates. A safety question (jailbreak, safety,
-PII and hallucination) reads it whole, up to the model's scan budget or the
-deployment's `input.max_tokens` with `overflow: window`. Content past it was
-not read: a jailbreak or PII rule matches it as `unscanned`. A safety scan
-that misses the signals' deadline (`global.model_catalog.signal_timeout_ms`)
-gives no answer: a jailbreak or PII rule then does not match unless it sets
-`on_unknown: match`.
+without `coverage: full`, and the `systemone` selector) reads a bounded view,
+the head and the tail within the deployment's `routing_view`. A guard question
+(jailbreak, safety and PII) reads it whole, in windows within the deployment's
+`scan_window`, each of which the model reads whole, up to its scan budget or
+the deployment's `input.max_tokens` with `overflow: window`. When the signals'
+deadline (`global.model_catalog.signal_timeout_ms`) ends a scan early, a
+jailbreak or PII rule decides on the windows read
+(`on_unscanned: best_effort`); when no window answers, it matches unless it
+sets `on_unknown: no_match`. A hallucination question reads its input whole,
+up to the model's scan budget; content past it was not read.
 
 Token budgets describe input coverage, not response time. Complete long-input
 embeddings and scans can exceed the signal deadline on a CPU with few cores.
@@ -441,11 +446,33 @@ answers match.
 
 ## System One compatibility
 
-`POST /v1/systemone` accepts System One requests as JSON, compressed JSON or
-multipart bodies, and answers with System One fields. It also accepts the
-extensions above (`images`, `videos`, batches in `states`, Set and Span,
-`choices` / `levels` / `labels`, `options`). A model the process does not
-serve is answered with an error that names the served models.
+`POST /v1/systemone` and `POST /v1/systemone/batch` speak the process's System
+One schema, which `vllm-srun serve --systemone-schema` sets:
+
+- **`vllm-sr/5.0`** (the default): the System One standard plus the vllm-sr
+  extensions. A request is decoded strictly, any other member refused with 400
+  naming it; an object state without `roles` gives no part a role; assets whose
+  placeholders lead the state (images, then videos, then one other item) are
+  read in front of that item; `TypeSafe-Danger-Zone-Long-Context: true` reads a
+  long context. Errors are the standard `detail` (a list on a 422) with flat
+  `code`, `question`, `state`, `reason` and `limit`, and an overloaded process
+  answers 529 with `Retry-After`. See [System One schemas](../../system-one/use/schemas.md).
+- **`vllm-sr/4.0`**: the forms below as they are, and every 5.0 form; an
+  error adds `detail` and the flat fields beside `error`. Use it for a runtime
+  that serves clients of the earlier contract directly.
+
+A typed question that names a `preset` beside its own `instructions` or
+`criteria` (the 5.0 form) asks the model's trained preset when its card lists
+it, and the question as written otherwise.
+
+The internal form, which `/v1/decisions`, `/v1/bundle` and a `vllm-sr/4.0`
+process read, accepts System One requests as JSON, compressed JSON or multipart
+bodies, and answers with System One fields. It also accepts the extensions
+above (`images`, `videos`, batches in `states`, Set and Span,
+`choices` / `levels` / `labels`, `options`) and `roles`: absent, an object
+state's keys name its parts; `null`, no part has a role; an object, the role of
+each key. A model the process does not serve is answered with an error that
+names the served models.
 
 **Bodies.** A body may be compressed with one layer of `Content-Encoding`
 `gzip` (or `x-gzip`) or `zstd` with a window of at most 8 MiB; the size limit

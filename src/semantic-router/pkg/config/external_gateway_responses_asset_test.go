@@ -41,8 +41,8 @@ func assertExternalGatewayModelMetadata(t *testing.T, cfg *RouterConfig) {
 	if len(cfg.ModelConfig) != 1 {
 		t.Fatalf("model metadata entries = %d, want 1", len(cfg.ModelConfig))
 	}
-	if got := cfg.GetModelAPIFormat(model); got != APIFormatOpenAI {
-		t.Fatalf("model API format = %q, want %q", got, APIFormatOpenAI)
+	if got := cfg.GetModelAPIFormat(model); got != APIFormatChatCompletions {
+		t.Fatalf("model API format = %q, want %q", got, APIFormatChatCompletions)
 	}
 	if endpoints := cfg.GetEndpointsForModel(model); len(endpoints) != 0 {
 		t.Fatalf("metadata-only model resolved %d Semantic Router endpoints", len(endpoints))

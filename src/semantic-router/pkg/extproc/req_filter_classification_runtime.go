@@ -41,6 +41,9 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", ctx.Routing.RecipeName())
 	}
 
+	facts := signalInput.requestFacts
+	var release func()
+	facts.Context, release = ctx.contextAdmission.signals(facts.Context)
 	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
 		ToolResultTexts:          signalInput.toolResultTexts,
 		ToolResultScanIncomplete: signalInput.toolResultScanIncomplete,
@@ -56,8 +59,15 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		UncompressedText:         signalInput.evaluationText,
 		SkipCompressionSignals:   signalInput.skipCompressionSignals,
 		ConversationFacts:        signalInput.conversationFacts,
-		RequestFacts:             signalInput.requestFacts,
+		RequestFacts:             facts,
 	})
+	release()
+	if admission := ctx.contextAdmission; admission != nil && admission.finished() {
+		if refusal := r.contextAdmissionRefusal(ctx); refusal != nil {
+			signalSpan.SetStatus(codes.Error, "context_window_exceeded")
+			return nil, refusal
+		}
+	}
 	if authzErr != nil {
 		signalSpan.SetStatus(codes.Error, "signal_evaluation_failed")
 		logging.ComponentErrorEvent("extproc", "signal_evaluation_failed", map[string]interface{}{
@@ -73,7 +83,8 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	ctx.ResponseStage = classification.ResponseInput{
 		Request: signalInput.currentUserText, PriorUserMessages: signalInput.priorUserMessages,
 		Turns: signalInput.requestFacts.Turns, ToolResultTexts: signalInput.toolResultTexts,
-		Images: signalInput.requestFacts.Images, Videos: signalInput.requestFacts.Videos,
+		ToolResultsIncomplete: signalInput.toolResultScanIncomplete,
+		Images:                signalInput.requestFacts.Images, Videos: signalInput.requestFacts.Videos,
 	}
 	ensureContextTokenCount(ctx, signalInput)
 	logSignalEvaluationResults(ctx, signalLatency, signals)
@@ -257,12 +268,29 @@ func (r *OpenAIRouter) runDecisionEngine(
 	}
 	if result == nil || result.Decision == nil {
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy), false)
+		ctx.VSRGuardOverload = overloadedRules(classifier, signals, candidates, nil)
 		return nil, r.defaultModelForUnmatchedDecision(originalModel), nil
 	}
 
 	observeDecisionIdentity(ctx, decisionSpan, result.Decision)
 	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, string(strategy), result.ConfidenceScored)
+	ctx.VSRGuardOverload = overloadedRules(classifier, signals, candidates, result)
 	return result, "", nil
+}
+
+// overloadedRules are, with on_signal_overload retry, the rules that failed
+// on an overloaded decision runtime and decide the request: alone they make
+// it refused, or it is not refused but one of them would have refused it.
+// The request keeps its decision: answering the retryable error instead is
+// guardOverloadResponse's, and nothing forwards it.
+func overloadedRules(classifier *classification.Classifier, signals *classification.SignalResults, candidates []config.Decision, result *decision.DecisionResult) []string {
+	if !classifier.Config.SignalOverloadRetries() {
+		return nil
+	}
+	if rules := classifier.OverloadedRefusal(signals, candidates, result); rules != nil {
+		return rules
+	}
+	return classifier.OverloadedUnread(signals, candidates, result)
 }
 
 func (r *OpenAIRouter) defaultModelForUnmatchedDecision(originalModel string) string {
@@ -379,14 +407,14 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		ctx.VSRSelectionMethod = "fast_response"
 		return "", entropy.ReasoningDecision{}, nil
 	}
-	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, contextTokensWithoutReserves(ctx, ctx.VSRContextTokenCount)); !decisionUsesAutomaticOutput(ctx.SemanticRequest, result.Decision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && ineligible > 0 {
-		return "", entropy.ReasoningDecision{}, fmt.Errorf(
-			"%w: decision %q requires %d request tokens but %d explicitly configured algorithm model(s) have smaller context windows",
-			errNoContextEligibleDecisionModel,
-			decisionName,
-			ctx.VSRContextTokenCount,
-			ineligible,
-		)
+	if !decisionUsesAutomaticOutput(ctx.SemanticRequest, result.Decision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
+		withoutReserves := contextTokensWithoutReserves(ctx, ctx.VSRContextTokenCount)
+		if ineligible := r.contextIneligibleAlgorithmModels(ctx, result.Decision, withoutReserves); len(ineligible) > 0 {
+			scope := fmt.Sprintf("an algorithm model of decision %q", decisionName)
+			if refusal := r.contextLengthRefusal(ctx, ineligible, withoutReserves, scope); refusal != nil {
+				return "", entropy.ReasoningDecision{}, refusal
+			}
+		}
 	}
 	if len(result.Decision.ModelRefs) == 0 && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
 		return r.selectDecisionDefaultRuntimeModel(result.Decision, decisionName, ctx)

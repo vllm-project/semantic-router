@@ -204,7 +204,7 @@ func TestCreateReplayRuntimeAllowsExplicitDecisionOptInWithSafeDefaults(t *testi
 			},
 		}},
 	}
-	withGlobalPlugins(t, cfg)
+	withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": false}))
 
 	recorders, shared, sharedStore, err := createReplayRuntime(cfg)
 	if err != nil {

@@ -92,7 +92,7 @@ func TestNativeDecisionsHaveIndependentAlgorithmBudgets(t *testing.T) {
 	if !compiled.IsRecipeReachableForRouting(native.Name) {
 		t.Fatal("published native signal consumers are not reachable")
 	}
-	compiled.Listeners[0].SystemOne = nil
+	compiled.Listeners[0].APIs = nil
 	if compiled.IsRecipeReachableForRouting(native.Name) {
 		t.Fatal("unpublished recipe remains reachable")
 	}
