@@ -335,10 +335,10 @@ func recordStreamingTTFT(ctx *RequestContext) {
 		return
 	}
 
-	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
 	if !ctx.LooperStreamingActive {
+		metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 		latency.UpdateTTFT(ctx.RequestModel, ttft)
 	}
 	ctx.CacheWarmthEstimate = latency.EstimateCacheProbability(latency.CacheEstimationInput{
@@ -604,7 +604,7 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 	completionLatency := time.Duration(0)
 	if !ctx.StartTime.IsZero() {
 		completionLatency = time.Since(ctx.StartTime)
-		if ctx.RequestModel != "" {
+		if !ctx.LooperStreamingActive && ctx.RequestModel != "" {
 			metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
 		}
 	}
@@ -781,17 +781,15 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	}
 	if !ctx.LooperStreamingActive {
 		recordModelUsageTokens(ctx.RequestModel, usage)
-	}
-	metrics.RecordModelWindowedRequest(
-		ctx.RequestModel,
-		completionLatency.Seconds(),
-		int64(usage.promptTokens),
-		int64(usage.completionTokens),
-	)
-	if usage.completionTokens > 0 && completionLatency > 0 {
-		timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
-		metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
-		if !ctx.LooperStreamingActive {
+		metrics.RecordModelWindowedRequest(
+			ctx.RequestModel,
+			completionLatency.Seconds(),
+			int64(usage.promptTokens),
+			int64(usage.completionTokens),
+		)
+		if usage.completionTokens > 0 && completionLatency > 0 {
+			timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
+			metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
 			latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 		}
 	}

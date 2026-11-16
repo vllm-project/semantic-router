@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -140,6 +141,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 	if r.shouldStreamLooperFinalStage(ownership, reqCtx, request, decision) {
 		return r.handleLooperStreamingDispatch(ctx, looperReq, decision, request.Model, reqCtx)
 	}
+	r.logLooperStreamingFallbackIfRequested(ownership, reqCtx, request, decision)
 
 	resp, errorResponse := r.executeLooper(ctx, looperReq, decision, request.Model, reqCtx)
 	if errorResponse != nil {
@@ -170,10 +172,54 @@ func (r *OpenAIRouter) shouldStreamLooperFinalStage(
 	if reqCtx.SourceFormat != llmprotocol.OpenAIChatV1 {
 		return false
 	}
-	if isResponseAPIRequest(reqCtx) {
-		return false
-	}
 	return ownership.Eligibility == looper.StreamingEligible
+}
+
+func (r *OpenAIRouter) logLooperStreamingFallbackIfRequested(
+	ownership looper.StageOwnership,
+	reqCtx *RequestContext,
+	request *llmprotocol.Request,
+	decision *config.Decision,
+) {
+	if r == nil || r.Config == nil || !r.Config.Looper.IsStreamingEnabled() {
+		return
+	}
+	if reqCtx == nil || !reqCtx.ExpectStreamingResponse || request == nil || !request.Stream {
+		return
+	}
+	decisionName := ""
+	if decision != nil {
+		decisionName = decision.Name
+	}
+	logging.ComponentEvent("extproc", "looper_streaming_fallback_to_buffered", map[string]interface{}{
+		"request_id":         reqCtx.RequestID,
+		"decision":           decisionName,
+		"algorithm":          ownership.AlgorithmType,
+		"stage_name":         ownership.StageName,
+		"stage_role":         string(ownership.StageRole),
+		"target_model":       ownership.TargetModel,
+		"final_user_visible": ownership.IsFinalUserVisible,
+		"eligibility":        string(ownership.Eligibility),
+		"source_format":      string(reqCtx.SourceFormat),
+		"buffering_reason":   looperStreamingBufferingReason(ownership, reqCtx, decision),
+	})
+}
+
+func looperStreamingBufferingReason(
+	ownership looper.StageOwnership,
+	reqCtx *RequestContext,
+	decision *config.Decision,
+) string {
+	if ownership.BufferingReason != looper.BufferingReasonNone {
+		return string(ownership.BufferingReason)
+	}
+	if decision == nil || decision.Algorithm == nil || decision.Algorithm.Type != config.DecisionAlgorithmFusion {
+		return string(looper.BufferingReasonUnsupportedAlgorithm)
+	}
+	if reqCtx != nil && reqCtx.SourceFormat != llmprotocol.OpenAIChatV1 {
+		return "unsupported_source_format"
+	}
+	return "streaming_ineligible"
 }
 
 func (r *OpenAIRouter) handleLooperStreamingDispatch(
@@ -199,11 +245,11 @@ func (r *OpenAIRouter) handleLooperStreamingDispatch(
 
 	streamingLooper, ok := looperInstance.(looper.StreamingLooper)
 	if !ok {
-		resp, errorResponse := r.executeLooper(ctx, looperReq, decision, originalModel, reqCtx)
-		if errorResponse != nil {
-			return errorResponse, nil
-		}
-		return r.finalizeLooperBufferedResponse(resp, decision, originalModel, reqCtx)
+		return r.looperConstructionFailed(
+			decision,
+			reqCtx,
+			fmt.Errorf("looper algorithm %q does not implement StreamingLooper", decision.Algorithm.Type),
+		), nil
 	}
 
 	plan, err := streamingLooper.PrepareStreamingSynthesis(ctx, looperReq)

@@ -312,9 +312,9 @@ func resolveWorkflowsFinalStage(req *Request) StageOwnership {
 	}
 }
 
-// ResolveWorkflowPlanFinalStage determines final stage ownership when the actual workflowPlan
+// resolveWorkflowPlanFinalStage determines final stage ownership when the actual workflowPlan
 // or stepResults are available (e.g. after dynamic planning or step execution).
-func ResolveWorkflowPlanFinalStage(req *Request, plan *workflowPlan, stepResults []workflowStepResult) StageOwnership {
+func resolveWorkflowPlanFinalStage(req *Request, plan *workflowPlan, stepResults []workflowStepResult) StageOwnership {
 	if req == nil {
 		return StageOwnership{
 			AlgorithmType:      config.DecisionAlgorithmWorkflows,

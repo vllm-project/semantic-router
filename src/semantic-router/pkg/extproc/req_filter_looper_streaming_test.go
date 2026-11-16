@@ -1689,6 +1689,7 @@ func TestLooperStreaming_CacheWriteAndLatencyIsolation(t *testing.T) {
 		LooperStreamingActive:    true,
 		LooperTargetModel:        isolatedModel,
 		LooperSynthesisTextBytes: len("do not cache or update latency"),
+		StartTime:                time.Now().Add(-60 * time.Millisecond),
 		ProcessingStartTime:      time.Now().Add(-50 * time.Millisecond),
 		LooperIntermediateUsage: looper.TokenUsage{
 			PromptTokens:     30,

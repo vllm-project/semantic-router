@@ -499,7 +499,7 @@ func TestWorkflowsFinalStageOwnership(t *testing.T) {
 			},
 		}
 
-		ownership := ResolveWorkflowPlanFinalStage(req, plan, nil)
+		ownership := resolveWorkflowPlanFinalStage(req, plan, nil)
 		assert.Equal(t, config.DecisionAlgorithmWorkflows, ownership.AlgorithmType)
 		assert.Equal(t, "synthesis", ownership.StageName)
 		assert.Equal(t, "worker-b", ownership.TargetModel)
