@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import difflib
 import json
 import os
 import shlex
@@ -936,14 +935,8 @@ def _run(
     try:
         for change in changes:
             seen[change.path] = old = hc.read(change.path)
-            label, new = str(change.path), change.new_text(old=old or "")
-            diff = difflib.unified_diff(
-                change.shown(old or "", key_label).splitlines(keepends=True),
-                change.shown(new, key_label).splitlines(keepends=True),
-                fromfile=label if old is not None else "/dev/null",
-                tofile=label,
-            )
-            echo("".join(diff) or f"{label}: no change")
+            diff = change.diff(old, change.new_text(old=old or ""), key_label)
+            echo(diff or f"{change.path}: no change")
     except ValueError as exc:
         raise click.ClickException(
             f"{change.path} is not plain JSON ({exc}). connect would lose its"

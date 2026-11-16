@@ -3952,7 +3952,8 @@ def test_codex_app_sets_the_shared_defaults_and_undo_keeps_the_rest(
     assert "The gateway is now Codex's default" in output
     # the preview is the change written, where it is written
     lines = [text.splitlines(keepends=True) for text in (before, config.read_text())]
-    assert "".join(difflib.unified_diff(*lines, str(config), str(config))) in preview
+    diff = difflib.unified_diff(*lines, str(config), str(config), n=0)
+    assert "".join(diff) in preview
     assert result.output.rstrip().endswith("Start Codex with: codex")
     held = tomllib.loads(config.read_text())
     assert held["model"] == "vllm-sr/auto" and held["model_provider"] == "vllm-sr"
@@ -3998,6 +3999,51 @@ def test_codex_app_sets_the_shared_defaults_and_undo_keeps_the_rest(
 
     result = CliRunner().invoke(main, ["connect", "codex", "--app", "--launch"])
     assert result.exit_code == 2 and "does not take --app" in result.output
+
+
+# Secrets the shared config.toml holds where hiding by setting name misses them:
+# an MCP server's env, a provider's headers, a password in a URL argument.
+THEIR_SECRETS = (
+    'model = "gpt-5.5"\n'
+    "\n"
+    "[mcp_servers.brave]\n"
+    'env = { "BRAVE_API_KEY" = "BSA-live-secret-123" }\n'
+    'command = "npx"\n'
+    "\n"
+    "[mcp_servers.pg]\n"
+    'command = "npx"\n'
+    'args = ["-y", "@modelcontextprotocol/server-postgres",'
+    ' "postgresql://admin:hunter2@db/prod"]\n'
+    "[model_providers.other]\n"
+    'base_url = "https://x"\n'
+    'http_headers = { "X-Api-Key" = "xk-secret-999" }\n'
+)
+
+
+@pytest.mark.parametrize("ending", ["\n", ""])
+def test_a_codex_app_preview_shows_no_line_connect_does_not_own(
+    tmp_path, gateway, monkeypatch, ending
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    config = tmp_path / "codex" / "config.toml"
+    config.parent.mkdir()
+    # without a newline at its end, connect adds one to a line of theirs
+    before = THEIR_SECRETS.removesuffix("\n") + ending
+    config.write_text(before)
+    args = ["connect", "codex", "--app", "--base-url", url, "--no-vsr"]
+    preview = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert preview.exit_code == 0, preview.output
+    for secret in ("BSA-live-secret-123", "hunter2", "xk-secret-999"):
+        assert secret not in preview.output
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    if ending:
+        # the preview is the whole change, line numbers included, so patch applies it
+        lines = [
+            text.splitlines(keepends=True) for text in (before, config.read_text())
+        ]
+        diff = difflib.unified_diff(*lines, str(config), str(config), n=0)
+        assert "".join(diff) in preview.output
 
 
 def test_codex_app_check_runs_codex_without_a_profile(
@@ -4094,7 +4140,41 @@ def test_codex_memories_ask_the_gateway_for_their_models(
     assert 'memories.consolidation_model="vllm-sr/auto"' in launch
 
 
-def test_a_failed_probe_says_what_failed_in_words():
+@pytest.mark.parametrize(
+    "error, client_key",
+    [
+        # the listener, on a key it does not hold
+        (
+            {
+                "message": "Unauthorized: missing or invalid API key",
+                "type": "authentication_error",
+                "code": "invalid_api_key",
+            },
+            True,
+        ),
+        # the Router past it, holding no key for the backend
+        (
+            {
+                "message": "authentication failed",
+                "type": "authentication_error",
+                "code": "authentication_failed",
+            },
+            False,
+        ),
+        # the backend itself, on the key the Router sent it
+        (
+            {
+                "message": "Incorrect API key provided: sk-up***",
+                "type": "invalid_request_error",
+                "code": "invalid_api_key",
+            },
+            False,
+        ),
+    ],
+)
+def test_a_failed_probe_says_what_failed_in_words(error, client_key):
+    body = json.dumps({"error": error}).encode()
+
     class Refuses(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -4103,7 +4183,7 @@ def test_a_failed_probe_says_what_failed_in_words():
             self.rfile.read(int(self.headers["content-length"]))
             self.send_response(401)
             self.end_headers()
-            self.wfile.write(b'{"error": "invalid key"}')
+            self.wfile.write(body)
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Refuses)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -4111,7 +4191,8 @@ def test_a_failed_probe_says_what_failed_in_words():
     refused = rc.basic_reply(url, "codex", "vllm-sr/auto", "sk-wrong")
     server.shutdown()
     server.server_close()
-    assert "the gateway did not accept the key (HTTP 401" in refused.detail
+    assert f"HTTP 401 {body.decode()}" in refused.detail
+    assert ("the gateway did not accept the key" in refused.detail) is client_key
     down = rc.basic_reply(url, "codex", "vllm-sr/auto", "sk-wrong")
     assert down.detail == (
         f"{url}/v1/responses: no connection (Connection refused)."

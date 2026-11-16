@@ -727,7 +727,7 @@ def _post(url: str, headers: dict, body: dict, timeout: float):
         ) as response:
             if response.status_code != requests.codes.ok:
                 problem = f"HTTP {response.status_code} {response.text[:300]}"
-                if response.status_code == requests.codes.unauthorized:
+                if _refused_key(response.text):
                     problem = f"the gateway did not accept the key ({problem})"
                 return response, None, problem
             if body.get("stream"):
@@ -745,6 +745,24 @@ def _post(url: str, headers: dict, body: dict, timeout: float):
         return None, None, f"no connection ({why}). Is the gateway running there?"
     except requests.RequestException as exc:
         return None, None, str(exc)
+
+
+# The listener's answer to a client key it does not hold, the same from the Envoy
+# template and the Router's own listener. A 401 from past it, the Router's when it
+# cannot present the backend's credential or a backend's own, says something else,
+# even with the same code.
+LISTENER_REFUSAL = {
+    "code": "invalid_api_key",
+    "message": "Unauthorized: missing or invalid API key",
+}
+
+
+def _refused_key(text: str) -> bool:
+    try:
+        error = json.loads(text).get("error")
+    except (ValueError, AttributeError):
+        return False
+    return isinstance(error, dict) and LISTENER_REFUSAL.items() <= error.items()
 
 
 def _result(name: str, url: str, response, problem: str, detail: str) -> ProbeResult:
