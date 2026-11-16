@@ -67,10 +67,12 @@ func (r *OpenAIRouter) selectTools(request *llmprotocol.Request, plugin *config.
 	if spec.Input.History {
 		input.History = strings.Join(snapshot.PriorUserMessages, "\n\n")
 	}
-	if strings.TrimSpace(input.Request) == "" && len(snapshot.ToolResults) > 0 {
-		// A tool-continuation turn carries the results instead of user text:
-		// the selection reads them rather than skipping the turn.
-		input.Request = strings.Join(snapshot.ToolResults, "\n\n")
+	if strings.TrimSpace(input.Request) == "" {
+		if results := continuationToolResults(request.Messages, toolContinuationLimit); results != "" {
+			// A tool-continuation turn carries the results instead of user text:
+			// the selection reads this turn's results rather than skipping it.
+			input.Request = results
+		}
 	}
 	if strings.TrimSpace(input.Request) == "" {
 		return nil
@@ -110,6 +112,55 @@ func (r *OpenAIRouter) selectTools(request *llmprotocol.Request, plugin *config.
 		keepRequestTools(request, kept, spec.PreserveCount)
 	}
 	return nil
+}
+
+// toolContinuationLimit bounds how much tool output one selection question
+// reads. A long agent session can carry hundreds of earlier results; the judge
+// only needs the ones this turn produced.
+const toolContinuationLimit = 8 << 10
+
+// continuationToolResults are the tool results the current turn carries: the
+// ones after the last assistant tool call, in order, capped at limit bytes.
+// Earlier results are history the judge does not need, and the cap keeps the
+// question bounded however long the session has run.
+func continuationToolResults(messages []llmprotocol.Message, limit int) string {
+	start := 0
+	for index := len(messages) - 1; index >= 0; index-- {
+		if messages[index].Role != llmprotocol.RoleAssistant {
+			continue
+		}
+		for _, content := range messages[index].Content {
+			if content.Kind == llmprotocol.ContentToolCall {
+				start = index + 1
+				break
+			}
+		}
+		if start != 0 {
+			break
+		}
+	}
+	var results []string
+	total := 0
+	for _, message := range messages[start:] {
+		if message.Role != llmprotocol.RoleTool {
+			continue
+		}
+		for _, content := range message.Content {
+			if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
+				continue
+			}
+			text := semanticText(content.ToolResult.Content)
+			if text == "" || total >= limit {
+				continue
+			}
+			if room := limit - total; len(text) > room {
+				text = strings.TrimSpace(text[:room])
+			}
+			results = append(results, text)
+			total += len(text)
+		}
+	}
+	return strings.Join(results, "\n\n")
 }
 
 // toolsCandidates are the tools a selection chooses among: in filter mode
