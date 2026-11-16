@@ -54,7 +54,9 @@ The rates come from the [Anthropic](https://platform.claude.com/docs/en/about-cl
 and [OpenAI](https://developers.openai.com/api/docs/pricing) pricing pages and
 leave out long-context, data-residency, batch and service-tier adjustments.
 Insights marks such a cost as a list price estimate, and on a login it is what
-the tokens would cost at API prices, not what the plan charges. Set `pricing`
+the tokens would cost at API prices, not what the plan charges. The Dashboard
+Models page shows the list price under **Pricing**, marked catalog list price.
+Set `pricing`
 on the alias to use other rates. A written `pricing` block always wins,
 whatever its rates, and its `currency` defaults to `USD`, so
 `pricing: {prompt_per_1m: 0, completion_per_1m: 0}` marks a Model free: its

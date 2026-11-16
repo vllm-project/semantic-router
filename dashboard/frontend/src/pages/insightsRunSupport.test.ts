@@ -1,33 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildRunLanes,
-  formatRunCost,
-  getRunPath,
-  runAgentTreeText,
-  runTitle,
-} from './insightsRunSupport'
+import { formatRunCost, getRunPath, runAgentTreeText, runTitle } from './insightsRunSupport'
 import { compactID } from './insightsReviewSupport'
-import type { RunCall, RunResponse } from './insightsRunTypes'
+import type { RunResponse } from './insightsRunTypes'
 
 const START = Date.parse('2026-11-16T09:00:00Z')
-
-function call(
-  agent: string,
-  model: string,
-  second: number,
-  fields: Partial<RunCall> = {},
-): RunCall {
-  return {
-    record_id: `${agent}-${second}`,
-    agent,
-    model,
-    timestamp: new Date(START + second * 1000).toISOString(),
-    duration_ms: 1000,
-    lifecycle_state: 'completed',
-    ...fields,
-  }
-}
 
 const cost = {
   unpriced_records: 0,
@@ -36,7 +13,7 @@ const cost = {
   completion_tokens: 0,
 }
 
-function run(calls: RunCall[]): RunResponse {
+function run(calls: RunResponse['calls']): RunResponse {
   const agent = (label: string, parent?: string) => ({
     label,
     parent,
@@ -63,44 +40,6 @@ function run(calls: RunCall[]): RunResponse {
   }
 }
 
-describe('buildRunLanes', () => {
-  it("groups an agent's calls on one model until a switch or another agent's call", () => {
-    const lanes = buildRunLanes(
-      run([
-        call('main', 'small', 0),
-        call('main', 'small', 10, { markers: ['tool_failure'] }),
-        call('subagent 1', 'small', 20),
-        call('main', 'small', 30),
-        call('main', 'large', 40, { markers: ['switch'] }),
-        call('subagent 2', 'small', 50, { markers: ['failure'] }),
-      ]),
-    )
-    expect(lanes.map((lane) => [lane.agent.label, lane.depth])).toEqual([
-      ['main', 0],
-      ['subagent 1', 1],
-      ['subagent 2', 2],
-    ])
-    const main = lanes[0].segments
-    expect(main.map((segment) => [segment.model, segment.calls.length])).toEqual([
-      ['small', 2],
-      ['small', 1],
-      ['large', 1],
-    ])
-    expect(main[0].markers).toEqual(['tool_failure'])
-    expect(main[2].markers).toEqual(['switch'])
-    expect(main[0].left).toBe(0)
-    expect(main[2].left).toBeCloseTo(40)
-    expect(lanes[2].segments[0].markers).toEqual(['failure'])
-  })
-
-  it('keeps a few hundred calls to a handful of segments', () => {
-    const calls = Array.from({ length: 300 }, (_, index) =>
-      call('main', index < 200 ? 'small' : 'large', index / 4),
-    )
-    expect(buildRunLanes(run(calls))[0].segments).toHaveLength(2)
-  })
-})
-
 describe('run labels', () => {
   it('formats cost per currency and names an unpriced run', () => {
     expect(
@@ -110,6 +49,15 @@ describe('run labels', () => {
       }),
     ).toBe('$0.0123')
     expect(formatRunCost({ ...cost, unpriced_records: 2 })).toBe('no price')
+    // One call whose classifier call has no price counts once.
+    expect(
+      formatRunCost({
+        ...cost,
+        by_currency: [{ currency: 'USD', total: 0.1031, router_call_spend: 0 }],
+        unpriced_records: 1,
+        unpriced_router_calls: 1,
+      }),
+    ).toBe('$0.1031 (1 unpriced)')
   })
 
   it('names a run by its session name, else its task, else its session', () => {
@@ -128,17 +76,5 @@ describe('run labels', () => {
     expect(getRunPath('tenant:a/b', 'rec-1')).toBe(
       '/insights/run?session=tenant%3Aa%2Fb&step=rec-1',
     )
-  })
-})
-
-describe('a Looper call', () => {
-  it('spans the hops its record started after', () => {
-    const looper = call('main', 'large', 60, {
-      duration_ms: 0,
-      hops: [call('main', 'small', 50), call('main', 'large', 55)],
-    })
-    const [segment] = buildRunLanes(run([looper]))[0].segments
-    expect(segment.left).toBeCloseTo(50)
-    expect(segment.width).toBeCloseTo(10)
   })
 })

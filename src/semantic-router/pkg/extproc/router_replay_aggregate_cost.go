@@ -4,6 +4,7 @@ import (
 	"math"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -39,6 +40,14 @@ func (a *replayCostAccumulator) add(record routerreplay.RoutingRecord) {
 		a.summary.Coverage.LooperHopRecords++
 		return
 	}
+	if replayRefusedBeforeModel(record) {
+		a.summary.Coverage.RefusedRecords++
+		return
+	}
+	if replayUnanswered(record) {
+		a.summary.Coverage.UnansweredRecords++
+		return
+	}
 	if record.CostAccounting != nil && record.CostAccounting.CallerLogin {
 		a.summary.Coverage.CallerLoginRecords++
 	}
@@ -47,9 +56,11 @@ func (a *replayCostAccumulator) add(record routerreplay.RoutingRecord) {
 	modelPriced := a.addModelCost(record)
 	routerPriced, routerGap := a.addRouterCalls(record)
 	if record.LifecycleState != routerreplay.LifecycleCompleted {
-		// Its cost may still miss calls, and only a completed request is
-		// compared with a baseline.
-		a.countRecord(modelPriced || routerPriced, false, store.UnpricedNotCompleted)
+		// Its cost may still miss calls, unless the Router refused the answer
+		// of a priced call, and only a completed request is compared with a
+		// baseline.
+		refusedAnswer := modelPriced && routerGap == "" && replayRouterRefused(record)
+		a.countRecord(modelPriced || routerPriced, refusedAnswer, store.UnpricedNotCompleted)
 		return
 	}
 	a.addSavings(record, modelPriced)
@@ -227,6 +238,35 @@ func replayRouterCalls(record routerreplay.RoutingRecord) []store.RouterCallCost
 		return nil
 	}
 	return record.CostAccounting.RouterCalls
+}
+
+// replayRefusedBeforeModel reports a request the Router refused, or that
+// ended with a 4xx, before any model answered it: a block, also one a stream
+// carries as an error event under its 200, a refusal or a spend budget. Its
+// record holds no usage, no price and no Router call, so it cost nothing and
+// is neither priced nor unpriced.
+func replayRefusedBeforeModel(record routerreplay.RoutingRecord) bool {
+	if record.LifecycleState != routerreplay.LifecycleFailed || !replayRouterRefused(record) && !replayClientError(record) ||
+		record.PromptTokens != nil || record.TotalTokens != nil || record.ActualCost != nil {
+		return false
+	}
+	accounting := record.CostAccounting
+	return accounting == nil || accounting.PricingSource == "" && accounting.UnpricedReason == "" && len(accounting.RouterCalls) == 0
+}
+
+// replayUnanswered reports a request no provider answered: its upstream
+// connection failed, was reset or timed out before any response, so the
+// Router wrote the reply itself and nothing was charged. A provider's own
+// error reply ends upstream_error_response, and a response with no price
+// stays unpriced.
+func replayUnanswered(record routerreplay.RoutingRecord) bool {
+	reason := record.TerminalReason
+	if record.LifecycleState != routerreplay.LifecycleFailed || !strings.HasPrefix(reason, "upstream_") ||
+		reason == "upstream_error_response" || record.ResponseStatus >= 200 && record.ResponseStatus < 300 ||
+		record.PromptTokens != nil || record.TotalTokens != nil || record.ActualCost != nil {
+		return false
+	}
+	return record.CostAccounting == nil || len(record.CostAccounting.RouterCalls) == 0
 }
 
 // isLooperReplayRecord reports a Looper request, whose cost is its attempts'

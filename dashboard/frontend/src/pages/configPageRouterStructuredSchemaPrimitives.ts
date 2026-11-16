@@ -52,7 +52,10 @@ export const number = (
   options: Omit<RouterStructuredSchema, 'kind' | 'label'> = {},
 ): RouterStructuredSchema => ({ kind: 'number', label, ...options })
 
-export const boolean = (label: string): RouterStructuredSchema => ({ kind: 'boolean', label })
+export const boolean = (
+  label: string,
+  options: Omit<RouterStructuredSchema, 'kind' | 'label'> = {},
+): RouterStructuredSchema => ({ kind: 'boolean', label, ...options })
 
 export const select = (
   label: string,

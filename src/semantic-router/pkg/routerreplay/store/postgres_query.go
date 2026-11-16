@@ -125,7 +125,7 @@ func postgresSummarySelectColumns() string {
 }
 
 // ScanMetadata streams only the columns used by Insights, with each record's
-// id and its place in its agent run. Large request, response, tool, safety,
+// id, its place in its agent run and how it ended. Large request, response, tool, safety,
 // and learning payloads never cross the database wire.
 func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) error) (err error) {
 	release, err := p.lifecycle.beginMutation()
@@ -139,7 +139,7 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 		from_cache, streaming, lifecycle_state, COALESCE(signals, '{}'::jsonb),
 		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s, COALESCE(turn_id, ''), COALESCE(parent_turn_id, ''), cost_accounting,
-		routing_metadata
+		routing_metadata, COALESCE(response_status, 0), COALESCE(terminal_reason, '')
 		FROM %s ORDER BY timestamp DESC, id DESC`, postgresReviewMetadataColumn, p.tableName)
 	rows, err := p.db.QueryContext(ctx, query)
 	if err != nil {
@@ -154,7 +154,8 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 			&row.promptTokens, &row.completionTokens, &row.totalTokens, &row.actualCost,
 			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel, &row.providerCacheJSON,
 			&row.record.Timestamp, &row.record.DurationMS, &row.review.requestKind, &row.review.reviewJSON,
-			&row.record.TurnID, &row.record.ParentTurnID, &row.costAccountingJSON, &row.routingMetadataJSON); err != nil {
+			&row.record.TurnID, &row.record.ParentTurnID, &row.costAccountingJSON, &row.routingMetadataJSON,
+			&row.record.ResponseStatus, &row.record.TerminalReason); err != nil {
 			return err
 		}
 		if err = unmarshalPostgresRoutingMetadata(row.routingMetadataJSON, &row.record); err != nil {

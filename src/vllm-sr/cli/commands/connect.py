@@ -253,7 +253,7 @@ def claude_code(
         delegate,
     )
     if undo:
-        _undo(path.parent)
+        _undo(path.parent, dry_run)
         return
     if delegate:
         _require_clients("claude", "codex")
@@ -364,7 +364,7 @@ def claude_code(
         [shlex.join(argv) for _, _, argv in steps],
     ):
         if check:
-            text = hc.set_json_env("", values)
+            text = _checked_claude_settings("", values, env)
             _check(
                 "claude-code",
                 lambda private, _: hk.claude_argv(
@@ -421,8 +421,14 @@ def claude_code(
         )
     _probe_or_say_why(gateway, "claude-code", model, key or token, doc)
     if check:
-        settings = path.absolute()  # the harness runs in a directory of its own
-        _check("claude-code", lambda *_: hk.claude_argv(settings), env, secrets)
+        # the settings connect wrote, with the check's own mark beside them
+        text = _checked_claude_settings(path.read_text(encoding="utf-8"), {}, env)
+        _check(
+            "claude-code",
+            lambda private, _: hk.claude_argv(_private(private, "settings.json", text)),
+            env,
+            secrets,
+        )
     echo("Start a new Claude Code session to use it.")
     if delegate:
         echo("There, /codex:rescue <task> hands a task to Codex.")
@@ -501,7 +507,7 @@ def codex(
         delegate=delegate,
     )
     if undo:
-        _undo(home)
+        _undo(home, dry_run)
         return
     if delegate:
         _require_clients("claude")
@@ -690,7 +696,10 @@ def codex(
                 _management_url(gateway, doc),
             )
         return
-    if options and _vsr_step(lambda: [_must(argv, env) for argv in install], plan):
+    vsr_set_up = bool(options) and _vsr_step(
+        lambda: [_must(argv, env) for argv in install], plan
+    )
+    if vsr_set_up:
         success(
             f"vSR: the Codex plugin asks {options['runtimeModel']} at {options['runtimeUrl']}."
         )
@@ -736,6 +745,10 @@ def codex(
         # model_catalog_json is read only when Codex starts (0.166)
         echo("Restart the Codex app so it reads the new model catalog.")
     echo(f"Start Codex with: {shlex.join(['codex', *selected])}")
+    if vsr_set_up:
+        # Trusting a plugin's hooks is the person's consent, so connect says how
+        # and never trusts them itself.
+        echo(CODEX_HOOK_TRUST)
     if delegate:
         echo(
             "There, ask it to ask Claude Code"
@@ -1173,6 +1186,15 @@ def _vsr_without_key(key_env: str) -> str:
     )
 
 
+def _checked_claude_settings(text: str, values: dict, env: dict) -> str:
+    """Claude Code settings for the check's run: text with values, sending the
+    custom headers Claude Code would send and x-vsr-probe, so Router Replay
+    records the run as a check and lists no run for it. The settings connect
+    writes for normal use never carry it."""
+    headers = hs.claude_headers(env, Path.cwd(), rc.PROBE_VALUE, rc.PROBE_HEADER)
+    return hc.set_json_env(text, {**values, hs.CLAUDE_HEADERS: headers})
+
+
 def _private(directory: Path, name: str, text: str) -> Path:
     """A file only its owner can read, in a temporary directory."""
     hc.write_private(directory / name, text)
@@ -1419,6 +1441,14 @@ def _check_router(harness: str, doc: dict | None, model: str | None = None) -> N
 
 # vSR beside the agent (System One): the plugin, from this repository's marketplace.
 VSR_PLUGIN = "vsr@vllm-sr"
+# Codex 0.166 runs a plugin's hooks only once a person trusted them in its terminal
+# UI, and codex exec skips untrusted hooks without a word.
+CODEX_HOOK_TRUST = (
+    "There, trust the vSR hooks once when Codex says they are new or changed"
+    " (Trust all and continue, or Review hooks), and again after a plugin update."
+    " Until then Codex runs none of them, codex exec included, which never asks:"
+    " no guard before a command, no redact or shield on its output, no turn line."
+)
 
 
 def _installs(harness_cli: str, source: str) -> list[list[str]]:
@@ -1786,7 +1816,20 @@ def _probe(
             )
 
 
-def _undo(manifest_dir: Path) -> None:
+def _undo(manifest_dir: Path, dry_run: bool = False) -> None:
+    if dry_run:
+        # say what --undo would take back, and change nothing
+        added = hc.installed(manifest_dir)
+        try:
+            lines = hc.undo_changes(manifest_dir, write=False)
+        except (FileNotFoundError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+        for kind in ("plugins", "marketplaces"):
+            lines += [f"would remove {name}" for name in added.get(kind, [])]
+        for line in lines:
+            echo(line)
+        echo("Dry run: nothing was undone.")
+        return
     env = dict(os.environ)
     # every plugin is read before anything is undone, so a failed read keeps the record
     for plugin_id, back in hc.plugin_undo(

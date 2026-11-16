@@ -70,7 +70,15 @@ type ToolTrace struct {
 	// the timeline when StepsTruncated is true. Zero when no truncation
 	// happened.
 	DroppedStepCount int `json:"dropped_step_count,omitempty"`
+	// OfferedTools names the tools the request offered the model, an MCP
+	// tool with its server as the backend saw it, at most MaxOfferedTools of
+	// them: names only, never their schemas or descriptions.
+	OfferedTools []string `json:"offered_tools,omitempty"`
 }
+
+// MaxOfferedTools bounds the tool names a record keeps of what a request
+// offered.
+const MaxOfferedTools = 256
 
 // ToolTraceStep represents a single step in a request-local tool-calling flow.
 type ToolTraceStep struct {
@@ -324,6 +332,9 @@ type Record struct {
 	// ParentRequestID the client request a Looper hop was made for.
 	Agent           *AgentIdentity `json:"agent,omitempty"`
 	ParentRequestID string         `json:"parent_request_id,omitempty"`
+	// SessionNameFromPrompt marks a SessionName the main agent's first prompt
+	// gave, which a name the harness gave outranks.
+	SessionNameFromPrompt bool `json:"session_name_from_prompt,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -573,6 +584,7 @@ func cloneToolTrace(trace *ToolTrace) *ToolTrace {
 	}
 	cloned := *trace
 	cloned.ToolNames = cloneStringSlice(trace.ToolNames)
+	cloned.OfferedTools = cloneStringSlice(trace.OfferedTools)
 	cloned.Steps = cloneToolTraceSteps(trace.Steps)
 	return &cloned
 }

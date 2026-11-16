@@ -13,13 +13,6 @@
   align-self: flex-start;
 }
 
-.body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
-  gap: 1rem;
-  align-items: start;
-}
-
 .muted {
   color: var(--color-text-secondary);
   font-size: 0.8rem;
@@ -145,33 +138,50 @@ h1.task {
   color: #7aa7e8;
 }
 
-.diagram {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+/* The run as a sequence diagram: a lifeline per agent and a side column,
+   calls top to bottom. --sequence-columns is set per run. It scrolls on its
+   own, so its header of agents stays in view: the page body does not let a
+   sticky element stick. */
+.sequence {
+  --lifeline: rgba(166, 171, 179, 0.28);
+
   min-width: 0;
+  max-height: 78vh;
+  overflow-y: auto;
 }
 
-.lane {
+.sequenceHeader,
+.row {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 0.75rem;
-  align-items: center;
-  min-height: 2.4rem;
+  grid-template-columns: var(--sequence-columns);
+  column-gap: 0.6rem;
 }
 
-.laneLabel {
+.sequenceHeader {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--color-border);
+  background: #0d0d0f;
+}
+
+.agentHead {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
   min-width: 0;
+  text-align: center;
 }
 
-.laneLabel strong {
-  color: var(--color-text);
+.agentHead strong {
+  color: var(--agent, var(--color-text));
   font-size: 0.82rem;
 }
 
-.laneLabel span {
+.agentHead > span {
+  max-width: 100%;
   overflow: hidden;
   color: var(--color-text-secondary);
   font-size: 0.7rem;
@@ -179,55 +189,359 @@ h1.task {
   white-space: nowrap;
 }
 
-.track {
-  position: relative;
-  height: 1.7rem;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.035);
+.agentHead[data-side='true'] {
+  opacity: 0.75;
 }
 
-.spawn {
-  position: absolute;
-  top: -0.45rem;
-  bottom: 50%;
-  width: 0;
-  border-left: 1px dashed var(--color-text-secondary);
-}
-
-.segment {
-  position: absolute;
-  top: 0.2rem;
-  bottom: 0.2rem;
+.agentModels {
   display: flex;
-  align-items: center;
-  gap: 0.15rem;
-  min-width: 10px;
-  padding: 0 0.15rem;
-  overflow: visible;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.05rem 0.45rem;
+  overflow: hidden;
+  border: 1px solid var(--chip);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chip) 18%, transparent);
+  color: var(--color-text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lifeline {
+  grid-row: 1;
+  min-height: 2.9rem;
+  background: linear-gradient(var(--lifeline), var(--lifeline)) center / 1px 100% no-repeat;
+}
+
+.row[data-kind='idle'] .lifeline {
+  min-height: 1.5rem;
+  background: repeating-linear-gradient(var(--lifeline) 0 3px, transparent 3px 7px) center / 1px
+    100% no-repeat;
+}
+
+.row[data-kind='spawn'] .lifeline,
+.row[data-kind='return'] .lifeline {
+  min-height: 1.8rem;
+}
+
+.row .lifeline[data-side='true'] {
+  background: none;
+}
+
+.sequence[data-sides='false'] [data-side='true'] {
+  display: none;
+}
+
+.card {
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  grid-row: 1;
+  align-self: center;
+  min-width: 0;
+  margin: 0.25rem 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #151517;
+  color: var(--color-text);
+  text-align: left;
   cursor: pointer;
+}
+
+.card:hover,
+.card[aria-expanded='true'] {
+  border-color: var(--color-text-secondary);
+}
+
+/* A side request keeps off the agents' lifelines, muted. */
+.card[data-side='true'] {
+  padding: 0.3rem 0.5rem;
+  border-style: dashed;
+  background: transparent;
+  color: var(--color-text-secondary);
   opacity: 0.85;
 }
 
-.segment:hover,
-.segment[data-selected='true'] {
-  border-color: var(--color-text);
-  opacity: 1;
-}
-
-.count {
-  color: #111214;
-  font-size: 0.66rem;
-  font-weight: 750;
-}
-
-.axis {
+.cardTitle,
+.cardMeta {
   display: flex;
-  justify-content: space-between;
-  margin-left: calc(180px + 0.75rem);
+  align-items: center;
+  gap: 0.2rem 0.45rem;
+  min-width: 0;
+  font-size: 0.78rem;
+}
+
+.cardTitle {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.cardTitle > span:not(.chip) {
   color: var(--color-text-secondary);
+}
+
+.cardMeta {
+  flex-wrap: wrap;
+  color: var(--color-text-secondary);
+  font-size: 0.71rem;
+}
+
+.agentTag {
+  display: none;
+}
+
+.arrow {
+  position: relative;
+  z-index: 1;
+  grid-row: 1;
+  align-self: stretch;
+}
+
+/* The line runs between the two lifelines, stopping short of the head. */
+.arrow::before {
+  position: absolute;
+  top: 64%;
+  right: calc(100% / var(--span) / 2);
+  left: calc(100% / var(--span) / 2);
+  border-top: 2px solid var(--arrow);
+  content: '';
+}
+
+.arrow[data-kind='return']::before {
+  border-top-style: dashed;
+}
+
+.arrow[data-direction='right']::before {
+  right: calc(100% / var(--span) / 2 + 8px);
+}
+
+.arrow[data-direction='left']::before {
+  left: calc(100% / var(--span) / 2 + 8px);
+}
+
+.arrow::after {
+  position: absolute;
+  top: calc(64% - 5px);
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  content: '';
+}
+
+.arrow[data-direction='right']::after {
+  right: calc(100% / var(--span) / 2);
+  border-left: 10px solid var(--arrow);
+}
+
+.arrow[data-direction='left']::after {
+  left: calc(100% / var(--span) / 2);
+  border-right: 10px solid var(--arrow);
+}
+
+.arrow > span {
+  position: absolute;
+  top: 0.05rem;
+  left: 50%;
+  max-width: calc(100% - 100% / var(--span));
+  overflow: hidden;
+  color: var(--arrow);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.arrow[data-failed='true'] > span {
+  color: var(--color-danger);
+}
+
+/* A call's tool calls, a line each, in the order its response asked. */
+.tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.offered {
+  max-width: 100%;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+}
+
+.offered summary {
+  cursor: pointer;
+}
+
+.offered > span {
+  display: block;
+  max-height: 8rem;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.offeredChange {
+  display: flex;
+  gap: 0.5rem;
+  color: #7aa7e8;
+  font-size: 0.7rem;
+}
+
+.tool {
+  max-width: 100%;
+  padding: 0.05rem 0.4rem;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
   font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool[data-status='failed'],
+.toolCount[data-failed='true'],
+.toolList li[data-status='failed'] > span {
+  border-color: color-mix(in srgb, var(--color-danger) 55%, transparent);
+  color: var(--color-danger);
+}
+
+.toolCount {
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+}
+
+.toolList {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto auto;
+  gap: 0.2rem 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toolList li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  font-size: 0.74rem;
+}
+
+.toolList strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolList code {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolList li > span {
+  color: var(--color-text-secondary);
+}
+
+.idleLabel {
+  z-index: 1;
+  grid-row: 1;
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: center;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: #101012;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+}
+
+.rowDetails {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  max-width: 48rem;
+  margin: 0.15rem 0 0.6rem;
+}
+
+/* Narrow: one list, indented by agent depth, each call tagged with its agent. */
+.sequence[data-narrow='true'] {
+  max-height: none;
+  overflow: visible;
+}
+
+.sequence[data-narrow='true'] .sequenceHeader {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.sequence[data-narrow='true'] .agentHead {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-left: calc(var(--depth, 0) * 0.9rem);
+  text-align: left;
+}
+
+.sequence[data-narrow='true'] .row {
+  display: flex;
+  flex-direction: column;
+  margin-left: calc(var(--depth, 0) * 0.9rem);
+}
+
+.sequence[data-narrow='true'] .row[data-kind='idle'] {
+  align-items: center;
+  margin: 0.2rem 0;
+}
+
+.sequence[data-narrow='true'] .arrow > span {
+  position: static;
+  display: block;
+  max-width: 100%;
+  transform: none;
+}
+
+.sequence[data-narrow='true'] .arrow {
+  padding: 0.25rem 0;
+}
+
+.sequence[data-narrow='true'] .arrow::before,
+.sequence[data-narrow='true'] .arrow::after {
+  content: none;
+}
+
+.sequence[data-narrow='true'] .agentTag {
+  display: inline;
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.sequence[data-narrow='true'] .card {
+  align-self: stretch;
+}
+
+.sequence[data-narrow='true'] .card[data-side='true'] {
+  margin-left: 1.2rem;
 }
 
 .panel {
@@ -238,18 +552,6 @@ h1.task {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   background: rgba(9, 9, 10, 0.5);
-}
-
-.panel header {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  color: var(--color-text);
-  font-size: 0.85rem;
-}
-
-.panel header span {
-  color: var(--color-text-secondary);
 }
 
 .steps {
@@ -309,20 +611,6 @@ h1.task {
 
 .field a {
   color: var(--color-text);
-}
-
-@media (max-width: 900px) {
-  .body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .lane {
-    grid-template-columns: 110px minmax(0, 1fr);
-  }
-
-  .axis {
-    margin-left: calc(110px + 0.75rem);
-  }
 }
 
 /* A model read by its label, the configured name beside it. */

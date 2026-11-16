@@ -81,8 +81,20 @@ type RunAgent struct {
 	FirstCallAt          time.Time `json:"first_call_at"`
 	LastCallAt           time.Time `json:"last_call_at"`
 	SpawnedAfterRecordID string    `json:"spawned_after_record_id,omitempty"`
-	Models               []string  `json:"models,omitempty"`
-	Cost                 RunCost   `json:"cost"`
+	// Task is what the spawning call's tool call asked the agent for, such as
+	// its subagent type and description, when Replay captured its arguments.
+	Task string `json:"task,omitempty"`
+	// ReturnedToRecordID is the parent's first call after the agent's last
+	// one, the call that took its result, and ReturnStatus how it came back:
+	// failed when the agent's last call or its spawn tool's result failed.
+	ReturnedToRecordID string `json:"returned_to_record_id,omitempty"`
+	ReturnStatus       string `json:"return_status,omitempty"`
+	// OfferedTools names the tools the agent's first turn offered the
+	// model; a call's OfferedToolsAdded and OfferedToolsRemoved say where
+	// that changed, as when Claude Code's ToolSearch loads deferred tools.
+	OfferedTools []string `json:"offered_tools,omitempty"`
+	Models       []string `json:"models,omitempty"`
+	Cost         RunCost  `json:"cost"`
 }
 
 // RunOutcome is how a run ended: Status from its main agent's last call,
@@ -159,6 +171,7 @@ type RunCall struct {
 	CompletionTokens *int                   `json:"completion_tokens,omitempty"`
 	Cost             *float64               `json:"cost,omitempty"`
 	Currency         string                 `json:"currency,omitempty"`
+	PricingSource    string                 `json:"pricing_source,omitempty"`
 	RouterCalls      []store.RouterCallCost `json:"router_calls,omitempty"`
 	LooperAttempts   int                    `json:"looper_attempts,omitempty"`
 	ToolResults      int                    `json:"tool_results,omitempty"`
@@ -166,7 +179,43 @@ type RunCall struct {
 	FinalAnswer      bool                   `json:"final_answer,omitempty"`
 	Outcomes         []store.Outcome        `json:"outcomes,omitempty"`
 	Markers          []string               `json:"markers,omitempty"`
-	Hops             []RunCall              `json:"hops,omitempty"`
+	ToolCalls        []RunToolCall          `json:"tool_calls,omitempty"`
+	// The tools this turn offered beyond the agent's previous turn, and those
+	// it no longer offered.
+	OfferedToolsAdded   []string  `json:"offered_tools_added,omitempty"`
+	OfferedToolsRemoved []string  `json:"offered_tools_removed,omitempty"`
+	Hops                []RunCall `json:"hops,omitempty"`
+}
+
+// RunToolCall is a tool call the model made in a call's turn, as far as
+// Replay kept it: its name always, its arguments only when the route
+// captured them, and the status of the result the agent's next request
+// carried, succeeded or failed, once there was one.
+type RunToolCall struct {
+	Name string `json:"name"`
+	ID   string `json:"id,omitempty"`
+	// Summary is the argument a person reads the call by, such as a command
+	// or a file name, and Arguments the arguments on one bounded line.
+	Summary   string `json:"summary,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
+	Status    string `json:"status,omitempty"`
+	// TimingSource says where the times come from: gateway, as the Router
+	// sees them, or plugin, as a harness plugin reports them.
+	TimingSource string `json:"timing_source,omitempty"`
+	// From the gateway: RequestedAt is when the response that asked for the
+	// call ended, ReturnedAt when the agent's next request that carried its
+	// result began, and ClientMS the time between, the tool's execution,
+	// any approval wait and the harness's own time. The tool calls of one
+	// response share that window.
+	RequestedAt *time.Time `json:"requested_at,omitempty"`
+	ReturnedAt  *time.Time `json:"returned_at,omitempty"`
+	ClientMS    *int64     `json:"client_ms,omitempty"`
+	// From a harness plugin, joined by the tool call id (Claude Code's
+	// tool_use id, Codex's call_id): when the tool ran and how long it waited
+	// for approval. Empty from the gateway.
+	StartedAt  *time.Time `json:"started_at,omitempty"`
+	EndedAt    *time.Time `json:"ended_at,omitempty"`
+	ApprovalMS *int64     `json:"approval_ms,omitempty"`
 }
 
 // ModelListResponse lists the models the Router's configuration holds, in
@@ -179,7 +228,8 @@ type ModelListResponse struct {
 // ModelLabel is a configured model's name and how a person reads it: its
 // card's display name when the catalog or the operator gives one, else the
 // display name of the catalog card its provider model id maps to, else that
-// provider model id.
+// provider model id. A label two models would share reads as each one's
+// configured name instead.
 type ModelLabel struct {
 	Name  string `json:"name"`
 	Label string `json:"label"`

@@ -85,7 +85,12 @@ type CurrencyCostSummary struct {
 // completed is at most partly priced. UnpricedReasons counts the partly
 // priced and unpriced records by the reason of their first missing price. A
 // Looper hop's record is in none of them but in LooperHopRecords: the record
-// of the request that made the hop counts its call.
+// of the request that made the hop counts its call. RefusedRecords are
+// requests the Router refused, or that ended with a 4xx, before any model
+// answered them, such as a block or a spend budget refusal: they cost
+// nothing and are in none of the three. UnansweredRecords are requests no
+// provider answered, whose upstream connection failed, was reset or timed
+// out before any response: they cost nothing either.
 // ListPriceRecords are priced at a catalog list price, an estimate.
 // CallerLoginRecords ran on the client's own provider login, priced or not:
 // a price shown for one is what its tokens cost at API prices, not what the
@@ -102,6 +107,8 @@ type AggregateCostCoverage struct {
 	UnpricedRecords     int            `json:"unpriced_records"`
 	UnpricedReasons     map[string]int `json:"unpriced_reasons,omitempty"`
 	LooperHopRecords    int            `json:"looper_hop_records"`
+	RefusedRecords      int            `json:"refused_records"`
+	UnansweredRecords   int            `json:"unanswered_records"`
 	ListPriceRecords    int            `json:"list_price_records"`
 	CallerLoginRecords  int            `json:"caller_login_records"`
 	RouterCalls         int            `json:"router_calls"`

@@ -219,8 +219,9 @@ func usesSharedReplayStorage(backend string) bool {
 }
 
 // replayBackend is the backend that keeps the configuration's records. The
-// file store holds routing data only, so where a router_replay plugin keeps
-// prompt, body or tool text, the records stay in memory instead.
+// file store holds routing data, run names and tool names only, so where a
+// router_replay plugin keeps prompt, body or tool text, the records stay in
+// memory instead.
 func replayBackend(cfg *config.RouterConfig) string {
 	backend := resolveReplayStoreBackend(cfg.RouterReplay)
 	if backend == "file" && replayKeepsText(cfg) {

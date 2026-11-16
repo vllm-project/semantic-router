@@ -10,6 +10,15 @@ import (
 // for a title.
 const RequestKindSessionTitle = "session_title"
 
+// The other requests that are no turn of their agent: a Claude Code side
+// request by the class Claude Code gives it, auxiliary or compaction, and a
+// check a tool marks with x-vsr-probe.
+const (
+	RequestKindAuxiliary  = "auxiliary"
+	RequestKindCompaction = "compaction"
+	RequestKindProbe      = "probe"
+)
+
 // UpdateSessionName stores the session name a record's answer gave.
 func (m *MemoryStore) UpdateSessionName(ctx context.Context, id string, name string) error {
 	m.mu.Lock()

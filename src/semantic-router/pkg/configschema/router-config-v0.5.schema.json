@@ -6303,6 +6303,12 @@
         "capture_tool_results": {
           "type": "boolean"
         },
+        "capture_session_name": {
+          "type": "boolean"
+        },
+        "capture_tool_names": {
+          "type": "boolean"
+        },
         "max_body_bytes": {
           "type": "integer"
         },

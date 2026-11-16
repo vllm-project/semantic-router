@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -23,7 +24,7 @@ const (
 	claudeCodeRenameCommand = "<command-name>/rename</command-name>"
 	claudeCodeRenameOutput  = "<local-command-stdout>Session renamed to: "
 	claudeCodeCommandOutput = "</local-command-stdout>"
-	maxSessionNameRunes     = 200
+	maxSessionNameRunes     = 120
 )
 
 // observeSessionTitleRequest recognises the side request a harness sends to
@@ -34,6 +35,20 @@ func observeSessionTitleRequest(ctx *RequestContext, request *llmprotocol.Reques
 	ctx.SessionTitleRequest = ctx.AgentTurn.ThreadSource == codexThreadSourceTitle ||
 		(strings.EqualFold(headerValueCI(ctx, headers.XClaudeCodeRequestClass), claudeCodeAuxiliaryClass) &&
 			asksForTitleOnly(request.OutputFormat))
+}
+
+// replaySideRequestKind is the kind of a request that is no turn of its
+// agent, as the client marks it: a check a tool sends, or a Claude Code
+// auxiliary or compaction request.
+func replaySideRequestKind(ctx *RequestContext) string {
+	if headerValueCI(ctx, headers.VSRProbe) != "" {
+		return store.RequestKindProbe
+	}
+	switch class := strings.ToLower(headerValueCI(ctx, headers.XClaudeCodeRequestClass)); class {
+	case store.RequestKindAuxiliary, store.RequestKindCompaction:
+		return class
+	}
+	return ""
 }
 
 func asksForTitleOnly(format llmprotocol.OutputFormat) bool {
@@ -53,27 +68,36 @@ func asksForTitleOnly(format llmprotocol.OutputFormat) bool {
 	return ok && len(schema.Properties) == 1 && title.Type == "string" && slices.Equal(schema.Required, []string{"title"})
 }
 
-// observeSessionTitle reads the name a title request answered with. A Codex
-// title thread carries no field naming the thread it titles, so its answer
-// names no run Replay knows.
+// observeSessionTitle reads the name a title request answered with, a JSON
+// object of one title field: Claude Code's, or that of a Codex title thread
+// matched to its run, which may answer with the bare line instead.
 func observeSessionTitle(ctx *RequestContext, response *llmprotocol.Response) {
-	if ctx == nil || !ctx.SessionTitleRequest || ctx.AgentTurn.ThreadSource == codexThreadSourceTitle || response == nil {
+	if ctx == nil || !ctx.SessionTitleRequest || response == nil {
 		return
 	}
+	codex := ctx.AgentTurn.ThreadSource == codexThreadSourceTitle
+	if codex && ctx.titleSession == "" {
+		return
+	}
+	content := strings.TrimSpace(semanticAssistantContent(response))
 	var answer struct {
 		Title string `json:"title"`
 	}
-	if json.Unmarshal([]byte(semanticAssistantContent(response)), &answer) == nil {
+	switch {
+	case json.Unmarshal([]byte(content), &answer) == nil:
 		ctx.sessionName = boundedSessionName(answer.Title)
+	case codex:
+		line, _, _ := strings.Cut(content, "\n")
+		ctx.sessionName = boundedSessionName(strings.Trim(line, "\"' "))
 	}
 }
 
 // settleReplaySessionName writes the name a title request answered with
-// before its record ends. The name is response text, kept only where Replay
-// keeps the answer.
+// before its record ends, where records keep session names: whatever the
+// prompt capture, and never on a masking route.
 func settleReplaySessionName(ctx *RequestContext, recorder *routerreplay.Recorder, state string) {
 	if ctx.sessionName == "" || state != routerreplay.LifecycleCompleted ||
-		!replayResponseContentAllowed(ctx) || !ctx.RouterReplayPluginConfig.CapturesResponseText() {
+		!ctx.RouterReplayPluginConfig.KeepsSessionName() || replaySuppressesBody(ctx) {
 		return
 	}
 	if err := recorder.UpdateSessionName(ctx.RouterReplayID, ctx.sessionName); err != nil {
@@ -88,16 +112,14 @@ func settleReplaySessionName(ctx *RequestContext, recorder *routerreplay.Recorde
 // replaySessionNaming is the request kind and session name a new record
 // starts with. A Claude Code /rename reaches the gateway only as the
 // command and its output in the next request's history, so the last such
-// pair names the session. That is request text, kept as Replay keeps the
-// request's tools: under raw capture with request text captured, and never
-// on a masking route.
+// pair names the session. The name is kept where records keep session names,
+// whatever the prompt capture, and never on a masking route.
 func replaySessionNaming(ctx *RequestContext) (kind string, name string) {
 	if ctx.SessionTitleRequest {
 		kind = store.RequestKindSessionTitle
 	}
-	policy := ctx.RouterReplayPluginConfig
-	if ctx.SemanticRequest == nil || requestHarness(ctx) != store.HarnessClaudeCode || policy == nil ||
-		!policy.CapturesRawContent() || !policy.CapturesRequestText() || replaySuppressesBody(ctx) {
+	if ctx.SemanticRequest == nil || requestHarness(ctx) != store.HarnessClaudeCode ||
+		!ctx.RouterReplayPluginConfig.KeepsSessionName() || replaySuppressesBody(ctx) {
 		return kind, ""
 	}
 	for _, message := range ctx.SemanticRequest.Messages {
@@ -109,6 +131,39 @@ func replaySessionNaming(ctx *RequestContext) (kind string, name string) {
 		}
 	}
 	return kind, boundedSessionName(name)
+}
+
+// applyReplayFirstPromptName names a harness run that no title or /rename
+// named by its main agent's first prompt, shortened: a headless run, such as
+// claude -p or codex exec, gets no title. Only the first turn of a harness
+// run's main agent, no side request or Looper hop, and only where records
+// keep session names. The record marks the name as the prompt's, so that a
+// title or /rename names the run over it, sent before or after.
+func applyReplayFirstPromptName(record *routerreplay.RoutingRecord, ctx *RequestContext, prompt string) {
+	if record.SessionName != "" || record.RequestKind != "" || record.ParentRequestID != "" || record.SessionID == "" ||
+		record.Agent == nil || record.Agent.Harness == "" || record.Agent.ID != "" ||
+		!ctx.RouterReplayPluginConfig.KeepsSessionName() || replaySuppressesBody(ctx) || !replayFirstTurn(ctx.SemanticRequest) {
+		return
+	}
+	record.SessionName = boundedOneLine(looper.WithoutSystemReminders(prompt), maxSessionNameRunes)
+	record.SessionNameFromPrompt = record.SessionName != ""
+	if record.Agent.Harness == store.HarnessCodex {
+		replayTitleIndex.remember(replayTitleKey(ctx, prompt), record.SessionID)
+	}
+}
+
+// replayFirstTurn reports a request that carries no answer of the model yet:
+// a conversation's first turn.
+func replayFirstTurn(request *llmprotocol.Request) bool {
+	if request == nil {
+		return false
+	}
+	for _, message := range request.Messages {
+		if message.Role == llmprotocol.RoleAssistant {
+			return false
+		}
+	}
+	return true
 }
 
 // claudeCodeRename is the name a /rename echo in message gave, the output

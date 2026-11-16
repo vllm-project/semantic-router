@@ -4,10 +4,12 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
@@ -83,8 +85,8 @@ func TestRequestMeterFusedTaskCountedOnce(t *testing.T) {
 
 func TestRequestMeterRemoteUsage(t *testing.T) {
 	ctx, meter := WithRequestMeter(context.Background())
-	reportRemoteCall(ctx, "remote", "fallback", []byte(`{"model":"system","usage":{"input_tokens":20,"output_tokens":4}}`))
-	reportRemoteCall(ctx, "remote", "fallback", nil)
+	reportRemoteCall(ctx, "remote", "fallback", 200, []byte(`{"model":"system","usage":{"input_tokens":20,"output_tokens":4}}`))
+	reportRemoteCall(ctx, "remote", "fallback", 500, nil)
 	calls := meter.Calls()
 	if len(calls) != 2 || calls[0].Kind != "systemone" || calls[0].Model != "system" || !calls[0].HasUsage || calls[1].HasUsage {
 		t.Fatalf("calls = %+v", calls)
@@ -109,11 +111,63 @@ func TestRequestMeterRemoteUsageRequiresBothCounters(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, meter := WithRequestMeter(context.Background())
-			reportRemoteCall(ctx, "remote", "system", []byte(`{"usage":`+tc.usage+`}`))
+			reportRemoteCall(ctx, "remote", "system", 200, []byte(`{"usage":`+tc.usage+`}`))
 			calls := meter.Calls()
 			if len(calls) != 1 || calls[0].HasUsage != tc.known || calls[0].InputTokens != tc.input || calls[0].OutputTokens != tc.output {
 				t.Fatalf("calls = %+v, want input=%d output=%d HasUsage=%v", calls, tc.input, tc.output, tc.known)
 			}
 		})
+	}
+}
+
+// A call no deployment answered, whose connection was refused, charged
+// nothing and is no call to price, through the native and codec System One
+// paths and the runtime client alike. A deployment's error reply is a call,
+// its usage unknown.
+func TestRequestMeterLeavesOutACallNoDeploymentAnswered(t *testing.T) {
+	closed := httptest.NewServer(http.NotFoundHandler())
+	refused := closed.URL
+	closed.Close()
+	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `{"error":{"code":"internal","message":"down"}}`)
+	}))
+	defer failing.Close()
+	noRetry := 0
+	for _, schema := range []string{"vllm-sr/4.0", "vllm-sr/5.0"} {
+		for endpoint, want := range map[string]int{refused: 0, failing.URL: 1} {
+			cfg := &config.RouterConfig{}
+			cfg.ModelDeployments = map[string]config.ModelDeployment{"remote": {
+				Provider: config.SystemOneProvider, Endpoint: endpoint + "/v1/systemone", Schema: schema,
+				Model: "vllm-sr/d3-ultra", MaxRetries: &noRetry,
+			}}
+			remote, err := NewRemoteSystemOne(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, meter := WithRequestMeter(context.Background())
+			if _, err = remote.Decide(ctx, "remote", Request{State: "x", Questions: []Question{routeQuestion}}); err == nil {
+				t.Fatalf("%s %s: answered", schema, endpoint)
+			}
+			_ = remote.Close()
+			if calls := meter.Calls(); len(calls) != want || want == 1 && calls[0].HasUsage {
+				t.Fatalf("%s %s: calls = %+v, want %d without usage", schema, endpoint, calls, want)
+			}
+		}
+	}
+	generated, err := api.NewClientWithResponses(refused)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, meter := WithRequestMeter(context.Background())
+	if _, err = (&Client{api: generated}).Decide(ctx, Request{}); err == nil {
+		t.Fatal("a closed runtime answered")
+	}
+	if calls := meter.Calls(); len(calls) != 0 {
+		t.Fatalf("runtime calls = %+v", calls)
 	}
 }

@@ -11,12 +11,18 @@ import { formatInsightsCost } from '../utils/insightsCost'
 import styles from './InsightsPage.module.css'
 import runStyles from './InsightsRun.module.css'
 import { fetchInsightsJSON } from './insightsPageApi'
-import { RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
+import { RunLegend } from './InsightsRunDiagram'
+import { RunSequence } from './InsightsRunSequence'
 import { ModelLabelsProvider, ModelName } from './insightsModelLabelSupport'
 import { RunEvents, RunOutcomeBadge } from './InsightsRunsView'
 import { compactID } from './insightsReviewSupport'
 import {
-  buildRunLanes,
+  buildRunSequence,
+  useNarrowRunLayout,
+  type RunCallsRow,
+  type RunSequence as RunSequenceLayout,
+} from './insightsRunSequence'
+import {
   countText,
   describeCallStatus,
   formatRunCost,
@@ -25,7 +31,6 @@ import {
   runAgentTreeText,
   RUN_MARKER_GLYPHS,
   runTitle,
-  type RunSegment,
 } from './insightsRunSupport'
 import type { RunCall, RunResponse } from './insightsRunTypes'
 
@@ -136,34 +141,51 @@ export default function InsightsRunPage() {
   )
 }
 
-// One agent run: its agents as lanes on a time axis, a step's details on
-// click, and every call in a table one click further.
+// The row whose details show, and the call picked in it: at first the row of
+// the step a link names.
+function useOpenRow(sequence: RunSequenceLayout | undefined, step: string | null) {
+  // undefined until a row is opened or closed: the row of the linked step opens.
+  const [expanded, setExpanded] = useState<string | null>()
+  const [callId, setCallId] = useState<string | undefined>(step ?? undefined)
+  const rows = useMemo(
+    () =>
+      (sequence?.rows ?? []).filter(
+        (row): row is RunCallsRow => row.kind === 'turns' || row.kind === 'side',
+      ),
+    [sequence],
+  )
+  const open =
+    expanded === undefined
+      ? rows.find((row) => row.calls.some((entry) => entry.record_id === callId))
+      : rows.find((row) => row.key === expanded)
+  const call =
+    open?.calls.find((entry) => entry.record_id === callId) ??
+    (open?.calls.length === 1 ? open.calls[0] : undefined)
+  const toggle = (row: RunCallsRow) => {
+    setExpanded(open?.key === row.key ? null : row.key)
+    setCallId(row.calls.length === 1 ? row.calls[0].record_id : undefined)
+  }
+  const selectCall = (next: RunCall) => {
+    const row = rows.find((entry) => entry.calls.includes(next))
+    setExpanded(row?.key ?? null)
+    setCallId(next.record_id)
+    if (row) document.getElementById(`run-row-${row.key}`)?.scrollIntoView({ block: 'nearest' })
+  }
+  return { open, call, toggle, selectCall }
+}
+
+// One agent run: its agents as lifelines with their calls top to bottom, a
+// row's details under it on click, and every call in a table one click further.
 function AgentRun() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session') ?? ''
   const { response, error, loading, load } = useRun(sessionId)
-  const lanes = useMemo(() => (response ? buildRunLanes(response) : []), [response])
-  const [segmentKey, setSegmentKey] = useState<string>()
-  const [callId, setCallId] = useState<string | undefined>(searchParams.get('step') ?? undefined)
+  const narrow = useNarrowRunLayout()
+  const sequence = useMemo(() => (response ? buildRunSequence(response) : undefined), [response])
   const [showCalls, setShowCalls] = useState(false)
   const columns = useMemo(() => createCallColumns(), [])
-
-  const segments = useMemo(() => lanes.flatMap((lane) => lane.segments), [lanes])
-  const segment =
-    segments.find((entry) => entry.key === segmentKey) ??
-    segments.find((entry) => entry.calls.some((call) => call.record_id === callId))
-  const call =
-    segment?.calls.find((entry) => entry.record_id === callId) ??
-    (segment?.calls.length === 1 ? segment.calls[0] : undefined)
-  const selectSegment = (next: RunSegment) => {
-    setSegmentKey(next.key)
-    setCallId(next.calls.length === 1 ? next.calls[0].record_id : undefined)
-  }
-  const selectCall = (next: RunCall) => {
-    setSegmentKey(segments.find((entry) => entry.calls.includes(next))?.key)
-    setCallId(next.record_id)
-  }
+  const { open, call, toggle, selectCall } = useOpenRow(sequence, searchParams.get('step'))
 
   return (
     <main className={styles.recordPage}>
@@ -188,23 +210,17 @@ function AgentRun() {
           <RunHero response={response} />
           <section className={runStyles.section}>
             <RunLegend run={response.run} />
-            <div className={runStyles.body}>
-              <RunDiagram
+            {sequence ? (
+              <RunSequence
                 run={response.run}
-                lanes={lanes}
-                selected={segment?.key}
-                onSelect={selectSegment}
+                sequence={sequence}
+                expanded={open?.key}
+                call={call}
+                narrow={narrow}
+                onToggle={toggle}
+                onSelectCall={selectCall}
               />
-              {segment ? (
-                <RunSegmentPanel segment={segment} call={call} onSelectCall={selectCall} />
-              ) : (
-                <aside className={runStyles.panel}>
-                  <p className={runStyles.muted}>
-                    Click a segment for its calls and their details.
-                  </p>
-                </aside>
-              )}
-            </div>
+            ) : null}
           </section>
           <section className={runStyles.section}>
             <button

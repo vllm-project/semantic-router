@@ -59,6 +59,7 @@ function ModelInventoryBlock({ props, controller }: ModelsSectionViewProps) {
         liveVerificationStates={liveVerification.states}
         onVerifyModel={(modelName) => void liveVerification.verify(modelName)}
         canVerifyModels={props.canVerifyModels}
+        catalogPrices={controller.catalogPrices}
       />
     </div>
   )

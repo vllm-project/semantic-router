@@ -84,7 +84,7 @@ func (r *OpenAIRouter) queryRouterReplayRuns(query routerReplayListQuery) (route
 	runs := make([]routerreplay.RunSummary, 0, len(builders))
 	prompts := make(map[string]string, len(builders))
 	for sessionID, builder := range builders {
-		if builder.titlesOnly() {
+		if builder.sidesOnly() {
 			continue
 		}
 		summary, _ := builder.build()

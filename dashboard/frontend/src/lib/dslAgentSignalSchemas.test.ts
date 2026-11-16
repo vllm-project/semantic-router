@@ -28,4 +28,10 @@ describe('agent routing in the Builder', () => {
       type: 'boolean',
     })
   })
+
+  it('names the status a block answers with, as the Router sends it', () => {
+    expect(field(getPluginFieldSchema('fast_response'), 'block')?.description).toContain('HTTP 400')
+    const rules = field(getPluginFieldSchema('response_guard'), 'rules')
+    expect(field(rules?.fields ?? [], 'action')?.description).toContain('HTTP 400')
+  })
 })

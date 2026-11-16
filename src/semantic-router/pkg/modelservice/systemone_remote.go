@@ -376,7 +376,7 @@ func (d *systemOneDeployment) sendBatch(ctx context.Context, task *bundleTask) {
 func (d *systemOneDeployment) post(ctx context.Context, body api.DecisionRequest) (int, []byte, error) {
 	started := time.Now()
 	status, data, err := d.exchangeDecisions(ctx, body)
-	reportRemoteCall(ctx, d.name, d.model, data)
+	reportRemoteCall(ctx, d.name, d.model, status, data)
 	outcome := err
 	if outcome == nil {
 		outcome = systemOneStatusError(status)

@@ -41,6 +41,7 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 	fixture := postgresMetadataFixture()
 	fixture.ID, fixture.RequestID, fixture.Recipe = "record-00000", "benchmark_%_request", "evaluation"
 	fixture.LifecycleState = LifecycleCompleted
+	fixture.ResponseStatus, fixture.TerminalReason = 400, "request_rejected"
 	fixture.SessionID = "old-session"
 	fixture.RequestBody, fixture.ResponseBody = strings.Repeat("request", 32), strings.Repeat("response", 32)
 	fixture.ToolTrace = &ToolTrace{ToolNames: []string{"lookup"}, Steps: []ToolTraceStep{{ToolName: "calculate", Text: strings.Repeat("large result", 16)}}}
@@ -88,6 +89,10 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 		}
 		if record.RequestBody != "" || record.ResponseBody != "" || record.ToolTrace != nil || record.Prompt != "" {
 			return errors.New("metadata scan fetched a captured payload")
+		}
+		// Insights reads a refusal from how the record ended.
+		if record.ResponseStatus != 400 || record.TerminalReason != "request_rejected" {
+			return errors.New("metadata scan left out how the record ended")
 		}
 		return nil
 	})

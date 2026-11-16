@@ -521,6 +521,10 @@ def _fallback_findings(doc: dict, decisions) -> list[RouterFinding]:
     fixes: dict[tuple[str, bool], list[str]] = {}
     one_model = []
     for recipe, decision in decisions:
+        models = list(dict.fromkeys(_decision_models(decision)))
+        if not models:
+            # a decision that answers itself, such as a block, calls no model
+            continue
         name = str(decision.get("name"))
         places = [
             (f"decision {name}'s own fallback", decision.get("fallback")),
@@ -532,8 +536,7 @@ def _fallback_findings(doc: dict, decisions) -> list[RouterFinding]:
         if fix is not None:
             fixes.setdefault((places[fix[0]][0], fix[1]), []).append(name)
             continue
-        models = list(dict.fromkeys(_decision_models(decision)))
-        if len(models) <= 1:
+        if len(models) == 1:
             one_model.append(
                 RouterFinding(
                     f"a second model on decision {name}: fallback moves only to the"
@@ -668,6 +671,9 @@ def output_limit(doc: dict | None, entrypoint: str) -> int:
 
 # Room for a model that thinks before it calls the tool or answers its result.
 PROBE_TOKENS = 1024
+# Router Replay records a request with this header as a check and lists no run
+# for a session of only checks: the probes here and the check's harness run.
+PROBE_HEADER, PROBE_VALUE = "x-vsr-probe", "connect"
 
 
 def _probe_request(harness: str, model: str) -> tuple[str, dict, dict]:
@@ -1016,6 +1022,7 @@ def _probe_target(harness: str, model: str, gateway: str, token: str):
     headers = {
         "content-type": "application/json",
         "authorization": f"Bearer {token}",
+        PROBE_HEADER: PROBE_VALUE,
         **extra,
     }
     return gateway.rstrip("/") + path, headers, call

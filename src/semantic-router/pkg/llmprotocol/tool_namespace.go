@@ -80,6 +80,15 @@ func ClaimToolName(request *Request, flat, namespace, name string) error {
 	return request.ToolNameOrigins.claim(flat, toolNamespaceOrigin{namespace: namespace, name: name})
 }
 
+// Origin is the namespace and name the client sent for a flat name, with an
+// empty namespace for a plain name or one no namespace flattened into.
+func (origins ToolNameOrigins) Origin(flat string) (namespace, name string) {
+	if origin, ok := origins[flat]; ok && origin.namespace != "" {
+		return origin.namespace, origin.name
+	}
+	return "", flat
+}
+
 func (origins ToolNameOrigins) claim(flat string, origin toolNamespaceOrigin) error {
 	if held, seen := origins[flat]; seen && held != origin {
 		return NewError(ErrorInvalidRequest, "tool_namespace_collision",

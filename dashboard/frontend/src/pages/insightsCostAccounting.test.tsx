@@ -198,6 +198,25 @@ describe('Insights cost coverage', () => {
     expect(html).not.toContain('No cost is shown')
   })
 
+  it('counts requests refused before any model answered apart, as free', () => {
+    const refused = { ...aggregate, summary: { ...aggregate.summary, coverage: { ...coverage, refused_records: 3 } } }
+    const html = renderToStaticMarkup(<InsightsCharts aggregate={refused} />)
+    expect(html).toContain(
+      'Priced: 2 of 5 requests, 1 partly, 2 without a price. 3 requests refused before any model answered cost nothing.',
+    )
+  })
+
+  it('counts requests no provider answered apart, as free', () => {
+    const down = {
+      ...aggregate,
+      summary: { ...aggregate.summary, coverage: { ...coverage, unanswered_records: 56 } },
+    }
+    const html = renderToStaticMarkup(<InsightsCharts aggregate={down} />)
+    expect(html).toContain(
+      'Priced: 2 of 5 requests, 1 partly, 2 without a price. 56 requests no provider answered cost nothing.',
+    )
+  })
+
   it('says plainly why no cost shows and how to set it', () => {
     const unpriced = {
       ...coverage,

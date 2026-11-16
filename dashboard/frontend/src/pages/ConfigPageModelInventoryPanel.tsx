@@ -60,6 +60,7 @@ interface ConfigPageModelInventoryPanelProps {
   liveVerificationStates: ReadonlyMap<string, ModelLiveVerificationState>
   onVerifyModel: (modelName: string) => void
   canVerifyModels: boolean
+  catalogPrices?: Readonly<Record<string, NonNullable<NormalizedModel['pricing']>>>
 }
 
 export default function ConfigPageModelInventoryPanel({
@@ -96,6 +97,7 @@ export default function ConfigPageModelInventoryPanel({
   liveVerificationStates,
   onVerifyModel,
   canVerifyModels,
+  catalogPrices = {},
 }: ConfigPageModelInventoryPanelProps) {
   const columns: Column<NormalizedModel>[] = [
     {
@@ -189,12 +191,14 @@ export default function ConfigPageModelInventoryPanel({
       width: '132px',
       minWidth: '124px',
       render: (row) => {
-        if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
-        const currency = row.pricing.currency || 'USD'
-        const prompt = row.pricing.prompt_per_1m?.toFixed(2) || '0.00'
+        const catalogPrice = row.pricing ? undefined : catalogPrices[row.name]
+        const pricing = row.pricing ?? catalogPrice
+        if (!pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
+        const currency = pricing.currency || 'USD'
+        const prompt = pricing.prompt_per_1m?.toFixed(2) || '0.00'
         return (
           <span
-            title={`${prompt} ${currency} per 1M input tokens`}
+            title={`${prompt} ${currency} per 1M input tokens${catalogPrice ? ', the catalog list price' : ''}`}
             style={{
               fontSize: '0.8125rem',
               fontFamily: 'var(--font-mono)',
@@ -203,6 +207,11 @@ export default function ConfigPageModelInventoryPanel({
           >
             {currency === 'USD' ? '$' : `${currency} `}
             {prompt} / 1M
+            {catalogPrice ? (
+              <span style={{ display: 'block', color: 'var(--color-text-secondary)' }}>
+                catalog list price
+              </span>
+            ) : null}
           </span>
         )
       },

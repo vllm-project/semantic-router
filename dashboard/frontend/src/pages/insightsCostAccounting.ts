@@ -192,7 +192,13 @@ export function buildCostCoverageLines(
     `Priced: ${coverage.priced_records} of ${plural(requests, 'request')}` +
       (coverage.partly_priced_records ? `, ${coverage.partly_priced_records} partly` : '') +
       (coverage.unpriced_records ? `, ${coverage.unpriced_records} without a price` : '') +
-      '.',
+      '.' +
+      (coverage.refused_records
+        ? ` ${plural(coverage.refused_records, 'request')} refused before any model answered cost nothing.`
+        : '') +
+      (coverage.unanswered_records
+        ? ` ${plural(coverage.unanswered_records, 'request')} no provider answered cost nothing.`
+        : ''),
   ]
   if (coverage.unpriced_records + coverage.partly_priced_records > 0) {
     lines.push(`Left out: ${formatReasonCounts(coverage.unpriced_reasons)}.`)

@@ -515,7 +515,7 @@ The `store_backend` field controls where routing-decision replay records are per
 | `redis` | Survives router restart, shared across replicas | Lightweight deployments already running Redis |
 | `milvus` | Vector-searchable replay records | Semantic replay search |
 | `qdrant` | Vector-searchable replay records | Semantic replay search in a Qdrant deployment |
-| `file` | Survives router restart on one Router; routing data only | The default for local and single-Router deployments |
+| `file` | Survives router restart on one Router; routing data, run names and tool names only | The default for local and single-Router deployments |
 | `memory` | Lost on router restart | Local development only |
 
 ## Data and Security

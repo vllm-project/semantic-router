@@ -23,6 +23,13 @@ export interface RunAgent {
   first_call_at: string
   last_call_at: string
   spawned_after_record_id?: string
+  // What the spawning tool call asked for, the parent's call that took the
+  // agent's result, and how it came back: succeeded or failed.
+  task?: string
+  returned_to_record_id?: string
+  return_status?: string
+  // The tools the agent's first turn offered the model.
+  offered_tools?: string[]
   models?: string[]
   cost: RunCost
 }
@@ -69,6 +76,26 @@ export interface RunRouterCall {
   unpriced_calls?: number
 }
 
+// A tool call of a call's turn: its name, its arguments when Replay captured
+// them, and its result's status once the agent's next request carried it.
+export interface RunToolCall {
+  name: string
+  id?: string
+  summary?: string
+  arguments?: string
+  status?: 'succeeded' | 'failed' | string
+  // gateway: from the end of the response that asked for the call to the
+  // start of the next request that carried its result, shared by the calls
+  // of one response; plugin: as a harness plugin reported it.
+  timing_source?: 'gateway' | 'plugin' | string
+  requested_at?: string
+  returned_at?: string
+  client_ms?: number
+  started_at?: string
+  ended_at?: string
+  approval_ms?: number
+}
+
 export interface RunCall {
   record_id: string
   request_id?: string
@@ -93,6 +120,8 @@ export interface RunCall {
   completion_tokens?: number
   cost?: number
   currency?: string
+  // catalog_list_price when the cost is the catalog's list price estimate.
+  pricing_source?: string
   router_calls?: RunRouterCall[]
   looper_attempts?: number
   tool_results?: number
@@ -100,6 +129,9 @@ export interface RunCall {
   final_answer?: boolean
   outcomes?: RunReportedOutcome[]
   markers?: string[]
+  tool_calls?: RunToolCall[]
+  offered_tools_added?: string[]
+  offered_tools_removed?: string[]
   hops?: RunCall[]
 }
 

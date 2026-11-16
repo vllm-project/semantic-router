@@ -16,6 +16,7 @@ type postgresRoutingMetadata struct {
 	Agent           *AgentIdentity `json:"agent,omitempty"`
 	ParentRequestID string         `json:"parent_request_id,omitempty"`
 	SessionName     string         `json:"session_name,omitempty"`
+	NameFromPrompt  bool           `json:"session_name_from_prompt,omitempty"`
 	ReasoningEffort string         `json:"reasoning_effort,omitempty"`
 }
 
@@ -25,7 +26,7 @@ func marshalPostgresRoutingMetadata(record Record) ([]byte, error) {
 		CacheHitKind:    record.CacheHitKind, CacheSource: record.CacheSource,
 		CacheEntryAgeSeconds: record.CacheEntryAgeSeconds, CacheTTLSeconds: record.CacheTTLSeconds,
 		Agent: record.Agent, ParentRequestID: record.ParentRequestID, SessionName: record.SessionName,
-		ReasoningEffort: record.ReasoningEffort,
+		NameFromPrompt: record.SessionNameFromPrompt, ReasoningEffort: record.ReasoningEffort,
 	}
 	if record.ConfidenceScoreAvailable {
 		metadata.ConfidenceScore = &record.ConfidenceScore
@@ -51,6 +52,7 @@ func unmarshalPostgresRoutingMetadata(encoded []byte, record *Record) error {
 	record.CacheEntryAgeSeconds = metadata.CacheEntryAgeSeconds
 	record.CacheTTLSeconds = metadata.CacheTTLSeconds
 	record.Agent, record.ParentRequestID, record.SessionName = metadata.Agent, metadata.ParentRequestID, metadata.SessionName
+	record.SessionNameFromPrompt = metadata.NameFromPrompt
 	record.ReasoningEffort = metadata.ReasoningEffort
 	return nil
 }

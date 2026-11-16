@@ -94,6 +94,11 @@ const (
 	// VSRCompressionControl is the default header of the context plugin's
 	// compress request controls; request_controls.header names another.
 	VSRCompressionControl = "x-vsr-compression-control"
+
+	// VSRProbe marks a request a tool sends to check the Router, such as
+	// vllm-sr connect --check, rather than a turn of an agent run. Any
+	// non-empty value marks it.
+	VSRProbe = "x-vsr-probe"
 )
 
 // The public response headers. Every routed response carries the ones that

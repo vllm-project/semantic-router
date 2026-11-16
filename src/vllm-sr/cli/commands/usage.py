@@ -22,6 +22,8 @@ AGGREGATE_PATH = f"{OBSERVABILITY_REPLAYS_PATH}/aggregate"
 # Models and entrypoints shown, those with the most requests.
 TOP = 3
 LIFECYCLE = ("completed", "failed", "aborted", "in_progress", "unknown")
+# How a record the Router refused itself ends: a block, a guard or a budget.
+REFUSALS = ("request_rejected", "budget_exceeded", "budget_unpriced")
 
 
 @click.command("usage")
@@ -119,7 +121,15 @@ def _summary(client: RouterManagementClient, start: datetime) -> dict:
             "total": len(records),
             **{state: states.count(state) for state in LIFECYCLE},
         },
-        "sessions": len({r["session_id"] for r in records if r.get("session_id")}),
+        # as Runs counts them: a session of only side requests, such as a title
+        # or a quota check, is no run
+        "sessions": len(
+            {
+                r["session_id"]
+                for r in records
+                if r.get("session_id") and not r.get("request_kind")
+            }
+        ),
         "cost": summary.get("by_currency") or [],
         "prompt_cache": (aggregate.get("provider_cache") or {}).get("by_currency")
         or [],
@@ -138,18 +148,29 @@ def _older_router(client: RouterManagementClient, why: str) -> click.ClickExcept
 
 def _top(records: list[dict], key: str) -> list[dict]:
     """The TOP names under key with the most requests, each with its requests'
-    priced costs by currency and how many have none."""
+    priced costs by currency, how many have none, and how many were refused
+    before any model answered or reached no provider, which cost nothing."""
     rows: dict[str, dict] = {}
     for record in records:
         if not record.get(key):
             continue
         row = rows.setdefault(
             record[key],
-            {"name": record[key], "requests": 0, "spend": {}, "unpriced": 0},
+            {
+                "name": record[key],
+                "requests": 0,
+                "spend": {},
+                "unpriced": 0,
+                "refused": 0,
+                "unanswered": 0,
+            },
         )
         row["requests"] += 1
         costs = _costs(record)
-        row["unpriced"] += costs == {}
+        refused, unanswered = _refused(record), _unanswered(record)
+        row["refused"] += refused
+        row["unanswered"] += unanswered
+        row["unpriced"] += costs == {} and not refused and not unanswered
         for currency, amount in costs.items():
             row["spend"][currency] = row["spend"].get(currency, 0) + amount
     ranked = sorted(rows.values(), key=lambda row: (-row["requests"], row["name"]))
@@ -162,6 +183,51 @@ def _hop(record: dict) -> bool:
     """Whether record is a Looper hop's, one model call of a client request."""
     accounting = record.get("cost_accounting") or {}
     return accounting.get("unpriced_reason") == "counted_in_parent"
+
+
+def _refused(record: dict) -> bool:
+    """Whether the Router refused a request, or it ended with a 4xx, before any
+    model answered it, a block, also one a stream carries under its 200, a
+    refusal or a spend budget, as the Router's aggregate counts it: its record
+    holds no usage, no price and no Router call."""
+    accounting = record.get("cost_accounting") or {}
+    status = record.get("response_status") or 0
+    return (
+        record.get("lifecycle_state") == "failed"
+        and (
+            record.get("terminal_reason") in REFUSALS
+            or HTTPStatus.BAD_REQUEST <= status < HTTPStatus.INTERNAL_SERVER_ERROR
+        )
+        and all(
+            record.get(field) is None
+            for field in ("prompt_tokens", "total_tokens", "actual_cost")
+        )
+        and not any(
+            accounting.get(field)
+            for field in ("pricing_source", "unpriced_reason", "router_calls")
+        )
+    )
+
+
+def _unanswered(record: dict) -> bool:
+    """Whether no provider answered a request, its upstream connection failed,
+    was reset or timed out before any response, as the Router's aggregate
+    counts it: a provider's own error reply, or a response with no price,
+    stays unpriced."""
+    reason = record.get("terminal_reason") or ""
+    status = record.get("response_status") or 0
+    accounting = record.get("cost_accounting") or {}
+    return (
+        record.get("lifecycle_state") == "failed"
+        and reason.startswith("upstream_")
+        and reason != "upstream_error_response"
+        and not HTTPStatus.OK <= status < HTTPStatus.MULTIPLE_CHOICES
+        and all(
+            record.get(field) is None
+            for field in ("prompt_tokens", "total_tokens", "actual_cost")
+        )
+        and not accounting.get("router_calls")
+    )
 
 
 def _costs(record: dict) -> dict[str, float]:
@@ -236,9 +302,13 @@ def _show(summary: dict) -> None:
 
 
 def _row_text(row: dict) -> str:
-    priced = [_money(amount, currency) for currency, amount in row["spend"].items()]
-    if not priced:
-        return f"{_requests(row['requests'])}, no price"
-    if row["unpriced"]:
-        priced.append(f"{row['unpriced']} with no price")
-    return f"{_requests(row['requests'])}, " + ", ".join(priced)
+    parts = [_money(amount, currency) for currency, amount in row["spend"].items()]
+    if row["unpriced"] == row["requests"]:
+        parts.append("no price")
+    elif row["unpriced"]:
+        parts.append(f"{row['unpriced']} with no price")
+    if row["refused"]:
+        parts.append(f"{row['refused']} refused before any model answered")
+    if row["unanswered"]:
+        parts.append(f"{row['unanswered']} no provider answered")
+    return ", ".join([_requests(row["requests"]), *parts])

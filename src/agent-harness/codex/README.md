@@ -103,8 +103,8 @@ Through a vLLM Semantic Router gateway, Codex only knows the model it asked for,
 ↳ Hook · ▚▞ vSR turn · 4 calls: gpt-6-luna (3), qwen3-coder (1) · decisions: coding, simple · 2 reviews: 1 allowed, 1 denied by codex-auto-review
 ```
 
-The line counts the turn's calls by the model the gateway selected and names the decisions that
-selected them. Reviews are the turn's **Approve for me** reviews, with their verdicts (or `failed`,
+The line counts the turn's calls by the model the gateway selected, a call the Router refused
+before any model answered as `blocked`, and names the decisions that selected them. Reviews are the turn's **Approve for me** reviews, with their verdicts (or `failed`,
 `invalid`, `cancelled`) and the model that answered. The records come from Router Replay
 (`GET /api/v1/observability/replays?turn_id=...`), found by the turn id Codex sends with every call;
 an approval review and a subagent name the turn that started them. Nothing is guessed from the

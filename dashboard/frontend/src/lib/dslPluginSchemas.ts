@@ -82,7 +82,7 @@ function getResponseGuardPluginFieldSchema(): FieldSchema[] {
           required: true,
           options: ['block', 'annotate', 'none'],
           description:
-            'Refuse the answer with 403, deliver it with x-vsr-warnings, or only record it',
+            'Refuse the answer with HTTP 400, deliver it with x-vsr-warnings, or only record it',
         },
         {
           key: 'details',
@@ -149,6 +149,20 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
       label: 'Capture Tool Results',
       type: 'boolean',
       description: 'Store client tool-result text; requires request body capture and raw prompt capture',
+    },
+    {
+      key: 'capture_session_name',
+      label: 'Capture Session Name',
+      type: 'boolean',
+      description:
+        'Keep the name a run reads by, its harness title or rename, else a headless run’s first prompt cut to 120 characters, whatever the prompt capture; on unless set off',
+    },
+    {
+      key: 'capture_tool_names',
+      label: 'Capture Tool Names',
+      type: 'boolean',
+      description:
+        'Keep the tool history, each call’s tool name and result status, the names of the tools each request offered and each subagent’s kind, without arguments, results or schemas, whatever the prompt capture; on unless set off',
     },
     { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
     {
@@ -246,7 +260,7 @@ function getFastResponsePluginFieldSchema(): FieldSchema[] {
       key: 'block',
       label: 'Block the request',
       type: 'boolean',
-      description: 'Refuse the request with HTTP 403 and this message instead of answering with it',
+      description: 'Refuse the request with HTTP 400 and this message instead of answering with it',
     },
   ]
 }

@@ -6,19 +6,16 @@ import styles from './InsightsRun.module.css'
 import { ModelName, modelLabel, modelText, useModelLabels } from './insightsModelLabelSupport'
 import { getInsightsRecordPath } from './insightsPageSupport'
 import {
-  countText,
   describeCallStatus,
-  formatRunCost,
-  formatRunDuration,
   modelHue,
   RUN_MARKER_GLYPHS,
   RUN_MARKER_LABELS,
-  type RunLane,
-  type RunSegment,
+  formatRunDuration,
 } from './insightsRunSupport'
-import type { RunCall, RunSummary } from './insightsRunTypes'
+import { toolDuration, toolStatusText } from './insightsRunSequence'
+import type { RunCall, RunSummary, RunToolCall } from './insightsRunTypes'
 
-function Markers({ markers }: { markers?: string[] }) {
+export function Markers({ markers }: { markers?: string[] }) {
   return (
     <>
       {(markers ?? []).map((marker) => (
@@ -35,75 +32,9 @@ function Markers({ markers }: { markers?: string[] }) {
   )
 }
 
-interface RunDiagramProps {
-  run: RunSummary
-  lanes: RunLane[]
-  selected?: string
-  onSelect: (segment: RunSegment) => void
-}
-
 // A model's label with its configured name, for a tooltip.
 function modelTitle(labels: Record<string, string>, model: string): string {
   return model ? modelText(labels, model) : 'no model'
-}
-
-// A lane per agent, in tree order, with its calls as segments on one time axis.
-export function RunDiagram({ run, lanes, selected, onSelect }: RunDiagramProps) {
-  const labels = useModelLabels()
-  return (
-    <div className={styles.diagram} role="list" aria-label="Run timeline">
-      {lanes.map((lane) => (
-        <div key={lane.agent.label} className={styles.lane} role="listitem">
-          <div className={styles.laneLabel} style={{ paddingLeft: `${lane.depth * 0.9}rem` }}>
-            <strong>{lane.depth > 0 ? `↳ ${lane.agent.label}` : lane.agent.label}</strong>
-            <span>
-              {[
-                lane.agent.kind,
-                countText(lane.agent.calls, 'call'),
-                formatRunCost(lane.agent.cost),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
-          </div>
-          <div className={styles.track}>
-            {lane.spawnAt !== undefined ? (
-              <span
-                className={styles.spawn}
-                style={{ left: `${lane.spawnAt}%` }}
-                title={`Spawned by ${lane.agent.parent ?? 'main'}`}
-              />
-            ) : null}
-            {lane.segments.map((segment) => (
-              <button
-                key={segment.key}
-                type="button"
-                className={styles.segment}
-                data-selected={segment.key === selected}
-                style={{
-                  left: `${segment.left}%`,
-                  width: `${segment.width}%`,
-                  background: modelHue(run.models, segment.model),
-                }}
-                title={`${modelTitle(labels, segment.model)} · ${countText(segment.calls.length, 'call')}`}
-                onClick={() => onSelect(segment)}
-              >
-                {segment.calls.length > 1 ? (
-                  <span className={styles.count}>{segment.calls.length}</span>
-                ) : null}
-                <Markers markers={segment.markers} />
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-      <div className={styles.axis}>
-        <span>0s</span>
-        <span>{formatRunDuration(Math.round(run.duration_ms / 2))}</span>
-        <span>{formatRunDuration(run.duration_ms)}</span>
-      </div>
-    </div>
-  )
 }
 
 export function RunLegend({ run }: { run: RunSummary }) {
@@ -134,7 +65,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function callCost(call: RunCall) {
-  const own = call.cost !== undefined ? formatInsightsCost(call.cost, call.currency) : 'no price'
+  const listPrice = call.pricing_source === 'catalog_list_price' ? ' list price' : ''
+  const own =
+    call.cost !== undefined ? formatInsightsCost(call.cost, call.currency) + listPrice : 'no price'
   const router = (call.router_calls ?? [])
     .map(
       (entry) =>
@@ -172,10 +105,10 @@ export function RunCallDetails({ call }: { call: RunCall }) {
         {call.terminal_reason ? ` · ${call.terminal_reason}` : ''}
         {call.final_answer ? ' · final answer' : ''}
       </Field>
-      <Field label="Tools">
+      <Field label="Results">
         {call.tool_results
-          ? `${call.tool_results} results, ${call.tool_failures ?? 0} failed`
-          : 'none returned'}
+          ? `${call.tool_results} tool results sent, ${call.tool_failures ?? 0} failed`
+          : 'no tool results sent'}
       </Field>
       {call.looper_attempts ? (
         <Field label="Looper">{`${call.looper_attempts} attempts`}</Field>
@@ -183,7 +116,9 @@ export function RunCallDetails({ call }: { call: RunCall }) {
       {call.hops?.length ? (
         <Field label="Hops">
           {call.hops
-            .map((hop) => `${modelLabel(labels, hop.model) || 'no model'} ${describeCallStatus(hop)}`)
+            .map(
+              (hop) => `${modelLabel(labels, hop.model) || 'no model'} ${describeCallStatus(hop)}`,
+            )
             .join(', ')}
         </Field>
       ) : null}
@@ -202,28 +137,52 @@ export function RunCallDetails({ call }: { call: RunCall }) {
   )
 }
 
-interface RunSegmentPanelProps {
-  segment: RunSegment
+interface RunRowDetailsProps {
+  calls: RunCall[]
   call?: RunCall
   onSelectCall: (call: RunCall) => void
 }
 
-// A segment's calls, one per row, and the details of the one picked.
-export function RunSegmentPanel({ segment, call, onSelectCall }: RunSegmentPanelProps) {
-  const labels = useModelLabels()
+// How long a tool call took on the client, and whose clock says so.
+function ToolDuration({ tool }: { tool: RunToolCall }) {
+  const duration = toolDuration(tool)
+  if (duration === undefined) return <span />
+  const source =
+    tool.timing_source === 'plugin'
+      ? 'Run time the harness reported'
+      : 'From the response that asked for it to the request that carried its result, as the gateway saw it'
+  return <span title={source}>{formatRunDuration(duration)}</span>
+}
+
+// Every tool call of a row's turns with its arguments and result.
+function RunToolList({ calls }: { calls: RunCall[] }) {
+  const rows = calls.flatMap((entry) =>
+    (entry.tool_calls ?? []).map((tool, index) => ({ entry, tool, index })),
+  )
+  if (rows.length === 0) return null
   return (
-    <aside className={styles.panel} aria-label="Step details">
-      <header>
-        <strong title={modelTitle(labels, segment.model)}>
-          {segment.agent} · {modelLabel(labels, segment.model) || 'no model'}
-        </strong>
-        <span>
-          {segment.calls.length} call{segment.calls.length === 1 ? '' : 's'}
-        </span>
-      </header>
-      {segment.calls.length > 1 ? (
+    <ol className={styles.toolList} aria-label="Tool calls">
+      {rows.map(({ entry, tool, index }) => (
+        <li key={`${entry.record_id}-${tool.id || index}`} data-status={tool.status}>
+          <strong>{tool.name}</strong>
+          <code>{tool.arguments || tool.summary || 'arguments not kept'}</code>
+          <ToolDuration tool={tool} />
+          <span>{toolStatusText(tool.status)}</span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+// A row's tool calls, its calls one per line when there are several, and the
+// details of the one picked.
+export function RunRowDetails({ calls, call, onSelectCall }: RunRowDetailsProps) {
+  return (
+    <div className={styles.panel} aria-label="Step details">
+      <RunToolList calls={calls} />
+      {calls.length > 1 ? (
         <ol className={styles.steps}>
-          {segment.calls.map((entry) => (
+          {calls.map((entry) => (
             <li key={entry.record_id}>
               <button
                 type="button"
@@ -231,7 +190,7 @@ export function RunSegmentPanel({ segment, call, onSelectCall }: RunSegmentPanel
                 onClick={() => onSelectCall(entry)}
               >
                 <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                <span>{entry.decision || '-'}</span>
+                <span>{entry.request_kind || entry.decision || '-'}</span>
                 <span>{describeCallStatus(entry)}</span>
                 <Markers markers={entry.markers} />
               </button>
@@ -244,6 +203,6 @@ export function RunSegmentPanel({ segment, call, onSelectCall }: RunSegmentPanel
       ) : (
         <p className={styles.muted}>Pick a call for its details.</p>
       )}
-    </aside>
+    </div>
   )
 }
