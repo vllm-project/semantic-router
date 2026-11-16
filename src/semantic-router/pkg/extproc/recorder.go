@@ -500,16 +500,11 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 // terminal response, which would otherwise read as a client abort. A record
 // the Router already ended keeps what it holds.
 func (r *OpenAIRouter) failAnsweredRouterReplay(ctx *RequestContext, status int, body []byte, reason string) {
-	recorder := r.responseGuardReplayRecorder(ctx)
-	if status < 400 || recorder == nil {
-		return
-	}
-	if record, ok := recorder.GetRecord(ctx.RouterReplayID); !ok || record.LifecycleState != routerreplay.LifecycleInProgress {
+	if status < 400 || !r.routerReplayInProgress(ctx) {
 		return
 	}
 	r.updateRouterReplayStatus(ctx, status, false)
-	r.attachRouterReplayResponse(ctx, body, false)
-	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, reason)
+	r.failStreamedRouterReplay(ctx, body, reason)
 }
 
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.

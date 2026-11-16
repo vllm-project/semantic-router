@@ -37,7 +37,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			decodeEvent["cause"] = cause.Error()
 		}
 		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
-		return r.createErrorResponse(502, "The selected model returned an invalid response")
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 	}
 	decodedDiagnosticsEnd := len(ctx.ProtocolDiagnostics)
 	clientBody := responseBody
@@ -49,7 +49,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	if rewriteClientBody {
 		clientBody, err = r.encodeClientResponse(*semanticResponse, ctx)
 		if err != nil {
-			return r.createErrorResponse(502, "The selected model returned an incompatible response")
+			return r.invalidUpstreamResponse(ctx, "The selected model returned an incompatible response")
 		}
 		ctx.ProtocolDiagnostics = deduplicateReencodedResponseDiagnostics(
 			ctx.ProtocolDiagnostics, diagnosticsBeforeBody, decodedDiagnosticsEnd,
@@ -66,6 +66,9 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
 	warnings, hasBufferedWarnings := bufferedWarnings(ctx)
 	if blocked != nil {
+		// The refusal replaces the answer, and no later phase sees it.
+		immediate := blocked.GetImmediateResponse()
+		r.failAnsweredRouterReplay(ctx, int(immediate.GetStatus().GetCode()), immediate.GetBody(), "request_rejected")
 		return blocked
 	}
 	// The cache keeps the answer the client receives: the guard passed it, and

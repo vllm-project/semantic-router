@@ -834,21 +834,25 @@ Replay lifecycle values describe what the recorder observed:
 
 - `in_progress`: no terminal response frame has been recorded yet.
 - `completed`: the response finished normally.
-- `failed`: the Router refused the request, or routing or the upstream
-  response failed. The record keeps the status the client received. A refusal
-  after routing uses `terminal_reason: request_rejected`. In standalone mode, a
-  request no backend answered keeps the gateway's `503` or `504` local reply
-  with `terminal_reason: upstream_<failure>`, such as
-  `upstream_connect_failure` or `upstream_reset`. A fallback chain that ends
-  without a success keeps the answer of its last attempt, in both modes:
-  `upstream_error_response` when that backend answered with an error,
-  `upstream_<failure>` when it did not answer, and `request_rejected` when a
-  candidate needs a delegated credential the request does not carry.
+- `failed`: the Router refused the request, the Router failed, or the
+  upstream response failed. The record keeps the status the client received,
+  and `terminal_reason` says why, as in the table below.
 - `aborted`: the stream ended without a valid terminal frame, for example
   after a disconnect or timeout.
 
 An HTTP `200` response header alone does not make a streaming record
-`completed`.
+`completed`. A stream that reached its terminal frame does, even when the
+record cannot keep its answer, such as one that was all thinking the client
+asked to omit.
+
+| `terminal_reason` of a `failed` record | When |
+| --- | --- |
+| `request_rejected` | The Router refused the request after routing it, with a `4xx`: before it sent the request to a backend, such as for a capability the selected model's wire format lacks, or in place of the answer, such as a `response_guard` block. A held stream's refusal arrives as its error event and keeps the `200`. A guard overload is a refusal its client retries, whether as `429` or as `529`, and so is a fallback candidate that needs a delegated credential the request does not carry. |
+| `request_budget_exceeded` | The request does not fit the [request budget](#request-budget-errors) of any candidate. |
+| `request_processing_failed` | The Router failed after routing. It answered with its own `5xx`, such as for a failed RAG retrieval, context compression that fails closed, a cached answer it cannot serve, a fast response it cannot encode, or a failed context recovery follow-up, or the request failed with an internal error. In standalone mode the record of such an error keeps the gateway's `500`. Behind Envoy, the ext_proc filter's `failure_mode_allow` decides what the client gets, so the record has no status. |
+| `upstream_invalid_response` | The Router cannot read or pass on the upstream answer, such as a cut body or one with no output, and answers `502` in place of the upstream's `200`. A held stream it read to its end but could not rebuild an answer from ends this way too, under its `200`. |
+| `upstream_error_response` | The upstream answered with an error status, or its stream carried an error event, which keeps the `200` the stream began with. A fallback chain that ends without a success keeps the answer of its last attempt, in both modes. |
+| `upstream_<failure>` | No backend answered: in standalone mode, the gateway's `503` or `504` local reply, such as `upstream_connect_failure` or `upstream_reset`, and, in both modes, a fallback chain whose last attempt did not answer. |
 
 ## Which port should I use?
 
