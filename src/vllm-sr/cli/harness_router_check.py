@@ -686,17 +686,23 @@ def _post(url: str, headers: dict, body: dict, timeout: float):
             url, json=body, headers=headers, timeout=timeout, stream=True
         ) as response:
             if response.status_code != requests.codes.ok:
-                return (
-                    response,
-                    None,
-                    f"HTTP {response.status_code} {response.text[:300]}",
-                )
+                problem = f"HTTP {response.status_code} {response.text[:300]}"
+                if response.status_code == requests.codes.unauthorized:
+                    problem = f"the gateway did not accept the key ({problem})"
+                return response, None, problem
             if body.get("stream"):
                 return response, _events(response), ""
             try:
                 return response, response.json(), ""
             except ValueError:
                 return response, None, "the answer is not JSON"
+    except requests.Timeout:
+        return None, None, f"no answer within {timeout:g} s"
+    except requests.ConnectionError as exc:
+        # requests nests the socket error a few reprs deep
+        found = re.search(r"\[Errno -?\d+\] ([^'\")]+)", str(exc))
+        why = found[1] if found else "the connection failed"
+        return None, None, f"no connection ({why}). Is the gateway running there?"
     except requests.RequestException as exc:
         return None, None, str(exc)
 

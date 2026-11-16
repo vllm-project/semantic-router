@@ -160,8 +160,10 @@ It then reports three checks, each on its own line:
   goes back, as the harness sends them. A stream that ends in an error fails
   it, and the check runs only after the basic reply passed.
 
-On a failure the written changes stay, so fix the gateway and run the command
-again, or take them back with `--undo`. With the vSR plugin installed it warns
+On a failure the line says what failed in words: a key the gateway refused, no
+connection at that address, or no answer in time. The written changes stay, so
+fix what failed and run the command again, or take them back with `--undo`.
+With the vSR plugin installed it warns
 while the plugin's router app is on, and when the listener also serves System
 One it prints the setting that points vSR at it. `--dry-run` prints the plan
 and writes nothing.
@@ -214,8 +216,9 @@ line, and a failed one fails the command:
 - `Approval review`, for Codex with a `review_model`: Codex runs with
   `--approve-for-me` and is asked to request approval for the command. The line
   says whether a request for the review entrypoint appeared in the Router's
-  replay list, read from the management API on the gateway's host (port 8080
-  plus `VLLM_SR_PORT_OFFSET`, with `VSR_MGMT_TOKEN`). Without replay capture on
+  replay list, read from the management API on the gateway's host (at
+  `global.services.management_api.port`, 8080 by default, plus
+  `VLLM_SR_PORT_OFFSET`, with `VSR_MGMT_TOKEN`). Without replay capture on
   the review recipe, or when the model runs the command without asking, it
   reads `not observed`, which does not fail the check.
 - `Exit`: the harness finished in time, exited with status 0, and reported no
