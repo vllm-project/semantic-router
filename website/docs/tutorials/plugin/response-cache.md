@@ -72,6 +72,12 @@ Replay and freshness, in every mode:
 - **Streams.** Replay preserves content, reasoning, refusal, tool calls,
   terminal usage, finish reasons and choice indexes for complete single- or
   multi-choice streams. Incomplete streams are never cached.
+- **Ids.** A hit gets ids of its own, the same for the same request, in the
+  shapes a model's answer has in the client's protocol: `chatcmpl-` on Chat,
+  `msg_` on Messages, and on Responses `resp_` with each item named by the
+  prefix of its type (`msg_`, `rs_`, `fc_`, `ctc_`, `ig_`). A tool call keeps
+  its `call_id`. A Responses client sends the items back with their ids, and
+  an OpenAI backend refuses an id whose prefix does not match its type.
 - **Request controls.** When enabled, the configured header accepts the
   authorized directives: `max-age` bounds read freshness and `ttl` bounds
   write lifetime. Caller TTL values are clamped to `max_ttl_seconds`.

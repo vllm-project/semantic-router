@@ -262,7 +262,10 @@ func neutralToolCallEvents(started, completed llmprotocol.Event, content llmprot
 		return nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_call_missing", "neutral tool call is missing", nil)
 	}
 	call := *content.ToolCall
-	started.ToolCall = &llmprotocol.ToolCall{ID: call.ID, Name: call.Name, Namespace: call.Namespace}
+	// The start names the call without its arguments, and keeps its kind: a
+	// Responses stream starts a custom tool call as custom_tool_call, and one
+	// started as function_call would not match its input deltas.
+	started.ToolCall = &llmprotocol.ToolCall{Kind: call.Kind, ID: call.ID, Name: call.Name, Namespace: call.Namespace}
 	completed.ToolCall = &call
 	delta := started
 	delta.Type = llmprotocol.EventToolCallDelta

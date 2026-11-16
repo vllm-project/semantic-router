@@ -21,7 +21,7 @@
                   "type": "reasoning_text"
                 }
               ],
-              "id": "msg_1",
+              "id": "rs_634e33906deaea6c5c926b57",
               "summary": [],
               "type": "reasoning"
             },
@@ -45,7 +45,7 @@
                   "type": "refusal"
                 }
               ],
-              "id": "item_79cc09c4ea9ad9df05cd3523",
+              "id": "msg_79cc09c4ea9ad9df05cd3523",
               "role": "assistant",
               "status": "completed",
               "type": "message"

@@ -54,7 +54,7 @@
         "data": {
           "item": {
             "content": [],
-            "id": "item_c14368f3e99d46cd77715e2b",
+            "id": "msg_2f83bc6917449f7a0294f543",
             "role": "assistant",
             "status": "in_progress",
             "type": "message"
@@ -68,7 +68,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "item_c14368f3e99d46cd77715e2b",
+          "item_id": "msg_2f83bc6917449f7a0294f543",
           "output_index": 0,
           "part": {
             "annotations": [],
@@ -84,7 +84,7 @@
         "data": {
           "content_index": 0,
           "delta": "done",
-          "item_id": "item_c14368f3e99d46cd77715e2b",
+          "item_id": "msg_2f83bc6917449f7a0294f543",
           "output_index": 0,
           "sequence_number": 4,
           "type": "response.output_text.delta"
@@ -94,7 +94,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "item_c14368f3e99d46cd77715e2b",
+          "item_id": "msg_2f83bc6917449f7a0294f543",
           "output_index": 0,
           "sequence_number": 5,
           "text": "done",
@@ -105,7 +105,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "item_c14368f3e99d46cd77715e2b",
+          "item_id": "msg_2f83bc6917449f7a0294f543",
           "output_index": 0,
           "part": {
             "annotations": [],
@@ -127,7 +127,7 @@
                 "type": "output_text"
               }
             ],
-            "id": "item_c14368f3e99d46cd77715e2b",
+            "id": "msg_2f83bc6917449f7a0294f543",
             "role": "assistant",
             "status": "completed",
             "type": "message"
@@ -158,7 +158,7 @@
                     "type": "output_text"
                   }
                 ],
-                "id": "item_c14368f3e99d46cd77715e2b",
+                "id": "msg_2f83bc6917449f7a0294f543",
                 "role": "assistant",
                 "status": "completed",
                 "type": "message"

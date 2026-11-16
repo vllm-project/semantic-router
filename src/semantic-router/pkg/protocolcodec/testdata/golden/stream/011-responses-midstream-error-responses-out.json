@@ -53,7 +53,7 @@
       "data": {
         "item": {
           "content": [],
-          "id": "output_1",
+          "id": "msg_4d5161bdd29e7f8be1972986",
           "role": "assistant",
           "status": "in_progress",
           "type": "message"
@@ -67,7 +67,7 @@
       "event": "response.content_part.added",
       "data": {
         "content_index": 0,
-        "item_id": "output_1",
+        "item_id": "msg_4d5161bdd29e7f8be1972986",
         "output_index": 0,
         "part": {
           "annotations": [],
@@ -83,7 +83,7 @@
       "data": {
         "content_index": 0,
         "delta": "partial",
-        "item_id": "output_1",
+        "item_id": "msg_4d5161bdd29e7f8be1972986",
         "output_index": 0,
         "sequence_number": 4,
         "type": "response.output_text.delta"

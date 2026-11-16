@@ -57,7 +57,7 @@
             {
               "data": {
                 "item": {
-                  "id": "item_4b8abe746dedebe24ff91fb6",
+                  "id": "rs_1b72f7da535388fddf0661fb",
                   "status": "in_progress",
                   "summary": [],
                   "type": "reasoning"
@@ -72,7 +72,7 @@
               "data": {
                 "content_index": 0,
                 "delta": "The user is asking for the current weather in Paris and explicitly requests to",
-                "item_id": "item_4b8abe746dedebe24ff91fb6",
+                "item_id": "rs_1b72f7da535388fddf0661fb",
                 "output_index": 0,
                 "sequence_number": 3,
                 "type": "response.reasoning_text.delta"
@@ -83,7 +83,7 @@
               "data": {
                 "content_index": 0,
                 "delta": " use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
-                "item_id": "item_4b8abe746dedebe24ff91fb6",
+                "item_id": "rs_1b72f7da535388fddf0661fb",
                 "output_index": 0,
                 "sequence_number": 4,
                 "type": "response.reasoning_text.delta"
@@ -95,7 +95,7 @@
                 "item": {
                   "arguments": "",
                   "call_id": "call_2",
-                  "id": "item_0aa2f5f05ce975eae264a2d9",
+                  "id": "fc_3d095cdb2201bd91057a69de",
                   "name": "get_weather",
                   "status": "in_progress",
                   "type": "function_call"
@@ -109,7 +109,7 @@
             {
               "data": {
                 "delta": "{\"city\":\"Paris\"}",
-                "item_id": "item_0aa2f5f05ce975eae264a2d9",
+                "item_id": "fc_3d095cdb2201bd91057a69de",
                 "output_index": 1,
                 "sequence_number": 6,
                 "type": "response.function_call_arguments.delta"
@@ -119,7 +119,7 @@
             {
               "data": {
                 "content_index": 0,
-                "item_id": "item_4b8abe746dedebe24ff91fb6",
+                "item_id": "rs_1b72f7da535388fddf0661fb",
                 "output_index": 0,
                 "sequence_number": 7,
                 "text": "The user is asking for the current weather in Paris and explicitly requests to use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
@@ -136,7 +136,7 @@
                       "type": "reasoning_text"
                     }
                   ],
-                  "id": "item_4b8abe746dedebe24ff91fb6",
+                  "id": "rs_1b72f7da535388fddf0661fb",
                   "status": "completed",
                   "summary": [],
                   "type": "reasoning"
@@ -150,7 +150,7 @@
             {
               "data": {
                 "arguments": "{\"city\":\"Paris\"}",
-                "item_id": "item_0aa2f5f05ce975eae264a2d9",
+                "item_id": "fc_3d095cdb2201bd91057a69de",
                 "name": "get_weather",
                 "output_index": 1,
                 "sequence_number": 9,
@@ -163,7 +163,7 @@
                 "item": {
                   "arguments": "{\"city\":\"Paris\"}",
                   "call_id": "call_2",
-                  "id": "item_0aa2f5f05ce975eae264a2d9",
+                  "id": "fc_3d095cdb2201bd91057a69de",
                   "name": "get_weather",
                   "status": "completed",
                   "type": "function_call"
@@ -193,7 +193,7 @@
                           "type": "reasoning_text"
                         }
                       ],
-                      "id": "item_4b8abe746dedebe24ff91fb6",
+                      "id": "rs_1b72f7da535388fddf0661fb",
                       "status": "completed",
                       "summary": [],
                       "type": "reasoning"
@@ -201,7 +201,7 @@
                     {
                       "arguments": "{\"city\":\"Paris\"}",
                       "call_id": "call_2",
-                      "id": "item_0aa2f5f05ce975eae264a2d9",
+                      "id": "fc_3d095cdb2201bd91057a69de",
                       "name": "get_weather",
                       "status": "completed",
                       "type": "function_call"

@@ -206,9 +206,9 @@ func assertGuardRefused(t *testing.T, format llmprotocol.WireFormat, stream bool
 	}
 	if stream {
 		if out.Status != 200 {
-			t.Fatalf("status = %d, want the refusal as a 200 event stream", out.Status)
+			t.Fatalf("status = %d, want the block's message as a 200 event stream", out.Status)
 		}
-		assertRefusedStream(t, format, body, "Response blocked by the response guard", benignAnswer)
+		assertBlockedStream(t, format, body, "Response blocked by the response guard", benignAnswer)
 		return
 	}
 	if out.Status != 400 || !strings.Contains(body, "Response blocked by the response guard") || strings.Contains(body, benignAnswer) {

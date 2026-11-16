@@ -13,7 +13,7 @@
     {
       "arguments": "{\"city\":\"Paris\",\"unit\":\"cel",
       "call_id": "call_weather_1",
-      "id": "item_208ea8cd6ce106360fb989a0",
+      "id": "fc_9caa76fbdace353836e8914a",
       "name": "lookup_weather",
       "type": "function_call"
     }

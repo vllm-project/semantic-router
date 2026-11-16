@@ -283,14 +283,20 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
 	metrics.RecordPluginExecution("fast_response", requestDecisionStateKey(ctx), "executed", 0)
 	ctx.VSRSelectedDecisionName = decisionName
+	path := headers.ResponsePathFastResponse
 	if fastCfg.Block {
-		// A 400, as a provider's content filter answers: Claude Code reads a
-		// 401 or 403 as a failed login and retries it. The record ends with
-		// the refusal when requestBodyReply sends it.
-		ctx.ResponsePath = headers.ResponsePathBlocked
-		ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "request_blocked", fastCfg.Message, nil)
-		return r.encodeImmediateResponseForClient(
-			r.createErrorResponseOnPath(http.StatusBadRequest, fastCfg.Message, headers.ResponsePathBlocked), ctx)
+		// A request that does not stream gets a 400, as a provider's content
+		// filter answers: Claude Code reads a 401 or 403 as a failed login and
+		// retries it. A stream gets the message as its answer, which ends an
+		// agent harness's turn: Claude Code re-sends a refused request with
+		// features turned off and merges the next prompt into the refused
+		// turn. The record ends with the refusal either way.
+		ctx.ResponsePath, path = headers.ResponsePathBlocked, headers.ResponsePathBlocked
+		if !ctx.ExpectStreamingResponse {
+			ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "request_blocked", fastCfg.Message, nil)
+			return r.encodeImmediateResponseForClient(
+				r.createErrorResponseOnPath(http.StatusBadRequest, fastCfg.Message, headers.ResponsePathBlocked), ctx)
+		}
 	}
 
 	body, contentType, _, err := r.encodeSyntheticTextResponse(
@@ -307,7 +313,7 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 		return r.createErrorResponse(500, "Fast response could not be encoded")
 	}
 	ctx.ImmediateResponseEncoded = true
-	return httputil.CreateFastResponseWithBody(body, contentType)
+	return httputil.CreateFastResponseWithBody(body, contentType, path)
 }
 
 // isMemoryDisabledForRoute checks if memory is disabled for the given route path.

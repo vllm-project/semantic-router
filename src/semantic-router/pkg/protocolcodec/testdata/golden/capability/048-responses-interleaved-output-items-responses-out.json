@@ -94,7 +94,7 @@
       {
         "data": {
           "item": {
-            "id": "reasoning_interleaved",
+            "id": "rs_39b0d41bb3d6ad8befdc0a2f",
             "status": "in_progress",
             "summary": [],
             "type": "reasoning"
@@ -109,7 +109,7 @@
         "data": {
           "content_index": 0,
           "delta": "thought",
-          "item_id": "reasoning_interleaved",
+          "item_id": "rs_39b0d41bb3d6ad8befdc0a2f",
           "output_index": 1,
           "sequence_number": 6,
           "type": "response.reasoning_text.delta"
@@ -119,7 +119,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "reasoning_interleaved",
+          "item_id": "rs_39b0d41bb3d6ad8befdc0a2f",
           "output_index": 1,
           "sequence_number": 7,
           "text": "thought",
@@ -136,7 +136,7 @@
                 "type": "reasoning_text"
               }
             ],
-            "id": "reasoning_interleaved",
+            "id": "rs_39b0d41bb3d6ad8befdc0a2f",
             "status": "completed",
             "summary": [],
             "type": "reasoning"
@@ -237,7 +237,7 @@
                     "type": "reasoning_text"
                   }
                 ],
-                "id": "reasoning_interleaved",
+                "id": "rs_39b0d41bb3d6ad8befdc0a2f",
                 "status": "completed",
                 "summary": [],
                 "type": "reasoning"

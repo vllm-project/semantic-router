@@ -53,7 +53,7 @@
       "data": {
         "item": {
           "content": [],
-          "id": "item_6b3da1cdd1ac360830ea6556",
+          "id": "msg_91bdc754674fd56c5a5ed0bf",
           "role": "assistant",
           "status": "in_progress",
           "type": "message"
@@ -67,7 +67,7 @@
       "event": "response.content_part.added",
       "data": {
         "content_index": 0,
-        "item_id": "item_6b3da1cdd1ac360830ea6556",
+        "item_id": "msg_91bdc754674fd56c5a5ed0bf",
         "output_index": 0,
         "part": {
           "annotations": [],
@@ -83,7 +83,7 @@
       "data": {
         "content_index": 0,
         "delta": "partial",
-        "item_id": "item_6b3da1cdd1ac360830ea6556",
+        "item_id": "msg_91bdc754674fd56c5a5ed0bf",
         "output_index": 0,
         "sequence_number": 4,
         "type": "response.output_text.delta"

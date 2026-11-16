@@ -61,8 +61,15 @@ recipes:
 ```
 
 With `block: true` the client gets HTTP 400 with the message as an error in
-its own protocol, and Router Replay records the request as refused; see
-[Block a Request](../../plugin/fast-response.md#block-a-request).
+its own protocol, or the message as the answer to a streaming request, and
+Router Replay records the request as refused; see
+[Block a Request](../../plugin/fast-response.md#block-a-request). The answer
+ends the turn, and an agent harness sends the blocked prompt again as history
+with its later prompts. `prompt_injection` above sets `input.history: true`,
+so it reads that history and refuses those requests as well. A rule without
+it reads only the user and tool messages after the last assistant message,
+which the answer leaves out, so the later prompts pass it; see
+[Later Requests Carry the Blocked Prompt](../../plugin/fast-response.md#later-requests-carry-the-blocked-prompt).
 
 | Field | Meaning |
 | --- | --- |

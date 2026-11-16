@@ -3,8 +3,28 @@ package extproc
 import (
 	"net/http"
 
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
+
+// recordFastResponse opens the record of a request a fast_response answered
+// with response. The message as the answer completes the record. A block
+// fails it with request_rejected, under the 200 a streamed block answers. A
+// block's 400, or a fast response that could not be encoded, is an error,
+// which ends the record when requestBodyReply sends it.
+func (r *OpenAIRouter) recordFastResponse(ctx *RequestContext, response *ext_proc.ProcessingResponse, originalModel, selectedModel, decisionName string) {
+	r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
+	immediate := response.GetImmediateResponse()
+	status := int(immediate.GetStatus().GetCode())
+	r.updateRouterReplayStatus(ctx, status, false)
+	if status < http.StatusBadRequest && ctx.ResponsePath == headers.ResponsePathBlocked {
+		r.failStreamedRouterReplay(ctx, immediate.GetBody(), "request_rejected")
+		return
+	}
+	r.attachRouterReplayResponse(ctx, immediate.GetBody(), status < http.StatusBadRequest)
+}
 
 // openRoutedRouterReplay opens the record of a request the Router answers
 // itself after routing it, before any dispatch opened one: a refusal of the

@@ -16,7 +16,7 @@
           "output": [
             {
               "call_id": "call_1",
-              "id": "item_68f26e3ce4ea5094995aa366",
+              "id": "ctc_0da743e6ea9560f40ac10328",
               "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
               "name": "apply_patch",
               "type": "custom_tool_call"

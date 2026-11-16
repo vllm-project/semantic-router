@@ -53,7 +53,7 @@
       "data": {
         "item": {
           "content": [],
-          "id": "item_d2224c2806947f1ca3a8a665",
+          "id": "msg_766ad55b5fabb2013868aa40",
           "role": "assistant",
           "status": "in_progress",
           "type": "message"
@@ -67,7 +67,7 @@
       "event": "response.content_part.added",
       "data": {
         "content_index": 0,
-        "item_id": "item_d2224c2806947f1ca3a8a665",
+        "item_id": "msg_766ad55b5fabb2013868aa40",
         "output_index": 0,
         "part": {
           "annotations": [],
@@ -83,7 +83,7 @@
       "data": {
         "content_index": 0,
         "delta": "hello ",
-        "item_id": "item_d2224c2806947f1ca3a8a665",
+        "item_id": "msg_766ad55b5fabb2013868aa40",
         "output_index": 0,
         "sequence_number": 4,
         "type": "response.output_text.delta"
@@ -94,7 +94,7 @@
       "data": {
         "content_index": 0,
         "delta": "world",
-        "item_id": "item_d2224c2806947f1ca3a8a665",
+        "item_id": "msg_766ad55b5fabb2013868aa40",
         "output_index": 0,
         "sequence_number": 5,
         "type": "response.output_text.delta"
@@ -104,7 +104,7 @@
       "event": "response.output_text.done",
       "data": {
         "content_index": 0,
-        "item_id": "item_d2224c2806947f1ca3a8a665",
+        "item_id": "msg_766ad55b5fabb2013868aa40",
         "output_index": 0,
         "sequence_number": 6,
         "text": "hello world",
@@ -115,7 +115,7 @@
       "event": "response.content_part.done",
       "data": {
         "content_index": 0,
-        "item_id": "item_d2224c2806947f1ca3a8a665",
+        "item_id": "msg_766ad55b5fabb2013868aa40",
         "output_index": 0,
         "part": {
           "annotations": [],
@@ -137,7 +137,7 @@
               "type": "output_text"
             }
           ],
-          "id": "item_d2224c2806947f1ca3a8a665",
+          "id": "msg_766ad55b5fabb2013868aa40",
           "role": "assistant",
           "status": "completed",
           "type": "message"
@@ -168,7 +168,7 @@
                   "type": "output_text"
                 }
               ],
-              "id": "item_d2224c2806947f1ca3a8a665",
+              "id": "msg_766ad55b5fabb2013868aa40",
               "role": "assistant",
               "status": "completed",
               "type": "message"

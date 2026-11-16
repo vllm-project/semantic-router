@@ -54,7 +54,7 @@
         "item": {
           "arguments": "",
           "call_id": "call_1",
-          "id": "item_ea01fffb29fcdc43fffdbc3b",
+          "id": "fc_e399b51ae4d71c331185b424",
           "name": "lookup",
           "status": "in_progress",
           "type": "function_call"
@@ -68,7 +68,7 @@
       "event": "response.function_call_arguments.done",
       "data": {
         "arguments": "",
-        "item_id": "item_ea01fffb29fcdc43fffdbc3b",
+        "item_id": "fc_e399b51ae4d71c331185b424",
         "name": "lookup",
         "output_index": 0,
         "sequence_number": 3,
@@ -81,7 +81,7 @@
         "item": {
           "arguments": "",
           "call_id": "call_1",
-          "id": "item_ea01fffb29fcdc43fffdbc3b",
+          "id": "fc_e399b51ae4d71c331185b424",
           "name": "lookup",
           "status": "completed",
           "type": "function_call"
@@ -109,7 +109,7 @@
             {
               "arguments": "",
               "call_id": "call_1",
-              "id": "item_ea01fffb29fcdc43fffdbc3b",
+              "id": "fc_e399b51ae4d71c331185b424",
               "name": "lookup",
               "status": "completed",
               "type": "function_call"

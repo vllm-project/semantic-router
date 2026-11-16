@@ -53,7 +53,7 @@
       "data": {
         "item": {
           "content": [],
-          "id": "message_incomplete",
+          "id": "msg_268ed5e23ebd90e277f4857e",
           "role": "assistant",
           "status": "in_progress",
           "type": "message"
@@ -67,7 +67,7 @@
       "event": "response.content_part.added",
       "data": {
         "content_index": 0,
-        "item_id": "message_incomplete",
+        "item_id": "msg_268ed5e23ebd90e277f4857e",
         "output_index": 0,
         "part": {
           "annotations": [],
@@ -83,7 +83,7 @@
       "data": {
         "content_index": 0,
         "delta": "partial answer",
-        "item_id": "message_incomplete",
+        "item_id": "msg_268ed5e23ebd90e277f4857e",
         "output_index": 0,
         "sequence_number": 4,
         "type": "response.output_text.delta"
@@ -93,7 +93,7 @@
       "event": "response.output_text.done",
       "data": {
         "content_index": 0,
-        "item_id": "message_incomplete",
+        "item_id": "msg_268ed5e23ebd90e277f4857e",
         "output_index": 0,
         "sequence_number": 5,
         "text": "partial answer",
@@ -104,7 +104,7 @@
       "event": "response.content_part.done",
       "data": {
         "content_index": 0,
-        "item_id": "message_incomplete",
+        "item_id": "msg_268ed5e23ebd90e277f4857e",
         "output_index": 0,
         "part": {
           "annotations": [],
@@ -126,7 +126,7 @@
               "type": "output_text"
             }
           ],
-          "id": "message_incomplete",
+          "id": "msg_268ed5e23ebd90e277f4857e",
           "role": "assistant",
           "status": "completed",
           "type": "message"
@@ -159,7 +159,7 @@
                   "type": "output_text"
                 }
               ],
-              "id": "message_incomplete",
+              "id": "msg_268ed5e23ebd90e277f4857e",
               "role": "assistant",
               "status": "completed",
               "type": "message"

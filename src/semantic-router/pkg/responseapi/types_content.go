@@ -161,6 +161,7 @@ const (
 	ItemTypeReasoning           = "reasoning"
 	ItemTypeItemReference       = "item_reference"
 	ItemTypeImageGenerationCall = "image_generation_call"
+	ItemTypeCustomToolCall      = "custom_tool_call"
 )
 
 // ToolType constants

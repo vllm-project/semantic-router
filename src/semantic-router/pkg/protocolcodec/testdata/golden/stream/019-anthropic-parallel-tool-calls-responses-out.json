@@ -54,7 +54,7 @@
         "item": {
           "arguments": "",
           "call_id": "call_weather",
-          "id": "call_weather",
+          "id": "fc_9f5e8968e832f81832c83efa",
           "name": "lookup_weather",
           "status": "in_progress",
           "type": "function_call"
@@ -70,7 +70,7 @@
         "item": {
           "arguments": "",
           "call_id": "call_time",
-          "id": "call_time",
+          "id": "fc_8ca13326bfbb926c986ed50e",
           "name": "lookup_time",
           "status": "in_progress",
           "type": "function_call"
@@ -84,7 +84,7 @@
       "event": "response.function_call_arguments.delta",
       "data": {
         "delta": "{\"city\":",
-        "item_id": "call_weather",
+        "item_id": "fc_9f5e8968e832f81832c83efa",
         "output_index": 0,
         "sequence_number": 4,
         "type": "response.function_call_arguments.delta"
@@ -94,7 +94,7 @@
       "event": "response.function_call_arguments.delta",
       "data": {
         "delta": "{\"zone\":",
-        "item_id": "call_time",
+        "item_id": "fc_8ca13326bfbb926c986ed50e",
         "output_index": 1,
         "sequence_number": 5,
         "type": "response.function_call_arguments.delta"
@@ -104,7 +104,7 @@
       "event": "response.function_call_arguments.delta",
       "data": {
         "delta": "\"UTC\"}",
-        "item_id": "call_time",
+        "item_id": "fc_8ca13326bfbb926c986ed50e",
         "output_index": 1,
         "sequence_number": 6,
         "type": "response.function_call_arguments.delta"
@@ -114,7 +114,7 @@
       "event": "response.function_call_arguments.delta",
       "data": {
         "delta": "\"Paris\"}",
-        "item_id": "call_weather",
+        "item_id": "fc_9f5e8968e832f81832c83efa",
         "output_index": 0,
         "sequence_number": 7,
         "type": "response.function_call_arguments.delta"
@@ -124,7 +124,7 @@
       "event": "response.function_call_arguments.done",
       "data": {
         "arguments": "{\"zone\":\"UTC\"}",
-        "item_id": "call_time",
+        "item_id": "fc_8ca13326bfbb926c986ed50e",
         "name": "lookup_time",
         "output_index": 1,
         "sequence_number": 8,
@@ -137,7 +137,7 @@
         "item": {
           "arguments": "{\"zone\":\"UTC\"}",
           "call_id": "call_time",
-          "id": "call_time",
+          "id": "fc_8ca13326bfbb926c986ed50e",
           "name": "lookup_time",
           "status": "completed",
           "type": "function_call"
@@ -151,7 +151,7 @@
       "event": "response.function_call_arguments.done",
       "data": {
         "arguments": "{\"city\":\"Paris\"}",
-        "item_id": "call_weather",
+        "item_id": "fc_9f5e8968e832f81832c83efa",
         "name": "lookup_weather",
         "output_index": 0,
         "sequence_number": 10,
@@ -164,7 +164,7 @@
         "item": {
           "arguments": "{\"city\":\"Paris\"}",
           "call_id": "call_weather",
-          "id": "call_weather",
+          "id": "fc_9f5e8968e832f81832c83efa",
           "name": "lookup_weather",
           "status": "completed",
           "type": "function_call"
@@ -190,7 +190,7 @@
             {
               "arguments": "{\"city\":\"Paris\"}",
               "call_id": "call_weather",
-              "id": "call_weather",
+              "id": "fc_9f5e8968e832f81832c83efa",
               "name": "lookup_weather",
               "status": "completed",
               "type": "function_call"
@@ -198,7 +198,7 @@
             {
               "arguments": "{\"zone\":\"UTC\"}",
               "call_id": "call_time",
-              "id": "call_time",
+              "id": "fc_8ca13326bfbb926c986ed50e",
               "name": "lookup_time",
               "status": "completed",
               "type": "function_call"
