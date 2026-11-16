@@ -179,7 +179,9 @@ listeners:
 
 Memory and router replay record the user of each request. Without a trusting
 listener they still load and treat every request as anonymous, and the Router
-logs one warning at startup that names them.
+logs one warning at startup that names them. Replay is named only where a
+`router_replay` plugin turns it on, not for the routing record a configuration
+without one keeps by default.
 
 ### Draining on shutdown
 

@@ -218,9 +218,9 @@ line, and a failed one fails the command:
   says whether a request for the review entrypoint appeared in the Router's
   replay list, read from the management API on the gateway's host (at
   `global.services.management_api.port`, 8080 by default, plus
-  `VLLM_SR_PORT_OFFSET`, with `VSR_MGMT_TOKEN`). Without replay capture on
-  the review recipe, or when the model runs the command without asking, it
-  reads `not observed`, which does not fail the check.
+  `VLLM_SR_PORT_OFFSET`, with `VSR_MGMT_TOKEN`). When `enabled: false`
+  turns replay off for the review recipe, or when the model runs the command
+  without asking, it reads `not observed`, which does not fail the check.
 - `Exit`: the harness finished in time, exited with status 0, and reported no
   failed turn or error result. A run that ends any other way fails the check,
   even after the steps above passed.
@@ -686,17 +686,10 @@ another entrypoint in the same API namespace with neither a `review_model` nor
 a `memory_model` of its own. One entrypoint can take both reviews and
 memories. Re-run connect after changing the memory binding.
 
-To see the reviews, turn Router Replay on for the recipe that answers them,
-the `review` recipe above or the main one when reviews use the session model.
-A global plugin covers every recipe:
-
-```yaml
-global:
-  plugins:
-    - type: router_replay
-      configuration:
-        enabled: true
-```
+Router Replay records the reviews by default, under the recipe that answers
+them: the `review` recipe above, or the main one when reviews use the session
+model. A `router_replay` plugin with `enabled: false` on that recipe leaves
+them out.
 
 Each review's record holds the planned action, the verdict with its risk and
 rationale, the reviewed session, the review model, latency, tokens and cost.
@@ -957,9 +950,10 @@ session in `session-id`, which the Router reads only when
 `global.router.headers.session_id_headers` or protection's `identity.headers`
 name it, so by default a Codex call is filed under a session the Router derives.
 
-- **Router Replay** must be on for the recipes that serve the turn and its
-  reviews. A principal without `replay.detail` permission still sees the
-  models, decisions and verdicts.
+- **Router Replay** records the turn and its reviews by default; a recipe
+  whose `router_replay` plugin sets `enabled: false` leaves them out. A
+  principal without `replay.detail` permission still sees the models,
+  decisions and verdicts.
 - **The management API** must be reachable at `managementUrl`. With bearer
   auth, set `VSR_MANAGEMENT_TOKEN` to a token with `replay.read`.
 - **No answer within 1.5 seconds**, or no record of the turn, ends the turn

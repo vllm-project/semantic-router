@@ -151,6 +151,12 @@
                 "key": "x-vsr-selected-model",
                 "rawValueText": "general-small"
               }
+            },
+            {
+              "header": {
+                "key": "x-vsr-replay-id",
+                "rawValueText": "<volatile>"
+              }
             }
           ]
         }

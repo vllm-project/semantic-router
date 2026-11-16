@@ -525,17 +525,17 @@ Router Replay records routing decisions and selected request lifecycle data.
 It is useful for debugging, evaluation, and Router Learning, but it does not
 change routing merely because a record is read.
 
-Replay is disabled unless a `router_replay` plugin enables it:
+Without a `router_replay` plugin, Replay records each request's routing data,
+and no request or response text, in the in-memory store. A `router_replay`
+plugin in `global.plugins` replaces that default, and `enabled: false` turns
+Replay off:
 
 ```yaml
 global:
-  services:
-    router_replay:
-      store_backend: memory
   plugins:
     - type: router_replay
       configuration:
-        enabled: true
+        enabled: false
 ```
 
 The in-memory backend is suitable for local inspection. Use a configured
