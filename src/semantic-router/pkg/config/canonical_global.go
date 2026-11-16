@@ -70,6 +70,7 @@ type CanonicalServiceGlobal struct {
 	MaskingIdentity MaskingIdentityConfig `yaml:"masking_identity,omitempty"`
 	Authz           AuthzConfig           `yaml:"authz"`
 	RateLimit       RateLimitConfig       `yaml:"ratelimit"`
+	Budgets         BudgetsConfig         `yaml:"budgets,omitempty"`
 	ManagementAPI   ManagementAPIConfig   `yaml:"management_api"`
 	RouterReplay    RouterReplayConfig    `yaml:"router_replay"`
 	StartupStatus   StartupStatusConfig   `yaml:"startup_status"`
@@ -252,6 +253,7 @@ func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlo
 	cfg.MaskingIdentity = services.MaskingIdentity
 	cfg.Authz = services.Authz
 	cfg.RateLimit = services.RateLimit
+	cfg.Budgets = services.Budgets
 	cfg.ManagementAPI = services.ManagementAPI
 	cfg.RouterReplay = services.RouterReplay
 	cfg.StartupStatus = services.StartupStatus

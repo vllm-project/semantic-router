@@ -84,6 +84,30 @@ export function describeBaselineBasis(record: InsightsRecord): string {
   return `The same recorded tokens at the rates of ${rule}${model}.`
 }
 
+const BUDGET_SETTLEMENTS: Record<string, string> = {
+  usage: 'from its usage',
+  estimate: 'its estimate, as it reported no usage that could be priced',
+  released: 'nothing, as no provider answered it',
+}
+
+/** What the request's tightest spend budget had left, and what the request reserved and spent. */
+export function describeBudget(accounting?: InsightsCostAccounting): string | undefined {
+  const budget = accounting?.budget
+  if (!budget) {
+    return undefined
+  }
+  const cost = (value?: number) => formatInsightsCost(value, budget.currency)
+  const left = `${budget.scope}: ${cost(budget.remaining)} of ${cost(budget.limit)} left`
+  const unpriced = budget.unpriced_calls ? `; ${plural(budget.unpriced_calls, 'unpriced call')}` : ''
+  if (!budget.settlement) {
+    const refused =
+      budget.remaining > 0 ? `the call was estimated at ${cost(budget.estimate)}` : 'nothing was left'
+    return `${left}; refused: ${refused}${unpriced}`
+  }
+  const settled = BUDGET_SETTLEMENTS[budget.settlement] ?? budget.settlement
+  return `${left}; reserved ${cost(budget.estimate)}, charged ${cost(budget.charged)} ${settled}${unpriced}`
+}
+
 /** The calls the Router made itself, with what they cost and what is left unpriced. */
 export function describeRouterCalls(accounting?: InsightsCostAccounting): string | undefined {
   const calls = accounting?.router_calls ?? []

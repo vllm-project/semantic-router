@@ -2515,6 +2515,23 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    # Spend limits per agent run and per user window, in one currency. A call
+    # reserves its estimated cost before it is sent and settles its actual
+    # cost after.
+    budgets:
+      currency: USD
+      unpriced: refuse
+      output_reserve_tokens: 4096
+      run:
+        limit: 5.0
+        idle_timeout_seconds: 86400
+      users:
+        - name: premium-daily
+          match:
+            user: "*"
+            group: premium-tier
+          limit: 50.0
+          window: day
     management_api:
       bind_address: 127.0.0.1
       port: 8080

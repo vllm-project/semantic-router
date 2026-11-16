@@ -341,6 +341,47 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "BudgetMatch": {
+      "properties": {
+        "user": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BudgetsConfig": {
+      "properties": {
+        "currency": {
+          "type": "string"
+        },
+        "unpriced": {
+          "type": "string",
+          "enum": [
+            "refuse",
+            "allow"
+          ]
+        },
+        "output_reserve_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "run": {
+          "$ref": "#/$defs/RunBudget"
+        },
+        "users": {
+          "items": {
+            "$ref": "#/$defs/UserBudget"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CacheEconomicsTuning": {
       "properties": {
         "enabled": {
@@ -1179,6 +1220,9 @@
         },
         "ratelimit": {
           "$ref": "#/$defs/RateLimitConfig"
+        },
+        "budgets": {
+          "$ref": "#/$defs/BudgetsConfig"
         },
         "management_api": {
           "$ref": "#/$defs/ManagementAPIConfig"
@@ -6480,6 +6524,23 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "RunBudget": {
+      "properties": {
+        "limit": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "idle_timeout_seconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "limit"
+      ]
+    },
     "SafetyRule": {
       "properties": {
         "name": {
@@ -7081,6 +7142,36 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "UserBudget": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "match": {
+          "$ref": "#/$defs/BudgetMatch"
+        },
+        "limit": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "window": {
+          "type": "string",
+          "enum": [
+            "hour",
+            "day",
+            "week",
+            "month"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "limit",
+        "window"
+      ]
     },
     "UserFeedbackRule": {
       "properties": {
@@ -8102,6 +8193,15 @@
         "path": [
           "services",
           "ratelimit"
+        ]
+      },
+      {
+        "key": "budgets",
+        "layer": "services",
+        "display_name": "Budgets",
+        "path": [
+          "services",
+          "budgets"
         ]
       },
       {

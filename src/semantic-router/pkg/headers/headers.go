@@ -135,6 +135,15 @@ const (
 
 	// VSRCostCurrency is the currency of VSRCost. Example: "USD"
 	VSRCostCurrency = "x-vsr-cost-currency"
+
+	// VSRBudgetRemaining is what the tightest spend budget the request
+	// belongs to has left, in global.services.budgets.currency: after the
+	// call's actual cost on a buffered response, after its reservation on a
+	// stream and on a refusal. Example: "1.250000"
+	VSRBudgetRemaining = "x-vsr-budget-remaining"
+
+	// VSRBudgetScope names that budget: run, or user/<rule name>.
+	VSRBudgetScope = "x-vsr-budget-scope"
 )
 
 // Warning codes in VSRWarnings: a request-stage guard rule that read only

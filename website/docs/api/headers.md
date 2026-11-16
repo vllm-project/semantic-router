@@ -38,6 +38,8 @@ Every response of the routing pipeline carries the headers that apply to it: ans
 | `x-vsr-replay-id` | v0.2 | Router Replay record id, when the record was persisted. |
 | `x-vsr-cost` | v0.4 | Usage priced with the served model's configured pricing; buffered responses only. |
 | `x-vsr-cost-currency` | v0.4 | Currency of `x-vsr-cost`, from `pricing.currency`. |
+| `x-vsr-budget-remaining` | v0.5 | What the tightest spend budget of the request has left, in `global.services.budgets.currency`: after the call's actual cost on a buffered response, after its reservation on a stream and on a `budget_exceeded` refusal. |
+| `x-vsr-budget-scope` | v0.5 | The spend budget `x-vsr-budget-remaining` reports: `run`, or `user/<rule name>`. |
 | `x-ratelimit-limit` | v0.2 | Limit of the rate-limit window that rejected the request. |
 | `x-ratelimit-remaining` | v0.2 | Requests left in that window. |
 | `x-ratelimit-reset` | v0.2 | Unix time the window resets at. |

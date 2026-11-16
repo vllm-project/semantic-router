@@ -221,6 +221,7 @@ func (s *routingSession) end(err error) {
 	}
 	s.ended = true
 	releaseInflightAdmission(s.ctx)
+	s.router.finishRequestSpend(s.ctx)
 	releaseStreamedBody(s.ctx)
 	finishRequestTrace(s.ctx, err)
 	if s.release != nil {

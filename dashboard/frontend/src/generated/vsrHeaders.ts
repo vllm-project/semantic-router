@@ -157,6 +157,12 @@ export const X_VSR_BENCH_EXPECTED_CONFIG_HASH = 'x-vsr-bench-expected-config-has
 /** Provider-call limit of an evaluation request; only `1` is supported. Surface: control. */
 export const X_VSR_BENCH_MAX_INFERENCE_CALLS = 'x-vsr-bench-max-inference-calls'
 
+/** What the tightest spend budget of the request has left, in `global.services.budgets.currency`: after the call's actual cost on a buffered response, after its reservation on a stream and on a `budget_exceeded` refusal. Surface: public. */
+export const X_VSR_BUDGET_REMAINING = 'x-vsr-budget-remaining'
+
+/** The spend budget `x-vsr-budget-remaining` reports: `run`, or `user/<rule name>`. Surface: public. */
+export const X_VSR_BUDGET_SCOPE = 'x-vsr-budget-scope'
+
 /** Response-cache directives for the request, when the plugin's `request_controls` allow them. Surface: control. */
 export const X_VSR_CACHE_CONTROL = 'x-vsr-cache-control'
 

@@ -137,6 +137,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			MaskingIdentity: cfg.MaskingIdentity,
 			Authz:           cfg.Authz,
 			RateLimit:       cfg.RateLimit,
+			Budgets:         cfg.Budgets,
 			ManagementAPI:   cfg.ManagementAPI,
 			RouterReplay:    cfg.RouterReplay,
 			StartupStatus:   cfg.StartupStatus,

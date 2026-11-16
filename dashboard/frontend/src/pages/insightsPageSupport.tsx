@@ -27,6 +27,7 @@ import {
   describeBaselineBasis,
   describeMissingModelCost,
   describePricingSource,
+  describeBudget,
   describeRouterCalls,
   isLooperRecord,
 } from './insightsCostAccounting'
@@ -426,6 +427,7 @@ export function buildInsightsRecordSections(
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
       { label: 'Baseline model', value: record.baseline_model || 'Baseline not recorded' },
       ...buildRouterCallFields(record),
+      ...buildBudgetFields(record),
       { label: 'Cost basis', value: describeCostBasis(record) },
       {
         label: 'Baseline basis',
@@ -510,6 +512,11 @@ function describeCostBasis(record: InsightsRecord): string {
 function buildRouterCallFields(record: InsightsRecord): ViewField[] {
   const value = describeRouterCalls(record.cost_accounting)
   return value ? [{ label: 'Router calls', value }] : []
+}
+
+function buildBudgetFields(record: InsightsRecord): ViewField[] {
+  const value = describeBudget(record.cost_accounting)
+  return value ? [{ label: 'Spend budget', value }] : []
 }
 
 function getUnavailableCost(record: InsightsRecord) {
