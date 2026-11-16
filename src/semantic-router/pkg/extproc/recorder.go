@@ -332,7 +332,7 @@ func buildReplayRoutingRecord(
 		// Tool definitions are operator-authored, not user content, so they
 		// are kept even when the prompt is suppressed.
 		record.ToolDefinitions = toolDefinitions
-		record.ReasoningEffort = ctx.SemanticRequest.ReasoningEffort
+		record.ReasoningEffort = replayReasoningEffort(ctx)
 		if !suppressBody {
 			if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
 				record.RequestBody = string(requestBody)
@@ -372,11 +372,16 @@ func replayDecisionMetadata(ctx *RequestContext) (int, int) {
 	return ctx.VSRSelectedDecision.Tier, ctx.VSRSelectedDecision.Priority
 }
 
+// replayReasoningMode and replayReasoningEffort are the reasoning the request
+// was sent with, as its provider dispatch carried it: no mode where the Router
+// wrote no reasoning for the model, and no effort for a request the Router
+// answered itself or turned reasoning off for.
 func replayReasoningMode(ctx *RequestContext) string {
-	if ctx.VSRReasoningMode == "" {
-		return "off"
-	}
-	return ctx.VSRReasoningMode
+	return ctx.dispatchReasoningMode
+}
+
+func replayReasoningEffort(ctx *RequestContext) string {
+	return ctx.dispatchReasoningEffort
 }
 
 func replaySelectedModel(selectedModel string) string {

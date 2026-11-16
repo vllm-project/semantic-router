@@ -55,6 +55,9 @@ func TestFeedbackAfterFallbackCreditsTheModelThatAnswered(t *testing.T) {
 			t.Cleanup(func() { _ = recorder.Close() })
 			ctx := answerThroughFallback(t, native, recorder)
 			require.Equal(t, "model-fallback-1", ctx.VSRSelectedModel, "the client is told the fallback answered")
+			record, found := recorder.GetRecord(ctx.RouterReplayID)
+			require.True(t, found)
+			require.Equal(t, "model-fallback-1", record.SelectedModel, "the record names the model that answered")
 
 			rt := newRouterLearningRuntime(nil, recorder, nil)
 			feedback := func(targetRef string) routerruntime.RouterOutcomeResult {

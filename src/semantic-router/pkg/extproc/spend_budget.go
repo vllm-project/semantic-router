@@ -201,9 +201,10 @@ func (r *OpenAIRouter) settleRequestSpend(ctx *RequestContext, replayUsage *rout
 }
 
 // finishRequestSpend ends the request's part in the budgets: a call still
-// reserved is charged its estimate when a provider answered it, since its
-// usage never arrived, and released otherwise; Router model calls made
-// since the last charge are charged.
+// reserved is charged the usage a stream cut short reported, when it was
+// priced, else its estimate when a provider answered it, since its usage
+// never arrived, and released otherwise; Router model calls made since the
+// last charge are charged.
 func (r *OpenAIRouter) finishRequestSpend(ctx *RequestContext) {
 	if ctx == nil || ctx.spend == nil {
 		return
@@ -211,9 +212,12 @@ func (r *OpenAIRouter) finishRequestSpend(ctx *RequestContext) {
 	spend := ctx.spend
 	changed := r.chargeRouterModelCalls(ctx, spend)
 	if spend.hold != nil {
-		if ctx.UpstreamStatusCode >= http.StatusOK && ctx.UpstreamStatusCode < http.StatusMultipleChoices {
+		switch {
+		case ctx.RequestCostPriced && normalizeReplayCurrency(ctx.RequestCostCurrency) == spend.currency:
+			spend.settle(ctx.RequestCost, store.BudgetSettledPartialUsage)
+		case ctx.UpstreamStatusCode >= http.StatusOK && ctx.UpstreamStatusCode < http.StatusMultipleChoices:
 			spend.settle(spend.estimate, store.BudgetSettledEstimate)
-		} else {
+		default:
 			spend.settle(0, store.BudgetSettledReleased)
 		}
 		changed = true

@@ -35,6 +35,20 @@ func protectionAgentID(ctx *RequestContext, cfg config.RouterLearningProtectionC
 	return agentID, header
 }
 
+// protectionSideRequestClass is the class of a Claude Code side request, such
+// as a compaction or an auxiliary call that names the session's title: any
+// class but main and the subagent classes, whose requests name their agent.
+// A side request is held under a key of its own beside its agent's, so it
+// neither sets nor moves the model that agent is held on.
+func protectionSideRequestClass(ctx *RequestContext) string {
+	switch class := boundedHeader(ctx, headers.XClaudeCodeRequestClass); class {
+	case "", config.AgentRequestClassMain, config.AgentRequestClassSubagent, config.AgentRequestClassWorkflow:
+		return ""
+	default:
+		return class
+	}
+}
+
 // protectionIdentityHeader reads key's id from the first identity header that
 // carries one. A configured header is reported even when the request lacks
 // it. With none configured, the id Codex's turn metadata carries comes last:

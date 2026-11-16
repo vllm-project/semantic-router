@@ -146,6 +146,7 @@ func recordRouterSessionUsageFromContext(
 		EstimatedCacheSavings:       accounting.estimatedSavings,
 		CacheAccountingSource:       accounting.source,
 		CacheReported:               usageReportsCache(usage),
+		Apart:                       ctx.protectionKeyApart,
 		Timestamp:                   time.Now(),
 	})
 	recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)

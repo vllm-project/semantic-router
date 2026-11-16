@@ -242,6 +242,18 @@ blocks are omitted:
 | Non-empty text, including whitespace | The same text |
 | A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
 
+### Empty answers
+
+A model can end its turn with nothing to say, which Anthropic answers with
+`end_turn` and no content block. The Router passes that on as an empty
+completion, buffered or streamed: a Messages client gets `content: []` with
+`end_turn`, a Chat Completions client an assistant message with `content: ""`
+and `finish_reason: stop`, and a Responses client a `completed` response with
+no output. Router Replay records it `completed`, with its usage and cost. A
+reply with no output under any other stop, such as a tool call that names no
+call, and a stream without its stop reason or its `message_stop`, are still
+invalid upstream answers.
+
 ### Anthropic Messages clients on other backends
 
 For an Anthropic Messages client using a Chat Completions or Responses

@@ -76,6 +76,10 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 	buffers := semanticStreamBuffers{}
 	body, endOfStream = r.bridgeBufferedBody(&buffers, body, endOfStream, ctx)
 	buffers.push(body, ctx)
+	if endOfStream && buffers.unread(ctx) {
+		r.recordUnreadStream(ctx, responseGuardIncomplete)
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
+	}
 	if endOfStream {
 		buffers.finalize(ctx)
 	}

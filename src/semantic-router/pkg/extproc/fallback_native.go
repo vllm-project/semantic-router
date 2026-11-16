@@ -318,6 +318,7 @@ func (f *sessionFallback) succeeded(status int) {
 	// The response phases credit this success to the request's backend.
 	ctx.primaryBackendName = candidate.dispatch.backendName
 	ctx.ResponsePath = headers.ResponsePathFallback
+	r.recordServedFallback(ctx, candidate)
 
 	orch := r.fallbackOrchestratorForContext(ctx)
 	if orch == nil || ctx.FallbackRecord == nil {
@@ -368,11 +369,13 @@ func (r *OpenAIRouter) fallbackBackendName(ctx *RequestContext, model string) st
 	return model
 }
 
+// fallbackCommitState is what a failed attempt leaves for the next candidate.
+// No attempt runs a tool: a request carries only tools its client runs, and a
+// tool result in its history ran on the client before the request, so a
+// candidate gets it as history and runs nothing again. Once any of the answer,
+// such as a streamed tool call, has reached the client, nothing falls back.
 func fallbackCommitState(ctx *RequestContext) fallback.CommitState {
-	return fallback.CommitState{
-		HasNonIdempotentSideEffects: ctx.hasNonIdempotentToolExecution(),
-		BodyReplayable:              ctx.SemanticRequest != nil,
-	}
+	return fallback.CommitState{BodyReplayable: ctx.SemanticRequest != nil}
 }
 
 // candidateCall builds the upstream request for a prepared candidate from the

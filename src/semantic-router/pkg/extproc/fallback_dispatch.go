@@ -31,24 +31,6 @@ import (
 
 type fallbackTransportCaller func(ctx context.Context, model string, body []byte, headers map[string]string) ([]byte, int, error)
 
-// hasNonIdempotentToolExecution reports whether the request contains executed tool side-effects.
-func (ctx *RequestContext) hasNonIdempotentToolExecution() bool {
-	if ctx == nil || ctx.SemanticRequest == nil {
-		return false
-	}
-	for _, msg := range ctx.SemanticRequest.Messages {
-		if msg.Role == llmprotocol.RoleTool {
-			return true
-		}
-		for _, content := range msg.Content {
-			if content.Kind == llmprotocol.ContentToolResult {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 // isClientStreamingRequested reports whether the original downstream client requested a streaming response.
 func isClientStreamingRequested(ctx *RequestContext) bool {
 	if ctx == nil {
@@ -131,11 +113,8 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		return nil
 	}
 
-	commit := fallback.CommitState{
-		ResponseCommitted:           ctx.ResponseHeadersContinued || ctx.StreamingComplete || (ctx.IsStreamingResponse && ctx.TTFTRecorded),
-		HasNonIdempotentSideEffects: ctx.hasNonIdempotentToolExecution(),
-		BodyReplayable:              ctx.SemanticRequest != nil,
-	}
+	commit := fallbackCommitState(ctx)
+	commit.ResponseCommitted = ctx.ResponseHeadersContinued || ctx.StreamingComplete || (ctx.IsStreamingResponse && ctx.TTFTRecorded)
 
 	primaryModel := ctx.VSRSelectedModel
 	if primaryModel == "" {
@@ -605,6 +584,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 
 	metrics.RecordModelRouting(primaryModel, candidateModel)
 	r.updateRouterReplayStatus(ctx, statusCode, isStreaming)
+	r.recordServedFallback(ctx, candidate)
 
 	// Write the finalized public response to cache only after response policy and wire validation succeed.
 	// Blocked responses (jailbreak/hallucination) or rejected frames are never cached.
@@ -694,20 +674,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		reqCopy.Stream = false
 		reqCopy.StreamOptions = llmprotocol.StreamOptions{}
 	}
-	if useReasoning {
-		effort := candidateRef.ReasoningEffort
-		if effort == "" {
-			effort = r.getReasoningEffort(ctx.decisionForCandidate(candidateModel), candidateModel)
-		}
-		reqCopy.ReasoningEffort = effort
-		reqCopy.ReasoningMode, reqCopy.ReasoningBudgetTokens = r.candidateReasoningMode(
-			ctx, candidateRef, dispatch.targetFormat, reqCopy.ReasoningBudgetTokens,
-		)
-	} else {
-		reqCopy.ReasoningEffort = ""
-		reqCopy.ReasoningMode = ""
-		reqCopy.ReasoningBudgetTokens = nil
-	}
+	r.applyCandidateReasoning(ctx, reqCopy, candidateRef, dispatch, useReasoning)
 
 	if requestAlreadyPrepared {
 		if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
@@ -793,33 +760,6 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		model: candidateModel, ref: candidateRef, dispatch: dispatch, request: reqCopy, body: requestBody,
 		engine: engine,
 	}, fallback.EvaluationResult{CanFallback: true}, nil
-}
-
-// candidateReasoningMode is the reasoning mode, and the thinking budget that
-// goes with it, of a candidate with reasoning on. Only the Messages wire
-// carries a mode, and enabled thinking there needs a budget, so a budgetless
-// enabled mode becomes adaptive, as for the primary. Chat Completions and
-// Responses carry none: their provider adapter turns use_reasoning into the
-// backend's own control, and a mode left on the request fails validation
-// before the call.
-func (r *OpenAIRouter) candidateReasoningMode(
-	ctx *RequestContext,
-	candidateRef *config.ModelRef,
-	target llmprotocol.WireFormat,
-	budget *int64,
-) (llmprotocol.ReasoningMode, *int64) {
-	if target != llmprotocol.AnthropicMessagesV1 {
-		return "", budget
-	}
-	mode := candidateRef.ReasoningMode
-	if mode == "" {
-		candidateModel := candidateModelIdentity(*candidateRef)
-		mode = r.getReasoningMode(ctx.decisionForCandidate(candidateModel), candidateModel, true)
-	}
-	if mode == "" {
-		return "", budget
-	}
-	return messagesThinkingBudget(target, llmprotocol.ReasoningMode(mode), budget)
 }
 
 func (r *OpenAIRouter) settleFallbackCandidateUsage(ctx *RequestContext, attemptDuration time.Duration) {
@@ -1057,8 +997,10 @@ const fallbackOutcomeSource = "fallback"
 // recordFallbackExecution persists one bounded terminal audit record containing
 // every correlated attempt. It runs for success, exhaustion, cancellation, and
 // policy rejection so replay consumers never have to infer missing attempts.
+// A record without attempts is a chain that never started, because the first
+// model answered, so it leaves no outcome.
 func (r *OpenAIRouter) recordFallbackExecution(ctx *RequestContext) {
-	if ctx == nil || ctx.FallbackRecord == nil || ctx.FallbackAuditRecorded {
+	if ctx == nil || ctx.FallbackRecord == nil || len(ctx.FallbackRecord.Attempts) == 0 || ctx.FallbackAuditRecorded {
 		return
 	}
 

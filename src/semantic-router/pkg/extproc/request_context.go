@@ -313,6 +313,16 @@ type RequestContext struct {
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
+	// protectionKeyApart marks a request protection holds under a key of its
+	// own in the session: a subagent's or a side request's.
+	protectionKeyApart bool
+	// dispatchReasoningMode and dispatchReasoningEffort are the reasoning the
+	// request's provider dispatch carried; empty while nothing was sent.
+	dispatchReasoningMode   string
+	dispatchReasoningEffort string
+	// committedSessionDecision is the ownership the dispatch committed, which a
+	// fallback candidate that answers takes over.
+	committedSessionDecision *sessiontelemetry.SessionDecisionParams
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*

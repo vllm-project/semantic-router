@@ -33,6 +33,8 @@ type semanticResponseStreamState struct {
 	order      []int
 	terminal   bool
 	failed     *llmprotocol.ProtocolError
+	// decoded reports that the stream decoder read at least one event.
+	decoded bool
 }
 
 type semanticStreamItem struct {
@@ -61,6 +63,10 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	buffers := semanticStreamBuffers{}
 	responseBody, endOfStream = r.bridgeBufferedBody(&buffers, responseBody, endOfStream, ctx)
 	buffers.push(responseBody, ctx)
+	if endOfStream && buffers.unread(ctx) {
+		// The client gets what a buffered client gets for such a body.
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
+	}
 	if endOfStream {
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
@@ -126,6 +132,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 		observeProtocolStream(ctx, events, diagnostics)
 		buffers.recordError(ctx, err, true)
 	}
+}
+
+// unread reports a body the provider answered whole, which its client has not
+// seen yet, that neither the bridge nor the stream decoder could read
+// anything from.
+func (buffers *semanticStreamBuffers) unread(ctx *RequestContext) bool {
+	state := ctx.SemanticStreamState
+	return !ctx.UpstreamBodyStreamed && !buffers.bridged && ctx.ProtocolResponseStream != nil && state != nil && !state.decoded
 }
 
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
@@ -366,6 +380,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 	if state == nil {
 		return
 	}
+	state.decoded = state.decoded || len(events) > 0
 	for _, event := range events {
 		if event.ResponseID != "" {
 			state.responseID = event.ResponseID
@@ -646,7 +661,9 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	}
 	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
-		r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
+		if !r.recordInterruptedStreamUsage(ctx) {
+			r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
+		}
 		return
 	}
 	totalTokens := responseUsageTotal(usage)

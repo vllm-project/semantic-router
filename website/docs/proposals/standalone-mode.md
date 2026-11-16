@@ -279,13 +279,21 @@ deliberate:
   resolved address.
 - **Transport framing.** Content length and chunked framing follow Go's HTTP server, which may frame a buffered
   body with a length where Envoy would chunk it.
+- **A body cut short.** When a backend closes a buffered body before its declared length, Envoy answers with its own
+  `502` local reply and ext_proc never sees it, so the Router Replay record ends `aborted`. Standalone mode lets the
+  response phase answer instead: the client gets the `502` of an answer the Router cannot read, with the replay id,
+  and the record is `failed` with `upstream_invalid_response`. A timeout that stops the body partway gets a `504` and
+  `upstream_timeout` the same way.
 - **Cross-model fallback.** The upstream layer sends each candidate, so a candidate gets its provider model's
   retries, ejection and TLS. Envoy mode's response-phase fallback calls candidates over plain HTTP.
   - An unreachable candidate reaches the policy as the `503` or `504` local reply, not as a transport error. That
     changes the outcome only for a policy that leaves those statuses out.
   - Standalone mode also falls back on Envoy's local replies, such as a refused connection, a reset or a timeout. Behind
-    Envoy, ext_proc ends processing on Envoy's own local replies, so the client gets the reply and no candidate is
-    tried. In both modes a local reply that reaches the client skips the response phases.
+    Envoy, ext_proc ends processing on Envoy's own local replies (the runtime guard
+    `envoy.reloadable_features.skip_ext_proc_on_local_reply`, on by default in Envoy v1.35.3), so the client gets the
+    reply, no candidate is tried, and the Router sees only the end of the stream, as when a client leaves. In both
+    modes a local reply that reaches the client skips the response phases, and a candidate the Router calls itself
+    names its failure the same way.
   - In standalone mode a candidate's request is built like the primary's, from the client's request. Envoy
     mode's candidate gets only the provider's headers.
   - Standalone mode commits to a candidate when its successful headers arrive. Envoy mode commits once it has

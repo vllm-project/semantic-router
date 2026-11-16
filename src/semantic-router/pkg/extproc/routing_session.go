@@ -148,6 +148,16 @@ func (s *routingSession) ResponseBody(body []byte, endOfStream bool) (*routing.E
 	})
 }
 
+// ResponseBodyCut answers for an upstream body that ended before it was
+// whole, which Envoy answers with its own local reply.
+func (s *routingSession) ResponseBodyCut(cause error) (*routing.Effect, error) {
+	return s.phase(func() (*ext_proc.ProcessingResponse, error) {
+		return s.router.cutResponseBodyReply(s.ctx, cause), nil
+	}, func(response *ext_proc.ProcessingResponse) {
+		responseBodyReplySent(s.ctx, response, true)
+	})
+}
+
 func (s *routingSession) Evidence() routing.Evidence {
 	return routingEvidence(s.ctx)
 }

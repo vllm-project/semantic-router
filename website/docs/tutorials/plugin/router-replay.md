@@ -781,6 +781,21 @@ so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 
+A record's `selected_model` is the model whose answer the request got, and
+`reasoning_mode` and `reasoning_effort` the reasoning it was sent with. When a
+[fallback](../../installation/model-configuration#fall-back-to-another-model)
+candidate answers in place of the routed model, the record names the
+candidate, and its `fallback` outcome keeps every attempt with the routed model
+as `initial_model`. `reasoning_mode` is `on` or `off` where the Router wrote
+reasoning for the model, a model with a reasoning family that the decision's
+controls reached, and empty for a request passed through with the client's
+reasoning fields as sent, such as one to a model without a reasoning family.
+`reasoning_effort` is empty when no effort level was sent: for a decision that
+turns reasoning off, a backend whose reasoning switch carries no level, or a
+request the Router answered itself, such as a blocked one, which has no mode
+either. A Looper request's own record carries neither, while each hop's record
+keeps what that hop was sent with.
+
 Each record's `route_diagnostics` explains the route:
 
 | Field | Holds |

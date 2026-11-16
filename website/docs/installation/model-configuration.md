@@ -538,7 +538,10 @@ layer first:
   its retries, ejection and health checks instead.
 - **Reasoning.** A candidate is sent with its own `modelRefs` reasoning
   settings (`use_reasoning`, `reasoning_effort`, `reasoning_mode`), written for
-  its backend the way the first attempt's are. A candidate the Router cannot
+  its backend the way the first attempt's are. A candidate whose model has no
+  reasoning family keeps the request's reasoning fields as they are, such as
+  Claude Code's `thinking` block, as a first attempt to that model does. A
+  candidate the Router cannot
   prepare, such as one its rate limit refuses, is passed over for the next one
   and logged as `fallback_candidate_skipped` with the reason.
 - **Streaming.** A streamed request falls back too, whatever `stream_options`
@@ -554,6 +557,15 @@ layer first:
   answered the last attempt, the client gets `503` with
   `upstream_unavailable`, or `504` with `upstream_timeout`, and none of the
   transport's detail.
+- **Tool history.** A tool result in the conversation does not stop a
+  fallback. The client ran that tool before the request, and a candidate
+  gets it as history and runs nothing again. Nothing falls back once any part
+  of the answer, such as a streamed tool call, has reached the client.
+- **Records.** When a candidate answers, Router Replay's record names it in
+  `selected_model`, with the reasoning it was sent with, and its `fallback`
+  outcome keeps every attempt, the first model's included. Protection then
+  holds the session on the candidate. A request the first model answers has
+  no `fallback` outcome.
 - **Long prompts.** A candidate whose window the Router's
   [count](#check-prompts-against-the-context-window) exceeds beyond its band
   is never tried. After a backend refuses the prompt for its length, the chain

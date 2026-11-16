@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"syscall"
 	"testing"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -283,20 +286,34 @@ func TestExhaustedFallbackReplayKeepsTheClientsStatus(t *testing.T) {
 		})
 	}
 
-	t.Run("response phase, no candidate backend answers", func(t *testing.T) {
-		router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
-		ctx := testFallbackRequestContext("model-primary", eligible)
-		openReplay(t, router, ctx, "model-primary", "")
-		ctx.UpstreamStatusCode = http.StatusServiceUnavailable
-		router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
-			return nil, 0, errors.New("dial tcp 127.0.0.1:8002: connect: connection refused")
-		}
-		resp := router.handleUpstreamTransportError([]byte(`{"error":{"message":"unavailable","type":"server_error"}}`), ctx)
-		require.NotNil(t, resp.GetImmediateResponse())
-		require.NoError(t, router.handleProcessReceiveError(ctx, io.EOF))
+	// Behind Envoy the Router calls a candidate itself, and names its failure
+	// as the native gateway does.
+	transport := func(cause error) error {
+		return &connector.Error{Kind: connector.KindTransport, Operation: "fallback_dispatch", Cause: cause}
+	}
+	for name, tc := range map[string]struct {
+		err    error
+		reason string
+	}{
+		"no connection": {transport(&net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}), "upstream_connect_failure"},
+		"reset":         {transport(&net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}), "upstream_reset"},
+		"unclassified":  {errors.New("no transport"), "upstream_unavailable"},
+	} {
+		t.Run("response phase, no candidate backend answers, "+name, func(t *testing.T) {
+			router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+			ctx := testFallbackRequestContext("model-primary", eligible)
+			openReplay(t, router, ctx, "model-primary", "")
+			ctx.UpstreamStatusCode = http.StatusServiceUnavailable
+			router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+				return nil, 0, tc.err
+			}
+			resp := router.handleUpstreamTransportError([]byte(`{"error":{"message":"unavailable","type":"server_error"}}`), ctx)
+			require.NotNil(t, resp.GetImmediateResponse())
+			require.NoError(t, router.handleProcessReceiveError(ctx, io.EOF))
 
-		requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "upstream_unavailable", http.StatusServiceUnavailable)
-	})
+			requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, tc.reason, http.StatusServiceUnavailable)
+		})
+	}
 }
 
 // A chain that ends at a candidate refused for want of the request's
@@ -386,17 +403,28 @@ var answeredUpstream = map[string]func(t *testing.T, prepare func(*OpenAIRouter,
 }
 
 // An upstream answer the Router cannot read reaches the client as a 502, not
-// the 200 the upstream sent, and the record is that failure, not an abort.
+// the 200 the upstream sent, and the record is that failure, not an abort. A
+// Responses client that asked for a stream gets the same for one body the
+// provider did not stream, since none of it has reached the client.
 func TestInvalidUpstreamAnswerReplayKeepsTheClientsStatus(t *testing.T) {
-	for name, body := range map[string]string{
-		"cut body":  `{"id":"msg_bad","type":"message","content":[`,
-		"no output": `{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":0}}`,
+	messages := func(ctx *RequestContext) { ctx.TargetFormat = llmprotocol.AnthropicMessagesV1 }
+	responsesStream := func(ctx *RequestContext) {
+		streamingClient(ctx, llmprotocol.OpenAIResponsesV1)
+		ctx.TargetFormat = llmprotocol.OpenAIChatV1
+	}
+	for name, tc := range map[string]struct {
+		prepare func(*RequestContext)
+		body    string
+	}{
+		"cut body":                  {messages, `{"id":"msg_bad","type":"message","content":[`},
+		"Responses stream, no JSON": {responsesStream, "this is not json"},
+		"Responses stream, cut":     {responsesStream, `{"id":"x","object":"chat.completion","choices":[{"index":0,"message":{"role":"assi`},
 	} {
 		for gateway, deliver := range answeredUpstream {
 			t.Run(name+", "+gateway, func(t *testing.T) {
 				router, ctx := deliver(t, func(_ *OpenAIRouter, ctx *RequestContext) {
-					ctx.TargetFormat = llmprotocol.AnthropicMessagesV1
-				}, "200", "application/json", body)
+					tc.prepare(ctx)
+				}, "200", "application/json", tc.body)
 
 				requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "upstream_invalid_response", http.StatusBadGateway)
 				record, _ := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
