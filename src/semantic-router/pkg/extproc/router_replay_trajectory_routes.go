@@ -27,7 +27,7 @@ func buildTrajectoryRoutes(records []routerreplay.RoutingRecord) []trajectoryRou
 			Decision:       record.Decision, SelectedModel: record.SelectedModel,
 			SelectionMethod: record.SelectionMethod, LifecycleState: record.LifecycleState,
 			ResponseStatus: record.ResponseStatus, DurationMS: record.DurationMS,
-			Agent: agentOf(record),
+			Agent: agentOf(record), TurnID: record.TurnID, ParentTurnID: record.ParentTurnID,
 		}
 		if diagnostics := record.RouteDiagnostics; diagnostics != nil {
 			route.PreviousModel = diagnostics.PreviousModel

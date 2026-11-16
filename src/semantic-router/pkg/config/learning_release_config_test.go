@@ -39,6 +39,8 @@ func TestValidateProtectionReleaseConfig(t *testing.T) {
 		{name: "session_header", release: RouterLearningProtectionReleaseConfig{Header: str("X-Session-Id")}, wantErr: "must differ from identity"},
 		{name: "conversation_header", release: RouterLearningProtectionReleaseConfig{Header: str("x-conversation-id")}, wantErr: "must differ from identity"},
 		{name: "agent_header", release: RouterLearningProtectionReleaseConfig{Header: str("x-agent")}, agent: str("x-agent"), wantErr: "must differ from identity"},
+		{name: "default_agent_header", release: RouterLearningProtectionReleaseConfig{Header: str("X-Claude-Code-Agent-Id")}, wantErr: "must differ from identity"},
+		{name: "default_agent_header_replaced", release: RouterLearningProtectionReleaseConfig{Header: str("x-claude-code-agent-id")}, agent: str("x-agent")},
 		{name: "authorization_header", release: RouterLearningProtectionReleaseConfig{Header: str("Authorization")}, wantErr: "is reserved"},
 		{name: "api_key_header", release: RouterLearningProtectionReleaseConfig{Header: str("x-api-key")}, wantErr: "is reserved"},
 		{name: "non_x_header", release: RouterLearningProtectionReleaseConfig{Header: str("anthropic-beta")}, wantErr: "is reserved"},

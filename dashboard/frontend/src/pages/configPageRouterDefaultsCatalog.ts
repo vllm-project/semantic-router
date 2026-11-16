@@ -61,7 +61,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     max_responses: 1000,
   } satisfies ResponseAPIConfig,
   router_replay: {
-    store_backend: 'memory',
+    store_backend: 'file',
     ttl_seconds: 2592000,
     async_writes: false,
   } satisfies RouterReplayConfig,
@@ -79,6 +79,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   } satisfies RateLimitConfig,
   management_api: {},
   startup_status: {},
+  masking_identity: { namespaces: {} },
   memory: {
     auto_store: false,
     milvus: {
@@ -197,6 +198,12 @@ export const SECTION_META: Record<
     title: 'Startup Status',
     eyebrow: 'Services',
     description: 'Startup readiness and status-reporting behavior exposed by the router.',
+  },
+  masking_identity: {
+    title: 'Masking Identity',
+    eyebrow: 'Services',
+    description:
+      'Namespaces that keep one masking placeholder per value across requests, sessions and restarts, for masking plugins with index: registry.',
   },
   memory: {
     title: 'Agentic Memory',

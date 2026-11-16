@@ -252,6 +252,7 @@ func assertReferenceConfigDeploymentCoverage(t testingT, deployments map[string]
 		typ reflect.Type
 	}{
 		{"input", reflect.TypeOf(ModelInputBudget{})},
+		{"pricing", reflect.TypeOf(ModelPricing{})},
 		{"auth", reflect.TypeOf(DeploymentAuth{})},
 		{"tls", reflect.TypeOf(DeploymentTLS{})},
 		{"limits", reflect.TypeOf(DeploymentLimits{})},

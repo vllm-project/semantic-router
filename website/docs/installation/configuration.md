@@ -56,7 +56,8 @@ decision, algorithm, plugin and global block.
 | Field | Meaning | Default |
 | --- | --- | --- |
 | `timeout` | The whole call, including its streamed response; it also bounds a stalled stream. `0s` lifts both limits. To lift only one model's call limit, set that model's `total_timeout: 0s`. | `300s` |
-| `api_keys` | Client API keys the listener requires. | none |
+| `api_keys` | Client API keys the listener requires. A `"${NAME}"` entry reads the key from that environment variable, with an uppercase `NAME` as every reference in the configuration. | none |
+| `api_key_files` | Absolute paths of owner-only files that each hold one more client key, read at every load. Standalone mode reads them; `--gateway extproc` refuses them. See [Keep credentials out of configuration](security-hardening.md#keep-credentials-out-of-configuration). | none |
 | `apis` | The APIs the listener serves, by API name: `chat_completions`, `responses`, `messages`, `images` and `systemone` (`openai` and `anthropic` are accepted as aliases of `chat_completions` and `messages`). Any other API path answers `404` with a `detail` naming the listener. Standalone mode serves `systemone`; `--gateway extproc` refuses a listener that serves it. | the four LLM APIs, no `systemone` |
 | `apis.<api>.models` | The only request models an API accepts. | every model of its kind |
 | `apis.systemone.schema` | The System One schema the listener speaks to its clients: `vllm-sr/5.0`, or `vllm-sr/4.0`, which also accepts every request form of the earlier contract. See [System One schemas](../system-one/use/schemas.md). | `vllm-sr/5.0` |
@@ -71,7 +72,11 @@ decision, algorithm, plugin and global block.
   `providers.models[]` entry.
 - **Pricing.** `providers.models[].pricing` takes an optional uppercase
   three-letter `currency`, plus non-negative `prompt_per_1m`,
-  `completion_per_1m`, `cached_input_per_1m` and `cache_write_per_1m` rates.
+  `completion_per_1m`, `cached_input_per_1m`, `cache_write_per_1m` and
+  `cache_write_1h_per_1m` rates. A model without it takes its provider's
+  [list price](catalog-backed-models#list-prices) when the catalog lists one.
+  A written block always wins and defaults `currency` to `USD`, so zero rates
+  mark a model free.
 - **Backend format.** [Protocol Compatibility](protocol-compatibility) helps
   you choose a backend's `api_format`. Check
   [Backend Target Compatibility](backend-target-compatibility) before moving
@@ -334,6 +339,8 @@ entrypoints:
 | `entrypoints[].model_names` | The public model aliases. |
 | `entrypoints[].recipe` | The recipe those aliases enter. |
 | `entrypoints[].default` | Marks the default chat entrypoint. |
+| `entrypoints[].review_model` | Optional model name of another entrypoint in the same API namespace for agent approval reviews. The target cannot have its own `review_model` or `memory_model`. See [Approve for me](agent-harness#approve-for-me-reviews). |
+| `entrypoints[].memory_model` | Optional model name of another entrypoint in the same API namespace for agent memory extraction and consolidation. The target cannot have its own `review_model` or `memory_model`. See [Codex memories](agent-harness#codex-memories). |
 | `recipes[]` | One recipe's policy: its signals, projections, decisions, algorithms, plugins, cache, learning and routing state. |
 
 Providers, stores and the model catalog's deployments can be shared without
@@ -468,6 +475,7 @@ every recipe.
 | Where | What it sets |
 | --- | --- |
 | `global.services.router_replay` | Shared storage and retention. |
+| No `router_replay` plugin on any layer | A record of each request's routing data, with no request or response text. |
 | A `router_replay` plugin in `global.plugins` | Whether capture is on, and the capture defaults. |
 | A recipe's or decision's `router_replay` plugin | Only the fields it sets. `enabled: false` turns capture off there; `enabled: true` opts in when the default is off. |
 

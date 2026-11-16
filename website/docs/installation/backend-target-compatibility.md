@@ -104,7 +104,7 @@ An `endpoint` of `host[:port]` takes its scheme from `protocol`; a full URL
 carries its scheme and path, and its path is the complete API root. `auth`,
 `headers` and `tls` have the same shape as a deployment's
 [connection block](model-catalog.md#connection-block); a backend reads its key
-from `auth.api_key_env`, and is always verified (see
+from `auth.api_key_env` or `auth.api_key_file`, and is always verified (see
 [Trust a private CA](#trust-a-private-ca)).
 
 `api_format` belongs to the model, not to an individual backend ref. It selects

@@ -144,7 +144,7 @@ func isCanonicalConfig(raw map[string]interface{}) bool {
 	return hasGlobal || hasRecipes || hasEntrypoints
 }
 
-func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error) {
+func normalizeCanonicalConfig(canonical *CanonicalConfig, skipExternalAssets bool) (*RouterConfig, error) {
 	if err := validateCanonicalContract(canonical); err != nil {
 		return nil, err
 	}
@@ -174,12 +174,16 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	cfg := DefaultGlobalConfig()
+	cfg.SkipExternalAssetValidation = skipExternalAssets
 	if applyErr := applyCanonicalGlobal(&cfg, &global); applyErr != nil {
 		return nil, applyErr
 	}
 
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 	if err := normalizeListenerAPIs(cfg.Listeners); err != nil {
+		return nil, err
+	}
+	if err := readListenerKeyFiles(cfg.Listeners, skipExternalAssets); err != nil {
 		return nil, err
 	}
 	cfg.ModelConfig = make(map[string]ModelParams)

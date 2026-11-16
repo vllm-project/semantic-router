@@ -72,7 +72,10 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config versions`](#vllm-sr-config-versions) | List the configuration history, newest first. |
 | [`vllm-sr connect`](#vllm-sr-connect) | Point an agent harness at a Router gateway (System Two). |
 | [`vllm-sr connect claude-code`](#vllm-sr-connect-claude-code) | Route Claude Code's model calls through the gateway. |
-| [`vllm-sr connect codex`](#vllm-sr-connect-codex) | Route Codex CLI through the gateway with a profile of its own. |
+| [`vllm-sr connect codex`](#vllm-sr-connect-codex) | Route Codex through the gateway, with a profile or (--app) as its default. |
+| [`vllm-sr connect pi`](#vllm-sr-connect-pi) | Route Pi's model calls through the gateway, as a provider in its models.json. |
+| [`vllm-sr connect sessions`](#vllm-sr-connect-sessions) | List the sessions --launch started and what is left of their worktrees. |
+| [`vllm-sr connect status`](#vllm-sr-connect-status) | Show what connect manages for each harness now, and whether it still holds. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
 | [`vllm-sr instance`](#vllm-sr-instance) | Inspect the serving state of an existing local instance. |
 | [`vllm-sr instance models`](#vllm-sr-instance-models) | Print actual native model cards for readiness checks, without inference. |
@@ -103,6 +106,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr storage`](#vllm-sr-storage) | Inspect Router storage or manage local storage credentials. |
 | [`vllm-sr storage rotate`](#vllm-sr-storage-rotate) | Replace this stack's storage credentials with freshly generated ones. |
 | [`vllm-sr storage vector-stores`](#vllm-sr-storage-vector-stores) | List vector stores known to the Router management API. |
+| [`vllm-sr usage`](#vllm-sr-usage) | Show the requests, spend and savings the Router recorded in a window. |
 
 ## `vllm-sr` {#vllm-sr}
 
@@ -998,11 +1002,15 @@ Route Claude Code's model calls through the gateway.
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
-| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code, Codex and Pi then budget with it instead of a window of their own.  [x&gt;=1] |
 | `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |
-| `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
+| `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
+| `--launch` | Start the harness through the gateway for this session only, writing none of its settings; arguments after -- go to the harness. Default: false. |
+| `--worktree DIRECTORY\|new[:NAME]` | With --launch, start the harness in this existing git worktree, or with new (new:NAME) in a new one: branch vllm-sr/NAME and the worktree &lt;checkout&gt;-NAME beside this checkout, from its HEAD. Nothing is switched or removed. |
+| `--home DIRECTORY` | With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR or $CODEX_HOME) in place of yours, for another login. Nothing is copied into it. |
+| `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--scope CHOICE` | user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.  [default: user] Choices: user, project. |
 | `--status-line` | Also show in Claude Code's status line which models answered, the last first. Default: false. |
@@ -1014,7 +1022,9 @@ Route Claude Code's model calls through the gateway.
 Usage: vllm-sr connect codex [OPTIONS] [HARNESS_ARGS]...
 ```
 
-Route Codex CLI through the gateway with a profile of its own.
+Route Codex through the gateway, with a profile or (--app) as its default.
+
+The default is what the Codex app reads, and the Codex CLI without --profile.
 
 | Parameter | Description |
 | --- | --- |
@@ -1024,13 +1034,77 @@ Route Codex CLI through the gateway with a profile of its own.
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
-| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code then neither assumes its own window nor warns that it does not know the entrypoint, and Codex budgets with it.  [x&gt;=1] |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code, Codex and Pi then budget with it instead of a window of their own.  [x&gt;=1] |
 | `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
 | `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
 | `--yes` | Write without asking. Default: false. |
-| `--launch` | Start the harness through the gateway for this session only, writing no file; arguments after -- go to the harness. Default: false. |
+| `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
+| `--launch` | Start the harness through the gateway for this session only, writing none of its settings; arguments after -- go to the harness. Default: false. |
+| `--worktree DIRECTORY\|new[:NAME]` | With --launch, start the harness in this existing git worktree, or with new (new:NAME) in a new one: branch vllm-sr/NAME and the worktree &lt;checkout&gt;-NAME beside this checkout, from its HEAD. Nothing is switched or removed. |
+| `--home DIRECTORY` | With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR or $CODEX_HOME) in place of yours, for another login. Nothing is copied into it. |
+| `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--profile TEXT` | The Codex profile to write.  [default: vllm-sr] |
+| `--app` | Write the gateway as the default of Codex's shared config.toml in place of a profile, since the Codex app reads that file and no profile. This changes the default for the Codex CLI too; --undo takes it back. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect pi` {#vllm-sr-connect-pi}
+
+```text
+Usage: vllm-sr connect pi [OPTIONS]
+```
+
+Route Pi's model calls through the gateway, as a provider in its models.json.
+
+| Parameter | Description |
+| --- | --- |
+| `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
+| `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
+| `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
+| `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
+| `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
+| `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code, Codex and Pi then budget with it instead of a window of their own.  [x&gt;=1] |
+| `--yes` | Write without asking. Default: false. |
+| `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
+| `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect sessions` {#vllm-sr-connect-sessions}
+
+```text
+Usage: vllm-sr connect sessions [OPTIONS]
+```
+
+List the sessions --launch started and what is left of their worktrees.
+
+The newest comes first. For a worktree connect made, the steps that remove
+it are shown, but nothing is removed here. No step is offered while the
+worktree has uncommitted changes or commits on a detached HEAD, the branch
+is not deleted while it has commits no other branch or remote has, and the
+steps say first when the removal deletes files git ignores there. Without
+git on PATH, each session is listed with that state unknown and no step.
+
+| Parameter | Description |
+| --- | --- |
+| `--json` | Print the sessions as JSON. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect status` {#vllm-sr-connect-status}
+
+```text
+Usage: vllm-sr connect status [OPTIONS]
+```
+
+Show what connect manages for each harness now, and whether it still holds.
+
+Read from the undo records beside Claude Code's settings (user and project),
+in the Codex home and in Pi's agent directory; the gateway gets one short
+request per connection.
+
+| Parameter | Description |
+| --- | --- |
+| `--json` | Print the status as JSON. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr dashboard` {#vllm-sr-dashboard}
@@ -1725,4 +1799,27 @@ List vector stores known to the Router management API.
 | `--endpoint TEXT` | Router management origin or /api/v1 root. |
 | `--timeout INTEGER` | [default: 15] |
 | `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
+| `--help` | Show this message and exit. Default: false. |
+
+## `vllm-sr usage` {#vllm-sr-usage}
+
+```text
+Usage: vllm-sr usage [OPTIONS]
+```
+
+Show the requests, spend and savings the Router recorded in a window.
+
+Read from Router Replay's list and aggregate, the figures Insights shows,
+with $VSR_MGMT_TOKEN as the bearer token when it is set. Requests count each
+client request once: the record of a Looper hop counts in the request that
+made it. Top models and entrypoints are those with the most requests, by
+selected model and by the model the client asked for; each row adds its
+requests' own priced costs, the Router's calls for them included, as the
+window's spend does.
+
+| Parameter | Description |
+| --- | --- |
+| `--since TEXT` | Start of the window, as a time back from now such as 30m, 1h or 7d.  [default: midnight today, local time] |
+| `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
+| `--json` | Print the summary as JSON. Default: false. |
 | `--help` | Show this message and exit. Default: false. |

@@ -133,6 +133,30 @@ func redactRecordMap(record map[string]any) bool {
 	if redactNestedMap(record, "tool_trace", redactToolTraceMap) {
 		changed = true
 	}
+	if redactNestedMap(record, "review", redactReviewMap) {
+		changed = true
+	}
+	return changed
+}
+
+// redactReviewMap keeps an approval review's status and verdict enums and
+// the reviewed tool's name, and clears the reviewer's rationale and the
+// planned action's command, directory and arguments.
+func redactReviewMap(review map[string]any) bool {
+	changed := false
+	if assessment, ok := review["assessment"].(map[string]any); ok && clearStringField(assessment, "rationale") {
+		changed = true
+	}
+	if action, ok := review["action"].(map[string]any); ok {
+		for _, field := range []string{"summary", "cwd", "arguments"} {
+			if clearStringField(action, field) {
+				changed = true
+			}
+		}
+	}
+	if changed {
+		review["content_redacted"] = true
+	}
 	return changed
 }
 

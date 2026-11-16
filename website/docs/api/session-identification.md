@@ -35,17 +35,39 @@ Without the session header the request still routes, but protection does not
 retain a model.
 
 An agent harness that delegates work to subagents can also name each agent.
-Set `identity.headers.agent` to the header that carries that name, such as
-`x-claude-code-agent-id`, which Claude Code sends on subagent requests only.
-For Codex CLI, set `session: session-id` and `agent: thread-id`. Codex sends
-both on every request; on a root thread the two values are equal.
 Protection then holds each named agent on its own model inside the session,
-and requests without the header keep the session or conversation key. The
-agent header is optional, has no default, and is never required.
+and requests without an agent keep the session or conversation key. The agent
+is never required. The harnesses the Router supports need no identity headers
+configured, because protection reads what they send:
 
-Replay uses the same configured session and conversation header names when that
-explicit identity is available. Recording a conversation ID does not change the
-protection scope or reset model ownership under session scope.
+| Harness | Session | Agent |
+| --- | --- | --- |
+| Claude Code | `x-claude-code-session-id`, a `session_id_headers` default | `x-claude-code-agent-id`, sent on subagent requests only |
+| Codex CLI | `session-id` | `thread-id`; on a root thread it equals `session-id` |
+| Pi, with the provider `vllm-sr connect pi` writes, and the VS Code extension | `x-session-id`, a `session_id_headers` default | none |
+
+- **Session.** With `identity.headers.session` unset, protection reads the
+  session the request pins, `x-vsr-session-id` or a `session_id_headers`
+  header, and without one Codex's `session-id`.
+- **Agent.** With `identity.headers.agent` unset, protection reads
+  `x-claude-code-agent-id`, then `thread-id`. A `thread-id` equal to the
+  request's `session-id` marks Codex's root thread, the main agent, and names no
+  agent, also when the request pins another session, as
+  `vllm-sr connect codex --launch` does.
+- **Codex's turn metadata.** Without those headers, protection reads the
+  `session_id` and `thread_id` of Codex's `x-codex-turn-metadata`, or of a
+  Responses request's `client_metadata`.
+- **A configured header replaces the defaults** for its part: set
+  `identity.headers.agent` to a header your harness does not send to hold its
+  subagents on their parent's model.
+
+Replay records the session and conversation protection reads, from the
+configured headers or the defaults above, when that identity is available. A
+Codex call is filed under its `session-id` that way: under `scope: session`,
+or under `scope: conversation` with `x-conversation-id`, since a Responses
+request has no conversation start to name its conversation by. Recording a
+conversation ID does not change the protection scope or reset model ownership
+under session scope.
 
 The Responses API keeps explicit conversation membership separate from response
 lineage. A request's `conversation` value identifies that membership;
