@@ -174,6 +174,24 @@ def test_reference_config_matches_generated_structure() -> None:
     assert validate_config_structure(config) == []
 
 
+def test_protection_cache_economics_matches_generated_structure() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    with (repository_root / "config" / "config.yaml").open(encoding="utf-8") as stream:
+        config = safe_load_router_config(stream)
+    tuning = config["global"]["router"]["learning"]["protection"]["tuning"]
+
+    assert tuning["cache_economics"] == {
+        "enabled": True,
+        "cache_ttl_seconds": 300,
+        "default_remaining_turns": 3,
+    }
+    assert validate_config_structure(config) == []
+    tuning["cache_economics"]["cache_ttl_seconds"] = 0
+    assert validate_config_structure(config)
+    tuning["cache_economics"] = {"remaining_turns": 3}
+    assert validate_config_structure(config)
+
+
 @pytest.mark.parametrize(
     "config_path",
     sorted(

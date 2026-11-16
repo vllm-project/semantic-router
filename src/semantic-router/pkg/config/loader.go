@@ -578,7 +578,15 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 			"switch_margin",
 			"stability_weight",
 			"progress_gate",
+			"cache_economics",
 		}); err != nil {
+			return err
+		}
+		if err := rejectUnknownMapFields(
+			prefix+".tuning.cache_economics",
+			nestedStringMap(tuningMap["cache_economics"]),
+			[]string{"enabled", "cache_ttl_seconds", "default_remaining_turns"},
+		); err != nil {
 			return err
 		}
 		if gate, ok := tuningMap["progress_gate"]; ok {
