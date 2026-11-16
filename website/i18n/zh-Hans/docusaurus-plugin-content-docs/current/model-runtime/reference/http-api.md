@@ -72,7 +72,7 @@ Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur
 
 唯一的字节限额是 `--max-request-bytes`，作用于整个请求。
 
-router 通过 Vela 2.0 用两种方式读长请求。路由问题（domain、fact check、feedback、modality、决策问题和决策模型选择器）截断。安全问题（jailbreak、safety、PII 和 hallucination）整读，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。超出部分是没读到的内容：越狱或 PII 规则把它匹配为 `unscanned`。没赶上信号截止时间（`global.model_catalog.signal_timeout_ms`）的安全扫描没有答案：越狱或 PII 规则此时不匹配，除非它设置了 `on_unknown: match`。
+router 在模型读取之前用两种方式读长请求（参见[长输入](../../system-one/deploy/performance.md#long-inputs)）。路由问题（domain、fact check、feedback、modality、没有 `coverage: full` 的 `systemone` 问题和决策模型选择器）读取有界视图，即部署 `routing_view` 以内的开头和结尾。防护问题（jailbreak、safety 和 PII）整读，按部署的 `scan_window` 分窗口读取，模型完整读取每个窗口，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。信号截止时间（`global.model_catalog.signal_timeout_ms`）提前结束扫描时，越狱或 PII 规则根据已读窗口作出判断（`on_unscanned: best_effort`）；没有任何窗口作答时，规则匹配，除非它设置了 `on_unknown: no_match`。hallucination 问题整读其输入，上限是模型的扫描预算；超出部分没有被读到。
 
 ## 分类 {#classify}
 

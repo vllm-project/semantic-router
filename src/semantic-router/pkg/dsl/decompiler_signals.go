@@ -21,6 +21,7 @@ func (d *decompiler) decompileSignals() {
 	d.decompileApplicationSignals(config.SignalTypePII)
 	d.decompileMetadataSignals()
 	d.decompileInputModalitySignals()
+	d.decompileAgentSignals()
 	d.decompileSystemOneSignals()
 	d.decompileProjectionSignals()
 }

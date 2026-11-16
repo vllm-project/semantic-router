@@ -457,16 +457,16 @@ global:
 	if !cfg.ResponseAPI.Enabled {
 		t.Fatal("expected sparse global override to preserve default response_api.enabled=true")
 	}
-	if cfg.ResponseAPI.StoreBackend != "redis" {
+	if cfg.ResponseAPI.StoreBackend != "memory" {
 		t.Fatalf("expected response api backend to keep default, got %q", cfg.ResponseAPI.StoreBackend)
 	}
 	if cfg.ResponseAPI.TTLSeconds != 86400 {
 		t.Fatalf("expected response api ttl default to be preserved, got %d", cfg.ResponseAPI.TTLSeconds)
 	}
-	if cfg.UsesRouterReplay() {
-		t.Fatal("expected sparse global override to preserve default router_replay.enabled=false")
+	if !cfg.UsesRouterReplay() {
+		t.Fatal("expected sparse global override to keep the default routing record of router_replay")
 	}
-	if cfg.RouterReplay.StoreBackend != "memory" {
+	if cfg.RouterReplay.StoreBackend != "file" {
 		t.Fatalf("expected router replay backend to keep default, got %q", cfg.RouterReplay.StoreBackend)
 	}
 	if cfg.RouterReplay.TTLSeconds != 2592000 {
@@ -783,5 +783,41 @@ recipes:
 	}
 	if cfg.Decisions[0].ModelRefs[0].LoRAName != "sql-expert" {
 		t.Fatalf("expected lora_name to survive parse, got %q", cfg.Decisions[0].ModelRefs[0].LoRAName)
+	}
+}
+
+// A configuration written when the Responses store defaulted to Redis names
+// only the Redis server. Leaving store_backend out keeps that store; with no
+// server named, the default is memory.
+func TestResponseAPIStoreDefaultsToTheRedisServerItNames(t *testing.T) {
+	for redis, want := range map[string]string{
+		"":                                  "memory",
+		"redis: {address: redis:6379}":      "redis",
+		"redis: {cluster_addresses: [a:1]}": "redis",
+		"redis: {config_path: redis.yaml}":  "redis",
+	} {
+		cfg, err := ParseYAMLBytes([]byte(`
+version: v0.5
+providers:
+  models:
+    - name: chat
+      provider_model_id: chat
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+recipes:
+  - name: default
+global:
+  services:
+    response_api:
+      enabled: true
+      ` + redis + `
+`))
+		if err != nil {
+			t.Fatalf("%q: %v", redis, err)
+		}
+		if got := cfg.ResponseAPI.StoreBackend; got != want {
+			t.Errorf("%q: store_backend = %q, want %q", redis, got, want)
+		}
 	}
 }

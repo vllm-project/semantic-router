@@ -7,6 +7,8 @@ import click
 from cli import __version__
 from cli.commands.benchmark import benchmark
 from cli.commands.completion import completion
+from cli.commands.connect import connect
+from cli.commands.connect_pi import pi as connect_pi
 from cli.commands.general import config
 from cli.commands.instance import instance
 from cli.commands.optimize import optimize
@@ -15,6 +17,7 @@ from cli.commands.request import request
 from cli.commands.route import route
 from cli.commands.runtime import dashboard, logs, serve, status, stop
 from cli.commands.storage import storage
+from cli.commands.usage import usage
 from cli.terminal import brand
 
 logo = r"""
@@ -27,11 +30,15 @@ __   _| | |_ _|  \/  |     / ___||  _ \
 vLLM Semantic Router - Intelligent routing for vLLM
 """
 
+# connect pi lives in a module of its own, beside the commands it shares
+connect.add_command(connect_pi)
+
 REGISTERED_COMMANDS = (
     serve,
     config,
     route,
     request,
+    connect,
     benchmark,
     optimize,
     status,
@@ -42,6 +49,7 @@ REGISTERED_COMMANDS = (
     recipe,
     storage,
     instance,
+    usage,
 )
 
 

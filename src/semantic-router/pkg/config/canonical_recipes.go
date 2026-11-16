@@ -19,6 +19,11 @@ type CanonicalEntrypoint struct {
 	// Default marks the chat entrypoint of the default recipe, which serves
 	// the configuration's default routing. Several recipes need exactly one.
 	Default bool `yaml:"default,omitempty"`
+	// ReviewModel names another entrypoint model for agent approval reviews.
+	ReviewModel string `yaml:"review_model,omitempty"`
+	// MemoryModel names another entrypoint model for agent memory extraction
+	// and consolidation.
+	MemoryModel string `yaml:"memory_model,omitempty"`
 }
 
 // CanonicalRecipe is a named routing profile: its signals, projections and
@@ -235,15 +240,20 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 		}
 
 		result = append(result, EntrypointMapping{
-			API:        entrypoint.API,
-			ModelNames: names,
-			Recipe:     recipeName,
-			ClientAuth: clientAuth,
-			Default:    entrypoint.Default,
+			API:         entrypoint.API,
+			ModelNames:  names,
+			Recipe:      recipeName,
+			ClientAuth:  clientAuth,
+			Default:     entrypoint.Default,
+			ReviewModel: strings.TrimSpace(entrypoint.ReviewModel),
+			MemoryModel: strings.TrimSpace(entrypoint.MemoryModel),
 		})
 	}
 	view := *cfg
 	view.Entrypoints = result
+	if err := view.ValidateDelegateModels(); err != nil {
+		return nil, err
+	}
 	for _, entrypoint := range view.EffectiveEntrypoints(ChatAPI) {
 		if entrypoint.Source != EntrypointBuiltin {
 			continue
@@ -345,11 +355,13 @@ func canonicalEntrypointsFromRouterConfig(cfg *RouterConfig) []CanonicalEntrypoi
 	entrypoints := make([]CanonicalEntrypoint, 0, len(cfg.Entrypoints))
 	for _, entrypoint := range cfg.Entrypoints {
 		entrypoints = append(entrypoints, CanonicalEntrypoint{
-			API:        entrypoint.API,
-			ModelNames: append([]string(nil), entrypoint.ModelNames...),
-			Recipe:     string(entrypoint.Recipe),
-			ClientAuth: entrypoint.ClientAuth.Clone(),
-			Default:    entrypoint.Default,
+			API:         entrypoint.API,
+			ModelNames:  append([]string(nil), entrypoint.ModelNames...),
+			Recipe:      string(entrypoint.Recipe),
+			ClientAuth:  entrypoint.ClientAuth.Clone(),
+			Default:     entrypoint.Default,
+			ReviewModel: strings.TrimSpace(entrypoint.ReviewModel),
+			MemoryModel: strings.TrimSpace(entrypoint.MemoryModel),
 		})
 	}
 	return entrypoints

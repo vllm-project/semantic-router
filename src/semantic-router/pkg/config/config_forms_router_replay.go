@@ -2,14 +2,19 @@ package config
 
 import (
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-// routerReplayForms are the forms of shadow traffic before router_replay
-// owned it: the shadow_dispatch plugin, now the shadow block of the
-// decision's router_replay plugin, which records its outcome.
+// routerReplayForms are the earlier forms of Router Replay's settings: the
+// shadow_dispatch plugin, now the shadow block of the decision's
+// router_replay plugin, which records its outcome; a router_replay plugin's
+// capture_personal_data, now its prompt_capture; and a recipe's data_policy.
+// capture_personal_data is renamed before data_policy is migrated, which
+// writes prompt_capture.
 var routerReplayForms = []ConfigForm{
 	{
 		Code:    CodeRemovedPluginType,
@@ -19,20 +24,91 @@ var routerReplayForms = []ConfigForm{
 		Becomes: RemovedPluginTypes["shadow_dispatch"],
 		Migrate: migrateShadowDispatchPlugin,
 	},
+	capturePersonalDataForm(false),
+	capturePersonalDataForm(true),
 	{
 		Code:    CodeRemovedField,
 		Paths:   RoutingScopes("data_policy"),
 		What:    "a recipe's data_policy is removed",
-		Becomes: "the recipe's router_replay plugin: enabled: false for replay: false, capture_personal_data: false for replay_personal_data: false",
+		Becomes: "the recipe's router_replay plugin: enabled: false for replay: false, prompt_capture: verified for replay_personal_data: false",
 		Migrate: migrateDataPolicy,
 	},
 }
 
+// capturePersonalDataForm is a router_replay plugin's deprecated
+// capture_personal_data set to capture. It loads as the prompt_capture mode
+// it meant, with a warning: false kept a prompt only once verified, true kept
+// it as it came.
+func capturePersonalDataForm(capture bool) ConfigForm {
+	mode := personalDataPromptCapture(capture)
+	return ConfigForm{
+		Code: CodeRenamedField,
+		Paths: slices.Concat(
+			[]string{"global.plugins[].configuration.capture_personal_data"},
+			RoutingScopes("plugins[].configuration.capture_personal_data"),
+			RoutingScopes("decisions[].plugins[].configuration.capture_personal_data"),
+		),
+		MatchAt: func(at FormMatch) bool {
+			value, ok := yamlBool(at.Node)
+			return ok && value == capture && NormalizeDecisionPluginType(scalarAt(at.Above(2), "type")) == DecisionPluginRouterReplay
+		},
+		What:    "capture_personal_data: " + strconv.FormatBool(capture) + " is deprecated",
+		Becomes: "prompt_capture: " + mode,
+		Renamed: true,
+		Migrate: func(m *Migration, at FormMatch) error {
+			return migrateCapturePersonalData(m, at.Parent, mode)
+		},
+	}
+}
+
+// yamlBool is a scalar's boolean value, as the configuration decodes it, and
+// whether it holds one; null holds none.
+func yamlBool(node *yaml.Node) (value, ok bool) {
+	if node == nil || node.Kind != yaml.ScalarNode || node.ShortTag() == "!!null" {
+		return false, false
+	}
+	return value, node.Decode(&value) == nil
+}
+
+// renameCapturePersonalData writes a capture_personal_data that a later form
+// moved into a router_replay configuration as its prompt_capture.
+func renameCapturePersonalData(m *Migration, configuration *yaml.Node) error {
+	if capture, ok := yamlBool(mappingValue(configuration, "capture_personal_data")); ok {
+		return migrateCapturePersonalData(m, configuration, personalDataPromptCapture(capture))
+	}
+	return nil
+}
+
+// migrateCapturePersonalData writes a router_replay configuration's
+// capture_personal_data as prompt_capture: mode, in its place. A
+// prompt_capture beside it must say the same.
+func migrateCapturePersonalData(m *Migration, configuration *yaml.Node, mode string) error {
+	if existing := mappingValue(configuration, "prompt_capture"); existing != nil {
+		if existing.Value != mode {
+			return fmt.Errorf("capture_personal_data means prompt_capture: %s, but prompt_capture is %s; keep prompt_capture alone", mode, existing.Value)
+		}
+		m.Delete(configuration, "capture_personal_data")
+		return nil
+	}
+	if err := m.Rename(configuration, "capture_personal_data", "prompt_capture"); err != nil {
+		return err
+	}
+	m.Set(configuration, "prompt_capture", Scalar(mode))
+	return nil
+}
+
 // dataPolicyFields are the data_policy fields that forbade something when
-// false, and the router_replay field that forbids it now.
-var dataPolicyFields = []struct{ policy, replay, forbade string }{
-	{"replay", "enabled", "replay capture"},
-	{"replay_personal_data", "capture_personal_data", "capturing personal data"},
+// false, the router_replay setting that forbids it now and its forbidding
+// value, and whether a decision's value of that setting allowed it.
+var dataPolicyFields = []struct {
+	policy, replay, forbade string
+	forbidding              func() *yaml.Node
+	allows                  func(value *yaml.Node) bool
+}{
+	{"replay", "enabled", "replay capture", func() *yaml.Node { return boolNode(false) }, yamlTrue},
+	{"replay_personal_data", "prompt_capture", "capturing personal data", func() *yaml.Node { return Scalar(PromptCaptureVerified) }, func(value *yaml.Node) bool {
+		return value != nil && value.Value == PromptCaptureRaw
+	}},
 }
 
 // migrateDataPolicy keeps what a recipe's data_policy did. A field set to
@@ -57,14 +133,14 @@ func migrateDataPolicy(m *Migration, at FormMatch) error {
 			plugin = mappingNode("type", DecisionPluginRouterReplay)
 			plugins.Content = append(plugins.Content, plugin)
 		}
-		setNode(ensureMapping(plugin, "configuration"), field.replay, boolNode(false))
+		setNode(ensureMapping(plugin, "configuration"), field.replay, field.forbidding())
 		for _, decision := range sequenceAt(recipe, "decisions") {
 			decision = resolveAlias(decision)
 			replay := pluginOfType(resolveAlias(mappingValue(decision, "plugins")), DecisionPluginRouterReplay)
-			if configuration := mappingValue(replay, "configuration"); yamlTrue(mappingValue(configuration, field.replay)) {
-				setNode(configuration, field.replay, boolNode(false))
+			if configuration := mappingValue(replay, "configuration"); field.allows(mappingValue(configuration, field.replay)) {
+				setNode(configuration, field.replay, field.forbidding())
 				m.Changed(fmt.Sprintf("%s.decisions[%s]", prefix, scalarAt(decision, "name")),
-					fmt.Sprintf("its router_replay %s is false: the recipe's data_policy forbade %s", field.replay, field.forbade))
+					fmt.Sprintf("its router_replay %s is %s: the recipe's data_policy forbade %s", field.replay, field.forbidding().Value, field.forbade))
 			}
 		}
 	}

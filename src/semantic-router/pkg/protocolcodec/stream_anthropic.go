@@ -153,14 +153,14 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 	if wire.Type == "" {
 		wire.Type = eventType
 	}
-	if err := validateAnthropicStreamEvent(wire, data); err != nil {
+	if err = validateAnthropicStreamEvent(wire, data); err != nil {
 		return nil, nil, err
 	}
 	if wire.Type == "content_block_start" && anthropicEventIndex(wire) != len(decoder.items) {
 		return nil, nil, invalidProviderResponse("stream_output_index_order", "Anthropic content block indexes must be contiguous from zero")
 	}
 	if wire.Message != nil {
-		if err := decoder.observeProviderIdentity(wire.Message.ID, wire.Message.Model); err != nil {
+		if err = decoder.observeProviderIdentity(wire.Message.ID, wire.Message.Model); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -508,6 +508,11 @@ func (decoder *anthropicStreamDecoder) Finalize(reason error) ([]llmprotocol.Eve
 }
 
 func (encoder *anthropicStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.Content != nil {
+		if err := requireReasoningRepresentation(llmprotocol.AnthropicMessagesV1, []llmprotocol.Content{*event.Content}); err != nil {
+			return nil, nil, err
+		}
+	}
 	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredEventCapabilities(event)); err != nil {
 		return nil, nil, err
 	}
@@ -733,9 +738,10 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicItemStart(
 	kind llmprotocol.ContentKind,
 ) anthropicEventWire {
 	block := &anthropicContentWire{Type: "text", Text: ""}
-	if kind == llmprotocol.ContentToolCall {
+	switch kind {
+	case llmprotocol.ContentToolCall:
 		block.Type, block.ID, block.Name, block.Input = "tool_use", event.ToolCall.ID, event.ToolCall.Name, json.RawMessage(`{}`)
-	} else if kind == llmprotocol.ContentReasoning {
+	case llmprotocol.ContentReasoning:
 		signature := ""
 		if event.Content != nil {
 			signature = event.Content.Signature
@@ -756,15 +762,19 @@ func (encoder *anthropicStreamEncoder) completeAnthropicItem(
 			return nil, nil, err
 		}
 		frames = append(frames, started...)
-		delta := anthropicEventWire{
-			Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
-			Delta: &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments},
+		// A call cut right after its name has no arguments, and Messages has
+		// no empty input_json_delta, so the block stops after it starts.
+		if event.ToolCall.Arguments != "" {
+			delta := anthropicEventWire{
+				Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
+				Delta: &anthropicDeltaWire{Type: "input_json_delta", PartialJSON: event.ToolCall.Arguments},
+			}
+			deltaFrames, _, err := encodeAnthropicWireFrame(delta)
+			if err != nil {
+				return nil, nil, err
+			}
+			frames = append(frames, deltaFrames...)
 		}
-		deltaFrames, _, err := encodeAnthropicWireFrame(delta)
-		if err != nil {
-			return nil, nil, err
-		}
-		frames = append(frames, deltaFrames...)
 		keys = append(keys, key)
 	}
 	if len(keys) == 0 {
@@ -773,6 +783,12 @@ func (encoder *anthropicStreamEncoder) completeAnthropicItem(
 			kind = llmprotocol.ContentToolCall
 		} else if event.Content != nil && event.Content.Kind != "" {
 			kind = event.Content.Kind
+		}
+		// Reasoning that streamed nothing, all of it omitted or dropped, has no
+		// block: an unsigned empty thinking block carries nothing, and the
+		// buffered reply leaves such an item out.
+		if kind == llmprotocol.ContentReasoning && event.Content.Signature == "" {
+			return frames, nil, nil
 		}
 		started, key, err := encoder.ensureAnthropicBlockStarted(event, kind)
 		if err != nil {

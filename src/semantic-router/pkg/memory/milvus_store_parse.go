@@ -115,6 +115,7 @@ func applyMemoryMetadataMap(memory *Memory, metadata map[string]interface{}) {
 	if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
 		memory.LastAccessed = time.Unix(int64(lastAccessed), 0)
 	}
+	applyProvenanceMetadata(memory, metadata)
 }
 
 type listResultColumns struct {

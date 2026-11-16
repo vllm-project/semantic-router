@@ -8,6 +8,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
@@ -119,7 +121,7 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	}
 	common.HeaderMutation.RemoveHeaders = append(
 		common.HeaderMutation.RemoveHeaders,
-		providerBoundRemovals()...,
+		providerBoundRemovals(ctx.identity)...,
 	)
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 }
@@ -319,5 +321,19 @@ func (r *OpenAIRouter) startLooperInternalReplay(
 	decisionName string,
 ) {
 	ctx.RouterReplayID = ""
-	r.startRouterReplay(ctx, "ReMoM", modelName, decisionName)
+	r.startRouterReplay(ctx, looperHopLabel(ctx.VSRSelectedDecision), modelName, decisionName)
+	// A hop's usage and price belong to the request that made it, whose
+	// record counts the call; this one says so rather than reading as unpriced.
+	r.writeRouterReplayUsageCost(ctx, routerreplay.UsageCost{
+		CostAccounting: &store.CostAccounting{UnpricedReason: store.UnpricedCountedInParent},
+	})
+}
+
+// looperHopLabel is what a hop's record names as its requested model, since
+// no client asked for one: the algorithm of the decision that made the call.
+func looperHopLabel(decision *config.Decision) string {
+	if decision == nil || decision.Algorithm == nil || decision.Algorithm.Type == "" {
+		return "Looper"
+	}
+	return config.DecisionAlgorithmDisplayName(decision.Algorithm.Type)
 }

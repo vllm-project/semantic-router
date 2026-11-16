@@ -166,7 +166,7 @@ class SystemOneRule(BaseModel):
     stage: Literal["request", "response"] | None = None
     input: SystemOneInput | None = None
     coverage: Literal["truncate", "full"] | None = None
-    on_unscanned: Literal["match", "no_match", "unknown"] | None = None
+    on_unscanned: Literal["best_effort", "match", "no_match", "unknown"] | None = None
     timeout_ms: int | None = Field(default=None, ge=0, le=MAX_SYSTEMONE_TIMEOUT_MS)
 
     @model_validator(mode="after")

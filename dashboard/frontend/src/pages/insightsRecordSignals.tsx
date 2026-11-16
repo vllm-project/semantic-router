@@ -30,6 +30,13 @@ function formatSignalMatch(type: string, value: string): string {
   return formatRoutingMetadataValue(matchedSignalKey(type), value)
 }
 
+// Each recorded match with its family and the words it shows as.
+export function recordedSignalMatches(signals: Signal) {
+  return recordedSignalGroups(signals).flatMap(({ type, values }) =>
+    values.map((value) => ({ type, value, text: formatSignalMatch(type, value) })),
+  )
+}
+
 export function collectSignals(signals: Signal): string[] {
   return recordedSignalGroups(signals).flatMap(({ type, values }) =>
     values.map((value) => formatSignalMatch(type, value)),

@@ -5,6 +5,7 @@ import type {
 } from '../pages/insightsPageTypes'
 import styles from './InsightsCharts.module.css'
 import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
+import { modelText, useModelLabels } from '../pages/insightsModelLabelSupport'
 
 interface InsightsProviderCacheSummaryProps {
   summary?: InsightsAggregateProviderCache
@@ -82,6 +83,7 @@ function SpendTable({ title, nameLabel, entries }: SpendTableProps) {
 }
 
 export default function InsightsProviderCacheSummary({ summary }: InsightsProviderCacheSummaryProps) {
+  const labels = useModelLabels()
   if (!summary || summary.priced_records === 0) {
     return null
   }
@@ -153,7 +155,10 @@ export default function InsightsProviderCacheSummary({ summary }: InsightsProvid
         <SpendTable
           title="Net Saving by Selected Model"
           nameLabel="Model"
-          entries={summary.by_selected_model}
+          entries={summary.by_selected_model.map((entry) => ({
+            ...entry,
+            name: modelText(labels, entry.name),
+          }))}
         />
       </div>
     </section>

@@ -134,7 +134,7 @@ export interface SystemOneSignal {
   stage?: 'request' | 'response'
   input?: SystemOneInput
   coverage?: 'truncate' | 'full'
-  on_unscanned?: 'match' | 'no_match' | 'unknown'
+  on_unscanned?: 'best_effort' | 'match' | 'no_match' | 'unknown'
   timeout_ms?: number
 }
 
@@ -163,6 +163,48 @@ export interface ListenerAPI {
   schema?: 'vllm-sr/5.0' | 'vllm-sr/4.0'
   models?: string[]
   max_deadline_ms?: number
+  // systemone only: what the vSR agent plugins pointed at the listener do.
+  vsr?: VSRProfile
+}
+
+// The vSR agent plugins' profile a systemone listener serves. A field left
+// out keeps the plugin's own option.
+export interface VSRProfile {
+  // Hide personal data in tool output before the agent reads it.
+  redact?: boolean
+  // Mark text in tool output that gives the agent orders.
+  shield?: boolean
+  // Hold a destructive command for the person to approve.
+  guard?: boolean
+  // Compare the agent's answer with what it read.
+  check?: boolean
+  // Raise the next turn's model or effort after a pushback.
+  escalate?: boolean
+  // Pick the model and effort of subagents.
+  router?: boolean
+  // Also pick the model and effort of the person's own turns.
+  router_turns?: boolean
+  // How far the router may go down: quality never below the session's model,
+  // balanced when the decision is sure, save whenever it answers clearly enough.
+  router_goal?: 'quality' | 'balanced' | 'save'
+  // Recipe rules guard and redact enforce besides their own checks.
+  rules?: VSRRules
+}
+
+// One rule of the bound recipe an app enforces.
+export interface VSRRule {
+  type: 'keyword' | 'systemone'
+  name: string
+  // required: a command waits for the person and an output is withheld when
+  // the rule cannot be checked; advisory (the default): it goes unchecked.
+  enforce?: 'required' | 'advisory'
+}
+
+// Rules of one recipe the vSR agent plugins enforce, evaluated by the Router.
+export interface VSRRules {
+  recipe: string
+  guard?: VSRRule[]
+  redact?: VSRRule[]
 }
 
 export interface ListenerTLS {
@@ -181,6 +223,9 @@ export interface Listener {
   port: number
   timeout?: string
   api_keys?: string[]
+  // Owner-only files that each hold one more client key, which a save
+  // writes in place of a literal api_keys entry.
+  api_key_files?: string[]
   // The APIs the listener serves, by API name (or alias); omitted, the four
   // LLM APIs and not systemone.
   apis?: Partial<Record<APIName | APIAlias, ListenerAPI>>

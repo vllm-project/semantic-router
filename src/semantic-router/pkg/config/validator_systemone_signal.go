@@ -193,12 +193,12 @@ func validateSystemOneInput(rule SystemOneRule) error {
 	}
 	switch rule.OnUnscanned {
 	case "":
-	case SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown:
+	case SystemOneUnscannedBestEffort, SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown:
 		if !rule.FullCoverage() {
 			return fmt.Errorf("on_unscanned applies only to a rule with coverage: %s", SystemOneCoverageFull)
 		}
 	default:
-		return fmt.Errorf("on_unscanned must be %s, %s or %s", SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown)
+		return fmt.Errorf("on_unscanned must be %s, %s, %s or %s", SystemOneUnscannedBestEffort, SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown)
 	}
 	return nil
 }

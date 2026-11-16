@@ -24,6 +24,7 @@ const (
 	TraceEffectiveInputTokens     = "effective_input_tokens"
 	TraceEffectiveMaxOutputTokens = "effective_max_output_tokens"
 	TraceSignals                  = "signals"
+	TraceScanCoverage             = "scan_coverage"
 	TraceContextTokens            = "context_tokens"
 	TraceCategory                 = "category"
 	TraceReasoning                = "reasoning"
@@ -67,6 +68,7 @@ var traceMembers = []TraceMember{
 	{TraceEffectiveInputTokens, "automatic_output", "Rendered input tokens of the final automatic-output dispatch, chat template included."},
 	{TraceEffectiveMaxOutputTokens, "automatic_output", "Output token limit of the final automatic-output dispatch, reasoning included."},
 	{TraceSignals, "signals", "Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`."},
+	{TraceScanCoverage, "signals", "Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts."},
 	{TraceContextTokens, "signals", "Token count the `context` signal measured."},
 	{TraceCategory, "classification", "Domain category the classifier chose, such as `math`."},
 	{TraceReasoning, "classification", "Reasoning mode chosen for the request: `on` or `off`."},

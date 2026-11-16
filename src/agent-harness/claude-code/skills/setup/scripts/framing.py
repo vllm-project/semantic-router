@@ -151,10 +151,12 @@ def _probability(answer: object, key: str) -> float | None:
 def _router(reply: dict, _: dict) -> dict:
     a = reply["answers"]["complexity"]
     steps = reply["answers"].get("steps")
+    # As hooks/router.ts scoreOf: a steps answer counts only with its confidence.
+    has_steps = _number(steps, "confidence") is not None
     return {
         "score": _number(a, "score"),
         "confidence": _number(a, "confidence"),
-        "steps": _number(steps, "score"),
+        "steps": _number(steps, "score") if has_steps else None,
     }
 
 

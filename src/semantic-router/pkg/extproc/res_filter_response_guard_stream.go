@@ -69,11 +69,12 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 	if len(body) > responseGuardHoldLimit-hold.read {
 		r.completeSemanticStream(ctx, errResponseGuardHoldLimit)
 		ctx.ResponsePath = headers.ResponsePathBlocked
-		return r.endUnreadStream(ctx, responseGuardOverLimit, llmprotocol.NewError(llmprotocol.ErrorPermission,
-			"response_guard_hold_limit", "Response blocked: the answer is larger than the response guard can check", nil))
+		return r.endUnreadStream(ctx, responseGuardOverLimit, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest,
+			"response_guard_hold_limit", "Response blocked: the answer is larger than the response guard can check", nil), "request_rejected")
 	}
 	hold.read += len(body)
 	buffers := semanticStreamBuffers{}
+	body, endOfStream = r.bridgeBufferedBody(&buffers, body, endOfStream, ctx)
 	buffers.push(body, ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
@@ -82,9 +83,10 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 	if !endOfStream {
 		return heldStreamPart(nil)
 	}
+	clean := buffers.streamErr == nil && !ctx.StreamingAborted
 	semanticResponse := r.completeSemanticStream(ctx, buffers.streamErr)
 	if semanticResponse == nil || ctx.StreamingAborted {
-		return r.endUnreadStream(ctx, responseGuardIncomplete, heldStreamFailure(ctx, buffers.streamErr))
+		return r.endUnreadStream(ctx, responseGuardIncomplete, heldStreamFailure(ctx, buffers.streamErr), heldStreamFailureReason(ctx, clean))
 	}
 	return r.releaseHeldStream(ctx, semanticResponse)
 }
@@ -108,7 +110,7 @@ func (r *OpenAIRouter) releaseHeldStream(ctx *RequestContext, semanticResponse *
 	metrics.RecordResponseGuardBuffered(requestDecisionStateKey(ctx), hold.outcome)
 	if plan.blocked != nil {
 		plan.commit()
-		return r.refuseHeldStream(ctx, plan.refusal)
+		return r.refuseHeldStream(ctx, plan.refusal, "request_rejected")
 	}
 	// The cache keeps the answer the client receives, as a buffered answer's.
 	frames, delivered := hold.frames, answer
@@ -151,9 +153,9 @@ func (r *OpenAIRouter) encodeNotedStream(ctx *RequestContext) []byte {
 
 // endUnreadStream ends a held stream the guard could not read. Nothing of
 // the answer leaves unread: the client receives only protocolError.
-func (r *OpenAIRouter) endUnreadStream(ctx *RequestContext, outcome string, protocolError *llmprotocol.ProtocolError) *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) endUnreadStream(ctx *RequestContext, outcome string, protocolError *llmprotocol.ProtocolError, reason string) *ext_proc.ProcessingResponse {
 	r.recordUnreadStream(ctx, outcome)
-	return r.refuseHeldStream(ctx, protocolError)
+	return r.refuseHeldStream(ctx, protocolError, reason)
 }
 
 // recordHeldStreamOverMessageLimit records a held stream that arrived as one
@@ -180,10 +182,16 @@ func (r *OpenAIRouter) recordUnreadStream(ctx *RequestContext, outcome string) {
 }
 
 // refuseHeldStream answers the client with protocolError in its protocol's
-// streaming form, in place of everything the hold kept. The guard's own
-// refusal names the blocked response path; a stream that failed keeps its.
-func (r *OpenAIRouter) refuseHeldStream(ctx *RequestContext, protocolError *llmprotocol.ProtocolError) *ext_proc.ProcessingResponse {
-	response := heldStreamPart(r.encodeStreamRefusal(ctx, protocolError))
+// streaming form, in place of everything the hold kept, and fails the replay
+// record with it for reason. The guard's own refusal names the blocked
+// response path; a stream that failed keeps its. A stream that ended early,
+// with no reason, stays an abort.
+func (r *OpenAIRouter) refuseHeldStream(ctx *RequestContext, protocolError *llmprotocol.ProtocolError, reason string) *ext_proc.ProcessingResponse {
+	refusal := r.encodeStreamRefusal(ctx, protocolError)
+	if reason != "" {
+		r.failStreamedRouterReplay(ctx, refusal, reason)
+	}
+	response := heldStreamPart(refusal)
 	if ctx.ResponsePath == headers.ResponsePathBlocked {
 		setResponseBodyHeaderOverwrite(response, headers.VSRResponsePath, ctx.ResponsePath)
 	}
@@ -193,10 +201,12 @@ func (r *OpenAIRouter) refuseHeldStream(ctx *RequestContext, protocolError *llmp
 	return response
 }
 
-// responseGuardRefusal is the error a streaming client receives for an answer
-// rule blocked: the message a buffered answer's 403 carries.
+// responseGuardRefusal is the error a client receives for an answer a rule
+// blocked: a buffered answer's 400 and a stream's error event. It is the
+// invalid request a blocking fast_response gives, not a permission error,
+// which Claude Code reads as a failed login and retries.
 func responseGuardRefusal(rule *responseGuardRuleRun) *llmprotocol.ProtocolError {
-	return llmprotocol.NewError(llmprotocol.ErrorPermission, "response_blocked", responseGuardBlockMessage(rule), nil)
+	return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "response_blocked", responseGuardBlockMessage(rule), nil)
 }
 
 // streamedFallbackRefusal answers a streaming client whose fallback answer
@@ -269,6 +279,21 @@ func heldStreamFailure(ctx *RequestContext, streamErr error) *llmprotocol.Protoc
 	}
 	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_incomplete",
 		"the model's stream ended before the answer was complete", streamErr)
+}
+
+// heldStreamFailureReason is why the record of a held stream that ended
+// without an answer the guard could read fails: the upstream's failure event,
+// or a stream the Router read cleanly to its end but could not rebuild an
+// answer from. A stream that ended early has none.
+func heldStreamFailureReason(ctx *RequestContext, clean bool) string {
+	state := ctx.SemanticStreamState
+	switch {
+	case state != nil && state.failed != nil:
+		return "upstream_error_response"
+	case clean && state.delivered():
+		return "upstream_invalid_response"
+	}
+	return ""
 }
 
 // heldStreamPart is the reply to one part of a held stream: body replaces

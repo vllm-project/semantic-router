@@ -53,6 +53,12 @@ describe('model form backend targets', () => {
       api_key: 'test-only-key',
       auth: { header: 'x-api-key', prefix: '', api_key_env: 'PROVIDER_API_KEY' },
       headers: { 'X-Org': 'acme' },
+      tls: {
+        ca_file: '/etc/vllm-sr/certs/example-corp-ca.pem',
+        server_name: 'provider.internal',
+        cert_file: '/etc/vllm-sr/certs/router.crt',
+        key_file: '/etc/vllm-sr/certs/router.key',
+      },
     } as const
 
     expect(normalizeModelBackendRefs([backend])).toEqual([backend])
@@ -86,19 +92,22 @@ describe('model form backend targets', () => {
     expect(Object.prototype.hasOwnProperty.call(payload.backend_refs[0].auth, 'prefix')).toBe(true)
   })
 
-  it('keeps a delegated credential mode through the model payload', () => {
-    const backend = {
-      name: 'litellm',
-      endpoint: 'https://litellm.internal/v1',
-      provider: 'openai-compatible',
-      auth: { credential: 'delegated' as const },
-    }
+  it.each(['delegated', 'caller'] as const)(
+    'keeps a %s credential mode through the model payload',
+    (credential) => {
+      const backend = {
+        name: 'litellm',
+        endpoint: 'https://litellm.internal/v1',
+        provider: 'openai-compatible',
+        auth: { credential },
+      }
 
-    expect(normalizeModelBackendRefs([backend])).toEqual([backend])
-    expect(buildProviderModelPayload('gateway', { backend_refs: [backend] }).backend_refs).toEqual([
-      backend,
-    ])
-  })
+      expect(normalizeModelBackendRefs([backend])).toEqual([backend])
+      expect(
+        buildProviderModelPayload('gateway', { backend_refs: [backend] }).backend_refs,
+      ).toEqual([backend])
+    },
+  )
 
   it('leaves new-model pricing unset until the operator enters a value', () => {
     const form = newModelFormData()

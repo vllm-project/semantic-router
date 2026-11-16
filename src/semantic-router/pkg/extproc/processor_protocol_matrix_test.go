@@ -64,7 +64,7 @@ func TestExtProcAcceptsAnthropicToolUseCallerProvenance(t *testing.T) {
 			"content":[{"type":"tool_use","id":"call_1","name":"lookup","input":{"city":"Paris"},"caller":{"type":"direct"}}],
 			"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}
 		}`)
-		response := router.handleNonStreamingResponseBody(body, ctx, 0)
+		response := router.handleNonStreamingResponseBody(body, ctx, 0, false)
 		if response.GetImmediateResponse() != nil || response.GetResponseBody() == nil {
 			t.Fatalf("successful Anthropic tool response was rejected: %+v", response)
 		}

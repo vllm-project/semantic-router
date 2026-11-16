@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -54,6 +55,17 @@ func providerEndpointScheme(cfg *config.RouterConfig, backendName string, profil
 	return "http"
 }
 
+// providerTLSConfig is the TLS client configuration of a Router-initiated
+// call to a backend: its tls block, so the Router trusts the CA, server name
+// and client certificate the backend's Envoy cluster uses. nil keeps the
+// system roots and the endpoint's host.
+func providerTLSConfig(profile *config.ProviderProfile) (*tls.Config, error) {
+	if profile == nil {
+		return nil, nil
+	}
+	return profile.TLS.ClientConfig()
+}
+
 // providerEndpointPath mirrors primary dispatch for router-initiated provider calls.
 func providerEndpointPath(profile *config.ProviderProfile, format llmprotocol.WireFormat) string {
 	path := requestWirePath(format)
@@ -80,9 +92,9 @@ func configuredProviderAuthorizer(
 	if err != nil {
 		return nil, err
 	}
-	if profile.Delegated() {
+	if profile.Delegated() || profile.Caller() {
 		logging.ComponentWarnEvent("extproc", "delegated_router_call_refused", map[string]interface{}{
-			"call": call, "model": model,
+			"call": call, "model": model, "credential": profile.AuthCredential,
 		})
 		return nil, principal.ErrRouterCall
 	}

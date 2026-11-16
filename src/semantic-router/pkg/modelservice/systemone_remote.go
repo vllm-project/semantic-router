@@ -121,9 +121,10 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 			return nil, fmt.Errorf("systemone deployment %q: %w", name, err)
 		}
 		// A delegated deployment answers each user with that user's
-		// credential, so no answer is kept for another request.
+		// credential, and one that forwards request headers may answer by
+		// them, so neither keeps an answer for another request.
 		var cache *resultCache
-		if !deployment.Auth.Delegated() {
+		if !deployment.Auth.Delegated() && len(deployment.ForwardRequestHeaders) == 0 {
 			cache = newExpiringResultCache(ResultCacheEntries(), remoteCacheTTL)
 		}
 		codec, deviations, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(deployment.Schema), deployment.Deviations)
@@ -163,42 +164,6 @@ func siblingEndpoint(endpoint, segment string) string {
 	return base.ResolveReference(&url.URL{Path: segment, RawQuery: base.RawQuery}).String()
 }
 
-// Card is the card name's questions compile against: the question types and
-// presets its API lists for the model in GET <endpoint>/models, else the
-// declared ones, else the System One types; and the modalities it lists, else
-// the declared ones, else text. The first call reads the listing in the
-// background unless a preparation has read it; until it answers, the declared
-// or System One types apply.
-func (r *RemoteSystemOne) Card(name string) (ModelCard, bool) {
-	d := r.deployment(name)
-	if d == nil {
-		return ModelCard{}, false
-	}
-	if card := d.listed.Load(); card != nil {
-		return *card, true
-	}
-	if d.started.CompareAndSwap(false, true) {
-		go d.readListing(r.ctx, listingTimeout)
-	}
-	return d.declaredCard(), true
-}
-
-// ListedCard is the card name's API lists for its model, when the listing has
-// answered; like Card, the first call reads the listing in the background.
-func (r *RemoteSystemOne) ListedCard(name string) (ModelCard, bool) {
-	d := r.deployment(name)
-	if d == nil {
-		return ModelCard{}, false
-	}
-	if card := d.listed.Load(); card != nil {
-		return *card, true
-	}
-	if d.started.CompareAndSwap(false, true) {
-		go d.readListing(r.ctx, listingTimeout)
-	}
-	return ModelCard{}, false
-}
-
 // PrepareCard reads name's listing once, for at most
 // preparationListingTimeout, and returns its card as Card does. An API that
 // does not list leaves the declared or System One types; it never fails the
@@ -225,6 +190,7 @@ func (r *RemoteSystemOne) PrepareCard(ctx context.Context, name string) (ModelCa
 // another schema gets the request converted to its schema, and its answers
 // and errors come back in the native form, a batch reassembled.
 func (r *RemoteSystemOne) Forward(ctx context.Context, name string, body json.RawMessage) (SystemOneResult, error) {
+	ctx = WithMeterDeployment(ctx, name)
 	d := r.deployment(name)
 	if d == nil {
 		return SystemOneResult{}, ErrUnavailable
@@ -264,6 +230,7 @@ func (r *RemoteSystemOne) Empty() bool {
 // to name; alone it is one System One call. An answer the generation's cache
 // holds is not asked again.
 func (r *RemoteSystemOne) Decide(ctx context.Context, name string, request Request) (Response, error) {
+	ctx = WithMeterDeployment(ctx, name)
 	d := r.deployment(name)
 	if d == nil {
 		requestsTotal.WithLabelValues(name, ErrorReason(ErrUnknownDeployment)).Inc()
@@ -409,6 +376,7 @@ func (d *systemOneDeployment) sendBatch(ctx context.Context, task *bundleTask) {
 func (d *systemOneDeployment) post(ctx context.Context, body api.DecisionRequest) (int, []byte, error) {
 	started := time.Now()
 	status, data, err := d.exchangeDecisions(ctx, body)
+	reportRemoteCall(ctx, d.name, d.model, data)
 	outcome := err
 	if outcome == nil {
 		outcome = systemOneStatusError(status)
@@ -479,7 +447,11 @@ func (d *systemOneDeployment) exchange(ctx context.Context, method, path string,
 		if errors.As(cause, &urlErr) {
 			cause = urlErr.Err
 		}
-		d.reportFailure(remote.StatusCode, "transport", cause)
+		// A call its caller cancelled did not fail at the deployment; once
+		// reported, it would also hide the deployment's next real failure.
+		if !callerCancelled(ctx, cause) {
+			d.reportFailure(remote.StatusCode, "transport", cause)
+		}
 		return 0, nil, cause
 	}
 	return 0, nil, err
@@ -593,11 +565,35 @@ func (d *systemOneDeployment) listedCard(ctx context.Context) (ModelCard, error)
 		}
 		if json.Unmarshal(data, &card) == nil {
 			if listed, ok := d.listedEntryCard(card.QuestionTypes, card.Presets, card.Modalities); ok {
+				listed.MaxInputTokens, listed.ValidatedInputTokens = listedInputLimits(data)
 				return listed, nil
 			}
 		}
 	}
 	return ModelCard{}, fmt.Errorf("the models listing gives no question types or modalities for %q", d.model)
+}
+
+// listedInputLimits are the question token caps a listed card's limits give:
+// max_input_tokens and validated_input_tokens, zero when absent or not a
+// positive whole number.
+func listedInputLimits(data json.RawMessage) (maxInput, validated int) {
+	var card struct {
+		Limits struct {
+			MaxInputTokens       json.Number `json:"max_input_tokens"`
+			ValidatedInputTokens json.Number `json:"validated_input_tokens"`
+		} `json:"limits"`
+	}
+	if json.Unmarshal(data, &card) != nil {
+		return 0, 0
+	}
+	whole := func(number json.Number) int {
+		value, err := number.Int64()
+		if err != nil || value < 1 || value > math.MaxInt32 {
+			return 0
+		}
+		return int(value)
+	}
+	return whole(card.Limits.MaxInputTokens), whole(card.Limits.ValidatedInputTokens)
 }
 
 // checkListed reads the listing of a schema without model cards, whose
@@ -623,6 +619,13 @@ func (d *systemOneDeployment) checkListed(ctx context.Context) {
 			"deployment": d.name, "schema": string(d.schemaID()), "reason": reason, "question_types": d.declaredCard().QuestionTypes,
 		})
 	}
+}
+
+// callerCancelled reports a call that failed because its caller cancelled it,
+// whatever cause the cancel carried, rather than because of the deployment.
+// A call past its deadline is not one: a slow deployment is its failure.
+func callerCancelled(ctx context.Context, err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, ErrSignalsAbandoned) || errors.Is(ctx.Err(), context.Canceled)
 }
 
 // reportFailure logs each kind of failure once per deployment and generation;

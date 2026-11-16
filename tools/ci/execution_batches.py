@@ -76,11 +76,16 @@ def image_producers(images: list[str]) -> dict[str, list[str]]:
     return result
 
 
+def scheduled_verifications(plan: dict) -> list[dict]:
+    reused = set(plan.get("reused_verification_ids", []))
+    return [record for record in plan["verifications"] if record["id"] not in reused]
+
+
 def expected_dispatch_jobs(plan: dict) -> list[str]:
     return sorted(
         {
             "plan",
-            *(dispatch_job(record) for record in plan["verifications"]),
+            *(dispatch_job(record) for record in scheduled_verifications(plan)),
             *(job for job, images in image_producers(plan["images"]).items() if images),
         }
     )

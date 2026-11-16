@@ -237,6 +237,18 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	for _, item := range response.Output {
 		contents = append(contents, item.Content...)
 	}
+	if truncated := llmprotocol.TruncatedToolCall(response, policy.Limits.JSONDepth); truncated != nil {
+		// tool_use.input is an object, so a call the output limit cut carries
+		// the members the model completed before the cut.
+		call := *truncated
+		call.Arguments, _ = llmprotocol.TruncatedJSONObject(truncated.Arguments, policy.Limits.JSONDepth)
+		contents[len(contents)-1].ToolCall = &call
+		diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{{
+			Source: envelope.Format, Target: llmprotocol.AnthropicMessagesV1,
+			Field: "content.tool_use.input", Action: llmprotocol.DiagnosticApproximated,
+			Reason: "a tool call cut by the output limit carries the members completed before the cut",
+		}}, policy.Limits.Diagnostics)
+	}
 	contentDiagnostics, err := anthropicContentDiagnostics(contents, envelope.Format, policy)
 	diagnostics = appendDiagnostics(diagnostics, contentDiagnostics, policy.Limits.Diagnostics)
 	if err != nil {

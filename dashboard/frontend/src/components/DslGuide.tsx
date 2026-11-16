@@ -163,7 +163,9 @@ SIGNAL domain math {
 # PLUGINS
 # ============================================
 
-PLUGIN replay router_replay {}
+PLUGIN replay router_replay {
+  enabled: true
+}
 
 # ============================================
 # ROUTES
@@ -208,7 +210,9 @@ const ROUTE_SNIPPET = `ROUTE my_route (description = "Description") {
   }
 }`
 
-const PLUGIN_SNIPPET = `PLUGIN my_plugin router_replay {}`
+const PLUGIN_SNIPPET = `PLUGIN my_plugin router_replay {
+  enabled: true
+}`
 
 // Signal type descriptions
 const SIGNAL_DESCRIPTIONS: Record<string, string> = {
@@ -234,6 +238,7 @@ const SIGNAL_DESCRIPTIONS: Record<string, string> = {
   conversation: 'Count or detect conversation features: messages, tool definitions and tool calls',
   metadata: 'Match caller-provided request metadata by key (untrusted, never an identity)',
   input_modality: 'Match a request that contains text, image, audio or video input',
+  agent: 'Match the agent a request belongs to: main or subagent, its harness and subagent type',
   systemone: 'Ask a System One model a named question and match its answer',
 }
 

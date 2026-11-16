@@ -119,6 +119,33 @@ func TestProviderDispatchEncodesEveryClientBackendProtocolPair(t *testing.T) {
 	}
 }
 
+func TestProviderDispatchAcceptsAnthropicNullCitations(t *testing.T) {
+	router := routingTestRouter("chat")
+	ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, nil)
+	body := []byte(`{"model":"chat","max_tokens":64,"messages":[
+		{"role":"user","content":"hi"},
+		{"role":"assistant","content":[{"type":"text","text":"hello","citations":null}]},
+		{"role":"user","content":"more"}]}`)
+	request, immediate := router.prepareProtocolRequest(body, ctx)
+	if immediate != nil || request == nil {
+		t.Fatalf("Anthropic history was rejected: %v", ctx.ImmediateProtocolError)
+	}
+	if _, err := router.prepareProviderDispatch(request, "chat", "", false, ctx); err != nil {
+		t.Fatal(err)
+	}
+	body, err := router.encodeDispatchRequest(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIChatV1, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Messages) != 3 || len(decoded.Messages[1].Content) != 1 || decoded.Messages[1].Content[0].Text != "hello" {
+		t.Fatalf("assistant history changed: %+v", decoded.Messages)
+	}
+}
+
 func TestAzureProviderDispatchAcceptsDecoratedResponse(t *testing.T) {
 	router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	profile := router.Config.ProviderProfiles["provider"]

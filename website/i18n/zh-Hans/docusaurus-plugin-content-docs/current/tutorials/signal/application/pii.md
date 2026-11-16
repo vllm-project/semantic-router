@@ -68,7 +68,9 @@ recipes:
 | `input.history` | 同时读取之前的用户轮次 |
 | `input.tool_results` | 同时读取请求中的工具结果 |
 | `input.request` | 设为 `false` 时不读取当前用户轮次，规则只读取它指定的之前用户轮次或工具结果 |
-| `on_unknown` | 模型没有给出答案时规则报告什么：`no_match`（默认）或 `match` |
+| `on_unscanned` | 长输入只读了部分窗口时规则报告什么：`best_effort`（默认）、`match`、`no_match` 或 `unknown` |
+| `min_coverage` | 使用 `best_effort` 时，至少要读完的窗口比例（0 到 1），达到后才根据已读窗口判断；低于该比例时规则为未知。默认关闭 |
+| `on_unknown` | 模型没有给出答案时规则报告什么：`match`（默认）或 `no_match` |
 | `deployment`、`timeout_ms` | 回答问题的部署，以及答案的截止时间 |
 
 规则的 `predicate` 是策略：请为你使用的模型校准这个值，或者省略它以使用模型的校准阈值。vela3-fast 的 span 适配器在返回 span 之前会应用它自己按长度设定的阈值，所以它的 0.18 会接受它返回的每个 span。
@@ -79,13 +81,13 @@ recipes:
 
 编码智能体的用户轮次带有其运行框架（harness）自身的指令：例如 Claude Code 2.1.317 会在第一条用户消息的提醒中放入一行带邮箱地址的提交尾注（commit trailer）。针对智能体工具返回内容的规则应同时设置 `input.request: false` 和 `input.tool_results: true`，如上面的 `tool_result_pii`，这样它只读取工具结果，不读取当前轮次及 `routing_input` 从中移除的内容。在请求带有工具结果之前，这样的规则不会被询问，也不会匹配。
 
-它读取完整输入，输入超过一次前向计算的长度时分窗口读取。模型没有读到的文本（超过其输入或扫描预算，或被截断）按个人数据计入，所以无法检查的文本不能当作干净文本通过。在信号截止时间前没有完成的扫描没有答案，只有设置 `on_unknown: match` 时才匹配。
+它读取完整输入。超过部署一个 `scan_window` 的输入被切成相互重叠的窗口，先读结尾，再读开头，然后按二分读中间；每个窗口的 span 都按其在原输入中的位置计入，因此脱敏会替换每一处。参见[长输入](../../../system-one/deploy/performance.md#long-inputs)。如果截止时间在所有窗口读完之前到达，且已读窗口中没有发现个人数据，由 `on_unscanned` 决定：`best_effort`（默认）根据已读窗口作出判断（规则设置了 `min_coverage` 时，需读完该比例的窗口，低于该比例时规则为未知），`match` 把请求按个人数据计入（严格模式），`no_match` 不计入，`unknown` 交给 `on_unknown`。已读窗口中发现的个人数据无论 `on_unscanned` 如何设置都会计入。masking 插件始终需要读完所有窗口：无法完整读取的文本不会被发送。
 
 模型可能只找到某个值的一次出现，而漏掉后面的副本。所找到的、长度至少两个字符的值，其其他所有完全相同、整词匹配的副本也会以同一标签报告，因此遮蔽会替换每一个副本。
 
 ### 模型没有给出答案时 {#when-the-model-gives-no-answer}
 
-模型没有给出答案（失败、过载或错过截止时间）的规则不匹配。若要改为失败关闭，写 `on_unknown: match`：此时规则会匹配这类请求，匹配类型为 `unavailable`，决策的 `rules.on_unknown` 仍然决定处理方式：
+没有任何窗口得到答案（模型失败、过载或错过截止时间）的规则会匹配，匹配类型为 `unavailable`：失败即拦截，决策的 `rules.on_unknown` 仍然决定处理方式。若要放行这类请求，写 `on_unknown: no_match`：
 
 ```yaml
 recipes:
@@ -93,7 +95,7 @@ recipes:
     signals:
       pii:
         - name: personal_data
-          on_unknown: match
+          on_unknown: no_match
     decisions:
       - name: keep-private
         priority: 200

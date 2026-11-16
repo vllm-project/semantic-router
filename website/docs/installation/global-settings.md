@@ -47,7 +47,7 @@ global settings; see [Virtual Models](../tutorials/global/entrypoints-and-recipe
 | Group | Owns | Guide |
 | --- | --- | --- |
 | `global.router` | Router engine controls, selection defaults, streamed-body policy, routing input, learning | [Algorithms](../tutorials/algorithm/overview.md), [Router Learning](../tutorials/learning/overview.md), [Routing input](../tutorials/signal/overview.md#choose-the-user-text-signals-read) |
-| `global.services` | API, Response API, observability, authz, rate limits, management API, startup status, replay | [API and Observability](../tutorials/global/api-and-observability.md) |
+| `global.services` | API, Response API, observability, authz, rate limits, spend budgets, management API, startup status, replay | [API and Observability](../tutorials/global/api-and-observability.md) |
 | `global.stores` | response cache, memory, vector store | [Stores and Tools](../tutorials/global/stores-and-tools.md) |
 | `global.integrations` | tool catalog and Looper runtime/state | [Stores and Tools](../tutorials/global/stores-and-tools.md) |
 | `global.model_catalog` | deployments, bindings, admission, the embedding and decision models | [Connect the Router to the model runtime](../model-runtime/deploy/connect-the-router.md) |

@@ -79,7 +79,7 @@ func TestBufferedResponsePartialCacheWarningIsRecordedOnce(t *testing.T) {
 	counter := metrics.TranslationLossyTotal.WithLabelValues("anthropic", "openai", "dropped", reason)
 	before := testutil.ToFloat64(counter)
 	body := []byte(`{"id":"response_1","model":"source-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12,"prompt_tokens_details":{"cached_tokens":1}}}`)
-	response := router.handleNonStreamingResponseBody(body, ctx, 0)
+	response := router.handleNonStreamingResponseBody(body, ctx, 0, false)
 	if response.GetResponseBody() == nil {
 		t.Fatalf("buffered response failed: %+v", response)
 	}

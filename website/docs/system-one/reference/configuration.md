@@ -20,6 +20,7 @@ when to use them; this page lists them.
 | `recipes[].model_bindings.<type>` | The same, for one recipe |
 | `global.model_catalog.deployments.<name>` | A deployment: `provider: model_runtime` (local or attached) or `provider: systemone` (a remote API) |
 | `global.model_catalog.signal_timeout_ms` | The deadline of all of a request's signals |
+| `global.model_catalog.on_signal_overload` | `{action, wait_ms, retry_after_seconds}`: with `action: retry`, every call an overloaded decision model refuses is asked again for up to `wait_ms`. A request that rules it still could not read would refuse then gets an error the client retries. See [when the decision model is overloaded](../deploy/performance.md#when-the-decision-model-is-overloaded) |
 
 A `systemone` deployment takes `endpoint`, `model`, `auth` (`api_key_env` or
 `api_key_file`, or `credential: delegated`; `header`, `prefix`), `headers`,
@@ -41,7 +42,7 @@ A `systemone` rule, under `recipes[].signals.systemone`:
 | `stage` | `request` (default) or `response` |
 | `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `request` (`false` leaves the current user turn out), `answer`, `context`, `image`, `audio`, `video` |
 | `coverage` | `truncate` (default) or `full` |
-| `on_unscanned` | With `coverage: full`: `match`, `no_match` or `unknown` (default) |
+| `on_unscanned` | With `coverage: full`: `match`, `no_match`, `unknown` (default) or `best_effort`; on `jailbreak` and `pii` rules, `best_effort` is the default |
 | `timeout_ms` | Up to 60,000 |
 
 An application rule takes `name`, `description`, `deployment`, `timeout_ms` and

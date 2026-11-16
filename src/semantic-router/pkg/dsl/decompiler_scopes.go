@@ -65,6 +65,12 @@ func writeEntrypoints(sb *strings.Builder, entrypoints []config.EntrypointMappin
 		}
 		fmt.Fprintf(sb, "  model_names: %s\n", formatStringArray(entrypoint.ModelNames))
 		fmt.Fprintf(sb, "  recipe: %q\n", entrypoint.Recipe)
+		if entrypoint.ReviewModel != "" {
+			fmt.Fprintf(sb, "  review_model: %q\n", entrypoint.ReviewModel)
+		}
+		if entrypoint.MemoryModel != "" {
+			fmt.Fprintf(sb, "  memory_model: %q\n", entrypoint.MemoryModel)
+		}
 		if entrypoint.Default {
 			sb.WriteString("  default: true\n")
 		}
@@ -129,10 +135,12 @@ func appendConfigScopesToAST(prog *Program, cfg *config.RouterConfig) {
 	}
 	for _, entrypoint := range cfg.Entrypoints {
 		prog.Entrypoints = append(prog.Entrypoints, &EntrypointDecl{
-			API:        string(entrypoint.API),
-			ModelNames: append([]string(nil), entrypoint.ModelNames...),
-			Recipe:     string(entrypoint.Recipe),
-			Default:    entrypoint.Default,
+			API:         string(entrypoint.API),
+			ModelNames:  append([]string(nil), entrypoint.ModelNames...),
+			Recipe:      string(entrypoint.Recipe),
+			Default:     entrypoint.Default,
+			ReviewModel: entrypoint.ReviewModel,
+			MemoryModel: entrypoint.MemoryModel,
 		})
 	}
 	for i := range cfg.Recipes {

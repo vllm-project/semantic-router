@@ -3753,6 +3753,93 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/router/api/v1/observability/replays/models": {
+      "get": {
+        "operationId": "getApiRouterApiV1ObservabilityReplaysModels",
+        "summary": "GET /api/router/api/v1/observability/replays/models",
+        "tags": [
+          "router"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "replay",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "replay.read.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/router/api/v1/observability/replays/run": {
+      "get": {
+        "operationId": "getApiRouterApiV1ObservabilityReplaysRun",
+        "summary": "GET /api/router/api/v1/observability/replays/run",
+        "tags": [
+          "router"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "replay",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "replay.read.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/router/api/v1/observability/replays/runs": {
+      "get": {
+        "operationId": "getApiRouterApiV1ObservabilityReplaysRuns",
+        "summary": "GET /api/router/api/v1/observability/replays/runs",
+        "tags": [
+          "router"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "replay",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "replay.read.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/api/router/api/v1/observability/replays/trajectory": {
       "get": {
         "operationId": "getApiRouterApiV1ObservabilityReplaysTrajectory",
@@ -8639,6 +8726,35 @@
         "x-vllm-sr-schema-status": "typed"
       }
     },
+    "/api/vsr/rules/try": {
+      "post": {
+        "operationId": "postApiVsrRulesTry",
+        "summary": "POST /api/vsr/rules/try",
+        "tags": [
+          "vsr"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 1048576,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/api/workflows/health": {
       "get": {
         "operationId": "getApiWorkflowsHealth",
@@ -9266,6 +9382,26 @@
       "get": {
         "operationId": "getV1SystemoneModels",
         "summary": "GET /v1/systemone/models",
+        "tags": [
+          "systemone"
+        ],
+        "security": [],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-sensitivity": "public",
+        "x-vllm-sr-resource-owner": "public",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/v1/systemone/rules": {
+      "post": {
+        "operationId": "postV1SystemoneRules",
+        "summary": "POST /v1/systemone/rules",
         "tags": [
           "systemone"
         ],

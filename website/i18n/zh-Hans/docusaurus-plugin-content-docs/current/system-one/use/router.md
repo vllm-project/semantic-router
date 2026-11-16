@@ -77,7 +77,7 @@ recipes:
 - Images API（`POST /v1/images/generations`）上的请求会像文本请求一样针对其提示词被询问。它必须到达 [output](../../tutorials/decision/output.md) 为图像的决策，否则在调用任何模型之前就以 `image_route_required` 被拒绝。
 
 :::tip
-迟到或失败的答案会让规则成为未知（unknown）。决策的 `rules.on_unknown` 或条件的 `on_error` 说明其含义；设置了 `on_unknown: match` 的 `jailbreak` 或 `pii` 规则在模型没有给出答案时视为匹配。
+迟到或失败的答案会让规则成为未知（unknown）。决策的 `rules.on_unknown` 或条件的 `on_error` 说明其含义；请求阶段的 `jailbreak` 或 `pii` 规则在模型没有给出答案时视为匹配，除非设置了 `on_unknown: no_match`。
 :::
 
 ## `systemone` 选择器 {#the-systemone-selector}

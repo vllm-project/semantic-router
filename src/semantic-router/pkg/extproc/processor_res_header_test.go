@@ -95,8 +95,8 @@ func TestHandleResponseHeadersUsesResponseAPIStreamRequestFallback(t *testing.T)
 	if !ctx.IsStreamingResponse {
 		t.Fatal("expected stream:true Responses API request to force streaming response mode")
 	}
-	if response.ModeOverride == nil || response.ModeOverride.ResponseBodyMode != http_ext.ProcessingMode_STREAMED {
-		t.Fatalf("expected streamed mode override, got %#v", response.ModeOverride)
+	if response.ModeOverride != nil && response.ModeOverride.ResponseBodyMode == http_ext.ProcessingMode_STREAMED {
+		t.Fatalf("a provider body without an SSE content-type must be read whole, got %#v", response.ModeOverride)
 	}
 
 	mutation := response.GetResponseHeaders().Response.GetHeaderMutation()

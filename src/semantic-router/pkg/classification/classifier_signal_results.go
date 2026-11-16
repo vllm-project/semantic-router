@@ -48,6 +48,7 @@ type SignalResults struct {
 	MatchedConversationRules  []string
 	MatchedMetadataRules      []string // Matched untrusted request metadata rules
 	MatchedInputModalityRules []string // Matched structural input-modality presence rules
+	MatchedAgentRules         []string // Matched agent rules: the request's agent role, harness and type
 	MatchedSystemOneRules     []string
 	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores          map[string]float64
@@ -74,7 +75,10 @@ type SignalResults struct {
 	SignalErrors       map[string]string              // Signal evaluation errors keyed by "type:name"
 	SignalSpans        map[string][]modelservice.Span // The matched spans of span rules keyed by "type:name"; set at the response stage
 	SignalErrorMatches map[string]bool
-	Diagnostics        decision.EvaluationDiagnostics
+	// ScanCoverage is how much of its input each guard rule that read it in
+	// windows read, keyed by "type:name": full, partial n/m or none.
+	ScanCoverage map[string]string
+	Diagnostics  decision.EvaluationDiagnostics
 
 	// Signal metrics (only populated in eval mode)
 	Metrics *SignalMetricsCollection
@@ -105,6 +109,7 @@ func (r *SignalResults) Matches() *decision.SignalMatches {
 		ConversationRules:  r.MatchedConversationRules,
 		MetadataRules:      r.MatchedMetadataRules,
 		InputModalityRules: r.MatchedInputModalityRules,
+		AgentRules:         r.MatchedAgentRules,
 		SystemOneRules:     r.MatchedSystemOneRules,
 		ProjectionRules:    r.MatchedProjectionRules,
 		SignalValues:       r.SignalValues,
@@ -131,6 +136,7 @@ type SignalMetricsCollection struct {
 	Conversation  SignalMetrics `json:"conversation"`
 	Metadata      SignalMetrics `json:"metadata"`
 	InputModality SignalMetrics `json:"input_modality"`
+	Agent         SignalMetrics `json:"agent"`
 	SystemOne     SignalMetrics `json:"systemone"`
 }
 

@@ -43,10 +43,13 @@ const (
 	SystemOneCoverageFull     = "full"
 
 	// What a full-coverage rule means when its model could not read the
-	// whole input: a match, no match, or an unknown signal.
-	SystemOneUnscannedMatch   = "match"
-	SystemOneUnscannedNoMatch = "no_match"
-	SystemOneUnscannedUnknown = "unknown"
+	// whole input: what the windows it read found (a guard rule read in
+	// windows; one that read nothing is unknown), a match, no match, or an
+	// unknown signal.
+	SystemOneUnscannedBestEffort = "best_effort"
+	SystemOneUnscannedMatch      = "match"
+	SystemOneUnscannedNoMatch    = "no_match"
+	SystemOneUnscannedUnknown    = "unknown"
 
 	// DefaultSystemOneTimeoutMs bounds one call when a rule sets none.
 	DefaultSystemOneTimeoutMs = 1000
@@ -95,7 +98,7 @@ type SystemOneRule struct {
 	Coverage   string         `yaml:"coverage,omitempty" jsonschema:"enum=truncate,enum=full"`
 	// OnUnscanned applies to a full-coverage rule whose model could not
 	// read its whole input (default unknown).
-	OnUnscanned string `yaml:"on_unscanned,omitempty" jsonschema:"enum=match,enum=no_match,enum=unknown"`
+	OnUnscanned string `yaml:"on_unscanned,omitempty" jsonschema:"enum=best_effort,enum=match,enum=no_match,enum=unknown"`
 	TimeoutMs   int    `yaml:"timeout_ms,omitempty"`
 }
 

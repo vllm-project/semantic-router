@@ -295,7 +295,7 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 
 - **默认在本地。** 什么都不配置时，每个问题都询问本地的 `primary` 部署，个人数据规则也在那里运行。绑定或规则的 `deployment` 会把问题移到别处；决策模型在远程时，请显式绑定 `pii` 和 `hallucination`。
 - **远程模型会收到它评判的内容。** `systemone` 部署会收到其问题读取的状态部分：请求、之前的轮次、工具结果、模型的答案、候选，以及图片问题中的图片。[哪些数据会离开本机](../system-one/deploy/deployments#what-leaves-the-host)按信号列出了这些部分。远程嵌入提供方会收到它要嵌入的文本。
-- **防护可以失败开放或失败关闭。** 模型没有给出答案的 `jailbreak` 或 `pii` 规则不匹配，除非设置了 `on_unknown: match`；模型没能读到的文本按攻击或个人数据计入。
+- **防护默认失败即拦截。** 模型没有给出答案的请求阶段 `jailbreak` 或 `pii` 规则匹配，除非设置了 `on_unknown: no_match`。长输入分窗口读取；截止时间提前结束扫描时，规则根据已读窗口作出判断，除非设置了 `on_unscanned: match`。
 - **遮蔽覆盖最终请求。** `masking` 插件替换发往提供方的请求中每个文本位置的个人数据，包括检索到的文档和工具结果；拿不到 span 时以失败关闭。
 - **Router 自有的请求头受保护。** `header_mutation` 不能写入 Router 自有的请求头或路由键，客户端发送的内部请求头会被丢弃，调试细节只发给 `global.router.headers.debug` 允许的调用方。
 - **授权是一个信号。** `role_bindings` 条件根据网关声明的身份，决定谁可以到达哪些路由和工具；只有设置了 `identity.trust_headers: true` 时，才信任客户端发送的身份请求头。
@@ -320,7 +320,7 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 | 将 provider 和存储凭据保留在密钥管理器或 Kubernetes Secret 中 | YAML 中使用 `${ENV}` 引用 | [将凭据排除在配置之外](#keep-credentials-out-of-configuration) |
 | 复核每条路由的 provider 本地性、工具和数据保留行为 | 每个问题的决策模型在哪里运行；每条路由写入哪些存储 | [复核决策模型读取的内容](#review-what-the-decision-model-reads)、[复核已存储的请求数据](#review-stored-request-data) |
 | 仅向受信任的运维人员授予回放详情、日志和配置写入权限 | `replay.read`、`logs.read`、配置写入权限 | [保护公共监听器](#protect-the-public-listener) |
-| 在绕过策略不可接受的地方设置严格的失败行为 | 在 `jailbreak` 和 `pii` 规则上设置 `on_unknown: match` | [复核决策模型读取的内容](#review-what-the-decision-model-reads) |
+| 在绕过策略不可接受的地方设置严格的失败行为 | 在 `jailbreak` 和 `pii` 规则上设置 `on_unscanned: match`，并保留它们默认的 `on_unknown: match` | [复核决策模型读取的内容](#review-what-the-decision-model-reads) |
 | 按与其他凭据相同的计划轮换本地栈的存储凭据 | `vllm-sr storage rotate` | [轮换](#rotate) |
 | 测试备份、恢复、凭据轮换、升级和回滚 | 每次生产变更前先演练 | [升级与回滚](upgrade-rollback) |
 | 不要把容器运行时套接字挂载进任何栈容器 | 只有 `vllm-sr serve` 使用运行时 | [限制容器运行时访问](#limit-container-runtime-access) |

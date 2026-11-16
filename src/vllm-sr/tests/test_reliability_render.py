@@ -109,14 +109,48 @@ def test_bare_model_renders_the_shared_defaults(tmp_path, monkeypatch):
     assert _hcm(rendered)["stream_idle_timeout"] == listener_timeout
     for route in _routes(rendered):
         assert route["route"]["timeout"] == listener_timeout
-        assert "retry_policy" not in route["route"]
+        # The default retries: only an attempt the backend never received.
+        retry = route["route"]["retry_policy"]
+        assert retry["retry_on"] == DEFAULTS["retry_on"]
+        assert retry["num_retries"] == DEFAULTS["retry_count"]
+        assert "retry_back_off" not in retry
     cluster = _cluster(rendered)
     assert cluster["connect_timeout"] == _seconds(DEFAULTS["connect_timeout"])
+    options = cluster["typed_extension_protocol_options"][
+        "envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
+    ]
+    assert options["common_http_protocol_options"]["idle_timeout"] == _seconds(
+        DEFAULTS["idle_connection_timeout"]
+    )
     assert cluster["lb_policy"] == DEFAULTS["lb_policy"].upper()
-    # No circuit_breakers block: Envoy's own defaults are the table's.
-    assert "circuit_breakers" not in cluster
+    thresholds = cluster["circuit_breakers"]["thresholds"][0]
+    assert (
+        thresholds["max_requests"] == DEFAULTS["max_requests_with_retries_or_ejection"]
+    )
     assert "outlier_detection" not in cluster
     assert "health_checks" not in cluster
+
+
+@pytest.mark.parametrize("block", ["retry_count: 0", "retry_on: reset"])
+def test_a_block_naming_retries_replaces_the_default_ones(tmp_path, monkeypatch, block):
+    rendered = _render(
+        tmp_path,
+        monkeypatch,
+        f"""
+providers:
+  models:
+    - name: m
+      reliability:
+        {block}
+      backend_refs:
+        - endpoint: 10.0.0.1:8000
+          provider: vllm
+""",
+    )
+    for route in _routes(rendered):
+        assert "retry_policy" not in route["route"]
+    # No circuit_breakers block: Envoy's own defaults are the table's.
+    assert "circuit_breakers" not in _cluster(rendered)
 
 
 def test_enabled_reliability_renders_the_shared_defaults(tmp_path, monkeypatch):
@@ -158,6 +192,28 @@ def test_enabled_reliability_renders_the_shared_defaults(tmp_path, monkeypatch):
     assert check["healthy_threshold"] == DEFAULTS["healthy_threshold"]
     assert "no_traffic_interval" not in check
     assert "common_lb_config" not in cluster
+
+
+def test_a_blank_retry_on_keeps_the_default_retries(tmp_path, monkeypatch):
+    # the Router trims retry_on, so blank is unset there too
+    rendered = _render(
+        tmp_path,
+        monkeypatch,
+        """
+providers:
+  models:
+    - name: m
+      reliability:
+        retry_on: "  "
+      backend_refs:
+        - endpoint: 10.0.0.1:8000
+          provider: vllm
+""",
+    )
+    for route in _routes(rendered):
+        retry = route["route"]["retry_policy"]
+        assert retry["retry_on"] == DEFAULTS["retry_on"]
+        assert retry["num_retries"] == DEFAULTS["retry_count"]
 
 
 def test_timeout_and_retry_fields_render_for_every_route(tmp_path, monkeypatch):
@@ -212,9 +268,7 @@ providers:
     }
 
 
-def test_per_try_timeout_alone_renders_a_retry_policy_without_retries(
-    tmp_path, monkeypatch
-):
+def test_per_try_timeout_renders_a_retry_policy_without_retries(tmp_path, monkeypatch):
     rendered = _render(
         tmp_path,
         monkeypatch,
@@ -223,6 +277,7 @@ providers:
   models:
     - name: m
       reliability:
+        retry_count: 0
         per_try_timeout: 15s
       backend_refs:
         - endpoint: 10.0.0.1:8000

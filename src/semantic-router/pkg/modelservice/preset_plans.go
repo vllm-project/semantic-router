@@ -13,7 +13,9 @@ import (
 // trained options, as one native Set, as the model's own preset question, or
 // as one trained Noul per label. Every other family answers the canonical
 // question zero-shot under the Router's own ID, which always contains a ':'
-// and so never equals a trained ID.
+// and so never equals a trained ID; a preset's question to a family that
+// answers it with its base (presets.BaseOnly) also goes without the opt-in
+// decision adapter.
 
 // Plan implementations: a question asked as written, asked in its family's
 // trained form, or as one Noul per Set label, as written or as trained.
@@ -57,7 +59,9 @@ func presetChoices(options []presets.Option) []Choice {
 // the card's family was trained on, their implementation and the canonical
 // option each trained option answers; false when the family answers the
 // task's question as asked. A Choice question a consumer specialized (other
-// wording, options that are not the preset's) is asked as written.
+// wording, options that are not the preset's) is asked as written. The
+// preset's question to a family that answers it with its base goes as
+// asked, marked base.
 func presetPlan(definition TaskDefinition, question Question, card ModelCard) (trainedForm, bool) {
 	if definition.Preset == "" || !card.Serves("decisions") {
 		return trainedForm{}, false
@@ -65,6 +69,12 @@ func presetPlan(definition TaskDefinition, question Question, card ModelCard) (t
 	preset, ok := presets.Lookup(definition.Preset, definition.Stage)
 	if !ok {
 		return trainedForm{}, false
+	}
+	if presets.BaseOnly(card.Family, definition.Preset, definition.Stage) {
+		if !asksPreset(question, preset) || !card.Answers(question.Type) {
+			return trainedForm{}, false
+		}
+		return trainedForm{questions: []Question{question}, implementation: implementationNative, base: true}, true
 	}
 	binding, ok := presets.Trained(card.Family, definition.Preset, definition.Stage)
 	if !ok {
@@ -110,13 +120,14 @@ func presetPlan(definition TaskDefinition, question Question, card ModelCard) (t
 
 // trainedForm is how a family is asked a preset: the questions on the wire,
 // their implementation, the semantic question their answer reads as when the
-// trained options are another set than the asked ones, and the canonical
-// option each trained option answers.
+// trained options are another set than the asked ones, the canonical option
+// each trained option answers, and whether the family's base answers it.
 type trainedForm struct {
 	questions      []Question
 	implementation string
 	semantic       Question
 	canonical      map[string]string
+	base           bool
 }
 
 // asksPreset reports whether a Choice or Noul question is the preset's
@@ -188,9 +199,10 @@ func trainedLabelNouls(question Question, template presets.NoulTemplate, card Mo
 
 // withDecisionAdapter marks the Choice, Noul and Score questions of a plan no
 // adapter was trained on for a family whose packages may answer them with an
-// opt-in decision adapter. A package without one ignores the field.
+// opt-in decision adapter, unless its base answers the plan. A package
+// without one ignores the field.
 func withDecisionAdapter(plan TaskPlan, card ModelCard) TaskPlan {
-	if card.Family != decisionAdapterFamily || (plan.Implementation != implementationNative && plan.Implementation != implementationComposedNoul) {
+	if card.Family != decisionAdapterFamily || plan.base || (plan.Implementation != implementationNative && plan.Implementation != implementationComposedNoul) {
 		return plan
 	}
 	plan.Questions = slices.Clone(plan.Questions)
