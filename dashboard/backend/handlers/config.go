@@ -148,10 +148,12 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if yamlData, err = persistConfig(configPath, yamlData); err != nil {
+		yamlData, keptKeys, err := persistConfig(configPath, yamlData)
+		if err != nil {
 			writeConfigPersistenceError(w, err)
 			return
 		}
+		warnings = append(warnings, keptKeys...)
 		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 			return
 		}
@@ -268,10 +270,12 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if _, err = persistConfig(configPath, yamlData); err != nil {
+		_, keptKeys, err := persistConfig(configPath, yamlData)
+		if err != nil {
 			writeConfigPersistenceError(w, err)
 			return
 		}
+		warnings = append(warnings, keptKeys...)
 		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 			return
 		}

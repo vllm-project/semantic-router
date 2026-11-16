@@ -253,7 +253,7 @@ func SetupActivateHandler(
 			return
 		}
 
-		if yamlData, err = persistConfig(configPath, yamlData); err != nil {
+		if yamlData, _, err = persistConfig(configPath, yamlData); err != nil {
 			writeConfigPersistenceError(w, err)
 			return
 		}

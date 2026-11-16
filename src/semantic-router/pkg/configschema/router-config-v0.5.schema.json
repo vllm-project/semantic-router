@@ -3325,6 +3325,12 @@
           },
           "type": "array"
         },
+        "api_key_files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "apis": {
           "$ref": "#/$defs/ListenerAPIs",
           "propertyNames": {

@@ -233,6 +233,11 @@ type Listener struct {
 	// APIKeys are client bearer credentials the listener enforces, in
 	// standalone mode and in the CLI-managed Envoy listener.
 	APIKeys []string `yaml:"api_keys,omitempty"`
+	// APIKeyFiles name owner-only files that each hold one more client key.
+	// The Router reads them at every load, as a backend's auth.api_key_file.
+	APIKeyFiles []string `yaml:"api_key_files,omitempty"`
+	// FileKeys are the keys APIKeyFiles held when the configuration loaded.
+	FileKeys []string `yaml:"-" json:"-"`
 	// APIs, when set, are the only APIs the listener serves, by API name (an
 	// alias reads as its API), each with its schema, models and settings;
 	// other paths answer 404. Omitted, the listener serves chat_completions,

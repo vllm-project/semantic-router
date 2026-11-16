@@ -94,7 +94,7 @@ func serveRules(w http.ResponseWriter, r *http.Request, config *routerconfig.Rou
 		publicSystemOneError(w, http.StatusNotFound, "systemone_not_published")
 		return
 	}
-	if !systemOneAuthorized(r, listener.APIKeys) {
+	if !systemOneAuthorized(r, listener.ClientKeys()) {
 		w.Header().Set("WWW-Authenticate", `Bearer realm="vllm-semantic-router"`)
 		publicSystemOneError(w, http.StatusUnauthorized, "invalid_api_key")
 		return

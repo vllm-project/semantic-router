@@ -18,6 +18,7 @@ from cli.envoy_backend_pool import (
     project_envoy_backend_group,
 )
 from cli.models import Model, ProviderReliability, UserConfig
+from cli.runtime_env_names import expand_router_references
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -195,6 +196,36 @@ def _delegated_credential_headers(user_config: UserConfig) -> list[str]:
     return names
 
 
+def _envoy_listener_keys(listener) -> list[str]:
+    """The keys Envoy's listener accepts. Envoy expands no reference, so each
+    key is read here as the Router reads it; a key that reads the environment
+    and expands to nothing stops the render."""
+
+    if listener.api_key_files:
+        raise ValueError(
+            f"listener '{listener.name}': api_key_files is read in standalone "
+            "mode, and the --gateway extproc Envoy listener holds its keys in its "
+            'own configuration; write them in api_keys, as "${NAME}" references '
+            "to the environment"
+        )
+    keys = []
+    for index, key in enumerate(listener.api_keys or []):
+        names: list[str] = []
+
+        def lookup(name: str, names=names) -> str | None:
+            names.append(name)
+            return os.environ.get(name)
+
+        value = expand_router_references(key, lookup)
+        if names and not value:
+            raise ValueError(
+                f"listener '{listener.name}': api_keys[{index}] reads "
+                f"{', '.join(names)} and expands to an empty key"
+            )
+        keys.append(value)
+    return keys
+
+
 def generate_envoy_config_from_user_config(
     user_config: UserConfig,
     output_file: str,
@@ -279,11 +310,7 @@ def generate_envoy_config_from_user_config(
                     ),
                     "port": listener.port,
                     "timeout": envoy_duration(listener.timeout or "300s"),
-                    "api_keys": (
-                        list(listener.api_keys)
-                        if getattr(listener, "api_keys", None)
-                        else []
-                    ),
+                    "api_keys": _envoy_listener_keys(listener),
                     "trust_identity_headers": _trusts_identity_headers(listener),
                 }
             )

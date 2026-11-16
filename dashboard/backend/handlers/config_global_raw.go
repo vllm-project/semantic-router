@@ -94,10 +94,12 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if _, err = persistConfig(configPath, updatedYAML); err != nil {
+		_, keptKeys, err := persistConfig(configPath, updatedYAML)
+		if err != nil {
 			writeConfigPersistenceError(w, err)
 			return
 		}
+		warnings = append(warnings, keptKeys...)
 		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 			return
 		}

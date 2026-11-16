@@ -291,18 +291,18 @@ func (c *compiler) listeners() {
 			Path: path,
 			Spec: ListenerSpec{Address: listener.Address, Port: listener.Port, Timeout: listener.Timeout},
 		}
-		if len(listener.APIKeys) > 0 {
+		if keys := listener.ClientKeys(); len(keys) > 0 {
 			secret := &Resource{
 				Ref:  Ref{Kind: KindSecret, Name: "listener/" + listener.Name},
 				Path: path + ".api_keys",
-				Spec: SecretSpec{Inline: len(listener.APIKeys)},
+				Spec: SecretSpec{Inline: len(listener.APIKeys), Files: listener.APIKeyFiles},
 			}
-			secret.Hash = secretFingerprint(secret.Name, listener.APIKeys)
+			secret.Hash = secretFingerprint(secret.Name, keys)
 			c.add(secret)
 			resource.Refs = []Ref{secret.Ref}
 		}
 		content := listener
-		content.APIKeys = nil
+		content.APIKeys, content.FileKeys = nil, nil
 		resource.Hash = fingerprint(content)
 		c.add(resource)
 	}

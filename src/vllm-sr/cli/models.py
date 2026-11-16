@@ -248,7 +248,14 @@ class Listener(BaseModel):
         description="Client keys required to call this listener. "
         "If set, requests must send one of these values as "
         "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
-        "'api-key: <key>'; other requests are rejected with HTTP 401.",
+        "'api-key: <key>'; other requests are rejected with HTTP 401. "
+        "A '${NAME}' entry reads the key from that environment variable.",
+    )
+    api_key_files: Optional[List[str]] = Field(
+        default=None,
+        description="Absolute paths of owner-only files that each hold one more "
+        "client key; the Router reads them at every load. Standalone mode reads "
+        "them; --gateway extproc rejects them.",
     )
     apis: Optional[Dict[str, ListenerAPI]] = Field(
         default=None,
@@ -280,6 +287,13 @@ class Listener(BaseModel):
                         f"{field} is removed; run `vllm-sr config migrate` ({becomes})"
                     )
         return data
+
+    @field_validator("api_key_files")
+    @classmethod
+    def absolute_key_files(cls, paths: Optional[List[str]]) -> Optional[List[str]]:
+        if any(not os.path.isabs(path) for path in paths or []):
+            raise ValueError("api_key_files must name absolute paths")
+        return paths
 
     @field_validator("apis")
     @classmethod

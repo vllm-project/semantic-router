@@ -1244,8 +1244,13 @@ def _gateway(router_config: Path, base_url: str | None) -> tuple[str, dict | Non
 def _require_key(doc, base_url, from_env, api_key_env, login) -> None:
     """Refuse to write a placeholder key for a listener that takes keys: it would
     replace a key written before, and every request would be refused."""
-    listeners = (doc or {}).get("listeners") or [{}]
-    if base_url or from_env or login or not (listeners[0] or {}).get("api_keys"):
+    first = ((doc or {}).get("listeners") or [{}])[0] or {}
+    if (
+        base_url
+        or from_env
+        or login
+        or not (first.get("api_keys") or first.get("api_key_files"))
+    ):
         return
     raise click.ClickException(
         f"The listener takes an API key and ${api_key_env} is not set. Export it"

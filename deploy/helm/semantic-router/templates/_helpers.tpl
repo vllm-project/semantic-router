@@ -79,6 +79,13 @@ Get the router ConfigMap name
 {{- end }}
 
 {{/*
+The Secret that keeps the keys a ConfigMap save moves out of config.yaml.
+*/}}
+{{- define "semantic-router.keySecretName" -}}
+{{- printf "%s-provider-keys" (include "semantic-router.fullname" .) }}
+{{- end }}
+
+{{/*
 After installation, management APIs may update config.yaml in the live
 ConfigMap. Helm values are the install seed. A changed revision explicitly
 reapplies them once; --reuse-values with the same revision preserves later

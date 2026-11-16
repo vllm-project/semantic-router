@@ -340,6 +340,22 @@ keep the replaced document in the configuration history, and trigger reload;
 an active config still does not prove that upstream model backends are
 healthy. Check `/ready` and send a representative request after a change.
 
+A mutation stores keys rather than writing them literally. Before it writes
+the document and its history, the Router replaces each literal backend
+`api_key`, and in standalone mode each literal listener `api_keys` entry, with
+a reference to a stored copy: a mode `600` file in `router-keys/` beside the
+config file (`auth.api_key_file`, `api_key_files`), or on a Kubernetes
+ConfigMap target an entry of the chart's key Secret (`auth.api_key_env`, a
+`"${NAME}"` listener key). A value that holds an environment reference the
+Router expands is not literal and stays as written. The response's `ETag` is
+that of the stored document, and a mutation that fails to write the document
+removes the copies it stored. `POST /api/v1/config/plan` reads keys already
+stored the same way, so a plan of a document already applied reports
+`changed: false`. Where the Router has no key store it can write, a ConfigMap
+target without the key Secret or one it may not update, the key stays as
+written and the response lists a `literal_key_kept` entry in `warnings` for
+each, by path and never by value.
+
 `activation_status` is `active`, `pending`, `failed`, or `unknown`. When a
 candidate has been attempted, `activation` includes its document hash, attempt,
 stage, timestamps, and a redacted failure detail. A failed candidate leaves the
