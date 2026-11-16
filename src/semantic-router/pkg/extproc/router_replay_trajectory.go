@@ -113,7 +113,9 @@ func buildTrajectoryTurns(records []routerreplay.RoutingRecord) []trajectoryTurn
 	}
 	turnByIndex := make(map[turnKey]int)
 	for _, record := range records {
-		if record.ToolTrace == nil || len(record.ToolTrace.Steps) == 0 {
+		// An approval review quotes the session's transcript to its reviewer;
+		// that copy is not another turn of the conversation.
+		if record.ToolTrace == nil || len(record.ToolTrace.Steps) == 0 || record.RequestKind != "" {
 			continue
 		}
 

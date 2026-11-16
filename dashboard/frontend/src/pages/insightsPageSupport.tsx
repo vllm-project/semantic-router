@@ -21,6 +21,15 @@ import { renderToolNamesCell } from './insightsPageToolTrace'
 import { buildSignalFields } from './insightsRecordSignals'
 import { buildInsightsPluginFields } from './insightsRecordPlugins'
 import { buildProviderCacheSection } from './insightsProviderCache'
+import { buildReviewSection } from './insightsReviewSupport'
+import {
+  CALLER_LOGIN_NOTE,
+  describeBaselineBasis,
+  describeMissingModelCost,
+  describePricingSource,
+  describeRouterCalls,
+  isLooperRecord,
+} from './insightsCostAccounting'
 import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
@@ -265,7 +274,13 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
 
         return (
           <div className={styles.costCell}>
-            <strong className={zeroSavingsReason ? styles.costValue : styles.costValuePositive}>
+            <strong
+              className={
+                zeroSavingsReason || (row.cost_savings ?? 0) < 0
+                  ? styles.costValue
+                  : styles.costValuePositive
+              }
+            >
               {zeroSavingsReason ? 'No savings' : formatCurrency(row.cost_savings, row.currency)}
             </strong>
             {zeroSavingsReason && <span className={styles.costSubtle}>{zeroSavingsReason}</span>}
@@ -314,6 +329,10 @@ export function buildInsightsRecordSections(
   options: { isReadonly: boolean },
 ): ViewSection[] {
   const sections: ViewSection[] = []
+  const reviewSection = buildReviewSection(record)
+  if (reviewSection) {
+    sections.push(reviewSection)
+  }
 
   sections.push({
     title: 'Lifecycle',
@@ -403,16 +422,13 @@ export function buildInsightsRecordSections(
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
       { label: 'Baseline model', value: record.baseline_model || 'Baseline not recorded' },
-      {
-        label: 'Cost basis',
-        value:
-          getInsightsCostUnavailableReason(record) ||
-          'Recorded tokens × configured model rates at capture time; not a GPU bill or provider invoice.',
-      },
+      ...buildRouterCallFields(record),
+      { label: 'Cost basis', value: describeCostBasis(record) },
       {
         label: 'Baseline basis',
-        value:
-          'New records use the highest estimate in the recipe’s complete model pool across all decisions at configured rates, in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
+        value: record.cost_accounting?.baseline_source
+          ? `${describeBaselineBasis(record)} Same currency and recorded tokens; a negative saving means the baseline was cheaper.`
+          : 'New records use the highest estimate in the recipe’s complete model pool across all decisions at configured rates, in the same currency using the same recorded tokens, unless the route sets a cost_baseline_model. Direct requests compare against the selected model. Older records retain their captured baseline.',
       },
       {
         label: 'Current pricing',
@@ -470,6 +486,25 @@ export function getInsightsCostUnavailableReason(record: InsightsRecord): string
   return getUnavailableCost(record)?.reason
 }
 
+function describeCostBasis(record: InsightsRecord): string {
+  const rates = describePricingSource(record.cost_accounting)
+  if (rates && Number.isFinite(record.actual_cost)) {
+    const login = record.cost_accounting?.caller_login
+      ? ` It ran on the client’s own login: this is the ${CALLER_LOGIN_NOTE}.`
+      : ''
+    return `Recorded tokens × ${rates} at capture time; not a GPU bill or provider invoice.${login}`
+  }
+  return (
+    getInsightsCostUnavailableReason(record) ||
+    'Recorded tokens × configured model rates at capture time; not a GPU bill or provider invoice.'
+  )
+}
+
+function buildRouterCallFields(record: InsightsRecord): ViewField[] {
+  const value = describeRouterCalls(record.cost_accounting)
+  return value ? [{ label: 'Router calls', value }] : []
+}
+
 function getUnavailableCost(record: InsightsRecord) {
   if (record.lifecycle_state !== 'completed') {
     return { label: 'Not completed', reason: 'Request not completed' }
@@ -478,11 +513,7 @@ function getUnavailableCost(record: InsightsRecord) {
     return { label: 'Usage not recorded', reason: 'Token usage was not recorded for this request' }
   }
   if (!Number.isFinite(record.actual_cost) || !record.currency?.trim()) {
-    return {
-      label: 'Price not recorded',
-      reason:
-        'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
-    }
+    return getMissingModelCost(record)
   }
   if (
     !Number.isFinite(record.baseline_cost) ||
@@ -495,6 +526,24 @@ function getUnavailableCost(record: InsightsRecord) {
     }
   }
   return undefined
+}
+
+function getMissingModelCost(record: InsightsRecord) {
+  if (isLooperRecord(record)) {
+    return {
+      label: 'In router calls',
+      reason: `A Looper request: its cost is its calls, ${describeRouterCalls(record.cost_accounting)}`,
+    }
+  }
+  const missing = describeMissingModelCost(record)
+  if (missing) {
+    return { label: 'No price', reason: missing }
+  }
+  return {
+    label: 'Price not recorded',
+    reason:
+      'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
+  }
 }
 
 function renderUnavailableCost(record: InsightsRecord) {

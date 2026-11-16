@@ -30,6 +30,11 @@ const (
 	XSessionID           = "x-session-id"
 	XClaudeCodeSessionID = "x-claude-code-session-id"
 
+	// XCodexTurnMetadata is the turn metadata Codex sends, its session,
+	// thread and turn ids, as a header and in a Responses request's
+	// client_metadata.
+	XCodexTurnMetadata = "x-codex-turn-metadata"
+
 	// XConversationID is the default header Router Learning protection reads a
 	// stable conversation identifier from.
 	XConversationID = "x-conversation-id"

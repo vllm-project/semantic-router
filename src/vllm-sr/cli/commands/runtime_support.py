@@ -33,6 +33,7 @@ from cli.consts import (
 )
 from cli.container_management_listener import resolve_managed_management_listener
 from cli.gateway_mode import GATEWAY_ENV, GATEWAY_STANDALONE, runs_envoy
+from cli.masking_identity import inject_local_masking_identity
 from cli.models import UserConfig
 from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_env_names import (
@@ -144,9 +145,11 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
     while pending:
         node = pending.pop()
         if isinstance(node, dict):
-            named = node.get(API_KEY_ENV_FIELD)
-            if isinstance(named, str) and named.strip():
-                names.add(named.strip())
+            # A masking identity namespace may read its key from key_env.
+            for field in (API_KEY_ENV_FIELD, "key_env"):
+                named = node.get(field)
+                if isinstance(named, str) and named.strip():
+                    names.add(named.strip())
             pending.extend(node.values())
         elif isinstance(node, list):
             pending.extend(node)
@@ -386,6 +389,7 @@ def _resolve_effective_config_document(
     changed = False
     if not setup_mode and materialize_local_runtime:
         stack = resolve_runtime_stack()
+        changed = inject_local_masking_identity(config, stack.stack_name) or changed
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
         changed = apply_local_tracing_endpoint(config, stack) or changed

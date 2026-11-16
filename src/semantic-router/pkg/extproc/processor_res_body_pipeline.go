@@ -170,6 +170,7 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	// is recorded before a block returns, so a blocked response leaves the same
 	// evidence in Router Replay as a delivered one.
 	recordPrimaryOutputDigest(ctx, semanticResponse)
+	observeApprovalReviewVerdict(ctx, semanticResponse)
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	logResponseGuard(ctx, ctx.ResponseGuard)
 	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {

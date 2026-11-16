@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -140,6 +141,22 @@ func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
 		return fmt.Errorf("max_tool_trace_total_bytes cannot be negative; 0 keeps every step")
 	}
 	return nil
+}
+
+// validateRouterReplayCostBaseline refuses a cost_baseline_model that names
+// no model with rates, against which no record's savings could be priced.
+func validateRouterReplayCostBaseline(cfg *RouterConfig, path string, p *RouterReplayPluginConfig) error {
+	model := strings.TrimSpace(p.CostBaselineModel)
+	if model == "" {
+		return nil
+	}
+	if _, priced := cfg.GetFullModelPricing(model); priced {
+		return nil
+	}
+	if _, configured := cfg.resolveModelConfig(model); !configured {
+		return fmt.Errorf("%s.cost_baseline_model: %q is not a configured model", path, model)
+	}
+	return fmt.Errorf("%s.cost_baseline_model: model %q has no pricing to compare savings with; set its providers.models[].pricing", path, model)
 }
 
 // ToolTraceByteLimit is how many bytes each tool text field a record keeps
