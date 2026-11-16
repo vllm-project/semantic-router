@@ -84,6 +84,28 @@ api_key: ${MODEL_API_KEY}
 Do not commit literal API keys, passwords, authorization headers, credential
 query parameters, or URLs containing user information.
 
+A provider backend can also read its key from a file. The Router reads
+`auth.api_key_file` at startup and at every configuration reload, so a file
+only the Router's user can read keeps the key out of the configuration, its
+history, and every export:
+
+```yaml
+providers:
+  models:
+    - name: gpt
+      provider_model_id: gpt-4o-mini
+      backend_refs:
+        - name: openai-primary
+          provider: openai
+          endpoint: https://api.openai.com/v1
+          auth:
+            api_key_file: /etc/vllm-sr/provider-keys/openai
+```
+
+The path must be absolute and the file holds only the key, with mode `600`.
+A missing or empty file stops the configuration from loading, and a hot
+reload then keeps the previous configuration.
+
 For `vllm-sr serve --target kubernetes`, the CLI places sensitive environment
 values in an immutable Secret revision, scoped to the namespace and Helm
 release:
@@ -98,6 +120,41 @@ release:
 Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
+
+### Keys saved from the Dashboard
+
+A key you enter in the Dashboard, in **Connect Models** or in a backend's
+**API key** field, never lands in the configuration. Each save moves a
+literal backend `api_key` into a new mode `600` file in a `provider-keys/`
+directory (created with mode `700`) beside the configuration file the Router
+reads, and names that file in `auth.api_key_file`. Under `vllm-sr serve` the
+directory is `.vllm-sr/provider-keys/` in the stack's state directory, which
+the Router and Dashboard containers mount at the same path. An environment
+reference such as `${OPENAI_API_KEY}` stays as written.
+
+On Kubernetes the Dashboard saves to a ConfigMap, and the Router pod cannot
+read a file the Dashboard pod writes, so the Dashboard saves the key as given.
+Keep the key in a Kubernetes Secret and reference it with `auth.api_key_env`
+instead.
+
+### Move an existing literal key
+
+A configuration that still holds a backend's literal `api_key` loads as
+before. To move the key out:
+
+- **From the Dashboard.** Save once, for example after changing any setting.
+  The save moves every literal backend key into a key file.
+- **By hand.** Write the key to a file only the Router's user can read, for
+  example with `install -m 600 /dev/stdin /etc/vllm-sr/provider-keys/openai`
+  (paste the key, then press Ctrl-D). Replace `api_key: ...` with
+  `auth: {api_key_file: /etc/vllm-sr/provider-keys/openai}` and reload. With
+  `vllm-sr serve`, export the key before starting the stack and reference it
+  with `auth.api_key_env` instead: `serve` passes that variable to the Router
+  container, which cannot see host paths outside its mounts.
+
+Earlier configuration versions and backups still hold the old literal, so
+rotate any key that was ever saved in the configuration. To rotate a key kept
+in a file, replace the file's contents and reload the configuration.
 
 ### Delegate the user's credential to an upstream
 
@@ -281,10 +338,14 @@ Codex sends a ChatGPT login to ChatGPT's Codex backend at
 login is a person's, so the configuration fails to load wherever it could reach
 someone else, or be used without the person's request:
 
-- **One payer, one provider.** Once one backend takes the caller's login, every
-  backend does and all name one provider, so neither routing nor a fallback
-  moves a request from the person's plan to a key or to another provider. A
-  pool serves Claude Code or Codex, not both.
+- **One provider, one payer per model.** Every caller backend names one
+  provider, so a pool serves Claude Code or Codex, not both, and the backends
+  of one model share one credential, so failing over between them never moves
+  a request from the person's plan to a key. Other models may sit beside the
+  caller's, with a key of their own or none, such as a local model for easy
+  turns ([mixing a login with other models](agent-harness#mixing-a-login-with-other-models)).
+  They never receive the login, nor the `chatgpt-account-id` that names the
+  ChatGPT account it acts for.
 - **The issuer only.** The endpoint is `https://api.anthropic.com` for
   `anthropic`, `https://chatgpt.com` or `https://api.openai.com` for `openai`,
   or an endpoint on this machine such as a test stub.
@@ -293,13 +354,15 @@ someone else, or be used without the person's request:
 - **Only the client's request.** A call the Router makes on its own behalf, an
   in-process hop (an executor algorithm, context recovery), a
   `router_replay.shadow` copy and an automatic output render have no login and
-  are refused, and so is `response_cache`, which would answer one person with
-  another's result.
+  are refused for a caller model, and so is `response_cache`, which would
+  answer one person with another's result. A decision whose models take no
+  login may call them in process.
 - **The client's system prompt.** Both providers refuse the system message a
   decision's `system_prompt` puts before the client's own on a person's login
   (measured: Anthropic answers 429 for a block put first and 200 for the same
   block put last, ChatGPT's Codex backend 400 `System messages are not
-  allowed`), so a decision cannot use `system_prompt`.
+  allowed`), so a decision that can reach a caller model cannot use
+  `system_prompt`. A decision whose models all take no login can.
 
 At dispatch a login reaches a backend only from a request on that provider's own
 API: Messages for Anthropic, Responses or Chat Completions for OpenAI. A request
@@ -594,7 +657,7 @@ administrators, and do not mount it into a stack container.
 | Strip internal control and identity headers at the trusted proxy | `request_headers_to_remove`; remove the delegated credential ahead of ext_proc | [Delegate the user's credential](#delegate-the-users-credential-to-an-upstream) |
 | Bind Router management, ExtProc, metrics and store ports to private interfaces | Expose only the inference listener | [Protect the public listener](#protect-the-public-listener) |
 | Restrict model access and rate limits by role or tenant | Chat model allowlists, native model grants, `role_bindings` | [Gateway Modes](gateway-modes) |
-| Keep provider and store credentials in a secret manager or Kubernetes Secret | `${ENV}` references in YAML | [Keep credentials out of configuration](#keep-credentials-out-of-configuration) |
+| Keep provider and store credentials in a secret manager or Kubernetes Secret | `${ENV}` references or `auth.api_key_file` in YAML | [Keep credentials out of configuration](#keep-credentials-out-of-configuration) |
 | Review every route's provider locality, tools and data retention | Where each question's decision model runs; which stores each route writes | [Review what the decision model reads](#review-what-the-decision-model-reads), [Review stored request data](#review-stored-request-data) |
 | Grant replay detail, logs and configuration writes only to trusted operators | `replay.read`, `logs.read`, configuration-write access | [Protect the public listener](#protect-the-public-listener) |
 | Set strict failure behavior where bypassing a policy is unacceptable | `on_unscanned: match` on `jailbreak` and `pii` rules, which keep the default `on_unknown: match` | [Review what the decision model reads](#review-what-the-decision-model-reads) |

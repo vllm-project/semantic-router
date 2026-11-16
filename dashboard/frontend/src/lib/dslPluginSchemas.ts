@@ -176,6 +176,14 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
         "Bytes a record's trace steps keep in all, the oldest dropped first; 0 keeps every step. Unset, 262144 while max_tool_trace_bytes is unset too",
     },
     {
+      key: 'cost_baseline_model',
+      label: 'Cost Baseline Model',
+      type: 'string',
+      placeholder: 'premium-model',
+      description:
+        "A priced model savings compare with, at the same recorded tokens; a dearer route then shows a negative saving. Unset, the recipe pool's most expensive model",
+    },
+    {
       key: 'shadow',
       label: 'Shadow',
       type: 'object',

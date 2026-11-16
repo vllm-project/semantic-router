@@ -54,6 +54,7 @@ type requestSignalSnapshot struct {
 	LastMessageFlowToolResult bool
 	LastAssistantToolCall     bool
 	LastUserAfterToolResult   bool
+	ToolFailures              classification.ToolFailureCount
 
 	RoutingInput routinginput.Outcome
 }

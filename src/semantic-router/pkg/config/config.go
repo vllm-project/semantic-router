@@ -95,6 +95,7 @@ type RouterConfig struct {
 	ToolSessions     *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
 	ResponseAPI      ResponseAPIConfig       `yaml:"response_api"`
 	RouterReplay     RouterReplayConfig      `yaml:"router_replay"`
+	MaskingIdentity  MaskingIdentityConfig   `yaml:"-" json:"-"`
 	StartupStatus    StartupStatusConfig     `yaml:"startup_status"`
 	Looper           LooperConfig            `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`

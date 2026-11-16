@@ -130,6 +130,16 @@ test('Fable 5 cache reads cost four times Fable 5.1\'s, and a retired Opus 4 has
   expect(costOf('claude-opus-4-8', USAGE)).toBe(7.5)
 })
 
+test('Sonnet 5.5 and Fable 5.2 cache reads cost 0.05 and 0.025 times their input price', () => {
+  const reads = { ...USAGE, input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 1_000_000 }
+
+  expect(costOf('claude-sonnet-5-5', reads)).toBe(0.1)
+  expect(costOf('sonnet', reads)).toBe(0.1)
+  expect(costOf('claude-sonnet-5', reads)).toBe(0.2)
+  expect(costOf('claude-fable-5-2', reads)).toBe(0.2)
+  expect(costOf('claude-fable-5-2', USAGE)).toBe(12)
+})
+
 test('an answer not given yet is underlined, as a link is, in its dim colour', async ($, on) => {
   engine(on, { review: 0.2, files: {} })
   on('tool.call', () => ({ result: { stdout: '' } }))

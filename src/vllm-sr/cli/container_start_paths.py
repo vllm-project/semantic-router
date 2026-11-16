@@ -23,6 +23,7 @@ from cli.commands.runtime_paths import (
 )
 from cli.container_log_spool import prepare_runtime_log_spool
 from cli.instance_paths import prepare_instance_control_directory
+from cli.masking_identity import provision_local_masking
 from cli.recipe_directory import resolve_active_recipe_directory
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.utils import get_logger
@@ -43,6 +44,7 @@ def _prepare_runtime_directories(
 ) -> tuple[str, str, str]:
     """Create mutable runtime roots and return their resolved host paths."""
 
+    provision_local_masking(vllm_sr_dir, stack_layout.stack_name)
     models_dir = (
         os.path.join(vllm_sr_dir, "models")
         if managed_recipe

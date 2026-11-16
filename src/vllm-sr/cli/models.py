@@ -1272,7 +1272,9 @@ class RouterReplayPluginConfig(BaseModel):
     prompt keeps max_tool_trace_bytes's bound when that is above 0, else 65536.
     Where no layer sets max_tool_trace_bytes, each tool text field keeps 65536
     bytes, raw copies included, and max_tool_trace_total_bytes, the steps' text
-    in all, defaults to 262144; 0 removes either limit.
+    in all, defaults to 262144; 0 removes either limit. cost_baseline_model is
+    the configured, priced model a record's savings compare with; unset, the
+    baseline is the most expensive model of the recipe's pool.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1289,6 +1291,7 @@ class RouterReplayPluginConfig(BaseModel):
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_total_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
+    cost_baseline_model: Optional[str] = Field(default=None, min_length=1)
     shadow: Optional["RouterReplayShadowConfig"] = None
 
 
@@ -2655,15 +2658,25 @@ REMOVED_BACKEND_REF_FIELDS = ("compat_gateway", "openai_compat_gateway")
 
 class BackendAuth(BaseModel):
     """A backend's credential: the mode (delegated sends the requesting user's
-    credential instead of a key), the header (the provider's own when unset),
-    the prefix ("" sends the bare key) and the key's environment variable."""
+    credential instead of a key, caller the client's own provider login), the
+    header (the provider's own when unset), the prefix ("" sends the bare key)
+    and the key's environment variable or owner-only file, which the Router
+    reads at every load."""
 
     model_config = ConfigDict(extra="forbid")
 
-    credential: Optional[Literal["delegated"]] = None
+    credential: Optional[Literal["delegated", "caller"]] = None
     header: Optional[str] = None
     prefix: Optional[str] = None
     api_key_env: Optional[str] = None
+    api_key_file: Optional[str] = None
+
+    @field_validator("api_key_file")
+    @classmethod
+    def absolute_key_file(cls, value: Optional[str]) -> Optional[str]:
+        if value and not os.path.isabs(value):
+            raise ValueError("auth.api_key_file must be an absolute path")
+        return value
 
 
 class BackendTLS(BaseModel):
@@ -2833,6 +2846,8 @@ class Entrypoint(BaseModel):
     model_names: List[str] = Field(min_length=1)
     recipe: str = Field(min_length=1)
     default: Optional[bool] = None
+    review_model: Optional[str] = Field(default=None, min_length=1)
+    memory_model: Optional[str] = Field(default=None, min_length=1)
 
     @field_validator("model_names", mode="before")
     @classmethod
@@ -2846,12 +2861,14 @@ class Entrypoint(BaseModel):
             raise ValueError("model_names must contain at least one non-empty name")
         return normalized
 
-    @field_validator("recipe")
+    @field_validator("recipe", "review_model", "memory_model")
     @classmethod
-    def normalize_recipe(cls, value: str) -> str:
+    def normalize_recipe(cls, value: str | None, info) -> str | None:
+        if value is None:
+            return None
         normalized = value.strip()
         if not normalized:
-            raise ValueError("recipe must not be empty")
+            raise ValueError(f"{info.field_name} must not be empty")
         return normalized
 
 

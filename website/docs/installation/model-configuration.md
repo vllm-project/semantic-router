@@ -104,6 +104,12 @@ The Dashboard edits the same configuration document as YAML. Use one authoring o
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 
+The Dashboard never writes a provider key you enter into that document. Saving
+stores it in an owner-only file beside the configuration and sets the backend's
+`auth.api_key_file`, which the Router reads at every load. Any save also moves a
+key already written inline as `api_key`. See
+[Keys saved from the Dashboard](security-hardening#keys-saved-from-the-dashboard).
+
 ## Routing capabilities
 
 Author-declared model capabilities act as an eligibility filter before model

@@ -563,16 +563,6 @@ func holdCurrentModelInResult(
 	return true
 }
 
-// protectionSessionID is the session id protection keys on and the header it
-// came from: identity.headers.session when configured, else the session id
-// the request pins.
-func protectionSessionID(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) (string, string) {
-	if header := cfg.HeaderName("session"); header != "" {
-		return strings.TrimSpace(headerValueCI(ctx, header)), header
-	}
-	return pinnedSessionID(ctx)
-}
-
 // protectionConversationID is the conversation id protection keys on and
 // whether the Router derived it: the configured conversation header, else,
 // under scope conversation and only beside a session id, the request's
@@ -601,12 +591,8 @@ func (r *OpenAIRouter) protectionIdentity(
 	scope := cfg.EffectiveScope()
 	sessionID, sessionHeader := protectionSessionID(ctx, cfg)
 	conversationHeader := cfg.HeaderName("conversation")
-	agentHeader := cfg.HeaderName("agent")
+	agentID, agentHeader := protectionAgentID(ctx, cfg)
 	conversationID, conversationDerived := protectionConversationID(ctx, cfg, sessionID)
-	agentID := ""
-	if agentHeader != "" {
-		agentID = strings.TrimSpace(headerValueCI(ctx, agentHeader))
-	}
 	if sessionID == "" {
 		return routerLearningIdentity{}, false
 	}

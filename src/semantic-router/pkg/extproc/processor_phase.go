@@ -47,6 +47,10 @@ func (r *OpenAIRouter) requestBodyReply(
 	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	r.persistImmediateResponseObject(response, ctx)
+	// A refusal after routing has opened a replay record that no response
+	// phase will end.
+	immediate := response.GetImmediateResponse()
+	r.failAnsweredRouterReplay(ctx, int(immediate.GetStatus().GetCode()), immediate.GetBody(), "request_rejected")
 	return response, nil
 }
 

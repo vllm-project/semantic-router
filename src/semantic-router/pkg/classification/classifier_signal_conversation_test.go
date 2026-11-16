@@ -291,3 +291,27 @@ func TestConversation_FlowToolState(t *testing.T) {
 		t.Fatal("ordinary history should not match flow_tool_state")
 	}
 }
+
+// Only the client's flag or the status line Codex writes above a command's
+// output marks a failure. Text the command printed below it never does.
+func TestToolResultFailedReadsTheFlagOrTheCodexHeader(t *testing.T) {
+	failed, succeeded := true, false
+	for _, tc := range []struct {
+		name    string
+		isError *bool
+		text    string
+		want    bool
+	}{
+		{"flag set", &failed, "ok", true},
+		{"flag cleared wins over a header", &succeeded, "Exit code: 1\nWall time: 0.1 seconds\nOutput:\n", false},
+		{"shell nonzero exit", nil, "Exit code: 127\nWall time: 0.1 seconds\nOutput:\nsh: make: not found\n", true},
+		{"exec_command nonzero exit", nil, "Chunk ID: a\nWall time: 0.1 seconds\nProcess exited with code 2\nOutput:", true},
+		{"exec_command zero exit", nil, "Chunk ID: a\nProcess exited with code 0\nOutput:\nExit code: 1\n", false},
+		{"still running", nil, "Chunk ID: a\nProcess running with session ID 3\nOutput:\n", false},
+		{"no header", nil, "Exit code: 1\nbuild failed", false},
+	} {
+		if got := ToolResultFailed(tc.isError, tc.text); got != tc.want {
+			t.Errorf("%s: ToolResultFailed() = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

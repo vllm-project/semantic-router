@@ -254,6 +254,54 @@
       "doc": "Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it."
     },
     {
+      "name": "x-claude-code-agent-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.5",
+      "doc": "Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it."
+    },
+    {
+      "name": "session-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.5",
+      "doc": "Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it."
+    },
+    {
+      "name": "thread-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.5",
+      "doc": "Thread id Codex sends on every call, equal to `session-id` on a root thread, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it."
+    },
+    {
+      "name": "x-codex-turn-metadata",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_replay",
+      "version": "v0.5",
+      "doc": "Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it."
+    },
+    {
       "name": "x-conversation-id",
       "direction": [
         "request",

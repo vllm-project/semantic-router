@@ -63,6 +63,7 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			LastMessageFlowToolResult: history.lastMessageFlowToolResult,
 			LastAssistantToolCall:     history.lastAssistantToolCall,
 			LastUserAfterToolResult:   history.lastUserAfterToolResult,
+			FailedToolResults:         history.failedToolResults,
 		},
 		requestFacts: classification.RequestFacts{
 			JailbreakInput:         history.jailbreakInput,

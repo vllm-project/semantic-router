@@ -13,6 +13,12 @@ export const AUTHORIZATION = 'authorization'
 /** Azure API Management credential, which a model connection sets through `auth`. Surface: internal. */
 export const OCP_APIM_SUBSCRIPTION_KEY = 'ocp-apim-subscription-key'
 
+/** Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it. Surface: control. */
+export const SESSION_ID = 'session-id'
+
+/** Thread id Codex sends on every call, equal to `session-id` on a root thread, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. Surface: control. */
+export const THREAD_ID = 'thread-id'
+
 /** Provider credential of Anthropic-style APIs. Surface: internal. */
 export const X_API_KEY = 'x-api-key'
 
@@ -28,8 +34,14 @@ export const X_AUTHZ_USER_GROUPS = 'x-authz-user-groups'
 /** Authenticated user id; `identity.user_id_header` names another header. Surface: internal. */
 export const X_AUTHZ_USER_ID = 'x-authz-user-id'
 
+/** Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. Surface: control. */
+export const X_CLAUDE_CODE_AGENT_ID = 'x-claude-code-agent-id'
+
 /** Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_SESSION_ID = 'x-claude-code-session-id'
+
+/** Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it. Surface: control. */
+export const X_CODEX_TURN_METADATA = 'x-codex-turn-metadata'
 
 /** `nosniff` on Router Replay management responses. Surface: public. */
 export const X_CONTENT_TYPE_OPTIONS = 'x-content-type-options'

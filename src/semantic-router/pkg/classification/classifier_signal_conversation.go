@@ -1,6 +1,8 @@
 package classification
 
 import (
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +28,67 @@ type ConversationFacts struct {
 	LastMessageFlowToolResult bool
 	LastAssistantToolCall     bool
 	LastUserAfterToolResult   bool
+	// FailedToolResults is ToolFailureCount.Failed for the request.
+	FailedToolResults int
+}
+
+// toolFailureRecoveryRun is how many consecutive successful tool results
+// clear the failed_tool_result count, the default number of recoveries the
+// progress gate needs before a session switches back.
+const toolFailureRecoveryRun = 2
+
+// ToolFailureCount is the failed_tool_result fact: the failed tool results
+// of the current user turn since the last two consecutive successful ones.
+// The client resends the history every turn, so the count needs no session
+// state and reads the same on every replica.
+type ToolFailureCount struct {
+	Failed     int
+	successRun int
+}
+
+// Observe counts one tool result, in conversation order.
+func (c *ToolFailureCount) Observe(failed bool) {
+	if failed {
+		c.Failed++
+		c.successRun = 0
+		return
+	}
+	c.successRun++
+	if c.successRun >= toolFailureRecoveryRun {
+		c.Failed = 0
+	}
+}
+
+// codexExitStatusPrefixes are the header lines in which Codex reports a
+// shell command's exit code: the shell tool's and exec_command's.
+var codexExitStatusPrefixes = []string{"Exit code: ", "Process exited with code "}
+
+// ToolResultFailed reports whether a tool result says it failed. The
+// client's flag, Anthropic is_error, decides when it is set. OpenAI Chat and
+// Responses tool outputs have no such field, so only the exit code Codex
+// writes into the header above a shell command's output counts. Codex ends
+// that header with an "Output:" line and the command's own output follows
+// it, so nothing the command prints is read as a status.
+func ToolResultFailed(isError *bool, text string) bool {
+	if isError != nil {
+		return *isError
+	}
+	header, _, found := strings.Cut(text, "\nOutput:\n")
+	if !found {
+		header, found = strings.CutSuffix(text, "\nOutput:")
+	}
+	if !found {
+		return false
+	}
+	for _, line := range strings.Split(header, "\n") {
+		for _, prefix := range codexExitStatusPrefixes {
+			if status, ok := strings.CutPrefix(line, prefix); ok {
+				code, err := strconv.Atoi(status)
+				return err == nil && code != 0
+			}
+		}
+	}
+	return false
 }
 
 func (c *Classifier) evaluateConversationSignal(
@@ -114,6 +177,8 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 		return activeToolLoopCount(facts)
 	case "flow_tool_state":
 		return conversationBoolCount(facts.LastMessageFlowToolResult)
+	case "failed_tool_result":
+		return facts.FailedToolResults
 	default:
 		return 0
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
@@ -83,6 +84,9 @@ func (r *OpenAIRouter) executeLooperGraph(
 	// The hops act for the client request: they share its principal, and
 	// with it its delegated credential.
 	ctx = principal.Inherit(ctx, reqCtx.TraceContext)
+	if scope, ok := masking.RequestScope(reqCtx.TraceContext); ok {
+		ctx = masking.WithRequestScope(ctx, scope)
+	}
 	outcome, err := graph.Run(ctx, program, in, graph.Options{
 		Caller: hops,
 		Hop:    routing.Hop{Decision: decision.Name, Recipe: string(req.RecipeName)},

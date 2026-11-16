@@ -153,6 +153,8 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
 	ctx.SemanticRequest = &request
+	observeAgentTurn(ctx, body)
+	r.observeApprovalReview(ctx, body, &request)
 	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
@@ -506,9 +508,9 @@ func setImmediateContentType(response *ext_proc.ImmediateResponse, value string)
 
 // logProtocolRejection records why the Router refused a request. Every refusal
 // that carries a protocol error leaves through encodeImmediateResponseForClient,
-// and the client's error body is otherwise the only trace: the request never
-// reaches replay. Only the protocol error's own message is logged, never the
-// request body.
+// and the client's error body is otherwise the only trace of a refusal before
+// routing, which never reaches replay. Only the protocol error's own message
+// is logged, never the request body.
 func logProtocolRejection(ctx *RequestContext, protocolError *llmprotocol.ProtocolError, status int) {
 	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", map[string]interface{}{
 		"request_id": ctx.RequestID,

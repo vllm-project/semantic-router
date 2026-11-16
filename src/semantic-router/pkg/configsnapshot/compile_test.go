@@ -3,6 +3,8 @@ package configsnapshot
 import (
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -166,6 +168,26 @@ func TestCompiledResourcesNeverCarryCredentialValues(t *testing.T) {
 				t.Fatalf("%s resources expose a credential value: %s", kind, encoded)
 			}
 		}
+	}
+}
+
+func TestAKeyFileSecretNamesTheFileNotTheKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hosted.key")
+	if err := os.WriteFile(path, []byte("hosted-file-value"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	document := strings.Replace(testDocument, "api_key_env: TEST_HOSTED_KEY", "api_key_file: "+path, 1)
+	resources := compileTest(t, parseTestConfig(t, document))
+	secret := mustGet(t, resources, KindSecret, "hosted-model").Spec.(SecretSpec)
+	if len(secret.Files) != 1 || secret.Files[0] != path || len(secret.Env) != 0 || secret.Inline != 0 {
+		t.Fatalf("hosted secret spec = %+v, want the key file", secret)
+	}
+	encoded, err := json.Marshal(resources.List(KindSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "hosted-file-value") {
+		t.Fatalf("secret resources expose the key: %s", encoded)
 	}
 }
 
