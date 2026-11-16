@@ -161,7 +161,11 @@ Each save moves every literal backend `api_key`, and every literal listener
 reference in its place. The configuration, its history, and every version a
 rollback can restore then hold only references. Your local file is sent as it
 is and never rewritten. An environment reference such as `${OPENAI_API_KEY}`
-stays as written.
+stays as written. The configuration file a save replaces keeps its mode,
+owner and group, so a `config.yaml` you keep at mode `600` stays private. A
+writer that cannot keep the owner, such as the Dashboard's own user replacing
+a file the host user owns, writes it with mode `644`, so that owner can still
+read it.
 
 - **A local file.** The key goes into a new mode `600` file, in a directory
   created with mode `700` beside the configuration file the Router reads:
@@ -209,16 +213,32 @@ stays as written.
   `${NAME}` or `auth.api_key_file`.
 
 A Dashboard user without the `config.secrets.read` permission, such as the
-Write role, sees a saved key's reference but never the key. Such a user can
-save `auth.api_key_file`, or the key Secret's `VSR_KEY_` variable, only where
-the saved configuration already uses it, on the same destination (`endpoint`,
-`provider`, `protocol` and the other fields a redacted key is checked on).
-Moving that backend to another host, naming the reference from another
-backend, or naming a file the configuration does not use is refused with
-`403`, since the Router would send what it reads there. To send a key
-somewhere new, enter the key itself. A user with `config.secrets.read` can
-name any key file. A variable you wrote yourself, such as `${OPENAI_API_KEY}`,
-is not a saved key and is not checked.
+Write role, sees a reference but never what it reads, while the Router sends
+what it reads. The Router expands every variable of its environment across the
+whole document, not only a credential field, so an environment reference is a
+value the writer cannot see wherever it sits: a backend `api_key`, a store
+`password`, an `auth.api_key_env`, but also a `chat_path`, a header, a plugin
+prompt or any other string. A reference is `auth.api_key_file`,
+`auth.api_key_env` of any name, or an environment reference (`${NAME}` or
+`$NAME`, with or without a default) in any value the Router expands, anywhere
+in the configuration. Such a user can save a reference only where the saved
+configuration already uses it, on the same destination (`endpoint`,
+`provider`, `protocol` and the other fields a redacted key is checked on). A
+listener's `api_keys` and `api_key_files` check what clients send and are not
+included. Naming a new reference, moving the backend, plugin or store that
+names one to another host, or naming a file the configuration does not use is
+refused with `403`. To send a value somewhere new, enter the value itself. A
+user with `config.secrets.read` can name any reference.
+
+A Recipe package carries its own configuration, which can bind an environment
+reference the same way. Activating one makes the Router load and expand it, so
+a user without `config.secrets.read` may not activate a Recipe whose
+configuration binds any environment reference (such as a provider key in
+`auth.api_key_env`), even one an operator allowlisted with `--recipe-env`. The
+operator allowlist still bounds which names any Recipe may bind at all; this
+adds that only a secret-reading user chooses to activate a Recipe that reads a
+value with it. A Recipe that binds none activates with the Write role as
+before.
 
 ### Move an existing literal key
 

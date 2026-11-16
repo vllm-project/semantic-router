@@ -336,7 +336,8 @@ the exact current `ETag` in `If-Match`. The Router does not accept unguarded
 writes. A mutation response and `GET /api/v1/config/hash` use the same explicit
 runtime identity fields: `source_config_hash`, `generated_runtime_hash`,
 `active_runtime_hash`, and `activation_status`. Config mutations validate,
-keep the replaced document in the configuration history, and trigger reload;
+keep the replaced document in the configuration history, write the config
+file with the mode, owner and group it had, and trigger reload;
 an active config still does not prove that upstream model backends are
 healthy. Check `/ready` and send a representative request after a change.
 
