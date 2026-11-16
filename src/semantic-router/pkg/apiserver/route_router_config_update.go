@@ -755,7 +755,11 @@ func writeConfigFileAtomically(configPath string, yamlBytes []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tmpFile.Write(yamlBytes); err != nil {
+	err = config.KeepReplacedFileMode(tmpFile, configPath)
+	if err == nil {
+		_, err = tmpFile.Write(yamlBytes)
+	}
+	if err != nil {
 		tmpFile.Close()
 		os.Remove(tmpConfigFile)
 		return err
