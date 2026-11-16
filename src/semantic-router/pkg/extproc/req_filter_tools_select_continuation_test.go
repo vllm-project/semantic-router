@@ -3,6 +3,7 @@ package extproc
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -33,6 +34,33 @@ func TestContinuationToolResultsKeepsThisTurnsResults(t *testing.T) {
 	}
 	if got, want := continuationToolResults(messages, toolContinuationLimit), "second output\n\nthird output"; got != want {
 		t.Fatalf("continuationToolResults = %q, want %q", got, want)
+	}
+}
+
+// A turn that does not end in tool results carries none: an earlier call's
+// output is history, not the question.
+func TestContinuationToolResultsNeedsTrailingResults(t *testing.T) {
+	messages := []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "look it up"}}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{toolCall("call_1")}},
+		toolText("call_1", "stale output"),
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "done"}}},
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "next question"}}},
+	}
+	if got := continuationToolResults(messages, toolContinuationLimit); got != "" {
+		t.Fatalf("continuationToolResults = %q, want no results", got)
+	}
+}
+
+// The cap cuts on a rune boundary, not inside one.
+func TestContinuationToolResultsCutsOnARuneBoundary(t *testing.T) {
+	messages := []llmprotocol.Message{toolText("call_1", strings.Repeat("é", 10))}
+	got := continuationToolResults(messages, 5)
+	if !utf8.ValidString(got) {
+		t.Fatalf("continuationToolResults split a rune: %q", got)
+	}
+	if len(got) != 4 {
+		t.Fatalf("continuationToolResults length = %d, want 4", len(got))
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -120,41 +121,38 @@ func (r *OpenAIRouter) selectTools(request *llmprotocol.Request, plugin *config.
 const toolContinuationLimit = 8 << 10
 
 // continuationToolResults are the tool results the current turn carries: the
-// ones after the last assistant tool call, in order, capped at limit bytes.
-// Earlier results are history the judge does not need, and the cap keeps the
-// question bounded however long the session has run.
+// trailing run of tool messages, in order, capped at limit bytes. A request
+// that does not end in tool results carries none, so an earlier turn's output
+// never stands in for the question, and the cap keeps the question bounded
+// however long the session has run. The text is untrusted: the judge only
+// chooses among the policy's candidates, so a result can steer which of them
+// the model sees and never reach past the policy.
 func continuationToolResults(messages []llmprotocol.Message, limit int) string {
-	start := 0
-	for index := len(messages) - 1; index >= 0; index-- {
-		if messages[index].Role != llmprotocol.RoleAssistant {
-			continue
-		}
-		for _, content := range messages[index].Content {
-			if content.Kind == llmprotocol.ContentToolCall {
-				start = index + 1
-				break
-			}
-		}
-		if start != 0 {
-			break
-		}
+	start := len(messages)
+	for start > 0 && messages[start-1].Role == llmprotocol.RoleTool {
+		start--
 	}
 	var results []string
 	total := 0
 	for _, message := range messages[start:] {
-		if message.Role != llmprotocol.RoleTool {
-			continue
+		if total >= limit {
+			break
 		}
 		for _, content := range message.Content {
 			if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
 				continue
 			}
 			text := semanticText(content.ToolResult.Content)
-			if text == "" || total >= limit {
+			if text == "" {
 				continue
 			}
 			if room := limit - total; len(text) > room {
-				text = strings.TrimSpace(text[:room])
+				// Trim to a rune boundary: a split rune would be mojibake in the question.
+				cut := room
+				for cut > 0 && !utf8.RuneStart(text[cut]) {
+					cut--
+				}
+				text = strings.TrimSpace(text[:cut])
 			}
 			results = append(results, text)
 			total += len(text)
