@@ -266,6 +266,34 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       ),
     },
   },
+  budgets: {
+    run: {
+      label: 'Run Budget',
+      description:
+        'Spend limit of one agent run: a user\'s session with every subagent, Looper hop, retry and Router model call in it.',
+      schema: object('Run Budget', {
+        limit: number('Limit', { required: true, min: 0, step: 0.01 }),
+        idle_timeout_seconds: number('Idle Timeout Seconds', { min: 0, placeholder: '86400' }),
+      }),
+    },
+    users: {
+      label: 'User Budgets',
+      description: 'Spend limits per user over a calendar window in UTC; every matching rule applies.',
+      schema: objectList(
+        'User Budget',
+        {
+          name: text('Name', { required: true }),
+          match: object('Match', {
+            user: text('User'),
+            group: text('Group'),
+          }),
+          limit: number('Limit', { required: true, min: 0, step: 0.01 }),
+          window: select('Window', ['hour', 'day', 'week', 'month'], true),
+        },
+        'name',
+      ),
+    },
+  },
   memory: {
     embedding: STORE_EMBEDDING_FIELD,
     milvus: {

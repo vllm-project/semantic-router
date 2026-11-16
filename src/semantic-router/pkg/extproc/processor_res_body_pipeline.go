@@ -260,7 +260,11 @@ func addResponseStageTrace(ctx *RequestContext, response *ext_proc.ProcessingRes
 // addResponseCostHeaders reports the priced cost of a buffered response. A
 // streamed response has already sent its headers by the time usage arrives.
 func addResponseCostHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
-	if ctx == nil || !ctx.RequestCostPriced {
+	if ctx == nil {
+		return
+	}
+	addResponseBudgetHeaders(ctx, response)
+	if !ctx.RequestCostPriced {
 		return
 	}
 	setResponseBodyHeader(response, headers.VSRCost, strconv.FormatFloat(ctx.RequestCost, 'f', -1, 64))

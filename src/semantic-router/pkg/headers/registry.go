@@ -182,6 +182,8 @@ var registry = []Header{
 	{RouterReplayID, ToClient, SurfacePublic, SensitivityNone, "router_replay", "v0.2", "Router Replay record id, when the record was persisted."},
 	{VSRCost, ToClient, SurfacePublic, SensitivityNone, "cost", "v0.4", "Usage priced with the served model's configured pricing; buffered responses only."},
 	{VSRCostCurrency, ToClient, SurfacePublic, SensitivityNone, "cost", "v0.4", "Currency of `x-vsr-cost`, from `pricing.currency`."},
+	{VSRBudgetRemaining, ToClient, SurfacePublic, SensitivityNone, "cost", "v0.5", "What the tightest spend budget of the request has left, in `global.services.budgets.currency`: after the call's actual cost on a buffered response, after its reservation on a stream and on a `budget_exceeded` refusal."},
+	{VSRBudgetScope, ToClient, SurfacePublic, SensitivityNone, "cost", "v0.5", "The spend budget `x-vsr-budget-remaining` reports: `run`, or `user/<rule name>`."},
 	{RateLimitLimit, ToClient, SurfacePublic, SensitivityNone, "rate_limit", "v0.2", "Limit of the rate-limit window that rejected the request."},
 	{RateLimitRemaining, ToClient, SurfacePublic, SensitivityNone, "rate_limit", "v0.2", "Requests left in that window."},
 	{RateLimitReset, ToClient, SurfacePublic, SensitivityNone, "rate_limit", "v0.2", "Unix time the window resets at."},

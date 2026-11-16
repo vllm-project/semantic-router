@@ -675,6 +675,7 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 	}
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)
+	r.settleRequestSpend(ctx, &replayUsage)
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
 	r.observeRouterLearningUsageTelemetry(ctx, completionLatency, usage, replayUsage)
 }

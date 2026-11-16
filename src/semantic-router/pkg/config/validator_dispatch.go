@@ -29,6 +29,7 @@ var (
 		validateContextWindowContracts,
 		validateRouterHeadersContracts,
 		validateDrainTimeoutContract,
+		validateBudgetsContract,
 		validateFlowContracts,
 		validateModelAdmissionContracts,
 		validateModelSignalTimeoutContracts,

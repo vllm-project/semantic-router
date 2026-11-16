@@ -114,6 +114,8 @@ type RequestContext struct {
 	RequestCost                   float64
 	RequestCostCurrency           string
 	RequestCostPriced             bool
+	// spend is the request's place in the spend budgets; nil without any.
+	spend *requestSpend
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type

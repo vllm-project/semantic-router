@@ -69,7 +69,13 @@ func (r *OpenAIRouter) refreshReplayModelCalls(ctx *RequestContext, recorder *ro
 	if !ok {
 		return
 	}
-	usage := routerreplay.UsageCost{
+	r.writeRouterReplayUsageCost(ctx, recordUsageCost(record))
+}
+
+// recordUsageCost is the usage and cost a record holds, to rewrite it with
+// one part changed.
+func recordUsageCost(record routerreplay.RoutingRecord) routerreplay.UsageCost {
+	return routerreplay.UsageCost{
 		ProviderCache: record.ProviderCache, PromptTokens: record.PromptTokens,
 		CachedPromptTokens: record.CachedPromptTokens, CacheWriteTokens: record.CacheWriteTokens,
 		CompletionTokens: record.CompletionTokens, TotalTokens: record.TotalTokens,
@@ -77,5 +83,4 @@ func (r *OpenAIRouter) refreshReplayModelCalls(ctx *RequestContext, recorder *ro
 		CostSavings: record.CostSavings, Currency: record.Currency, BaselineModel: record.BaselineModel,
 		CostAccounting: record.CostAccounting,
 	}
-	r.writeRouterReplayUsageCost(ctx, usage)
 }

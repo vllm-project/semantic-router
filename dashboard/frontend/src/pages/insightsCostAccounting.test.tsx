@@ -281,3 +281,54 @@ describe('Router decision costs', () => {
     expect(renderToStaticMarkup(<>{savings.render!(priced)}</>)).not.toContain('Router calls')
   })
 })
+
+describe('spend budget on a record', () => {
+  it('shows what the budget had left and what the call reserved and was charged', () => {
+    const settled: InsightsRecord = {
+      ...priced,
+      cost_accounting: {
+        ...priced.cost_accounting,
+        budget: {
+          scope: 'run',
+          currency: 'USD',
+          limit: 0.03,
+          remaining: 0.024,
+          estimate: 0.011,
+          charged: 0.006,
+          settlement: 'usage',
+        },
+      },
+    }
+    expect(field(settled, 'Spend budget')).toBe(
+      'run: $0.024 of $0.03 left; reserved $0.011, charged $0.0060 from its usage',
+    )
+  })
+
+  it('says a refused call did not fit', () => {
+    const refused: InsightsRecord = {
+      ...priced,
+      lifecycle_state: 'failed',
+      terminal_reason: 'budget_exceeded',
+      cost_accounting: {
+        budget: {
+          scope: 'user/daily',
+          currency: 'USD',
+          limit: 0.05,
+          remaining: 0.008,
+          estimate: 0.011,
+        },
+      },
+    }
+    expect(field(refused, 'Spend budget')).toBe(
+      'user/daily: $0.0080 of $0.05 left; refused: the call was estimated at $0.011',
+    )
+    const exhausted: InsightsRecord = {
+      ...refused,
+      cost_accounting: {
+        budget: { scope: 'run', currency: 'USD', limit: 0.03, remaining: 0, estimate: 0 },
+      },
+    }
+    expect(field(exhausted, 'Spend budget')).toBe('run: $0.0000 of $0.03 left; refused: nothing was left')
+    expect(field({ ...priced }, 'Spend budget')).toBeUndefined()
+  })
+})

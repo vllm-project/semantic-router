@@ -129,6 +129,28 @@
       "doc": "Currency of `x-vsr-cost`, from `pricing.currency`."
     },
     {
+      "name": "x-vsr-budget-remaining",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "cost",
+      "version": "v0.5",
+      "doc": "What the tightest spend budget of the request has left, in `global.services.budgets.currency`: after the call's actual cost on a buffered response, after its reservation on a stream and on a `budget_exceeded` refusal."
+    },
+    {
+      "name": "x-vsr-budget-scope",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "cost",
+      "version": "v0.5",
+      "doc": "The spend budget `x-vsr-budget-remaining` reports: `run`, or `user/<rule name>`."
+    },
+    {
       "name": "x-ratelimit-limit",
       "direction": [
         "response"
@@ -932,6 +954,8 @@
     "x-vsr-replay-id",
     "x-vsr-cost",
     "x-vsr-cost-currency",
+    "x-vsr-budget-remaining",
+    "x-vsr-budget-scope",
     "x-vsr-trace",
     "x-vsr-route-model",
     "x-vsr-upstream-host",

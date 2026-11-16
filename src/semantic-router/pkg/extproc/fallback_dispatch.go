@@ -780,6 +780,14 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 			Reason:      "candidate_rate_limited",
 		}, fmt.Errorf("fallback candidate %q rejected by rate limit", candidateModel)
 	}
+	// The primary's reservation ends here; a candidate the budget cannot
+	// cover gives way to the next, which may cost less.
+	if refusal := r.reserveDispatchSpend(ctx, candidateModel, reqCopy); refusal != nil {
+		return nil, fallback.EvaluationResult{
+			CanFallback: true,
+			Reason:      "candidate_" + refusal.code,
+		}, fmt.Errorf("fallback candidate %q refused by the spend budget: %s", candidateModel, refusal.message)
+	}
 
 	return &fallbackCandidate{
 		model: candidateModel, ref: candidateRef, dispatch: dispatch, request: reqCopy, body: requestBody,

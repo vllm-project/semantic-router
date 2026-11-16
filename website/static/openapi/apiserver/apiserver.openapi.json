@@ -19841,6 +19841,44 @@
                               "baseline_unavailable": {
                                 "type": "string"
                               },
+                              "budget": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "charged": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "estimate": {
+                                    "type": "number"
+                                  },
+                                  "limit": {
+                                    "type": "number"
+                                  },
+                                  "remaining": {
+                                    "type": "number"
+                                  },
+                                  "scope": {
+                                    "type": "string"
+                                  },
+                                  "settlement": {
+                                    "type": "string"
+                                  },
+                                  "unpriced_calls": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "scope",
+                                  "currency",
+                                  "limit",
+                                  "remaining",
+                                  "estimate"
+                                ]
+                              },
                               "caller_login": {
                                 "type": "boolean"
                               },
@@ -25334,6 +25372,44 @@
                         },
                         "baseline_unavailable": {
                           "type": "string"
+                        },
+                        "budget": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "charged": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "estimate": {
+                              "type": "number"
+                            },
+                            "limit": {
+                              "type": "number"
+                            },
+                            "remaining": {
+                              "type": "number"
+                            },
+                            "scope": {
+                              "type": "string"
+                            },
+                            "settlement": {
+                              "type": "string"
+                            },
+                            "unpriced_calls": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "scope",
+                            "currency",
+                            "limit",
+                            "remaining",
+                            "estimate"
+                          ]
                         },
                         "caller_login": {
                           "type": "boolean"
