@@ -243,7 +243,11 @@ def _codex_findings(doc: dict, router: dict, reach) -> list[RouterFinding | None
 
 
 def _pi_findings(doc: dict, router: dict, reach) -> list[RouterFinding | None]:
-    # Pi sends its own output limit, so an anthropic backend needs no default
+    # Pi sends its own output limit, so an anthropic backend needs no default. On
+    # its own Anthropic login Pi speaks Messages, which keeps thinking signatures,
+    # and sends no session header, so neither finding applies.
+    if _caller_of(doc, reach) == "anthropic":
+        return []
     return [
         _signature_finding(router, _to_anthropic(doc, reach)),
         _protection_finding(router, PI_HEADERS),
@@ -377,12 +381,16 @@ def caller_provider(doc: dict | None, entrypoint: str | None = None) -> str | No
     reachable = (
         entrypoint_models(doc, entrypoint) if doc and entrypoint else None
     ) or None
+    return _caller_of(doc, lambda name: reachable is None or name in reachable)
+
+
+def _caller_of(doc: dict | None, reach) -> str | None:
+    """The provider the caller backends of the models reach accepts name."""
     return next(
         (
             str(ref.get("provider") or "").lower()
             for model in _get(doc, "providers", "models") or []
-            if isinstance(model, dict)
-            and (reachable is None or model.get("name") in reachable)
+            if isinstance(model, dict) and reach(model.get("name"))
             for ref in model.get("backend_refs") or []
             if isinstance(ref, dict)
             and (ref.get("auth") or {}).get("credential") == "caller"
