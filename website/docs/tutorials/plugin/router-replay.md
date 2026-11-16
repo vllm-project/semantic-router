@@ -27,14 +27,41 @@ capture limits that match the data you are allowed to keep.
 
 ### Keep records across restarts
 
+Without a store in `global.services.router_replay`, Replay uses the `file`
+store. It writes each record once, when the request ends (completed, failed or
+aborted), to `.vllm-sr/router-replay.jsonl` in the configuration file's
+directory, a file only its owner can read, and reads the records back when the
+Router starts, so Insights keeps its history across restarts and configuration
+reloads. `vllm-sr serve` mounts that directory from the host, so the file
+outlives the Router container.
+
+- **In progress.** A request still in progress when the Router crashes is not
+  in the file. What reaches a record after its request ends, such as a late
+  outcome or a review, is written when the file is next rewritten: when the
+  Router stops, and whenever the file reaches twice as many lines as the
+  records it keeps.
+- **Size.** The file keeps at most 1,000 records, or `max_records` when that
+  is lower. A record of routing data takes about 8 KB, so the file stays near
+  8 MB and reaches about 16 MB just before a rewrite. The `memory` backend
+  keeps its default of 10,000.
+- **Age.** Reading the file back and rewriting it drop records older than
+  `ttl_seconds`; until then the running Router lists them, as the `memory`
+  backend does.
+- **Memory instead.** Where any `router_replay` plugin captures prompt or body
+  text, where that directory cannot be written (the Helm chart mounts the
+  configuration read-only), or where another Router process already holds the
+  file, Replay keeps all its records in memory and logs a warning that says
+  why.
+
 All five built-in MoM recipes, including Vault, enable PostgreSQL Replay by
 default. Local `vllm-sr serve` manages PostgreSQL and its persistent volume.
 For another deployment method, configure the PostgreSQL connection in the
 [shared Replay service](../learning/memory-and-replay#configuration).
 
-The generic `memory` store is useful for temporary inspection but loses records
-when the Router restarts or reloads configuration. Use PostgreSQL or Redis when
-you need durable history. Set retention for the data you intend to keep.
+The `memory` store keeps records in the Router process only and loses them
+when the Router restarts or reloads configuration. Use PostgreSQL or Redis for
+records that keep text or that several Routers share. Set retention for the
+data you intend to keep.
 
 ### Set shared capture defaults
 
@@ -61,8 +88,8 @@ routing data only, as `prompt_capture: none` does: the recipe and decision,
 the requested and selected model, token usage, cost, latency, status, and the
 session, turn and agent identifiers the request carries. It keeps no request
 or response body and no prompt, and it writes to the store
-`global.services.router_replay` names: the in-memory store unless you
-configure another, at most `max_records` records for each decision. A
+`global.services.router_replay` names: the `file` store unless you configure
+another, at most 1,000 records there. A
 `router_replay` plugin on any layer replaces that default and records only
 where a layer sets `enabled: true`. The plugin in
 `global.plugins` holds the shared capture defaults; a recipe's plugin
@@ -191,9 +218,9 @@ records.
 
 :::note Zero values
 Explicit `max_body_bytes: 0` falls back to 4,096 bytes, and `max_records: 0`
-to 200 records for the memory store. `max_prompt_bytes: 0`, like the tool-trace
-limits, removes the limit instead. These zeros override an inherited value,
-so omit a field to inherit it.
+to 200 records for the file and memory stores. `max_prompt_bytes: 0`, like the
+tool-trace limits, removes the limit instead. These zeros override an
+inherited value, so omit a field to inherit it.
 :::
 
 ### Bound the prompt

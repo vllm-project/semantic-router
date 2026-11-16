@@ -165,7 +165,8 @@ runtime dependency; they do not define routing behavior by themselves.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
 - Router replay records each request's routing data by default, with no
-  request or response text, and can capture request or response bodies when a
+  request or response text, in `.vllm-sr/router-replay.jsonl` beside the
+  configuration file, and can capture request or response bodies when a
   `router_replay` plugin asks for it. Review its access controls and retention
   settings before capturing text.
 - `global.router.skip_processing.enabled` should be enabled only when an

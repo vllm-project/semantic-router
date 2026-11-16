@@ -427,8 +427,8 @@ Router replay records routing data by default:
 - **Per recipe or decision.** A recipe's or decision's `router_replay` plugin
   overrides it: `enabled: false` turns capture off there, and `enabled: true`
   opts in when the default is off.
-- **Storage.** Without a durable backend, the default in-memory store is
-  process-local and lost on restart.
+- **Storage.** Without a configured backend, records go to the `file` store,
+  which [keeps them across restarts](../plugin/router-replay#keep-records-across-restarts).
 
 The `store_backend` field controls where routing-decision replay records are persisted. Available backends:
 
@@ -438,6 +438,7 @@ The `store_backend` field controls where routing-decision replay records are per
 | `redis` | Survives router restart, shared across replicas | Lightweight deployments already running Redis |
 | `milvus` | Vector-searchable replay records | Semantic replay search |
 | `qdrant` | Vector-searchable replay records | Semantic replay search in a Qdrant deployment |
+| `file` | Survives router restart on one Router; routing data only | The default for local and single-Router deployments |
 | `memory` | Lost on router restart | Local development only |
 
 ## Data and Security

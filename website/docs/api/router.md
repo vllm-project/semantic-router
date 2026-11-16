@@ -526,7 +526,8 @@ It is useful for debugging, evaluation, and Router Learning, but it does not
 change routing merely because a record is read.
 
 Without a `router_replay` plugin, Replay records each request's routing data,
-and no request or response text, in the in-memory store. A `router_replay`
+and no request or response text, in the `file` store, which
+[keeps records across restarts](../tutorials/plugin/router-replay#keep-records-across-restarts). A `router_replay`
 plugin in `global.plugins` replaces that default, and `enabled: false` turns
 Replay off:
 
@@ -538,9 +539,9 @@ global:
         enabled: false
 ```
 
-The in-memory backend is suitable for local inspection. Use a configured
-persistent backend when records must survive process restarts, and set
-retention appropriate to the data being captured.
+The `memory` backend is suitable for local inspection. Use a configured
+persistent backend when records that keep text must survive process restarts,
+and set retention appropriate to the data being captured.
 
 Replay queries go to the management API:
 

@@ -372,9 +372,13 @@ type ResponseAPIRedisConfig struct {
 
 // RouterReplayConfig says where routing-decision replay records are stored.
 // A router_replay plugin turns recording on and says what a record captures.
-// Without a storage configuration records stay in memory. Supported
-// backends: "postgres", "redis", "milvus", "qdrant", "memory". Production
-// deployments should configure a durable backend.
+// Supported backends: "file", "postgres", "redis", "milvus", "qdrant",
+// "memory". The default, "file", writes each record that holds no prompt or
+// body text once its request ends to .vllm-sr/router-replay.jsonl in the
+// configuration's directory, at most 1,000 of them, and keeps them in memory
+// where a plugin captures text, that directory cannot be written or another
+// process holds the file. Shared or production deployments should configure
+// postgres or redis.
 type RouterReplayConfig struct {
 	StoreBackend string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
 	TTLSeconds   int                         `json:"ttl_seconds" yaml:"ttl_seconds"`

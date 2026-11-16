@@ -29,7 +29,7 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
         "store_backend": "redis",
     },
     "router_replay": {
-        "store_backend": "memory",
+        "store_backend": "file",
     },
     "startup_status": {
         "store_backend": "file",
