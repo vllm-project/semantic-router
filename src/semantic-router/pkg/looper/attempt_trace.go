@@ -59,6 +59,10 @@ const (
 	AttemptReasonThresholdNotMet AttemptReason = "threshold_not_met"
 	AttemptReasonUnusable        AttemptReason = "unusable_response"
 	AttemptReasonUpstreamError   AttemptReason = "upstream_error"
+	// AttemptReasonBudgetExceeded and AttemptReasonBudgetUnpriced are a call
+	// a spend budget refused before it reached a model.
+	AttemptReasonBudgetExceeded  AttemptReason = "budget_exceeded"
+	AttemptReasonBudgetUnpriced  AttemptReason = "budget_unpriced"
 	AttemptReasonInvalidResponse AttemptReason = "invalid_response"
 	AttemptReasonCancelled       AttemptReason = "request_cancelled"
 	AttemptReasonDeadline        AttemptReason = "deadline_exceeded"
@@ -431,11 +435,14 @@ func attemptReasonFromError(err error) AttemptReason {
 	if err == nil {
 		return ""
 	}
+	var hopErr *hopOperationError
 	switch {
 	case errors.Is(err, context.Canceled):
 		return AttemptReasonCancelled
 	case errors.Is(err, context.DeadlineExceeded):
 		return AttemptReasonDeadline
+	case errors.As(err, &hopErr) && hopErr.refusal != "":
+		return hopErr.refusal
 	case strings.Contains(err.Error(), "parse response"):
 		return AttemptReasonInvalidResponse
 	default:

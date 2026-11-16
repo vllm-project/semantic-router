@@ -19,11 +19,13 @@ package extproc
 import (
 	"bytes"
 	"context"
+	"strconv"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -178,7 +180,21 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// Replay starts inside the recorder, so its ID only exists now; the reply
 	// boundary adds it to the already-built response.
 	r.recordSuccessfulLooperExecution(resp, request.Model, decision, reqCtx, plan)
+	if plan.blocked == nil {
+		addLooperCostHeaders(reply, reqCtx, resp)
+	}
 	return reply, nil
+}
+
+// addLooperCostHeaders prices a Looper answer as its record prices it: the
+// sum of its calls, when every one has a price.
+func addLooperCostHeaders(reply *ext_proc.ProcessingResponse, reqCtx *RequestContext, resp *looper.Response) {
+	calls := looperRouterCalls(reqCtx.VSRLooperDiagnostics, resp.Usage, resp.Iterations)
+	if calls.Cost == nil || calls.UnpricedCalls > 0 {
+		return
+	}
+	appendImmediateResponseHeader(reply, headers.VSRCost, strconv.FormatFloat(*calls.Cost, 'f', -1, 64))
+	appendImmediateResponseHeader(reply, headers.VSRCostCurrency, calls.Currency)
 }
 
 // releaseLooperAnswer is the reply the response policy leaves of a Looper
@@ -380,6 +396,8 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 
 	// Update router replay with success status (looper returns immediate response with 200)
 	r.updateRouterReplayStatus(reqCtx, 200, false)
+	// The hops have settled: the answer reports the budgets after them.
+	r.finishRequestSpend(reqCtx)
 
 	// The response body pipeline is bypassed by ImmediateResponse, so the
 	// response policy commits here, once Replay is open: Replay, memory and

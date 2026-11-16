@@ -2,6 +2,8 @@ package extproc
 
 import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // Internal hops skip final response policy and persistence, which belong to
@@ -23,9 +25,10 @@ func (r *OpenAIRouter) handleLooperResponseBody(
 	}
 
 	response := buildResponseBodyContinueResponse(nil, nil)
+	var semantic *llmprotocol.Response
 	if requiresClientResponseRewrite(ctx) {
-		semantic, err := r.decodeClientResponse(responseBody, ctx)
-		if err != nil {
+		var err error
+		if semantic, err = r.decodeClientResponse(responseBody, ctx); err != nil {
 			return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 		}
 		responseBody, err = r.encodeClientResponse(*semantic, ctx)
@@ -35,6 +38,7 @@ func (r *OpenAIRouter) handleLooperResponseBody(
 		setResponseBodyMutation(response, responseBody)
 		setResponseContentType(response, "application/json")
 	}
+	r.settleHopSpend(ctx, semantic, responseBody)
 	// Same-wire Chat remains byte-preserving. An empty completion can still
 	// carry paid usage, which the calling algorithm classifies and accounts.
 	r.attachRouterReplayResponse(ctx, responseBody, true)
@@ -58,8 +62,11 @@ func (r *OpenAIRouter) handleLooperStreamingResponseBody(
 		semantic, err := ctx.SemanticStreamState.response()
 		if err != nil {
 			ctx.StreamingAborted = true
-		} else if body, err := r.encodeClientResponse(*semantic, ctx); err == nil {
-			r.attachRouterReplayResponse(ctx, body, true)
+		} else {
+			r.settleHopSpend(ctx, semantic, nil)
+			if body, err := r.encodeClientResponse(*semantic, ctx); err == nil {
+				r.attachRouterReplayResponse(ctx, body, true)
+			}
 		}
 		r.endStreamRouterReplay(ctx, clean)
 	}

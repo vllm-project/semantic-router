@@ -61,6 +61,7 @@ func (r *OpenAIRouter) failedAttemptResponse(ctx *RequestContext, attempt *faile
 	if attempt == nil {
 		return nil
 	}
+	r.releaseFailedSpend(ctx)
 	protocolError := r.failedAttemptError(attempt)
 	ctx.ImmediateProtocolError = protocolError
 	response := r.encodeImmediateResponseForClient(r.createErrorResponse(attempt.status, protocolError.Message), ctx)
