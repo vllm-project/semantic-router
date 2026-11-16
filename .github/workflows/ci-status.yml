@@ -2,7 +2,7 @@ name: PR CI Status
 
 on:
   workflow_run:
-    workflows: [Pull Request]
+    workflows: [Pull Request, Community]
     types: [in_progress, completed]
   workflow_dispatch:
     inputs:
@@ -14,16 +14,43 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-status-${{ github.event.workflow_run.id || inputs.run_id }}
-  cancel-in-progress: false
-
 jobs:
-  publish:
-    name: Publish PR qualification status
+  resolve:
+    name: Resolve qualification identity
     if: >-
       github.event_name == 'workflow_run'
       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      run_id: ${{ steps.qualification.outputs.run_id }}
+      mode: ${{ steps.qualification.outputs.mode }}
+    steps:
+      - name: Check out the trusted resolver
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Resolve the current qualification run
+        id: qualification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/pr_ci_status.py --resolve-event --event "$GITHUB_EVENT_PATH" --output "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish PR qualification status
+    needs: resolve
+    if: >-
+      needs.resolve.outputs.run_id != ''
+      && (github.event_name == 'workflow_run'
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+    concurrency:
+      group: ci-status-${{ needs.resolve.outputs.run_id }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -42,4 +69,6 @@ jobs:
       - name: Reconcile the current run and update PR guidance
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH"
+          QUALIFICATION_RUN_ID: ${{ needs.resolve.outputs.run_id }}
+          STATUS_MODE: ${{ needs.resolve.outputs.mode }}
+        run: python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH" --run-id "$QUALIFICATION_RUN_ID" --mode "$STATUS_MODE"
