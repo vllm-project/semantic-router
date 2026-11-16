@@ -2671,6 +2671,46 @@ def test_status_fails_when_a_gateway_check_fails(tmp_path, gateway, monkeypatch)
         assert "failed" in result.output
 
 
+def test_status_names_the_project_settings_that_win_in_this_directory(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    project = tmp_path / "project"
+    (project / ".claude").mkdir(parents=True)
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    for harness in ("claude-code", "codex"):
+        args = ["connect", harness, "--base-url", url, "--no-vsr", "--yes"]
+        assert CliRunner().invoke(main, args).exit_code == 0
+    local = project / ".claude" / "settings.local.json"
+    local.write_text('{"env": {"ANTHROPIC_MODEL": "opus", "OTHER": "1"}}')
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    (project / ".codex").mkdir()
+    toml = project / ".codex" / "config.toml"
+    toml.write_text('model = "gpt-x"\n')
+
+    # reported, as connect warns, but the gateway still answers
+    result = CliRunner().invoke(main, ["connect", "status"])
+    assert result.exit_code == 0, result.output
+    output = _flat(result.output)
+    assert f"overridden here {local} sets ANTHROPIC_MODEL" in output
+    assert f"overridden here {toml} sets model, once Codex trusts" in output
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    claude, codex, _ = json.loads(result.output)["connections"]
+    assert claude["overrides"] == [{"path": str(local), "keys": ["ANTHROPIC_MODEL"]}]
+    assert codex["overrides"] == [{"path": str(toml), "keys": ["model"]}]
+    assert claude["probe"]["state"] == "ok"
+
+    # elsewhere the user settings hold
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    claude, codex, _ = json.loads(result.output)["connections"]
+    assert claude["overrides"] == codex["overrides"] == []
+
+
 def test_status_sends_no_key_to_a_gateway_the_settings_no_longer_name(
     tmp_path, gateway, checked_harness, monkeypatch
 ):

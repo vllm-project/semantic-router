@@ -673,7 +673,7 @@ def status(as_json):
                 **entry,
             }
             for folder in folders
-            for entry in _connections(folder)
+            for entry in _connections(folder, cwd)
             if entry["harness"] == harness
         ]
         for entry in entries:
@@ -730,9 +730,9 @@ def _aligned(rows: list[tuple[str, str]]) -> None:
         echo(f"  {label:<{width}}  {value}")
 
 
-def _connections(folder: Path) -> list[dict]:
+def _connections(folder: Path, cwd: Path) -> list[dict]:
     try:
-        return hc.connections(folder) + hp.connections(folder)
+        return hc.connections(folder, cwd) + hp.connections(folder)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise click.ClickException(
             f"cannot read {folder / hc.MANIFEST}: {exc!r}"
@@ -863,6 +863,11 @@ def _show_status(entry: dict) -> None:
         if item.get("changed"):
             state += f": {', '.join(item['changed'])}"
         rows.append(("files" if index == 0 else "", f"{item['path']}: {state}"))
+    # what a harness started in this directory takes over the files above
+    trusted = ", once Codex trusts this project" if codex else ""
+    for index, item in enumerate(entry.get("overrides") or []):
+        label = "overridden here" if index == 0 else ""
+        rows.append((label, f"{item['path']} sets {', '.join(item['keys'])}{trusted}"))
     if entry.get("plugins"):
         rows.append(("vSR plugin", ", ".join(entry["plugins"])))
     probe = entry["probe"]

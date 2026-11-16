@@ -240,8 +240,15 @@ why, once Claude Code's settings name another gateway or model than connect
 wrote, or the Codex profile, Codex's shared `config.toml` (`--app`) or Pi's
 `models.json` no longer holds what connect wrote, since the key they send may
 then be for another gateway. A Pi connection fails when Pi's `auth.json` holds
-a key of its own for `vllm-sr`, which Pi sends in its place. `--json` prints the same as JSON,
-and the command exits with status 1 when a gateway check fails.
+a key of its own for `vllm-sr`, which Pi sends in its place. Under
+`overridden here` it names the project settings in the current directory that
+win over what connect wrote, the ones connect warns about after writing: a
+`.claude/settings.json` or `.claude/settings.local.json` that sets one of the
+keys of a user scope connection, and a `.codex/config.toml` that sets `model`.
+Run it in the directory you start the harness in. These do not fail the
+command, since the gateway itself still answers. `--json` prints the same as
+JSON, the settings under `overrides`, and the command exits with status 1 when
+a gateway check fails.
 
 ### Try it without writing anything
 
