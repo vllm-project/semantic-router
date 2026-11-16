@@ -156,6 +156,9 @@ func replayNettedRouterCallCost(record routerreplay.RoutingRecord, currency stri
 			continue
 		case !finiteReplayCost(call.Cost):
 			return 0, store.UnpricedNotRecorded
+		case *call.Cost == 0:
+			// Nothing is netted, whatever the currency of a free call.
+			continue
 		case normalizeReplayCurrency(call.Currency) != currency:
 			return 0, store.UnpricedCurrencyMismatch
 		}

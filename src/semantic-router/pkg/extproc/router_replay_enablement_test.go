@@ -4,6 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -228,5 +232,46 @@ func TestBuildReplayPostgresConfigUsesUnifiedTableName(t *testing.T) {
 
 	if pgConfig.TableName != "router_replay" {
 		t.Fatalf("expected unified postgres table name, got %q", pgConfig.TableName)
+	}
+}
+
+// On the memory store the decisions that run the default record share one
+// store with the requests that match no decision, rather than holding
+// max_records each; a decision with its own router_replay plugin keeps its own.
+func TestReplayDecisionsOnTheDefaultRecordShareOneMemoryStore(t *testing.T) {
+	route := func(name string, plugins ...config.DecisionPlugin) config.Decision {
+		return config.Decision{Name: name, ModelRefs: []config.ModelRef{{Model: "m"}}, Plugins: plugins}
+	}
+	cfg := withGlobalPlugins(t, &config.RouterConfig{
+		RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"},
+		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{
+			route("plain"), route("other"),
+			route("audited", replayTestPlugin(map[string]interface{}{"enabled": true, "max_records": 5})),
+		}},
+	})
+	router := replayRuntimeRouter(t, cfg)
+	if router.ReplayRecorder == nil || router.ReplayRecorders["plain"] != router.ReplayRecorder ||
+		router.ReplayRecorders["other"] != router.ReplayRecorder {
+		t.Fatalf("decisions on the default record do not share the request store: %+v", router.ReplayRecorders)
+	}
+	if audited := router.ReplayRecorders["audited"]; audited == nil || audited == router.ReplayRecorder {
+		t.Fatalf("a decision with its own router_replay plugin shares the default store: %v", audited)
+	}
+}
+
+// The memory store warning names a choice the configuration made: records
+// kept in memory because they hold text, which the default file store does
+// not, are warned about once, and a configured memory store as before.
+func TestReplayWarnsAboutTheMemoryStoreOnlyWhenConfigured(t *testing.T) {
+	core, logs := observer.New(zapcore.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+	raw := replayTestPlugin(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureRaw})
+	replayRuntimeRouter(t, withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "file"}}, raw))
+	if got := logs.FilterMessageSnippet("store_backend is set to").Len(); got != 0 {
+		t.Fatalf("a memory store nobody configured was warned about %d times", got)
+	}
+	replayRuntimeRouter(t, withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}))
+	if got := logs.FilterMessageSnippet(`store_backend is set to "memory"`).Len(); got != 1 {
+		t.Fatalf("a configured memory store was warned about %d times, want 1", got)
 	}
 }

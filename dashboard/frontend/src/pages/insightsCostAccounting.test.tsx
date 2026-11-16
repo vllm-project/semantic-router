@@ -270,6 +270,10 @@ describe('Router decision costs', () => {
       '1 System One call (remote), 10 input / 0 output tokens, 1 unpriced',
     )
     expect(field(priced, 'Router calls')).toBeUndefined()
+    // The record's own savings are gross, as the table's column says.
+    expect(field(record, 'Estimated savings before its Router calls')).toBe('-$0.0030')
+    expect(field(record, 'Estimated savings')).toBeUndefined()
+    expect(field(priced, 'Estimated savings')).toBeDefined()
     const savings = createInsightsTableColumns().find((column) => column.key === 'cost_savings')!
     expect(renderToStaticMarkup(<>{savings.render!(record)}</>)).toContain(
       'Before its Router calls',

@@ -313,3 +313,23 @@ func TestRouterReplayAggregateNetsRouterCallsOutOfSavings(t *testing.T) {
 		}
 	}
 }
+
+// A Router call that cost nothing nets at zero whatever its currency, so a
+// free call in USD, the currency an empty pricing block defaults to, leaves a
+// record priced in another currency compared.
+func TestRouterReplayAggregateNetsAFreeRouterCallInAnyCurrency(t *testing.T) {
+	record := netSavingsRecords()[1]
+	record.ID, record.Currency = "euro-record", replayStringPtr("EUR")
+	summary := replayAggregateSummaryJSON(t, []routerreplay.RoutingRecord{record})
+	compared := false
+	for _, group := range summary["by_currency"].([]interface{}) {
+		group := group.(map[string]interface{})
+		compared = compared || group["currency"] == "EUR" && group["cost_record_count"] == 1.0 && group["total_saved"] == 2.0
+	}
+	if !compared {
+		t.Fatalf("by_currency = %v, want the EUR record compared with its free USD call netted at zero", summary["by_currency"])
+	}
+	if unavailable := summary["coverage"].(map[string]interface{})["net_unavailable"]; unavailable != nil {
+		t.Fatalf("net_unavailable = %v, want none", unavailable)
+	}
+}
