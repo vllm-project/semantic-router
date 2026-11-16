@@ -66,6 +66,31 @@ func TestWriteConfigAtomicallySucceeds(t *testing.T) {
 	}
 }
 
+// A save keeps a private config private: the file written in place of the
+// config takes the config's mode, where it used to be 644 whatever the
+// config's mode was.
+func TestWriteConfigAtomicallyKeepsTheConfigMode(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	for _, mode := range []os.FileMode{0o600, 0o640, 0o644} {
+		if err := os.WriteFile(configPath, []byte("routing: {}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(configPath, mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := writeConfigAtomically(configPath, []byte("routing: {new: true}\n")); err != nil {
+			t.Fatalf("writeConfigAtomically: %v", err)
+		}
+		info, err := os.Stat(configPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != mode {
+			t.Fatalf("config mode = %o after a save, want %o", info.Mode().Perm(), mode)
+		}
+	}
+}
+
 // TestWriteConfigAtomicallyRenameFailureLeavesExistingConfigUntouched pins the
 // invariant a failed rename must never fall back to a non-atomic direct
 // write: it forces the rename step to fail (standing in for the EBUSY/EROFS

@@ -184,7 +184,10 @@ for operator-defined evidence.
 | Neither known | The configured per-million-token rates |
 
 The same request mix feeds the cost factor, `max_cost_per_1m` and the
-`cheapest` fallback.
+`cheapest` fallback. A candidate without rates has no cost for any of them,
+but a Model without `pricing` may carry its catalog
+[list price](../../../installation/catalog-backed-models#list-prices), which
+they read like any other rates.
 
 ```yaml
 multi_factor:

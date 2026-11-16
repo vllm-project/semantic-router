@@ -77,6 +77,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
+		Agent:         append([]AgentRule(nil), signals.AgentRules...),
 		SystemOne:     append([]SystemOneRule(nil), signals.SystemOneRules...),
 	}
 }
@@ -131,14 +132,16 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			DrainTimeoutSeconds:   cfg.DrainTimeoutSeconds,
 		},
 		Services: CanonicalServiceGlobal{
-			API:           cfg.API,
-			ResponseAPI:   cfg.ResponseAPI,
-			Observability: cfg.Observability,
-			Authz:         cfg.Authz,
-			RateLimit:     cfg.RateLimit,
-			ManagementAPI: cfg.ManagementAPI,
-			RouterReplay:  cfg.RouterReplay,
-			StartupStatus: cfg.StartupStatus,
+			API:             cfg.API,
+			ResponseAPI:     cfg.ResponseAPI,
+			Observability:   cfg.Observability,
+			MaskingIdentity: cfg.MaskingIdentity,
+			Authz:           cfg.Authz,
+			RateLimit:       cfg.RateLimit,
+			Budgets:         cfg.Budgets,
+			ManagementAPI:   cfg.ManagementAPI,
+			RouterReplay:    cfg.RouterReplay,
+			StartupStatus:   cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
 			ResponseCache: cfg.SemanticCache,

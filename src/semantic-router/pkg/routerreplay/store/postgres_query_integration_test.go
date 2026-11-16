@@ -107,6 +107,17 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 	if err != nil || searched.Total != 3 {
 		t.Fatalf("session search total=%d err=%v", searched.Total, err)
 	}
+	// since compares the zone-less timestamp column in UTC: the rows' own
+	// instant written in another zone keeps them, a second later drops them.
+	for _, window := range []struct {
+		since time.Time
+		want  int
+	}{{fixture.Timestamp.In(time.FixedZone("KST", 9*3600)), 3}, {fixture.Timestamp.Add(time.Second), 0}} {
+		windowed, windowErr := postgres.QueryPage(ctx, QueryFilters{SessionID: "old-session", Since: window.since}, 100, 0, false)
+		if windowErr != nil || windowed.Total != window.want {
+			t.Fatalf("since %s total=%d err=%v", window.since, windowed.Total, windowErr)
+		}
+	}
 	//nolint:gosec // generated table name is validated by NewPostgresStore
 	if _, err = postgres.db.ExecContext(ctx, "UPDATE "+cfg.TableName+" SET recipe=NULL WHERE id=$1", "record-12249"); err != nil {
 		t.Fatal(err)

@@ -102,7 +102,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			name: "OpenAI Responses",
 			wire: responsesRequestWire{},
 			semantic: fields(
-				"conversation", "input", "instructions", "max_output_tokens", "metadata", "model",
+				"conversation", "include", "input", "instructions", "max_output_tokens", "metadata", "model",
 				"parallel_tool_calls", "previous_response_id", "prompt_cache_key", "reasoning", "store",
 				"stream", "temperature", "text", "tool_choice", "tools", "top_p", "truncation", "user",
 			),
@@ -114,7 +114,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			transport:  fields("stream_options"),
 			extensions: fields("auto_store"),
 			// Accepted but never forwarded; decode reports each as a dropped diagnostic.
-			dropped: fields("client_metadata", "include"),
+			dropped: fields("client_metadata"),
 		},
 		{
 			name: "Anthropic Messages",

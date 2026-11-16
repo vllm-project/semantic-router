@@ -74,7 +74,7 @@ func UntrustedIdentityWarning(cfg *RouterConfig) string {
 	if memoryRecordsUsers(cfg) {
 		features = append(features, "memory")
 	}
-	if cfg.UsesRouterReplay() {
+	if routerReplayConfigured(cfg) {
 		features = append(features, "router replay")
 	}
 	if len(features) == 0 {
@@ -87,6 +87,17 @@ func UntrustedIdentityWarning(cfg *RouterConfig) string {
 
 func memoryRecordsUsers(cfg *RouterConfig) bool {
 	return cfg.UsesMemory()
+}
+
+// routerReplayConfigured reports whether a router_replay plugin records a
+// reachable request. The record a configuration gets without one is left out,
+// so that it does not warn on every standalone start.
+func routerReplayConfigured(cfg *RouterConfig) bool {
+	configured := false
+	cfg.visitReachablePlugins(func(plugins []DecisionPlugin) {
+		configured = configured || (pluginIndex(plugins, DecisionPluginRouterReplay) >= 0 && RouterReplayPolicyOf(plugins) != nil)
+	})
+	return configured
 }
 
 func firstSignalOfType(node *RuleNode, signalType string) (string, bool) {

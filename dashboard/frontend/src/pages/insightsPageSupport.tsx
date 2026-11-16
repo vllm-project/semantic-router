@@ -18,9 +18,20 @@ import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
+import { ModelName, type ModelLabels } from './insightsModelLabelSupport'
 import { buildSignalFields } from './insightsRecordSignals'
 import { buildInsightsPluginFields } from './insightsRecordPlugins'
 import { buildProviderCacheSection } from './insightsProviderCache'
+import { buildReviewSection } from './insightsReviewSupport'
+import {
+  CALLER_LOGIN_NOTE,
+  describeBaselineBasis,
+  describeMissingModelCost,
+  describePricingSource,
+  describeBudget,
+  describeRouterCalls,
+  isLooperRecord,
+} from './insightsCostAccounting'
 import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
@@ -155,7 +166,7 @@ const SESSION_COLUMN: Column<InsightsRecord> = {
     ),
 }
 
-export function createInsightsTableColumns(): Column<InsightsRecord>[] {
+export function createInsightsTableColumns(labels: ModelLabels = {}): Column<InsightsRecord>[] {
   return [
     {
       key: 'request_id',
@@ -236,9 +247,13 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       width: '320px',
       render: (row) => (
         <div className={styles.modelChange}>
-          <span className={styles.modelName}>{row.original_model || '-'}</span>
+          <span className={styles.modelName}>
+            <ModelName name={row.original_model} compact />
+          </span>
           <span className={styles.modelArrow}>→</span>
-          <span className={styles.modelName}>{row.selected_model || '-'}</span>
+          <span className={styles.modelName}>
+            <ModelName name={row.selected_model} compact />
+          </span>
         </div>
       ),
     },
@@ -250,7 +265,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       render: (row) =>
         hasCompleteCostData(row)
           ? renderCostValue(row.actual_cost, row.currency)
-          : renderUnavailableCost(row),
+          : renderUnavailableCost(row, labels),
     },
     {
       key: 'cost_savings',
@@ -259,19 +274,28 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       sortable: true,
       render: (row) => {
         if (!hasCompleteCostData(row)) {
-          return renderUnavailableCost(row)
+          return renderUnavailableCost(row, labels)
         }
         const zeroSavingsReason = getZeroSavingsReason(row)
 
         return (
           <div className={styles.costCell}>
-            <strong className={zeroSavingsReason ? styles.costValue : styles.costValuePositive}>
+            <strong
+              className={
+                zeroSavingsReason || (row.cost_savings ?? 0) < 0
+                  ? styles.costValue
+                  : styles.costValuePositive
+              }
+            >
               {zeroSavingsReason ? 'No savings' : formatCurrency(row.cost_savings, row.currency)}
             </strong>
             {zeroSavingsReason && <span className={styles.costSubtle}>{zeroSavingsReason}</span>}
             <span className={styles.costSubtle}>
-              Baseline (configured rates): {row.baseline_model}
+              Baseline (configured rates): <ModelName name={row.baseline_model} compact />
             </span>
+            {row.cost_accounting?.router_calls?.length ? (
+              <span className={styles.costSubtle}>Before its Router calls</span>
+            ) : null}
           </div>
         )
       },
@@ -311,9 +335,14 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
 
 export function buildInsightsRecordSections(
   record: InsightsRecord,
-  options: { isReadonly: boolean },
+  options: { isReadonly: boolean; modelLabels?: ModelLabels },
 ): ViewSection[] {
+  const labels = options.modelLabels ?? {}
   const sections: ViewSection[] = []
+  const reviewSection = buildReviewSection(record)
+  if (reviewSection) {
+    sections.push(reviewSection)
+  }
 
   sections.push({
     title: 'Lifecycle',
@@ -353,8 +382,11 @@ export function buildInsightsRecordSections(
   sections.push({
     title: 'Model Selection',
     fields: [
-      { label: 'Original model', value: record.original_model || '-' },
-      { label: 'Selected model', value: record.selected_model || '-' },
+      { label: 'Original model', value: <ModelName name={record.original_model} /> },
+      {
+        label: 'Selected model',
+        value: record.selected_model ? <ModelName name={record.selected_model} /> : '-',
+      },
       { label: 'Selection method', value: record.selection_method || '-' },
       {
         label: 'Selection rationale',
@@ -402,17 +434,22 @@ export function buildInsightsRecordSections(
       { label: 'Prompt tokens', value: formatTokenValue(record.prompt_tokens) },
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
-      { label: 'Baseline model', value: record.baseline_model || 'Baseline not recorded' },
       {
-        label: 'Cost basis',
-        value:
-          getInsightsCostUnavailableReason(record) ||
-          'Recorded tokens × configured model rates at capture time; not a GPU bill or provider invoice.',
+        label: 'Baseline model',
+        value: record.baseline_model ? (
+          <ModelName name={record.baseline_model} />
+        ) : (
+          'Baseline not recorded'
+        ),
       },
+      ...buildRouterCallFields(record, labels),
+      ...buildBudgetFields(record),
+      { label: 'Cost basis', value: describeCostBasis(record, labels) },
       {
         label: 'Baseline basis',
-        value:
-          'New records use the highest estimate in the recipe’s complete model pool across all decisions at configured rates, in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
+        value: record.cost_accounting?.baseline_source
+          ? `${describeBaselineBasis(record, labels)} Same currency and recorded tokens; a negative saving means the baseline was cheaper.`
+          : 'New records use the highest estimate in the recipe’s complete model pool across all decisions at configured rates, in the same currency using the same recorded tokens, unless the route sets a cost_baseline_model. Direct requests compare against the selected model. Older records retain their captured baseline.',
       },
       {
         label: 'Current pricing',
@@ -432,7 +469,11 @@ export function buildInsightsRecordSections(
         value: formatRecordedCost(record, record.baseline_cost),
       },
       {
-        label: 'Estimated savings',
+        // The record's own savings are gross of its Router calls, as the
+        // table's column says.
+        label: record.cost_accounting?.router_calls?.length
+          ? 'Estimated savings before its Router calls'
+          : 'Estimated savings',
         value: getZeroSavingsReason(record)
           ? `No savings — ${getZeroSavingsReason(record)}`
           : formatRecordedCost(record, record.cost_savings),
@@ -466,11 +507,38 @@ export function buildInsightsRecordSections(
   return sections
 }
 
-export function getInsightsCostUnavailableReason(record: InsightsRecord): string | undefined {
-  return getUnavailableCost(record)?.reason
+export function getInsightsCostUnavailableReason(
+  record: InsightsRecord,
+  labels: ModelLabels = {},
+): string | undefined {
+  return getUnavailableCost(record, labels)?.reason
 }
 
-function getUnavailableCost(record: InsightsRecord) {
+function describeCostBasis(record: InsightsRecord, labels: ModelLabels): string {
+  const rates = describePricingSource(record.cost_accounting)
+  if (rates && Number.isFinite(record.actual_cost)) {
+    const login = record.cost_accounting?.caller_login
+      ? ` It ran on the client’s own login: this is the ${CALLER_LOGIN_NOTE}.`
+      : ''
+    return `Recorded tokens × ${rates} at capture time; not a GPU bill or provider invoice.${login}`
+  }
+  return (
+    getInsightsCostUnavailableReason(record, labels) ||
+    'Recorded tokens × configured model rates at capture time; not a GPU bill or provider invoice.'
+  )
+}
+
+function buildRouterCallFields(record: InsightsRecord, labels: ModelLabels): ViewField[] {
+  const value = describeRouterCalls(record.cost_accounting, labels)
+  return value ? [{ label: 'Router calls', value }] : []
+}
+
+function buildBudgetFields(record: InsightsRecord): ViewField[] {
+  const value = describeBudget(record.cost_accounting)
+  return value ? [{ label: 'Spend budget', value }] : []
+}
+
+function getUnavailableCost(record: InsightsRecord, labels: ModelLabels = {}) {
   if (record.lifecycle_state !== 'completed') {
     return { label: 'Not completed', reason: 'Request not completed' }
   }
@@ -478,11 +546,7 @@ function getUnavailableCost(record: InsightsRecord) {
     return { label: 'Usage not recorded', reason: 'Token usage was not recorded for this request' }
   }
   if (!Number.isFinite(record.actual_cost) || !record.currency?.trim()) {
-    return {
-      label: 'Price not recorded',
-      reason:
-        'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
-    }
+    return getMissingModelCost(record, labels)
   }
   if (
     !Number.isFinite(record.baseline_cost) ||
@@ -497,8 +561,26 @@ function getUnavailableCost(record: InsightsRecord) {
   return undefined
 }
 
-function renderUnavailableCost(record: InsightsRecord) {
-  const unavailable = getUnavailableCost(record)
+function getMissingModelCost(record: InsightsRecord, labels: ModelLabels) {
+  if (isLooperRecord(record)) {
+    return {
+      label: 'In router calls',
+      reason: `A Looper request: its cost is its calls, ${describeRouterCalls(record.cost_accounting, labels)}`,
+    }
+  }
+  const missing = describeMissingModelCost(record, labels)
+  if (missing) {
+    return { label: 'No price', reason: missing }
+  }
+  return {
+    label: 'Price not recorded',
+    reason:
+      'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
+  }
+}
+
+function renderUnavailableCost(record: InsightsRecord, labels: ModelLabels) {
+  const unavailable = getUnavailableCost(record, labels)
   return (
     <span className={styles.costValueMuted} title={unavailable?.reason}>
       {unavailable?.label || 'N/A'}

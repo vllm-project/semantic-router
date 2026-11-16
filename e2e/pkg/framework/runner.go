@@ -12,9 +12,11 @@ import (
 	"sync"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -140,7 +142,7 @@ func (r *Runner) restartLocalImageDeployments(ctx context.Context, client *kuber
 	}
 	for _, image := range r.profileCapabilities.LocalImages {
 		for _, target := range image.RolloutRestarts {
-			_, err := client.AppsV1().Deployments(target.Namespace).Get(
+			deployment, err := client.AppsV1().Deployments(target.Namespace).Get(
 				ctx, target.Deployment, metav1.GetOptions{})
 			if skipMissingLocalImageDeployment(err) {
 				r.log("Skipping restart of %s/%s: deployment not found",
@@ -151,12 +153,51 @@ func (r *Runner) restartLocalImageDeployments(ctx context.Context, client *kuber
 				return fmt.Errorf("check deployment %s/%s: %w",
 					target.Namespace, target.Deployment, err)
 			}
+			replaced, err := deploymentPods(ctx, client, deployment)
+			if err != nil {
+				return err
+			}
 			if err := r.rolloutRestartDeployment(ctx, target.Namespace, target.Deployment); err != nil {
 				return err
+			}
+			if err := waitForPodsDeleted(ctx, client, replaced); err != nil {
+				return fmt.Errorf("wait for replaced pods of %s/%s: %w",
+					target.Namespace, target.Deployment, err)
 			}
 		}
 	}
 	return nil
+}
+
+func deploymentPods(ctx context.Context, client *kubernetes.Clientset, deployment *appsv1.Deployment) ([]corev1.Pod, error) {
+	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
+	if err != nil {
+		return nil, err
+	}
+	pods, err := client.CoreV1().Pods(deployment.Namespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
+	if err != nil {
+		return nil, err
+	}
+	return pods.Items, nil
+}
+
+// waitForPodsDeleted returns once every given pod is gone. Rollout status
+// returns while a replaced pod is still terminating, and the gateway keeps
+// sending it requests it no longer accepts until it leaves the endpoints.
+func waitForPodsDeleted(ctx context.Context, client *kubernetes.Clientset, pods []corev1.Pod) error {
+	return wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 2*time.Minute, true,
+		func(ctx context.Context) (bool, error) {
+			for _, pod := range pods {
+				_, err := client.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				if err == nil {
+					return false, nil
+				}
+				if !apierrors.IsNotFound(err) {
+					return false, err
+				}
+			}
+			return true, nil
+		})
 }
 
 func skipMissingLocalImageDeployment(err error) bool {
