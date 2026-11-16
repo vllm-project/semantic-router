@@ -97,6 +97,7 @@ type CanonicalSignals struct {
 	Conversation  []ConversationRule  `yaml:"conversation,omitempty"`
 	Metadata      []MetadataRule      `yaml:"metadata,omitempty"`
 	InputModality []InputModalityRule `yaml:"input_modality,omitempty"`
+	Agent         []AgentRule         `yaml:"agent,omitempty"`
 	SystemOne     []SystemOneRule     `yaml:"systemone,omitempty"`
 }
 
@@ -553,6 +554,7 @@ func normalizeSignals(signals CanonicalSignals) Signals {
 		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),
 		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
+		AgentRules:         append([]AgentRule(nil), signals.Agent...),
 		SystemOneRules:     append([]SystemOneRule(nil), signals.SystemOne...),
 	}
 }

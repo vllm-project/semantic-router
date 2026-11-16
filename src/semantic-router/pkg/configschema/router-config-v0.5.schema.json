@@ -32,6 +32,51 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AgentRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "main",
+            "subagent"
+          ]
+        },
+        "harness": {
+          "type": "string",
+          "enum": [
+            "claude_code",
+            "codex"
+          ]
+        },
+        "types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "request_classes": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "main",
+              "subagent",
+              "workflow",
+              "compaction",
+              "auxiliary"
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AlgorithmBudget": {
       "properties": {
         "deadline": {
@@ -1344,6 +1389,12 @@
         "input_modality": {
           "items": {
             "$ref": "#/$defs/InputModalityRule"
+          },
+          "type": "array"
+        },
+        "agent": {
+          "items": {
+            "$ref": "#/$defs/AgentRule"
           },
           "type": "array"
         },
@@ -2827,6 +2878,9 @@
         },
         "message": {
           "type": "string"
+        },
+        "block": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -5831,6 +5885,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "agent",
             "authz",
             "complexity",
             "context",
@@ -6471,6 +6526,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "agent",
             "authz",
             "complexity",
             "context",
@@ -7909,6 +7965,14 @@
         "observation_key": "input_modality",
         "decision_referenceable": true,
         "schema_ref": "#/$defs/InputModalityRule"
+      },
+      {
+        "type": "agent",
+        "display_name": "Agent",
+        "collection": "agent",
+        "observation_key": "agent",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/AgentRule"
       },
       {
         "type": "systemone",

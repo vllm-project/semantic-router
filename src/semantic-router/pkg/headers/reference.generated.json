@@ -288,6 +288,30 @@
       "doc": "Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it."
     },
     {
+      "name": "x-claude-code-agent-type",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.5",
+      "doc": "Subagent type Claude Code sends on a subagent's own turns when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: a built-in agent's name such as `Explore`, `Plan` or `general-purpose`, or `custom`, `teammate` or `fork`; `agent` signal rules match it as a type, and providers receive it."
+    },
+    {
+      "name": "x-claude-code-request-class",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.5",
+      "doc": "Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, and providers receive it."
+    },
+    {
       "name": "session-id",
       "direction": [
         "request",
@@ -312,6 +336,18 @@
       "doc": "Thread id Codex sends on every call, which protection and Router Replay read as the agent when `identity.headers.agent` is unset, except on a root thread, where it equals `session-id`; providers receive it."
     },
     {
+      "name": "x-openai-subagent",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.5",
+      "doc": "Kind of child thread Codex sends a request for, `collab_spawn` for a `spawn_agent` child whatever its role and `review` for a review child, which `agent` signal rules match as a type and Router Replay records with the agent; providers receive it."
+    },
+    {
       "name": "x-codex-turn-metadata",
       "direction": [
         "request",
@@ -334,18 +370,6 @@
       "owner": "router_replay",
       "version": "v0.5",
       "doc": "Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it."
-    },
-    {
-      "name": "x-openai-subagent",
-      "direction": [
-        "request",
-        "provider request"
-      ],
-      "surface": "control",
-      "sensitivity": "none",
-      "owner": "router_replay",
-      "version": "v0.5",
-      "doc": "Kind of subagent a Codex call comes from, such as `collab_spawn` or `review`, which Router Replay records with the agent; providers receive it."
     },
     {
       "name": "x-conversation-id",

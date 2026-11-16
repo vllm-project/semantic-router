@@ -69,7 +69,7 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 	if len(body) > responseGuardHoldLimit-hold.read {
 		r.completeSemanticStream(ctx, errResponseGuardHoldLimit)
 		ctx.ResponsePath = headers.ResponsePathBlocked
-		return r.endUnreadStream(ctx, responseGuardOverLimit, llmprotocol.NewError(llmprotocol.ErrorPermission,
+		return r.endUnreadStream(ctx, responseGuardOverLimit, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest,
 			"response_guard_hold_limit", "Response blocked: the answer is larger than the response guard can check", nil), "request_rejected")
 	}
 	hold.read += len(body)
@@ -201,10 +201,12 @@ func (r *OpenAIRouter) refuseHeldStream(ctx *RequestContext, protocolError *llmp
 	return response
 }
 
-// responseGuardRefusal is the error a streaming client receives for an answer
-// rule blocked: the message a buffered answer's 403 carries.
+// responseGuardRefusal is the error a client receives for an answer a rule
+// blocked: a buffered answer's 400 and a stream's error event. It is the
+// invalid request a blocking fast_response gives, not a permission error,
+// which Claude Code reads as a failed login and retries.
 func responseGuardRefusal(rule *responseGuardRuleRun) *llmprotocol.ProtocolError {
-	return llmprotocol.NewError(llmprotocol.ErrorPermission, "response_blocked", responseGuardBlockMessage(rule), nil)
+	return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "response_blocked", responseGuardBlockMessage(rule), nil)
 }
 
 // streamedFallbackRefusal answers a streaming client whose fallback answer

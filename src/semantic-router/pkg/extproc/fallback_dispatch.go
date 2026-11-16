@@ -507,7 +507,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	// side effects until the final public wire has passed validation.
 	policyPlan := r.prepareResponsePolicy(ctx, ctx.SemanticResponse, translated.Body)
 	if policyPlan.blocked != nil {
-		blockedStatus := http.StatusForbidden
+		blockedStatus := http.StatusBadRequest
 		if imm := policyPlan.blocked.GetImmediateResponse(); imm != nil && imm.GetStatus() != nil {
 			if code := int(imm.GetStatus().GetCode()); code != 0 {
 				blockedStatus = code

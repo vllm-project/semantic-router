@@ -740,6 +740,22 @@ recipes:
           description: Request contains at least one audio content part.
           modality: audio
 
+      # The agent a request belongs to, as Claude Code's and Codex's headers
+      # name it. Claude Code sends a subagent's type and a request's class
+      # only when CLAUDE_CODE_GATEWAY_HINT_HEADERS is set.
+      agent:
+        - name: exploration_subagent
+          description: A Claude Code Explore subagent or a Codex spawn_agent child.
+          role: subagent
+          types: [Explore, collab_spawn]
+        - name: codex_review
+          description: A Codex review child.
+          harness: codex
+          types: [review]
+        - name: housekeeping
+          description: Claude Code compactions and side requests such as session titles.
+          request_classes: [compaction, auxiliary]
+
       # Typed questions. deployment names the deployment that answers each one:
       # the built-in model runtime (provider model_runtime) or a remote System
       # One API (provider systemone). A question without one asks the decision
@@ -1853,6 +1869,32 @@ recipes:
             - type: systemone
               name: content-risk
               label: privacy
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+
+      - name: block_subagent_personal_data
+        description: Refuse an exploration subagent's request that carries personal data.
+        priority: 127
+        rules:
+          operator: AND
+          conditions:
+            - type: agent
+              name: exploration_subagent
+            - type: pii
+              name: restricted_pii
+        plugins:
+          - type: fast_response
+            configuration:
+              message: Exploration subagents may not send personal data.
+              block: true
+
+      - name: exploration_subagent_route
+        description: Keep exploration subagents on a small model at low effort.
+        priority: 126
+        rules:
+          type: agent
+          name: exploration_subagent
         modelRefs:
           - model: qwen3-8b
             use_reasoning: false

@@ -387,6 +387,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Conversation:  ctx.VSRMatchedConversation,
 		Metadata:      ctx.VSRMatchedMetadata,
 		InputModality: ctx.VSRMatchedInputModality,
+		Agent:         ctx.VSRMatchedAgent,
 		Decision:      ctx.VSRMatchedDecisionModel,
 	}
 }

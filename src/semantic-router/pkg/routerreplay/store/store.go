@@ -30,6 +30,7 @@ type Signal struct {
 	Conversation  []string `json:"conversation,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
+	Agent         []string `json:"agent,omitempty"`
 	Decision      []string `json:"decision,omitempty"`
 }
 
@@ -590,6 +591,7 @@ func cloneSignal(signal Signal) Signal {
 		Conversation:  cloneStringSlice(signal.Conversation),
 		Metadata:      cloneStringSlice(signal.Metadata),
 		InputModality: cloneStringSlice(signal.InputModality),
+		Agent:         cloneStringSlice(signal.Agent),
 		Decision:      cloneStringSlice(signal.Decision),
 	}
 }

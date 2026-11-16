@@ -77,6 +77,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
+		Agent:         append([]AgentRule(nil), signals.AgentRules...),
 		SystemOne:     append([]SystemOneRule(nil), signals.SystemOneRules...),
 	}
 }

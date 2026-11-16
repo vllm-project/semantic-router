@@ -34,10 +34,20 @@ const (
 	// main conversation sends none.
 	XClaudeCodeAgentID = "x-claude-code-agent-id"
 
+	// XClaudeCodeAgentType names the type of the Claude Code subagent whose
+	// turn a request is, and XClaudeCodeRequestClass the class of every
+	// request, when CLAUDE_CODE_GATEWAY_HINT_HEADERS is set.
+	XClaudeCodeAgentType    = "x-claude-code-agent-type"
+	XClaudeCodeRequestClass = "x-claude-code-request-class"
+
 	// CodexSessionID and CodexThreadID are the session and thread Codex sends
 	// on every request; a root thread sends its session id as both.
 	CodexSessionID = "session-id"
 	CodexThreadID  = "thread-id"
+
+	// XOpenAISubagent is the kind of child thread Codex sends a request for:
+	// collab_spawn for a spawn_agent child, review for a review child.
+	XOpenAISubagent = "x-openai-subagent"
 
 	// XCodexTurnMetadata is the turn metadata Codex sends, its session,
 	// thread and turn ids, as a header and in a Responses request's
@@ -45,9 +55,8 @@ const (
 	XCodexTurnMetadata = "x-codex-turn-metadata"
 
 	// XCodexParentThreadID names the thread that spawned a Codex subagent's
-	// thread, and XOpenAISubagent the subagent's kind, such as collab_spawn.
+	// thread.
 	XCodexParentThreadID = "x-codex-parent-thread-id"
-	XOpenAISubagent      = "x-openai-subagent"
 
 	// XConversationID is the default header Router Learning protection reads a
 	// stable conversation identifier from.
@@ -107,7 +116,7 @@ const (
 	ResponsePathCache        = "cache"         // served from semantic cache, no upstream call
 	ResponsePathFastResponse = "fast_response" // short-circuited by the fast_response plugin
 	ResponsePathLooper       = "looper"        // produced by the agent looper
-	ResponsePathBlocked      = "blocked"       // an answer the response_guard plugin refused
+	ResponsePathBlocked      = "blocked"       // a request a blocking fast_response refused, or an answer the response_guard refused
 	ResponsePathRateLimited  = "rate_limited"  // rejected by rate limiting
 	ResponsePathError        = "error"         // router-side error response
 	ResponsePathFallback     = "fallback"      // produced by upstream error fallback
