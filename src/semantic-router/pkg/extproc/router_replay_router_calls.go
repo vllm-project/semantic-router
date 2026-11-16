@@ -10,7 +10,7 @@ import (
 // the Router made itself to answer it. The priced attempts in the first
 // priced attempt's currency are summed. An attempt without rates or usage, in
 // another currency, or that no trace kept counts as unpriced, never free.
-// calls is how many calls the algorithm reports, for one that traces none.
+// calls is how many calls the algorithm reports, for a run that kept no trace.
 // The tokens are the request's, which already sum every call.
 func looperRouterCalls(diagnostics *routerreplay.LooperDiagnostics, usage looper.TokenUsage, calls int) store.RouterCallCost {
 	call := store.RouterCallCost{
@@ -19,8 +19,8 @@ func looperRouterCalls(diagnostics *routerreplay.LooperDiagnostics, usage looper
 		CompletionTokens: usage.CompletionTokens,
 	}
 	if diagnostics == nil || len(diagnostics.Attempts)+diagnostics.DroppedAttemptCount == 0 {
-		// Only some algorithms trace their attempts. Without a trace no call
-		// has a price; at least one call was made.
+		// A run that kept no trace prices no call; at least one call was
+		// made.
 		addUnpricedRouterCalls(&call, store.UnpricedAttemptNotTraced, max(calls, 1))
 		return call
 	}

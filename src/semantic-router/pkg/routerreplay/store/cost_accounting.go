@@ -46,7 +46,7 @@ const (
 	UnpricedPricingNotConfigured = "pricing_not_configured"
 	UnpricedCurrencyMismatch     = "currency_mismatch"
 	// UnpricedAttemptNotTraced is a Looper call whose price no attempt trace
-	// kept: past the trace bound, or made by an algorithm that traces none.
+	// kept: past the trace bound, or in a run that kept no trace.
 	// Its tokens are in the request's.
 	UnpricedAttemptNotTraced = "attempt_not_traced"
 	// UnpricedNotRecorded is a record that carries no cost accounting, such

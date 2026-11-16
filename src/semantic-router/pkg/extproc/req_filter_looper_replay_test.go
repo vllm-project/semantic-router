@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -315,17 +316,70 @@ func TestHandleLooperExecutionRecordsFinalModelInReplay(t *testing.T) {
 	assertFinalLooperReplay(t, response, ctx, record, found)
 }
 
+// Every Looper algorithm prices each call it makes at its model's rates, so
+// the request's router calls carry the cost of its hops.
+func TestLooperCallsArePricedForEachAlgorithm(t *testing.T) {
+	for _, algorithm := range []string{"ratings", "remom", "escalate"} {
+		t.Run(algorithm, func(t *testing.T) {
+			var hops atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				hops.Add(1)
+				writeRatingsReplayReply(w)
+			}))
+			defer server.Close()
+			replayConfig := config.DefaultRouterReplayPluginConfig()
+			pricing := config.ModelPricing{Currency: "USD", PromptPer1M: 1000, CompletionPer1M: 2000}
+			router := &OpenAIRouter{
+				Config: &config.RouterConfig{
+					Looper: config.LooperConfig{Endpoint: server.URL},
+					BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+						"model-a": {Pricing: pricing}, "model-b": {Pricing: pricing},
+					}},
+				},
+				ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
+			}
+			decision := &config.Decision{
+				Name:      algorithm + "-route",
+				ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+				Algorithm: &config.AlgorithmConfig{Type: algorithm},
+			}
+			request := testNeutralRequest("router-entrypoint", "hello")
+			ctx := &RequestContext{
+				RequestID: "priced-" + algorithm, Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIChatV1,
+				SemanticRequest: request, RouterReplayPluginConfig: &replayConfig, VSRSelectedDecision: decision,
+			}
+			if _, err := router.handleLooperExecution(context.Background(), request, decision, ctx); err != nil {
+				t.Fatalf("handleLooperExecution: %v", err)
+			}
+			record, _ := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+			if record.CostAccounting == nil || len(record.CostAccounting.RouterCalls) != 1 {
+				t.Fatalf("looper calls were not recorded as router calls: %+v", record.CostAccounting)
+			}
+			calls := record.CostAccounting.RouterCalls[0]
+			// each call is 3 prompt and 2 completion tokens: 0.003 + 0.004
+			if n := int(hops.Load()); n < 2 || calls.Calls != n || calls.UnpricedCalls != 0 || calls.Currency != "USD" {
+				t.Fatalf("%d calls made, router calls = %+v, want each one priced", n, calls)
+			}
+			assertApproxFloat64(t, calls.Cost, 0.007*float64(calls.Calls))
+		})
+	}
+}
+
 func newRatingsReplayServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"id": "chatcmpl-replay-model", "object": "chat.completion", "created": 1, "model": "backend-model",
-			"choices": []map[string]interface{}{{
-				"index": 0, "message": map[string]interface{}{"role": "assistant", "content": "ok"}, "finish_reason": "stop",
-			}},
-			"usage": map[string]int{"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
-		})
+		writeRatingsReplayReply(w)
 	}))
+}
+
+func writeRatingsReplayReply(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"id": "chatcmpl-replay-model", "object": "chat.completion", "created": 1, "model": "backend-model",
+		"choices": []map[string]interface{}{{
+			"index": 0, "message": map[string]interface{}{"role": "assistant", "content": "ok"}, "finish_reason": "stop",
+		}},
+		"usage": map[string]int{"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
+	})
 }
 
 func assertFinalLooperReplay(
@@ -342,8 +396,8 @@ func assertFinalLooperReplay(
 	assertLooperCallsUnpriced(t, record)
 }
 
-// assertLooperCallsUnpriced checks the ratings request's router calls: ratings
-// traces no attempts, so neither of its two calls has a price.
+// assertLooperCallsUnpriced checks the ratings request's router calls: its
+// models have no price, so neither of its two calls has one.
 func assertLooperCallsUnpriced(t *testing.T, record store.Record) {
 	t.Helper()
 	accounting := record.CostAccounting
@@ -352,7 +406,7 @@ func assertLooperCallsUnpriced(t *testing.T, record store.Record) {
 	}
 	want := store.RouterCallCost{
 		Kind: store.RouterCallKindLooper, Calls: 2, PromptTokens: 6, CompletionTokens: 4, UnpricedCalls: 2,
-		UnpricedReasons: map[string]int{store.UnpricedAttemptNotTraced: 2},
+		UnpricedReasons: map[string]int{store.UnpricedPricingNotConfigured: 2},
 	}
 	if !reflect.DeepEqual(accounting.RouterCalls[0], want) {
 		t.Fatalf("looper router calls = %+v, want %+v", accounting.RouterCalls[0], want)
@@ -395,6 +449,8 @@ func assertReplayAggregateUsage(t *testing.T, record store.Record) {
 
 func TestLooperHopReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
 	cfg := looperReplayRecipeConfig()
+	// the hop's record names the algorithm that made the call
+	cfg.Recipes[1].Profile.Decisions[0].Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmEscalate}
 	recorders := initializeReplayRecorders(cfg)
 	router := &OpenAIRouter{
 		Config:             cfg,
@@ -547,10 +603,30 @@ func assertLooperInternalReplayScope(
 	if record.DecisionTier != 2 {
 		t.Fatalf("replay decision tier = %d, want 2", record.DecisionTier)
 	}
+	if record.OriginalModel != "Escalate" {
+		t.Fatalf("hop record original model = %q, want its algorithm Escalate", record.OriginalModel)
+	}
 	assertHopCostCountedInParent(t, record)
 
 	if records := firstRecorder.ListAllRecords(); len(records) != 0 {
 		t.Fatalf("first recipe recorder received %d records, want 0", len(records))
+	}
+}
+
+func TestLooperHopLabelNamesTheDecisionsAlgorithm(t *testing.T) {
+	for algorithm, want := range map[string]string{
+		config.DecisionAlgorithmEscalate: "Escalate",
+		config.DecisionAlgorithmRatings:  "Ratings",
+		config.DecisionAlgorithmReMoM:    "ReMoM",
+		"":                               "Looper",
+	} {
+		decision := &config.Decision{Algorithm: &config.AlgorithmConfig{Type: algorithm}}
+		if got := looperHopLabel(decision); got != want {
+			t.Errorf("looperHopLabel(%q) = %q, want %q", algorithm, got, want)
+		}
+	}
+	if got := looperHopLabel(&config.Decision{}); got != "Looper" {
+		t.Errorf("looperHopLabel(no algorithm) = %q, want Looper", got)
 	}
 }
 
