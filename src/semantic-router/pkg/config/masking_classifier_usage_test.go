@@ -136,8 +136,12 @@ recipes:
 		{`{enabled: true, rules: [{type: keyword, name: employee_id}], placeholders: {other: "[O_{index}]"}}`, `"other" is neither a label`},
 		{`{enabled: true, signal: personal, rules: [{type: keyword, name: email_address}]}`, `"EMAIL_ADDRESS" and "email_address" can both produce the same placeholder`},
 		{`{enabled: true, signal: personal, rules: [{type: keyword, name: employee_id}], placeholders: {employee_id: "[PERSON_{index}]"}}`, `"PERSON" and "employee_id" can both produce the same placeholder`},
-		{`{enabled: true, rules: [{type: keyword, name: employee_id}], placeholders: {employee_id: "[X_1{index}]"}}`, "must not put a digit next to {index}"},
-		{`{enabled: true, rules: [{type: keyword, name: employee_id}], placeholders: {employee_id: "X{index}0"}}`, "must not put a digit next to {index}"},
+		{`{enabled: true, rules: [{type: keyword, name: employee_id}], placeholders: {employee_id: "[X_1{index}]"}}`, "a character other than a digit right before and right after {index}"},
+		{`{enabled: true, rules: [{type: keyword, name: employee_id}], placeholders: {employee_id: "X{index}0"}}`, "a character other than a digit right before and right after {index}"},
+		{`{enabled: true, rules: [{type: keyword, name: employee_id}], placeholders: {employee_id: "#{index}"}}`, "a character other than a digit right before and right after {index}"},
+		{`{enabled: true, rules: [{type: keyword, name: employee_id}], placeholders: {employee_id: "{index}#"}}`, "a character other than a digit right before and right after {index}"},
+		{`{enabled: true, rules: [{type: keyword, name: employee_id}], placeholders: {employee_id: "{index}"}}`, "a character other than a digit right before and right after {index}"},
+		{`{enabled: true, rules: [{type: keyword, name: employee_id}], placeholders: {employee_id: "#{index}#"}}`, ""},
 	} {
 		t.Run(tc.plugin, func(t *testing.T) {
 			_, err := ParseYAMLBytes([]byte(doc(tc.plugin)))

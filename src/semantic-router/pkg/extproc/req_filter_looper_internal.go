@@ -8,6 +8,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
@@ -320,4 +322,9 @@ func (r *OpenAIRouter) startLooperInternalReplay(
 ) {
 	ctx.RouterReplayID = ""
 	r.startRouterReplay(ctx, "ReMoM", modelName, decisionName)
+	// A hop's usage and price belong to the request that made it, whose
+	// record counts the call; this one says so rather than reading as unpriced.
+	r.writeRouterReplayUsageCost(ctx, routerreplay.UsageCost{
+		CostAccounting: &store.CostAccounting{UnpricedReason: store.UnpricedCountedInParent},
+	})
 }

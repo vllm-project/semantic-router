@@ -8,6 +8,10 @@ model, token usage, response, and tool trajectory. Configure storage in
 `router_replay` plugin in `global.plugins`; use a recipe's or a decision's
 `router_replay` plugin to override only the capture fields that differ.
 
+Replay is on by default. A configuration without a `router_replay` plugin
+records every request's routing data and none of its text, so Insights,
+sessions and cost work with no extra configuration.
+
 ## What Problem Does It Solve?
 
 Replay keeps request-level evidence together so you can understand a routing
@@ -15,8 +19,9 @@ choice and follow a conversation across requests.
 
 ## When to Use
 
-Enable Replay when you need request history for inspection or troubleshooting.
-Choose retention and capture limits that match the data you are allowed to keep.
+Configure Replay when you need request text for inspection or troubleshooting,
+records that survive a restart, or no records at all. Choose retention and
+capture limits that match the data you are allowed to keep.
 
 ## Configuration
 
@@ -51,7 +56,15 @@ global:
         max_tool_trace_steps: 100
 ```
 
-Without a `router_replay` plugin, Replay stays disabled. The plugin in
+Without a `router_replay` plugin on any layer, Replay records each request's
+routing data only, as `prompt_capture: none` does: the recipe and decision,
+the requested and selected model, token usage, cost, latency, status, and the
+session, turn and agent identifiers the request carries. It keeps no request
+or response body and no prompt, and it writes to the store
+`global.services.router_replay` names: the in-memory store unless you
+configure another, at most `max_records` records for each decision. A
+`router_replay` plugin on any layer replaces that default and records only
+where a layer sets `enabled: true`. The plugin in
 `global.plugins` holds the shared capture defaults; a recipe's plugin
 overrides them, and a decision's plugin overrides its recipe's, field by
 field. Storage, retention and asynchronous writes are global service settings.
@@ -160,8 +173,9 @@ How the layers combine:
 
 - **Opt out one decision** with `configuration: {enabled: false}`.
 - **Change the deployment-wide default** by setting `enabled: false` on the
-  `router_replay` plugin in `global.plugins`, or leaving that plugin out. A
-  recipe or decision can still opt in.
+  `router_replay` plugin in `global.plugins`. A recipe or decision can still
+  opt in. Leaving every `router_replay` plugin out keeps the default record of
+  routing data.
 - **Omitted fields inherit** from the layer below. An explicit `false` is an
   override, and `max_prompt_bytes: 0`, `max_tool_trace_bytes: 0`,
   `max_tool_trace_total_bytes: 0` or `max_tool_trace_steps: 0` removes that
@@ -261,6 +275,75 @@ These defaults are new:
 `vllm-sr config migrate` writes no limit: a configuration that relies on whole
 traces sets `max_tool_trace_bytes: 0` itself.
 :::
+
+### Choose the savings baseline
+
+A record's savings compare its recorded tokens at the selected model's rates
+with the same tokens at a baseline model's rates. By default the baseline is
+the most expensive model of the selected recipe's pool, so a request routed to
+a model in that pool never shows a loss. Name the model to compare with
+instead:
+
+```yaml
+plugins:
+  - type: router_replay
+    configuration:
+      enabled: true
+      cost_baseline_model: premium-model
+```
+
+`cost_baseline_model` must name a model with pricing, or the configuration does
+not load. Like the other fields it layers: set it in `global.plugins` for every
+route, or on one recipe or decision. A request sent to a model dearer than the
+baseline then shows a negative saving. A record whose baseline is priced in
+another currency than the selected model has no baseline and says why
+(`baseline_unavailable`); it never falls back to the default. Each record names
+how its baseline was chosen in `cost_accounting.baseline_source`, and Insights
+shows which baselines the savings cover.
+
+A model with no `pricing` of its own takes its provider's list price from the
+built-in catalog when the catalog has one, and Insights marks that cost as a
+list price estimate. For a backend on the client's own login
+(`auth.credential: caller`) a cost is the API-price equivalent of its tokens,
+not what the client's plan charges; set `pricing` on such a model to see it.
+
+Router decision calls are recorded separately in `cost_accounting.router_calls`:
+`decision_model` for native decision tasks, `systemone` for remote System One
+exchanges, and `embeddings`, `classify` or `rerank` for other runtime tasks.
+Each entry names its model, input and output tokens, cost and currency, or an
+unpriced reason. Fused runtime tasks count once; cached results and startup or
+warmup calls add no request spend. Calls spent before a decision fails remain
+in its record and in aggregate router spend. A record's generation cost and
+`cost_savings` keep their meaning, while the savings Insights and the aggregate
+API report are net of the Router calls of the requests they compare, with the
+figure before them kept as `gross_saved`. A request whose Router call has no
+price leaves the savings instead of being netted as free. Router spend is also
+added to total spend. Auxiliary model calls made by internal Looper hops count
+in the parent request's router spend and coverage; hop generation costs count
+there once. See the
+[aggregate fields](../../api/router#configured-rate-cost-estimates).
+
+Set deployment rates under `global.model_catalog.deployments.<name>.pricing`,
+using the same per-million-token fields as `providers.models[].pricing`:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/vela3-fast
+        pricing: {currency: USD, prompt_per_1m: 0.2, completion_per_1m: 0.4}
+```
+
+Explicit deployment pricing wins. Otherwise, a deployment's `model` may name a
+provider model whose pricing is used. Omitted currency defaults to USD; an
+explicit empty pricing block declares zero rates. An unpriced deployment or a
+call without complete usage remains unpriced, never implicitly free, so the
+requests that call it are left out of savings: give a self-hosted deployment an
+empty `pricing: {}` block to count its calls as free. Remote System One usage
+must include both input and output token counters, even when zero. These are token rate estimates; they do not measure local compute or GPU
+costs.
 
 ### Keep personal data out of Replay
 
@@ -652,10 +735,11 @@ often, how many times the model switched, how the calls ended, and the time from
 the first call's start to the last one's end. Below it each call is one row, the
 request on the page marked and a model switch highlighted. Subagents are named
 `subagent 1`, `subagent 2` and so on in order of their first call, with the
-short hash of the agent identity header in the row's title, and the main
-conversation is `main`. The hash is recorded only when `identity.headers.agent`
-names that header (see [Session identification](../../api/session-identification));
-without it, every call shows `main`. A Codex root thread, whose agent and session
+short hash of the agent id in the row's title, and the main conversation is
+`main`. The hash is recorded when protection runs and reads an agent id: the
+one Claude Code or Codex sends, or the header `identity.headers.agent` names
+(see [Session identification](../../api/session-identification#choose-the-identity-you-need)).
+A call without one shows `main`. A Codex root thread, whose agent and session
 ids are equal, is `main`. A viewer without `replay.detail` gets no hash, as with
 the rest of the redacted session policy, so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
@@ -673,6 +757,95 @@ Each record's `route_diagnostics` explains the route:
   `replay.detail` omit it.
 - `looper` excludes prompts, tool arguments, credentials and raw errors. Its
   attempt details need `replay.detail`, and any truncation is marked.
+
+### Agent approval reviews
+
+When Codex's **Approve for me** asks a reviewer whether to run a planned
+action, Replay records that review on the request's record, with
+`request_kind: codex_approval_review` and a `review` object. A request is a
+review when it names an entrypoint that another entrypoint uses as its
+`review_model` (`identification_source: entrypoint`), or, when reviews use the
+session model, when it carries Codex's review request: its judge instructions,
+the approval request block and the verdict schema
+(`identification_source: content`). Recognition only records; it never changes
+routing, authorization or masking. The default record keeps each review's
+status, verdict, risk, tool and sessions; the action's summary, directory and
+arguments and the rationale need `prompt_capture: raw` with body capture on,
+on the recipe that answers reviews; see
+[Approve for me reviews](../../installation/agent-harness#approve-for-me-reviews).
+
+| Field | Holds |
+| --- | --- |
+| `status` | `completed` with a verdict, `tool_call` when the reviewer asked for a read-only check and answers in a later request, `invalid` when the answer was missing or not the verdict schema, `failed` when the upstream call failed, `cancelled` when the client left first, and `pending` while the request runs. A failed or cancelled review is never a deny. |
+| `assessment` | Completed reviews only: `outcome` (`allow` or `deny`), and `risk_level`, `user_authorization` and `rationale` when the reviewer gave them. The rationale is cut at 2 KiB. |
+| `action` | The planned action's `tool`, a one-line `summary` such as the shell command, its `cwd`, and the action as Codex sent it in `arguments`, cut at 16 KiB. |
+| `reviewed_session_id`, `thread_id`, `turn_id`, `parent_turn_id` | The agent session whose action was judged, the reviewer's thread and turn, and the session's turn that planned the action. |
+| `latency_ms` | The review request's duration. Tokens, model and cost are the record's own fields. |
+
+The verdict is read from the decoded answer, buffered or streamed, before any
+response rewrite or body truncation. A review keeps its text as the record
+keeps request and response text:
+
+- **The action's summary, directory and arguments** are kept only under
+  `prompt_capture: raw` with `capture_request_body: true`, and never on a
+  masking route. Otherwise only the tool name is kept.
+- **The rationale** is kept only under `prompt_capture: raw` with
+  `capture_response_body: true`.
+- **List responses** leave out `arguments`; read one record for them.
+- **Principals without `replay.detail`** receive the status, verdict, risk and
+  tool, with the summary, directory, arguments and rationale cleared.
+
+A review is filed under the session a header names, as every record is. When
+none does, it is filed under the session it judged, so the review appears with
+that session's requests. Every store keeps the review on the record; PostgreSQL
+also keeps `request_kind`, the status, the outcome and the risk in indexed
+columns, added to an existing table when the Router starts.
+
+In **Insights**, the **Reviews** switch shows reviews alone: the number of
+reviews, the approval rate, denials, failures, p50 and p95 latency and cost,
+reviews over time by result, requests by review model, and a table with each
+review's time, result, risk, action, session, model, latency, tokens and cost.
+Filter by session, result, risk and review model; a row opens the record with
+its review section and a link to the reviewed session's reviews. A session's
+routing history marks the turn each review judged and counts its reviews in
+the summary. Past 2,000 reviews it keeps the newest and says that older reviews
+are not shown.
+
+The [Replay API](../../api/router#router-replay) filters with `request_kind`,
+`review_status`, `review_outcome` and `review_risk`. With reviews among the
+filtered records, the aggregate response carries a `reviews` summary over the
+whole filtered set: counts by result, `approval_rate` as allowed verdicts over
+allowed plus denied verdicts, latency percentiles of reviews with a verdict,
+recorded cost per currency with the number of unpriced requests, reviews over
+time, and requests by review model.
+
+### Agent turns
+
+A request Codex sends carries its turn metadata, in the `x-codex-turn-metadata`
+header and the Responses request's `client_metadata`, and every record of it
+keeps three of its ids:
+
+| Field | Holds |
+| --- | --- |
+| `thread_id` | The Codex thread that sent the request: the session's own thread, a reviewer's or a subagent's. |
+| `turn_id` | The turn of that thread the request belongs to. |
+| `parent_turn_id` | The turn that started the thread, such as the turn an approval review judges or a subagent was spawned from. |
+
+The [Replay API](../../api/router#router-replay) filter `turn_id` matches
+`turn_id` or `parent_turn_id`, so one query returns a turn's calls, its
+approval reviews and the calls of subagents it spawned. The Codex plugin reads
+it at the end of each turn to name the models that served it. Every store
+keeps the ids on the record; PostgreSQL also keeps them in columns, with
+indexes on `turn_id` and `parent_turn_id`, added to an existing table when the
+Router starts.
+
+Trajectory routes carry `turn_id` and `parent_turn_id` too. In **Insights**, a
+record's Session Routing section shows its Codex thread, turn and parent turn,
+and each turn opens the request list filtered to it (`/insights?turn=...`),
+with a chip that clears the filter. A session's routing history opens each
+Codex turn with a row that links there and counts its calls, so a turn's own
+calls and its subagents' calls read as one unit, and a review that names the
+turn it judged is marked on that turn's calls.
 
 For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).

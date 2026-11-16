@@ -476,7 +476,7 @@ func TestReplayRecipeDefaultsCaptureBeforeDecisionOnMemoryStore(t *testing.T) {
 			}},
 		},
 	}
-	withGlobalPlugins(t, cfg)
+	withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": false}))
 	router := replayRuntimeRouter(t, cfg)
 	for i, recorded := range []bool{false, true} {
 		ctx := replayPolicyRequest(t)

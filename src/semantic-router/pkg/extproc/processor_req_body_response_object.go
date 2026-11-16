@@ -156,7 +156,9 @@ func storedResponseItems(storedResponses []*responseapi.StoredResponse) ([]json.
 func marshalStoredInputItems(items []responseapi.InputItem) ([]json.RawMessage, error) {
 	encoded := make([]json.RawMessage, 0, len(items))
 	for _, item := range items {
-		item.Status = ""
+		if item.Type != responseapi.ItemTypeImageGenerationCall {
+			item.Status = ""
+		}
 		body, err := json.Marshal(item)
 		if err != nil {
 			return nil, err
@@ -169,7 +171,9 @@ func marshalStoredInputItems(items []responseapi.InputItem) ([]json.RawMessage, 
 func marshalStoredOutputItems(items []responseapi.OutputItem) ([]json.RawMessage, error) {
 	encoded := make([]json.RawMessage, 0, len(items))
 	for _, item := range items {
-		item.Status = ""
+		if item.Type != responseapi.ItemTypeImageGenerationCall {
+			item.Status = ""
+		}
 		body, err := json.Marshal(item)
 		if err != nil {
 			return nil, err

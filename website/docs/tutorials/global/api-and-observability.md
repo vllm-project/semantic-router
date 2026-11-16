@@ -418,9 +418,12 @@ global:
         enabled: true
 ```
 
-Router replay is disabled by default:
+Router replay records routing data by default:
 
-- **Router-wide.** A `router_replay` plugin in `global.plugins` turns it on.
+- **Router-wide.** Without a `router_replay` plugin anywhere, every request
+  keeps a record of its routing data and none of its text. A `router_replay`
+  plugin in `global.plugins` sets the capture defaults, and `enabled: false`
+  there turns Replay off.
 - **Per recipe or decision.** A recipe's or decision's `router_replay` plugin
   overrides it: `enabled: false` turns capture off there, and `enabled: true`
   opts in when the default is off.

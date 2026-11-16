@@ -171,6 +171,8 @@ func CanonicalPreset(name string) (systemoneprotocol.Question, bool) {
 // exchangeCall posts one call and returns the API's reply, an error status's
 // included with its Retry-After; err is set when there is none.
 func (d *systemOneDeployment) exchangeCall(ctx context.Context, call systemonecodec.WireCall, body []byte) (systemonecodec.WireReply, error) {
+	var meteredBody []byte
+	defer func() { reportRemoteCall(ctx, d.name, d.model, meteredBody) }()
 	headers := map[string]string{}
 	for name, values := range call.Header {
 		if len(values) > 0 && http.CanonicalHeaderKey(name) != "Content-Type" {
@@ -180,6 +182,7 @@ func (d *systemOneDeployment) exchangeCall(ctx context.Context, call systemoneco
 	operation := systemOneOperation
 	operation.Method, operation.Path = http.MethodPost, call.Path
 	result, err := d.client.DoRequest(ctx, operation, connector.Request{Body: body, Headers: headers})
+	meteredBody = result.Body
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return systemonecodec.WireReply{}, ctxErr
 	}
@@ -189,6 +192,7 @@ func (d *systemOneDeployment) exchangeCall(ctx context.Context, call systemoneco
 	var remote *connector.Error
 	if errors.As(err, &remote) && remote.Kind == connector.KindStatus {
 		data, _ := remote.ResponseBody()
+		meteredBody = data
 		header := http.Header{}
 		if remote.RetryAfter != "" {
 			header.Set("Retry-After", remote.RetryAfter)

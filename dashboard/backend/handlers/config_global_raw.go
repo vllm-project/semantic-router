@@ -94,7 +94,7 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if err := writeConfigAtomically(configPath, updatedYAML); err != nil {
+		if _, err = persistConfig(configPath, updatedYAML); err != nil {
 			writeConfigPersistenceError(w, err)
 			return
 		}

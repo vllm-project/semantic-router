@@ -253,8 +253,8 @@ func SetupActivateHandler(
 			return
 		}
 
-		if writeErr := writeConfigAtomically(configPath, yamlData); writeErr != nil {
-			writeConfigPersistenceError(w, writeErr)
+		if yamlData, err = persistConfig(configPath, yamlData); err != nil {
+			writeConfigPersistenceError(w, err)
 			return
 		}
 		if configActivationDeferred() {

@@ -108,7 +108,9 @@ export function ConfigPageMoMEntrypointsList({
                   </span>
                 </div>
                 <div className={pageStyles.portfolioMeta}>
-                  <span>{targetCount} models</span>
+                  <span>
+                    {targetCount} model{targetCount === 1 ? '' : 's'}
+                  </span>
                   <span>{entrypoint.recipe}</span>
                 </div>
                 <div className={pageStyles.rowActions}>
@@ -240,7 +242,10 @@ export function ConfigPageMoMRecipesList({
                     {countRecipeEntrypoints(config.entrypoints ?? [], recipe.name)} public models
                   </span>
                   <span>{recipe.routing.decisions?.length ?? 0} decisions</span>
-                  <span>{collectRecipeTargetModels(recipe).length} models</span>
+                  <span>
+                    {collectRecipeTargetModels(recipe).length} model
+                    {collectRecipeTargetModels(recipe).length === 1 ? '' : 's'}
+                  </span>
                   {syntheticDefault ? <span>Built in</span> : null}
                 </div>
                 <div className={pageStyles.rowActions}>

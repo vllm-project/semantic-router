@@ -148,6 +148,9 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		result.UserMessageCount++
 		result.LastUserHasText = strings.TrimSpace(text) != ""
 		result.LastUserAfterToolResult = previousWasTool
+		if !message.WithToolResults {
+			result.ToolFailures = classification.ToolFailureCount{}
+		}
 		recordUserInputModalities(result, message.Content, text)
 		result.UserVideos = userInlineVideos(message.Content)
 		if text != "" {
@@ -192,7 +195,11 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		case llmprotocol.ContentToolResult:
 			result.ToolResultCount++
 			result.LastMessageToolResult = true
-			if content.ToolResult != nil && looper.IsWorkflowToolCallID(content.ToolResult.CallID) {
+			if content.ToolResult == nil {
+				continue
+			}
+			result.ToolFailures.Observe(classification.ToolResultFailed(content.ToolResult.IsError, semanticText(content.ToolResult.Content)))
+			if looper.IsWorkflowToolCallID(content.ToolResult.CallID) {
 				result.LastMessageFlowToolResult = true
 			}
 		}
