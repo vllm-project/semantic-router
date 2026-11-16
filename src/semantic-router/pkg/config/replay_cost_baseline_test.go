@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -132,6 +133,99 @@ recipes:
 	provenance, priced = cfg.ModelPricingProvenance("private-preview")
 	if priced || provenance != (PricingProvenance{CallerLogin: true}) {
 		t.Fatalf("unpriced caller provenance = %+v, %v", provenance, priced)
+	}
+}
+
+func TestModelsOnAClaudeOrChatGPTLoginTakeTheirListPrice(t *testing.T) {
+	rate := func(value float64) *float64 { return &value }
+	for name, tc := range map[string]struct {
+		model string
+		want  ModelPricing
+	}{
+		"claude": {
+			model: `catalog: anthropic/claude-sonnet-5
+      backend_refs:
+        - {name: claude, provider: anthropic, auth: {credential: caller}}`,
+			want: ModelPricing{Currency: "USD", PromptPer1M: 2, CompletionPer1M: 10, CachedInputPer1M: 0.2, CacheWritePer1M: rate(2.5), CacheWrite1hPer1M: rate(4)},
+		},
+		"claude 5.5": {
+			model: `catalog: anthropic/claude-sonnet-5.5
+      backend_refs:
+        - {name: claude, provider: anthropic, auth: {credential: caller}}`,
+			want: ModelPricing{Currency: "USD", PromptPer1M: 2, CompletionPer1M: 10, CachedInputPer1M: 0.1, CacheWritePer1M: rate(2.5), CacheWrite1hPer1M: rate(4)},
+		},
+		"chatgpt": {
+			model: `catalog: openai/gpt-5.5
+      api_format: responses
+      backend_refs:
+        - {name: chatgpt, endpoint: "https://chatgpt.com/backend-api/codex", provider: openai, auth: {credential: caller}}`,
+			want: ModelPricing{Currency: "USD", PromptPer1M: 5, CompletionPer1M: 30, CachedInputPer1M: 0.5},
+		},
+		// Without catalog, the backend's provider prices the model it is called with.
+		"claude provider_model_id": {
+			model: `provider_model_id: claude-sonnet-5-5
+      api_format: anthropic
+      backend_refs:
+        - {name: claude, provider: anthropic, auth: {credential: caller}}`,
+			want: ModelPricing{Currency: "USD", PromptPer1M: 2, CompletionPer1M: 10, CachedInputPer1M: 0.1, CacheWritePer1M: rate(2.5), CacheWrite1hPer1M: rate(4)},
+		},
+		"chatgpt provider_model_id": {
+			model: `provider_model_id: gpt-5.5
+      api_format: responses
+      backend_refs:
+        - {name: chatgpt, endpoint: "https://chatgpt.com/backend-api/codex", provider: openai, auth: {credential: caller}}`,
+			want: ModelPricing{Currency: "USD", PromptPer1M: 5, CompletionPer1M: 30, CachedInputPer1M: 0.5},
+		},
+		// A model ID with only a price list entry, no card.
+		"chatgpt price list": {
+			model: `provider_model_id: gpt-6.1-sol
+      api_format: responses
+      backend_refs:
+        - {name: chatgpt, endpoint: "https://chatgpt.com/backend-api/codex", provider: openai, auth: {credential: caller}}`,
+			want: ModelPricing{Currency: "USD", PromptPer1M: 2, CompletionPer1M: 10, CachedInputPer1M: 0.1, CacheWritePer1M: rate(2.5)},
+		},
+	} {
+		cfg, err := ParseYAMLBytes([]byte(`version: v0.5
+listeners:
+  - name: http
+    port: 8899
+providers:
+  models:
+    - name: login
+      ` + tc.model + `
+recipes:
+  - name: default
+`))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got, priced := cfg.GetFullModelPricing("login"); !priced || !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("%s pricing = %+v, %v; want %+v", name, got, priced, tc.want)
+		}
+		if provenance, _ := cfg.ModelPricingProvenance("login"); provenance != (PricingProvenance{CatalogListPrice: true, CallerLogin: true}) {
+			t.Fatalf("%s provenance = %+v", name, provenance)
+		}
+	}
+}
+
+// A self-hosted server that serves a vendor's model ID is not billed as the
+// vendor: only the backend's own provider prices the model ID.
+func TestSelfHostedModelWithAVendorModelIDTakesNoListPrice(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.5
+providers:
+  models:
+    - name: local
+      provider_model_id: claude-sonnet-5-5
+      backend_refs:
+        - {name: local, endpoint: "http://127.0.0.1:8000/v1", provider: vllm}
+recipes:
+  - name: default
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pricing, priced := cfg.GetFullModelPricing("local"); priced {
+		t.Fatalf("vllm model priced as the vendor: %+v", pricing)
 	}
 }
 

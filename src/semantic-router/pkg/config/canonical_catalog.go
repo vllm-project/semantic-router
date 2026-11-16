@@ -220,12 +220,34 @@ func applyBindingServiceMetadata(effective modelcatalog.EffectiveModelProvider, 
 	if pricing == (modelcatalog.Pricing{}) && effective.CatalogBinding != nil {
 		pricing = effective.CatalogBinding.Pricing
 	}
+	if pricing == (modelcatalog.Pricing{}) && params.AuthoredModel != nil && strings.TrimSpace(params.AuthoredModel.Catalog) == "" {
+		pricing = providerListPrice(effective.Provider.Definition, effective.Binding.ModelID)
+	}
 	if params.Pricing == (ModelPricing{}) {
 		params.Pricing = modelPricingFromCatalog(pricing)
 	}
 	if params.Reliability.IsZero() {
 		params.Reliability = providerReliabilityFromCatalog(effective.Binding.Reliability)
 	}
+}
+
+// providerListPrice is the list price a provider's catalog gives the model ID
+// a backend calls, for a model declared without catalog: a binding's price,
+// or a price list entry's for a model ID with no card. Only the backend's own
+// provider is read, so a vllm backend serving a vendor's model ID is not
+// priced as the vendor.
+func providerListPrice(provider modelcatalog.ProviderDefinition, modelID string) modelcatalog.Pricing {
+	for _, binding := range provider.Models {
+		if binding.ID == modelID {
+			return binding.Pricing
+		}
+	}
+	for _, entry := range provider.PriceList {
+		if entry.ID == modelID {
+			return entry.Pricing
+		}
+	}
+	return modelcatalog.Pricing{}
 }
 
 func appendMaterializedEndpoint(

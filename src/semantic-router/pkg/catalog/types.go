@@ -178,6 +178,16 @@ type ProviderDefinition struct {
 	Presentation        ProviderDefinitionPresentation `json:"presentation"`
 	Conformance         Conformance                    `json:"conformance"`
 	Models              []CatalogModelBinding          `json:"models,omitempty"`
+	PriceList           []PriceListEntry               `json:"price_list,omitempty"`
+}
+
+// PriceListEntry is the list price of a provider model ID that has no Model
+// Card. It prices the model ID a backend calls and is never a model.
+type PriceListEntry struct {
+	ID           string                     `json:"id"`
+	Pricing      Pricing                    `json:"pricing"`
+	Restrictions map[string]any             `json:"restrictions,omitempty"`
+	Verification CatalogBindingVerification `json:"verification"`
 }
 
 // CredentialsRef keeps secrets out of the catalog and lets configuration name

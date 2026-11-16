@@ -414,8 +414,12 @@ only on that login.
 
 The Router then routes each call among Claude models on that login, and
 Insights shows the session's calls with the model each decision picked. A
-model's `pricing` is the API's list price, not the plan's, so leave it out or
-read the cost as an API-price estimate. The login stays its owner's: serve this
+cost is the tokens at the API's list price, not what the plan charges. A model
+without `pricing` takes its list price from the built-in catalog, through its
+`catalog` card or through the `provider_model_id` its `anthropic` backend calls,
+such as `claude-sonnet-5-5` or `claude-haiku-5-5`
+([list prices](catalog-backed-models#list-prices)). A model the catalog does
+not price has no cost. The login stays its owner's: serve this
 to your own Claude Code, or to your organization's members, never to other
 people as a service
 ([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)).
@@ -482,8 +486,9 @@ and does not probe the gateway, which answers only on Codex's own login. Each
 `connect` command stops before writing anything for a gateway whose caller
 backends name the other provider: the Router takes an `anthropic` login only on
 Messages and an `openai` one only on Responses or Chat, so every call would be
-refused. The plan's usage limits apply to each call, and the login stays its
-owner's, as for Claude Code above.
+refused. The plan's usage limits apply to each call, and a cost and the login
+work as for Claude Code above, with `gpt-6.1-sol` on an `openai` backend for
+example.
 
 ### Approve for me reviews
 
