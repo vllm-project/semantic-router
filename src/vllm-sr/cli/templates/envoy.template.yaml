@@ -358,6 +358,16 @@ static_resources:
       http_health_check:
         path: {{ model.reliability.health_check_path | tojson }}
     {% endif %}
+    # Close an idle connection before the backend does: uvicorn (vLLM's server)
+    # and Node close theirs after 5s, and a call sent while that close is on its
+    # way gets no response. The standalone gateway uses the same 4s.
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        common_http_protocol_options:
+          idle_timeout: 4s
+        explicit_http_config:
+          http_protocol_options: {}
     load_assignment:
       cluster_name: {{ model.cluster_name }}_cluster
       endpoints:
