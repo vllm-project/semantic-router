@@ -5,16 +5,6 @@ import (
 	"testing"
 )
 
-func memoryPluginDecision(name string, configuration map[string]interface{}) Decision {
-	return Decision{
-		Name: name,
-		Plugins: []DecisionPlugin{{
-			Type:          "memory",
-			Configuration: MustStructuredPayload(configuration),
-		}},
-	}
-}
-
 func TestValidateMemoryHybridMode(t *testing.T) {
 	scopes := []struct {
 		name  string
@@ -27,35 +17,6 @@ func TestValidateMemoryHybridMode(t *testing.T) {
 			build: func(mode string) *RouterConfig {
 				cfg := &RouterConfig{}
 				cfg.Memory.HybridMode = mode
-				return cfg
-			},
-		},
-		{
-			name:  "flat_decision",
-			field: "routing.decisions[memory_route].plugins[memory].hybrid_mode",
-			build: func(mode string) *RouterConfig {
-				cfg := &RouterConfig{}
-				cfg.Decisions = []Decision{memoryPluginDecision("memory_route", map[string]interface{}{
-					"enabled":     true,
-					"hybrid_mode": mode,
-				})}
-				return cfg
-			},
-		},
-		{
-			name:  "recipe_decision",
-			field: "routing.decisions[recipe_memory_route].plugins[memory].hybrid_mode",
-			build: func(mode string) *RouterConfig {
-				cfg := &RouterConfig{}
-				cfg.Recipes = []RoutingRecipe{
-					{Name: DefaultRecipeName},
-					{Name: "private", Profile: RoutingProfile{Decisions: []Decision{
-						memoryPluginDecision("recipe_memory_route", map[string]interface{}{
-							"enabled":     true,
-							"hybrid_mode": mode,
-						}),
-					}}},
-				}
 				return cfg
 			},
 		},
@@ -94,25 +55,5 @@ func TestValidateMemoryHybridMode(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-func TestValidateMemoryRecipeDecisionThreshold(t *testing.T) {
-	cfg := &RouterConfig{}
-	cfg.Recipes = []RoutingRecipe{
-		{Name: DefaultRecipeName},
-		{Name: "private", Profile: RoutingProfile{Decisions: []Decision{
-			memoryPluginDecision("recipe_memory_route", map[string]interface{}{
-				"enabled":              true,
-				"similarity_threshold": 2.0,
-			}),
-		}}},
-	}
-	err := validateMemoryContracts(cfg)
-	if err == nil {
-		t.Fatal("out-of-range recipe decision threshold must be rejected")
-	}
-	if !strings.Contains(err.Error(), "recipe_memory_route") {
-		t.Fatalf("error should name the offending decision, got: %v", err)
 	}
 }

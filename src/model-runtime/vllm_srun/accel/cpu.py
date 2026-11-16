@@ -79,8 +79,26 @@ def cap_threads(configured: int | None) -> dict[str, int] | None:
     return {"from": current, "to": limit}
 
 
+# oneDNN instruction sets without BF16 dot products: capped to one of these
+# (ONEDNN_MAX_CPU_ISA), oneDNN converts BF16 to FP32 as on a CPU without them.
+EMULATED_BF16_ISAS = frozenset(
+    {
+        "SSE41",
+        "AVX",
+        "AVX2",
+        "AVX2_VNNI",
+        "AVX2_VNNI_2",
+        "AVX512_CORE",
+        "AVX512_CORE_VNNI",
+    }
+)
+
+
 def native_bf16() -> bool:
-    """Whether the CPU computes BF16 natively (AVX-512 BF16 or AMX)."""
+    """Whether the CPU kernels compute BF16 natively: AVX-512 BF16 or AMX, and oneDNN not capped below them."""
+    cap = os.environ.get("ONEDNN_MAX_CPU_ISA") or os.environ.get("DNNL_MAX_CPU_ISA")
+    if cap and cap.upper() in EMULATED_BF16_ISAS:
+        return False
     probes = ("_is_avx512_bf16_supported", "_is_amx_tile_supported")
     return any(getattr(torch.cpu, probe, lambda: False)() for probe in probes)
 

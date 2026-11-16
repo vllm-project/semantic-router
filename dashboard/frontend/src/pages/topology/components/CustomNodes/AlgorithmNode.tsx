@@ -19,21 +19,9 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
 
   // Get algorithm-specific config display
   const getConfigDisplay = () => {
-    if (algorithm.type === 'confidence' && algorithm.confidence) {
-      return `threshold: ${algorithm.confidence.threshold}`
-    }
-    if (algorithm.type === 'concurrent' && algorithm.concurrent) {
-      return `timeout: ${algorithm.concurrent.timeout_seconds}s`
-    }
-    if (algorithm.type === 'latency_aware' && algorithm.latency_aware) {
-      const parts: string[] = []
-      if (algorithm.latency_aware.tpot_percentile) {
-        parts.push(`TPOT P${algorithm.latency_aware.tpot_percentile}`)
-      }
-      if (algorithm.latency_aware.ttft_percentile) {
-        parts.push(`TTFT P${algorithm.latency_aware.ttft_percentile}`)
-      }
-      return parts.length > 0 ? parts.join(', ') : null
+    const confidence = algorithm.escalate?.accept?.confidence
+    if (algorithm.type === 'escalate' && confidence) {
+      return `gte: ${confidence.gte}`
     }
     if (algorithm.type === 'multi_factor' && algorithm.multi_factor) {
       const latencyPercentile = algorithm.multi_factor.latency_percentile

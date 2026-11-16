@@ -4,16 +4,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
-func maskedFor(t *testing.T, text string, detections []classification.PIIDetection) string {
+func maskedFor(t *testing.T, text string, detections []piiDetection) string {
 	t.Helper()
 	placeholders := buildPIIMaskPlaceholders(detections)
 	return buildMaskedPIIText(text, detections, placeholders)
 }
 
-func assertNoPIISurvives(t *testing.T, masked string, detections []classification.PIIDetection) {
+func assertNoPIISurvives(t *testing.T, masked string, detections []piiDetection) {
 	t.Helper()
 	for _, d := range detections {
 		if strings.Contains(masked, d.Text) {
@@ -25,7 +25,7 @@ func assertNoPIISurvives(t *testing.T, masked string, detections []classificatio
 // Single, non-overlapping spans mask exactly as they did before the rewrite.
 func TestBuildMaskedPIITextSingleSpansUnchanged(t *testing.T) {
 	text := "Contact John Smith at john@example.org today."
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "PERSON", Text: "John Smith", Start: 8, End: 18, Confidence: 0.9},
 		{EntityType: "EMAIL_ADDRESS", Text: "john@example.org", Start: 22, End: 38, Confidence: 0.9},
 	}
@@ -38,7 +38,7 @@ func TestBuildMaskedPIITextSingleSpansUnchanged(t *testing.T) {
 // PERSON strictly inside ADDRESS: the outer span wins, nothing leaks.
 func TestBuildMaskedPIITextNestedSpans(t *testing.T) {
 	text := "Send it to John Smith, 12 Baker Street, London."
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "PERSON", Text: "John Smith", Start: 11, End: 21, Confidence: 0.9},
 		{EntityType: "ADDRESS", Text: "John Smith, 12 Baker Street, London", Start: 11, End: 46, Confidence: 0.9},
 	}
@@ -52,9 +52,9 @@ func TestBuildMaskedPIITextNestedSpans(t *testing.T) {
 // EMAIL inside URL, reported with the inner span first: same result either order.
 func TestBuildMaskedPIITextOverlappingSpansOrderIndependent(t *testing.T) {
 	text := "Reach me at mailto:jane@example.org for details."
-	inner := classification.PIIDetection{EntityType: "EMAIL_ADDRESS", Text: "jane@example.org", Start: 19, End: 35, Confidence: 0.9}
-	outer := classification.PIIDetection{EntityType: "URL", Text: "mailto:jane@example.org", Start: 12, End: 35, Confidence: 0.9}
-	for name, detections := range map[string][]classification.PIIDetection{
+	inner := piiDetection{EntityType: "EMAIL_ADDRESS", Text: "jane@example.org", Start: 19, End: 35, Confidence: 0.9}
+	outer := piiDetection{EntityType: "URL", Text: "mailto:jane@example.org", Start: 12, End: 35, Confidence: 0.9}
+	for name, detections := range map[string][]piiDetection{
 		"inner first": {inner, outer},
 		"outer first": {outer, inner},
 	} {
@@ -69,7 +69,7 @@ func TestBuildMaskedPIITextOverlappingSpansOrderIndependent(t *testing.T) {
 // Partially overlapping spans of different types merge into one range.
 func TestBuildMaskedPIITextPartialOverlap(t *testing.T) {
 	text := "id 4111 1111 1111 1111 9999 end"
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "CREDIT_CARD", Text: "4111 1111 1111 1111", Start: 3, End: 22, Confidence: 0.9},
 		{EntityType: "PHONE_NUMBER", Text: "1111 1111 9999", Start: 13, End: 27, Confidence: 0.6},
 	}
@@ -83,7 +83,7 @@ func TestBuildMaskedPIITextPartialOverlap(t *testing.T) {
 // Adjacent spans stay two placeholders, one at offset 0 and one at the end.
 func TestBuildMaskedPIITextAdjacentAtEdges(t *testing.T) {
 	text := "John Smithjohn@example.org"
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "PERSON", Text: "John Smith", Start: 0, End: 10, Confidence: 0.9},
 		{EntityType: "EMAIL_ADDRESS", Text: "john@example.org", Start: 10, End: 26, Confidence: 0.9},
 	}
@@ -96,7 +96,7 @@ func TestBuildMaskedPIITextAdjacentAtEdges(t *testing.T) {
 // Byte offsets into multi-byte text, with an overlapping pair: no panic, no leak.
 func TestBuildMaskedPIITextMultiByteOverlap(t *testing.T) {
 	text := "こんにちは、私は John Smith です。電話は 415-555-0134"
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "PERSON", Text: "John Smith", Start: 25, End: 35, Confidence: 0.99},
 		{EntityType: "PHONE_NUMBER", Text: "415-555-0134", Start: 55, End: 67, Confidence: 0.99},
 		{EntityType: "PHONE_NUMBER", Text: "555-0134", Start: 59, End: 67, Confidence: 0.7},
@@ -111,7 +111,7 @@ func TestBuildMaskedPIITextMultiByteOverlap(t *testing.T) {
 // Out-of-range spans are ignored rather than slicing past the string.
 func TestBuildMaskedPIITextIgnoresInvalidSpans(t *testing.T) {
 	text := "John Smith called."
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "PERSON", Text: "John Smith", Start: 0, End: 10, Confidence: 0.9},
 		{EntityType: "PHONE_NUMBER", Text: "nope", Start: 12, End: 99, Confidence: 0.9},
 	}
@@ -129,7 +129,7 @@ func TestBuildPIIResponse_MaskEntitiesOverlappingAndNested(t *testing.T) {
 
 	t.Run("nested_person_inside_address", func(t *testing.T) {
 		text := "Send it to John Smith, 12 Baker Street, London."
-		detections := []classification.PIIDetection{
+		detections := []piiDetection{
 			{EntityType: "PERSON", Start: 11, End: 21, Text: "John Smith", Confidence: 0.9},
 			{EntityType: "ADDRESS", Start: 11, End: 46, Text: "John Smith, 12 Baker Street, London", Confidence: 0.9},
 		}
@@ -145,7 +145,7 @@ func TestBuildPIIResponse_MaskEntitiesOverlappingAndNested(t *testing.T) {
 
 	t.Run("email_inside_url_reported_inner_first", func(t *testing.T) {
 		text := "Reach me at mailto:jane@example.org for details."
-		detections := []classification.PIIDetection{
+		detections := []piiDetection{
 			{EntityType: "EMAIL_ADDRESS", Start: 19, End: 35, Text: "jane@example.org", Confidence: 0.9},
 			{EntityType: "URL", Start: 12, End: 35, Text: "mailto:jane@example.org", Confidence: 0.9},
 		}
@@ -163,7 +163,7 @@ func TestBuildPIIResponse_MaskEntitiesOverlappingAndNested(t *testing.T) {
 // (Xunzhuo's review on #3498).
 func TestBuildMaskedPIITextChainedOverlapKeepsLongestSourcePlaceholder(t *testing.T) {
 	text := "0123456789abcdefghijklmnopqrs tail"
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "PERSON", Text: text[0:10], Start: 0, End: 10, Confidence: 0.9},
 		{EntityType: "EMAIL_ADDRESS", Text: text[9:18], Start: 9, End: 18, Confidence: 0.9},
 		{EntityType: "ADDRESS", Text: text[17:29], Start: 17, End: 29, Confidence: 0.9},
@@ -175,7 +175,7 @@ func TestBuildMaskedPIITextChainedOverlapKeepsLongestSourcePlaceholder(t *testin
 	assertNoPIISurvives(t, got, detections)
 
 	// Same spans reported in reverse: the result must not depend on order.
-	reversed := []classification.PIIDetection{detections[2], detections[1], detections[0]}
+	reversed := []piiDetection{detections[2], detections[1], detections[0]}
 	if got := maskedFor(t, text, reversed); got != "[ADDRESS_0] tail" {
 		t.Fatalf("reverse order got %q", got)
 	}
@@ -207,13 +207,13 @@ func TestBuildMaskedPIITextLocalAndRemoteOffsetsAgree(t *testing.T) {
 			for i, r := range runes {
 				byteAt[i+1] = byteAt[i] + len(string(r))
 			}
-			var remote, local []classification.PIIDetection
+			var remote, local []piiDetection
 			for _, sp := range tc.spans {
 				// remote: code points converted once at the adapter boundary
-				remote = append(remote, classification.PIIDetection{EntityType: sp.label, Text: sp.text, Start: byteAt[sp.cpStart], End: byteAt[sp.cpEnd], Confidence: 0.9})
+				remote = append(remote, piiDetection{EntityType: sp.label, Text: sp.text, Start: byteAt[sp.cpStart], End: byteAt[sp.cpEnd], Confidence: 0.9})
 				// local: native byte offsets found by searching the text
 				bs := strings.Index(tc.text, sp.text)
-				local = append(local, classification.PIIDetection{EntityType: sp.label, Text: sp.text, Start: bs, End: bs + len(sp.text), Confidence: 0.9})
+				local = append(local, piiDetection{EntityType: sp.label, Text: sp.text, Start: bs, End: bs + len(sp.text), Confidence: 0.9})
 			}
 			gotRemote, gotLocal := maskedFor(t, tc.text, remote), maskedFor(t, tc.text, local)
 			if gotRemote != gotLocal {
@@ -221,5 +221,19 @@ func TestBuildMaskedPIITextLocalAndRemoteOffsetsAgree(t *testing.T) {
 			}
 			assertNoPIISurvives(t, gotRemote, remote)
 		})
+	}
+}
+
+// A model can label a value once and miss its later copies: the API masks
+// every copy of a value it reports, whatever the model said about the others.
+func TestPIIDetectionsCoverRepeatedValues(t *testing.T) {
+	text := "Zorblax met Zorblax"
+	detections := piiDetections(text, []modelservice.Span{
+		{Label: "PERSON", Start: 0, End: 7, Text: "Zorblax", Probability: 0.9},
+		{Label: "PERSON", Start: 12, End: 19, Text: "Zorblax", Probability: 0.1},
+	}, 0.5)
+	resp := newPIIResponseTestService().buildPIIResponse(text, detections, &PIIOptions{MaskEntities: true})
+	if len(detections) != 2 || strings.Contains(resp.MaskedText, "Zorblax") {
+		t.Fatalf("detections = %+v, masked text = %q", detections, resp.MaskedText)
 	}
 }

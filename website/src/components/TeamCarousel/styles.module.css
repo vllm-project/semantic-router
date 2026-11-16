@@ -1,279 +1,258 @@
 .teamSection {
   position: relative;
+  padding: var(--site-section-pad-top, var(--site-section-pad)) 0 var(--site-section-pad);
+}
+
+.wrap {
+  width: min(100% - 2 * var(--gut), 1280px);
+  margin-inline: auto;
+}
+
+/* Three drifting rows, faded at both edges. Each track holds its row twice, so moving it by one copy loops seamlessly. */
+.wall {
+  --gap: 12px;
+
+  display: grid;
+  gap: var(--gap);
+  margin-top: clamp(8px, 1.5vw, 16px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+/* --dur has a default here, not a var() fallback: the CSS minifier splits a comma inside the animation shorthand. */
+.row {
+  --dur: 90s;
+
   overflow: hidden;
-  padding: 5rem 0;
-  border-bottom: 0;
-  background: var(--site-bg);
-}
-
-.teamSection::before {
-  content: none;
-}
-
-.teamHeader,
-.teamFooter {
-  position: relative;
-  z-index: 1;
-}
-
-.teamHeader {
-  composes: site-section-intro from global;
-}
-
-.title {
-  composes: site-section-intro__title from global;
-  color: var(--site-text);
-}
-
-.subtitle {
-  composes: site-section-intro__lede from global;
-}
-
-.carouselShell {
-  position: relative;
-  z-index: 1;
-  border: 1px solid var(--site-border);
-  border-radius: 1.25rem;
-  background: var(--site-surface-alt);
-  overflow: hidden;
-}
-
-.viewport {
-  container-type: inline-size;
-  overflow: hidden;
-  padding: 1.35rem 0;
-  mask-image: linear-gradient(90deg, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
-}
-
-.viewport:hover .track {
-  animation-play-state: paused;
-}
-
-.viewport:focus-within {
-  overflow-x: auto;
-  scroll-padding-inline: 1.25rem;
-  scroll-snap-type: x proximity;
-  scrollbar-color: var(--site-border-strong) transparent;
-  scrollbar-width: thin;
-  mask-image: none;
-  -webkit-mask-image: none;
-}
-
-.viewport:focus-within .track {
-  animation: none;
-  transform: translateX(0);
-  will-change: auto;
 }
 
 .track {
   display: flex;
+  gap: var(--gap);
   width: max-content;
-  animation: team-marquee 220s linear infinite alternate;
-  will-change: transform;
+  margin: 0;
+  padding: 2px 0;
+  list-style: none;
+  animation: drift var(--dur) linear infinite;
 }
 
-.sequence {
+.row[data-dir='right'] .track {
+  animation-direction: reverse;
+}
+
+@keyframes drift {
+  to {
+    transform: translate3d(calc(-50% - var(--gap) / 2), 0, 0);
+  }
+}
+
+.wall:hover .track,
+.teamSection:focus-within .track,
+.teamSection[data-paused] .track,
+.teamSection[data-offscreen] .track {
+  animation-play-state: paused;
+}
+
+.person {
   display: flex;
-  gap: 1rem;
-  align-items: stretch;
-  padding-right: 1rem;
-}
-
-.memberCard {
-  flex: 0 0 17.5rem;
-  min-width: 17.5rem;
-  scroll-snap-align: start;
-  display: grid;
-  align-content: start;
-  gap: 0.65rem;
-  padding: 1.15rem;
-  border: 1px solid var(--site-border);
-  border-radius: 12px;
-  background:
-    linear-gradient(180deg, var(--site-surface-soft), transparent 36%),
-    var(--site-surface-alt);
-  transition:
-    border-color 180ms ease,
-    transform 180ms ease,
-    background 180ms ease,
-    box-shadow 180ms ease;
-  outline: none;
-}
-
-.memberCard:hover,
-.memberCard:focus-visible {
-  transform: translateY(-2px);
-  border-color: var(--site-hover-border);
-  background: var(--site-hover-surface-bg-soft);
-  box-shadow: var(--site-hover-glow);
-}
-
-.memberCard:focus-visible {
-  outline: 2px solid var(--site-accent);
-  outline-offset: 3px;
-}
-
-.memberCard:hover .memberName,
-.memberCard:focus-visible .memberName {
-  color: var(--site-accent-strong);
-}
-
-.avatarWrapper {
-  position: relative;
-  display: grid;
-  justify-items: start;
-  gap: 0.6rem;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: 64px;
+  margin: 0;
+  padding: 0 20px 0 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair), 0 1px 2px rgba(40, 32, 20, 0.04);
 }
 
 .avatar {
-  width: 76px;
-  height: 76px;
-  border: 1px solid var(--site-border);
+  flex: none;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
+  background: var(--paper-2);
   object-fit: cover;
-  display: block;
+  box-shadow: inset 0 0 0 1px var(--hair);
 }
 
-.badge {
+.who {
+  display: grid;
+  gap: 3px;
+}
+
+.name {
+  color: var(--ink);
+  font: 600 17px/1.1 var(--serif);
+  white-space: nowrap;
+}
+
+/* A quiet role tag: a pixel square in the role's colour, then the role in small mono capitals. */
+.tag {
   display: inline-flex;
-  width: fit-content;
-  padding: 0.18rem 0.46rem;
-  border: 1px solid var(--site-border);
-  background: var(--site-surface-soft);
-  color: var(--site-muted-bright);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font: 600 10px/1.2 var(--mono);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
-.steering,
-.maintainer {
-  background: var(--site-accent-soft);
-  color: var(--site-accent-strong);
+.tag i {
+  width: 6px;
+  height: 6px;
+  background: var(--hair-2);
 }
 
-.committer {
-  background: var(--site-surface-soft);
+.tag.maintainer i {
+  background: var(--ember);
 }
 
-.contributor {
-  background: var(--site-surface-soft);
+.tag.committer i {
+  background: var(--sky);
 }
 
-.memberName {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--site-text);
-  transition: color 180ms ease;
-}
-
-.memberRole {
-  composes: site-card-line from global;
-  margin: 0;
-  color: var(--site-muted);
-  font-size: 0.8rem;
-  line-height: 1.35;
-}
-
-.company {
-  color: var(--site-muted-bright);
+.tag.emeritus i {
+  box-shadow: inset 0 0 0 1px var(--muted);
+  background: transparent;
 }
 
 .teamFooter {
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-wrap: wrap;
   align-items: center;
-  margin-top: 1rem;
+  justify-content: space-between;
+  gap: 16px 32px;
+  margin-top: clamp(28px, 3.5vw, 40px);
 }
 
-.teamFooter p {
-  max-width: 36rem;
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
   margin: 0;
-  color: var(--site-muted);
-  font-size: 0.95rem;
 }
 
-@keyframes team-marquee {
-  to {
-    transform: translateX(calc(-100% + 100cqw));
-  }
+.legend .tag {
+  font-size: 11px;
 }
 
-@media (max-width: 996px) {
-  .teamFooter {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .viewport {
-    mask-image: linear-gradient(90deg, transparent, #000 1.25rem, #000 calc(100% - 1.25rem), transparent);
-    -webkit-mask-image: linear-gradient(90deg, transparent, #000 1.25rem, #000 calc(100% - 1.25rem), transparent);
-  }
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
 }
 
-@media (max-width: 768px) {
-  .teamSection {
-    padding: 3.5rem 0;
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--ink-2);
+  font: 600 12px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: box-shadow 0.2s var(--ease), color 0.2s var(--ease);
+}
+
+.toggle:hover {
+  box-shadow: inset 0 0 0 1px var(--ink-2);
+  color: var(--ink);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--ember);
+  outline-offset: 3px;
+}
+
+.toggle svg {
+  width: 12px;
+  height: 12px;
+}
+
+:global(html:not([data-js])) .toggle {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .wall {
+    --gap: 10px;
   }
 
-  .memberCard {
-    flex-basis: 16rem;
-    min-width: 16rem;
-    padding: 1rem;
-  }
-
-  .sequence {
-    gap: 0.75rem;
-    padding-right: 0.75rem;
+  .person {
+    gap: 10px;
+    height: 56px;
+    padding: 0 16px 0 8px;
   }
 
   .avatar {
-    width: 64px;
-    height: 64px;
+    width: 38px;
+    height: 38px;
+  }
+
+  .name {
+    font-size: 15px;
+  }
+
+  .teamFooter {
+    justify-content: center;
+  }
+
+  .legend {
+    justify-content: center;
   }
 }
 
-@media (max-width: 480px) {
-  .viewport {
-    padding: 1rem 0;
-  }
-
-  .memberCard {
-    flex-basis: min(16rem, calc(100vw - 4.5rem));
-    min-width: min(16rem, calc(100vw - 4.5rem));
-  }
-}
-
+/* Under reduced motion the wall stands still: every person once, in one wrapped, centred flow. */
 @media (prefers-reduced-motion: reduce) {
-  .viewport {
-    overflow-x: auto;
-    padding-bottom: 1.25rem;
-    scroll-padding-inline: 1rem;
-    scroll-snap-type: x mandatory;
-    scrollbar-color: var(--site-border-strong) transparent;
-    scrollbar-width: thin;
-    mask-image: none;
+  .wall {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: min(100% - 2 * var(--gut), 1280px);
+    margin-inline: auto;
     -webkit-mask-image: none;
+    mask-image: none;
   }
 
+  .row,
   .track {
-    animation: none;
-    transform: translateX(0);
-    will-change: auto;
+    display: contents;
   }
 
-  .memberCard {
-    transition: none;
+  .copy,
+  .toggle {
+    display: none;
+  }
+}
+
+/* On a phone the still wall is a mosaic of portraits; the names stay for screen readers and on the team page. */
+@media (prefers-reduced-motion: reduce) and (max-width: 760px) {
+  .wall {
+    gap: 8px;
   }
 
-  .memberCard:hover,
-  .memberCard:focus-visible {
-    transform: none;
+  .person {
+    height: auto;
+    padding: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .who {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }

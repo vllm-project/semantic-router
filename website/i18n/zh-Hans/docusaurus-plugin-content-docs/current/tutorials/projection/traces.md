@@ -46,7 +46,7 @@ translation:
 
 该 trace 已版本化，供前向兼容的消费者使用。
 
-- **`partitions`**：每个在此请求上运行归约的 `routing.projections.partitions` 组一条。记录带 **`raw_score`** 的 **`contenders`**（语义为 `softmax_exclusive` 时还有 **`normalized_score`**）、所选 **`winner`**、**`winner_score`**（路由器随后存在信号上的值）、**`raw_winner_score`**、**`margin`**（比较分数中第一名减第二名——softmax 用归一化权重，否则用原始置信度），以及分区合成其配置默认成员时的 **`default_used`**。
+- **`partitions`**：每个在此请求上运行归约的 `recipes[].projections.partitions` 组一条。记录带 **`raw_score`** 的 **`contenders`**（语义为 `softmax_exclusive` 时还有 **`normalized_score`**）、所选 **`winner`**、**`winner_score`**（路由器随后存在信号上的值）、**`raw_winner_score`**、**`margin`**（比较分数中第一名减第二名——softmax 用归一化权重，否则用原始置信度），以及分区合成其配置默认成员时的 **`default_used`**。
 - **`scores`**：每个已配置投影分数一条，带 **`total`** 和每个输入的 **`contribution`**（`weight * value`），与加权和运行时一致。
 - **`mappings`**：每个投影映射一条。按顺序对每个阈值档记录 **`matched`**、**`boundary_distance`**（到最近活动阈值的距离），并对第一个匹配档记录该档使用的 **`selected_output`**、sigmoid **`confidence`** 和 **`boundary_distance`**。
 

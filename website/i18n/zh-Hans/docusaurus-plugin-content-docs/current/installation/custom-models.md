@@ -15,8 +15,7 @@ translation:
 ## 绑定自定义模型
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: private-chat
@@ -29,17 +28,15 @@ providers:
           provider: vllm
           endpoint: model-gateway.example:8000
           protocol: http
-
-routing:
-  modelCards:
-    - name: private-chat
       display_name: Private Chat
       context_window_size: 131072
       capabilities: [chat, tools]
       tags: [private, production]
+recipes:
+  - name: default
 ```
 
-对于自定义 Model，`routing.modelCards[].name` 必须等于 Model 别名。card 是可选的：当 Router 只需要后端绑定时可以省略。如果省略 `provider_model_id`，上游 ID 默认等于别名；当已服务的 checkpoint 使用另一个名称时，请显式设置。
+对于自定义 Model，`providers.models[].name` 必须等于 Model 别名。card 是可选的：当 Router 只需要后端绑定时可以省略。如果省略 `provider_model_id`，上游 ID 默认等于别名；当已服务的 checkpoint 使用另一个名称时，请显式设置。
 
 Model Card 元数据还可以包含发布者、展示、分发和 LoRA。它不得包含凭据、价格或评估记录。价格放在 `providers.models[].pricing`，记录放在顶层 `evaluation.records[]`，凭据放在后端 ref 的 `auth` 中，通过 `auth.api_key_env` 提供。
 
@@ -83,7 +80,7 @@ reasoning:
   disabled: none
 ```
 
-恰好选择一种形式。此前的全局自定义家族注册表不属于 canonical v0.3；内联定义位于使用它们的自定义 Model 上。字段语义和决策控制见[推理配置](model-reasoning)。
+恰好选择一种形式。此前的全局自定义家族注册表不属于 canonical v0.5；内联定义位于使用它们的自定义 Model 上。字段语义和决策控制见[推理配置](model-reasoning)。
 
 ## 仅对相同上游契约使用副本
 

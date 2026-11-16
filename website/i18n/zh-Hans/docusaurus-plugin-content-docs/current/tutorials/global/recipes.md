@@ -24,50 +24,51 @@ translation:
 
 当消费者需要不同的延迟、质量、成本、隐私或安全策略时，添加配方。它们也适用于在当前策略旁边预演新策略，然后再把客户端迁移到其入口。
 
-当单一策略服务全部流量时，保持一个顶层 `routing` 块即可。Router 将该块视为 `default` 配方，因此现有配置无需改写。
+当单一策略服务全部流量时，保持一个配方即可：只有一个配方的文档不需要入口点，该配方服务 `vllm-sr/auto`。
 
 ## 配置
 
-提供商绑定和 model cards 留在顶层。命名配方从其自身的 routing 块引用这些共享模型名：
+提供商模型及其事实放在 `providers` 中，由所有配方共享。有多个配方时，`entrypoints` 映射它们的公共名称并恰好标记一个默认入口点；这里空的 `default` 配方让 `vllm-sr/auto` 继续使用默认模型：
 
 ```yaml
-routing:
-  modelCards:
-    - name: local-model
-    - name: general-model
-
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/privacy-v1]
     recipe: privacy
-
 recipes:
+  - name: default
   - name: privacy
     description: Keep prompts containing sensitive identifiers on the local model.
-    routing:
-      strategy: priority
-      signals:
-        pii:
-          - name: sensitive-input
-            threshold: 0.5
-      decisions:
-        - name: local-sensitive-route
-          description: Keep detected PII on the local backend.
-          priority: 200
-          rules:
-            operator: AND
-            conditions:
-              - type: pii
-                name: sensitive-input
-          modelRefs:
-            - model: local-model
-        - name: general-route
-          description: Handle remaining requests with the general backend.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: general-model
+    strategy: priority
+    signals:
+      pii:
+        - name: sensitive-input
+          predicate: {gte: 0.5}
+    decisions:
+      - name: local-sensitive-route
+        description: Keep detected PII on the local backend.
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: sensitive-input
+        modelRefs:
+          - model: local-model
+      - name: general-route
+        description: Handle remaining requests with the general backend.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: general-model
+providers:
+  models:
+    - name: local-model
+    - name: general-model
 ```
 
 名称在所属配方内解析。两个配方都可以定义名为 `sensitive-input` 的信号或决策；任何一方都不能引用对方配方中的定义。
@@ -77,8 +78,8 @@ recipes:
 | 配方局部 | 部署共享 |
 | --- | --- |
 | 信号及其阈值 | 提供商模型和后端端点 |
-| 投影和依赖图 | 顶层 `routing.modelCards` |
-| 决策、优先级和路由策略 | 共享分类器和嵌入资产 |
+| 投影和依赖图 | 顶层 `providers.models` |
+| 决策、优先级和路由策略 | Router 的决策模型和嵌入模型 |
 | 选择与 looper 策略 | API、身份、可观测性和传输设置 |
 | 路由局部插件 | 外部存储和集成服务 |
 | 缓存、回放、学习、会话和指标命名空间 | 模型文件和服务连接 |
@@ -94,7 +95,7 @@ recipes:
 | `GET /api/v1/config/recipes` | 列出配方及其入口；保留响应中的 `ETag`。 |
 | `POST /api/v1/config/recipes/validate` | 校验提议的配方，不写入也不重载。 |
 | `PUT /api/v1/config/recipes/{name}` | 创建或替换一个配方及其入口。 |
-| `DELETE /api/v1/config/recipes/{name}` | 删除未被引用的命名配方。 |
+| `DELETE /api/v1/config/recipes/{name}` | 删除默认配方以外未被引用的配方。 |
 
 变更需要在 `If-Match` 中提供当前 `ETag`。缺少前置条件返回 `428`；过期值返回 `412`。被接受的变更会校验完整配置，原子写入并备份，触发 Router 运行时激活，并返回新的 `ETag`。激活可能在 `202` 响应之后继续；在将新策略视为已激活之前，请轮询 `/api/v1/config/hash`。
 
@@ -102,7 +103,7 @@ recipes:
 
 ## 限制与安全边界 {#limits-and-security-boundaries}
 
-- 命名配方不能声明 `routing.modelCards`；所有配方使用共享的顶层目录。
+- 配方不能声明提供商模型；所有配方共享 `providers.models` 及其上的事实。
 - 信号、投影和决策引用必须在同一配方内解析。
 - 若没有决策匹配，路由回退到部署已配置的默认提供商模型，而不是另一个配方。
 - 配方隔离不会隔离 Router 进程、网络、提供商凭据或后台服务。当这些必须成为租户边界时，请使用单独部署。

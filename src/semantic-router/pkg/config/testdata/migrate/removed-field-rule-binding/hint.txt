@@ -1,0 +1,1 @@
+recipes[default].model_bindings.safety.harmful: removed_field: a binding for one rule is removed; run `vllm-sr config migrate` (the rule's deployment: recipes[].signals.safety[harmful].deployment)

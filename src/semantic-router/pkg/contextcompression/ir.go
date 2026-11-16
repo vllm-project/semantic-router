@@ -85,11 +85,6 @@ func ParseSemanticRequest(request *llmprotocol.Request, provenance Provenance) *
 			content := &message.Content[contentIndex]
 			appendSemanticContent(ir, entry, contentIndex, content, provenance)
 		}
-		if _, memory := provenance.MemoryMessageIndexes[index]; memory {
-			for _, block := range entry.Blocks {
-				block.Source = TargetMemory
-			}
-		}
 		if message.Role == llmprotocol.RoleUser {
 			lastUser = index
 			for _, block := range entry.Blocks {
@@ -144,10 +139,7 @@ func appendSemanticToolResult(
 	}
 	message.ToolResultIDs = append(message.ToolResultIDs, result.CallID)
 	message.ToolCallID = result.CallID
-	source := TargetToolOutput
-	if isRAGToolMessage(result.CallID, provenance) {
-		source = TargetRAG
-	}
+	source := toolResultSource(result.CallID, TargetToolOutput, provenance)
 	for nestedIndex := range result.Content {
 		nested := &result.Content[nestedIndex]
 		if nested.Kind == llmprotocol.ContentText || nested.Kind == llmprotocol.ContentRefusal {
@@ -218,13 +210,7 @@ func ParseRequestIR(
 		message.Protected = message.Role == "system" ||
 			message.Index == lastUser ||
 			message.Index == lastAssistant
-		source := TargetToolOutput
-		if _, ok := provenance.MemoryMessageIndexes[message.Index]; ok {
-			source = TargetMemory
-		}
-		if isRAGToolMessage(message.ToolCallID, provenance) {
-			source = TargetRAG
-		}
+		source := toolResultSource(message.ToolCallID, TargetToolOutput, provenance)
 		message.Blocks = parseMessageBlocks(message, source, provenance)
 	}
 	protectAtomicToolExchanges(ir.Messages)
@@ -436,10 +422,7 @@ func parseArrayBlocks(
 			))
 		case "tool_result":
 			toolUseID, _ := block["tool_use_id"].(string)
-			blockSource := source
-			if isRAGToolMessage(toolUseID, provenance) {
-				blockSource = TargetRAG
-			}
+			blockSource := toolResultSource(toolUseID, source, provenance)
 			result = append(result, parseToolResultBlocks(
 				message,
 				index,
@@ -516,11 +499,27 @@ func newTextBlock(
 	}
 }
 
-func isRAGToolMessage(toolCallID string, provenance Provenance) bool {
-	if _, ok := provenance.RAGToolCallIDs[toolCallID]; ok {
+// toolResultSource is the target a tool result's text is compressed as: the
+// documents or memories the context plugin injected, else fallback.
+func toolResultSource(toolCallID string, fallback TargetKind, provenance Provenance) TargetKind {
+	switch {
+	case toolCallID == "":
+		return fallback
+	case isProvenanceCall(toolCallID, provenance.RAGToolCallIDs, RAGToolCallPrefix):
+		return TargetRAG
+	case isProvenanceCall(toolCallID, provenance.MemoryToolCallIDs, MemoryToolCallPrefix):
+		return TargetMemory
+	}
+	return fallback
+}
+
+// isProvenanceCall reports a call the Router injected: one it recorded, or,
+// in a request it did not record, one under its prefix.
+func isProvenanceCall(toolCallID string, recorded map[string]struct{}, prefix string) bool {
+	if _, ok := recorded[toolCallID]; ok {
 		return true
 	}
-	return strings.HasPrefix(toolCallID, "rag_")
+	return strings.HasPrefix(toolCallID, prefix)
 }
 
 func messageText(content interface{}) string {

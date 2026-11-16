@@ -26,12 +26,73 @@ presentation:
 conformance:
   status: fixture_verified
   verified_at: 2026-09-04
+# List prices: https://platform.claude.com/docs/en/about-claude/pricing, checked
+# 2026-11-16. cache_write_per_1m is the 5-minute write, cache_write_1h_per_1m
+# the 1-hour one. US-only inference (inference_geo: us) costs 1.1 times as much.
 models:
+- catalog: anthropic/claude-fable-5.2
+  relationship: first_party
+  id: claude-fable-5-2
+  protocols:
+  - anthropic/messages@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 8.0
+    cached_input_per_1m: 0.2
+    cache_write_per_1m: 10.0
+    cache_write_1h_per_1m: 16.0
+    completion_per_1m: 40.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-16
+    source: https://platform.claude.com/docs/en/models/fable-5-2/overview
+- catalog: anthropic/claude-sonnet-5.5
+  relationship: first_party
+  id: claude-sonnet-5-5
+  protocols:
+  - anthropic/messages@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 2.0
+    cached_input_per_1m: 0.1
+    cache_write_per_1m: 2.5
+    cache_write_1h_per_1m: 4.0
+    completion_per_1m: 10.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-16
+    source: https://platform.claude.com/docs/en/models/sonnet-5-5/overview
+- catalog: anthropic/claude-opus-5.5
+  relationship: first_party
+  id: claude-opus-5-5
+  protocols:
+  - anthropic/messages@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 4.0
+    cached_input_per_1m: 0.2
+    cache_write_per_1m: 5.0
+    cache_write_1h_per_1m: 8.0
+    completion_per_1m: 20.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-16
+    source: https://platform.claude.com/docs/en/models/opus-5-5/overview
 - catalog: anthropic/claude-sonnet-5
   relationship: first_party
   id: claude-sonnet-5
   protocols:
   - anthropic/messages@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 2.0
+    cached_input_per_1m: 0.2
+    cache_write_per_1m: 2.5
+    cache_write_1h_per_1m: 4.0
+    completion_per_1m: 10.0
   lifecycle: active
   verification:
     status: claimed
@@ -42,6 +103,13 @@ models:
   id: claude-opus-4-8
   protocols:
   - anthropic/messages@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 5.0
+    cached_input_per_1m: 0.5
+    cache_write_per_1m: 6.25
+    cache_write_1h_per_1m: 10.0
+    completion_per_1m: 25.0
   lifecycle: active
   verification:
     status: claimed
@@ -52,6 +120,13 @@ models:
   id: claude-opus-5
   protocols:
   - anthropic/messages@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 5.0
+    cached_input_per_1m: 0.5
+    cache_write_per_1m: 6.25
+    cache_write_1h_per_1m: 10.0
+    completion_per_1m: 25.0
   lifecycle: active
   verification:
     status: claimed
@@ -62,6 +137,13 @@ models:
   id: claude-fable-5-1
   protocols:
   - anthropic/messages@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 10.0
+    cached_input_per_1m: 0.25
+    cache_write_per_1m: 12.5
+    cache_write_1h_per_1m: 20.0
+    completion_per_1m: 50.0
   lifecycle: active
   verification:
     status: claimed
@@ -72,8 +154,31 @@ models:
   id: claude-fable-5
   protocols:
   - anthropic/messages@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 10.0
+    cached_input_per_1m: 1.0
+    cache_write_per_1m: 12.5
+    cache_write_1h_per_1m: 20.0
+    completion_per_1m: 50.0
   lifecycle: active
   verification:
     status: claimed
     verified_at: 2026-09-05
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+# A model ID without a Model Card, priced from the same page. The entry only
+# prices the model ID a backend calls; it is never a model. Claude Haiku 5.5
+# costs five times as much for a prompt over 100,000 tokens.
+price_list:
+- id: claude-haiku-5-5
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.1
+    cached_input_per_1m: 0.01
+    cache_write_per_1m: 0.125
+    cache_write_1h_per_1m: 0.2
+    completion_per_1m: 0.5
+  verification:
+    status: claimed
+    verified_at: 2026-11-16
+    source: https://platform.claude.com/docs/en/about-claude/pricing

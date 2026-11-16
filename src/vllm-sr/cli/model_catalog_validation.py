@@ -13,7 +13,7 @@ from cli.model_catalog_types import (
 
 CATALOG_SCHEMA = "vllm-sr/model-catalog/v2"
 DEFAULT_CHANNEL = "latest"
-SUPPORTED_CONFIG_SCHEMAS = frozenset({"v0.3"})
+SUPPORTED_CONFIG_SCHEMAS = frozenset({"v0.5"})
 SUPPORTED_CATALOG_FEATURES = frozenset(
     {
         "entrypoints",
@@ -30,6 +30,7 @@ SUPPORTED_PROTOCOLS = frozenset(
     {
         "openai/chat-completions@1",
         "openai/responses@1",
+        "openai/images@1",
         "anthropic/messages@1",
         "vllm-sr/systemone@1",
     }
@@ -115,18 +116,16 @@ _VERIFICATION_KEYS = frozenset({"authority", "asset_sha256", "status", "verified
 # treating arbitrary string values as model references.
 _RECIPE_MODEL_REF_OBJECT_LIST_PATHS = frozenset(
     {
-        ("routing", "decisions", "modelRefs"),
-        ("routing", "decisions", "candidateIterations", "models"),
+        ("decisions", "modelRefs"),
+        ("decisions", "candidateIterations", "models"),
     }
 )
 _RECIPE_MODEL_REF_SCALAR_PATHS = frozenset(
     {
-        ("routing", "signals", "classifiers", "model"),
-        ("routing", "decisions", "algorithm", "prompt", "model"),
-        ("routing", "decisions", "algorithm", "remom", "synthesis_model"),
-        ("routing", "decisions", "algorithm", "fusion", "model"),
+        ("decisions", "algorithm", "prompt", "model"),
+        ("decisions", "algorithm", "remom", "synthesis_model"),
+        ("decisions", "algorithm", "fusion", "model"),
         (
-            "routing",
             "decisions",
             "algorithm",
             "fusion",
@@ -134,7 +133,6 @@ _RECIPE_MODEL_REF_SCALAR_PATHS = frozenset(
             "model",
         ),
         (
-            "routing",
             "decisions",
             "algorithm",
             "workflows",
@@ -142,25 +140,22 @@ _RECIPE_MODEL_REF_SCALAR_PATHS = frozenset(
             "model",
         ),
         (
-            "routing",
             "decisions",
             "algorithm",
             "workflows",
             "final",
             "model",
         ),
-        ("routing", "decisions", "plugins", "configuration", "model"),
+        ("decisions", "plugins", "configuration", "model"),
         (
-            "routing",
             "decisions",
             "plugins",
             "configuration",
             "backend_config",
             "model",
         ),
-        ("routing", "decisions", "plugins", "configuration", "ar_model"),
+        ("decisions", "plugins", "configuration", "ar_model"),
         (
-            "routing",
             "decisions",
             "plugins",
             "configuration",
@@ -170,9 +165,8 @@ _RECIPE_MODEL_REF_SCALAR_PATHS = frozenset(
 )
 _RECIPE_MODEL_REF_STRING_LIST_PATHS = frozenset(
     {
-        ("routing", "decisions", "algorithm", "fusion", "analysis_models"),
+        ("decisions", "algorithm", "fusion", "analysis_models"),
         (
-            "routing",
             "decisions",
             "algorithm",
             "workflows",

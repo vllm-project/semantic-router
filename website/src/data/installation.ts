@@ -11,4 +11,4 @@ python -m pip install --upgrade --pre vllm-sr`
 
 export const UV_INSTALL_COMMAND = 'uv tool install --upgrade --prerelease allow vllm-sr'
 
-export const AGENT_INSTALL_PROMPT = `Install the development channel of vLLM Semantic Router, then configure and verify it on this machine by following the official skill: ${AGENT_SKILL_URL}`
+export const AGENT_INSTALL_PROMPT = `Install the development channel of vLLM Semantic Router on this machine, then configure it and verify a routed request by following the official skill: ${AGENT_SKILL_URL}. Use the same skill later to upgrade, troubleshoot and tune it.`

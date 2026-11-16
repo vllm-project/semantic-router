@@ -55,6 +55,26 @@ class CIStatusWorkflowTests(unittest.TestCase):
                         errors,
                     )
 
+    def test_shared_image_producer_uses_no_layer_cache(self) -> None:
+        for key in ("cache-from", "cache-to"):
+            for value in ("type=gha,scope=vllm-sr-candidate", "${{ env.LAYER_CACHE }}"):
+                with self.subTest(key=key, value=value):
+                    workflows = copy.deepcopy(self.workflows)
+                    build = next(
+                        step
+                        for step in workflows["build-artifacts.yml"].jobs["image"][
+                            "steps"
+                        ]
+                        if "docker/build-push-action" in step.get("uses", "")
+                    )
+                    build["with"][key] = value
+                    errors: list[str] = []
+                    validate_pr_contract(workflows, errors)
+                    self.assertIn(
+                        "shared image producer must not import or export a layer cache",
+                        errors,
+                    )
+
     def test_queue_checks_on_drafts_that_need_no_new_ci_request(self) -> None:
         errors: list[str] = []
         validate_mergify_contract(errors)

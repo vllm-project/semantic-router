@@ -1,0 +1,324 @@
+# systemone/0.2: our description of the public System One API, version 0.2.
+#
+# It records the interface's structure (endpoints, field names, types and
+# limits) in our own words, so the Router's codecs, generators and conformance
+# tests have one precise definition of the standard. It was checked field by
+# field against the published OpenAPI document named below;
+# `make systemone-schemas-drift` compares it with the document published now
+# and fails on any structural difference. The published document is not
+# copied into this repository.
+#
+# Schemas use JSON Schema 2020-12 keywords; a `$ref` names another schema of
+# this file (`#/schemas/Name`). Names are the published component names.
+
+id: systemone/0.2
+title: The public System One API, version 0.2
+source: https://api.typesafe.ai/openapi.json
+source_version: 0.2.0
+source_sha256: 3ca93b6e6b9aa8d7820531b78c66ed7a9798b11e6e163ad96b140fb3d75fbcf4
+
+authentication: bearer
+
+endpoints:
+  - method: GET
+    path: /v1/models
+    summary: The models a client may name.
+    responses:
+      "200": ModelMetadataList
+      "400": HTTPBadRequestError
+      "422": HTTPValidationError
+  - method: POST
+    path: /v1/systemone
+    summary: Answers every question of one request about its state.
+    body: [application/json, multipart/form-data]
+    request: SystemOneRequest
+    headers:
+      TypeSafe-Danger-Zone-Images: {enum: ["true"], summary: Turns on assets and box questions.}
+      TypeSafe-Danger-Zone-Long-Context: {enum: ["true"], summary: Turns on long inputs.}
+    responses:
+      "200": SystemOneResponse
+      "400": HTTPBadRequestError
+      "422": HTTPValidationError
+
+schemas:
+  # ---- requests ---------------------------------------------------------
+  SystemOneRequest:
+    summary: A state and the named questions about it.
+    type: object
+    required: [model, state, questions]
+    properties:
+      model: {type: string}
+      state:
+        anyOf:
+          - {type: string}
+          - {type: object, additionalProperties: true}
+          - {type: array, items: {}}
+      questions:
+        type: object
+        minProperties: 1
+        additionalProperties: {$ref: "#/schemas/Question"}
+      assets:
+        type: object
+        minProperties: 1
+        additionalProperties: {$ref: "#/schemas/Asset"}
+  Asset:
+    summary: An image a placeholder string stands for.
+    type: object
+    properties:
+      type: {type: string, const: image}
+      format: {type: string, enum: [png, jpg, jpeg]}
+      data_base64: {type: string}
+      part: {type: string}
+  Question:
+    summary: One question, its kind named by type.
+    oneOf:
+      - {$ref: "#/schemas/NoulQuestion"}
+      - {$ref: "#/schemas/ChoiceQuestion"}
+      - {$ref: "#/schemas/ScoreQuestion"}
+      - {$ref: "#/schemas/BoxQuestion"}
+    discriminator:
+      propertyName: type
+      mapping:
+        noul: "#/schemas/NoulQuestion"
+        choice: "#/schemas/ChoiceQuestion"
+        score: "#/schemas/ScoreQuestion"
+        box: "#/schemas/BoxQuestion"
+  NoulQuestion:
+    summary: A yes/no question, answered with P(yes).
+    type: object
+    required: [type]
+    properties:
+      type: {type: string, const: noul}
+      instructions:
+        anyOf:
+          - {type: string}
+          - {type: object, additionalProperties: true}
+          - {type: array, items: {}}
+          - {type: "null"}
+      criteria:
+        anyOf:
+          - {$ref: "#/schemas/NoulCriteria"}
+          - {type: "null"}
+  NoulCriteria:
+    summary: What a yes and a no mean.
+    type: object
+    properties:
+      "true":
+        anyOf:
+          - {type: string}
+          - {type: object, additionalProperties: true}
+          - {type: array, items: {}}
+          - {type: "null"}
+      "false":
+        anyOf:
+          - {type: string}
+          - {type: object, additionalProperties: true}
+          - {type: array, items: {}}
+          - {type: "null"}
+  ChoiceQuestion:
+    summary: Picks one of the named options.
+    type: object
+    required: [type, criteria]
+    properties:
+      type: {type: string, const: choice}
+      instructions:
+        anyOf:
+          - {type: string}
+          - {type: object, additionalProperties: true}
+          - {type: array, items: {}}
+          - {type: "null"}
+      criteria:
+        type: object
+        minProperties: 1
+        maxProperties: 255
+        additionalProperties:
+          anyOf:
+            - {type: string}
+            - {type: object, additionalProperties: true}
+            - {type: array, items: {}}
+            - {type: "null"}
+  ScoreQuestion:
+    summary: Rates against ordered levels, the first worth 0.
+    type: object
+    required: [type, criteria]
+    properties:
+      type: {type: string, const: score}
+      instructions:
+        anyOf:
+          - {type: string}
+          - {type: object, additionalProperties: true}
+          - {type: array, items: {}}
+          - {type: "null"}
+      criteria:
+        type: array
+        minItems: 1
+        maxItems: 10
+        items:
+          anyOf:
+            - {type: string}
+            - {type: object, additionalProperties: true}
+            - {type: array, items: {}}
+  BoxQuestion:
+    summary: Finds what the instructions describe in the request's image.
+    type: object
+    required: [type]
+    properties:
+      type: {type: string, const: box}
+      instructions:
+        anyOf:
+          - {type: string}
+          - {type: object, additionalProperties: true}
+          - {type: array, items: {}}
+          - {type: "null"}
+
+  # ---- responses --------------------------------------------------------
+  SystemOneResponse:
+    summary: Every question's answer under its name, the model and the token usage.
+    type: object
+    required: [model, answers, usage]
+    properties:
+      model: {type: string}
+      answers:
+        type: object
+        minProperties: 1
+        additionalProperties: {$ref: "#/schemas/Answer"}
+      usage: {$ref: "#/schemas/Usage"}
+  Usage:
+    summary: Tokens read and written.
+    type: object
+    required: [input_tokens, output_tokens]
+    properties:
+      input_tokens: {type: integer}
+      output_tokens: {type: integer}
+  Answer:
+    summary: One answer, of its question's type.
+    oneOf:
+      - {$ref: "#/schemas/NoulAnswer"}
+      - {$ref: "#/schemas/ChoiceAnswer"}
+      - {$ref: "#/schemas/ScoreAnswer"}
+      - {$ref: "#/schemas/BoxAnswer"}
+    discriminator:
+      propertyName: type
+      mapping:
+        noul: "#/schemas/NoulAnswer"
+        choice: "#/schemas/ChoiceAnswer"
+        score: "#/schemas/ScoreAnswer"
+        box: "#/schemas/BoxAnswer"
+  NoulAnswer:
+    summary: P(yes).
+    type: object
+    required: [type, noul]
+    properties:
+      type: {type: string, const: noul}
+      noul: {type: number}
+  ChoiceAnswer:
+    summary: The most likely option, its confidence and every option's probability.
+    type: object
+    required: [type, choice, confidence, probabilities]
+    properties:
+      type: {type: string, const: choice}
+      choice: {type: string}
+      confidence: {type: number}
+      probabilities: {type: object, additionalProperties: {type: number}}
+  ScoreAnswer:
+    summary: The expected level, its confidence, the levels and their probabilities.
+    type: object
+    required: [type, score, confidence, legend, probabilities]
+    properties:
+      type: {type: string, const: score}
+      score: {type: number}
+      confidence: {type: number}
+      legend:
+        type: object
+        additionalProperties:
+          anyOf:
+            - {type: string}
+            - {type: object, additionalProperties: true}
+            - {type: array, items: {}}
+      probabilities: {type: object, additionalProperties: {type: number}}
+  BoxAnswer:
+    summary: A box as fractions of the image, and its confidence or null.
+    type: object
+    required: [type, box, confidence]
+    properties:
+      type: {type: string, const: box}
+      box: {$ref: "#/schemas/BoxCoordinates"}
+      confidence:
+        anyOf:
+          - {type: number}
+          - {type: "null"}
+  BoxCoordinates:
+    summary: Edges from the top and from the left, each from 0 to 1.
+    type: object
+    required: [top, bottom, left, right]
+    properties:
+      top: {type: number}
+      bottom: {type: number}
+      left: {type: number}
+      right: {type: number}
+
+  # ---- errors -----------------------------------------------------------
+  HTTPBadRequestError:
+    summary: A request the server cannot serve (400).
+    type: object
+    required: [detail]
+    properties:
+      detail:
+        anyOf:
+          - {type: string}
+          - {type: object, additionalProperties: true}
+  HTTPValidationError:
+    summary: A request whose fields do not validate (422).
+    type: object
+    properties:
+      detail:
+        type: array
+        items: {$ref: "#/schemas/ValidationError"}
+  ValidationError:
+    summary: One invalid value, located by its path in the request.
+    type: object
+    required: [loc, msg, type]
+    properties:
+      loc:
+        type: array
+        items:
+          anyOf:
+            - {type: string}
+            - {type: integer}
+      msg: {type: string}
+      type: {type: string}
+      input: {type: string}
+      ctx: {type: object}
+
+  # ---- listing ----------------------------------------------------------
+  ModelMetadataList:
+    summary: The models a client may name.
+    type: object
+    required: [models]
+    properties:
+      models:
+        type: array
+        items: {$ref: "#/schemas/ModelMetadata"}
+  ModelMetadata:
+    summary: One model's name, description and release date (YYYY-MM-DD).
+    type: object
+    required: [name, description, release_date]
+    properties:
+      name: {type: string}
+      description: {type: string}
+      release_date: {type: string}
+
+# Behaviour the published documentation states beside the schema, which the
+# Router's client and the conformance tests rely on.
+behaviour:
+  body_limit_bytes: 33554432
+  max_nesting: 64
+  retry_statuses: [429, 529]
+  status_codes:
+    "400": the body breaks a request rule, or the input is longer than the model reads
+    "401": the API key is missing or invalid
+    "413": the body is over the size limit
+    "415": the content encoding is not supported
+    "422": a field does not validate; detail locates it
+    "429": the client is over its rate limit; retry after a delay
+    "529": the service is overloaded; retry after a delay

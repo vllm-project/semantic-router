@@ -9,17 +9,7 @@ func (c *RouterConfig) ConfigForGlobalModelServices() *RouterConfig {
 	}
 	scoped := c.ConfigForRecipe(&RoutingRecipe{Name: GlobalModelScope})
 	scoped.ModelSelection.Enabled = false
-	scoped.SemanticCache.Enabled = c.NeedsSemanticResponseCache()
-	for _, ref := range c.RoutingDecisionRefs() {
-		if !c.IsRecipeReachableForRouting(ref.Recipe) {
-			continue
-		}
-		if plugin := ref.Decision.GetToolSelectionConfig(); plugin != nil && plugin.Enabled {
-			scoped.Tools.Enabled = true
-		}
-		if plugin := ref.Decision.GetMemoryConfig(); plugin != nil && plugin.Enabled {
-			scoped.Memory.Enabled = true
-		}
-	}
+	scoped.SemanticCache.InUse = c.NeedsSemanticResponseCache()
+	scoped.Memory.InUse = c.usesReachableMemory()
 	return scoped
 }

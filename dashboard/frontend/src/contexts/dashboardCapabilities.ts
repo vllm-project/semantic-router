@@ -1,4 +1,4 @@
-export const CAPABILITY_IDS = ['setup', 'config', 'evaluation', 'mlPipeline', 'mcp'] as const
+export const CAPABILITY_IDS = ['setup', 'config', 'evaluation', 'mcp'] as const
 export type CapabilityId = (typeof CAPABILITY_IDS)[number]
 
 const CAPABILITY_STATES = [

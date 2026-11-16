@@ -1,0 +1,45 @@
+# The CLI's layout before config v0.3, schema v0.1: signals and decisions at
+# the top level, models that name their endpoints, access key, reasoning
+# family and quality score, and the defaults beside the models. The version
+# refuses the document whole; migrate writes it in the v0.3 layout and then
+# as v0.5, in one run.
+version: v0.5
+listeners:
+  - {name: http-8888, address: 0.0.0.0, port: 8888, timeout: 300s}
+providers:
+  models:
+    - name: qwen3
+      backend_refs:
+        - name: primary
+          weight: 100
+          endpoint: "127.0.0.1:8000"
+          protocol: http
+          api_key: written-inline-test-key
+      reasoning: {type: chat_template_kwargs, parameter: enable_thinking}
+    - name: hosted
+      backend_refs: [{name: hosted, endpoint: "127.0.0.1:8001", protocol: http, provider: vllm, api_key: written-inline-test-key}]
+      reasoning: {family: deepseek}
+  defaults:
+    model: qwen3
+    reasoning_effort: medium
+evaluation:
+  records:
+    - model: qwen3
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.9
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - {name: math_keywords, operator: OR, keywords: [calculate, equation]}
+    decisions:
+      - name: math
+        priority: 100
+        rules:
+          operator: OR
+          conditions: [{type: keyword, name: math_keywords}]
+        modelRefs: [{model: qwen3, use_reasoning: true}]
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

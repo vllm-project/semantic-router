@@ -8,12 +8,12 @@ from cli.runtime_stack import resolve_runtime_stack
 from cli.service_defaults import inject_local_store_runtime_defaults
 
 
-def test_inject_local_store_runtime_defaults_migrates_legacy_cache_key():
+def test_inject_local_store_runtime_defaults_fills_response_cache_milvus():
     config = {
         "version": "v0.3",
         "global": {
             "stores": {
-                "semantic_cache": {
+                "response_cache": {
                     "enabled": True,
                     "backend_type": "milvus",
                 }
@@ -25,7 +25,6 @@ def test_inject_local_store_runtime_defaults_migrates_legacy_cache_key():
 
     stores = config["global"]["stores"]
     assert changed is True
-    assert "semantic_cache" not in stores
     assert stores["response_cache"]["milvus"]["connection"]["host"] == "vllm-sr-milvus"
 
 

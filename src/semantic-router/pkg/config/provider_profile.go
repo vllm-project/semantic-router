@@ -21,7 +21,7 @@ func ValidProviderTypes() []string {
 }
 
 // GetProviderProfileForEndpoint resolves the ProviderProfile for a named
-// endpoint. Catalog-materialized v0.3 endpoints always carry a profile.
+// endpoint. Catalog-materialized endpoints always carry a profile.
 func (c *RouterConfig) GetProviderProfileForEndpoint(endpointName string) (*ProviderProfile, error) {
 	if endpointName == "" {
 		return nil, nil

@@ -3,7 +3,6 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
 import AuthTransitionPage from '../pages/AuthTransitionPage'
-import { canAccessMLSetup } from '../utils/accessControl'
 import AuthGate from './AuthGate'
 import AuthenticatedShell from './AuthenticatedShell'
 import { renderAuthenticatedAppRoutes } from './AuthenticatedAppRoutes'
@@ -64,7 +63,6 @@ const AppRouter: React.FC = () => {
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>
             {renderAuthenticatedAppRoutes({
-              canAccessMLSetup: canAccessMLSetup(user),
               user,
               setupMode,
               capabilities,

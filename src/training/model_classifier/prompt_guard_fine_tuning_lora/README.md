@@ -6,10 +6,53 @@ safety. The current licensed-source builders are `vela_data.py` and
 [Vela application recipes](../vela-applications.md) for output contracts,
 fixed sources, initialization, long-context evaluation and export.
 
-For reviewed source-boundary contrasts, run
-`python -m src.training.model_classifier.prompt_guard_fine_tuning_lora.vela_source_boundary
---config reviewed-families.json --output contrasts/`. Supply the reviewed family
-definitions explicitly and retain them with the dataset release. The builder
+## Setup
+
+This directory is a uv project. `pyproject.toml` bounds the dependencies and
+`uv.lock` pins them. From the repository root:
+
+```bash
+uv sync --locked --project src/training/model_classifier/prompt_guard_fine_tuning_lora
+```
+
+`uv sync --locked` in this folder creates the same environment. Run the
+commands below from the repository root through that project, so
+`training_args_compat` and `common_lora_utils` resolve as packages.
+
+`make test-training-contracts` runs the provenance test. The `tests/` suite
+is separate:
+
+```bash
+uv run --project src/training/model_classifier/prompt_guard_fine_tuning_lora \
+  python -m pytest -q \
+  src/training/model_classifier/prompt_guard_fine_tuning_lora/test_jailbreak_provenance.py
+
+uv run --project src/training/model_classifier/prompt_guard_fine_tuning_lora \
+  python -m unittest discover \
+  -s src/training/model_classifier/prompt_guard_fine_tuning_lora/tests \
+  -p 'test_*.py'
+```
+
+The legacy checkpoint CLI stays available for inference and adapter export:
+
+```bash
+uv run --project src/training/model_classifier/prompt_guard_fine_tuning_lora \
+  python -m src.training.model_classifier.prompt_guard_fine_tuning_lora.jailbreak_bert_finetuning_lora \
+  --help
+```
+
+This folder has no `requirements.txt`.
+
+For reviewed source-boundary contrasts, run:
+
+```bash
+uv run --project src/training/model_classifier/prompt_guard_fine_tuning_lora \
+  python -m src.training.model_classifier.prompt_guard_fine_tuning_lora.vela_source_boundary \
+  --config reviewed-families.json --output contrasts/
+```
+
+Supply the reviewed family definitions explicitly and retain them with the
+dataset release. The builder
 keeps ordinary requests, attacks, quotations and translations in their declared
 family partition. Training corpora and historical review snapshots are separate
 from the source checkout.
@@ -21,7 +64,8 @@ instruction boundary. Neither field supplies a Guard gold label automatically.
 Export complete source candidates before reviewing them:
 
 ```bash
-python -m src.training.model_classifier.prompt_guard_fine_tuning_lora.jailbreak_data_v2 \
+uv run --project src/training/model_classifier/prompt_guard_fine_tuning_lora \
+  python -m src.training.model_classifier.prompt_guard_fine_tuning_lora.jailbreak_data_v2 \
   --salad source.json --salad-candidates-output candidates.jsonl
 ```
 
@@ -48,7 +92,8 @@ as the released Vela Guard uses. The base identity and immutable revision are
 required:
 
 ```bash
-python -m src.training.model_classifier.sequence_repair.train \
+uv run --project src/training/model_classifier/prompt_guard_fine_tuning_lora \
+  python -m src.training.model_classifier.sequence_repair.train \
   --base artifacts/vela/base \
   --base-id vllm-sr/Vela-1.0-Encoder-307M \
   --base-revision fe9ccc074b781bc0e2e13c2c8d26f2640410636a \

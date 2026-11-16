@@ -70,7 +70,7 @@ func TestFastResponseLiveDecisionAndPreviewNeedNoBackend(t *testing.T) {
 	cfg := immediateResponseTestConfig()
 	cfg.DefaultModel = "immediate-unused-default"
 	cfg.Decisions[0].ModelRefs = []config.ModelRef{{Model: "immediate-unused-candidate"}}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, classifier.Close()) })
 	router := &OpenAIRouter{Config: cfg, Classifier: classifier}

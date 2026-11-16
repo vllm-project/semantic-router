@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: "Qwen/Qwen2.5-14B-Instruct"
@@ -9,78 +9,59 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
+    # vLLM-Omni serves the image model on /v1/images/generations.
     - name: "Qwen/Qwen-Image"
+      api_format: images
       backend_refs:
         - name: vllm-omni
           provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
-routing:
-  modelCards:
-    - name: "Qwen/Qwen2.5-14B-Instruct"
-      modality: ar
-    - name: "Qwen/Qwen-Image"
-      modality: diffusion
       capabilities: [image_generation]
-  signals:
-    domains:
+      modalities: {input: [text], output: [image]}
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: text_generation
+          description: Text generation and general queries.
+          labels: [other]
+      modality:
+        - name: wants_text
+          description: Text-only answers.
+          labels: [text]
+        - name: wants_image
+          description: Requests for a generated image.
+          labels: [image]
+    decisions:
+      - name: image_generation
+        description: Generate the image a request asks for with the diffusion model.
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: modality
+              name: wants_image
+        output:
+          kind: image
+          action: generate
+        modelRefs:
+          - model: "Qwen/Qwen-Image"
+            use_reasoning: false
       - name: text_generation
-        description: Text generation and general queries.
-        mmlu_categories: [other]
-    modality:
-      - name: AR
-        description: Text-only response via autoregressive LLM.
-      - name: DIFFUSION
-        description: Image generation via diffusion model.
-      - name: BOTH
-        description: Hybrid response requiring both text and image.
-  decisions:
-    - name: image_generation
-      description: Route image generation requests to the diffusion model.
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: modality
-            name: DIFFUSION
-      modelRefs:
-        - model: "Qwen/Qwen-Image"
-          use_reasoning: false
-    - name: text_and_image
-      description: Route hybrid text+image requests to both models in parallel.
-      priority: 190
-      rules:
-        operator: AND
-        conditions:
-          - type: modality
-            name: BOTH
-      modelRefs:
-        - model: "Qwen/Qwen2.5-14B-Instruct"
-          use_reasoning: false
-        - model: "Qwen/Qwen-Image"
-          use_reasoning: false
-    - name: text_generation
-      description: Default text routing for AR requests.
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: modality
-            name: AR
-          - type: domain
-            name: text_generation
-      modelRefs:
-        - model: "Qwen/Qwen2.5-14B-Instruct"
-          use_reasoning: false
+        description: Default text routing.
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: modality
+              name: wants_text
+            - type: domain
+              name: text_generation
+        modelRefs:
+          - model: "Qwen/Qwen2.5-14B-Instruct"
+            use_reasoning: false
 global:
-  stores:
-    response_cache:
-      enabled: false
-      embedding_model: mmbert
-    memory:
-      embedding_model: mmbert
-    vector_store:
-      embedding_model: mmbert
   services:
     response_api:
       enabled: true
@@ -90,12 +71,8 @@ global:
     api:
       batch_classification:
         max_batch_size: 10
-        max_concurrency: 4
     observability:
       metrics:
         enabled: true
       tracing:
         enabled: false
-  integrations:
-    tools:
-      enabled: false

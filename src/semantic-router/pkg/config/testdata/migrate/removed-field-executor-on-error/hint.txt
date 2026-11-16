@@ -1,0 +1,1 @@
+recipes[default].decisions[fused].algorithm: removed_field: algorithm.fusion.on_error is removed; run `vllm-sr config migrate` (algorithm.on_error, which every executor reads)

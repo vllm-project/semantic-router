@@ -132,13 +132,13 @@ func compileCluster(cfg *config.RouterConfig, alias string, endpoints []config.V
 		spec.Endpoints[0].IPv4Only = true
 	}
 	// Backend pools are homogeneous (the config loader rejects mixed
-	// schemes, base paths, TLS names and headers), so the first endpoint
+	// schemes, base paths, TLS settings and headers), so the first endpoint
 	// speaks for the cluster, as it does in the template.
 	first := spec.Endpoints[0]
-	if first.Scheme == schemeHTTPS {
-		spec.TLS = &TLSSpec{ServerName: first.Host}
-	}
 	profile := cfg.ProviderProfiles[endpoints[0].ProviderProfileName]
+	if first.Scheme == schemeHTTPS {
+		spec.TLS = clusterTLS(first.Host, profile.TLS)
+	}
 	prefix, err := basePath(profile.BaseURL)
 	if err != nil {
 		return ClusterSpec{}, fmt.Errorf("providers.models[%s].backend_refs[0]: %w", alias, err)
@@ -153,6 +153,20 @@ func compileCluster(cfg *config.RouterConfig, alias string, endpoints []config.V
 		return ClusterSpec{}, fmt.Errorf("providers.models[%s].reliability: %w", alias, err)
 	}
 	return spec, nil
+}
+
+// clusterTLS is the TLS session of an https cluster: the backend's tls
+// block, with the endpoint's host as the server name when it names none.
+func clusterTLS(host string, backend *config.DeploymentTLS) *TLSSpec {
+	spec := &TLSSpec{ServerName: host}
+	if backend == nil {
+		return spec
+	}
+	if backend.ServerName != "" {
+		spec.ServerName = backend.ServerName
+	}
+	spec.CAFile, spec.CertFile, spec.KeyFile = backend.CAFile, backend.CertFile, backend.KeyFile
+	return spec
 }
 
 // compilePolicy maps the reliability block's timeouts and retry policy. A
@@ -182,7 +196,7 @@ func compilePolicy(spec *ClusterSpec, r config.ProviderReliability) error {
 	}
 	// The Envoy template renders a route retry policy, even with no retries,
 	// when a per-try timeout is set; a decision's retry override merges into it.
-	if r.RetryCount == 0 && strings.TrimSpace(r.PerTryTimeout) == "" {
+	if r.Retries() == 0 && strings.TrimSpace(r.PerTryTimeout) == "" {
 		return nil
 	}
 	retryOn := r.RetryOn
@@ -190,7 +204,7 @@ func compilePolicy(spec *ClusterSpec, r config.ProviderReliability) error {
 		retryOn = config.DefaultProviderRetryOn
 	}
 	retry := &RetryPolicy{
-		NumRetries:           r.RetryCount,
+		NumRetries:           r.Retries(),
 		On:                   ParseRetryOn(retryOn),
 		RetriableStatusCodes: slices.Clone(r.RetriableStatusCodes),
 	}
@@ -231,7 +245,7 @@ const raisedMaxRequests = 4096
 // outlier block needs consecutive_5xx and more than one endpoint, and health
 // checks need a path.
 func compileHealth(spec *ClusterSpec, reliability config.ProviderReliability) error {
-	if reliability.RetryCount > 0 || reliability.Consecutive5xx > 0 {
+	if reliability.Retries() > 0 || reliability.Consecutive5xx > 0 {
 		spec.Breakers.MaxRequests = raisedMaxRequests
 	}
 	if reliability.Consecutive5xx > 0 && len(spec.Endpoints) > 1 {

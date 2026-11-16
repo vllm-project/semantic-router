@@ -661,3 +661,31 @@ func TestOrchestrator_EvaluateAttempt_2xxWithErrorIsFailedAttempt(t *testing.T) 
 		t.Errorf("failed attempt must be marked Discarded")
 	}
 }
+
+// One person's refused login or spent plan says nothing about the backend: with
+// per-user credentials a 429 never opens the breaker other requests share,
+// while a 503 still does.
+func TestPerUserRefusalsLeaveTheSharedBreakerClosed(t *testing.T) {
+	policy := DefaultPolicy()
+	policy.RetryableStatusCodes = append(policy.RetryableStatusCodes, 401, 403, 429)
+	policy.CircuitBreaker = CircuitBreakerConfig{ConsecutiveFailures: 1, CooldownPeriod: time.Minute, HalfOpenProbes: 1}
+	safe := CommitState{}
+	for _, status := range []int{401, 403, 429} {
+		orch := NewOrchestrator(policy.ForPerUserCredentials(), nil)
+		exec := orch.NewExecutionRecord("req", "route", "claude")
+		orch.EvaluateAttempt(context.Background(), exec, AttemptOutcome{AttemptID: "a", Ordinal: 1, Model: "claude", Backend: "anthropic", StatusCode: status}, safe)
+		if state := orch.circuitBreaker.GetState("anthropic"); state != StateClosed {
+			t.Fatalf("%d opened the shared breaker: %s", status, state)
+		}
+	}
+	shared := NewOrchestrator(policy, nil)
+	shared.EvaluateAttempt(context.Background(), shared.NewExecutionRecord("req", "route", "m"), AttemptOutcome{AttemptID: "a", Ordinal: 1, Model: "m", Backend: "b", StatusCode: 429}, safe)
+	if state := shared.circuitBreaker.GetState("b"); state != StateOpen {
+		t.Fatalf("a server-key 429 left the breaker %s", state)
+	}
+	perUser := NewOrchestrator(policy.ForPerUserCredentials(), nil)
+	perUser.EvaluateAttempt(context.Background(), perUser.NewExecutionRecord("req", "route", "m"), AttemptOutcome{AttemptID: "a", Ordinal: 1, Model: "m", Backend: "b", StatusCode: 503}, safe)
+	if state := perUser.circuitBreaker.GetState("b"); state != StateOpen {
+		t.Fatalf("a 503 left the per-user breaker %s", state)
+	}
+}

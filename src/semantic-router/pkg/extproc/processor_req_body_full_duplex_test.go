@@ -196,7 +196,7 @@ func assertRoutedHeaderReply(t *testing.T, response *ext_proc.ProcessingResponse
 	common := response.GetRequestHeaders().GetResponse()
 	require.NotNil(t, common, "the header reply must come first")
 	mutation := common.GetHeaderMutation()
-	model, _ := accountingHeaderValue(mutation, headers.SelectedModel)
+	model, _ := accountingHeaderValue(mutation, headers.VSRRouteModel)
 	assert.Equal(t, "worker", model)
 	path, _ := accountingHeaderValue(mutation, ":path")
 	assert.Equal(t, "/provider/v1/chat/completions", path)

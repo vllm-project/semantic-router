@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import Link from '@docusaurus/Link'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import { usePluginData } from '@docusaurus/useGlobalData'
 import {
   HtmlClassNameProvider,
   PageMetadata,
@@ -12,7 +13,11 @@ import PageHeader from '@site/src/components/site/PageHeader'
 import BlogListPaginator from '@theme/BlogListPaginator'
 import BlogListPageStructuredData from '@theme/BlogListPage/StructuredData'
 import type { Props } from '@theme/BlogListPage'
-import type { BlogSearchIndexEntry } from '../../plugins/blogSearchIndex'
+import {
+  BLOG_SEARCH_INDEX_PLUGIN_NAME,
+  type BlogSearchIndex,
+  type BlogSearchIndexEntry,
+} from '../../plugins/blogSearchIndex'
 
 interface BlogCardProps {
   featured?: boolean
@@ -171,7 +176,15 @@ export default function BlogListPage(props: Props): React.ReactNode {
       .slice(0, 8)
   }, [items])
 
-  const [featuredEntry, ...remainingEntries] = pageEntries
+  // Props only carry this page's posts; a pinned post can be older, so read it from the index.
+  const searchIndex = usePluginData(BLOG_SEARCH_INDEX_PLUGIN_NAME) as BlogSearchIndex | undefined
+  const pinnedEntry = metadata.page === 1
+    ? searchIndex?.posts.find(post => post.featured)
+    : undefined
+  const featuredEntry = pinnedEntry ?? pageEntries[0]
+  const remainingEntries = pageEntries.filter(
+    entry => entry.permalink !== featuredEntry?.permalink,
+  )
 
   return (
     <HtmlClassNameProvider

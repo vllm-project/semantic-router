@@ -338,26 +338,37 @@ func (p *IngestionPipeline) ListFileStatuses(vectorStoreID string) []*VectorStor
 	return result
 }
 
-// DetachFile removes a file's chunks from the backend and updates status.
+// DetachFile removes a file's chunks from the backend and updates status. The
+// attachment and its count stay until the chunks are gone, so a failed detach
+// can be retried.
 func (p *IngestionPipeline) DetachFile(ctx context.Context, vectorStoreID, vsfID string) error {
-	p.mu.Lock()
+	p.mu.RLock()
 	vsf, ok := p.fileStatuses[vsfID]
 	if !ok {
-		p.mu.Unlock()
+		p.mu.RUnlock()
 		return fmt.Errorf("vector store file not found: %s", vsfID)
 	}
 	if vsf.VectorStoreID != vectorStoreID {
-		p.mu.Unlock()
+		p.mu.RUnlock()
 		return fmt.Errorf("vector store file %s does not belong to store %s", vsfID, vectorStoreID)
 	}
 	fileID := vsf.FileID
-	status := vsf.Status
-	delete(p.fileStatuses, vsfID)
-	p.mu.Unlock()
+	p.mu.RUnlock()
 
 	if err := p.backend.DeleteByFileID(ctx, vectorStoreID, fileID); err != nil {
 		return fmt.Errorf("failed to delete chunks: %w", err)
 	}
+
+	p.mu.Lock()
+	vsf, ok = p.fileStatuses[vsfID]
+	if !ok {
+		// A concurrent detach removed it and its count.
+		p.mu.Unlock()
+		return nil
+	}
+	status := vsf.Status
+	delete(p.fileStatuses, vsfID)
+	p.mu.Unlock()
 
 	_ = p.manager.UpdateFileCounts(context.Background(), vectorStoreID, func(fc *FileCounts) {
 		switch status {
@@ -372,6 +383,34 @@ func (p *IngestionPipeline) DetachFile(ctx context.Context, vectorStoreID, vsfID
 	})
 
 	return nil
+}
+
+// DeleteFile detaches a file from every vector store that holds it and then
+// deletes it, so its chunks stop answering searches. When a detach fails the
+// file and the attachment are kept and the error returned. Attachments to a
+// store that was deleted are dropped.
+func (p *IngestionPipeline) DeleteFile(ctx context.Context, fileID string) error {
+	p.mu.RLock()
+	var attached []*VectorStoreFile
+	for _, vsf := range p.fileStatuses {
+		if vsf.FileID == fileID {
+			attached = append(attached, cloneVectorStoreFile(vsf))
+		}
+	}
+	p.mu.RUnlock()
+
+	for _, vsf := range attached {
+		if _, err := p.manager.GetStore(vsf.VectorStoreID); errors.Is(err, ErrStoreNotFound) {
+			p.mu.Lock()
+			delete(p.fileStatuses, vsf.ID)
+			p.mu.Unlock()
+			continue
+		}
+		if err := p.DetachFile(ctx, vsf.VectorStoreID, vsf.ID); err != nil {
+			return err
+		}
+	}
+	return p.fileStore.Delete(fileID)
 }
 
 // worker is the background goroutine that processes ingestion jobs.

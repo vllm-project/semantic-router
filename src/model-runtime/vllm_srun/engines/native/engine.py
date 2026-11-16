@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from functools import partial
@@ -36,7 +37,7 @@ from ...scheduler.planner import padded
 from . import fast, models, quantized
 from . import threads as adaptive_threads
 from .adapters import load_adapter_network
-from .encoder import EncoderGraphs
+from .encoder import EncoderGraphs, graph_module
 from .models import branch as branch_module
 from .models.branch import (
     CAUSAL,
@@ -51,7 +52,8 @@ from .models.forest import ForestShape
 from .models.gated_lora import Gate, attach_gated
 from .models.lora import attach, fold_scaling
 from .models.packed import Packed, packed_unavailable
-from .models.qwen3_5 import noncausal_masks, rope_index
+from .models.qwen3_5 import Qwen3_5Backbone, noncausal_masks, rope_index
+from .models.qwen3_5_decode import greedy, pad_batch
 from .models.tree import Tree
 from .reduced import REDUCED_AUTOCAST, linear_bytes, reduced_view, unavailable
 from .weights import (
@@ -93,6 +95,44 @@ def graph_receipt(graphs: dict[str | None, EncoderGraphs]) -> dict[str, Any]:
     return out
 
 
+def language_model_head(backbone: nn.Module, spec: ModelSpec) -> torch.Tensor | None:
+    """The spec's LM head on ``backbone``'s device and embedding dtype, or None when it names none.
+
+    A tied head is the input embedding itself. A grafted head is read from its file and cast;
+    it is not a backbone parameter, so the base package's parameter count is unchanged.
+    """
+    head = spec.backbone.lm_head
+    if head is None:
+        return None
+    embedding = getattr(backbone, "embed_tokens", None)
+    if not isinstance(embedding, nn.Embedding):
+        raise ValueError(f"{spec.name} has an LM head and no input embedding")
+    weight = embedding.weight
+    if head.tied:
+        if spec.backbone.config.get("tie_word_embeddings", True) is False:
+            raise ValueError(
+                f"{spec.name} refuses a tied LM head on an untied embedding"
+            )
+        return weight
+    if head.weight_file is None:
+        raise ValueError(f"{spec.name} grafted LM head names no weight file")
+    from safetensors.torch import load_file
+
+    try:
+        stored = load_file(str(head.weight_file))[head.tensor]
+    except (OSError, KeyError) as exc:
+        raise ValueError(
+            f"{spec.name} grafted LM head {head.weight_file.name} has no {head.tensor}"
+        ) from exc
+    grafted = stored.to(device=weight.device, dtype=weight.dtype)
+    if tuple(grafted.shape) != tuple(weight.shape):
+        raise ValueError(
+            f"{spec.name} grafted LM head shape {tuple(grafted.shape)} "
+            f"does not match the embedding {tuple(weight.shape)}"
+        )
+    return grafted
+
+
 class NativeEngineModel(EngineModel):
     spec: ModelSpec
 
@@ -123,6 +163,9 @@ class NativeEngineModel(EngineModel):
         self.options = options
         # Gated adapters wrap the placed backbone's Linears before any view or layout copies them.
         self.gate = Gate()
+        self.lm_head = language_model_head(backbone, spec)
+        # generate runs on the request thread, forwards on the worker. One lock, so they never share the backbone.
+        self._backbone_lock = threading.Lock()
         self.gated = (
             attach_gated(backbone, spec.backbone.gated, self.gate, self.device)
             if spec.backbone.gated
@@ -222,7 +265,7 @@ class NativeEngineModel(EngineModel):
         ):
             # only graph captures take FlashInfer's product (``accel/flashinfer_nvfp4.py``)
             self.fast["nvfp4_product"] = quantized.use_flashinfer(nvfp4, self.device)
-        if self.device.type == "cuda" and spec.encoder and options.graphs:
+        if spec.encoder and options.graphs and graph_module(self.device) is not None:
             self.encoder_graphs = {
                 name: EncoderGraphs(cast(models.EncoderBackbone, module), self.device)
                 for name, module in self.stacks().items()
@@ -505,9 +548,7 @@ class NativeEngineModel(EngineModel):
         """
         resolver = self.threads_resolver
         if resolver is None:
-            if self.device.type == "cpu":
-                adaptive_threads.CpuTeam.apply(self._cpu_threads)
-            return run()
+            return self._untimed(run)
         count = resolver.pick(tokens)
         if resolver.adopted:
             # The table is final — one pass, nothing left to measure.
@@ -538,6 +579,12 @@ class NativeEngineModel(EngineModel):
         run()
         resolver.record_base(tokens, (time.perf_counter() - started) * 1000.0)
         return result
+
+    def _untimed(self, run: Callable[[], _T]) -> _T:
+        """One pass at the configured count, which the thread resolver never times."""
+        if self.device.type == "cpu":
+            adaptive_threads.CpuTeam.apply(self._cpu_threads)
+        return run()
 
     def _state_once(self) -> models.StateOnceBackbone:
         backbone = self.backbone
@@ -855,7 +902,44 @@ class NativeEngineModel(EngineModel):
             with self.gate.on(adapter):
                 return self._forward(batch)
 
-        return self._with_threads(batch.input_ids.numel(), run)
+        tokens = batch.input_ids.numel()
+        if self.lm_head is None:
+            return self._with_threads(tokens, run)
+        with self._backbone_lock:
+            return self._with_threads(tokens, run)
+
+    def generate(
+        self,
+        input_ids: Sequence[Sequence[int]],
+        *,
+        max_new_tokens: int,
+        eos_token_id: int | None,
+        pad_token_id: int,
+    ) -> list[list[int]]:
+        """Greedy tokens from the LM head, every adapter off, causal even on a noncausal backbone."""
+        weight = self.lm_head
+        backbone = self.backbone
+        if weight is None or not isinstance(backbone, Qwen3_5Backbone):
+            raise NotImplementedError(
+                f"{self.spec.name} has no Qwen3.5 generation path"
+            )
+        ids, mask = pad_batch(input_ids, pad_token_id, self.device)
+
+        def run() -> list[list[int]]:
+            with self.gate.on(None), torch.inference_mode(), self.autocast():
+                return greedy(
+                    backbone,
+                    weight,
+                    ids,
+                    mask,
+                    max_new_tokens,
+                    eos_token_id,
+                    pad_token_id,
+                )
+
+        # Decoding is not a forward: the thread resolver does not time it.
+        with self._backbone_lock:
+            return self._untimed(run)
 
     def _forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
@@ -1039,13 +1123,7 @@ class NativeEngineModel(EngineModel):
         count and stay out of the token-size learning.
         """
         if batch.tower is not None:
-            if self.device.type == "cpu":
-                adaptive_threads.CpuTeam.apply(
-                    self.threads_resolver.base
-                    if self.threads_resolver is not None
-                    else self._cpu_threads
-                )
-            return self._encode(batch)
+            return self._untimed(lambda: self._encode(batch))
         return self._with_threads(batch.input_ids.numel(), lambda: self._encode(batch))
 
     def _encode(self, batch: EncoderBatch) -> EncoderOutput:
@@ -1079,6 +1157,19 @@ class NativeEngineModel(EngineModel):
         else:
             input_ids = batch.input_ids.to(self.device)
             rows, width = input_ids.shape
+            # Only NPUs replay padded batches: on CUDA and ROCm the eager padded
+            # layout keeps answers byte-identical to the released runtime.
+            if (
+                graphs is not None
+                and batch.attention_mask is not None
+                and self.device.type == "npu"
+            ):
+                with torch.inference_mode(), context():
+                    replayed = graphs.padded(
+                        input_ids, batch.attention_mask, exits, batch.normalize_exits
+                    )
+                if replayed is not None:
+                    return EncoderOutput(hidden=replayed)
             layout = backbone.padded(batch.attention_mask, rows, width, self.device)
         with torch.inference_mode(), context():
             hidden = backbone.encode(input_ids, layout, exits, batch.normalize_exits)
@@ -1181,9 +1272,19 @@ class NativeEngineModel(EngineModel):
             for layer in self._packed()
         )
         packed += sum(layer.stored_bytes() for layer in self._quantized())
+        head = self.lm_head
+        embed = getattr(self.backbone, "embed_tokens", None)
+        extra = 0
+        if (
+            head is not None
+            and embed is not None
+            and head.data_ptr() != embed.weight.data_ptr()
+        ):
+            extra = head.numel() * head.element_size()
         return (
             copy_bytes
             + packed
+            + extra
             + sum(p.numel() * p.element_size() for p in self._parameters())
         )
 
@@ -1196,6 +1297,7 @@ class NativeEngineModel(EngineModel):
 
     def close(self) -> None:
         self.backbone = None  # type: ignore[assignment]  # close() releases the backbone; a closed model runs nothing
+        self.lm_head = None
         self.branches = {}
         self.towers = {}
         self.reduced = {}

@@ -183,7 +183,7 @@ func TestRoutingInputNeverSkipsMessagesWithMedia(t *testing.T) {
 		},
 	}}}
 	snapshot := extractSemanticRequestSignalsWith(request, router.routingInputSelector())
-	if snapshot.RoutingInput.SkippedMessages != 0 || snapshot.UserContent != routingInputContext || snapshot.ImageContentCount != 1 {
+	if snapshot.RoutingInput.SkippedMessages != 0 || snapshot.UserContent != routingInputContext || snapshot.InputModality.ImageContentCount != 1 {
 		t.Fatalf("a message with an image was skipped: %+v", snapshot.RoutingInput)
 	}
 }
@@ -201,7 +201,7 @@ func TestRoutingInputStripKeepsAMessagesMedia(t *testing.T) {
 	if snapshot.UserContent != "What is in this picture?" || snapshot.RoutingInput.StrippedBlocks != 1 {
 		t.Fatalf("routing text = %q, outcome %+v", snapshot.UserContent, snapshot.RoutingInput)
 	}
-	if snapshot.ImageContentCount != 1 || snapshot.FirstImageURL == "" ||
+	if snapshot.FirstImageURL == "" ||
 		snapshot.InputModality.ImageContentCount != 1 || snapshot.InputModality.TextContentCount != 1 {
 		t.Fatalf("stripping text lost the message's image: %+v", snapshot.InputModality)
 	}

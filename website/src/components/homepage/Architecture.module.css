@@ -1,0 +1,312 @@
+.section {
+  position: relative;
+  padding: var(--site-section-pad-top, var(--site-section-pad)) 0 var(--site-section-pad);
+}
+
+.wrap {
+  width: min(100% - 2 * var(--gut), 1200px);
+  margin-inline: auto;
+}
+
+.figure {
+  margin: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px minmax(0, 2.9fr) 48px minmax(0, 1.15fr);
+  align-items: center;
+}
+
+.row + .row {
+  margin-top: clamp(36px, 4vw, 52px);
+}
+
+.row .rowLabel {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px 4px;
+  color: var(--muted);
+  font: 600 12px/1.4 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 18px;
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.icon {
+  margin-bottom: 2px;
+  color: var(--ink);
+}
+
+.label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.node h3 {
+  margin: 0;
+  color: var(--ink);
+  font: 600 21px/1.15 var(--serif);
+  letter-spacing: -0.005em;
+}
+
+.node p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.node code {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.node.one {
+  box-shadow: inset 0 0 0 1.5px rgba(217, 68, 31, 0.55), var(--shadow);
+}
+
+.node.one .label {
+  color: var(--ember-text);
+}
+
+.node.two {
+  box-shadow: inset 0 0 0 1.5px rgba(77, 111, 163, 0.5), var(--shadow);
+}
+
+.node.two .label {
+  color: var(--sky-text);
+}
+
+/* vLLM Semantic Router: a dashed box with its logo as a tag on the border. */
+.router {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px minmax(0, 1fr) 36px minmax(0, 1fr);
+  align-items: center;
+  padding: 40px 16px 16px;
+  border: 2px dashed rgba(217, 68, 31, 0.62);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface) 42%, transparent);
+}
+
+.tag {
+  position: absolute;
+  top: -21px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: var(--paper-2);
+}
+
+.tag img {
+  display: block;
+  width: auto;
+  height: 28px;
+}
+
+.signals,
+.marks {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.signals {
+  gap: 4px;
+}
+
+.signals li {
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  font: 500 10.5px/1 var(--mono);
+}
+
+.marks {
+  gap: 7px;
+  color: var(--ink);
+}
+
+.marks li {
+  display: inline-flex;
+}
+
+/* A dotted wire with an arrowhead; a square travels along it on the compositor, relayed along each row. */
+.wire {
+  position: relative;
+  align-self: center;
+  height: 2px;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--ink) 30%, transparent) 1px, transparent 1.4px);
+  background-size: 6px 2px;
+  container-type: inline-size;
+}
+
+.wire::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  border: 5px solid transparent;
+  border-right: 0;
+  border-left-color: color-mix(in srgb, var(--ink) 35%, transparent);
+}
+
+.wire i {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--ember);
+  box-shadow: 0 0 12px rgba(217, 68, 31, 0.55);
+  animation: travel 2.4s var(--ease) infinite;
+}
+
+.slow i {
+  background: var(--sky);
+  box-shadow: 0 0 12px rgba(77, 111, 163, 0.5);
+  animation-duration: 4.8s;
+}
+
+.section[data-offscreen] .wire i {
+  animation-play-state: paused;
+}
+
+.d1 i {
+  animation-delay: 0.6s;
+}
+
+.d2 i {
+  animation-delay: 1.2s;
+}
+
+.d3 i {
+  animation-delay: 1.8s;
+}
+
+@keyframes travel {
+  0% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+
+  15%,
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateX(calc(100cqi - 8px));
+  }
+}
+
+@keyframes down {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+
+  15%,
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(calc(100cqh - 8px));
+  }
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:global([data-theme='dark']) .node.one {
+  box-shadow: inset 0 0 0 1.5px rgba(239, 86, 48, 0.6), var(--shadow);
+}
+
+:global([data-theme='dark']) .node.two {
+  box-shadow: inset 0 0 0 1.5px rgba(127, 162, 216, 0.55), var(--shadow);
+}
+
+:global([data-theme='dark']) .router {
+  border-color: rgba(239, 86, 48, 0.55);
+}
+
+@media (max-width: 1000px) {
+  .row,
+  .router {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .router {
+    padding: 40px 14px 14px;
+  }
+
+  .wire {
+    justify-self: center;
+    width: 2px;
+    height: 32px;
+    background-size: 2px 6px;
+    container-type: size;
+  }
+
+  .wire::after {
+    top: auto;
+    right: auto;
+    bottom: -3px;
+    left: -4px;
+    border: 5px solid transparent;
+    border-bottom: 0;
+    border-top-color: color-mix(in srgb, var(--ink) 35%, transparent);
+  }
+
+  .wire i {
+    top: 0;
+    left: -3px;
+    animation-name: down;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wire i {
+    display: none;
+  }
+}

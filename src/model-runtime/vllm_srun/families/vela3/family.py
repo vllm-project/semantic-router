@@ -65,7 +65,7 @@ QUESTION_TYPES = ("choice", "noul", "span")
 TOKEN_CACHE = 8192
 # A question reads a part whole up to this many windows' worth of tokens by
 # default (``max_scan_tokens``); a request may set another budget. A question
-# that truncates reads one window.
+# that truncates reads one window of its route: 32,768 tokens for evidence.
 SCAN_INPUTS = {"cpu": 4, "gpu": 32}
 LICENCE = {"spdx": "apache-2.0"}
 GOLDEN_STATE = {
@@ -319,7 +319,6 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         self.answerer = Answerer(router)
         self.tokens = _tokens(package)
         self.scan_tokens = scan_tokens
-        self.truncate_tokens = router.window
         self.layout = _layout(package, router.window, router.overlap)
         self.evidence_layout = _layout(package, router.evidence_window, router.overlap)
         config = package.config
@@ -414,7 +413,10 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         if not asked or request.state is None:
             return
         budget = max(scan or self.scan_tokens or 0, self.router.window)
-        cut = self.truncate_tokens
+        cut = max(
+            (self._layout_of(a).max_len for a in asked if a.question.truncate),
+            default=0,
+        )
         parts_plan = PartsPlan(
             request.state, request.question_ids, [a.question for a in asked]
         )
@@ -429,7 +431,6 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         kept = {question.id for question in whole} | {
             a.question.id for a in asked if a.question.truncate
         }
-        cut_parts = [part.cut(cut) for part in parts]
         groups: dict[tuple[Any, ...], list[Asked]] = {}
         for entry in asked:
             if entry.question.id not in kept:
@@ -453,18 +454,25 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         turns: dict[tuple[str, int], int] = {}
         for key, members in groups.items():
             first = members[0]
-            row = Row(
-                [entry.question for entry in members],
-                cut_parts if first.question.truncate else parts,
-            )
+            layout = self._layout_of(first)
+            row = Row([entry.question for entry in members], parts)
+            if first.question.truncate:
+                # Only the parts the row reads get its layout's window: the
+                # others stay at the router window, as they would on any row.
+                read = row.read_roles()
+                row.parts = [
+                    part.cut(
+                        layout.max_len if part.role in read else self.layout.max_len
+                    )
+                    for part in parts
+                ]
             if key[0] == ROUTER:
                 assert first.router is not None
                 _, adapters = self.router.router_adapters(first.router.id)
-                layout, budget_tokens = self.layout, SPAN_BUDGET
+                budget_tokens = SPAN_BUDGET
             else:
                 assert first.route is not None
                 adapters = (first.route.adapter,)
-                layout = self.evidence_layout if first.route.evidence else self.layout
                 budget_tokens = max(first.route.window, SPAN_BUDGET)
             try:
                 sequences = layout.sequences(
@@ -490,6 +498,13 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
                 plan.rows[question.id] = placed
                 if question.require_full_input:
                     plan.complete.add(question.id)
+
+    def _layout_of(self, asked: Asked) -> EncoderLayout:
+        """The layout a row question reads in: evidence spans one long window."""
+        evidence = (
+            asked.path != ROUTER and asked.route is not None and asked.route.evidence
+        )
+        return self.evidence_layout if evidence else self.layout
 
     # -- answers -------------------------------------------------------------
 

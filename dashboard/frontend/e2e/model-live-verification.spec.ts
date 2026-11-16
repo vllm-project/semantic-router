@@ -11,9 +11,9 @@ test('lets an operator run a real provider-model query and renders pending, veri
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        version: 'v0.3',
+        version: 'v0.5',
         providers: {
-          defaults: { default_model: 'logical-model' },
+          defaults: { model: 'logical-model' },
           models: [
             {
               name: 'logical-model',
@@ -26,13 +26,11 @@ test('lets an operator run a real provider-model query and renders pending, veri
                   protocol: 'http',
                 },
               ],
+              description: 'Physical provider model',
             },
           ],
         },
-        routing: {
-          modelCards: [{ name: 'logical-model', description: 'Physical provider model' }],
-          decisions: [],
-        },
+        recipes: [{ name: 'default', decisions: [] }],
       }),
     })
   })
@@ -126,9 +124,9 @@ test('keeps the Pricing column horizontally stable while the Live status changes
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        version: 'v0.3',
+        version: 'v0.5',
         providers: {
-          defaults: { default_model: 'logical-model' },
+          defaults: { model: 'logical-model' },
           models: [
             {
               name: 'logical-model',
@@ -144,13 +142,11 @@ test('keeps the Pricing column horizontally stable while the Live status changes
               // Pricing must be present for this test: an unpriced model renders a static
               // "N/A" cell that can't reflow, which would hide the bug this test guards.
               pricing: { currency: 'USD', prompt_per_1m: 3.5 },
+              description: 'Physical provider model',
             },
           ],
         },
-        routing: {
-          modelCards: [{ name: 'logical-model', description: 'Physical provider model' }],
-          decisions: [],
-        },
+        recipes: [{ name: 'default', decisions: [] }],
       }),
     })
   })

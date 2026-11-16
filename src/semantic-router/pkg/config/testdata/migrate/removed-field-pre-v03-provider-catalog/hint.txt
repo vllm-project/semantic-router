@@ -1,0 +1,1 @@
+providers.model_targets: removed_field: providers.model_targets belongs to the provider catalog before config v0.3; run `vllm-sr config migrate` (its place in the v0.5 layout)

@@ -1,0 +1,1 @@
+global.integrations.looper.fusion.model_names: removed_field: the model names of a Looper algorithm are removed; run `vllm-sr config migrate` (an entrypoint whose model_names name a recipe with a decision that runs the fusion algorithm)

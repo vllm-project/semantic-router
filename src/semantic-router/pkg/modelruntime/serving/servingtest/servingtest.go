@@ -25,7 +25,7 @@ func Runtime(t testing.TB, deployments map[string]runtimetest.Model) (*serving.R
 			model.ID = name
 		}
 		models = append(models, model)
-		attached[name] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "", ServedName: model.ID}
+		attached[name] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "", Model: model.ID}
 	}
 	fake := runtimetest.New(models...)
 	server := httptest.NewServer(fake.Handler())
@@ -40,15 +40,15 @@ func Runtime(t testing.TB, deployments map[string]runtimetest.Model) (*serving.R
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Preparation checks an attached deployment against the card the lease's
+	// watcher has observed, and skips one it has not observed yet. Return
+	// once every card is observed, as from a runtime that is already serving.
+	ctx, cancel := context.WithTimeout(context.Background(), modelservice.ReadyTimeout())
+	defer cancel()
+	for name := range attached {
+		if _, err := lease.Card(ctx, name); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return serving.New(lease, nil), fake
-}
-
-// Sequence is a fake classify model with one sequence head.
-func Sequence(labels ...string) runtimetest.Model {
-	return runtimetest.Model{Heads: []runtimetest.Head{{Name: "default", Kind: "sequence", Labels: labels}}}
-}
-
-// Grounded is a fake hallucination model: answer words absent from the context are spans.
-func Grounded() runtimetest.Model {
-	return runtimetest.Model{Heads: []runtimetest.Head{{Name: "default", Kind: "token", Labels: []string{"supported", "hallucinated"}, Inputs: []string{"grounded"}}}}
 }
