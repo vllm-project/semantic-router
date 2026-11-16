@@ -22,6 +22,7 @@ import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 import InsightsRecordSection from './InsightsRecordSection'
 import InsightsRecordTrace from './InsightsRecordTrace'
 import InsightsSessionRoutes, { InsightsSessionPosition } from './InsightsSessionRoutes'
+import { getRunPath } from './insightsRunSupport'
 
 export default function InsightsRecordPage() {
   const navigate = useNavigate()
@@ -126,6 +127,16 @@ export default function InsightsRecordPage() {
           Insights
         </button>
         <div className={styles.recordActions}>
+          {record?.session_id ? (
+            <button
+              type="button"
+              onClick={() => navigate(getRunPath(record.session_id ?? '', record.id))}
+              className={styles.recordAction}
+            >
+              <ProductIcon name="trace" width={15} height={15} />
+              Open run
+            </button>
+          ) : null}
           <button type="button" onClick={() => void loadRecord()} className={styles.recordAction}>
             <ProductIcon name="refresh" width={15} height={15} />
             Refresh

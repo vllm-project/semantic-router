@@ -128,6 +128,7 @@ func (r *OpenAIRouter) startRouterReplay(
 	ctx.RouterReplayContentOmitted = !r.replayPromptAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
 	headerSession := r.populateReplayIdentity(&record, ctx) || ctx.SessionProvenance == SessionProvenanceHeader
+	applyReplayRunParent(&record, ctx.replayRunParent)
 	applyReplayReviewSession(&record, headerSession)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
@@ -140,8 +141,9 @@ func (r *OpenAIRouter) startRouterReplay(
 
 // populateReplayIdentity records the same explicit identity used by protection,
 // including custom header names, without enabling protection or changing request
-// state. Optional Responses lineage remains the fallback for older clients. It
-// reports whether a header named the session.
+// state, and the agent run the harness names. Optional Responses lineage
+// remains the fallback for clients that name no session. It reports whether
+// a header named the session.
 func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) bool {
 	if r == nil || ctx == nil || record == nil {
 		return false
@@ -150,9 +152,17 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 	if r.Config != nil {
 		cfg = r.Config.RouterLearning.Protection
 	}
+	record.Agent = harnessRunAgent(ctx, cfg)
 	identity, ok := r.protectionIdentity(ctx, cfg)
 	if !ok {
-		return false
+		// Protection keys no state for the call, but the harness still names
+		// its run, which a per-call Responses key would split.
+		sessionID := harnessRunSession(ctx, cfg)
+		if sessionID == "" {
+			return false
+		}
+		record.SessionID = sessionID
+		return true
 	}
 	record.SessionID = identity.sessionID
 	if conversationID := identity.declaredConversationID(); conversationID != "" {
@@ -308,6 +318,7 @@ func buildReplayRoutingRecord(
 		// Tool definitions are operator-authored, not user content, so they
 		// are kept even when the prompt is suppressed.
 		record.ToolDefinitions = toolDefinitions
+		record.ReasoningEffort = ctx.SemanticRequest.ReasoningEffort
 		if !suppressBody {
 			if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
 				record.RequestBody = string(requestBody)

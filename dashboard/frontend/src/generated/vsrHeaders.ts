@@ -40,6 +40,9 @@ export const X_CLAUDE_CODE_AGENT_ID = 'x-claude-code-agent-id'
 /** Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_SESSION_ID = 'x-claude-code-session-id'
 
+/** Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it. Surface: control. */
+export const X_CODEX_PARENT_THREAD_ID = 'x-codex-parent-thread-id'
+
 /** Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it. Surface: control. */
 export const X_CODEX_TURN_METADATA = 'x-codex-turn-metadata'
 
@@ -111,6 +114,9 @@ export const X_FORWARDED_PROTO = 'x-forwarded-proto'
 
 /** Provider credential of Google APIs. Surface: internal. */
 export const X_GOOG_API_KEY = 'x-goog-api-key'
+
+/** Kind of subagent a Codex call comes from, such as `collab_spawn` or `review`, which Router Replay records with the agent; providers receive it. Surface: control. */
+export const X_OPENAI_SUBAGENT = 'x-openai-subagent'
 
 /** Limit of the rate-limit window that rejected the request. Surface: public. */
 export const X_RATELIMIT_LIMIT = 'x-ratelimit-limit'

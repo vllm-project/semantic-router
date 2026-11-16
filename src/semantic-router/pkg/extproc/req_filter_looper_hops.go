@@ -87,6 +87,7 @@ func (r *OpenAIRouter) executeLooperGraph(
 	if scope, ok := masking.RequestScope(reqCtx.TraceContext); ok {
 		ctx = masking.WithRequestScope(ctx, scope)
 	}
+	ctx = r.withReplayRunParent(ctx, reqCtx)
 	outcome, err := graph.Run(ctx, program, in, graph.Options{
 		Caller: hops,
 		Hop:    routing.Hop{Decision: decision.Name, Recipe: string(req.RecipeName)},

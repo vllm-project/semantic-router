@@ -263,6 +263,8 @@ func TestRouterReplayEveryReadRouteRedactsRecordedTextForViewer(t *testing.T) {
 		{"list with details", "/api/v1/observability/replays?showDetails=true"},
 		{"record", "/api/v1/observability/replays/replay-1"},
 		{"trajectory", "/api/v1/observability/replays/trajectory?session_id=session-1"},
+		{"runs", "/api/v1/observability/replays/runs"},
+		{"run", "/api/v1/observability/replays/run?session_id=session-1"},
 		{"aggregate", "/api/v1/observability/replays/aggregate"},
 		{"dataset", "/api/v1/observability/replays/dataset?seed=s&split=train:1"},
 		{"judge tasks", "/api/v1/observability/replays/dataset/judge-tasks?seed=s&split=train:1&blinding_key=k"},

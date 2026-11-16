@@ -773,12 +773,11 @@ the first call's start to the last one's end. Below it each call is one row, the
 request on the page marked and a model switch highlighted. Subagents are named
 `subagent 1`, `subagent 2` and so on in order of their first call, with the
 short hash of the agent id in the row's title, and the main conversation is
-`main`. The hash is recorded when protection runs and reads an agent id: the
-one Claude Code or Codex sends, or the header `identity.headers.agent` names
-(see [Session identification](../../api/session-identification#choose-the-identity-you-need)).
-A call without one shows `main`. A Codex root thread, whose agent and session
-ids are equal, is `main`. A viewer without `replay.detail` gets no hash, as with
-the rest of the redacted session policy, so a subagent's call shows `hidden` there.
+`main`. Every record keeps that hash in its `agent`, as described in
+[Agent runs](#agent-runs). A call without one shows `main`. A Codex root
+thread, whose agent and session ids are equal, is `main`. A viewer without
+`replay.detail` gets no hash, as with the rest of the redacted session policy,
+so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 
@@ -941,6 +940,85 @@ with a chip that clears the filter. A session's routing history opens each
 Codex turn with a row that links there and counts its calls, so a turn's own
 calls and its subagents' calls read as one unit, and a review that names the
 turn it judged is marked on that turn's calls.
+
+### Agent runs
+
+An agent run is one session of an agent harness: its main agent, the
+subagents it spawned, and every call they made. Replay files each call under
+the session the harness names and records the agent that made it, from the
+headers the harness already sends, whichever headers `identity.headers`
+points protection at:
+
+| Harness | Run | Agent | Parent |
+| --- | --- | --- | --- |
+| Claude Code | `x-claude-code-session-id` | `x-claude-code-agent-id`, sent on subagent calls only | none: every subagent hangs off the main agent |
+| Codex | `session-id`, the root session on every thread | `thread-id`; the root thread, equal to `session-id`, is the main agent | `x-codex-parent-thread-id`, unless it is the root thread |
+| Others | the pinned session, `x-vsr-session-id` or a `session_id_headers` header, or the one `identity.headers.session` names | the header `identity.headers.agent` names | none |
+
+A call protection cannot key is filed under its run all the same, not under a
+session of its own per call: a Codex Responses call under `scope: conversation`
+without `x-conversation-id`, or under an `identity.headers.session` Codex does
+not send, is filed under its `session-id`. Each record keeps its agent in
+`agent`:
+
+| Field | Holds |
+| --- | --- |
+| `harness` | `claude_code` or `codex`, when the request carries their identity headers. |
+| `id` | The short SHA-256 hash of the agent id, empty for the main agent. |
+| `parent_id` | The hash of the agent that spawned it, empty when the main agent did. |
+| `kind` | The subagent kind Codex sends in `x-openai-subagent`, such as `collab_spawn` or `review`. |
+
+A Looper hop carries none of its client's headers. Its record is filed in the
+run of the request that made it, under that request's agent, with
+`parent_request_id` naming the request. A record also keeps the
+`reasoning_effort` the request was sent with. A record written before these
+fields name a subagent only where protection recorded one.
+
+Two [Replay API](../../api/router#router-replay) routes read runs. `GET /api/v1/observability/replays/runs`
+takes the list's filters, `limit` and `offset`, and returns one summary per
+session over the records the filters keep, latest activity first.
+`GET /api/v1/observability/replays/run?session_id=...` returns one run across
+recipes: the same summary in `run` and every call in time order in `calls`.
+
+| Field | Holds |
+| --- | --- |
+| `prompt` | The main agent's first prompt, when Replay kept it, without `<system-reminder>` blocks. |
+| `harness`, `models`, `duration_ms` | The harness, the calls each model answered with Looper hops included, and the time from the first call's start to the last one's end. |
+| `agents` | Each agent: its `label` (`main`, then `subagent 1`, `subagent 2` by first call), the `parent` agent's label, `kind`, `id`, `calls`, first and last call, `spawned_after_record_id` (the parent's last call before this agent's first), `models` and `cost`. |
+| `outcome` | `status` from the main agent's last call: `answered` when it gave a final answer, `failed`, `aborted`, `in_progress`, or `unknown` when it asked for a tool and no call followed. With it `final_answer_record_id`, the tool results the calls carried and how many failed, each counted once, and `reported`, the outcomes posted to `/api/v1/observability/outcomes` for the run's calls. |
+| `cost` | Spend per currency as the aggregate's `total_spend` adds it, the Router's own calls apart, with the calls missing a price counted, never as free, and the tokens. |
+| `events` | Calls per marker: `switch` (another model than the agent's previous call to the same entrypoint), `escalation` (an `escalate` Looper answered by a later model than its first), `guard` (jailbreak, PII or hallucination detected), `block`, `fallback` (a cross-model fallback tried another candidate), `failure`, `tool_failure`. |
+| `calls` | Each call's `agent` label, `decision`, matched `signals` as `type:name`, `entrypoint`, `model`, `previous_model` on a switch, `effort`, `selection_method`, `session_action`, `reason` (protection's reason, and the Looper algorithm with its final attempt's reason), lifecycle and status, tokens, `cost`, `router_calls`, `looper_attempts`, `tool_results`, `tool_failures`, `final_answer`, `outcomes`, `markers`, and the Looper `hops` it made. |
+
+Without `replay.detail` a run keeps its tree, labels, markers and counts, and
+loses what its records would: the prompt, the agent hashes, the reasons and the
+text of reported outcomes. The runs list reads the filtered records whole, so
+bound it with `since` on a large PostgreSQL store.
+
+In **Insights**, the **Runs** view lists one row per run: the task, the
+harness, the agents, the models, the outcome, the cost and duration, and the
+events. A run opens as a timeline: a lane per agent in tree order, a dashed
+tick where a subagent started, and consecutive calls of one agent on one model
+drawn as one segment with its calls' markers, so a run of hundreds of calls
+reads as a few blocks. A segment lists its calls, and a call shows its decision
+and signals, model and effort, tokens and cost, status and reason, with a link
+to its record. The table of every call is one click further. A record page
+opens its run with **Open run**.
+
+With [tracing](../global/api-and-observability#observability) on, the
+Router's request span carries `session.id`, `vsr.harness`, `vsr.agent.id`,
+`vsr.agent.parent_id` and `vsr.agent.kind`, and a run is one trace:
+
+- **The harness sends `traceparent`.** The span stays in the harness's trace.
+  Claude Code sends one through a custom base URL only with its tracing on
+  and `CLAUDE_CODE_PROPAGATE_TRACEPARENT=1`, a trace per user prompt with the
+  subagents' calls in it.
+- **It sends none.** The span joins its run's trace: the Router creates a
+  root span `semantic_router.run` for the session and a `semantic_router.agent`
+  span for each subagent, under the agent that spawned it. Their ids derive
+  from the session and agent ids, so every call of the run lands in one trace
+  whichever Router process served it; each process emits those spans once.
+  Codex 0.166.0 sends no `traceparent` on its model calls.
 
 For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).

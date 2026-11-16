@@ -45,10 +45,11 @@ func redactPayload(payload any) bool {
 	}
 }
 
-// redactObjectPayload redacts a record, a list's records, and a trajectory's
-// messages and routes. A trajectory route repeats a record's route
-// diagnostics and the agent hash from its session policy, so it is redacted
-// the same way.
+// redactObjectPayload redacts a record, a list's records or runs, a
+// trajectory's messages and routes, and a run's summary and calls. A
+// trajectory route repeats a record's route diagnostics and the agent hash
+// from its session policy, and a run what its records hold, so they are
+// redacted the same way.
 func redactObjectPayload(payload map[string]any) bool {
 	changed := redactRecordMap(payload)
 	for _, list := range []struct {
@@ -56,14 +57,59 @@ func redactObjectPayload(payload map[string]any) bool {
 		redact func(map[string]any) bool
 	}{
 		{"messages", redactTrajectoryMessageMap},
-		{"data", redactRecordMap},
+		{"data", redactRecordOrRunMap},
 		{"routes", redactRouteDiagnosticsMap},
+		{"calls", redactRunCallMap},
 	} {
 		if items, ok := payload[list.field].([]any); ok && redactEach(items, list.redact) {
 			changed = true
 		}
 	}
+	if redactNestedMap(payload, "run", redactRecordOrRunMap) {
+		changed = true
+	}
 	return changed
+}
+
+func redactRecordOrRunMap(item map[string]any) bool {
+	changed := redactRecordMap(item)
+	return redactRunSummaryMap(item) || changed
+}
+
+// redactRunSummaryMap clears a run's agent hashes and the text of the
+// outcomes reported for it, keeping its tree, labels and counts. Its prompt
+// is cleared with a record's fields.
+func redactRunSummaryMap(run map[string]any) bool {
+	changed := false
+	if agents, ok := run["agents"].([]any); ok && redactEach(agents, redactAgentIdentityMap) {
+		changed = true
+	}
+	outcome, _ := run["outcome"].(map[string]any)
+	if reported, ok := outcome["reported"].([]any); ok && redactEach(reported, func(item map[string]any) bool {
+		return redactOutcomes([]any{item["outcome"]})
+	}) {
+		changed = true
+	}
+	return changed
+}
+
+// redactRunCallMap clears a run call's protection and Looper reason and its
+// reported outcomes' text, and its Looper hops' too.
+func redactRunCallMap(call map[string]any) bool {
+	changed := clearStringField(call, "reason")
+	if redactOutcomes(call["outcomes"]) {
+		changed = true
+	}
+	if hops, ok := call["hops"].([]any); ok && redactEach(hops, redactRunCallMap) {
+		changed = true
+	}
+	return changed
+}
+
+// redactAgentIdentityMap clears the hashes of the agent ids a harness sent.
+func redactAgentIdentityMap(agent map[string]any) bool {
+	changed := clearStringField(agent, "id")
+	return clearStringField(agent, "parent_id") || changed
 }
 
 func redactEach(items []any, redact func(map[string]any) bool) bool {
@@ -122,6 +168,9 @@ func redactRecordMap(record map[string]any) bool {
 		changed = true
 	}
 	if clearObjectField(record, "session_policy") {
+		changed = true
+	}
+	if redactNestedMap(record, "agent", redactAgentIdentityMap) {
 		changed = true
 	}
 	if redactNestedMap(record, "route_diagnostics", redactRouteDiagnosticsMap) {

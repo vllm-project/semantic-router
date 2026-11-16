@@ -237,6 +237,12 @@ global:
 configurations that use `traceidratio` or `trace_id_ratio` continue to work as
 compatibility aliases.
 
+An agent run is one trace. A request that carries `traceparent` stays in its
+harness's trace; one that carries none and names a session is parented under a
+`semantic_router.run` root and a `semantic_router.agent` span per subagent the
+Router creates for that run, so all of the run's calls share a trace. See
+[Agent runs](../plugin/router-replay#agent-runs).
+
 Common Prometheus metric families:
 
 | Family | Example metrics |

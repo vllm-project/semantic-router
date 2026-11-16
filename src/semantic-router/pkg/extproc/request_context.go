@@ -449,6 +449,7 @@ type RequestContext struct {
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process
+	replayRunParent *replayRunParent      // The client request a hop is made for
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
 	// LooperTrace is what the Looper's execution reports in x-vsr-trace.

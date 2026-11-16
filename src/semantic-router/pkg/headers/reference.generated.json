@@ -324,6 +324,30 @@
       "doc": "Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it."
     },
     {
+      "name": "x-codex-parent-thread-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_replay",
+      "version": "v0.5",
+      "doc": "Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it."
+    },
+    {
+      "name": "x-openai-subagent",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_replay",
+      "version": "v0.5",
+      "doc": "Kind of subagent a Codex call comes from, such as `collab_spawn` or `review`, which Router Replay records with the agent; providers receive it."
+    },
+    {
       "name": "x-conversation-id",
       "direction": [
         "request",
