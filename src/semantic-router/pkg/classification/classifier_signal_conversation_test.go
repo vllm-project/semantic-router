@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func ptrFloat(v float64) *float64 { return &v }
@@ -337,5 +338,63 @@ func TestConversation_SessionHistoryTokens(t *testing.T) {
 	}
 	if got := resolveConversationValue(rule.Feature, ConversationFacts{}); got != 0 {
 		t.Fatalf("missing facts must resolve session_history_tokens to 0, got %v", got)
+	}
+}
+
+// A result failed when the client flags it, and succeeded only when Claude
+// Code's foreground Bash or a Codex shell header says so. Everything else,
+// text a command printed or a tool fetched included, says nothing.
+func TestToolResultStatusOfReadsOnlyTheFlagOrTheCodexHeader(t *testing.T) {
+	failed, cleared := true, false
+	anthropic, responses := llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIResponsesV1
+	bash := &llmprotocol.ToolCall{Name: "Bash", Arguments: `{"command":"make"}`}
+	background := &llmprotocol.ToolCall{Name: "Bash", Arguments: `{"command":"make","run_in_background":true}`}
+	read := &llmprotocol.ToolCall{Name: "Read", Arguments: `{"file_path":"Makefile"}`}
+	exec := &llmprotocol.ToolCall{Name: "exec_command"}
+	shell := &llmprotocol.ToolCall{Name: "shell"}
+	header := "Exit code: 1\nWall time: 0.1 seconds\nOutput:\n"
+	for _, tc := range []struct {
+		name    string
+		format  llmprotocol.WireFormat
+		call    *llmprotocol.ToolCall
+		isError *bool
+		text    string
+		want    ToolResultStatus
+	}{
+		{"flag set", anthropic, read, &failed, "File does not exist.", ToolResultFailed},
+		{"flag set without the call", anthropic, nil, &failed, "denied", ToolResultFailed},
+		{"bash with the flag cleared", anthropic, bash, &cleared, "ok", ToolResultSucceeded},
+		{"bash in the background", anthropic, background, &cleared, "Command running in background with ID: b1.", ToolResultUnknown},
+		{"another tool with the flag cleared", anthropic, read, nil, "1\tall:", ToolResultUnknown},
+		{"anthropic text with a codex header", anthropic, read, nil, header, ToolResultUnknown},
+		{"shell nonzero exit", responses, shell, nil, "Exit code: 127\nWall time: 0.1 seconds\nOutput:\nsh: make: not found\n", ToolResultFailed},
+		{"exec_command nonzero exit", responses, exec, nil, "Chunk ID: a\nWall time: 0.1000 seconds\nProcess exited with code 2\nOriginal token count: 1\nOutput:\n", ToolResultFailed},
+		{"exec_command zero exit", responses, exec, nil, "Chunk ID: a\nProcess exited with code 0\nOutput:\nExit code: 1\n", ToolResultSucceeded},
+		{"still running", responses, exec, nil, "Chunk ID: a\nProcess running with session ID 3\nOutput:\n", ToolResultUnknown},
+		{"a line codex does not write", responses, exec, nil, "CI log for run 42\n" + header, ToolResultUnknown},
+		{"no output line", responses, exec, nil, "Exit code: 1\nbuild failed", ToolResultUnknown},
+		{"another tool's header", responses, &llmprotocol.ToolCall{Name: "fetch"}, nil, header, ToolResultUnknown},
+		{"a namespaced tool's header", responses, &llmprotocol.ToolCall{Name: "exec_command", Namespace: "mcp__ci"}, nil, header, ToolResultUnknown},
+		{"without the call", responses, nil, nil, header, ToolResultUnknown},
+	} {
+		if got := ToolResultStatusOf(tc.format, tc.call, tc.isError, tc.text); got != tc.want {
+			t.Errorf("%s: ToolResultStatusOf() = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+// Unknown results neither add a failure nor count toward the two successes
+// in a row that clear the count.
+func TestToolFailureCountSkipsUnknownResults(t *testing.T) {
+	var count ToolFailureCount
+	for _, status := range []ToolResultStatus{ToolResultFailed, ToolResultFailed, ToolResultUnknown, ToolResultSucceeded, ToolResultUnknown} {
+		count.Observe(status)
+	}
+	if count.Failed != 2 {
+		t.Fatalf("Failed = %d after one success, want 2", count.Failed)
+	}
+	count.Observe(ToolResultSucceeded)
+	if count.Failed != 0 {
+		t.Fatalf("Failed = %d after two successes, want 0", count.Failed)
 	}
 }

@@ -72,6 +72,7 @@
             "api-key",
             "api-subscription-key",
             "authorization",
+            "chatgpt-account-id",
             "content-length",
             "ocp-apim-subscription-key",
             "x-api-key",
@@ -156,6 +157,12 @@
               "header": {
                 "key": "x-vsr-selected-model",
                 "rawValueText": "claude-compatible"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-replay-id",
+                "rawValueText": "<volatile>"
               }
             }
           ]

@@ -1,7 +1,9 @@
 package parity
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -32,6 +34,16 @@ func TestWireRecordsThroughAPassThroughGateway(t *testing.T) {
 	target, _ := url.Parse(backendServer.URL)
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Read the whole request body first, as a gateway must over HTTP/1.1:
+		// once the streamed answer's headers are flushed, the server may
+		// refuse the transport's last read of the body, and the transport
+		// then closes the upstream connection mid-stream.
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
 		r.Header.Set("x-vsr-route-model", "model-a")
 		proxy.ServeHTTP(w, r)
 	}))
@@ -45,6 +57,9 @@ func TestWireRecordsThroughAPassThroughGateway(t *testing.T) {
 	if buffered.Route != "model-a" || buffered.Upstream.Header.Get(":path") != "/v1/chat/completions?x=1" ||
 		string(buffered.Upstream.Body) != `{"model":"m"}` || buffered.Upstream.Header.Get("x-request-id") != "parity-buffered" {
 		t.Fatalf("buffered upstream = %+v", buffered.Upstream)
+	}
+	if streamed.Error != "" || streamed.Response == nil {
+		t.Fatalf("streamed record = %+v", streamed)
 	}
 	if string(streamed.Response.Body) != "data: a\n\ndata: [DONE]\n\n" {
 		t.Fatalf("streamed body = %q", streamed.Response.Body)

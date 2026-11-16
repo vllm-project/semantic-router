@@ -573,7 +573,12 @@ func appendAnthropicOutputDiagnostics(
 		return nil
 	}
 	if request.OutputFormat.Strict != nil && !*request.OutputFormat.Strict {
-		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "output_format.strict", "Messages always enforces its output schema")
+		// an answer held to the schema is one a best-effort request accepts too
+		*diagnostics = appendDiagnostics(*diagnostics, llmprotocol.Diagnostics{{
+			Source: request.Trusted.SourceFormat, Target: llmprotocol.AnthropicMessagesV1,
+			Field: "output_format.strict", Action: llmprotocol.DiagnosticApproximated,
+			Reason: "Messages always enforces its output schema",
+		}}, policy.Limits.Diagnostics)
 	}
 	if request.OutputFormat.Name != "" && request.OutputFormat.Name != "structured_output" {
 		appendProviderFieldOmission(diagnostics, policy, request.Trusted.SourceFormat, "output_format.name", "Messages output schemas are unnamed")

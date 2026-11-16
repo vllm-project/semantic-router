@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/codexreview"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
@@ -15,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -406,6 +408,7 @@ type RequestContext struct {
 	PIIBlocked         bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
+	ModelCallMeter    *modelservice.RequestMeter
 	TraceContext      context.Context // OpenTelemetry trace context for span propagation
 	RequestSpan       trace.Span      // Spans the complete ext_proc request, including streaming
 	UpstreamSpan      trace.Span      // Spans provider dispatch through final response body
@@ -433,6 +436,14 @@ type RequestContext struct {
 	// trusted-facts gate and its selection) recorded before Replay created
 	// its record; startRouterReplay appends them.
 	pendingToolsOutcomes []routerreplay.Outcome
+	// ApprovalReview is the agent approval review this request carries, seen
+	// at ingress and given its verdict from the response. Observational only:
+	// nothing routes, authorizes or masks on it.
+	ApprovalReview        *routerreplay.Review
+	approvalReviewSettled bool
+	// AgentTurn is the Codex turn the request belongs to, read from its turn
+	// metadata at ingress. Replay records it; nothing routes on it.
+	AgentTurn codexreview.Turn
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process

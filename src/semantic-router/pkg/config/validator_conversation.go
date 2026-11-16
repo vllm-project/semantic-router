@@ -18,6 +18,7 @@ var validConversationSourceTypes = map[string]bool{
 	"flow_tool_state":        true,
 	"turn_index":             true,
 	"session_history_tokens": true,
+	"failed_tool_result":     true,
 }
 
 var validConversationSourceRoles = map[string]bool{
@@ -51,7 +52,7 @@ func ValidateConversationRuleContract(rule ConversationRule) error {
 		return fmt.Errorf("unsupported feature.type %q; valid types: count, exists", rule.Feature.Type)
 	}
 	if !validConversationSourceTypes[rule.Feature.Source.Type] {
-		return fmt.Errorf("unsupported feature.source.type %q; valid types: message, tool_definition, tool_choice_required, tool_choice_none, assistant_tool_call, assistant_tool_cycle, active_tool_loop, flow_tool_state", rule.Feature.Source.Type)
+		return fmt.Errorf("unsupported feature.source.type %q; valid types: message, tool_definition, tool_choice_required, tool_choice_none, assistant_tool_call, assistant_tool_cycle, active_tool_loop, flow_tool_state, failed_tool_result", rule.Feature.Source.Type)
 	}
 	if rule.Feature.Source.Role != "" {
 		if rule.Feature.Source.Type != "message" {

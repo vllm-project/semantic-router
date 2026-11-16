@@ -101,13 +101,24 @@ type RouterLearningIdentityConfig struct {
 type RouterLearningIdentityHeadersConfig struct {
 	// Session names the header protection reads the session id from. Unset,
 	// protection keys on the session id the request pins: x-vsr-session-id,
-	// or a header global.router.headers.session_id_headers accepts.
+	// or a header global.router.headers.session_id_headers accepts, and
+	// without one on the session a supported harness sends.
 	Session      *string `yaml:"session,omitempty"`
 	Conversation *string `yaml:"conversation,omitempty"`
 	// Agent names an optional header that identifies one agent inside a
 	// session, such as a delegated subagent. Requests that carry it are held
 	// per agent; requests without it keep the session or conversation key.
+	// Unset, protection reads the agent a supported harness sends.
 	Agent *string `yaml:"agent,omitempty"`
+}
+
+// defaultIdentityHeaders are the headers supported agent harnesses send their
+// ids in, read in order when identity.headers names none. Codex sends
+// session-id and thread-id on every request, and Claude Code sends its
+// subagents' id; its session header is a session_id_headers default.
+var defaultIdentityHeaders = map[string][]string{
+	"session": {headers.CodexSessionID},
+	"agent":   {headers.XClaudeCodeAgentID, headers.CodexThreadID},
 }
 
 // RouterLearningProtectionTuning exposes the stable protection knobs.
@@ -284,6 +295,17 @@ func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 	default:
 		return ""
 	}
+}
+
+// IdentityHeaderNames are the headers protection reads key's id from, in
+// order: the one identity.headers names, else the defaults supported
+// harnesses send. An unset session is read first from the session the
+// request pins.
+func (cfg RouterLearningProtectionConfig) IdentityHeaderNames(key string) []string {
+	if header := cfg.HeaderName(key); header != "" {
+		return []string{header}
+	}
+	return defaultIdentityHeaders[key]
 }
 
 func (cfg DecisionAdaptationsConfig) EffectiveMode() string {

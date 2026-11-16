@@ -42,6 +42,18 @@ type Result struct {
 // being scanned at the time of the error is never mutated, and the caller is
 // expected to discard the whole request rather than dispatch it (D4).
 func Apply(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, error) {
+	if a.err != nil {
+		return Result{}, a.err
+	}
+	if a.identity != nil {
+		if err := a.prepare(request); err != nil {
+			return Result{}, err
+		}
+	}
+	return applyRequest(request, a, scan)
+}
+
+func applyRequest(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, error) {
 	var result Result
 	// Instructions before Messages, so placeholder indices are stable
 	// regardless of where a value first appears in the request.
@@ -67,6 +79,9 @@ func Apply(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, e
 			result.Changed = true
 			request.Safeguards = json.RawMessage(masked)
 		}
+	}
+	if a.err != nil {
+		return Result{}, a.err
 	}
 	result.EntityTypes = dedupSortedEntityTypes(result.EntityTypes)
 	return result, nil

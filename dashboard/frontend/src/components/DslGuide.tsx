@@ -163,7 +163,9 @@ SIGNAL domain math {
 # PLUGINS
 # ============================================
 
-PLUGIN replay router_replay {}
+PLUGIN replay router_replay {
+  enabled: true
+}
 
 # ============================================
 # ROUTES
@@ -208,7 +210,9 @@ const ROUTE_SNIPPET = `ROUTE my_route (description = "Description") {
   }
 }`
 
-const PLUGIN_SNIPPET = `PLUGIN my_plugin router_replay {}`
+const PLUGIN_SNIPPET = `PLUGIN my_plugin router_replay {
+  enabled: true
+}`
 
 // Signal type descriptions
 const SIGNAL_DESCRIPTIONS: Record<string, string> = {

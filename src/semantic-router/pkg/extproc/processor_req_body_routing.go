@@ -517,6 +517,11 @@ func (r *OpenAIRouter) appendProviderCredential(
 	// No upstream receives the authenticator's delegated credential header; a
 	// delegated backend receives its value under the provider auth header.
 	state.removeHeaders = append(state.removeHeaders, r.delegatedCredentialHeadersForRemoval()...)
+	if !state.profile.Caller() {
+		// The ChatGPT account a login acts for goes only with that login, so
+		// a model beside a caller pool, such as a local one, never sees it.
+		state.removeHeaders = append(state.removeHeaders, callerCredentialCompanions["openai"]...)
+	}
 	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
 		return refused
 	}

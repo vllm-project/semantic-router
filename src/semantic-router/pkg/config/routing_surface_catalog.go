@@ -310,6 +310,15 @@ func DecisionAlgorithmCatalog() []AlgorithmCatalogEntry {
 	return result
 }
 
+// DecisionAlgorithmDisplayName returns the catalog's name for an algorithm
+// type, or the type itself when the catalog names none.
+func DecisionAlgorithmDisplayName(algorithmType string) string {
+	if entry, ok := decisionAlgorithmCatalogEntry(algorithmType); ok && entry.DisplayName != "" {
+		return entry.DisplayName
+	}
+	return algorithmType
+}
+
 // GetAlgorithmTier returns the tier for a given algorithm type, or empty string if unknown
 func GetAlgorithmTier(algorithmType string) string {
 	entry, ok := decisionAlgorithmCatalogEntry(algorithmType)

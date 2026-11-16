@@ -68,12 +68,16 @@ configuration surface.
 
 ## Files on the Router's disk {#router-local-files}
 
-Two features keep files on the Router's own disk rather than in a service:
+Three features keep files on the Router's own disk rather than in a service:
 
 | Feature | Setting | When unset |
 | --- | --- | --- |
 | Vector store uploads | `global.stores.vector_store.file_storage_dir` | `/var/lib/vsr/data` |
 | Router Flow tool state, `file` backend | `global.integrations.looper.flow.state.file.directory` | The user cache directory |
+| Router Replay, `file` backend (the default) | None | `.vllm-sr/router-replay.jsonl` beside the configuration file |
+
+The check below skips Replay's file, which falls back to memory instead; see
+[Keep records across restarts](../tutorials/plugin/router-replay#keep-records-across-restarts).
 
 `/var/lib/vsr` is the Router's data directory, the one every deployment below
 makes writable. Keep local storage paths under it:

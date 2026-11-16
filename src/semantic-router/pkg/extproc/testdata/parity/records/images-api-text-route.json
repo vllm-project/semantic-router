@@ -121,6 +121,10 @@
               {
                 "name": "x-vsr-selected-recipe",
                 "value": "default"
+              },
+              {
+                "name": "x-vsr-replay-id",
+                "value": "<volatile>"
               }
             ]
           },
@@ -151,6 +155,10 @@
       {
         "name": "x-vsr-selected-recipe",
         "value": "default"
+      },
+      {
+        "name": "x-vsr-replay-id",
+        "value": "<volatile>"
       },
       {
         "name": "content-length",

@@ -14,8 +14,11 @@ const (
 	// maxIdleConnsPerHost bounds the idle pool at Envoy's default
 	// max_connections circuit breaker.
 	maxIdleConnsPerHost = 1024
-	// idleConnTimeout is Envoy's default upstream connection idle timeout.
-	idleConnTimeout = time.Hour
+	// idleConnTimeout closes an idle connection before the backend does.
+	// uvicorn (vLLM's server) and Node close theirs after 5s, and a call sent
+	// while that close is still on its way gets no response. Envoy's default
+	// is an hour.
+	idleConnTimeout = 4 * time.Second
 	// tlsSessionCacheSize bounds resumable TLS sessions per security domain.
 	tlsSessionCacheSize = 64
 )

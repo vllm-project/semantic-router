@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 import type { FieldSchema } from '../lib/dslSchemas'
 import { routerConfigFieldAtPath } from '../lib/routerConfigSchema'
+import { DEFAULT_SECTIONS } from './configPageRouterDefaultsCatalog'
 import { buildRouterSectionCards } from './configPageRouterDefaultsSupport'
 import { getRouterStructuredFieldDefinition } from './configPageRouterStructuredFields'
 import {
@@ -66,6 +67,14 @@ describe('router defaults structured schemas', () => {
     expect(card.save(card.editData)).toMatchObject({
       services: { router_replay: replay },
     })
+  })
+
+  it('offers the file store Replay keeps its records in by default', () => {
+    const card = buildRouterSectionCards({ config: null, routerConfig: {}, routerDefaults: null }).find(
+      (item) => item.key === 'router_replay',
+    )!
+    expect(card.editFields.find((field) => field.name === 'store_backend')?.options).toContain('file')
+    expect((DEFAULT_SECTIONS.router_replay as { store_backend?: string }).store_backend).toBe('file')
   })
 
   it('normalizes typed lists and objects while preserving advanced keys', () => {

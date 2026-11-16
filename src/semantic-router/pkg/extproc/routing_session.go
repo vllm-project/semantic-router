@@ -1,9 +1,11 @@
 package extproc
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"runtime/debug"
 	"strconv"
 
@@ -105,7 +107,12 @@ func (s *routingSession) RequestBody(body []byte, endOfStream bool) (*routing.Ef
 	}
 	return s.phase(func() (*ext_proc.ProcessingResponse, error) {
 		response, err := s.router.handleRequestBodyDispatch(v, s.ctx)
-		return s.router.requestBodyReply(response, err, s.ctx)
+		response, err = s.router.requestBodyReply(response, err, s.ctx)
+		if state, _ := replayLifecycleForProcessError(err); err != nil && state == routerreplay.LifecycleFailed {
+			// The gateway answers a request body phase that failed with 500.
+			s.router.updateRouterReplayStatus(s.ctx, http.StatusInternalServerError, false)
+		}
+		return response, err
 	}, func(response *ext_proc.ProcessingResponse) {
 		finishImmediateResponseTrace(s.ctx, response)
 	})
@@ -146,7 +153,8 @@ func (s *routingSession) Evidence() routing.Evidence {
 
 // Close ends the request the way the end of its ext_proc stream would: EOF
 // after a delivered response, cancellation or a deadline when the transport
-// gave up early.
+// gave up early. A local reply was delivered too, but no response phase saw
+// it, so its replay record keeps what the client got.
 func (s *routingSession) Close(err error) {
 	if s.closed {
 		return
@@ -160,8 +168,11 @@ func (s *routingSession) Close(err error) {
 		return
 	}
 	transportErr := io.EOF
+	var local *routing.LocalReply
 	switch {
 	case err == nil:
+	case errors.As(err, &local):
+		s.router.failAnsweredRouterReplay(s.ctx, local.Status, nil, "upstream_"+cmp.Or(local.Failure, "unavailable"))
 	case errors.Is(err, context.DeadlineExceeded):
 		transportErr = context.DeadlineExceeded
 	default:
