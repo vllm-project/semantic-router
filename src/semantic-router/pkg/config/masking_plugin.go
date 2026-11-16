@@ -185,8 +185,10 @@ func validateMaskingPlugin(at PluginAt, p *MaskingPluginConfig) error {
 }
 
 // validateMaskingPlaceholdersDistinct refuses identical templates for different
-// entity types. Different templates can still intersect; the allocator skips
-// already-issued strings when their outputs collide.
+// entity types. In sequence mode different templates can still intersect, and
+// the allocator skips already-issued strings when their outputs collide. In
+// registry mode a value keeps its index for good, so nothing can be skipped:
+// intersecting templates are refused too.
 func validateMaskingPlaceholdersDistinct(at PluginAt, p *MaskingPluginConfig, labels []string) error {
 	var types []string
 	if strings.TrimSpace(p.Signal) != "" {
@@ -196,6 +198,7 @@ func validateMaskingPlaceholdersDistinct(at PluginAt, p *MaskingPluginConfig, la
 		}
 	}
 	owner := map[string]string{}
+	var seen []string
 	for _, entityType := range append(slices.Clone(types), p.RuleNames()...) {
 		template := p.EffectivePlaceholder(entityType)
 		if other, taken := owner[template]; taken && other != entityType {
@@ -203,9 +206,59 @@ func validateMaskingPlaceholdersDistinct(at PluginAt, p *MaskingPluginConfig, la
 			sort.Strings(pair)
 			return at.Errorf("placeholders: %q and %q can both produce the same placeholder (%s)", pair[0], pair[1], template)
 		}
+		if _, taken := owner[template]; taken {
+			continue
+		}
+		if p.RegistryMode() {
+			for _, other := range seen {
+				if written, ok := maskingTemplatesIntersect(other, template); ok {
+					pair := []string{owner[other], entityType}
+					sort.Strings(pair)
+					return at.Errorf("placeholders: %q and %q can both produce %s, and index: %s keeps each value's index for good, so their templates must not intersect", pair[0], pair[1], written, MaskingIndexRegistry)
+				}
+			}
+		}
 		owner[template] = entityType
+		seen = append(seen, template)
 	}
 	return nil
+}
+
+// maskingTemplatesIntersect reports a placeholder that two different
+// templates both write at canonical decimal indexes. Validation keeps a
+// character other than a digit on each side of {index}, so the template with
+// the shorter prefix decides the only index that can collide: the digits that
+// open the rest of the longer prefix.
+func maskingTemplatesIntersect(a, b string) (string, bool) {
+	aPrefix, aSuffix, _ := strings.Cut(a, MaskingPlaceholderIndexToken)
+	bPrefix, bSuffix, _ := strings.Cut(b, MaskingPlaceholderIndexToken)
+	if len(aPrefix) > len(bPrefix) {
+		aPrefix, aSuffix, bPrefix, bSuffix = bPrefix, bSuffix, aPrefix, aSuffix
+	}
+	rest, ok := strings.CutPrefix(bPrefix, aPrefix)
+	if !ok || rest == "" {
+		return "", false
+	}
+	index := rest[:len(rest)-len(strings.TrimLeft(rest, "0123456789"))]
+	if !canonicalMaskingIndex(index) {
+		return "", false
+	}
+	written := aPrefix + index + aSuffix
+	middle, ok := strings.CutPrefix(written, bPrefix)
+	if !ok {
+		return "", false
+	}
+	other, ok := strings.CutSuffix(middle, bSuffix)
+	return written, ok && canonicalMaskingIndex(other)
+}
+
+// canonicalMaskingIndex reports whether s is an index as the allocator writes
+// it: decimal digits with no leading zero.
+func canonicalMaskingIndex(s string) bool {
+	if s == "" || len(s) > 1 && s[0] == '0' {
+		return false
+	}
+	return strings.Trim(s, "0123456789") == ""
 }
 
 // validateMaskingSignals resolves every masking plugin of a recipe, its
