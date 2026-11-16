@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import type { TestContext } from "node:test";
 import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { host } from "./host.ts";
 import type { Snapshot } from "../../src/decisions.ts";
 
@@ -13,11 +14,16 @@ interface Request {
   tools?: unknown[];
   reasoning_effort?: string;
 }
-async function fixture(t: TestContext, agentModel = false) {
+async function fixture(t: TestContext, agentModel = false, priced = false) {
   const requests: Request[] = [],
     classifications: Record<string, unknown>[] = [];
   let retried = false;
   let offline = false;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  t.after(() => release());
   const server = createServer(async (req, res) => {
     // A plain decision runtime: no Router listener, so no vsr profile or rules.
     if (req.method === "GET" && req.url === "/v1/systemone/models") {
@@ -74,6 +80,7 @@ async function fixture(t: TestContext, agentModel = false) {
       .slice(lastUser + 1)
       .filter((message) => message.role === "tool");
     const child = text.includes("TASK:");
+    if (child && text.includes("BACKGROUND")) await gate;
     if (child && text.includes("RETRY") && !retried) {
       retried = true;
       res.writeHead(503);
@@ -81,7 +88,11 @@ async function fixture(t: TestContext, agentModel = false) {
       return;
     }
     const resume = text.includes("RESUME") && results.length === 1;
-    const spawn = !!body.tools?.length && !child && (!results.length || resume);
+    const spawn =
+      !!body.tools?.length &&
+      !child &&
+      text.includes("ROOT") &&
+      (!results.length || resume);
     const calls = Array.from(
       { length: text.includes("CONCURRENT") ? 2 : 1 },
       (_, i) => ({
@@ -92,7 +103,8 @@ async function fixture(t: TestContext, agentModel = false) {
           arguments: JSON.stringify({
             agent: "general",
             description: "Native routing fixture",
-            prompt: `TASK: ${text.includes("LOWCONF") ? "LOWCONF" : text.includes("RETRY") ? "RETRY" : "EASY"} ${i}`,
+            ...(text.includes("BACKGROUND") ? { background: true } : {}),
+            prompt: `TASK: ${text.includes("BACKGROUND") ? "BACKGROUND" : text.includes("LOWCONF") ? "LOWCONF" : text.includes("RETRY") ? "RETRY" : "EASY"} ${i}`,
             ...(text.includes("EXPLICIT")
               ? { model: "fixture/strong#high" }
               : {}),
@@ -190,6 +202,7 @@ async function fixture(t: TestContext, agentModel = false) {
             id,
             {
               name: id,
+              ...(priced ? { cost: { input: 1, output: 2 } } : {}),
               capabilities: { tools: true },
               limit: { context: 32768, output: 1024 },
               variants: ["low", "medium", "high"].map((id) => ({
@@ -206,6 +219,7 @@ async function fixture(t: TestContext, agentModel = false) {
     ...native,
     requests,
     classifications,
+    release,
     setOffline() {
       offline = true;
     },
@@ -259,6 +273,7 @@ test(
     assert.equal(snapshot.decisions[0]?.usage?.input, 10);
     assert.equal(snapshot.decisions[0]?.usage?.output, 2);
     assert.ok(snapshot.decisions[0]?.childSessionID);
+    assert.equal(snapshot.decisions[0]?.costKnown, false);
     const before = native.classifications.length;
     const explicit = await native.run("ROOT EXPLICIT");
     assert.deepEqual(
@@ -425,5 +440,34 @@ test(
       [],
     );
     assert.equal(native.requests.at(-2)?.model, "strong");
+  },
+);
+
+test(
+  "native background child usage is pending until completion and priced separately",
+  { timeout: 60000 },
+  async (t) => {
+    const native = await fixture(t, false, true);
+    const run = await native.run("ROOT BACKGROUND");
+    const before = (await native.rpc("snapshot", {
+      sessionID: run.sessionID,
+    })) as Snapshot;
+    assert.ok(before.decisions[0]?.childSessionID);
+    assert.equal(before.decisions[0]?.usage, undefined);
+    assert.equal(before.decisions[0]?.costKnown, undefined);
+    native.release();
+    let after = before;
+    for (let i = 0; i < 100; i++) {
+      after = (await native.rpc("snapshot", {
+        sessionID: run.sessionID,
+      })) as Snapshot;
+      if (after.decisions[0]?.usage) break;
+      await delay(100);
+    }
+    assert.equal(after.decisions[0]?.usage?.input, 10);
+    assert.equal(after.decisions[0]?.usage?.output, 2);
+    assert.equal(after.decisions[0]?.costKnown, true);
+    assert.equal(after.decisions[0]?.childOutcome, "succeeded");
+    assert.ok((after.decisions[0]?.usage?.cost ?? 0) > 0);
   },
 );

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { guard } from "../src/guard-policy.ts";
 import { Listener, NO_RULES, profileOf, rulesOf } from "../src/listener.ts";
+import { Controls } from "../src/controls.ts";
 import { inspectOutput } from "../src/output-policy.ts";
 import { addedPlaceholders } from "../src/output-hooks.ts";
 import { RuntimeClient } from "../src/runtime.ts";
@@ -63,6 +64,7 @@ function fake(
   const calls = { listing: 0, rules: 0 };
   return {
     calls,
+    listenerKey: () => "vsr.rules:fixture",
     listing: async () => {
       calls.listing++;
       return listed();
@@ -169,6 +171,7 @@ test("the profile sets the apps the person did not name, and an outage keeps the
     settings,
     runtime,
     new Set<App>(["shield"]),
+    undefined,
     () => now,
   );
   await listener.follow();
@@ -400,4 +403,90 @@ test("redact withholds an output a required rule could not check, and records an
   );
   assert.equal(over.withheld, true);
   assert.match(over.text, /past the 256 KiB/);
+});
+
+test("an app the person changes in the decision view stays theirs, across a restart too", async () => {
+  const settings = parseSettings({});
+  const runtime = fake(
+    () => ok(listing({ guard: false, shield: false })),
+    () => ok({}),
+  );
+  const listener = new Listener(settings, runtime, []);
+  let saved: unknown;
+  const controls = new Controls(
+    settings,
+    "instance",
+    async (value) => {
+      saved = value;
+    },
+    () => {},
+    (apps) => listener.pin(apps),
+  );
+  await listener.follow();
+  assert.equal(settings.apps.guard, false);
+  assert.deepEqual(
+    await controls.update({
+      instanceID: "instance",
+      expectedRevision: 0,
+      apps: { guard: true },
+    }),
+    { saved: true, revision: 1 },
+  );
+  await listener.follow();
+  assert.equal(settings.apps.guard, true, "the listener no longer sets guard");
+  assert.equal(settings.apps.shield, false, "it still sets the others");
+
+  const restarted = parseSettings({});
+  const next = new Listener(restarted, runtime, []);
+  await new Controls(
+    restarted,
+    "next",
+    async () => {},
+    () => {},
+    (apps) => next.pin(apps),
+  ).load(async () => saved);
+  await next.follow();
+  assert.equal(restarted.apps.guard, true);
+  assert.equal(restarted.apps.shield, false);
+});
+
+test("a restart during a listener outage keeps the rules the last run read", async () => {
+  const kept = new Map<string, unknown>();
+  const store = {
+    get: async (key: string) => kept.get(key),
+    set: async (key: string, value: unknown) => {
+      kept.set(key, value);
+    },
+    remove: async (key: string) => {
+      kept.delete(key);
+    },
+  };
+  let listed: Result<unknown> = ok(listing({ rules: rules("r1", true) }));
+  const runtime = fake(
+    () => listed,
+    () => ({ ok: false, code: "offline", elapsedMs: 1 }),
+  );
+  await new Listener(parseSettings({}), runtime, [], store).follow();
+  listed = { ok: false, code: "offline", elapsedMs: 1 };
+  const settings = parseSettings({});
+  const restarted = new Listener(settings, runtime, [], store);
+  await restarted.follow();
+  assert.equal(restarted.rules.revision, "r1");
+  const held = await guard(
+    "ls",
+    settings,
+    quiet,
+    undefined,
+    Date.now,
+    restarted,
+  );
+  assert.equal(held.reason, "listener-unchecked");
+
+  listed = { ok: false, code: "http", status: 404, elapsedMs: 1 };
+  await new Listener(parseSettings({}), runtime, [], store).follow();
+  assert.equal(
+    kept.size,
+    0,
+    "a listing that binds no rules forgets the kept ones",
+  );
 });

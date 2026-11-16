@@ -1,3 +1,4 @@
+import { knownPrices } from "./prices.ts";
 import type { Plugin } from "@opencode/plugin";
 import type { Settings } from "./settings.ts";
 import { isRecord } from "./settings.ts";
@@ -19,17 +20,83 @@ export async function registerRouting(
     return decision.id;
   });
   const pending = new Map<string, { sessionID: string; decisionID: string }>();
+  const children = new Map<
+    string,
+    { sessionID: string; decisionID: string; foreground: boolean }
+  >();
   const abort = new AbortController();
+  async function observe(childID: string, completed = false): Promise<void> {
+    const selected = children.get(childID);
+    if (!selected || abort.signal.aborted) return;
+    try {
+      const child = await ctx.session.get({ sessionID: childID });
+      const terminal =
+        completed ||
+        selected.foreground ||
+        child.outcome !== undefined ||
+        child.time.idle !== undefined;
+      let costKnown = false;
+      if (terminal && child.model) {
+        try {
+          const models = (await ctx.model.list()).data;
+          const model = models.find(
+            (model) =>
+              model.providerID === child.model!.providerID &&
+              model.id === child.model!.id,
+          );
+          costKnown = knownPrices(model?.cost);
+        } catch {
+          /* Usage remains useful without a known price. */
+        }
+      }
+      if (abort.signal.aborted || children.get(childID) !== selected) return;
+      decisions.observe(selected.sessionID, selected.decisionID, {
+        childSessionID: child.id,
+        ...(child.model ? { model: fullModel(child.model) } : {}),
+        ...(child.outcome ? { childOutcome: child.outcome } : {}),
+        ...(terminal
+          ? {
+              costKnown,
+              usage: {
+                input: child.tokens.input,
+                output: child.tokens.output,
+                cachedInput: child.tokens.cache.read,
+                reasoning: child.tokens.reasoning,
+                cost: child.cost,
+              },
+            }
+          : {}),
+      });
+      if (terminal) children.delete(childID);
+      await notify(selected.sessionID);
+    } catch {
+      /* A deleted child cannot be confirmed. */
+    }
+  }
+
   void (async () => {
     for await (const event of ctx.event.subscribe({
       signal: abort.signal,
-      types: ["session.execution.interrupted", "session.deleted"],
+      types: [
+        "session.execution.succeeded",
+        "session.execution.failed",
+        "session.execution.interrupted",
+        "session.deleted",
+      ],
     })) {
-      if (event.type === "session.execution.interrupted")
-        routing.interrupt(event.data.sessionID);
-      else {
+      if (event.type === "session.deleted") {
         routing.remove(event.data.sessionID);
         decisions.remove(event.data.sessionID);
+        for (const [id, selected] of children)
+          if (
+            id === event.data.sessionID ||
+            selected.sessionID === event.data.sessionID
+          )
+            children.delete(id);
+      } else {
+        if (event.type === "session.execution.interrupted")
+          routing.interrupt(event.data.sessionID);
+        void observe(event.data.sessionID, true);
       }
     }
   })().catch(() => {});
@@ -112,24 +179,14 @@ export async function registerRouting(
       isRecord(event.result.output) &&
       typeof event.result.output.sessionID === "string"
     ) {
-      try {
-        const child = await ctx.session.get({
-          sessionID: event.result.output.sessionID,
-        });
-        decisions.observe(selected.sessionID, selected.decisionID, {
-          childSessionID: child.id,
-          ...(child.model ? { model: fullModel(child.model) } : {}),
-          usage: {
-            input: child.tokens.input,
-            output: child.tokens.output,
-            cachedInput: child.tokens.cache.read,
-            reasoning: child.tokens.reasoning,
-            cost: child.cost,
-          },
-        });
-      } catch {
-        /* A deleted child cannot be observed; its planned choice remains distinguishable. */
-      }
+      const id = event.result.output.sessionID;
+      children.set(id, {
+        ...selected,
+        foreground: !isRecord(event.input) || event.input.background !== true,
+      });
+      while (children.size > settings.maxSessions * 4)
+        children.delete(children.keys().next().value!);
+      await observe(id);
     }
     await notify(selected.sessionID);
   });
@@ -137,5 +194,6 @@ export async function registerRouting(
     abort.abort();
     routing.close();
     pending.clear();
+    children.clear();
   };
 }

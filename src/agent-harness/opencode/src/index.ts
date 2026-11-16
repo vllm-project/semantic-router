@@ -1,5 +1,7 @@
 import { registerRouting } from "./routing-hooks.ts";
 import { registerGuard } from "./guard-hooks.ts";
+import { registerCheck } from "./check-hooks.ts";
+import { Controls } from "./controls.ts";
 import { registerOutput } from "./output-hooks.ts";
 import { Plugin } from "@opencode/plugin";
 import { DecisionStore } from "./decisions.ts";
@@ -29,9 +31,12 @@ export default Plugin.define({
     const listener = new Listener(
       settings,
       runtime,
-      new Set<App>(
-        isRecord(named) ? APPS.filter((app) => named[app] !== undefined) : [],
-      ),
+      isRecord(named) ? APPS.filter((app) => named[app] !== undefined) : [],
+      {
+        get: (key) => ctx.storage.get(key),
+        set: (key, value) => ctx.storage.set(key, value),
+        remove: (key) => ctx.storage.remove(key),
+      },
     );
     // The first prompt reads the listing: loading the plugin calls no runtime.
     const prompts = new AbortController();
@@ -46,15 +51,47 @@ export default Plugin.define({
       settings.maxSessions,
       settings.maxDecisions,
     );
+    const controls = new Controls(
+      settings,
+      decisions.snapshot("").instanceID,
+      (value) => ctx.storage.set("controls.v1", value),
+      () => decisions.changed(),
+      (apps) => listener.pin(apps),
+    );
+    await controls.load(() => ctx.storage.get("controls.v1"));
     const registration = await ctx.rpc.register(Vsr, {
       snapshot: async (input) => ({
         ...decisions.snapshot(sessionID(input)),
-        apps: settings.apps,
-        waits: settings.waits,
+        apps: { ...settings.apps },
+        waits: { ...settings.waits },
+        controls: controls.state(),
         runtime: runtime.status(),
       }),
-      diagnose: async (_input, request) =>
-        await runtime.discover(3000, request.signal),
+      diagnose: async (_input, request) => {
+        const result = await runtime.discover(3000, request.signal);
+        decisions.changed();
+        const { instanceID, revision } = decisions.snapshot("");
+        await registration.events
+          .emit("stateChanged", {
+            instanceID,
+            revision,
+          })
+          .catch(() => {});
+        return result;
+      },
+      controls: async (input) => {
+        const result = await controls.update(input);
+        if (result.saved) {
+          const { instanceID, revision } = decisions.snapshot("");
+          await registration.events
+            .emit("stateChanged", {
+              instanceID,
+              revision,
+            })
+            .catch(() => {});
+        }
+        return result;
+      },
       feedback: async (input) => {
         const id = sessionID(input);
         if (
@@ -65,25 +102,21 @@ export default Plugin.define({
           throw new Error("Invalid feedback");
         decisions.label(id, input.decisionID, input.feedback as Feedback);
         const { instanceID, revision } = decisions.snapshot(id);
-        await registration.events.emit("updated", {
-          instanceID,
-          sessionID: id,
-          revision,
-        });
+        await registration.events
+          .emit("updated", {
+            instanceID,
+            sessionID: id,
+            revision,
+          })
+          .catch(() => {});
         return { saved: true };
       },
     });
     const notify = async (id: string): Promise<void> => {
       const { instanceID, revision } = decisions.snapshot(id);
-      try {
-        await registration.events.emit("updated", {
-          instanceID,
-          sessionID: id,
-          revision,
-        });
-      } catch {
-        /* UI transport must not block routing. */
-      }
+      await registration.events
+        .emit("updated", { instanceID, sessionID: id, revision })
+        .catch(() => {});
     };
     const closeRouting = await registerRouting(
       ctx,
@@ -108,9 +141,18 @@ export default Plugin.define({
       notify,
       listener,
     );
+    const closeCheck = await registerCheck(
+      ctx,
+      settings,
+      runtime,
+      decisions,
+      notify,
+    );
     return async () => {
+      await controls.close();
       closeRouting();
       closeGuard();
+      closeCheck();
       closeOutput();
       prompts.abort();
       runtime.close();

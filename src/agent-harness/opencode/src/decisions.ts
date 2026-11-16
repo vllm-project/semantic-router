@@ -55,6 +55,9 @@ export interface Usage {
   cost: number;
 }
 export interface Decision {
+  messageID?: string;
+  costKnown?: boolean;
+  childOutcome?: "succeeded" | "failed" | "interrupted";
   counts?: Counts;
   coverage?: { checked: number; total: number };
   reason?: Reason;
@@ -169,6 +172,7 @@ export class DecisionStore {
           }
         : {}),
       ...(input.counts ? { counts: { ...input.counts } } : {}),
+      ...(input.messageID ? { messageID: input.messageID } : {}),
       id: crypto.randomUUID(),
       sessionID: input.sessionID,
       app: input.app,
@@ -202,6 +206,8 @@ export class DecisionStore {
       childSessionID?: string;
       usage?: Usage;
       failed?: boolean;
+      costKnown?: boolean;
+      childOutcome?: "succeeded" | "failed" | "interrupted";
     },
   ): void {
     const decision = this.sessions
@@ -230,6 +236,10 @@ export class DecisionStore {
     if (observation.childSessionID)
       decision.childSessionID = observation.childSessionID;
     if (usage) decision.usage = usage;
+    if (observation.childOutcome)
+      decision.childOutcome = observation.childOutcome;
+    if (typeof observation.costKnown === "boolean")
+      decision.costKnown = observation.costKnown;
     this.revision++;
   }
   settleGuard(
@@ -259,6 +269,9 @@ export class DecisionStore {
       throw new Error("Invalid decision feedback");
     session!.feedback[decisionID] = feedback;
     this.touch(sessionID);
+    this.revision++;
+  }
+  changed(): void {
     this.revision++;
   }
   snapshot(sessionID: string): Snapshot {

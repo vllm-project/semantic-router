@@ -55,18 +55,22 @@ export async function host(t: TestContext, config: Record<string, unknown>) {
   assert.ok(address && typeof address !== "string");
   await new Promise<void>((resolve) => port.close(() => resolve()));
   const url = `http://127.0.0.1:${address.port}`;
-  const server = spawn(
-    "opencode",
-    ["serve", "--hostname", "127.0.0.1", "--port", String(address.port)],
-    { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] },
-  );
   let logs = "";
-  server.stdout.on("data", (data) => {
-    logs += String(data);
-  });
-  server.stderr.on("data", (data) => {
-    logs += String(data);
-  });
+  const start = () => {
+    const child = spawn(
+      "opencode",
+      ["serve", "--hostname", "127.0.0.1", "--port", String(address.port)],
+      { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    child.stdout.on("data", (data) => {
+      logs += String(data);
+    });
+    child.stderr.on("data", (data) => {
+      logs += String(data);
+    });
+    return child;
+  };
+  let server = start();
   t.after(async () => {
     if (server.exitCode === null) {
       server.kill("SIGTERM");
@@ -77,22 +81,54 @@ export async function host(t: TestContext, config: Record<string, unknown>) {
     authorization: `Basic ${Buffer.from("opencode:native-fixture-password").toString("base64")}`,
     "content-type": "application/json",
   };
-  let ready = false;
-  for (let i = 0; i < 150; i++) {
-    try {
-      if ((await fetch(url + "/global/health", { headers })).ok) {
-        ready = true;
-        break;
+  async function waitReady() {
+    let ready = false;
+    for (let i = 0; i < 150; i++) {
+      try {
+        if ((await fetch(url + "/global/health", { headers })).ok) {
+          ready = true;
+          break;
+        }
+      } catch {
+        /* starting */
       }
-    } catch {
-      /* starting */
+      assert.equal(server.exitCode, null, logs);
+      await delay(100);
     }
-    assert.equal(server.exitCode, null, logs);
-    await delay(100);
+    assert.ok(ready, logs);
   }
-  assert.ok(ready, logs);
+  await waitReady();
   return {
     root,
+    async restart() {
+      server.kill("SIGTERM");
+      await once(server, "exit");
+      server = start();
+      await waitReady();
+    },
+    async terminal(
+      sessionID: string,
+      steps: { at: number; keys?: string; resize?: [number, number] }[],
+      duration = 15,
+    ): Promise<{ text: string; exit: number }> {
+      const driver = spawn(
+        "python3",
+        [resolve(import.meta.dirname, "terminal.py")],
+        { cwd: root, env, stdio: ["pipe", "pipe", "pipe"] },
+      );
+      let output = "",
+        error = "";
+      driver.stdout.on("data", (data) => {
+        output += String(data);
+      });
+      driver.stderr.on("data", (data) => {
+        error += String(data);
+      });
+      driver.stdin.end(JSON.stringify({ url, sessionID, steps, duration }));
+      const [code] = await once(driver, "exit");
+      assert.equal(code, 0, error);
+      return JSON.parse(output) as { text: string; exit: number };
+    },
     async api(path: string, body?: unknown, method?: string): Promise<unknown> {
       const response = await fetch(url + path, {
         headers,

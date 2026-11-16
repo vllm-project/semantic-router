@@ -9,7 +9,8 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./rpc": "./src/rpc.ts"
+    "./rpc": "./src/rpc.ts",
+    "./tui": "./src/tui.tsx"
   },
   "files": [
     "src",
@@ -26,8 +27,13 @@
     "@opencode/plugin": "2.2.0"
   },
   "devDependencies": {
+    "@opentui/solid": "0.7.0",
     "@types/node": "22.15.30",
-    "typescript": "5.8.3",
-    "prettier": "3.5.3"
+    "prettier": "3.5.3",
+    "solid-js": "1.9.12",
+    "typescript": "5.8.3"
+  },
+  "overrides": {
+    "seroval": "1.6.10"
   }
 }

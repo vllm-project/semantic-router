@@ -11,6 +11,7 @@ export const APPS = [
 export type App = (typeof APPS)[number];
 export type Wait = 1000 | 2000 | 3000 | "done";
 export interface Settings {
+  check: { unsupportedThreshold: number; deadlineMs: number };
   guard: { reviewThreshold: number };
   redact: { piiThreshold: number };
   shield: { injectionThreshold: number };
@@ -69,6 +70,7 @@ export function parseSettings(input: unknown): Settings {
     "guard",
     "redact",
     "shield",
+    "check",
   ]);
   for (const key of Object.keys(options))
     if (!known.has(key)) throw new Error(`Unknown option: ${key}`);
@@ -149,7 +151,33 @@ export function parseSettings(input: unknown): Settings {
       throw new Error(`Invalid ${app} threshold`);
     return value;
   };
+  const check = options.check === undefined ? {} : options.check;
+  if (
+    !isRecord(check) ||
+    Object.keys(check).some(
+      (key) => !["unsupportedThreshold", "deadlineMs"].includes(key),
+    )
+  )
+    throw new Error("Invalid check options");
+  const unsupportedThreshold =
+    check.unsupportedThreshold === undefined ? 0.5 : check.unsupportedThreshold;
+  if (
+    typeof unsupportedThreshold !== "number" ||
+    !Number.isFinite(unsupportedThreshold) ||
+    unsupportedThreshold < 0 ||
+    unsupportedThreshold > 1
+  )
+    throw new Error("Invalid check unsupportedThreshold");
+  const deadlineMs = check.deadlineMs === undefined ? 1500 : check.deadlineMs;
+  if (
+    typeof deadlineMs !== "number" ||
+    !Number.isInteger(deadlineMs) ||
+    deadlineMs < 1 ||
+    deadlineMs > 10000
+  )
+    throw new Error("Invalid check deadlineMs");
   return {
+    check: { unsupportedThreshold, deadlineMs },
     guard: { reviewThreshold },
     redact: { piiThreshold: threshold("redact", "piiThreshold", 0.7) },
     shield: {

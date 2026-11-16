@@ -1,9 +1,9 @@
 # vSR for OpenCode
 
 This package is under development for OpenCode 2.2.0. Router, Escalate, Guard,
-Redact and Shield are implemented, with session-scoped decision metadata and
-versioned RPC diagnostics. Check, the terminal UI, setup and durable calibration
-remain later implementation stages.
+Redact, Shield and Check are implemented, with a native terminal decision panel
+and durable app/wait controls. Setup, durable feedback/calibration and full
+combined qualification remain later implementation stages.
 
 From this directory, install dependencies and check the package:
 
@@ -46,7 +46,7 @@ are not accepted as options. No token is returned in diagnostics or decision
 snapshots. Redirects are refused so authorization cannot move to another host.
 A remote decision runtime receives the text supplied for classification.
 
-The server registers RPC `vsr.opencode.v1` with `snapshot`, `diagnose` and
+The server registers RPC `vsr.opencode.v1` with `snapshot`, `diagnose`, `controls` and
 `feedback` methods. `diagnose` explicitly queries runtime capabilities; loading
 the package alone sends no content to a model. Import the exported `./rpc`
 definition to call these through an OpenCode client. Snapshots are scoped to the
@@ -57,9 +57,7 @@ new snapshot instance ID, allowing clients to discard obsolete revisions.
 
 Options also include `apps`, `waits`, `maxDecisions` and `maxSessions`. Apps default
 to enabled except Check; waits are milliseconds (`1000`, `2000`, `3000`) or
-`"done"`. Controls for apps assigned to later stages reserve their eventual
-contract. Unknown options are
-rejected rather than silently ignored. Retention defaults to 500 decisions per
+`"done"`. Unknown options are rejected rather than silently ignored. Retention defaults to 500 decisions per
 session and 64 sessions, with least recently used session eviction.
 
 Router applies to new `general` subagent calls. Configure three distinct models
@@ -93,7 +91,7 @@ prompts and synthetic background messages do not inherit another turn's
 escalation. Interrupting/deleting a session cancels pending local requests.
 
 Snapshots distinguish the planned model from `observedModel`, child session and
-observed token/cost facts read after completion. Missing observations remain
+observed token usage and host cost estimates read after completion. Missing observations remain
 absent; a failed spawn is recorded separately. No estimated savings are claimed.
 Prior human text is held transiently in bounded memory for repeat detection;
 it is never included in decision records or diagnostics. Classification sends
@@ -185,7 +183,7 @@ plugin calls no runtime. Its `vsr` profile (`apis.systemone.vsr` in the Router's
 config, or Default, On or Off in the Dashboard under Config › Global Config › vSR
 agent plugins) turns `router`, `escalate`, `redact`, `shield`, `guard` and
 `check` on or off for every plugin pointed at it. An app you name under `apps` in
-this plugin's options stays yours; the listener sets the others. A plain decision
+this plugin's options, or turn on or off in the decision view, stays yours; the listener sets the others. A plain decision
 runtime, whose listing answers HTTP 404, sets nothing.
 
 Rules the listener binds to guard and redact (`vsr.rules`) come with the same
@@ -200,8 +198,8 @@ could not check holds the command or withholds the output, whatever the wait; an
 advisory one is recorded as skipped. An output over 256 KiB of UTF-8 is past what
 one rules call reads, so its rules count as not checked. An answer for another
 revision of the rules reads the listing again and asks once more. An outage keeps
-the rules read before, so it never drops a required rule; a restart forgets them
-until the listing answers again. Rule-name tags get the same write-back
+the rules read before, so it never drops a required rule; they are kept in
+OpenCode's plugin storage, so a restart during an outage keeps them too. Rule-name tags get the same write-back
 protection as vSR's own.
 
 When Redact rewrites an output it tells the model that the tags are vSR's, not
@@ -219,3 +217,58 @@ caller cancellation are reported separately. Discovery tries
 model and its advertised question types are checked before use. Responses over
 2 MiB or missing requested answers are rejected. Cancelling a request stops the
 local wait; it cannot guarantee a remote model stops computing.
+
+Check is off by default; enable it through the app dialog or `apps.check`.
+It checks a root session's final answer against successful native read/shell text
+actually delivered during that human turn, after Redact/Shield processing. Queued
+prompts, other sessions, earlier turns, failed/withheld results and synthetic
+background turns cannot provide evidence. Answers shorter than 40 UTF-16 units
+or turns without delivered evidence are not checked. Check does not request
+another generation or silently modify the answer.
+
+`check.deadlineMs` defaults to 1500 ms, including queue time (maximum 10000).
+`check.unsupportedThreshold` defaults to 0.5. Scores at or above it mark the
+answer unverified; lower scores mark it verified against supplied evidence,
+not against outside knowledge. Prompt, combined evidence and answer each have
+an 8000-unit ceiling; at most 64 read/shell sources per turn are tracked.
+Truncated inputs or missing evidence make a low-score result partial, never
+fully verified. Offline, timed-out or malformed replies produce skipped checks.
+Evidence is transient bounded memory and is absent from RPC/decision records.
+
+The native terminal loads the exported `./tui` entry automatically with the
+server plugin. Open a session, then use these keys or slash/palette commands:
+
+| Key     | Command         | Action                                                     |
+| ------- | --------------- | ---------------------------------------------------------- |
+| F5      | `/vsr`          | Open decisions for the selected session                    |
+| F6      | `/vsr-apps`     | Enable or disable any of the six apps                      |
+| F7      | `/vsr-waits`    | Choose Redact, Shield or Guard bounded/strict waits        |
+| F8      | `/vsr-feedback` | Label a retained decision; Router also offers model labels |
+| F9      | `/vsr-diagnose` | Query decision runtime capabilities                        |
+| F10     | `/vsr-sessions` | Select from the latest 100 accessible sessions             |
+| Palette | `/vsr-goal`     | Choose balanced, quality or save                           |
+| Palette | `/vsr-refresh`  | Refresh the authoritative snapshot                         |
+
+Use arrows and Enter in native dialogs, Escape to dismiss. Composer counts and
+the panel show metadata, reasons, coverage, partial/withheld/unverified states,
+planned/observed models and confirmed feedback. The 2.2.0 SDK has no per-tool
+activity annotation slot: the panel associates decisions by tool-call, turn or
+message identity instead. Rendering never classifies or generates; only explicit
+Diagnose queries capabilities. The panel replaces host fallback content only
+while this plugin's own panel is selected, releasing its slot for other panels.
+
+App flags, waits and goal apply to all sessions served by the same plugin
+instance/location. Controls persist in native plugin storage before taking
+effect and survive reload/restart. Concurrent or obsolete clients must refresh
+and retry; a failed save does not optimistically change the display. Changing
+configured app/wait/goal defaults supersedes previously saved preferences.
+Decision records and feedback remain bounded memory until Stage 6. Snapshots
+refresh on events and every three seconds, discard late responses from another
+session and reconcile with a new server instance after reconnect.
+
+Child usage appears after actual completion, including background children.
+Totals deduplicate child sessions; failed spawns and pending/missing observations
+are not zero-cost completed work. Cost figures use the host's estimate only
+when the observed model has an explicit finite price table. Unknown prices are
+shown separately, including when the host reports zero. Explicit zero prices
+are valid. These estimates are not billing receipts or savings measurements.

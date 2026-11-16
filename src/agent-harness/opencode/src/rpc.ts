@@ -23,6 +23,9 @@ const models = {
 const decision = {
   type: "object",
   properties: {
+    messageID: id,
+    costKnown: { type: "boolean" },
+    childOutcome: { enum: ["succeeded", "failed", "interrupted"] },
     counts: {
       type: "object",
       // A tag or a listener rule's name; DecisionStore.record checks its form (OpenCode RPC refuses `pattern`).
@@ -98,6 +101,16 @@ export const Vsr = Rpc.define({
             additionalProperties: { type: "string", enum: [...FEEDBACK] },
           },
           apps: appFlags,
+          controls: {
+            type: "object",
+            properties: {
+              revision: { type: "integer", minimum: 0 },
+              persistence: { enum: ["durable", "unavailable"] },
+              goal: { enum: ["balanced", "quality", "save"] },
+            },
+            required: ["revision", "persistence", "goal"],
+            additionalProperties: false,
+          },
           waits: {
             type: "object",
             properties: { redact: wait, shield: wait, guard: wait },
@@ -123,6 +136,7 @@ export const Vsr = Rpc.define({
           "decisions",
           "feedback",
           "apps",
+          "controls",
           "waits",
           "runtime",
         ],
@@ -157,6 +171,46 @@ export const Vsr = Rpc.define({
         ],
       },
     },
+    controls: {
+      input: {
+        type: "object",
+        properties: {
+          instanceID: id,
+          expectedRevision: { type: "integer", minimum: 0 },
+          apps: { ...appFlags, required: [] },
+          waits: {
+            type: "object",
+            properties: { redact: wait, shield: wait, guard: wait },
+            additionalProperties: false,
+          },
+          goal: { enum: ["balanced", "quality", "save"] },
+        },
+        required: ["instanceID", "expectedRevision"],
+        additionalProperties: false,
+      },
+      output: {
+        anyOf: [
+          {
+            type: "object",
+            properties: {
+              saved: { const: true },
+              revision: { type: "integer", minimum: 0 },
+            },
+            required: ["saved", "revision"],
+            additionalProperties: false,
+          },
+          {
+            type: "object",
+            properties: {
+              saved: { const: false },
+              reason: { enum: ["stale", "invalid", "storage"] },
+            },
+            required: ["saved", "reason"],
+            additionalProperties: false,
+          },
+        ],
+      },
+    },
     feedback: {
       input: {
         type: "object",
@@ -177,6 +231,17 @@ export const Vsr = Rpc.define({
     },
   },
   events: {
+    stateChanged: {
+      schema: {
+        type: "object",
+        properties: {
+          instanceID: id,
+          revision: { type: "integer", minimum: 0 },
+        },
+        required: ["instanceID", "revision"],
+        additionalProperties: false,
+      },
+    },
     updated: {
       schema: {
         type: "object",

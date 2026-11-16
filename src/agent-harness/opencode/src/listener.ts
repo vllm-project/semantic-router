@@ -177,27 +177,52 @@ const failureWords: Record<Failure, string> = {
   "queue-full": "too many listener requests are waiting",
 };
 
+// Where the rules last read from a listener are kept across restarts.
+export interface RuleStore {
+  get(key: string): Promise<unknown>;
+  set(key: string, value: ListenerRules): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
 export class Listener {
   rules: ListenerRules = NO_RULES;
   private askedAt = -Infinity;
   private reading: Promise<void> | undefined;
   private readonly base: Record<App, boolean>;
   private readonly settings: Settings;
-  private readonly runtime: Pick<RuntimeClient, "listing" | "rules">;
-  // The apps the person set in the plugin options: those stay theirs whatever the listener says.
-  private readonly pinned: ReadonlySet<App>;
+  private readonly runtime: Pick<
+    RuntimeClient,
+    "listing" | "rules" | "listenerKey"
+  >;
+  // The apps the person set in the plugin options or changed in the decision view: those stay theirs whatever the
+  // listener says.
+  private readonly pinned: Set<App>;
+  private readonly store: RuleStore | undefined;
+  private restored = false;
   private readonly now: () => number;
   constructor(
     settings: Settings,
-    runtime: Pick<RuntimeClient, "listing" | "rules">,
-    pinned: ReadonlySet<App>,
+    runtime: Pick<RuntimeClient, "listing" | "rules" | "listenerKey">,
+    pinned: Iterable<App>,
+    store?: RuleStore,
     now: () => number = Date.now,
   ) {
     this.settings = settings;
     this.runtime = runtime;
-    this.pinned = pinned;
+    this.pinned = new Set(pinned);
+    this.store = store;
     this.now = now;
     this.base = { ...settings.apps };
+  }
+  // The person set these apps: the profile leaves them alone from now on.
+  pin(apps: Partial<Record<App, boolean>>): void {
+    for (const app of APPS) {
+      const value = apps[app];
+      if (typeof value !== "boolean") continue;
+      this.pinned.add(app);
+      this.base[app] = value;
+      this.settings.apps[app] = value;
+    }
   }
   // Reads the listing and applies it. A listing that does not answer keeps the profile and rules read before, so an
   // outage never drops a required rule; one that does not exist (HTTP 404, a plain decision runtime) sets none.
@@ -218,14 +243,39 @@ export class Listener {
     this.askedAt = this.now();
     const result = await this.runtime.listing(timeoutMs, signal);
     if (!result.ok && !(result.code === "http" && result.status === 404))
-      return;
+      return await this.restore();
     const listing = result.ok ? result.value : {};
     const profile = profileOf(listing);
     for (const app of APPS)
       this.settings.apps[app] = this.pinned.has(app)
         ? this.base[app]
         : (profile[app] ?? this.base[app]);
-    this.rules = rulesOf(listing) ?? this.rules;
+    const rules = rulesOf(listing);
+    if (!rules) return await this.restore();
+    this.rules = rules;
+    this.restored = true;
+    // A listing that binds no rules forgets the kept ones; another key may be granted other rules.
+    try {
+      const key = this.runtime.listenerKey();
+      if (rules.revision === "") await this.store?.remove(key);
+      else await this.store?.set(key, rules);
+    } catch {
+      /* The rules still apply to this run. */
+    }
+  }
+  // Before this run has read the listener's rules, the ones kept from an earlier run apply: a restart during an
+  // outage never drops a required rule.
+  private async restore(): Promise<void> {
+    if (this.restored || !this.store) return;
+    this.restored = true;
+    try {
+      const kept = rulesOf({
+        vsr: { rules: await this.store.get(this.runtime.listenerKey()) },
+      });
+      if (kept && this.rules === NO_RULES) this.rules = kept;
+    } catch {
+      /* Nothing kept. */
+    }
   }
   // At a prompt, a minute or more after the last read: a change in the Dashboard reaches a running session.
   followLater(): void {

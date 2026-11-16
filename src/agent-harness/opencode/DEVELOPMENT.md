@@ -66,3 +66,27 @@ root. The CLI resolves its plugin SDK imports in the host. A package changes
 with its README and ownership/check registration. Development proceeds in
 stages toward one integration Draft PR; intermediate foundations are not a
 claim that the six-app product is complete.
+
+`check.ts` owns human-turn evidence, limits and answer checking; `check-hooks.ts`
+registers after output processing and joins final answers to their exact human
+boundary. `controls.ts` serializes persistent compare-and-set updates;
+`view.ts` owns snapshot recovery and usage summaries independently of the
+renderer. `tui.tsx` uses the native Solid owner, keymap, dialogs and panel slots.
+Do not create a separate Solid root around setup: the host's keymap provider
+belongs to the supplied owner. Panel replacement is active only while our own
+panel is selected; dimensions follow the renderer's resize events.
+
+The Check fixture drives real overlapping/queued human turns and captures the
+masked grounding sent to its synthetic runtime. Native background-child tests
+verify terminal usage and known versus missing prices. TUI tests use Python's
+standard-library PTY driver against the installed CLI, send actual function keys
+and dialog selections, then assert server state and absence of generation or
+classification calls. They need a Unix PTY and `python3`, not an external GUI.
+The control fixture restarts the private server and validates persisted settings
+and rejection of the previous instance's client revision. Pure controller tests
+cover stale events, late snapshots, failed saves and session changes.
+
+OpenTUI/Solid development dependencies provide TSX types; the native host supplies
+the shared runtime modules. `seroval` is overridden to 1.6.10 because the Solid
+version required by OpenTUI otherwise resolves its older vulnerable minor line.
+Do not let an audit fix replace the pinned host SDK or peer versions silently.

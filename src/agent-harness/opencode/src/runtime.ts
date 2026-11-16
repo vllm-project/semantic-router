@@ -322,6 +322,13 @@ export class RuntimeClient {
     this.state.models = models;
     return models;
   }
+  // Names the listener and the key sent to it, never the key itself: another key may be granted other rules.
+  listenerKey(): string {
+    let hash = 0x811c9dc5;
+    for (const char of this.token() ?? "")
+      hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0;
+    return `vsr.rules:${this.base()}/v1/systemone/models#${hash.toString(16)}`;
+  }
   // A Router listener's System One listing: its models, and the `vsr` profile and rules it sets for the plugins.
   async listing(
     timeoutMs: number,
