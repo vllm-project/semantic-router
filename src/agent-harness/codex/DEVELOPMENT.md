@@ -36,6 +36,9 @@ Before a change is done:
 python3 -m unittest discover -s hooks
 ```
 
+CI's Agent Plugins contract runs them, with the Claude Code plugin's tests, through
+`make agent-plugins-test` whenever either plugin changes.
+
 ## What Codex 0.166 does with each hook answer
 
 Measured on Codex CLI 0.166.0 through a Router listener with vela3-lite:

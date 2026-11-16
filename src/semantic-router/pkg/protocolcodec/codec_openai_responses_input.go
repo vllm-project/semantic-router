@@ -188,10 +188,9 @@ func decodeResponsesInputItem(
 
 func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"input.async":             item.Async,
-		"input.caller":            item.Caller,
-		"input.encrypted_content": item.EncryptedContent,
-		"input.phase":             item.Phase,
+		"input.async":  item.Async,
+		"input.caller": item.Caller,
+		"input.phase":  item.Phase,
 	}); err != nil {
 		return err
 	}
@@ -311,7 +310,7 @@ func decodeResponsesToolResult(item responsesItemWire, request *llmprotocol.Requ
 }
 
 func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
-	content, err := decodeResponsesReasoning(item.Summary, policy, false)
+	summary, err := decodeResponsesReasoning(item.Summary, policy, false)
 	if err != nil {
 		return err
 	}
@@ -319,7 +318,23 @@ func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.R
 	if err != nil {
 		return err
 	}
-	content = append(content, reasoning...)
+	var content []llmprotocol.Content
+	for _, part := range append(summary, reasoning...) {
+		if part.Text != "" {
+			content = append(content, part)
+		}
+	}
+	if len(content) == 0 && (len(item.EncryptedContent) > 0 || len(reasoning) > 0 || item.ID != "") {
+		// The item's payload was the provider blob the Router does not relay,
+		// reasoning with no text, or only the ID of the provider's reasoning, as
+		// an item the Router completed from a blob alone comes back. The turn
+		// carries nothing a target can render, and an empty reasoning part sent
+		// on would reach an OpenAI target as plaintext reasoning, which it
+		// refuses. decode reported a dropped blob; leave the empty turn out
+		// instead of rejecting the request. An item with nothing at all is still
+		// an empty message.
+		return nil
+	}
 	request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: llmprotocol.RoleAssistant, Content: content})
 	return nil
 }

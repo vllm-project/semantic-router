@@ -283,9 +283,10 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy), diagnostics, nil
 }
 
-// decodeResponsesDroppedFields accepts include and client_metadata without
-// forwarding them. The Router already drops provider-encrypted reasoning from
-// responses, so it can never honor that include, and client telemetry is not
+// decodeResponsesDroppedFields accepts include, input[].encrypted_content and
+// client_metadata without forwarding them. The Router does not relay
+// provider-encrypted reasoning, so it can never honor that include, an item
+// replayed with encrypted_content loses that blob, and client telemetry is not
 // model input. Each drop is reported instead of discarded silently.
 func decodeResponsesDroppedFields(wire responsesRequestWire, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
@@ -301,6 +302,9 @@ func decodeResponsesDroppedFields(wire responsesRequestWire, policy llmprotocol.
 	}
 	if bytes.Contains(wire.Input, []byte(`"`+codexItemMetadataField+`"`)) {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "input[]."+codexItemMetadataField, "client metadata is not model input")
+	}
+	if bytes.Contains(wire.Input, []byte(`"encrypted_content"`)) {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "input[].encrypted_content", "provider-encrypted reasoning is not relayed")
 	}
 	return diagnostics, nil
 }

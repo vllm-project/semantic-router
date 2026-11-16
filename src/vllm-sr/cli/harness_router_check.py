@@ -264,6 +264,24 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
     ]
 
 
+def caller_provider(doc: dict | None) -> str | None:
+    """The provider whose login the Router presents upstream for each client
+    (auth.credential: caller), which then has to come from the client in place of
+    a gateway key. The Router takes it on every backend or on none, all of one
+    provider."""
+    return next(
+        (
+            str(ref.get("provider") or "").lower()
+            for model in _get(doc, "providers", "models") or []
+            if isinstance(model, dict)
+            for ref in model.get("backend_refs") or []
+            if isinstance(ref, dict)
+            and (ref.get("auth") or {}).get("credential") == "caller"
+        ),
+        None,
+    )
+
+
 def context_windows(doc: dict, names: list[str]) -> dict[str, int | None]:
     """Each model's context window, as the Router reads it: the model's own
     context_window_size, else its built-in catalog card's limit."""

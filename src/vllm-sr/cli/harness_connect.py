@@ -282,15 +282,70 @@ def codex_home(env: dict[str, str]) -> Path:
     return Path(env.get("CODEX_HOME") or str(Path.home() / ".codex"))
 
 
+# The bundled Codex model whose catalog entry describes a gateway model: one the
+# Router accepts as Codex sends it, where the gpt-6 entries put tools in an input
+# item the Router refuses (Codex CLI 0.166).
+CODEX_CATALOG_BASE = "gpt-5.5"
+
+
+def codex_catalog(
+    bundled: Any, model: str, context_window: int | None
+) -> dict[str, Any] | None:
+    """A Codex model catalog holding model, so Codex does not fall back to
+    default metadata and warn. A catalog file replaces Codex's own, so it keeps
+    every bundled entry and adds model: this Codex's CODEX_CATALOG_BASE entry
+    under the model's name, without tool search, which the Router does not
+    serve, without apply_patch as a custom tool, which a Messages backend
+    refuses, with the reasoning and verbosity of Codex's fallback (a summary,
+    no effort, no verbosity), and with no migration target or service tiers,
+    which belong to the bundled model. Empty when Codex knows model already, so
+    its own entry stays in force; None when bundled holds no base entry."""
+    models = bundled.get("models") if isinstance(bundled, dict) else None
+    models = [entry for entry in models or [] if isinstance(entry, dict)]
+    if any(m.get("slug") == model for m in models):
+        return {}
+    base = next((m for m in models if m.get("slug") == CODEX_CATALOG_BASE), None)
+    if base is None:
+        return None
+    entry = {
+        **base,
+        "slug": model,
+        "display_name": model,
+        "supports_search_tool": False,
+        "apply_patch_tool_type": None,
+        "supported_reasoning_levels": [],
+        "default_reasoning_level": None,
+        "default_reasoning_summary": "auto",
+        "support_verbosity": False,
+        "default_verbosity": None,
+        "upgrade": None,
+        "service_tiers": [],
+        "additional_speed_tiers": [],
+    }
+    if context_window:
+        entry |= {
+            "context_window": context_window,
+            "max_context_window": context_window,
+        }
+    return {"models": [*models, entry]}
+
+
 def codex_settings(
-    gateway: str, model: str, key_env: str | None, context_window: int | None
+    gateway: str,
+    model: str,
+    key_env: str | None,
+    context_window: int | None,
+    login: bool = False,
+    catalog: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """The top-level settings, then the provider's. key_env is left out for a
     listener without keys: Codex refuses to start while the variable a provider
-    names is unset."""
+    names is unset. login has Codex send its own sign-in, for a gateway that
+    presents it upstream. catalog is the model catalog file Codex reads."""
     top = {
         "model": model,
         "model_context_window": context_window,
+        "model_catalog_json": str(catalog) if catalog else None,
         "model_provider": PROVIDER,
         # the Router does not serve hosted web search
         "web_search": "disabled",
@@ -300,6 +355,7 @@ def codex_settings(
         "base_url": gateway.rstrip("/") + "/v1",
         "wire_api": "responses",
         "env_key": key_env,
+        "requires_openai_auth": login,
     }
     return (
         {k: v for k, v in top.items() if v},
@@ -314,10 +370,14 @@ def codex_change(
     model: str,
     key_env: str | None,
     context_window: int | None = None,
+    login: bool = False,
+    catalog: Path | None = None,
 ) -> Change:
     """The profile file. Codex layers it over config.toml with --profile, and it
     holds the provider too, so config.toml is not touched."""
-    top, provider = codex_settings(gateway, model, key_env, context_window)
+    top, provider = codex_settings(
+        gateway, model, key_env, context_window, login, catalog
+    )
     lines = [f"{k} = {json.dumps(v)}" for k, v in top.items()]
     lines += ["", f"[model_providers.{PROVIDER}]"]
     lines += [f"{k} = {json.dumps(v)}" for k, v in provider.items()]
@@ -326,11 +386,15 @@ def codex_change(
 
 
 def codex_launch_args(
-    gateway: str, model: str, key_env: str | None, context_window: int | None
+    gateway: str,
+    model: str,
+    key_env: str | None,
+    context_window: int | None,
+    login: bool = False,
 ) -> list[str]:
     """The same settings as command-line overrides, which win over every
     configuration file, a trusted project's included (0.166)."""
-    top, provider = codex_settings(gateway, model, key_env, context_window)
+    top, provider = codex_settings(gateway, model, key_env, context_window, login)
     pairs = [*top.items()]
     pairs += [(f"model_providers.{PROVIDER}.{k}", v) for k, v in provider.items()]
     return [arg for k, v in pairs for arg in ("-c", f"{k}={json.dumps(v)}")]

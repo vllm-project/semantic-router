@@ -217,11 +217,17 @@
     {
       "name": "encrypted_reasoning_item",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_input_encrypted_content"
-        }
+        "status": "ok",
+        "body": {
+          "input": [],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "input[].encrypted_content",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

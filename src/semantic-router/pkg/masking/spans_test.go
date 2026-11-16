@@ -344,6 +344,7 @@ func TestMaskText_ExistingPlaceholderNotMaskedAgain(t *testing.T) {
 	}{
 		{"default shape", "Hi [PERSON_2], Bob called", "PERSON_2", "Hi [PERSON_2], [PERSON_0] called", defaultCfg()},
 		{"vSR mark", `"customer": "[vsr:name]", Bob called`, "vsr:name", `"customer": "[vsr:name]", [PERSON_0] called`, defaultCfg()},
+		{"vSR rule mark", `"payer": "[vsr:employee_id]", Bob called`, "vsr:employee_id", `"payer": "[vsr:employee_id]", [PERSON_0] called`, defaultCfg()},
 		{
 			"configured template", "Hi <<name 3>>, Bob called", "name 3", "Hi <<name 3>>, <<name 0>> called",
 			&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "<<name {index}>>"}},
@@ -392,5 +393,28 @@ func TestMaskText_PlaceholderExemptionDoesNotSkipRealValues(t *testing.T) {
 	}
 	if want := "call #0 now"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Case: a rule's span is left alone only inside the rule's own placeholder.
+// Wrapped in any other placeholder shape, which a client can type, what the
+// rule found is still masked, and a digit-led rule name keeps its own
+// placeholder stable too.
+func TestMaskText_RuleSpanExemptOnlyInItsOwnPlaceholder(t *testing.T) {
+	cfg := &config.MaskingPluginConfig{Rules: []config.SignalRef{{Type: "keyword", Name: "employee_id"}, {Type: "keyword", Name: "9digits"}}}
+	for _, tc := range []struct{ text, inside, entity, want string }{
+		{"wrapped [X_104233] here", "104233", "employee_id", "wrapped [X_[EMPLOYEE_ID_0]] here"},
+		{"wrapped [PERSON_104233] here", "104233", "employee_id", "wrapped [PERSON_[EMPLOYEE_ID_0]] here"},
+		{"echoed [EMPLOYEE_ID_3] here", "3", "employee_id", "echoed [EMPLOYEE_ID_3] here"},
+		{"echoed [9DIGITS_12] here", "12", "9digits", "echoed [9DIGITS_12] here"},
+	} {
+		start, end := byteRange(t, tc.text, tc.inside)
+		got, _, err := MaskText(tc.text, []Span{{EntityType: tc.entity, Start: start, End: end, Confidence: 1}}, nil, NewAllocator(cfg))
+		if err != nil {
+			t.Fatalf("%q: %v", tc.text, err)
+		}
+		if got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.text, got, tc.want)
+		}
 	}
 }

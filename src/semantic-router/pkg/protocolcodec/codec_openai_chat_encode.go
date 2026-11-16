@@ -73,6 +73,9 @@ func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Poli
 	if request.ReasoningSummary != "" {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Chat Completions cannot request a reasoning summary")
 	}
+	if len(request.Safeguards) > 0 {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "safeguards", "only Anthropic reviews auto mode's classifier context")
+	}
 	if len(request.ContextManagement) > 0 {
 		if err := appendLossy(&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIChatV1,
 			"context_management", "Chat Completions cannot apply Anthropic context edits"); err != nil {

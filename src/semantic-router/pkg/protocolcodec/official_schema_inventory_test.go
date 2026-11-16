@@ -55,6 +55,8 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"output_config", "service_tier", "stop_sequences", "stream", "system", "temperature", "thinking",
 				"tool_choice", "tools", "top_k", "top_p",
 			),
+			// Claude Code's auto mode sends it for Anthropic's classifier review.
+			extensions: fields("safeguards"),
 		},
 	}
 
@@ -122,6 +124,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"system", "temperature", "thinking", "tool_choice", "tools", "top_k", "top_p",
 			),
 			unsupported: fields("cache_control", "container", "inference_geo", "service_tier"),
+			extensions:  fields("safeguards"),
 		},
 	}
 	for _, test := range tests {

@@ -24,6 +24,13 @@ func (encoder *responsesStreamEncoder) collectCompletedResponsesContent(
 		if kind == "" {
 			kind = llmprotocol.ContentText
 		}
+		// A reasoning item that brought no text, only the provider's encrypted
+		// reasoning, which the Router does not relay, completes with no part. An
+		// empty reasoning_text a client sends back reaches an OpenAI target as
+		// plaintext reasoning, which it refuses.
+		if kind == llmprotocol.ContentReasoning && !encoder.contentStarted[key] && encoder.contentText[key] == nil {
+			continue
+		}
 		contentEvent := event
 		contentEvent.ContentIndex = key.content
 		completed, err := encoder.completeResponsesContent(contentEvent, outputKey, kind)

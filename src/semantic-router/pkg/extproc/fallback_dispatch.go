@@ -753,6 +753,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
 	requestBackendStreamUsage(dispatch.targetFormat, &projected)
+	r.requestUnstoredOnCallerLogin(dispatch.targetFormat, &projected)
 	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
 	if encodeErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
@@ -853,7 +854,7 @@ func (r *OpenAIRouter) fallbackProviderAuthorizer(
 	if profile.Caller() {
 		// The same contract as primary dispatch: only the client's own login,
 		// and the attempt fails before the call without it.
-		present, err := callerCredentialAuthorizer(reqCtx)
+		present, err := callerCredentialAuthorizer(reqCtx, profile)
 		if err != nil {
 			return nil, err
 		}

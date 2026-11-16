@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"net"
 	"slices"
 	"strings"
@@ -9,20 +10,20 @@ import (
 
 // A provider backend whose auth is credential: caller takes the provider
 // login the client itself sent the Router, as Claude Code sends its Claude
-// login, so the gateway routes a person's own subscription without holding
-// a key. Only the client's own request presents it: a call the Router makes
+// login and Codex its ChatGPT login, so the gateway routes a person's own
+// subscription without holding a key. Only the client's own request presents it: a call the Router makes
 // on its own behalf, an in-process hop and a response cache have no login of
-// that person's, so each fails to load. The first version keeps the payer
-// and the provider single: once one backend takes the caller's login, every
-// backend does, and each is Anthropic's.
+// that person's, so each fails to load. The payer and the provider stay
+// single: once one backend takes the caller's login, every backend does, and
+// all name the same provider.
 
-// CallerCredentialProviders are the providers a caller backend may name: the
-// provider whose login the client sends.
-var CallerCredentialProviders = []string{"anthropic"}
-
-// CallerCredentialHost is the only remote host a caller backend may name: the
-// API that issued the login.
-const CallerCredentialHost = "api.anthropic.com" // #nosec G101 -- a host name, not a credential
+// CallerCredentialHosts are the providers a caller backend may name, each
+// with the hosts that serve the logins it issues: Anthropic's API, OpenAI's
+// API for a key and ChatGPT's Codex backend for a ChatGPT login.
+var CallerCredentialHosts = map[string][]string{
+	"anthropic": {"api.anthropic.com"},
+	"openai":    {"api.openai.com", "chatgpt.com"},
+}
 
 // validateCallerUpstreams checks every caller backend against what the
 // rest of the configuration would do with a person's login.
@@ -31,6 +32,7 @@ func validateCallerUpstreams(cfg *RouterConfig) error {
 	if !ok {
 		return nil
 	}
+	provider := ""
 	for _, model := range sortedModelKeys(cfg.ModelConfig) {
 		for index, endpoint := range cfg.ModelConfig[model].PreferredEndpoints {
 			path := fmt.Sprintf("providers.models[%s].backend_refs[%d]", model, index)
@@ -40,6 +42,11 @@ func validateCallerUpstreams(cfg *RouterConfig) error {
 			}
 			if err := validateCallerBackend(cfg, path, endpoint, profile); err != nil {
 				return err
+			}
+			if provider == "" {
+				provider = profile.Type
+			} else if !strings.EqualFold(provider, profile.Type) {
+				return fmt.Errorf("%s: names provider %q while %s names %q; a login reaches only the provider that issued it, so every caller backend names one provider", path, profile.Type, first, provider)
 			}
 		}
 	}
@@ -54,9 +61,9 @@ func validateCallerUpstreams(cfg *RouterConfig) error {
 // validateCallerBackend keeps the login on the API that issued it, over TLS,
 // or on an endpoint on this machine.
 func validateCallerBackend(cfg *RouterConfig, path, endpointName string, profile *ProviderProfile) error {
-	provider := strings.ToLower(strings.TrimSpace(profile.Type))
-	if !slices.Contains(CallerCredentialProviders, provider) {
-		return fmt.Errorf("%s: auth.credential: caller sends the client's login, which only %s issues; provider %q would receive a login it did not issue", path, strings.Join(CallerCredentialProviders, ", "), profile.Type)
+	hosts, ok := CallerCredentialHosts[strings.ToLower(strings.TrimSpace(profile.Type))]
+	if !ok {
+		return fmt.Errorf("%s: auth.credential: caller sends the client's login, which only %s issue; provider %q would receive a login it did not issue", path, strings.Join(slices.Sorted(maps.Keys(CallerCredentialHosts)), ", "), profile.Type)
 	}
 	for _, endpoint := range cfg.VLLMEndpoints {
 		if endpoint.Name != endpointName {
@@ -65,8 +72,9 @@ func validateCallerBackend(cfg *RouterConfig, path, endpointName string, profile
 		if isLoopbackAddress(endpoint.Address) {
 			continue
 		}
-		if !strings.EqualFold(endpoint.Protocol, "https") || !strings.EqualFold(strings.TrimSuffix(endpoint.Address, "."), CallerCredentialHost) {
-			return fmt.Errorf("%s: auth.credential: caller sends the client's login, so the backend is https://%s, or an endpoint on this machine", path, CallerCredentialHost)
+		host := strings.ToLower(strings.TrimSuffix(endpoint.Address, "."))
+		if !strings.EqualFold(endpoint.Protocol, "https") || !slices.Contains(hosts, host) {
+			return fmt.Errorf("%s: auth.credential: caller sends the client's login, so the backend is https://%s, or an endpoint on this machine", path, strings.Join(hosts, " or https://"))
 		}
 	}
 	return nil
@@ -75,7 +83,7 @@ func validateCallerBackend(cfg *RouterConfig, path, endpointName string, profile
 // validateCallerRequestOnly refuses whatever would call a caller backend
 // without the client's own request, an in-process hop and an answer kept in
 // a response cache for other requests, and a system prompt the Router writes
-// over the client's, which Anthropic refuses on a person's login.
+// over the client's, which both providers refuse on a person's login.
 func (c *RouterConfig) validateCallerRequestOnly(first string) error {
 	recipes := c.Recipes
 	if len(recipes) == 0 {
@@ -94,7 +102,7 @@ func (c *RouterConfig) validateCallerRequestOnly(first string) error {
 				return fmt.Errorf("%s.plugins: response_cache keeps answers for other requests, and %s takes the caller's login; remove response_cache", path, first)
 			}
 			if prompt := decision.GetSystemPromptConfig(); prompt.IsEnabled() {
-				return fmt.Errorf("%s.plugins: system_prompt (mode %s) changes how the client's system prompt starts, and Anthropic refuses a request on a person's login whose system prompt does not start with the client's own; %s takes the caller's login, remove system_prompt", path, prompt.EffectiveMode(), first)
+				return fmt.Errorf("%s.plugins: system_prompt (mode %s) puts a system message before the client's own, which the provider refuses on a person's login (Anthropic answers 429, ChatGPT's Codex backend 400); %s takes the caller's login, remove system_prompt", path, prompt.EffectiveMode(), first)
 			}
 			if called := decisionCalledModels(decision); len(called) > 0 {
 				return fmt.Errorf("%s: the Router calls %q in process, and a hop never carries the caller's login that %s takes; route this decision to one model", path, called[0], first)

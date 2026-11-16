@@ -101,6 +101,42 @@ class ListenerIdentity(BaseModel):
     )
 
 
+class VSRRule(BaseModel):
+    """One rule of the bound recipe an app enforces: a keyword or systemone rule, required or advisory."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["keyword", "systemone"] = Field(
+        description="The signal type of the rule."
+    )
+    name: str = Field(min_length=1, description="The rule's name in the recipe.")
+    enforce: Optional[Literal["required", "advisory"]] = Field(
+        default=None,
+        description="required: a command waits for the person and an output is withheld when the rule "
+        "cannot be checked. advisory (the default): the rule then goes unchecked.",
+    )
+
+
+class VSRRules(BaseModel):
+    """Rules of one recipe that guard and redact enforce besides their own checks. The plugins learn
+    each rule's name and description; the Router evaluates it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    recipe: str = Field(
+        min_length=1,
+        description="The recipe whose rules these are; an entrypoint must reach it.",
+    )
+    guard: Optional[List[VSRRule]] = Field(
+        default=None,
+        description="Rules that say whether a shell command is held.",
+    )
+    redact: Optional[List[VSRRule]] = Field(
+        default=None,
+        description="Rules whose matches are hidden in a tool's output.",
+    )
+
+
 class VSRProfile(BaseModel):
     """What the vSR agent plugins pointed at a listener do: each application on or off and the router's goal.
     A field left out keeps the plugin's own option."""
@@ -137,6 +173,10 @@ class VSRProfile(BaseModel):
     )
     check: Optional[bool] = Field(
         default=None, description="Compare the agent's answer with what it read."
+    )
+    rules: Optional[VSRRules] = Field(
+        default=None,
+        description="Recipe rules guard and redact enforce besides their own checks.",
     )
 
 

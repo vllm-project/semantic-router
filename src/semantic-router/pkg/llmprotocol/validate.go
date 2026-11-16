@@ -51,6 +51,12 @@ func ValidateRequest(request Request, limits Limits) error {
 			return NewError(ErrorInvalidRequest, "context_management_limit", "context management exceeds the configured limit", nil)
 		}
 	}
+	if len(request.Safeguards) > 0 {
+		value := bytes.TrimSpace(request.Safeguards)
+		if !json.Valid(value) || len(value) == 0 || value[0] != '[' {
+			return NewError(ErrorInvalidRequest, "invalid_safeguards", "safeguards must be a JSON array", nil)
+		}
+	}
 	return validateReasoning(request, limits)
 }
 

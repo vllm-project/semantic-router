@@ -2,6 +2,7 @@ import type { PluginOptions } from 'claude-code'
 
 import type { App, Tiers } from '../../types'
 import { APP_NAMES } from './apps'
+import { type ListenerRules, NO_RULES } from './rules'
 
 export type RuntimeKind = 'local-cpu' | 'local-gpu' | 'remote'
 
@@ -77,6 +78,8 @@ export type Settings = {
   // The router also picks the model and effort of each prompt you send, not only of subagents.
   routerTurns: boolean
   display: Display
+  // The rules the listener binds to guard and redact, from its listing (lib/profile.ts).
+  rules: ListenerRules
 }
 
 export const DIFFICULTY_MAX = 2
@@ -115,5 +118,6 @@ export function parseSettings(options: PluginOptions): Settings {
     routerGoal: options.routerGoal as RouterGoal,
     routerTurns: options.routerTurns === true,
     display: options.display as Display,
+    rules: NO_RULES,
   }
 }

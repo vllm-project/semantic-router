@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -52,6 +53,19 @@ func Apply(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, e
 	for i := range request.Messages {
 		if err := applyToContent(request.Messages[i].Content, a, scan, &result, 0); err != nil {
 			return Result{}, err
+		}
+	}
+	// Auto mode's classifier context carries paths and git state from the
+	// client's machine to an Anthropic backend: its string leaves are masked
+	// like a structured tool result's, or the request is refused.
+	if len(request.Safeguards) > 0 {
+		masked, changed, err := maskJSONDocument(string(request.Safeguards), a, scan, &result)
+		if err != nil {
+			return Result{}, fmt.Errorf("masking: safeguards: %w", err)
+		}
+		if changed {
+			result.Changed = true
+			request.Safeguards = json.RawMessage(masked)
 		}
 	}
 	result.EntityTypes = dedupSortedEntityTypes(result.EntityTypes)
@@ -172,14 +186,22 @@ func maskToolResult(
 	return nil
 }
 
+// jsonOpening matches how a JSON object or array starts: `{` before a member
+// name or `}`, or `[` before `]` or a first value, where a number or a literal
+// must be followed by `,` or `]`. An opener with nothing after it counts too.
+var jsonOpening = regexp.MustCompile(`^\s*(?:\{\s*(?:$|["}])|\[\s*(?:$|[\]"{\[]|(?:-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|true|false|null)\s*(?:$|[,\]])))`)
+
 // isJSONShapedPayload reports whether text opens as a JSON object or array.
 // Such a payload is masked as decoded JSON, so escapes are seen through, and
 // one that will not decode faithfully fails closed rather than falling back to
 // the text path, which scans the undecoded bytes and so cannot see an escaped
-// value. Anything else, a bare scalar included, is ordinary text.
+// value. Anything else, a bare scalar included, is ordinary text, and so is
+// text that only begins with a bracket, such as a log line ("[INFO] ...",
+// "[2026-11-14 10:00:00] ...") or a vSR plugin mark ("[vsr:employee_id]"):
+// failing those closed refused every later turn of an agent session that had
+// read one.
 func isJSONShapedPayload(text string) bool {
-	trimmed := strings.TrimSpace(text)
-	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
+	return jsonOpening.MatchString(text)
 }
 
 // jsonFrame tracks one open object or array while walking tokens. Only object

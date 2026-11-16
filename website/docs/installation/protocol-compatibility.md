@@ -309,6 +309,22 @@ tool search on:
 - **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for
   `tools.defer_loading`.
 
+A `tool_addition` block, which Claude Code puts in a `role: "system"` message
+when a deferred tool becomes available mid-conversation, adds the tool it
+defines to the request's tools, after the declared ones and once per name, on
+every backend format. The system message keeps its other blocks, and a message
+that held nothing else is left out.
+
+### Auto mode's classifier context
+
+Claude Code in auto mode sends a top-level `safeguards` array for Anthropic's
+server-side classifier review. The Router carries it unchanged to a Messages
+backend. A Chat or Responses backend has no use for it, so the Router leaves it
+out and `x-vsr-warnings` reports a `dropped` diagnostic for `safeguards`. The
+array holds Claude Code's working directory, permission rules and git state, so
+on a decision with the `masking` plugin its string values are masked like a
+structured tool result's, and an array that will not decode refuses the request.
+
 ### Sampling controls a backend rejects
 
 Some backends reject a sampling control their wire format defines. A vLLM
@@ -437,7 +453,9 @@ tools or error translation.
 ## Validation and failure behavior
 
 - Public requests are decoded into the neutral contract even when client and
-  backend formats match. Unknown or unsupported request fields fail closed.
+  backend formats match. Unknown or unsupported request fields fail closed,
+  and the error names an unknown field, such as
+  `request JSON contains a non-canonical field: unknown field "new_field"`.
 - Chat requests accept and don't forward the fields that client libraries add
   to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
   which holds the reply fields its message type lacks, and `parsed` and
@@ -626,6 +644,12 @@ Point Codex at the Router through a model provider of your own, not
 - **The model.** Set `model` to a Router entrypoint as well, such as
   `vllm-sr/auto`; a name that matches no entrypoint is sent to a backend model
   of that name.
+- **The catalog.** On a ChatGPT login (`requires_openai_auth = true`, see
+  [Agent Harness](agent-harness#codex-on-its-own-chatgpt-login)), Codex also
+  asks for its own model catalog with `GET /v1/models?client_version=…`. The
+  Router answers that request with an empty `models` catalog beside the model
+  list, so Codex keeps its default model metadata instead of logging that it
+  cannot read the list.
 
 ```toml
 model = "vllm-sr/auto"
@@ -693,4 +717,6 @@ namespaces with a `tool_search` tool, which the Router does not support. For a
 Messages backend, also set `apply_patch_tool_type` to `null`, because Codex
 otherwise sends `apply_patch` as a custom tool. The `gpt-6` entries send tools
 in an `additional_tools` input item with `reasoning.context`, which the Router
-rejects.
+rejects. `vllm-sr connect codex` writes such a catalog: the bundled entries and
+one for the profile's model, with `apply_patch_tool_type` set to `null`
+whatever the backends; add an entry to it for each other name.
