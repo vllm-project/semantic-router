@@ -84,6 +84,9 @@ bench-plot = "reasoning.bench_plot:main"
 reasoning-mode-eval = "reasoning.reasoning_mode_eval:main"
 looper-tts = "looper_tts.__main__:main"
 
+[tool.setuptools]
+py-modules = ["router_trace"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["reasoning*", "looper_tts*"]

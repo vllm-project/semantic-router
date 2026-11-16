@@ -1,4 +1,4 @@
-"""Projection graph and embedding modality validators."""
+"""Projection graph validators."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ def _register_projection_names(
         if name and name in declared_names[kind]:
             errors.append(
                 ValidationError(
-                    field=f"recipes.{profile_name}.routing.projections.{kind}",
+                    field=f"recipes.{profile_name}.projections.{kind}",
                     message=(
                         f'duplicate projection name "{name}" in recipe "{profile_name}"'
                     ),
@@ -121,7 +121,7 @@ def _register_projection_names(
             if output_name and output_name in output_names:
                 errors.append(
                     ValidationError(
-                        field=(f"recipes.{profile_name}.routing.projections.mappings"),
+                        field=(f"recipes.{profile_name}.projections.mappings"),
                         message=(
                             f'duplicate projection output "{output_name}" in recipe '
                             f'"{profile_name}"'
@@ -197,63 +197,4 @@ def validate_projection_score_dependencies(
     errors: list[ValidationError] = []
     for profile_name, routing in iter_routing_profiles(config):
         errors.extend(_validate_projection_profile(routing.projections, profile_name))
-    return errors
-
-
-def validate_embedding_modality_compatibility(
-    config: UserConfig,
-) -> list[ValidationError]:
-    """Require a shared multimodal encoder or an explicit recipe binding.
-
-    The Router validates the loaded binding's actual image/original-audio
-    capabilities before publishing a runtime. CLI validation never loads models.
-    """
-    errors: list[ValidationError] = []
-    catalog = (config.global_ or {}).get("model_catalog", {})
-    if not isinstance(catalog, dict):
-        catalog = {}
-    semantic = catalog
-    for key in ("embeddings", "semantic", "embedding_config"):
-        semantic = semantic.get(key, {}) if isinstance(semantic, dict) else {}
-    model_type = semantic.get("model_type", "") if isinstance(semantic, dict) else ""
-    normalized = model_type.strip().lower() if isinstance(model_type, str) else ""
-    global_bindings = catalog.get("bindings") or {}
-
-    for profile_name, routing in iter_routing_profiles(config):
-        bound = "embedding" in routing.model_bindings or "embedding" in global_bindings
-        for rule in routing.signals.embeddings or []:
-            raw = (rule.query_modality or "").strip().lower()
-            if (
-                (rule.image_candidates or rule.negative_image_candidates)
-                and normalized != "multimodal"
-                and not bound
-            ):
-                errors.append(
-                    ValidationError(
-                        f"Embedding rule '{rule.name}' image candidates require model_type=multimodal or an explicit embedding binding with image capability.",
-                        field=f"{profile_name}.signals.embeddings.{rule.name}",
-                    )
-                )
-            if raw in ("", "text"):
-                continue
-            if raw in ("image", "audio"):
-                if normalized == "multimodal" or bound:
-                    continue
-                message = (
-                    f"Embedding rule '{rule.name}' declares query_modality={raw}, "
-                    "which requires global.model_catalog.embeddings.semantic."
-                    "embedding_config.model_type=multimodal or an explicit embedding "
-                    f"binding with that capability (current: '{model_type}')."
-                )
-            else:
-                message = (
-                    f"Embedding rule '{rule.name}' declares unknown "
-                    f"query_modality='{rule.query_modality}' "
-                    "(allowed values: text, image, audio)."
-                )
-            errors.append(
-                ValidationError(
-                    message, field=f"{profile_name}.signals.embeddings.{rule.name}"
-                )
-            )
     return errors

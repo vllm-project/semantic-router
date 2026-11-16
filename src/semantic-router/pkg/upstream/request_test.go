@@ -4,7 +4,10 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func TestRewriteDefaultPathMatchesOnlyTheV1Segment(t *testing.T) {
@@ -47,6 +50,34 @@ func TestEndpointAuthorityOmitsDefaultPorts(t *testing.T) {
 	}
 }
 
+// A client request can carry any header the registry keeps from providers:
+// the Router's control headers such as x-vsr-debug, internal context,
+// identity and secrets. None reaches the provider.
+func TestOutboundDropsEveryHeaderKeptFromProviders(t *testing.T) {
+	kept := headers.KeptFromProviders()
+	if !slices.Contains(kept, headers.VSRDebug) || !slices.Contains(kept, headers.VSRSkipProcessing) {
+		t.Fatalf("KeptFromProviders() = %v, want the Router's control headers", kept)
+	}
+	header := http.Header{"x-request-id": {"r-1"}, "x-session-id": {"s-1"}}
+	for _, name := range kept {
+		header.Set(name, "client-"+name)
+	}
+	spec := &ClusterSpec{Name: "m"}
+	ep := &EndpointSpec{Name: "e", Scheme: "http", Host: "10.0.0.1", Port: 8000, Weight: 1}
+	routed, err := outbound(t.Context(), &Request{Method: "POST", Path: "/v1/chat/completions", Header: header}, spec, ep, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range kept {
+		if value := routed.Header.Get(name); value != "" {
+			t.Errorf("%s = %q reaches the provider", name, value)
+		}
+	}
+	if routed.Header.Get("x-request-id") != "r-1" || routed.Header.Get("x-session-id") != "s-1" {
+		t.Fatalf("headers registered to reach providers were dropped: %v", routed.Header)
+	}
+}
+
 func TestOutboundAppliesTheTemplateRouteRules(t *testing.T) {
 	spec := &ClusterSpec{
 		Name:       "m",
@@ -55,23 +86,27 @@ func TestOutboundAppliesTheTemplateRouteRules(t *testing.T) {
 			{Name: "X-Tenant", Value: "operator"},
 			{Name: "x-authz-user-id", Value: "route-cannot-add-internal"},
 		},
+		RemoveHeaders: []string{"x-jwt-sub"},
 	}
 	ep := &EndpointSpec{Name: "e", Scheme: "http", Host: "10.0.0.1", Port: 8000, Weight: 1}
 	req := &Request{
 		Method: "POST",
 		Path:   "/v1/chat/completions?x=%20y",
 		Header: http.Header{
-			"x-tenant":             {"client"},
-			"authorization":        {"Bearer provider-key"},
-			"x-vsr-looper-request": {"true"},
-			"x-vsr-looper-secret":  {"s"},
-			"x-authz-user-groups":  {"admins"},
-			":authority":           {"client.example"},
-			"host":                 {"client.example"},
-			"content-length":       {"999"},
-			"connection":           {"keep-alive, x-hop"},
-			"x-hop":                {"1"},
-			"te":                   {"trailers"},
+			"x-tenant":            {"client"},
+			"authorization":       {"Bearer provider-key"},
+			"x-vsr-internal-auth": {"forged"},
+			"x-vsr-debug":         {"true"},
+			"x-authz-user-groups": {"admins"},
+			"x-authz-team-id":     {"team-a"},
+			"x-authz-tenant-id":   {"tenant-a"},
+			"x-jwt-sub":           {"alice"},
+			":authority":          {"client.example"},
+			"host":                {"client.example"},
+			"content-length":      {"999"},
+			"connection":          {"keep-alive, x-hop"},
+			"x-hop":               {"1"},
+			"te":                  {"trailers"},
 		},
 		Body: []byte(`{"model":"m"}`),
 	}

@@ -1,0 +1,94 @@
+[project]
+name = "multimodal-large"
+version = "0.0.0"
+description = "Environment for the large multimodal embedding trainer under src/training/model_embeddings/multimodal/large"
+requires-python = ">=3.10"
+dependencies = [
+    # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
+    "accelerate>=0.34.0,<2",
+    # Pinned: download_data.py uses the datasets 2.x audio API (trust_remote_code and Audio).
+    "datasets==2.21.0",
+    "librosa>=0.10.0,<1",
+    "numpy>=1.26.0,<3",
+    # Pillow 11 and 12 are already released; the small area stops before 13.
+    "pillow>=10.0.0,<13",
+    "pyyaml>=6.0,<7",
+    "sentence-transformers>=5.1.0,<6",
+    # Declared for the text-encoder tokenizer stack; the modules do not import it directly.
+    "sentencepiece>=0.2.0,<1",
+    "tqdm>=4.66.0,<5",
+    "transformers>=4.56.0,<6",
+]
+
+[project.optional-dependencies]
+# Pick exactly one. requirements.txt sends pip at the ROCm 7.1 index; these
+# extras record that index plus the CPU and default PyPI (CUDA on Linux) builds.
+cpu = [
+    "torch>=2.10.0,<3",
+    "torchvision>=0.25.0,<1",
+    "torchaudio>=2.10.0,<3",
+]
+cuda = [
+    "torch>=2.10.0,<3",
+    "torchvision>=0.25.0,<1",
+    "torchaudio>=2.10.0,<3",
+]
+rocm = [
+    "torch>=2.10.0,<3",
+    "torchvision>=0.25.0,<1",
+    "torchaudio>=2.10.0,<3",
+    # The ROCm torch wheels depend on triton-rocm from the same index.
+    "triton-rocm>=3.6,<4 ; sys_platform == 'linux'",
+]
+
+[dependency-groups]
+# Only download_data.py imports these.
+download = [
+    # Imported but missing from requirements.txt; the bound follows the other training areas.
+    "requests>=2.31.0,<3",
+    # requirements.txt leaves soundfile unbounded.
+    "soundfile<1",
+]
+# upload.py imports huggingface-hub; evaluate.py imports safetensors.
+publish = [
+    "huggingface-hub>=0.25.0,<2",
+    # requirements.txt leaves safetensors unbounded; the floor follows the other training areas.
+    "safetensors>=0.4,<1",
+]
+
+[tool.uv]
+package = false
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cuda" },
+        { extra = "rocm" },
+    ],
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux'" },
+]
+torchaudio = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux'" },
+]
+triton-rocm = [
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm7.1"
+explicit = true

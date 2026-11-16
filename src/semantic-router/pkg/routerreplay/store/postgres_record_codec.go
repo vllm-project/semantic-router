@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 )
 
 func nullableIntArg(value *int) interface{} {
@@ -101,4 +102,18 @@ func marshalReplayOptionalJSON(value interface{}) ([]byte, error) {
 		return nil, nil
 	}
 	return json.Marshal(value)
+}
+
+// marshalPostgresUsageCostJSON encodes the JSONB columns a usage update
+// writes: the provider prompt-cache accounting and the cost accounting.
+func marshalPostgresUsageCostJSON(usage UsageCost) ([]byte, []byte, error) {
+	providerCache, err := json.Marshal(usage.ProviderCache)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshal provider cache accounting: %w", err)
+	}
+	costAccounting, err := json.Marshal(usage.CostAccounting)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshal cost accounting: %w", err)
+	}
+	return providerCache, costAccounting, nil
 }

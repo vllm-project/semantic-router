@@ -1,0 +1,16 @@
+plugin:
+  type: tools
+  configuration:
+    enabled: true
+    # The decision model keeps the request's tools it needs, in the request's
+    # order, and the first preserve_count tools whatever it answers. BM25 first
+    # narrows a long tool list to the 40 tools that share the most terms with
+    # the request.
+    select:
+      mode: filter
+      match:
+        recall: {method: bm25, top_k: 40}
+        judge: {preset: tool_rank, min_ratio: 0.1}
+      preserve_count: 2
+      on_error: keep
+      input: {history: true}

@@ -2,19 +2,23 @@ import { useId, useMemo, useState } from 'react'
 
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import ProductIcon from '../components/ProductIcon'
+import { type BuiltInRecipeCatalog, composeBuiltInRecipe } from './configPageBuiltInRecipes'
 import {
-  DEFAULT_RECIPE_NAME,
+  delegatesCalls,
   getPublishableRecipeNames,
-  getRecipeByName,
-  getRecipeNames,
   normalizeEntrypointModelNames,
+  requireEntrypointModelNames,
   validateEntrypointForm,
 } from './configPageEntrypointsRecipesSupport'
 import {
   applyRecipeAssignments,
-  assignmentState,
+  builtInRecipeBindings,
+  builtInRecipeChoices,
+  type MixtureRecipeChoice,
+  mixtureRecipeKey,
   type ModelAssignments,
-  minimumCandidatesForDecision,
+  recipeAssignments,
+  resolveMixtureRecipe,
 } from './configPageMixtureSupport'
 import type { ConfigData, EntrypointConfig, NormalizedModel } from './configPageSupport'
 import styles from './ConfigPageMixtureDialog.module.css'
@@ -24,6 +28,8 @@ const firstDecisionName = (decisionNames: string[]) => decisionNames[0] ?? ''
 interface ConfigPageMixtureDialogProps {
   config: ConfigData
   models: NormalizedModel[]
+  builtInRecipes?: BuiltInRecipeCatalog | null
+  initialRecipe?: MixtureRecipeChoice
   entrypoint?: EntrypointConfig
   entrypointIndex?: number
   onClose: () => void
@@ -33,6 +39,8 @@ interface ConfigPageMixtureDialogProps {
 export default function ConfigPageMixtureDialog({
   config,
   models,
+  builtInRecipes = null,
+  initialRecipe,
   entrypoint,
   entrypointIndex,
   onClose,
@@ -40,18 +48,25 @@ export default function ConfigPageMixtureDialog({
 }: ConfigPageMixtureDialogProps) {
   const titleId = useId()
   const recipeNames = getPublishableRecipeNames(config)
-  const initialRecipeName =
-    entrypoint?.recipe ?? recipeNames[0] ?? getRecipeNames(config)[0] ?? DEFAULT_RECIPE_NAME
-  const initialRecipe = getRecipeByName(config, initialRecipeName)
+  // A built-in recipe publishes a new entrypoint, so editing offers config recipes only.
+  const catalog = entrypoint ? null : builtInRecipes
+  const builtInChoices = builtInRecipeChoices(catalog)
+  const [recipeChoice, setRecipeChoice] = useState<MixtureRecipeChoice | null>(() => {
+    const name = entrypoint?.recipe ?? recipeNames[0]
+    return initialRecipe ?? (name === undefined ? null : { name })
+  })
+  const choice = recipeChoice ?? builtInChoices[0] ?? null
+  const { description, decisions } = resolveMixtureRecipe(config, catalog, choice)
   const [primaryName, setPrimaryName] = useState(entrypoint?.model_names[0] ?? '')
   const [aliases, setAliases] = useState<string[]>(entrypoint?.model_names.slice(1) ?? [])
   const [aliasDraft, setAliasDraft] = useState('')
-  const [recipeName, setRecipeName] = useState(initialRecipeName)
+  const [reviewModel, setReviewModel] = useState(entrypoint?.review_model ?? '')
+  const [memoryModel, setMemoryModel] = useState(entrypoint?.memory_model ?? '')
   const [assignments, setAssignments] = useState<ModelAssignments>(() =>
-    assignmentState(initialRecipe?.routing.decisions ?? []),
+    recipeAssignments(config, choice),
   )
   const [activeDecisionName, setActiveDecisionName] = useState(() =>
-    firstDecisionName((initialRecipe?.routing.decisions ?? []).map((decision) => decision.name)),
+    firstDecisionName(decisions.map((decision) => decision.name)),
   )
   const [decisionSearch, setDecisionSearch] = useState('')
   const [modelSearch, setModelSearch] = useState('')
@@ -63,8 +78,6 @@ export default function ConfigPageMixtureDialog({
     onClose,
     dismissible: !saving,
   })
-  const recipe = getRecipeByName(config, recipeName)
-  const decisions = recipe?.routing.decisions ?? []
   const modelOptions = useMemo(
     () =>
       models
@@ -74,12 +87,19 @@ export default function ConfigPageMixtureDialog({
     [models],
   )
 
-  const chooseRecipe = (nextRecipeName: string) => {
-    const nextRecipe = getRecipeByName(config, nextRecipeName)
-    setRecipeName(nextRecipeName)
-    setAssignments(assignmentState(nextRecipe?.routing.decisions ?? []))
+  const chooseRecipe = (key: string) => {
+    const nextChoice = [...recipeNames.map((name) => ({ name })), ...builtInChoices].find(
+      (candidate) => mixtureRecipeKey(candidate) === key,
+    )
+    if (!nextChoice) return
+    setRecipeChoice(nextChoice)
+    setAssignments(recipeAssignments(config, nextChoice))
     setActiveDecisionName(
-      firstDecisionName((nextRecipe?.routing.decisions ?? []).map((decision) => decision.name)),
+      firstDecisionName(
+        resolveMixtureRecipe(config, catalog, nextChoice).decisions.map(
+          (decision) => decision.name,
+        ),
+      ),
     )
     setDecisionSearch('')
     setModelSearch('')
@@ -106,18 +126,32 @@ export default function ConfigPageMixtureDialog({
     setAliasDraft('')
   }
 
+  const publishConfigRecipe = (recipeName: string, publicNames: string[]): ConfigData => {
+    const normalizedEntrypoint = validateEntrypointForm(
+      { modelNames: publicNames.join('\n'), recipe: recipeName, reviewModel, memoryModel },
+      config,
+      models,
+      entrypointIndex ?? null,
+    )
+    const next = applyRecipeAssignments(config, recipeName, assignments)
+    const entrypoints = [...(next.entrypoints ?? [])]
+    if (entrypointIndex === undefined) entrypoints.push(normalizedEntrypoint)
+    else entrypoints[entrypointIndex] = normalizedEntrypoint
+    next.entrypoints = entrypoints
+    return next
+  }
+
   const save = async () => {
     const publicNames = normalizeEntrypointModelNames([primaryName, ...aliases].join('\n'))
-    if (!recipe || decisions.length === 0) {
+    if (!choice || decisions.length === 0) {
       setError('Choose a recipe with at least one decision.')
       return
     }
     const incompleteDecision = decisions.find(
-      (decision) =>
-        (assignments[decision.name]?.length ?? 0) < minimumCandidatesForDecision(decision),
+      (decision) => (assignments[decision.name]?.length ?? 0) < decision.minimumCandidates,
     )
     if (incompleteDecision) {
-      const minimum = minimumCandidatesForDecision(incompleteDecision)
+      const minimum = incompleteDecision.minimumCandidates
       setActiveDecisionName(incompleteDecision.name)
       setError(
         `Choose at least ${minimum} model${minimum === 1 ? '' : 's'} for “${incompleteDecision.name}”.`,
@@ -126,20 +160,17 @@ export default function ConfigPageMixtureDialog({
     }
 
     try {
-      const normalizedEntrypoint = validateEntrypointForm(
-        { modelNames: publicNames.join('\n'), recipe: recipeName },
-        config,
-        models,
-        entrypointIndex ?? null,
-      )
-      const next = applyRecipeAssignments(config, recipeName, assignments)
-      const entrypoints = [...(next.entrypoints ?? [])]
-      if (entrypointIndex === undefined) entrypoints.push(normalizedEntrypoint)
-      else entrypoints[entrypointIndex] = normalizedEntrypoint
-      next.entrypoints = entrypoints
-
       setSaving(true)
       setError(null)
+      const next =
+        choice.bundle === undefined
+          ? publishConfigRecipe(choice.name, publicNames)
+          : await composeBuiltInRecipe({
+              bundle: choice.bundle,
+              recipe: choice.name,
+              bindings: builtInRecipeBindings(decisions, assignments),
+              model_names: requireEntrypointModelNames(publicNames),
+            })
       await onSave(next)
       onClose()
     } catch (cause) {
@@ -167,9 +198,32 @@ export default function ConfigPageMixtureDialog({
       (!normalizedModelSearch || modelName.toLocaleLowerCase().includes(normalizedModelSearch)),
   )
   const completedDecisionCount = decisions.filter(
-    (decision) =>
-      (assignments[decision.name]?.length ?? 0) >= minimumCandidatesForDecision(decision),
+    (decision) => (assignments[decision.name]?.length ?? 0) >= decision.minimumCandidates,
   ).length
+  const configRecipeOptions = recipeNames.map((name) => (
+    <option key={name} value={mixtureRecipeKey({ name })}>
+      {name}
+    </option>
+  ))
+  // Other entrypoints that send nothing on can take this one's reviews and memory calls.
+  const delegateOptions = (config.entrypoints ?? [])
+    .filter(
+      (candidate, index) =>
+        index !== entrypointIndex &&
+        !delegatesCalls(candidate) &&
+        (candidate.api ?? 'chat') === (entrypoint?.api ?? 'chat'),
+    )
+    .flatMap((candidate) => candidate.model_names)
+    .filter((name) => ![primaryName.trim(), ...aliases].includes(name))
+    .map((name) => (
+      <option key={name} value={name}>
+        {name}
+      </option>
+    ))
+  const delegateFields = [
+    { label: 'Reviews go to', value: reviewModel, onChange: setReviewModel },
+    { label: 'Memories go to', value: memoryModel, onChange: setMemoryModel },
+  ]
 
   return (
     <div
@@ -220,14 +274,44 @@ export default function ConfigPageMixtureDialog({
                 data-dialog-initial-focus
               />
             </label>
+            {choice?.bundle === undefined
+              ? delegateFields.map(({ label, value, onChange }) => (
+                  <label key={label}>
+                    <span>{label}</span>
+                    <select value={value} onChange={(event) => onChange(event.target.value)}>
+                      <option value="">Session model</option>
+                      {delegateOptions}
+                    </select>
+                  </label>
+                ))
+              : null}
             <label>
               <span>Recipe</span>
-              <select value={recipeName} onChange={(event) => chooseRecipe(event.target.value)}>
-                {recipeNames.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
+              <select
+                value={choice ? mixtureRecipeKey(choice) : ''}
+                onChange={(event) => chooseRecipe(event.target.value)}
+              >
+                {catalog?.bundles.length ? (
+                  <>
+                    {configRecipeOptions.length ? (
+                      <optgroup label="Configured recipes">{configRecipeOptions}</optgroup>
+                    ) : null}
+                    {catalog.bundles.map((bundle) => (
+                      <optgroup key={bundle.name} label={`Built-in · ${bundle.name}`}>
+                        {bundle.recipes.map((recipe) => (
+                          <option
+                            key={recipe.name}
+                            value={mixtureRecipeKey({ bundle: bundle.name, name: recipe.name })}
+                          >
+                            {recipe.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </>
+                ) : (
+                  configRecipeOptions
+                )}
               </select>
             </label>
           </div>
@@ -287,7 +371,7 @@ export default function ConfigPageMixtureDialog({
                   {completedDecisionCount} of {decisions.length} ready
                 </strong>
               </div>
-              <p>{recipe?.description || 'Complete every decision before publishing.'}</p>
+              <p>{description || 'Complete every decision before publishing.'}</p>
             </div>
             {decisions.length > 0 && activeDecision ? (
               <div className={styles.assignmentWorkspace}>
@@ -307,6 +391,7 @@ export default function ConfigPageMixtureDialog({
                         (candidate) => candidate.name === decision.name,
                       )
                       const selected = assignments[decision.name] ?? []
+                      const needsModels = decision.minimumCandidates > 0
                       const isActive = decision.name === activeDecision.name
                       return (
                         <button
@@ -330,10 +415,12 @@ export default function ConfigPageMixtureDialog({
                           </span>
                           <span
                             className={
-                              selected.length ? styles.selectionCount : styles.missingCount
+                              selected.length || !needsModels
+                                ? styles.selectionCount
+                                : styles.missingCount
                             }
                           >
-                            {selected.length || '—'}
+                            {needsModels ? selected.length || '—' : 'No model'}
                           </span>
                         </button>
                       )
@@ -357,56 +444,65 @@ export default function ConfigPageMixtureDialog({
                       </span>
                     </div>
                     <span>
-                      {activeSelection.length} selected · minimum{' '}
-                      {minimumCandidatesForDecision(activeDecision)}
+                      {activeDecision.minimumCandidates > 0
+                        ? `${activeSelection.length} selected · minimum ${activeDecision.minimumCandidates}`
+                        : 'No model needed'}
                     </span>
                   </div>
-                  <div className={styles.modelPickerToolbar}>
-                    <label className={styles.assignmentSearch}>
-                      <ProductIcon name="search" aria-hidden="true" />
-                      <input
-                        value={modelSearch}
-                        onChange={(event) => setModelSearch(event.target.value)}
-                        placeholder="Find a model"
-                        aria-label={`Find a model for ${activeDecision.name}`}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className={showSelectedModels ? styles.activeFilter : ''}
-                      aria-pressed={showSelectedModels}
-                      onClick={() => setShowSelectedModels((current) => !current)}
-                    >
-                      <ProductIcon name="check" aria-hidden="true" />
-                      Selected
-                      <span>{activeSelection.length}</span>
-                    </button>
-                  </div>
-                  <div className={styles.modelPicker}>
-                    {visibleModelOptions.map((modelName) => (
-                      <label
-                        key={modelName}
-                        className={activeSelection.includes(modelName) ? styles.selectedModel : ''}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={activeSelection.includes(modelName)}
-                          onChange={() => toggleModel(activeDecision.name, modelName)}
-                        />
-                        <span aria-hidden="true">
-                          <ProductIcon name="check" />
-                        </span>
-                        <code>{modelName}</code>
-                      </label>
-                    ))}
-                    {visibleModelOptions.length === 0 ? (
-                      <p>
-                        {modelOptions.length === 0
-                          ? 'Connect a model before publishing this mixture.'
-                          : 'No models match this view.'}
-                      </p>
-                    ) : null}
-                  </div>
+                  {activeDecision.minimumCandidates > 0 ? (
+                    <>
+                      <div className={styles.modelPickerToolbar}>
+                        <label className={styles.assignmentSearch}>
+                          <ProductIcon name="search" aria-hidden="true" />
+                          <input
+                            value={modelSearch}
+                            onChange={(event) => setModelSearch(event.target.value)}
+                            placeholder="Find a model"
+                            aria-label={`Find a model for ${activeDecision.name}`}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className={showSelectedModels ? styles.activeFilter : ''}
+                          aria-pressed={showSelectedModels}
+                          onClick={() => setShowSelectedModels((current) => !current)}
+                        >
+                          <ProductIcon name="check" aria-hidden="true" />
+                          Selected
+                          <span>{activeSelection.length}</span>
+                        </button>
+                      </div>
+                      <div className={styles.modelPicker}>
+                        {visibleModelOptions.map((modelName) => (
+                          <label
+                            key={modelName}
+                            className={
+                              activeSelection.includes(modelName) ? styles.selectedModel : ''
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              checked={activeSelection.includes(modelName)}
+                              onChange={() => toggleModel(activeDecision.name, modelName)}
+                            />
+                            <span aria-hidden="true">
+                              <ProductIcon name="check" />
+                            </span>
+                            <code>{modelName}</code>
+                          </label>
+                        ))}
+                        {visibleModelOptions.length === 0 ? (
+                          <p>
+                            {modelOptions.length === 0
+                              ? 'Connect a model before publishing this mixture.'
+                              : 'No models match this view.'}
+                          </p>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : (
+                    <p className={styles.empty}>This decision responds without calling a model.</p>
+                  )}
                 </div>
               </div>
             ) : (

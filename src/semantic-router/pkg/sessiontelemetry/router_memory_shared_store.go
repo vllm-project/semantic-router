@@ -282,6 +282,8 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 		turnCount:                       snapshot.TurnCount,
 		switchCount:                     snapshot.SwitchCount,
 		modelTurns:                      modelTurns,
+		userTurnCount:                   snapshot.UserTurnCount,
+		lastReleaseUserTurn:             snapshot.LastReleaseUserTurn,
 		cumulativePrompt:                snapshot.CumulativePromptTokens,
 		cumulativeCached:                snapshot.CumulativeCachedTokens,
 		cumulativeCacheWrite:            snapshot.CumulativeCacheWriteTokens,

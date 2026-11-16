@@ -54,12 +54,12 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 	// Get config from algorithm
 	maxConcurrent := len(req.ModelRefs)
 	onError := "skip"
-	if req.Algorithm != nil && req.Algorithm.Ratings != nil {
-		if req.Algorithm.Ratings.MaxConcurrent > 0 {
+	if req.Algorithm != nil {
+		if req.Algorithm.Ratings != nil && req.Algorithm.Ratings.MaxConcurrent > 0 {
 			maxConcurrent = req.Algorithm.Ratings.MaxConcurrent
 		}
-		if req.Algorithm.Ratings.OnError != "" {
-			onError = req.Algorithm.Ratings.OnError
+		if req.Algorithm.OnError != "" {
+			onError = req.Algorithm.OnError
 		}
 	}
 
@@ -208,7 +208,7 @@ func ratingsCompletionBody(responses []*ModelResponse, modelsUsed []string, id s
 				"role":    "assistant",
 				"content": resp.Content,
 			},
-			"finish_reason": "stop",
+			"finish_reason": backendFinishReason(resp),
 		}
 	}
 
@@ -304,11 +304,11 @@ func (l *RatingsLooper) formatRatingsStreamingResponse(responses []*ModelRespons
 		"model":   strings.Join(modelsUsed, ","),
 		"choices": func() []map[string]interface{} {
 			choices := make([]map[string]interface{}, len(responses))
-			for i := range responses {
+			for i, resp := range responses {
 				choices[i] = map[string]interface{}{
 					"index":         i,
 					"delta":         map[string]interface{}{},
-					"finish_reason": "stop",
+					"finish_reason": backendFinishReason(resp),
 				}
 			}
 			return choices

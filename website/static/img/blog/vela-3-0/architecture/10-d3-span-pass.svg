@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1300" viewBox="0 0 1600 1300" role="img"><title>Vela 3.0 d3 sizes: the span pass</title><desc>One span question = one forward of the frozen d3 base with its span-family LoRA on, read by a SpanHeadV2. Read bottom to top.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<g transform="translate(0,-250)">
+<g data-box="100.0 1230 1400 90">
+<rect x="100.0" y="1230" width="1400" height="90" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="1269.1200000000001" font-size="24" text-anchor="middle" class="">d3 prompt (chat template): State: &lt;parts&gt; · Question: &lt;span question&gt;</text>
+<text x="800" y="1297.2" font-size="24" text-anchor="middle" class="">Options: one line per label  &lt;code&gt;: label[: description or definition]</text>
+</g>
+<g data-box="350.0 1090 900 84">
+<rect x="350.0" y="1090" width="900" height="84" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="1126.1200000000001" font-size="24" text-anchor="middle" class="">Frozen d3 decoder, noncausal full attention</text>
+<text x="800" y="1154.2" font-size="24" text-anchor="middle" class="">span / NER / relation / image-halu LoRA switched on</text>
+</g>
+<path d="M800,1229 L800,1175" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="550.0 970 500 60">
+<rect x="550.0" y="970" width="500" height="60" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="1008.5" font-size="25" text-anchor="middle" class="">Final-norm states H</text>
+</g>
+<path d="M800,1089 L800,1031" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="185.0 850 470 80">
+<rect x="185.0" y="850" width="470" height="80" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="420" y="884.12" font-size="24" text-anchor="middle" class="">First sub-token of each</text>
+<text x="420" y="912.2" font-size="24" text-anchor="middle" class="">word of the target part</text>
+</g>
+<g data-box="945.0 850 470 80">
+<rect x="945.0" y="850" width="470" height="80" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1180" y="884.12" font-size="24" text-anchor="middle" class="">Mean over each option line</text>
+<text x="1180" y="912.2" font-size="24" text-anchor="middle" class="">label vector, one per label</text>
+</g>
+<path d="M800,969 L800,940 L420,940 L420,931" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M800,940 L1180,940 L1180,931" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="800" cy="940" r="3.5" fill="#111"/>
+<g data-box="300.0 700 1000 90">
+<rect x="300.0" y="700" width="1000" height="90" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="739.12" font-size="24" text-anchor="middle" class="">SpanHeadV2: LayerNorm + centring, 64 label slots</text>
+<text x="800" y="767.2" font-size="24" text-anchor="middle" class="">scaled bilinear K Qᵀ / √256 + GELU MLP</text>
+</g>
+<path d="M420,849 L420,791" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1180,849 L1180,791" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="580.0 560 440 78">
+<rect x="580.0" y="560" width="440" height="78" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="592.875" font-size="25" text-anchor="middle" class="">Word × label logits</text>
+<text x="800" y="622.125" font-size="25" text-anchor="middle" class="">Z ∈ ℝ^(W×L)</text>
+</g>
+<path d="M800,699 L800,639" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="540.0 430 520 64">
+<rect x="540.0" y="430" width="520" height="64" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="470.5" font-size="25" text-anchor="middle" class="">Sigmoid · threshold per label set</text>
+</g>
+<path d="M800,559 L800,495" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="480.0 310 640 84">
+<rect x="480.0" y="310" width="640" height="84" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="346.12" font-size="24" text-anchor="middle" class="">Merge neighbouring words · trim</text>
+<text x="800" y="374.2" font-size="24" text-anchor="middle" class="">character-offset spans with scores</text>
+</g>
+<path d="M800,429 L800,395" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="800" y="1385.0" font-size="22" text-anchor="middle" class="">Targets over 2,048 tokens: word-aligned windows ≤ 1,800 tokens, stride 1,536; word logits averaged.</text>
+<text x="800" y="1410.74" font-size="22" text-anchor="middle" class="">With images, the image tokens enter the same pass in d3&#x27;s image layout.</text>
+<text x="800" y="1500.0" font-size="31" text-anchor="middle" class="serif">No second copy of the text: every word already sees the labels</text>
+</g>
+</svg>

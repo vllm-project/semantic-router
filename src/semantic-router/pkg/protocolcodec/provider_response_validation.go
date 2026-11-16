@@ -139,6 +139,9 @@ func validChatFinishReason(reason string) bool {
 }
 
 func validateResponsesResponseResource(wire responsesResponseWire, allowNonterminal bool) error {
+	if err := validateResponsesProviderDefaults(wire); err != nil {
+		return err
+	}
 	if err := validateResponsesResourceStatus(wire, allowNonterminal); err != nil {
 		return err
 	}

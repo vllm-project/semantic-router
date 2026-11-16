@@ -5,15 +5,17 @@ package apiserver
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -192,7 +194,7 @@ func batchClassificationConfigCases() []batchClassificationConfigCase {
 func TestBatchClassificationMaxBatchSizeFollowsRuntimeConfig(t *testing.T) {
 	apiServer := newBatchClassificationTestServer(batchClassificationMaxBatchSizeConfig(0))
 	live := batchClassificationMaxBatchSizeConfig(3)
-	apiServer.runtimeConfig = newLiveRuntimeConfig(nil, func() *config.RouterConfig { return live }, nil)
+	apiServer.runtimeConfig = newLiveRuntimeConfig(nil, func() *config.RouterConfig { return live })
 
 	runBatchClassificationHTTPCase(t, apiServer, batchClassificationHTTPCase{
 		name:           "Resolver config bounds the batch",
@@ -298,8 +300,8 @@ func batchAllUnifiedResponse() *services.UnifiedBatchResponse {
 		},
 		SecurityResults: []classification.SecurityResult{
 			{IsJailbreak: true, ThreatType: "jailbreak", Confidence: 0.75, ScoresAvailable: batchBoolPtr(true)},
-			// Categorical guard: decision detail is present while the score stays null.
-			{IsJailbreak: false, ThreatType: "benign", Decision: &tasks.LabelDecision{Label: "benign", SourceLabel: "safe", Categories: []string{"prompt_injection"}}},
+			// Scores unavailable: the confidence stays null.
+			{IsJailbreak: false, ThreatType: "benign"},
 			// Explicitly available zero score must stay 0, not null.
 			{IsJailbreak: false, ThreatType: "benign", Confidence: 0, ScoresAvailable: batchBoolPtr(true)},
 		},
@@ -386,7 +388,7 @@ func TestBatchClassificationAllWireFormat(t *testing.T) {
 		`"security":{"is_jailbreak":true,"threat_type":"jailbreak","confidence":0.75,"scores_available":true}},` +
 		`{"category":"law","confidence":0.25,"processing_time_ms":10,` +
 		`"pii":{"has_pii":true,"pii_types":["PERSON"],"confidence":null,"scores_available":false},` +
-		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":null,"decision":{"label":"benign","source_label":"safe","categories":["prompt_injection"]}}},` +
+		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":null}},` +
 		`{"category":"math","confidence":0.75,"processing_time_ms":10,` +
 		`"pii":{"has_pii":false,"confidence":0.125,"scores_available":true},` +
 		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":0,"scores_available":true}}` +
@@ -511,12 +513,46 @@ func TestBatchClassificationOtherTaskTypesUnchanged(t *testing.T) {
 type batchFixtureService struct {
 	classificationService
 	response *services.UnifiedBatchResponse
+	err      error
 }
 
 func (s *batchFixtureService) HasUnifiedClassifier() bool { return true }
 
 func (s *batchFixtureService) ClassifyBatchUnifiedWithOptions(_ []string, _ interface{}) (*services.UnifiedBatchResponse, error) {
-	return s.response, nil
+	return s.response, s.err
+}
+
+// TestHandleBatchClassificationMapsClassifierErrorsLikeSingleText checks that
+// a batch answers a classifier failure with the status and code the
+// single-text endpoints give it, not a 500 for every failure.
+func TestHandleBatchClassificationMapsClassifierErrorsLikeSingleText(t *testing.T) {
+	for _, tc := range []struct {
+		cause  error
+		status int
+		code   string
+	}{
+		{binding.ErrInputLimit, http.StatusBadRequest, "INVALID_INPUT"},
+		{admission.ErrQueueFull, http.StatusTooManyRequests, "OVERLOADED"},
+		{services.ErrClassifierUnavailable, http.StatusServiceUnavailable, "CLASSIFIER_UNAVAILABLE"},
+		{errors.New("tokenizer crashed"), http.StatusInternalServerError, "CLASSIFICATION_ERROR"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			apiServer := &ClassificationAPIServer{classificationSvc: &batchFixtureService{
+				err: fmt.Errorf("unified batch classification failed: %w", tc.cause),
+			}}
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/batch", bytes.NewBufferString(`{"texts":["a"]}`))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			apiServer.handleBatchClassification(rr, req)
+			var body managementErrorResponse
+			if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if rr.Code != tc.status || body.Error.Code != tc.code {
+				t.Fatalf("batch answered %d %s, want %d %s: %s", rr.Code, body.Error.Code, tc.status, tc.code, rr.Body.String())
+			}
+		})
+	}
 }
 
 func TestHandleBatchClassificationReturnsResultsPerTaskType(t *testing.T) {
@@ -532,7 +568,7 @@ func TestHandleBatchClassificationReturnsResultsPerTaskType(t *testing.T) {
 		`"security":{"is_jailbreak":true,"threat_type":"jailbreak","confidence":0.75,"scores_available":true}},` +
 		`{"category":"law","confidence":0.25,"processing_time_ms":10,` +
 		`"pii":{"has_pii":true,"pii_types":["PERSON"],"confidence":null,"scores_available":false},` +
-		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":null,"decision":{"label":"benign","source_label":"safe","categories":["prompt_injection"]}}},` +
+		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":null}},` +
 		`{"category":"math","confidence":0.75,"processing_time_ms":10,` +
 		`"pii":{"has_pii":false,"confidence":0.125,"scores_available":true},` +
 		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":0,"scores_available":true}}` +

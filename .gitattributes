@@ -14,6 +14,8 @@
 *.safetensors.fixture binary
 *.gz binary
 *.zip binary
+*.woff binary
+*.woff2 binary
 
 # Catalog projections are deterministic compiler outputs. Review authored
 # facts under config/catalog instead of treating these as independent sources.

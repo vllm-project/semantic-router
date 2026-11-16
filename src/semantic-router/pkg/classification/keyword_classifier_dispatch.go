@@ -1,6 +1,8 @@
 package classification
 
 import (
+	"unicode/utf8"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification/lexical"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -11,6 +13,9 @@ type ruleMatch struct {
 	keywords      []string
 	matchCount    int
 	totalKeywords int
+	// value is a counting rule's count or density; measured marks one.
+	value    float64
+	measured bool
 }
 
 // KeywordRuleMatch describes one matching keyword rule. MatchAll returns these
@@ -42,7 +47,7 @@ func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, [
 			return "", nil, 0, 0, err
 		}
 		if match.matched {
-			logRuleMatch(rule.method, match.ruleName, match.keywords, match.matchCount, match.totalKeywords)
+			logRuleMatch(rule.method, match)
 			return match.ruleName, match.keywords, match.matchCount, match.totalKeywords, nil
 		}
 	}
@@ -50,24 +55,28 @@ func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, [
 }
 
 // MatchAll evaluates every keyword rule and returns all matches in declaration
-// order. Decision evaluation must use this method because a request can satisfy
-// multiple named signals that participate in AND, OR, and NOT expressions.
+// order. Decision evaluation must use this method because a request can
+// satisfy multiple named signals that participate in AND, OR, and NOT
+// expressions.
 func (c *KeywordClassifier) MatchAll(text string) ([]KeywordRuleMatch, error) {
-	return c.MatchAllWithHistory(text, "")
+	matches, _, err := c.MatchAllWithHistory(text, "")
+	return matches, err
 }
 
 // MatchAllWithHistory is MatchAll with an optional conversation history.
 // Rules with includeHistory match against historyText (prior user messages
 // plus the current message) when it is non-empty; every other rule matches
-// against currentText only.
-func (c *KeywordClassifier) MatchAllWithHistory(currentText, historyText string) ([]KeywordRuleMatch, error) {
+// against currentText only. It also returns, by rule name, the count or
+// density each counting rule measured, whether or not the rule matched.
+func (c *KeywordClassifier) MatchAllWithHistory(currentText, historyText string) ([]KeywordRuleMatch, map[string]float64, error) {
 	if c == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	analysis := lexical.NewText(currentText)
 	// historyAnalysis is built lazily, only if some rule opts into history.
 	var historyAnalysis *lexical.Text
 	matches := make([]KeywordRuleMatch, 0)
+	var values map[string]float64
 
 	for _, rule := range c.rules {
 		text, ruleAnalysis := currentText, analysis
@@ -79,12 +88,18 @@ func (c *KeywordClassifier) MatchAllWithHistory(currentText, historyText string)
 		}
 		match, err := c.matchRule(text, ruleAnalysis, rule)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		if match.measured {
+			if values == nil {
+				values = make(map[string]float64)
+			}
+			values[rule.name] = match.value
 		}
 		if !match.matched {
 			continue
 		}
-		logRuleMatch(rule.method, match.ruleName, match.keywords, match.matchCount, match.totalKeywords)
+		logRuleMatch(rule.method, match)
 		matches = append(matches, KeywordRuleMatch{
 			RuleName:      match.ruleName,
 			Keywords:      match.keywords,
@@ -92,12 +107,15 @@ func (c *KeywordClassifier) MatchAllWithHistory(currentText, historyText string)
 			TotalKeywords: match.totalKeywords,
 		})
 	}
-	return matches, nil
+	return matches, values, nil
 }
 
 // matchRule evaluates one rule. analysis shares tokenization between the
 // BM25 and n-gram rules of one call.
 func (c *KeywordClassifier) matchRule(text string, analysis *lexical.Text, rule keywordRule) (ruleMatch, error) {
+	if rule.measure != nil {
+		return rule.measureMatch(text), nil
+	}
 	if rule.scored != nil {
 		match, ok := rule.scored.Match(analysis)
 		if !ok {
@@ -124,7 +142,30 @@ func (c *KeywordClassifier) matchRule(text string, analysis *lexical.Text, rule 
 	}, nil
 }
 
-func logRuleMatch(method, ruleName string, keywords []string, matchCount, totalKeywords int) {
+// measureMatch counts the rule's keyword occurrences in text and matches
+// when the count, or the density per 1,000 characters, satisfies the rule's
+// predicate; an empty text has a density of zero.
+func (r keywordRule) measureMatch(text string) ruleMatch {
+	count, keywords := r.regex.occurrences(text)
+	value := float64(count)
+	if r.measure.density {
+		value = 0
+		if characters := utf8.RuneCountInString(text); characters > 0 {
+			value = 1000 * float64(count) / float64(characters)
+		}
+	}
+	return ruleMatch{
+		matched:       predicateMatches(value, r.measure.predicate),
+		ruleName:      r.name,
+		keywords:      keywords,
+		matchCount:    len(keywords),
+		totalKeywords: len(r.regex.OriginalKeywords),
+		value:         value,
+		measured:      true,
+	}
+}
+
+func logRuleMatch(method string, match ruleMatch) {
 	prefix := "Keyword-based"
 	switch method {
 	case "bm25":
@@ -132,10 +173,14 @@ func logRuleMatch(method, ruleName string, keywords []string, matchCount, totalK
 	case "ngram":
 		prefix = "N-gram keyword"
 	}
-	if len(keywords) > 0 {
+	switch {
+	case match.measured:
+		logging.Infof("%s classification matched rule %q on its count or density %g, with keywords: %v",
+			prefix, match.ruleName, match.value, match.keywords)
+	case len(match.keywords) > 0:
 		logging.Infof("%s classification matched rule %q with keywords: %v (%d/%d matched)",
-			prefix, ruleName, keywords, matchCount, totalKeywords)
-		return
+			prefix, match.ruleName, match.keywords, match.matchCount, match.totalKeywords)
+	default:
+		logging.Infof("%s classification matched rule %q with a NOR rule.", prefix, match.ruleName)
 	}
-	logging.Infof("%s classification matched rule %q with a NOR rule.", prefix, ruleName)
 }

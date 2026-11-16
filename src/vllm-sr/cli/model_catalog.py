@@ -75,6 +75,10 @@ __all__ = [
     "load_model_catalog",
 ]
 
+# The packaged catalog is over a megabyte; PyYAML's pure-Python parser takes
+# seconds to read it, libyaml a fraction of that.
+_CATALOG_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 
 @dataclass(frozen=True)
 class _CatalogHeader:
@@ -152,7 +156,9 @@ def _load_catalog_document(version: str) -> tuple[str, dict[str, Any]]:
     if not catalog_resource.is_file():
         raise ModelCatalogError(f"built-in catalog version is not installed: {version}")
     try:
-        document = yaml.safe_load(catalog_resource.read_text(encoding="utf-8"))
+        document = yaml.load(
+            catalog_resource.read_text(encoding="utf-8"), Loader=_CATALOG_LOADER
+        )
     except yaml.YAMLError as error:
         raise ModelCatalogError("built-in model catalog YAML is invalid") from error
     if (

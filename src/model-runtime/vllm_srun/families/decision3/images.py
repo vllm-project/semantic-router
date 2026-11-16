@@ -18,19 +18,19 @@ import binascii
 import hashlib
 import io
 import math
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
 import torch
 import torch.nn.functional as F
 
+from ...accel.cpu import on_device_thread
 from ...errors import MediaError
 
-# Preprocessing runs on one thread: PyTorch's OpenMP backend keeps a thread team
-# per calling thread, and a team per request thread outnumbers the cores, so every
-# parallel region of the resize and normalization would pay a wake-up.
-_PREPROCESS = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vllm-sr-images")
+# Preprocessing runs on the CPU device thread, where CPU forwards run: PyTorch's
+# OpenMP backend keeps a thread team per calling thread, and once the teams
+# outnumber the cores libgomp stops spinning between parallel regions, so every
+# region of the resize, the normalization and a CPU forward pays a wake-up.
 
 MIN_PIXELS = 65_536
 MAX_PIXELS = 1_638_400
@@ -205,8 +205,8 @@ def _resize(image: torch.Tensor, height: int, width: int) -> torch.Tensor:
 
 
 def preprocess(image: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:
-    """One RGB PIL image through the processor (on the preprocessing thread): FP32 patch rows and its grid."""
-    return _PREPROCESS.submit(_preprocess, image, digest, settings).result()
+    """One RGB PIL image through the processor (on the CPU device thread): FP32 patch rows and its grid."""
+    return on_device_thread(lambda: _preprocess(image, digest, settings))
 
 
 def load(value: Any, settings: ProcessorSettings) -> tuple[Any, str]:
@@ -214,7 +214,7 @@ def load(value: Any, settings: ProcessorSettings) -> tuple[Any, str]:
 
     The worker returns the resized uint8 pixels as a NumPy array, an eighth of
     the FP32 patch rows they become, and ``loaded`` finishes them on the
-    preprocessing thread. The resize computes each output pixel alone, so the
+    CPU device thread. The resize computes each output pixel alone, so the
     worker's thread count leaves the pixels bit for bit as ``preprocess``
     gives them.
     """
@@ -223,10 +223,10 @@ def load(value: Any, settings: ProcessorSettings) -> tuple[Any, str]:
 
 
 def loaded(pixels: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:
-    """A ``load`` result through the rest of the processor (on the preprocessing thread)."""
-    return _PREPROCESS.submit(
-        _patches, torch.from_numpy(pixels), digest, settings
-    ).result()
+    """A ``load`` result through the rest of the processor (on the CPU device thread)."""
+    return on_device_thread(
+        lambda: _patches(torch.from_numpy(pixels), digest, settings)
+    )
 
 
 def _preprocess(image: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:

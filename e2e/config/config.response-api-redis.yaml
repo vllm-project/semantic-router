@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -10,27 +10,26 @@ providers:
           provider: vllm
           endpoint: 0.0.0.0:8000
           weight: 1
-routing:
-  decisions:
-    - name: default_decision
-      description: Default catch-all decision
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: openai/gpt-oss-120b
-          use_reasoning: false
-  signals:
-    domains:
-      - name: other
-        description: General knowledge and miscellaneous topics
-        mmlu_categories:
-          - other
-  modelCards:
-    - name: openai/gpt-oss-120b
+recipes:
+  - name: default
+    decisions:
+      - name: default_decision
+        description: Default catch-all decision
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: openai/gpt-oss-120b
+            use_reasoning: false
+    signals:
+      domains:
+        - name: other
+          description: General knowledge and miscellaneous topics
+          labels:
+            - other
 global:
   router:
     strategy: priority
@@ -54,14 +53,7 @@ global:
         tls_enabled: false
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
-      embedding_model: mmbert
-    memory:
-      embedding_model: mmbert
-    vector_store:
-      embedding_model: mmbert
   integrations: {}

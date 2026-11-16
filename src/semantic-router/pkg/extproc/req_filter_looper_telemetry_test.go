@@ -24,12 +24,12 @@ import (
 func TestALooperRequestRecordsItsTemplateNodeDurations(t *testing.T) {
 	var fixture looperFixture
 	for _, candidate := range looperFixtures {
-		if candidate.name == "confidence" {
+		if candidate.name == "escalate" {
 			fixture = candidate
 		}
 	}
 	observations := func(nodeType string) uint64 {
-		histogram, ok := metrics.RequestGraphNodeDuration.WithLabelValues(nodeType, "looper.confidence").(prometheus.Metric)
+		histogram, ok := metrics.RequestGraphNodeDuration.WithLabelValues(nodeType, "looper.escalate").(prometheus.Metric)
 		require.True(t, ok)
 		var sample dto.Metric
 		require.NoError(t, histogram.Write(&sample))
@@ -77,7 +77,7 @@ func TestRecordSuccessfulLooperExecutionRecordsAggregateSessionUsageWithoutModel
 		},
 	}
 
-	router.recordSuccessfulLooperExecution(response, "vllm-sr/auto", decision, ctx, nil, nil)
+	router.recordSuccessfulLooperExecution(response, "vllm-sr/auto", decision, ctx, nil)
 
 	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("session-looper", time.Now())
 	require.True(t, ok)
@@ -132,7 +132,7 @@ func TestRecordSuccessfulLooperExecutionRecordsCacheTokenBuckets(t *testing.T) {
 			PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120,
 			CachedInputTokens: 40, CacheWriteTokens: 10,
 		},
-	}, "vllm-sr/auto", &config.Decision{Name: "panel"}, ctx, nil, nil)
+	}, "vllm-sr/auto", &config.Decision{Name: "panel"}, ctx, nil)
 
 	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("session-cache", time.Now())
 	require.True(t, ok)
@@ -151,12 +151,11 @@ func TestRecordSuccessfulLooperExecutionSkipsUnreportedUsageTotals(t *testing.T)
 	router.recordSuccessfulLooperExecution(&looper.Response{
 		Model: "synthesizer",
 		Usage: looper.TokenUsage{PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120, Unreported: true},
-	}, "vllm-sr/auto", &config.Decision{Name: "panel"}, ctx, nil, nil)
+	}, "vllm-sr/auto", &config.Decision{Name: "panel"}, ctx, nil)
 
 	_, ok := sessiontelemetry.GetRouterSessionSnapshot("session-unreported", time.Now())
 	assert.False(t, ok, "unreported looper usage must not create complete-looking session totals")
 }
-
 func TestRecordSuccessfulLooperExecutionRecordsReportedZeroOutput(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
@@ -169,7 +168,7 @@ func TestRecordSuccessfulLooperExecutionRecordsReportedZeroOutput(t *testing.T) 
 	router.recordSuccessfulLooperExecution(&looper.Response{
 		Model: "synthesizer",
 		Usage: looper.TokenUsage{},
-	}, "vllm-sr/auto", &config.Decision{Name: "panel"}, ctx, nil, nil)
+	}, "vllm-sr/auto", &config.Decision{Name: "panel"}, ctx, nil)
 
 	window := sessiontelemetry.RecentTurnOutcomes(routingLearningStateKey(ctx), time.Now())
 	require.Len(t, window, 1)
@@ -186,7 +185,7 @@ func TestUpdateLooperReplayUsageCopiesCacheBuckets(t *testing.T) {
 	router.updateLooperReplayUsage(ctx, looper.TokenUsage{
 		PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120,
 		CachedInputTokens: 40, CacheWriteTokens: 10,
-	})
+	}, 1)
 
 	record, ok := recorder.GetRecord(id)
 	require.True(t, ok)
@@ -206,7 +205,7 @@ func TestUpdateLooperReplayUsageSkipsUnreportedAggregates(t *testing.T) {
 	ctx := &RequestContext{RouterReplayID: id, RouterReplayRecorder: recorder}
 	router.updateLooperReplayUsage(ctx, looper.TokenUsage{
 		PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120, Unreported: true,
-	})
+	}, 1)
 
 	record, ok := recorder.GetRecord(id)
 	require.True(t, ok)
@@ -223,7 +222,7 @@ func TestUpdateLooperReplayUsageSkipsIncompleteAggregates(t *testing.T) {
 	ctx := &RequestContext{RouterReplayID: id, RouterReplayRecorder: recorder}
 	router.updateLooperReplayUsage(ctx, looper.TokenUsage{
 		PromptTokens: 100, CompletionTokens: 20, TotalTokens: 999,
-	})
+	}, 1)
 
 	record, ok := recorder.GetRecord(id)
 	require.True(t, ok)

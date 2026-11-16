@@ -35,28 +35,28 @@ static_resources:
                   upstream_cluster: "%UPSTREAM_CLUSTER%"
                   upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
                   request_id: "%REQ(X-REQUEST-ID)%"
-                  selected_model: "%REQ(X-SELECTED-MODEL)%"
+                  selected_model: "%REQ(X-VSR-ROUTE-MODEL)%"
           route_config:
             name: local_route
             virtual_hosts:
             - name: local_service
               domains: ["*"]
-              # Security: strip internal headers from client requests to prevent
-              # looper bypass, identity spoofing, and credential leakage.
+              # Identity headers never reach the backend. Envoy removes them from
+              # the request it sends upstream, after the HTTP filters ran;
+              # client-sent identity is removed at ingress below.
               request_headers_to_remove:
-              - "x-vsr-looper-request"
-              - "x-vsr-looper-secret"
-              - "x-vsr-looper-decision"
-              - "x-vsr-looper-iteration"
               - "x-authz-user-id"
               - "x-authz-user-groups"
+              - "x-authz-team-id"
+              - "x-authz-tenant-id"
+              - "x-vsr-delegated-credential"
               response_headers_to_add:
               - header:
                   key: "x-vsr-upstream-host"
                   value: "%UPSTREAM_HOST%"
                 append_action: OVERWRITE_IF_EXISTS_OR_ADD
               routes:
-              # ExtProc emits the x-selected-model routing signal; this local-only
+              # ExtProc emits the x-vsr-route-model routing signal; this local-only
               # fixture deliberately has one upstream and needs no model inventory.
               - match:
                   prefix: "/"
@@ -64,6 +64,29 @@ static_resources:
                   cluster: vllm_backend_cluster
                   timeout: 300s
           http_filters:
+          # No authenticator runs in front of this listener, so a client's
+          # identity headers are removed before the Router reads them.
+          - name: strip-client-identity
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
+              mutations:
+                request_mutations:
+                - remove: "x-authz-user-id"
+                - remove: "x-authz-user-groups"
+                - remove: "x-authz-team-id"
+                - remove: "x-authz-tenant-id"
+          # The delegated credential is an authenticator output, never a client
+          # input. Remove any client copy before ext_proc sees the request; the
+          # route-level removal above only runs at the router filter. This
+          # fixture runs no authenticator, and a custom
+          # global.services.authz.delegated_credential.header must be added here.
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              inline_code: |
+                function envoy_on_request(request_handle)
+                  request_handle:headers():remove("x-vsr-delegated-credential")
+                end
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor

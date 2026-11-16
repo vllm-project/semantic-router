@@ -32,9 +32,13 @@ func (r *OpenAIRouter) responseCacheService() *cache.ResponseCacheService {
 func newResponseCacheService(cfg *config.RouterConfig, backend cache.CacheBackend, boundIdentity string, embeddings *embedding.Set) (*cache.ResponseCacheService, error) {
 	backendType, options := (&OpenAIRouter{Config: cfg}).responseCacheServiceConfig()
 	var provider embedding.Provider
+	deployment := ""
+	if cfg != nil {
+		deployment, _, _ = cfg.ResponseCacheEmbedding()
+	}
 	if cfg != nil && cfg.NeedsSemanticResponseCache() && embeddings != nil {
 		var err error
-		provider, err = embeddings.Get(detectSemanticCacheEmbeddingModel(cfg), 0, 0)
+		provider, err = embeddings.Get(deployment, 0, 0)
 		if err != nil && backend != nil && backend.IsEnabled() {
 			return nil, err
 		}
@@ -50,10 +54,7 @@ func newResponseCacheService(cfg *config.RouterConfig, backend cache.CacheBacken
 		}
 	}
 	options.EmbeddingIdentity = identity
-	adapter := cache.NewLegacyBackendAdapter(backend, backendType).WithEmbeddingProvider(provider)
-	if cfg != nil {
-		adapter.WithEmbeddingModel(detectSemanticCacheEmbeddingModel(cfg))
-	}
+	adapter := cache.NewLegacyBackendAdapter(backend, backendType).WithEmbeddingProvider(provider).WithEmbeddingDeployment(deployment)
 	return cache.NewResponseCacheService(adapter, options), nil
 }
 

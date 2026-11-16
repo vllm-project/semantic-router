@@ -162,6 +162,10 @@ def corpus(seed: int = 0) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     items = [{"id": f"p{i:04d}", "text": text} for i, text in enumerate(base)]
     items += [{"id": f"e{i:02d}", "text": text} for i, text in enumerate(EDGE)]
+    if not base:
+        raise SystemExit(
+            "acceptance corpus is empty; refuse to substitute edge prompts"
+        )
     for index, count in enumerate([8, 16, 32, 48, 64, 96, 128, 192, 256, 384]):
         picked = rng.sample(base, k=min(count, len(base)))
         items.append({"id": f"l{index:02d}", "text": "\n".join(picked)})
@@ -881,7 +885,7 @@ def run_ab(args: argparse.Namespace) -> None:
     while legacy.stdout.readline().strip() != "READY":
         if legacy.poll() is not None:
             raise SystemExit("the legacy binary exited before it was ready")
-    runtime = serve_runtime(args, specs, "cpu")
+    runtime = serve_runtime(args, specs, args.device)
     sides = ["legacy", "alone", "merged"]
 
     def call_legacy(spec: dict[str, Any], item: dict[str, str]) -> int:
@@ -1311,6 +1315,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     ab_parser.add_argument("--tree", required=True)
     ab_parser.add_argument("--libs")
     ab_parser.add_argument("--cache", required=True)
+    ab_parser.add_argument("--device", default="cpu")
     ab_parser.add_argument("--threads", type=int)
     ab_parser.add_argument("--rounds", type=int, default=2)
     ab_parser.add_argument(

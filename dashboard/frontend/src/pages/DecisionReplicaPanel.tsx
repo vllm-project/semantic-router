@@ -114,7 +114,7 @@ export default function DecisionReplicaPanel({
         </div>
         <div>
           <span>Model profile</span>
-          <strong>{config?.profile || observed?.profile || 'Not reported'}</strong>
+          <strong>{observed?.profile || 'Not reported'}</strong>
         </div>
       </div>
       <DecisionReplicaStatus deployment={observed} />
@@ -162,10 +162,10 @@ export default function DecisionReplicaPanel({
                       Served model name
                       <input
                         disabled={disabled}
-                        value={replica.served_name || ''}
+                        value={replica.model || ''}
                         placeholder="Deployment default"
                         onChange={(event) =>
-                          update(index, { ...replica, served_name: event.target.value })
+                          update(index, { ...replica, model: event.target.value })
                         }
                       />
                     </label>

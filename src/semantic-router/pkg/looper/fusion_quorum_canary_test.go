@@ -74,13 +74,13 @@ func canaryFallbackRequest(t *testing.T, streaming bool) (*Request, string) {
 	req := newFusionTestRequest()
 	req.IsStreaming = streaming
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:                        "judge",
 			AnalysisModels:               []string{"panel-a", "panel-b"},
 			MaxConcurrent:                2,
 			MinSuccessfulResponses:       2,
-			OnError:                      config.FusionOnErrorSkip,
 			QuorumFailurePolicy:          config.FusionQuorumFailurePolicyFallback,
 			QuorumFallbackTarget:         "backup-model",
 			IncludeAnalysis:              &includeTrace,
@@ -266,13 +266,13 @@ func toolOnlyFallbackRequest(t *testing.T, streaming bool) (*Request, string) {
 	req := newFusionTestRequest()
 	req.IsStreaming = streaming
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:                        "judge",
 			AnalysisModels:               []string{"panel-a", "panel-b"},
 			MaxConcurrent:                2,
 			MinSuccessfulResponses:       2,
-			OnError:                      config.FusionOnErrorSkip,
 			QuorumFailurePolicy:          config.FusionQuorumFailurePolicyFallback,
 			QuorumFallbackTarget:         "backup-model",
 			IncludeAnalysis:              &includeTrace,
@@ -364,13 +364,13 @@ func TestReasoningOnlyFallbackFailsInsteadOfServingEmptyContent(t *testing.T) {
 			req := newFusionTestRequest()
 			req.IsStreaming = streaming
 			req.Algorithm = &config.AlgorithmConfig{
-				Type: "fusion",
+				Type:    "fusion",
+				OnError: config.FusionOnErrorSkip,
 				Fusion: &config.FusionAlgorithmConfig{
 					Model:                  "judge",
 					AnalysisModels:         []string{"panel-a", "panel-b"},
 					MaxConcurrent:          2,
 					MinSuccessfulResponses: 2,
-					OnError:                config.FusionOnErrorSkip,
 					QuorumFailurePolicy:    config.FusionQuorumFailurePolicyFallback,
 					QuorumFallbackTarget:   "backup-model",
 				},

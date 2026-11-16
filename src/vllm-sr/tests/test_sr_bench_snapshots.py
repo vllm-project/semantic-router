@@ -46,11 +46,16 @@ def sequence(document, *, before=None, after=None, etag=f'"{SOURCE_HASH}"'):
 
 def test_observed_snapshot_binds_distinct_source_and_runtime_hashes(monkeypatch):
     document = {
-        "recipes": [{"name": "balance", "routing": {"api_key": "private"}}],
+        "recipes": [
+            {"name": "default", "max_tokens": 4096, "endpoint": "http://private.test"},
+            {"name": "balance", "api_key": "private"},
+        ],
         "providers": {"models": [{"api_key": "backend-secret"}]},
         "global": {"router": {"learning": {"enabled": True}}},
         "evaluation": {"source": "https://source.test/file?token=private"},
-        "routing": {"max_tokens": 4096, "endpoint": "http://private.test"},
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
+        ],
     }
     monkeypatch.setenv("TEST_RECIPE_KEY", "private-token")
     target = {**TARGET, "preview_api_key_env": "TEST_RECIPE_KEY"}
@@ -71,7 +76,7 @@ def test_observed_snapshot_binds_distinct_source_and_runtime_hashes(monkeypatch)
     assert receipt["generated_runtime_hash"] == receipt["active_runtime_hash"] == HASH
     assert receipt["source"] == "router_config_api_bracketed_hashes"
     assert receipt["learning"] == {"enabled": True}
-    assert receipt["routing"]["max_tokens"] == 4096
+    assert receipt["recipes"][0]["max_tokens"] == 4096
     assert receipt["redactions"]
     assert "providers" not in receipt
     assert "private" not in json.dumps(receipt)

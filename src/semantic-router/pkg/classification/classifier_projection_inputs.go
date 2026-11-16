@@ -11,26 +11,21 @@ type projectionMatchAccessor func(*SignalResults) []string
 
 var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeKeyword:       func(results *SignalResults) []string { return results.MatchedKeywordRules },
-	config.SignalTypeEmbedding:     func(results *SignalResults) []string { return results.MatchedEmbeddingRules },
 	config.SignalTypeDomain:        func(results *SignalResults) []string { return results.MatchedDomainRules },
 	config.SignalTypeFactCheck:     func(results *SignalResults) []string { return results.MatchedFactCheckRules },
 	config.SignalTypeUserFeedback:  func(results *SignalResults) []string { return results.MatchedUserFeedbackRules },
-	config.SignalTypeReask:         func(results *SignalResults) []string { return results.MatchedReaskRules },
-	config.SignalTypePreference:    func(results *SignalResults) []string { return results.MatchedPreferenceRules },
 	config.SignalTypeLanguage:      func(results *SignalResults) []string { return results.MatchedLanguageRules },
 	config.SignalTypeContext:       func(results *SignalResults) []string { return results.MatchedContextRules },
-	config.SignalTypeStructure:     func(results *SignalResults) []string { return results.MatchedStructureRules },
 	config.SignalTypeComplexity:    func(results *SignalResults) []string { return results.MatchedComplexityRules },
 	config.SignalTypeModality:      func(results *SignalResults) []string { return results.MatchedModalityRules },
 	config.SignalTypeAuthz:         func(results *SignalResults) []string { return results.MatchedAuthzRules },
 	config.SignalTypeJailbreak:     func(results *SignalResults) []string { return results.MatchedJailbreakRules },
 	config.SignalTypeSafety:        func(results *SignalResults) []string { return results.MatchedSafetyRules },
 	config.SignalTypePII:           func(results *SignalResults) []string { return results.MatchedPIIRules },
-	config.SignalTypeKB:            func(results *SignalResults) []string { return results.MatchedKBRules },
+	config.SignalTypeTurnRelation:  func(results *SignalResults) []string { return results.MatchedTurnRelationRules },
 	config.SignalTypeConversation:  func(results *SignalResults) []string { return results.MatchedConversationRules },
-	config.SignalTypeEvent:         func(results *SignalResults) []string { return results.MatchedEventRules },
 	config.SignalTypeInputModality: func(results *SignalResults) []string { return results.MatchedInputModalityRules },
-	config.SignalTypeDecision:      func(results *SignalResults) []string { return results.MatchedDecisionRules },
+	config.SignalTypeSystemOne:     func(results *SignalResults) []string { return results.MatchedSystemOneRules },
 	config.SignalTypeProjection:    func(results *SignalResults) []string { return results.MatchedProjectionRules },
 }
 
@@ -50,7 +45,10 @@ func projectionScoreHasFailedInput(score config.ProjectionScore, results *Signal
 		if input.Weight == 0 {
 			continue
 		}
-		key := signalConfidenceKey(strings.ToLower(strings.TrimSpace(input.Type)), input.Name)
+		// An input may name one option of a rule ("<rule>:<label>"), whose
+		// failure is the rule's.
+		rule, _, _ := strings.Cut(input.Name, ":")
+		key := signalConfidenceKey(strings.ToLower(strings.TrimSpace(input.Type)), rule)
 		if _, failed := results.SignalErrors[key]; failed {
 			return true
 		}
@@ -60,12 +58,6 @@ func projectionScoreHasFailedInput(score config.ProjectionScore, results *Signal
 
 func projectionInputValue(input config.ProjectionScoreInput, results *SignalResults) float64 {
 	normalizedType := strings.ToLower(strings.TrimSpace(input.Type))
-	if normalizedType == config.ProjectionInputKBMetric {
-		if results.KBMetricValues == nil {
-			return 0
-		}
-		return results.KBMetricValues[kbMetricKey(input.KB, input.Metric)]
-	}
 	if normalizedType == config.SignalTypeProjection {
 		return projectionInputProjectionValue(input, results)
 	}
@@ -96,14 +88,13 @@ func projectionInputConfidenceValue(input config.ProjectionScoreInput, results *
 }
 
 func projectionInputBinaryValue(input config.ProjectionScoreInput, results *SignalResults) float64 {
-	matchValue := input.Match
-	if matchValue == 0 {
-		matchValue = 1.0
+	if !projectionInputMatched(input.Type, input.Name, results) {
+		return input.Miss
 	}
-	if projectionInputMatched(input.Type, input.Name, results) {
-		return matchValue
+	if input.Match == nil {
+		return 1.0
 	}
-	return input.Miss
+	return *input.Match
 }
 
 func projectionInputProjectionValue(input config.ProjectionScoreInput, results *SignalResults) float64 {
@@ -120,10 +111,6 @@ func projectionInputProjectionValue(input config.ProjectionScoreInput, results *
 		}
 		return results.ProjectionScores[input.Name]
 	}
-}
-
-func kbMetricKey(kbName, metric string) string {
-	return strings.ToLower(config.ProjectionInputKBMetric + ":" + kbName + ":" + metric)
 }
 
 func projectionInputMatched(signalType string, name string, results *SignalResults) bool {

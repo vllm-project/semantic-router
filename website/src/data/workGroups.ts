@@ -246,6 +246,41 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/Alex-Wengg.png',
         profile: 'https://github.com/Alex-Wengg',
       },
+      {
+        name: 'YITIEN TSAI',
+        avatar: 'https://github.com/alexbuuuuuu.png',
+        profile: 'https://github.com/alexbuuuuuu',
+      },
+      {
+        name: 'DeveshValluru',
+        avatar: 'https://github.com/DeveshValluru.png',
+        profile: 'https://github.com/DeveshValluru',
+      },
+      {
+        name: 'swappy',
+        avatar: 'https://github.com/rycerzes.png',
+        profile: 'https://github.com/rycerzes',
+      },
+      {
+        name: 'Anup Sharma',
+        avatar: 'https://github.com/TwilightTechie.png',
+        profile: 'https://github.com/TwilightTechie',
+      },
+      {
+        name: 'Divyansh Lalotra',
+        avatar: 'https://github.com/nej1gotnochill.png',
+        profile: 'https://github.com/nej1gotnochill',
+      },
+      {
+        name: 'Henry Chen',
+        avatar: 'https://github.com/henry3260.png',
+        profile: 'https://github.com/henry3260',
+      },
+      {
+        name: 'Xiao Liu',
+        avatar: 'https://github.com/liuxiaocs7.png',
+        profile: 'https://github.com/liuxiaocs7',
+      },
     ],
   },
   {
@@ -586,6 +621,11 @@ export const workGroups: WorkGroup[] = [
         name: 'ZiY1Ming',
         avatar: 'https://github.com/Zi-Yi-Ming.png',
         profile: 'https://github.com/Zi-Yi-Ming',
+      },
+      {
+        name: 'Anup Sharma',
+        avatar: 'https://github.com/TwilightTechie.png',
+        profile: 'https://github.com/TwilightTechie',
       },
     ],
   },

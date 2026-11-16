@@ -48,9 +48,9 @@ func newLogsHandler(spoolRoot string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", http.MethodGet)
-			writeLogsError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET is supported.")
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			writeLogsError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only GET and HEAD are supported.")
 			return
 		}
 

@@ -50,7 +50,17 @@ the decision model it was calibrated with, Vela 2.0 0.8B.
 | `confidential` | Yes or no, at 0.5 | Does the request share or concern private material, such as personal data, private source code, internal or confidential documents or images, or ask that it stay local, on-premises or out of the cloud? | Whether the request stays on the local privacy lane. |
 | `personal_data` | Yes or no, at 0.5 | Does the message contain personal data about a person, such as a name with an email address, phone number, street address or ID number? | Whether personal data in the text keeps the request on the local privacy lane. |
 | `domain` | Choice of 5, at 0.4 | Which field does this request belong to: law and health, software, math and science, business, or anything else? | Which specialist lane a request takes. |
-| `difficulty` | Score from 0 to 4 | How much reasoning does a strong expert need to answer this request well? | Simple (below 1), medium (1 to 2.5) or complex (2.5 or more) work, inside and outside the specialist fields. |
+| `difficulty` | Score from 0 to 4 | How much reasoning does a strong expert need to answer this request well? | Simple (below 1), medium (1 to 1.75) or complex (1.75 or more) work, inside and outside the specialist fields. |
+
+The difficulty cut is specific to the text Vela 2.0 0.8B scores. It reads
+the latest textual user message; a tool-result block is not that text, so a
+tool-loop continuation is scored on the user text already in the
+conversation. Over 344 requests from real agentic sessions on hard software
+tasks, those scores stayed within [0.08, 1.87], median 1.36, and a threshold
+of 2.5 matched none of them. At 1.75, 15.7% of those requests reach a strong
+lane. The short maintained probes still use the rest of the scale: medium
+probes score 1.28 to 2.13 and complex probes 2.70 or more, as the
+calibration notes record. Re-calibrate when you swap the decision model.
 
 One conversation fact needs no model: `agent_has_images` is true when the
 request carries image content.
@@ -66,12 +76,12 @@ Decisions are tried by priority, and the first that matches wins.
 | 320 | `local_privacy_policy` | `confidential` or `personal_data` | `qwen/qwen3.6-rocm` |
 | 300 | `simple_math_fast_path` | `domain`: math_science, `difficulty` below 1 | `qwen/qwen3.6-rocm` |
 | 260 | `domain_legal_health` | `domain`: legal_health | `anthropic/claude-opus-4.6` |
-| 255 | `domain_code_complex` | `domain`: code, `difficulty` 2.5 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
-| 250 | `domain_code` | `domain`: code, `difficulty` 1 to 2.5 | `google/gemini-2.5-flash-lite`, `google/gemini-3.1-pro` |
+| 255 | `domain_code_complex` | `domain`: code, `difficulty` 1.75 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
+| 250 | `domain_code` | `domain`: code, `difficulty` 1 to 1.75 | `google/gemini-2.5-flash-lite`, `google/gemini-3.1-pro` |
 | 240 | `domain_stem_research` | `domain`: math_science, `difficulty` 1 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
 | 230 | `domain_business` | `domain`: business | `google/gemini-2.5-flash-lite` |
-| 190 | `complex_general` | `difficulty` 2.5 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
-| 150 | `medium_general` | `difficulty` 1 to 2.5 | `google/gemini-2.5-flash-lite` |
+| 190 | `complex_general` | `difficulty` 1.75 or more | `google/gemini-3.1-pro`, `openai/gpt5.4` |
+| 150 | `medium_general` | `difficulty` 1 to 1.75 | `google/gemini-2.5-flash-lite` |
 | 80 | `simple_general` | Nothing; the fallback | `qwen/qwen3.6-rocm` |
 
 Containment, images and privacy outrank every specialist lane, so a sensitive
@@ -103,7 +113,13 @@ Vela 2.0 0.8B:
   instead.
 - The lane-deciding `domain` answers have probability 0.77 or more.
 - `difficulty` puts the simple probes at 0.78 or less, the medium probes at
-  1.28 to 2.13, and the complex probes at 2.70 or more.
+  1.28 to 2.13, and the complex probes at 2.70 or more. The agent-session
+  cut at 1.75 sits inside that medium band. Two probes whose live scores
+  fall between 1.75 and 2.5 therefore take a complex lane: `python_bug`
+  matches `domain_code_complex`, and `followup`, a short note-taking
+  comparison, matches `complex_general`. `concept_explanation` stays on
+  `medium_general`, and `api_refactor` and `tool_conversation_followup`
+  stay on `domain_code`.
 
 When you change a question or a threshold, or move to another decision model,
 rerun the probes.

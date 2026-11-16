@@ -139,3 +139,22 @@ check as ordinary successful streams. Hosted image-generation fixtures also
 pin the complete Responses progress lifecycle, missing required event fields,
 duplicate state transitions, sparse partial-image indexes, and invalid base64
 payloads as readable protocol contracts.
+
+Responses provider defaults are indexed as extensions, not official OpenAI fields.
+Response decoding accepts absent fields or `null` for `kv_transfer_params`,
+`ec_transfer_params`, `input_messages`, and `output_messages`; per-turn usage arrays
+must be empty and `tool_output_tokens` must be an integer zero. Buffered responses
+and streaming response resources use the same validation for every backend.
+
+These defaults have no neutral representation. Usage defaults produce dropped-field
+diagnostics; null fields do not. A dropped-field diagnostic describes omission from
+the neutral response, not removal from every client payload. Bounded, unchanged
+same-format codec replay can retain strict defaults, and ExtProc same-format
+forwarding can retain original provider bytes. Cross-format conversion and source
+re-encoding omit the fields.
+
+Upstream members that no wire struct declares are dropped and reported for every
+backend instead of failing the reply. These fixtures are decoded under the
+conformance policy (`RejectUnknownUpstreamFields`), which still rejects such
+members, so a fixture cannot drift from the modelled contracts. Cache writes store
+the canonical encoding of a reply that carried such members.

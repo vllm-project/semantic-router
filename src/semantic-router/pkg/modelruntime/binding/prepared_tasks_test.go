@@ -10,7 +10,7 @@ import (
 func TestPreparedTaskLookupRequiresReadyTypedOwnedHandle(t *testing.T) {
 	prepared := NewPreparedTasks()
 	registry := NewRegistry(prepared.Observe)
-	task, err := Register(registry, "labels.v1", func(string) error { return nil }, func(string, string) error { return nil })
+	task, err := RegisterTask(registry, "labels.v1", "labels.v1", func(string) error { return nil }, func(string, string) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}

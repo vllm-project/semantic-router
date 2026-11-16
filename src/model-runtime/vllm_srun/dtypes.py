@@ -1,12 +1,14 @@
 """``--dtype``: the precision a backbone computes in.
 
-``auto`` runs the precision the model was published in: its family's
-``DtypePolicy``, with the kernel variants of its released runtime and the
-faster copies and kernels its records consent to. Any other value that names
-the published precision on the device class is ``auto`` too. Otherwise every
-backbone and tower weight is held and computed in that dtype, with the
-reference kernels: an explicit choice of numerics, which the golden
-references (recorded at the published precision) no longer check.
+``auto`` runs its family's ``DtypePolicy``: the precision the model was
+published in (Decision 3.0 computes in FP32 on CPUs instead, where its BF16
+answers depend on the CPU's kernels), with the kernel variants of its released
+runtime and the faster copies and kernels its records consent to. Any other
+value that names that precision on the device class is ``auto`` too.
+Otherwise every backbone and tower weight is held and computed in that dtype,
+with the reference kernels: an explicit choice of numerics, which only golden
+references recorded at that dtype check (``readiness.qualified``: Decision
+3.0's BF16 on CPUs).
 """
 
 from __future__ import annotations

@@ -38,7 +38,7 @@ decisions:
   - id: semantic_code
     query: Debug this Python program and fix its error.
     expected_signals:
-      embeddings:
+      systemone:
       - semantic-code
     tags:
     - language:en
@@ -48,7 +48,7 @@ decisions:
     - role: user
       content: Debug this Python program and fix its error.
     expected_signals:
-      embeddings:
+      systemone:
       - semantic-code
     tags:
     - language:en
@@ -66,7 +66,7 @@ decisions:
   expected_algorithm: static
   expected_alias: vela-default
   expected_plugins:
-  - rag
+  - context
   variants:
   - id: document_query
     query: 'Search my documents: how do I configure the service?'

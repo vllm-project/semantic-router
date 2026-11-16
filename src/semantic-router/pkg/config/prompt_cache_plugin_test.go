@@ -84,9 +84,8 @@ func TestValidatePromptCachePluginContract(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateDecisionPluginPayload(
-				"route",
-				0,
+			_, err := DecodeDecisionPluginAt(
+				PluginAt{Decision: "route", Type: DecisionPluginPromptCache},
 				DecisionPlugin{
 					Type:          DecisionPluginPromptCache,
 					Configuration: MustStructuredPayload(test.payload),

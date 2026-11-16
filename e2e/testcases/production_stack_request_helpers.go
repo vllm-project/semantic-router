@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	vsrFastResponseHeader     = "x-vsr-fast-response"
 	vsrSelectedDecisionHeader = "x-vsr-selected-decision"
 
 	productionStackJailbreakDecision = "block_jailbreak"
@@ -130,7 +129,7 @@ func warmProductionStackBackend(
 }
 
 func isProductionStackFastResponse(headers http.Header) bool {
-	if strings.EqualFold(headers.Get(vsrFastResponseHeader), "true") {
+	if headers.Get(responsePathHeader) == "fast_response" {
 		return true
 	}
 

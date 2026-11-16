@@ -13,12 +13,6 @@ func (c *Classifier) applySignalGroups(results *SignalResults) *SignalResults {
 		results.SignalConfidences,
 		results,
 	)
-	results.MatchedEmbeddingRules = c.applySignalGroupsForType(
-		config.SignalTypeEmbedding,
-		results.MatchedEmbeddingRules,
-		results.SignalConfidences,
-		results,
-	)
 
 	return results
 }
@@ -48,10 +42,6 @@ func (c *Classifier) signalGroupMembersForType(group config.ProjectionPartition,
 	case config.SignalTypeDomain:
 		for _, category := range c.Config.Categories {
 			exists[category.Name] = struct{}{}
-		}
-	case config.SignalTypeEmbedding:
-		for _, rule := range c.Config.EmbeddingRules {
-			exists[rule.Name] = struct{}{}
 		}
 	default:
 		return nil

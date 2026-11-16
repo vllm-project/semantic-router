@@ -13,7 +13,7 @@ translation:
 Semantic Router 可能因三种不同原因需要网络访问：
 
 1. 容器运行时拉取 Router、控制面板和支持镜像（`--gateway extproc` 还需要 Envoy）；
-2. Router 下载分类器或嵌入产物；以及
+2. 模型运行时下载决策模型和嵌入模型的产物；以及
 3. 被路由的请求调用你配置的模型提供方。
 
 在更改镜像或代理设置之前，先确认失败的是哪一层。仓库超时、Hugging Face 超时和不可达的提供方端点需要不同的修复。
@@ -117,4 +117,4 @@ kubectl get events -n <namespace> --sort-by=.lastTimestamp
 
 - [容器连通性](./container-connectivity)
 - [安全加固](../installation/security-hardening)
-- [快速开始](/zh-Hans/docs/installation)
+- [快速开始](/docs/installation)

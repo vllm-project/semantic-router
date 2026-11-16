@@ -3,12 +3,12 @@ package config
 import "fmt"
 
 // validateLoRAName checks if the specified LoRA name is defined in the
-// canonical routing model catalog for the selected model.
+// facts of the selected model's providers.models[] entry.
 func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) error {
 	modelParams, exists := cfg.ModelConfig[modelName]
 	if !exists {
 		return fmt.Errorf(
-			"lora_name %q specified but model %q is not declared in routing.modelCards",
+			"lora_name %q specified but model %q is not declared in providers.models",
 			loraName,
 			modelName,
 		)
@@ -16,7 +16,7 @@ func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) erro
 
 	if len(modelParams.LoRAs) == 0 {
 		return fmt.Errorf(
-			"lora_name %q specified but model %q declares no routing.modelCards[].loras entries",
+			"lora_name %q specified but model %q declares no providers.models[].loras entries",
 			loraName,
 			modelName,
 		)
@@ -33,7 +33,7 @@ func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) erro
 		availableLoRAs[i] = lora.Name
 	}
 	return fmt.Errorf(
-		"lora_name %q is not declared in routing.modelCards[%q].loras. Available LoRAs: %v",
+		"lora_name %q is not declared in providers.models[%q].loras. Available LoRAs: %v",
 		loraName,
 		modelName,
 		availableLoRAs,

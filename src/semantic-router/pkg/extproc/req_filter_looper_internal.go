@@ -6,9 +6,10 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
@@ -120,9 +121,8 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	}
 	common.HeaderMutation.RemoveHeaders = append(
 		common.HeaderMutation.RemoveHeaders,
-		looperInternalHeadersForRemoval()...,
+		providerBoundRemovals(ctx.identity)...,
 	)
-	setHeaderValue(common.HeaderMutation, headers.VSRSelectedModel, modelName)
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 }
 
@@ -170,12 +170,17 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}
-	compressionErr := r.applySemanticContextCompression(ctx, request)
-	if compressionErr != nil {
-		return r.createErrorResponse(
-			500,
-			"Context compression failed under fail_closed policy",
-		), nil
+	// Recovery follow-ups already carry uncompressed retrieved payloads and
+	// the reserved retrieve tool. Re-compressing that hop fails closed on
+	// vsr_context_retrieve injection.
+	if !isContextRecoveryFollowupRequest(request) {
+		compressionErr := r.applySemanticContextCompression(ctx, request)
+		if compressionErr != nil {
+			return r.createErrorResponse(
+				500,
+				"Context compression failed under fail_closed policy",
+			), nil
+		}
 	}
 	err = r.modifyRequestBodyForLooper(
 		request,
@@ -290,7 +295,8 @@ func (r *OpenAIRouter) parseLooperRequestForPlugins(
 		})
 		return nil, err
 	}
-	ctx.UserContent = extractSemanticRequestSignals(ctx.SemanticRequest).UserContent
+	snapshot := extractSemanticRequestSignalsWith(ctx.SemanticRequest, r.routingInputSelector())
+	ctx.UserContent, ctx.RoutingInput = snapshot.UserContent, snapshot.RoutingInput
 	return ctx.SemanticRequest, nil
 }
 
@@ -306,10 +312,6 @@ func (r *OpenAIRouter) runLooperInternalPlugins(
 		return response
 	}
 
-	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
-		return r.createErrorResponse(503, fmt.Sprintf("RAG failed: %v", err))
-	}
-
 	return nil
 }
 
@@ -320,4 +322,9 @@ func (r *OpenAIRouter) startLooperInternalReplay(
 ) {
 	ctx.RouterReplayID = ""
 	r.startRouterReplay(ctx, "ReMoM", modelName, decisionName)
+	// A hop's usage and price belong to the request that made it, whose
+	// record counts the call; this one says so rather than reading as unpriced.
+	r.writeRouterReplayUsageCost(ctx, routerreplay.UsageCost{
+		CostAccounting: &store.CostAccounting{UnpricedReason: store.UnpricedCountedInParent},
+	})
 }

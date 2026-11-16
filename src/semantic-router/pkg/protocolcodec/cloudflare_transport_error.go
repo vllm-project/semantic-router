@@ -34,12 +34,12 @@ func decodeCloudflareTransportError(
 	format llmprotocol.WireFormat,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
 	var wire cloudflareTransportErrorWire
-	_, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
 	if err != nil {
 		return llmprotocol.TransportError{}, nil, err
 	}
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, policy, format, vendorExtensions)
+	appendUnknownFieldDiagnostics(&diagnostics, policy, format, unknownFields)
 	if len(wire.Errors) == 0 {
 		return decodeOpenAITransportError(body, policy, format)
 	}

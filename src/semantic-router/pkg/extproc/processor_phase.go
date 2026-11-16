@@ -22,6 +22,7 @@ func (r *OpenAIRouter) requestHeadersReply(
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }
@@ -43,8 +44,13 @@ func (r *OpenAIRouter) requestBodyReply(
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	r.persistImmediateResponseObject(response, ctx)
+	// A refusal after routing has opened a replay record that no response
+	// phase will end.
+	immediate := response.GetImmediateResponse()
+	r.failAnsweredRouterReplay(ctx, int(immediate.GetStatus().GetCode()), immediate.GetBody(), "request_rejected")
 	return response, nil
 }
 
@@ -58,6 +64,7 @@ func (r *OpenAIRouter) responseHeadersReply(
 		return nil, err
 	}
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }
@@ -73,6 +80,7 @@ func (r *OpenAIRouter) responseBodyReply(
 		return nil, err
 	}
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }

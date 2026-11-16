@@ -319,6 +319,11 @@ func cloneProvider(value ProviderDefinition) ProviderDefinition {
 		value.Models[index].Pricing.CacheWritePer1M = cloneFloatPointer(value.Models[index].Pricing.CacheWritePer1M)
 		value.Models[index].Pricing.CacheWrite1hPer1M = cloneFloatPointer(value.Models[index].Pricing.CacheWrite1hPer1M)
 	}
+	value.PriceList = append([]PriceListEntry(nil), value.PriceList...)
+	for index := range value.PriceList {
+		value.PriceList[index].Pricing.CacheWritePer1M = cloneFloatPointer(value.PriceList[index].Pricing.CacheWritePer1M)
+		value.PriceList[index].Pricing.CacheWrite1hPer1M = cloneFloatPointer(value.PriceList[index].Pricing.CacheWrite1hPer1M)
+	}
 	return value
 }
 

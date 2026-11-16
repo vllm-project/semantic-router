@@ -3,6 +3,8 @@ package config
 import (
 	"strings"
 	"testing"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
 func fusionFallbackTestConfig(fusion *FusionAlgorithmConfig) (*RouterConfig, Decision) {
@@ -18,7 +20,7 @@ func fusionFallbackTestConfig(fusion *FusionAlgorithmConfig) (*RouterConfig, Dec
 				"backup-model": {},
 				"panel-a":      {},
 				"claude-model": {APIFormat: ClientProtocolAnthropic},
-				"image-model":  {Modality: "image"},
+				"image-model":  {Modalities: modelcatalog.Modalities{Input: []string{"text"}, Output: []string{"image"}}},
 			},
 		},
 	}
@@ -71,9 +73,9 @@ func TestFusionFallbackTargetRejected(t *testing.T) {
 		target     string
 		wantReason string
 	}{
-		{name: "undeclared model", target: "missing-model", wantReason: "routing.modelCards"},
+		{name: "undeclared model", target: "missing-model", wantReason: "providers.models[]"},
 		{name: "anthropic api format", target: "claude-model", wantReason: "OpenAI-compatible"},
-		{name: "non chat modality", target: "image-model", wantReason: "chat-capable"},
+		{name: "image output only", target: "image-model", wantReason: "answer in text"},
 		{name: "panel member", target: "panel-a", wantReason: "analysis models"},
 	}
 	for _, tc := range cases {
@@ -144,27 +146,29 @@ func TestFusionFallbackTargetRejectsCompositeSlugs(t *testing.T) {
 // checks must not make it undecompilable. This is the DSL round-trip path.
 func TestFusionFallbackTargetAllowsRoutingOnlyFragment(t *testing.T) {
 	yaml := []byte(`
-routing:
-  modelCards:
+recipes:
+  - name: default
+    decisions:
+      - name: fusion_quorum
+        priority: 10
+        modelRefs:
+          - model: panel-a
+            use_reasoning: false
+          - model: panel-b
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: judge
+            analysis_models: [panel-a, panel-b]
+            min_successful_responses: 2
+            quorum_failure_policy: fallback
+            quorum_fallback_target: backup-model
+providers:
+  models:
     - name: panel-a
     - name: panel-b
     - name: backup-model
-  decisions:
-    - name: fusion_quorum
-      priority: 10
-      modelRefs:
-        - model: panel-a
-          use_reasoning: false
-        - model: panel-b
-          use_reasoning: false
-      algorithm:
-        type: fusion
-        fusion:
-          model: judge
-          analysis_models: [panel-a, panel-b]
-          min_successful_responses: 2
-          quorum_failure_policy: fallback
-          quorum_fallback_target: backup-model
 `)
 	if _, err := ParseRoutingYAMLBytes(yaml); err != nil {
 		t.Fatalf("routing-only fragment must round-trip, got %v", err)
@@ -289,24 +293,25 @@ func TestFusionFallbackTargetAcceptedWhenPanelDeclaresNothing(t *testing.T) {
 // the whole load path is covered, not just the helper.
 func TestFusionFallbackTargetRejectedByPublicParserWithEmptyCatalog(t *testing.T) {
 	yaml := []byte(`
-version: v0.3
-routing:
-  decisions:
-    - name: fusion_quorum
-      priority: 10
-      modelRefs:
-        - model: panel-a
-          use_reasoning: false
-        - model: panel-b
-          use_reasoning: false
-      algorithm:
-        type: fusion
-        fusion:
-          model: judge
-          analysis_models: [panel-a, panel-b]
-          min_successful_responses: 2
-          quorum_failure_policy: fallback
-          quorum_fallback_target: backup-model
+version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: fusion_quorum
+        priority: 10
+        modelRefs:
+          - model: panel-a
+            use_reasoning: false
+          - model: panel-b
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: judge
+            analysis_models: [panel-a, panel-b]
+            min_successful_responses: 2
+            quorum_failure_policy: fallback
+            quorum_fallback_target: backup-model
 `)
 	if _, err := ParseYAMLBytes(yaml); err == nil {
 		t.Fatal("complete config accepted a fallback target with no model card or provider")

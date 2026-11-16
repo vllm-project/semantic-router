@@ -101,7 +101,7 @@ func (l *ReMoMLooper) formatReMoMJSONResponse(
 					"role":    "assistant",
 					"content": finalResponse.Content,
 				},
-				"finish_reason": "stop",
+				"finish_reason": finalResponse.FinishReason,
 			},
 		},
 		"usage": usage.Map(),

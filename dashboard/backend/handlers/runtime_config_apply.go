@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
@@ -72,12 +73,34 @@ func applyWrittenConfig(configPath string, configDir string, previousData []byte
 	return "", nil
 }
 
+// savedConfigWarnings are the Router's warnings about a configuration its
+// validator accepted. A save response lists them only when there are any, so
+// a clean save answers as it always did.
+func savedConfigWarnings(cfg *routerconfig.RouterConfig) []routerconfig.ConfigWarning {
+	return routerconfig.Warnings(cfg)
+}
+
+// writeConfigSavedResponse answers a saved change the runtime applied.
+func writeConfigSavedResponse(w http.ResponseWriter, warnings []routerconfig.ConfigWarning) {
+	response := map[string]any{"status": "success"}
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
+}
+
 // writeRestartRequiredResponse answers a saved change that waits for
-// `vllm-sr serve`.
-func writeRestartRequiredResponse(w http.ResponseWriter, version string, message string) {
-	response := map[string]string{"status": "restart_required", "message": message}
+// `vllm-sr serve`, with the Router's warnings about it.
+func writeRestartRequiredResponse(w http.ResponseWriter, version string, message string, warnings []routerconfig.ConfigWarning) {
+	response := map[string]any{"status": "restart_required", "message": message}
 	if version != "" {
 		response["version"] = version
+	}
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
@@ -124,13 +147,17 @@ func configActivationDeferred() bool {
 	return ok
 }
 
-func writeDeferredConfigResponse(w http.ResponseWriter) {
+func writeDeferredConfigResponse(w http.ResponseWriter, warnings []routerconfig.ConfigWarning) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	response := map[string]any{
 		"status":  "persisted",
 		"message": "Configuration saved to the Kubernetes ConfigMap. Roll out the Router and Envoy deployments to activate it.",
-	})
+	}
+	if len(warnings) > 0 {
+		response["warnings"] = warnings
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func writeConfigPersistenceError(w http.ResponseWriter, err error) {

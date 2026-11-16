@@ -34,8 +34,8 @@ container serving remains untested.
 
 These CUDA dependencies align with the model runtime Docker CUDA stage.
 The existing [D3 parity record](decision3-parity.md) covers CPU and AMD MI325X.
-This adds checkpoint/device-specific NVIDIA evidence; `CUDAAccelerator.validated`
-remains false.
+This adds checkpoint/device-specific NVIDIA evidence. CUDA is validated in
+[`cuda-h200.md`](cuda-h200.md).
 
 ## Reproduced failure and reference policy
 

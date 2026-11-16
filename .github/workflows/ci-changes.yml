@@ -131,9 +131,15 @@ jobs:
         name: Resolve the base the merge ref applies to
         env:
           EVENT_BEFORE: ${{ github.event.before }}
+          PROFILE: ${{ inputs.profile }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             sha="$(git rev-parse --verify "$GITHUB_SHA^1")"
+          elif [[ "$PROFILE" == main && "$GITHUB_EVENT_NAME" == push ]]; then
+            # A newer push cancels older pushes' qualification, so check their
+            # changes too: compare with the last commit whose checks finished.
+            sha="$(python3 tools/ci/main_push_base.py --head "$GITHUB_SHA" --before "$EVENT_BEFORE")"
           else
             sha="$EVENT_BEFORE"
           fi
@@ -162,6 +168,7 @@ jobs:
             --output .agent-harness/ci/authorization.json
       - id: plan
         env:
+          GH_TOKEN: ${{ github.token }}
           PROFILE: ${{ inputs.profile }}
           BASE_SHA: ${{ steps.base.outputs.sha }}
           FULL: ${{ inputs.full }}
@@ -187,3 +194,12 @@ jobs:
           path: .agent-harness/ci/plan.json
           include-hidden-files: true
           if-no-files-found: error
+      - name: Preserve validated automatic receipts for the gate
+        if: github.event_name == 'pull_request' && github.run_attempt > 1
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: ci-result-reused
+          path: .agent-harness/ci/reused/*.json
+          include-hidden-files: true
+          if-no-files-found: ignore

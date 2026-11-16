@@ -37,15 +37,12 @@ bench/
 **/etcd/
 **/postgres-data/
 # Dashboard imports the one public Model Hub snapshot published by the website.
-# Frozen image-routing prototypes also use original website images.
 # Keep other website sources out of image build contexts.
 website/*
 !website/static/
 website/static/*
-!website/static/img/
 !website/static/model-catalog/
 website/static/model-catalog/*
-!website/static/img/
 !website/static/model-catalog/catalog.json
 docs/
 paper/

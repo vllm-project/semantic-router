@@ -43,7 +43,7 @@ func requestAs(path string, perms ...string) *http.Request {
 	return request.WithContext(auth.WithAuthContext(request.Context(), auth.AuthContext{UserID: "user", Perms: granted}))
 }
 
-func TestConfigReadEndpointsHideListenerKeysFromCallersWhoCannotWriteConfig(t *testing.T) {
+func TestConfigReadEndpointsRequireSecretViewPermissionForListenerKeys(t *testing.T) {
 	configPath := writeKeyedListenerConfig(t)
 	cases := []struct {
 		name     string
@@ -52,8 +52,9 @@ func TestConfigReadEndpointsHideListenerKeysFromCallersWhoCannotWriteConfig(t *t
 		visible  bool
 	}{
 		{name: "read role", perms: []string{auth.PermConfigRead}},
-		{name: "write role", perms: []string{auth.PermConfigRead, auth.PermConfigWrite}, visible: true},
-		{name: "deploy-only grant", perms: []string{auth.PermConfigRead, auth.PermConfigDeploy}, visible: true},
+		{name: "write role", perms: []string{auth.PermConfigRead, auth.PermConfigWrite}},
+		{name: "deploy-only grant", perms: []string{auth.PermConfigRead, auth.PermConfigDeploy}},
+		{name: "secret viewer", perms: []string{auth.PermConfigRead, configSecretPermission}, visible: true},
 		{name: "no auth context"},
 		{name: "write role on readonly dashboard", readonly: true, perms: []string{auth.PermConfigRead, auth.PermConfigWrite}},
 	}
@@ -98,11 +99,11 @@ func TestConfigYAMLReturnsOriginalBytesWhenNoListenerHasKeys(t *testing.T) {
 
 func TestConfigYAMLNeverServesListenerKeysHiddenBehindYAMLIndirection(t *testing.T) {
 	documents := map[string]string{
-		"alias listener": "version: v0.3\nx-gated: &gated\n  name: a\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - *gated\n",
-		"merge key":      "version: v0.3\nx-gated: &gated\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - <<: *gated\n    name: b\n",
-		"duplicate key":  "version: v0.3\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [first]\n    api_keys: [" + listenerKeyFixture + "]\n",
-		"alias keys":     "version: v0.3\nx-keys: &keys [" + listenerKeyFixture + "]\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: *keys\n",
-		"alias key item": "version: v0.3\nx-key: &key " + listenerKeyFixture + "\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [*key]\n",
+		"alias listener": "version: v0.5\nx-gated: &gated\n  name: a\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - *gated\n",
+		"merge key":      "version: v0.5\nx-gated: &gated\n  port: 8899\n  api_keys: [" + listenerKeyFixture + "]\nlisteners:\n  - <<: *gated\n    name: b\n",
+		"duplicate key":  "version: v0.5\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [first]\n    api_keys: [" + listenerKeyFixture + "]\n",
+		"alias keys":     "version: v0.5\nx-keys: &keys [" + listenerKeyFixture + "]\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: *keys\n",
+		"alias key item": "version: v0.5\nx-key: &key " + listenerKeyFixture + "\nlisteners:\n  - name: a\n    port: 8899\n    api_keys: [*key]\n",
 	}
 	for name, document := range documents {
 		t.Run(name, func(t *testing.T) {

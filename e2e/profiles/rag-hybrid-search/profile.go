@@ -1,11 +1,8 @@
 package raghybridsearch
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"time"
@@ -31,13 +28,10 @@ const (
 	timeoutDeploymentWait        = 30 * time.Minute
 	timeoutLlamaStackReady       = 10 * time.Minute
 	intervalServiceRetry         = 5 * time.Second
-	timeoutHTTPRequest           = 60 * time.Second
-	delayPortForwardReady        = 2 * time.Second
 
 	// Image constants
 	imageRepository = "ghcr.io/vllm-project/semantic-router/vllm-sr"
 	imagePullPolicy = "Never"
-	llamaStackImage = "llamastack/distribution-starter:0.5.0"
 
 	// Namespace constants
 	namespaceSemanticRouter = "vllm-semantic-router-system"
@@ -130,29 +124,9 @@ func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 }
 
 func (p *Profile) deployLlamaStack(ctx context.Context, opts *framework.SetupOptions) error {
-	// Pre-pull Llama Stack image and load into Kind cluster to avoid
-	// slow or failing image pulls from within the cluster nodes
-	p.log("Pulling Llama Stack image: %s", llamaStackImage)
-	pullCmd := exec.CommandContext(ctx, "docker", "pull", llamaStackImage)
-	if p.verbose {
-		pullCmd.Stdout = os.Stdout
-		pullCmd.Stderr = os.Stderr
-	}
-	if err := pullCmd.Run(); err != nil {
-		return fmt.Errorf("failed to pull llama stack image: %w", err)
-	}
-
-	p.log("Loading Llama Stack image into Kind cluster: %s", opts.ClusterName)
-	loadCmd := exec.CommandContext(ctx, "kind", "load", "docker-image", llamaStackImage, "--name", opts.ClusterName)
-	if p.verbose {
-		loadCmd.Stdout = os.Stdout
-		loadCmd.Stderr = os.Stderr
-	}
-	if err := loadCmd.Run(); err != nil {
-		return fmt.Errorf("failed to load llama stack image to Kind: %w", err)
-	}
-
-	// Apply Llama Stack Kubernetes manifests
+	// The node that runs Llama Stack pulls its image: kind load imports every
+	// platform of a multi-platform image, which fails under Docker's
+	// containerd image store, and would copy the image to every node.
 	if err := p.kubectlApply(ctx, opts.KubeConfig, llamaStackManifest); err != nil {
 		return fmt.Errorf("failed to apply llama stack manifests: %w", err)
 	}
@@ -186,64 +160,7 @@ func (p *Profile) deployLlamaStack(ctx context.Context, opts *framework.SetupOpt
 		}
 	}
 
-	// Register embedding model via port-forward
-	p.log("Registering embedding model in Llama Stack")
-	if err := p.registerEmbeddingModel(ctx, opts); err != nil {
-		p.log("Warning: failed to register embedding model: %v", err)
-		// Don't fail — model may already be registered
-	}
-
 	return nil
-}
-
-func (p *Profile) registerEmbeddingModel(ctx context.Context, opts *framework.SetupOptions) error {
-	// Port-forward to Llama Stack to register the model
-	cmd := exec.CommandContext(ctx, "kubectl",
-		"--kubeconfig", opts.KubeConfig,
-		"port-forward", "-n", "llama-stack-system", "svc/llama-stack", "18321:8321")
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start port-forward: %w", err)
-	}
-	defer func() {
-		if cmd.Process != nil {
-			cmd.Process.Kill() //nolint:errcheck
-		}
-		cmd.Wait() //nolint:errcheck
-	}()
-
-	// Wait for port-forward to be ready
-	time.Sleep(delayPortForwardReady)
-
-	// Register the embedding model
-	body, err := json.Marshal(map[string]interface{}{
-		"model_id":    "all-MiniLM-L6-v2",
-		"provider_id": "sentence-transformers",
-		"model_type":  "embedding",
-		"metadata":    map[string]interface{}{"embedding_dimension": 384},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to marshal model registration body: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", "http://localhost:18321/v1/models", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	httpClient := &http.Client{Timeout: timeoutHTTPRequest}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusConflict {
-		p.log("Embedding model registered successfully")
-		return nil
-	}
-
-	return fmt.Errorf("unexpected status %d when registering model", resp.StatusCode)
 }
 
 func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {

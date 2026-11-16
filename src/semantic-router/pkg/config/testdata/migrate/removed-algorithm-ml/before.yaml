@@ -1,0 +1,50 @@
+# The knn, kmeans, svm and mlp selectors are the systemone selector, which needs
+# no trained model, or static for a decision with one candidate: the global ml
+# block and the unused selection method go.
+version: v0.5
+providers:
+  defaults: {model: small}
+  models:
+    - name: small
+      backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Fast general model
+    - name: large
+      backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+      description: Strong reasoning model
+recipes:
+  - name: default
+    decisions:
+      - name: knn-route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm: {type: knn}
+      - name: kmeans-route
+        priority: 90
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm: {type: kmeans}
+      - name: svm-route
+        priority: 80
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: large}]
+        algorithm: {type: svm}
+      - name: mlp-route
+        priority: 70
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: mlp
+          on_error: fallback
+global:
+  router:
+    model_selection:
+      enabled: true
+      method: knn
+      ml:
+        models_path: models/model_selection
+        embedding_dim: 1024
+        knn: {k: 5, pretrained_path: models/model_selection/knn_model.json}
+        kmeans: {num_clusters: 8}
+        svm: {kernel: rbf, gamma: 1}
+        mlp: {device: cpu}

@@ -193,11 +193,16 @@ func (r *SemanticRouterReconciler) generateHPA(sr *vllmv1alpha1.SemanticRouter) 
 	}
 }
 
-func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRouter) *networkingv1.Ingress {
+func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) *networkingv1.Ingress {
 	pathType := networkingv1.PathTypePrefix
-	// An omitted servicePort targets the port the api Service actually
-	// exposes, mirroring how resolveIngressPathType defaults pathType.
-	apiPort := servicePortOrDefault(sr.Spec.Service.API.Port, DefaultAPIPort)
+	// An omitted servicePort targets the standalone Router's inference
+	// listener, not the api port, whose management API listens on 127.0.0.1
+	// in the Pod. With spec.gateway the Router serves no HTTP inference, and
+	// the default stays the api port, as in the Helm chart.
+	defaultPort := servicePortOrDefault(sr.Spec.Service.API.Port, DefaultAPIPort)
+	if gatewayMode == GatewayModeStandalone {
+		defaultPort = DefaultListenerPort
+	}
 
 	var rules []networkingv1.IngressRule
 	for _, host := range sr.Spec.Ingress.Hosts {
@@ -211,7 +216,7 @@ func (r *SemanticRouterReconciler) generateIngress(sr *vllmv1alpha1.SemanticRout
 					Service: &networkingv1.IngressServiceBackend{
 						Name: sr.Name,
 						Port: networkingv1.ServiceBackendPort{
-							Number: servicePortOrDefault(path.ServicePort, apiPort),
+							Number: servicePortOrDefault(path.ServicePort, defaultPort),
 						},
 					},
 				},

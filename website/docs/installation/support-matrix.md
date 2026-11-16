@@ -78,7 +78,6 @@ external project.
 | Hallucination policy demo | Experimental example | Fact-check policy behavior; not a qualified guardrail or model. |
 | Jailbreak error-handling demo | Experimental example | Classifier failure paths; not a secure production policy. |
 | Provider mocker and optional tiny-model smoke | Experimental example | Deterministic protocol fixtures; optional pinned Qwen3-0.6B real inference via the upstream llama.cpp server. |
-| PII remote backend demo | Experimental example | Remote token_spans.v1 PII backend and its on_error policy; not a qualified PII model or redaction policy. |
 | PII masking demo | Experimental example | Provider-bound masking across wire formats and its fail-closed path; not a qualified PII model or redaction policy. |
 | Observability demo | Experimental example | Prometheus, Grafana, alert, and Dashboard wiring; replace all example security and retention settings. |
 | Response jailbreak demo | Experimental example | Response-classifier window behavior; not a production guardrail model. |
@@ -101,6 +100,7 @@ choices.
 | --- | --- | --- |
 | Linux x86-64 CPU | Maintained | The standard Router images, CLI, Helm chart, and Operator receive the broadest recurring coverage. Model-server requirements remain separate. |
 | Linux Arm64 CPU | Build-qualified | Release workflows publish multi-architecture images where declared. This does not qualify every integration or optional native dependency on Arm64. |
+| [Linux RISC-V64 CPU](riscv64) | Experimental | **Manual.** Native standalone Router with source-built GLIDE and external model-runtime endpoints. SpacemiT X60/openKylin testing covers keyword/default routing, buffered/SSE responses, and restart. Bundled inference, Envoy, and other components are outside this qualification. |
 | NVIDIA CUDA on Linux x86-64 | Supported integration | Follow [NVIDIA CUDA](nvidia-cuda) for supported Router-side models, or keep the Router on CPU and qualify a separate NVIDIA backend against vLLM's support matrix. |
 | AMD ROCm on Linux x86-64 | Supported integration | Follow [AMD ROCm](amd-rocm) for supported Router-side models and qualify the Router, vLLM, ROCm, and model revisions as one set. |
 | AMD AI PC/NPU | Experimental, not qualified | No maintained deployment contract yet; tracked by [issue #2373](https://github.com/vllm-project/semantic-router/issues/2373). |

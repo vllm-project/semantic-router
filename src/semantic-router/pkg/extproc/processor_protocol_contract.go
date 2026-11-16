@@ -10,6 +10,7 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
@@ -90,19 +91,18 @@ func authoritativeZeroUsage() llmprotocol.Usage {
 }
 
 func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
-	if r == nil {
-		return nil, fmt.Errorf("protocol runtime is unavailable")
-	}
-	return protocolEngineFor(r.ProtocolCodecs)
+	return r.protocolEngineForVendor("")
 }
 
-// protocolEngineFor serves callers that hold only the registry, such as
-// detached work that must not capture the router.
-func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine, error) {
+// protocolEngineFor serves callers that hold only the registry and the
+// accepted losses, such as detached work that must not capture the router.
+func protocolEngineFor(registry *protocolcodec.Registry, allowedLossyFields []string) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
-	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
+	policy := llmprotocol.DefaultPolicy()
+	policy.AllowedLossyFields = allowedLossyFields
+	return protocolcodec.NewEngine(registry, policy)
 }
 
 // protocolEngineForVendor creates an engine with the specified response vendor policy.
@@ -116,6 +116,9 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 	}
 	policy := llmprotocol.DefaultPolicy()
 	policy.ResponseVendor = vendor
+	if r.Config != nil {
+		policy.AllowedLossyFields = r.Config.AllowLossyTranslation
+	}
 	return protocolcodec.NewEngine(registry, policy)
 }
 
@@ -150,6 +153,8 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
 	ctx.SemanticRequest = &request
+	observeAgentTurn(ctx, body)
+	r.observeApprovalReview(ctx, body, &request)
 	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
@@ -232,18 +237,8 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream &&
-		!streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
-		// The Router always asks Chat backends for the final usage chunk so
-		// accounting observes authoritative tokens. Public stream rendering uses
-		// the original client preference retained in ctx.SemanticRequest.
-		includeUsage := true
-		dispatchRequest.StreamOptions.IncludeUsage = &includeUsage
-		// Source bytes no longer describe the dispatch request, so retire the
-		// replay claim on them. Without this the encoder forwards the original
-		// client bytes and the forced flag never reaches the backend.
-		dispatchRequest.Generation++
-	}
+	requestBackendStreamUsage(format, &dispatchRequest)
+	r.requestUnstoredOnCallerLogin(format, &dispatchRequest)
 	encoded, err := engine.EncodeRequest(format, dispatchRequest, ctx.ProtocolEnvelope)
 	if err != nil {
 		return nil, err
@@ -255,6 +250,23 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		return nil, err
 	}
 	return encodeLooperEvidence(body, format, ctx)
+}
+
+// requestBackendStreamUsage asks a Chat backend for the final usage chunk of
+// a streamed call, whatever the client asked, so accounting observes
+// authoritative tokens. Public stream rendering uses the original client
+// preference retained in ctx.SemanticRequest.
+func requestBackendStreamUsage(format llmprotocol.WireFormat, dispatchRequest *llmprotocol.Request) {
+	if format != llmprotocol.OpenAIChatV1 || !dispatchRequest.Stream ||
+		streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
+		return
+	}
+	includeUsage := true
+	dispatchRequest.StreamOptions.IncludeUsage = &includeUsage
+	// Source bytes no longer describe the dispatch request, so retire the
+	// replay claim on them. Without this the encoder forwards the original
+	// client bytes and the forced flag never reaches the backend.
+	dispatchRequest.Generation++
 }
 
 func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {
@@ -288,7 +300,7 @@ func (r *OpenAIRouter) decodeClientResponse(
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
 	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
-	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(decoded.Diagnostics)
+	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
 }
@@ -326,6 +338,24 @@ func (r *OpenAIRouter) encodeClientResponse(
 	response llmprotocol.Response,
 	ctx *RequestContext,
 ) ([]byte, error) {
+	return r.encodeClientResponseWithReplay(response, ctx, true)
+}
+
+// encodeCanonicalClientResponse renders the client wire from the neutral
+// response without replaying the upstream bytes, which may carry members the
+// wire contract does not declare.
+func (r *OpenAIRouter) encodeCanonicalClientResponse(
+	response llmprotocol.Response,
+	ctx *RequestContext,
+) ([]byte, error) {
+	return r.encodeClientResponseWithReplay(response, ctx, false)
+}
+
+func (r *OpenAIRouter) encodeClientResponseWithReplay(
+	response llmprotocol.Response,
+	ctx *RequestContext,
+	replay bool,
+) ([]byte, error) {
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, err
@@ -339,6 +369,9 @@ func (r *OpenAIRouter) encodeClientResponse(
 		envelope = ctx.ResponseEnvelope
 		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
 	}
+	if !replay {
+		envelope.ResponseReencodeRequired = true
+	}
 	encoded, err := engine.EncodeResponse(format, response, envelope)
 	if err != nil {
 		return nil, err
@@ -351,12 +384,6 @@ func (r *OpenAIRouter) encodeClientResponse(
 }
 
 func requestWirePath(format llmprotocol.WireFormat) string {
-	// The Images wire predates the protocol catalog and is not registered
-	// there; keep its canonical path stable instead of falling back to the
-	// chat-completions default.
-	if format == llmprotocol.OpenAIImagesV1 {
-		return "/v1/images/generations"
-	}
 	registry, err := modelcatalog.BuiltIn()
 	if err != nil {
 		return "/v1/chat/completions"
@@ -374,6 +401,8 @@ func requestWireProtocol(format llmprotocol.WireFormat) string {
 		return "openai/responses@1"
 	case llmprotocol.AnthropicMessagesV1:
 		return "anthropic/messages@1"
+	case llmprotocol.OpenAIImagesV1:
+		return "openai/images@1"
 	default:
 		return "openai/chat-completions@1"
 	}
@@ -404,6 +433,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 		protocolError := immediateProtocolError(status)
 		if ctx.ImmediateProtocolError != nil {
 			protocolError = ctx.ImmediateProtocolError
+			logProtocolRejection(ctx, protocolError, status)
 		}
 		if body, encodeErr := engine.EncodeError(format, protocolError); encodeErr == nil {
 			immediate.Body = body
@@ -429,7 +459,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 		if immediate.Status == nil {
 			immediate.Status = &typev3.HttpStatus{}
 		}
-		immediate.Status.Code = statusCodeToEnum(500)
+		immediate.Status.Code = typev3.StatusCode_InternalServerError
 		setImmediateContentType(immediate, "application/json")
 		ctx.ImmediateResponseEncoded = true
 	}
@@ -439,7 +469,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 func immediateProtocolError(status int) *llmprotocol.ProtocolError {
 	category, code, message := llmprotocol.ErrorInternal, "request_failed", "request failed"
 	switch status {
-	case 400, 413, 422:
+	case 400, 413, 415, 422:
 		category, code, message = llmprotocol.ErrorInvalidRequest, "invalid_request", "invalid inference request"
 	case 401:
 		category, code, message = llmprotocol.ErrorAuthentication, "authentication_failed", "authentication failed"
@@ -451,9 +481,9 @@ func immediateProtocolError(status int) *llmprotocol.ProtocolError {
 		category, code, message = llmprotocol.ErrorConflict, "request_conflict", "request cannot be completed"
 	case 429:
 		category, code, message = llmprotocol.ErrorRateLimited, "rate_limited", "rate limit exceeded"
-	case 499:
-		category, code, message = llmprotocol.ErrorInternal, "request_canceled", "request canceled"
-	case 502, 503, 504:
+	case 504:
+		category, code, message = llmprotocol.ErrorUpstreamTimeout, "request_timeout", "request timed out"
+	case 502, 503:
 		category, code, message = llmprotocol.ErrorUpstreamUnavailable, "upstream_unavailable", "model service unavailable"
 	}
 	return llmprotocol.NewError(category, code, message, nil)
@@ -474,4 +504,20 @@ func setImmediateContentType(response *ext_proc.ImmediateResponse, value string)
 		response.Headers.SetHeaders,
 		newHeaderValueOption("content-type", value),
 	)
+}
+
+// logProtocolRejection records why the Router refused a request. Every refusal
+// that carries a protocol error leaves through encodeImmediateResponseForClient,
+// and the client's error body is otherwise the only trace of a refusal before
+// routing, which never reaches replay. Only the protocol error's own message
+// is logged, never the request body.
+func logProtocolRejection(ctx *RequestContext, protocolError *llmprotocol.ProtocolError, status int) {
+	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      ctx.RequestModel,
+		"status":     status,
+		"code":       protocolError.Code,
+		"category":   string(protocolError.Category),
+		"message":    protocolError.Message,
+	})
 }
