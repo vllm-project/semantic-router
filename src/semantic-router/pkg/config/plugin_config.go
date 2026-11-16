@@ -87,6 +87,9 @@ type FastResponsePluginConfig struct {
 	// Enabled false turns off the fast_response a decision inherits.
 	Enabled *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Message string `json:"message" yaml:"message"`
+	// Block refuses the request with HTTP 400 and Message as the error,
+	// instead of answering with Message as the model's reply.
+	Block bool `json:"block,omitempty" yaml:"block,omitempty"`
 }
 
 // IsEnabled reports whether the fast_response runs: unless enabled is false.
@@ -187,7 +190,14 @@ type RouterReplayPluginConfig struct {
 	// (ToolDefinitions, ToolTraceStep.Text, Arguments and Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that
 	// structured fields remain complete even when the raw body is truncated.
-	MaxToolTraceBytes int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
+	// Nil where no layer sets it: then ToolTraceByteLimit is 64 KiB, which
+	// bounds the steps' raw copies too, and the trace has a total budget.
+	MaxToolTraceBytes *int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
+	// MaxToolTraceTotalBytes caps the text all steps of a record keep
+	// together, raw copies included: the oldest steps are dropped first, and
+	// the newest is always kept. 0 means no limit. Nil where no layer sets it:
+	// see ToolTraceTotalByteLimit.
+	MaxToolTraceTotalBytes *int `json:"max_tool_trace_total_bytes,omitempty" yaml:"max_tool_trace_total_bytes,omitempty" jsonschema:"minimum=0"`
 	// MaxToolTraceSteps caps the number of ToolTraceStep entries retained per
 	// record. Long agent sessions produce one step per tool-call turn, so an
 	// unbounded chain (e.g. a runaway hermes-style loop) can otherwise grow
@@ -195,6 +205,11 @@ type RouterReplayPluginConfig struct {
 	// oldest steps are dropped and ToolTrace.StepsTruncated is set so callers
 	// can see that a cap was applied. 0 means no limit.
 	MaxToolTraceSteps int `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
+	// CostBaselineModel is the configured model a record's savings compare
+	// with: the same recorded tokens at that model's rates, so a request
+	// routed to a dearer model saves a negative amount. Unset, the baseline is
+	// the most expensive model of the selected recipe's pool.
+	CostBaselineModel string `json:"cost_baseline_model,omitempty" yaml:"cost_baseline_model,omitempty"`
 	// Shadow sends a sampled copy of the decision's requests to a shadow
 	// model, whose outcome the replay record keeps. It runs while the
 	// decision records replays.

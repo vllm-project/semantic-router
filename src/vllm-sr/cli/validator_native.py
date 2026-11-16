@@ -17,6 +17,7 @@ _UNAVAILABLE_NATIVE_CONTEXT = {
     "reask",
     "user_feedback",
     "input_modality",
+    "agent",
 }
 
 

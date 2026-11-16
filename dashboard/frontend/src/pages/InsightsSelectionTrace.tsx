@@ -5,6 +5,7 @@ import type {
   SelectionObjectiveStage,
   SelectionTrace,
 } from '../types/selectionTrace'
+import { ModelName } from './insightsModelLabelSupport'
 import styles from './InsightsRoutingEvidence.module.css'
 
 const factors: Record<string, string> = {
@@ -92,7 +93,9 @@ export default function InsightsSelectionTrace({
       <dl className={styles.metrics}>
         <div>
           <dt>Actual selected model</dt>
-          <dd>{selectedModel || 'No backend selected'}</dd>
+          <dd>
+            <ModelName name={selectedModel} fallback="No backend selected" />
+          </dd>
         </div>
         <div>
           <dt>Candidates retained by the objective</dt>
@@ -101,7 +104,7 @@ export default function InsightsSelectionTrace({
               <ul className={styles.selectionSurvivors}>
                 {trace.final_survivors.map((candidate, index) => (
                   <li key={index}>
-                    {candidate.Model}
+                    <ModelName name={candidate.Model} />
                     {candidateDetails(candidate) ? (
                       <small>{candidateDetails(candidate)}</small>
                     ) : null}
@@ -178,7 +181,7 @@ export default function InsightsSelectionTrace({
                         {stage.candidates.map((row, candidateIndex) => (
                           <tr key={candidateIndex}>
                             <th scope="row">
-                              {row.candidate.Model}
+                              <ModelName name={row.candidate.Model} compact />
                               {candidateDetails(row.candidate) ? (
                                 <small>{candidateDetails(row.candidate)}</small>
                               ) : null}

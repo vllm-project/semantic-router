@@ -233,6 +233,19 @@ Valid scopes accumulate for the same revision; partial authorization does not
 waive the remaining checks. A new head revision requires fresh
 authorization.
 
+GitHub may regenerate a synthetic merge commit without changing its base and
+PR head. The existing Plan and authorization remain usable when the original
+merge's ordered parents can be verified against those inputs and both merge
+commits have the same verifiable tree. A different merge SHA alone does not
+require another push. The existing ancestor-base policy also allows main to
+advance while the planned base remains in its history; that path does not require
+equal trees across different bases.
+
+If the original planned merge commit is no longer readable, CI stays blocked
+with **CI source evidence unavailable**. Diagnostics identify this boundary as
+`planned_merge_unavailable`. Retain the Plan and run evidence for investigation;
+an unavailable object does not prove that qualification succeeded.
+
 The command handler reacts with 👀 when it receives a request and 🚀 after it
 successfully triggers the PR workflow. The rocket means CI was started, not that
 tests passed; **PR Gate** reports the final result. Rejected requests receive 😕
@@ -302,6 +315,14 @@ Summary check shows the effective conditions, including inherited requirements.
   of a recoverable failure. Save the diagnostic and the queue's refusal before
   recovery. Do not rerun a cancelled sibling or repeatedly requeue the same
   head to try to erase a required failure.
+
+  The diagnostic separates successful qualification from check visibility,
+  suite conclusions, and the commit rollup. A required green publisher Gate
+  in an unsuccessful suite reports `suite_mismatch`; an unsuccessful rollup
+  reports `rollup_blocked`. A successful sibling suite is valid even when its
+  ID differs from the qualification run's suite. Missing or changing evidence
+  cannot establish a healthy state. These reports never authorize cleanup or
+  claim that GitHub's final merge evaluation will succeed.
 
   Any fresh-head recovery needs the author's or maintainer's explicit consent
   and confirmation that the PR is no longer queued. Use a normal merge from

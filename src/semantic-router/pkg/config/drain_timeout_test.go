@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -45,31 +46,38 @@ func TestDrainTimeoutStays25SecondsWhenOmitted(t *testing.T) {
 	if got := (*RouterConfig)(nil).DrainTimeout(); got != 25*time.Second {
 		t.Fatalf("a nil configuration drains for %v, want 25s", got)
 	}
-	if exported := CanonicalGlobalFromRouterConfig(cfg).Router.DrainTimeoutSeconds; exported != 0 {
-		t.Fatalf("an omitted drain timeout exports as %d, want it omitted", exported)
+	if exported := CanonicalGlobalFromRouterConfig(cfg).Router.DrainTimeoutSeconds; exported != nil {
+		t.Fatalf("an omitted drain timeout exports as %d, want it omitted", *exported)
 	}
 	if err = ValidateGatewayCapabilities(cfg, GatewayExtProc); err != nil {
 		t.Fatalf("an omitted drain timeout is refused behind Envoy: %v", err)
 	}
 }
 
+// An explicit value is that many seconds, 0 meaning no drain, and exports as
+// written; behind Envoy any value is refused, 0 included.
 func TestDrainTimeoutSecondsSetsTheStandaloneDrain(t *testing.T) {
-	cfg, err := parseDrainTimeoutDoc("drain_timeout_seconds: 180")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := cfg.DrainTimeout(); got != 180*time.Second {
-		t.Fatalf("DrainTimeout() = %v, want 180s", got)
-	}
-	if exported := CanonicalGlobalFromRouterConfig(cfg).Router.DrainTimeoutSeconds; exported != 180 {
-		t.Fatalf("the drain timeout exports as %d, want 180", exported)
-	}
-	if err = ValidateGatewayCapabilities(cfg, GatewayStandalone); err != nil {
-		t.Fatalf("standalone mode refuses the drain timeout: %v", err)
-	}
-	err = ValidateGatewayCapabilities(cfg, GatewayExtProc)
-	if err == nil || !strings.Contains(err.Error(), "global.router.drain_timeout_seconds is honored only in standalone mode") {
-		t.Fatalf("behind Envoy, which drains the client connections itself, err = %v", err)
+	for _, test := range []struct {
+		seconds int
+		drain   time.Duration
+	}{{180, 180 * time.Second}, {0, 0}} {
+		cfg, err := parseDrainTimeoutDoc("drain_timeout_seconds: " + strconv.Itoa(test.seconds))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := cfg.DrainTimeout(); got != test.drain {
+			t.Fatalf("drain_timeout_seconds: %d: DrainTimeout() = %v, want %v", test.seconds, got, test.drain)
+		}
+		if exported := CanonicalGlobalFromRouterConfig(cfg).Router.DrainTimeoutSeconds; exported == nil || *exported != test.seconds {
+			t.Fatalf("drain_timeout_seconds: %d exports as %v", test.seconds, exported)
+		}
+		if err = ValidateGatewayCapabilities(cfg, GatewayStandalone); err != nil {
+			t.Fatalf("standalone mode refuses drain_timeout_seconds: %d: %v", test.seconds, err)
+		}
+		err = ValidateGatewayCapabilities(cfg, GatewayExtProc)
+		if err == nil || !strings.Contains(err.Error(), "global.router.drain_timeout_seconds is honored only in standalone mode") {
+			t.Fatalf("behind Envoy, which drains the client connections itself, drain_timeout_seconds: %d: err = %v", test.seconds, err)
+		}
 	}
 }
 

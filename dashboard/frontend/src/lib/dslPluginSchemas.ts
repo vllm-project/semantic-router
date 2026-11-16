@@ -160,6 +160,30 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
         'Bytes of the prompt a record keeps under raw or verified capture; 0 keeps the whole prompt. Unset, it follows max_tool_trace_bytes when that is set, else 65536',
     },
     {
+      key: 'max_tool_trace_bytes',
+      label: 'Max Tool Trace Bytes',
+      type: 'number',
+      placeholder: '65536',
+      description:
+        'Bytes each tool definition and trace step field keeps; 0 keeps them whole. Unset, 65536, raw copies included',
+    },
+    {
+      key: 'max_tool_trace_total_bytes',
+      label: 'Max Tool Trace Total Bytes',
+      type: 'number',
+      placeholder: '262144',
+      description:
+        "Bytes a record's trace steps keep in all, the oldest dropped first; 0 keeps every step. Unset, 262144 while max_tool_trace_bytes is unset too",
+    },
+    {
+      key: 'cost_baseline_model',
+      label: 'Cost Baseline Model',
+      type: 'string',
+      placeholder: 'premium-model',
+      description:
+        "A priced model savings compare with, at the same recorded tokens; a dearer route then shows a negative saving. Unset, the recipe pool's most expensive model",
+    },
+    {
       key: 'shadow',
       label: 'Shadow',
       type: 'object',
@@ -217,6 +241,12 @@ function getFastResponsePluginFieldSchema(): FieldSchema[] {
       required: true,
       placeholder: 'I cannot help with that request.',
       description: 'The response message returned directly to the client',
+    },
+    {
+      key: 'block',
+      label: 'Block the request',
+      type: 'boolean',
+      description: 'Refuse the request with HTTP 403 and this message instead of answering with it',
     },
   ]
 }

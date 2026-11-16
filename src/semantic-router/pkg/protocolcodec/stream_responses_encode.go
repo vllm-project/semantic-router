@@ -9,8 +9,10 @@ import (
 )
 
 func (encoder *responsesStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
-	if err := rejectReasoningContinuity(llmprotocol.OpenAIResponsesV1, llmprotocol.RequiredEventCapabilities(event)); err != nil {
-		return nil, nil, err
+	if event.Content != nil {
+		if err := requireReasoningRepresentation(llmprotocol.OpenAIResponsesV1, []llmprotocol.Content{*event.Content}); err != nil {
+			return nil, nil, err
+		}
 	}
 	if encoder.terminal {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already terminal", nil)
@@ -20,6 +22,11 @@ func (encoder *responsesStreamEncoder) Push(event llmprotocol.Event) ([][]byte, 
 		return nil, nil, err
 	}
 	event = normalized
+	if event.Content != nil && event.Content.ReasoningDetail != nil {
+		// Ciphertext is recorded by streamState but never rendered as a text part.
+		frames, _, startErr := encoder.ensureResponsesOutputStarted(event, responsesOutputReasoning)
+		return frames, nil, startErr
+	}
 	if frames, diagnostics, handled, directErr := encoder.encodeDirectResponsesEvent(event); handled {
 		return frames, diagnostics, directErr
 	}
@@ -613,6 +620,15 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesContent(
 	item, err := marshalCompletedResponsesItem(outputKey, id, parts)
 	if err != nil {
 		return nil, nil, err
+	}
+	// An item has one encrypted_content field. Prefer the lowest neutral content
+	// index so multiple details cannot make the replay snapshot depend on map order.
+	lowest := -1
+	for key, detail := range encoder.reasoningDetails {
+		if outputKey.kind == responsesOutputReasoning && key.item == event.ItemIndex && llmprotocol.IsResponsesReasoning(&detail) && (lowest < 0 || key.content < lowest) {
+			lowest = key.content
+			item.EncryptedContent, _ = json.Marshal(detail.Data.Value)
+		}
 	}
 	wire := responsesEventWire{
 		Type: "response.output_item.done", Sequence: encoder.nextWireSequence(),

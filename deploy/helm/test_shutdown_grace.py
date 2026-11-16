@@ -47,6 +47,10 @@ class ShutdownGraceTest(unittest.TestCase):
         self.assertEqual(pod["terminationGracePeriodSeconds"], 220)
         self.assertEqual(pod["containers"][0]["lifecycle"], pre_stop)
 
+    def test_an_explicit_zero_grace_period_reaches_the_router_pod(self):
+        pod = router_pod({"terminationGracePeriodSeconds": 0})
+        self.assertEqual(pod["terminationGracePeriodSeconds"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

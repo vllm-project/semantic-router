@@ -113,7 +113,7 @@ func TestReplayTextNormalizationAndExactBoundaries(t *testing.T) {
 	}
 	record := RoutingRecord{Prompt: "a\xffb", ToolDefinitions: "a\xffb", PromptTruncated: true, ToolDefinitionsTruncated: true}
 	capRecordPrompt(&record, 0)
-	applyMaxToolTraceBytes(&record, 0)
+	applyMaxToolTraceBytes(&record, recorderPolicy{})
 	if record.Prompt != "a\uFFFDb" || record.ToolDefinitions != "a\uFFFDb" {
 		t.Fatal("unbounded structured text must still be valid UTF-8")
 	}

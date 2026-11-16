@@ -174,14 +174,19 @@ func TestStandaloneDrainEndsAtTheConfiguredTimeout(t *testing.T) {
 }
 
 // The process's shutdown budget is the drain and the resources' reserve after
-// it: 30 s by default, as before the drain could be set, and a longer drain
-// keeps its whole time.
+// it: 30 s by default, as before the drain could be set, the reserve alone for
+// no drain, and a longer drain keeps its whole time.
 func TestProcessShutdownBudgetCoversTheDrain(t *testing.T) {
 	if got := processShutdownTimeout(config.GatewayStandalone, nil); got != 30*time.Second {
 		t.Fatalf("the default shutdown budget is %v, want 30s", got)
 	}
-	cfg := &config.RouterConfig{}
-	cfg.DrainTimeoutSeconds = 180
+	none, seconds := &config.RouterConfig{}, 0
+	none.DrainTimeoutSeconds = &seconds
+	if got := processShutdownTimeout(config.GatewayStandalone, none); got != 5*time.Second {
+		t.Fatalf("no drain gets a %v shutdown budget, want the 5 s reserve", got)
+	}
+	cfg, long := &config.RouterConfig{}, 180
+	cfg.DrainTimeoutSeconds = &long
 	budget := processShutdownTimeout(config.GatewayStandalone, cfg)
 	if budget != 185*time.Second {
 		t.Fatalf("a 180 s drain gets a %v shutdown budget, want 185s", budget)
@@ -200,11 +205,36 @@ func TestProcessShutdownBudgetCoversTheDrain(t *testing.T) {
 // also for a routing-disabled config: it skips the gateway capability checks,
 // so its drain_timeout_seconds loads with --gateway extproc.
 func TestExtProcShutdownBudgetStays30Seconds(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte("version: v0.5\nglobal:\n  router:\n    enabled: false\n    drain_timeout_seconds: 180\n"))
-	if err != nil {
-		t.Fatal(err)
+	for _, seconds := range []string{"180", "0"} {
+		cfg, err := config.ParseYAMLBytes([]byte("version: v0.5\nglobal:\n  router:\n    enabled: false\n    drain_timeout_seconds: " + seconds + "\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := processShutdownTimeout(config.GatewayExtProc, cfg); got != 30*time.Second {
+			t.Fatalf("behind Envoy, a config with drain_timeout_seconds: %s gets a %v shutdown budget, want 30s", seconds, got)
+		}
 	}
-	if got := processShutdownTimeout(config.GatewayExtProc, cfg); got != 30*time.Second {
-		t.Fatalf("behind Envoy, a config with a 180 s drain gets a %v shutdown budget, want 30s", got)
+}
+
+// drain_timeout_seconds: 0 is no drain: the listeners close and the gateway
+// stops at once, a request in flight being left to the process's exit.
+func TestStandaloneDrainOfZeroStopsAtOnce(t *testing.T) {
+	arrived, release := make(chan struct{}, 1), make(chan struct{})
+	backend := heldBackend(arrived, release)
+	defer backend.Close()
+	defer close(release)
+	url, stop, drained := startDrainTestGateway(t, backend.URL, "global:\n  router:\n    drain_timeout_seconds: 0\n")
+	go postChatForDrain(&http.Client{}, url)
+	waitForTestSignal(t, arrived, "the request never reached the backend")
+
+	begun := time.Now()
+	stop()
+	select {
+	case <-drained:
+		if waited := time.Since(begun); waited > 2*time.Second {
+			t.Fatalf("no drain took %v", waited)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the gateway waited for a request with no drain")
 	}
 }

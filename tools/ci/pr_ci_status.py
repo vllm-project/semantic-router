@@ -13,15 +13,18 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from manual_ci import (
+    MERGE_EVIDENCE_UNAVAILABLE,
     PAGE_SIZE,
     GitHubClient,
     ManualCIError,
     api_failure,
     main_contains,
+    merge_revision_matches,
     plan_for_run,
     read_artifact,
     source_identity,
 )
+from pr_ci_status_suites import read_rollup, read_suites, successful
 
 CHECK = "PR Gate"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"
@@ -162,11 +165,9 @@ def validate_plan(client, repo: str, run: dict, plan: dict) -> None:
         for key in ("source_sha", "base_sha")
     ):
         raise ManualCIError("Invalid qualification source revision.")
-    commit = client.request(f"repos/{repo}/git/commits/{plan['source_sha']}")
-    if [item.get("sha") for item in commit.get("parents", [])] != [
-        plan["base_sha"],
-        run["head_sha"],
-    ]:
+    if not merge_revision_matches(
+        client, repo, plan["source_sha"], plan["base_sha"], run["head_sha"]
+    ):
         raise ManualCIError(
             "Qualification plan does not belong to this PR merge revision."
         )
@@ -226,7 +227,12 @@ def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
 
 
 def presentation(
-    state: str, repo: str, pull: dict, run: dict, plan: dict | None
+    state: str,
+    repo: str,
+    pull: dict,
+    run: dict,
+    plan: dict | None,
+    reason: str | None = None,
 ) -> tuple[str, str]:
     url = f"https://github.com/{repo}/actions/runs/{run['id']}"
     titles = {
@@ -237,6 +243,8 @@ def presentation(
         "success": "All required CI qualification passed",
         "legacy": "Waiting for committer approval — /ci run",
     }
+    if reason == MERGE_EVIDENCE_UNAVAILABLE:
+        titles["failure"] = "CI source evidence unavailable"
     lines = [f"**{titles[state]}**", ""]
     if state in {"awaiting-approval", "legacy"}:
         lines += [
@@ -265,7 +273,11 @@ def presentation(
         ]
     elif state == "failure":
         lines += [
-            "A check failed or its required evidence could not be verified. Open the run below for the failure; approval alone does not turn a failed test green."
+            (
+                "The original planned merge commit could not be read. Qualification stays blocked because its source equivalence could not be verified. Retain the Plan and run evidence for investigation."
+                if reason == MERGE_EVIDENCE_UNAVAILABLE
+                else "A check failed or its required evidence could not be verified. Open the run below for the failure; approval alone does not turn a failed test green."
+            )
         ]
         if plan and plan.get("deferred_verifications"):
             lines += [
@@ -348,8 +360,9 @@ def publish(
     checks: list[dict],
     *,
     dry_run=False,
+    reason: str | None = None,
 ) -> dict:
-    title, summary = presentation(state, repo, pull, run, plan)
+    title, summary = presentation(state, repo, pull, run, plan, reason)
     external = f"{PREFIX}{pull['number']}:{run['id']}:{run['run_attempt']}"
     payload = {
         "name": CHECK,
@@ -382,6 +395,8 @@ def publish(
             else None
         ),
     }
+    if reason == MERGE_EVIDENCE_UNAVAILABLE:
+        result["reason_codes"] = [reason]
     if dry_run:
         return result
     visible_checks = (
@@ -490,6 +505,7 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         )
     )
     plan = None
+    reason = None
     try:
         plan = artifact(client, repo, run, "ci-plan", "plan.json", 16 * 1024 * 1024)
         validate_plan(client, repo, run, plan)
@@ -514,12 +530,19 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         state = verdict(run, plan, report, jobs)
         if state != "failure" and not main_contains(client, repo, plan["base_sha"]):
             state = "stale"
-    except (ManualCIError, KeyError, ValueError, TypeError):
+    except (ManualCIError, KeyError, ValueError, TypeError) as error:
         if not checks and not any(job.get("name") == "CI Execution" for job in jobs):
             raise
         state = "failure"
+        if (
+            isinstance(error, ManualCIError)
+            and error.reason == MERGE_EVIDENCE_UNAVAILABLE
+        ):
+            reason = MERGE_EVIDENCE_UNAVAILABLE
         plan = None  # Never interpolate malformed artifact content into a comment.
-    return publish(client, repo, pull, run, state, plan, checks, dry_run=dry_run)
+    return publish(
+        client, repo, pull, run, state, plan, checks, dry_run=dry_run, reason=reason
+    )
 
 
 def required_checks(client, repo: str, head: str, number: int):
@@ -753,6 +776,9 @@ def diagnose(
             "requiredness_complete": False,
         },
         "checks": {"all": [], "latest": []},
+        "suites": [],
+        "run_suite_id": None,
+        "rollup_state": None,
     }
 
     def finish(state, reason):
@@ -767,6 +793,8 @@ def diagnose(
     ):
         return finish("ignored", "invalid_identity")
     snapshots = {}
+    suite_snapshot = None
+    rollup_snapshot = None
     try:
         run = client.request(f"repos/{repo}/actions/runs/{run_id}")
         workflow = client.request(f"repos/{repo}/actions/workflows/pr.yml")
@@ -789,6 +817,9 @@ def diagnose(
         if not bound or bound.get("number") != number:
             return finish("ignored", "pull_mismatch")
         snapshots[run_id] = run
+        suite_id = run.get("check_suite_id")
+        if type(suite_id) is int and suite_id > 0:
+            result["run_suite_id"] = suite_id
         source_snapshot = None
         raw = {}
         for check_filter in ("all", "latest"):
@@ -898,10 +929,35 @@ def diagnose(
                 state, reason = "failed", "current_qualification_failed"
             elif evidence["full_qualification"]:
                 try:
+                    suite_ids = [
+                        run.get("check_suite_id"),
+                        *(
+                            check.get("check_suite", {}).get("id")
+                            for check in replacements
+                        ),
+                    ]
+                    suite_snapshot = read_suites(client, repo, head, suite_ids, APP_ID)
+                    rollup_snapshot = read_rollup(client, repo, head)
+                    result["suites"] = list(suite_snapshot.values())
+                    result["rollup_state"] = rollup_snapshot
+                except (
+                    ManualCIError,
+                    KeyError,
+                    ValueError,
+                    TypeError,
+                    OSError,
+                    subprocess.TimeoutExpired,
+                ):
+                    # Missing health evidence must not skip source revalidation.
+                    suite_snapshot = None
+                    result["reason_codes"].append("check_state_evidence_unavailable")
+                try:
                     identity = source_identity(client, repo, number)
                     source_snapshot = plan_for_run(client, repo, run, identity)
                     evidence["current_source"] = source_snapshot is not None
-                except ManualCIError:
+                except ManualCIError as error:
+                    if error.reason == MERGE_EVIDENCE_UNAVAILABLE:
+                        raise
                     source_snapshot = False
                     evidence["current_source"] = False
                 if not evidence["current_source"]:
@@ -926,8 +982,48 @@ def diagnose(
                     state, reason = (
                         "healthy" if green else "uncertain"
                     ), "no_competing_native_failure"
-        except (ManualCIError, KeyError, ValueError, TypeError):
-            pass
+                    if green:
+                        visible = {check["id"] for check in raw["latest"]}
+                        required_green = [
+                            check
+                            for check in replacements
+                            if required.get(check["id"]) is True
+                            and check["id"] in visible
+                        ]
+                        if not complete or suite_snapshot is None:
+                            state, reason = (
+                                "evidence_unavailable",
+                                "health_evidence_incomplete",
+                            )
+                        elif not required_green:
+                            state, reason = (
+                                "uncertain",
+                                "current_required_gate_not_visible",
+                            )
+                        elif not successful(suite_snapshot[run["check_suite_id"]]):
+                            state, reason = (
+                                "uncertain",
+                                "qualification_suite_not_successful",
+                            )
+                        elif any(
+                            not successful(suite_snapshot[check["check_suite"]["id"]])
+                            for check in required_green
+                        ):
+                            state, reason = (
+                                "suite_mismatch",
+                                "required_gate_suite_not_successful",
+                            )
+                        elif rollup_snapshot != "SUCCESS":
+                            state, reason = (
+                                "rollup_blocked",
+                                "commit_rollup_not_successful",
+                            )
+        except (ManualCIError, KeyError, ValueError, TypeError) as error:
+            if (
+                isinstance(error, ManualCIError)
+                and error.reason == MERGE_EVIDENCE_UNAVAILABLE
+            ):
+                result["reason_codes"].append(MERGE_EVIDENCE_UNAVAILABLE)
         # The last GETs must still bind the PR and every examined run attempt.
         for identity, snapshot in snapshots.items():
             fresh = client.request(f"repos/{repo}/actions/runs/{identity}")
@@ -986,11 +1082,22 @@ def diagnose(
             for key in ("number", "state", "head", "base", "merge_commit_sha")
         ) or not latest_run(client, repo, run):
             return finish("stale", "snapshot_changed")
+        if suite_snapshot is not None:
+            if (
+                read_suites(client, repo, head, suite_snapshot, APP_ID)
+                != suite_snapshot
+            ):
+                return finish("stale", "check_suite_changed")
+            if read_rollup(client, repo, head) != rollup_snapshot:
+                return finish("stale", "commit_rollup_changed")
         if source_snapshot is not None:
             try:
                 fresh_identity = source_identity(client, repo, number)
                 fresh_source = plan_for_run(client, repo, run, fresh_identity)
-            except ManualCIError:
+            except ManualCIError as error:
+                if error.reason == MERGE_EVIDENCE_UNAVAILABLE:
+                    evidence["current_source"] = False
+                    return finish("evidence_unavailable", MERGE_EVIDENCE_UNAVAILABLE)
                 fresh_source = False
             if bool(fresh_source) != bool(source_snapshot):
                 return finish("stale", "source_changed")

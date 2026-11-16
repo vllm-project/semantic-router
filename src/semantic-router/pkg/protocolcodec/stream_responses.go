@@ -538,7 +538,9 @@ func isSupportedResponsesEvent(eventType string) bool {
 		"response.function_call_arguments.delta", "response.function_call_arguments.done",
 		"response.custom_tool_call_input.delta", "response.custom_tool_call_input.done",
 		"response.image_generation_call.in_progress", "response.image_generation_call.generating",
-		"response.image_generation_call.partial_image", "response.image_generation_call.completed":
+		"response.image_generation_call.partial_image", "response.image_generation_call.completed",
+		// Not in the published inventory: ChatGPT's Codex backend sends it.
+		"response.metadata":
 		return true
 	default:
 		return false

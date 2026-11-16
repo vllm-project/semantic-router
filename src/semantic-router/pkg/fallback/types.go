@@ -60,6 +60,10 @@ type FallbackPolicy struct {
 	ForwardRequestHeaders []string `json:"forward_request_headers,omitempty" yaml:"forward_request_headers,omitempty"`
 
 	rawEnabled *bool
+	// perUserCredentials marks backends that each request authenticates with
+	// its own login (auth.credential: caller): their 401, 403 and 429 speak of
+	// that person's login or plan, not of the backend.
+	perUserCredentials bool
 }
 
 // ExplicitEnabled returns whether the enabled field was explicitly configured (tri-state).
@@ -444,4 +448,12 @@ type ExecutionRecord struct {
 	FinalStatus    string            `json:"final_status"`
 	UsageSummary   TokenUsageSummary `json:"usage_summary"`
 	VisitedModels  []string          `json:"visited_models"`
+}
+
+// ForPerUserCredentials returns the policy for backends that each request
+// authenticates with its own login: one person's refused login or spent plan
+// never trips the circuit breaker the other requests share.
+func (p FallbackPolicy) ForPerUserCredentials() FallbackPolicy {
+	p.perUserCredentials = true
+	return p
 }

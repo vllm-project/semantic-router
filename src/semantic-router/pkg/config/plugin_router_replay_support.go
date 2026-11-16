@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -35,6 +36,16 @@ const (
 	// keeps nearly every chat prompt whole and the head of a long one, so
 	// 10,000 records of 1M-token prompts take some 640 MiB, not 40 GB.
 	defaultRouterReplayMaxPromptBytes = 64 << 10
+	// defaultRouterReplayMaxToolTraceBytes caps each text field of a trace
+	// step, and the tool definitions, where no layer sets
+	// max_tool_trace_bytes: the prompt's 64 KiB, so that a long user turn
+	// keeps no more in the trace than in the prompt.
+	defaultRouterReplayMaxToolTraceBytes = 64 << 10
+	// defaultRouterReplayMaxToolTraceTotalBytes caps the text of all steps of
+	// a record together where neither trace limit is set: 256 KiB, so that
+	// 100 steps cannot keep 100 times a field's limit, and 10,000 records of
+	// long agent sessions take some 2.5 GiB of trace, not tens of GB.
+	defaultRouterReplayMaxToolTraceTotalBytes = 256 << 10
 )
 
 // DefaultRouterReplayPluginConfig leaves PromptCapture unset, which is none,
@@ -50,30 +61,66 @@ func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 	}
 }
 
+// defaultRouterReplayPolicy is the policy of a request none of whose layers
+// has a router_replay plugin: a record of its routing data (the route,
+// decision, models, usage, cost, latency, status and ids) and no request or
+// response text, in the store's default bounds.
+func defaultRouterReplayPolicy() *RouterReplayPluginConfig {
+	policy := DefaultRouterReplayPluginConfig()
+	return &policy
+}
+
+// RecordsByDefault reports whether a request runs the default record: no
+// layer of its plugins, those of the decision or, for a request that matched
+// none, the default recipe's, has a router_replay plugin.
+func (c *RouterConfig) RecordsByDefault(decision *Decision) bool {
+	return pluginIndex(c.RequestPlugins(decision), DecisionPluginRouterReplay) < 0
+}
+
 // EffectiveRouterReplayConfig resolves the replay policy a request runs, from
 // an already scoped decision (nil for a request that matched none): its
 // router_replay plugin, layered as RequestPlugins says, over the capture
-// defaults. Recording is off without one, or where no layer enables it.
-// Request-time callers pass the decision because decision names are
-// recipe-local and therefore cannot identify a decision globally.
+// defaults. Without one on any layer the request records its routing data
+// only; with one, recording is off unless a layer enables it. A native
+// decision takes no Chat plugins and records nothing. Request-time callers
+// pass the decision because decision names are recipe-local and therefore
+// cannot identify a decision globally.
 func (c *RouterConfig) EffectiveRouterReplayConfig(decision *Decision) *RouterReplayPluginConfig {
+	if decision != nil && decision.Algorithm.IsNative() {
+		return nil
+	}
 	return RouterReplayPolicyOf(c.RequestPlugins(decision))
 }
 
-// UsesRouterReplay reports whether a reachable request records replay.
+// UsesRouterReplay reports whether a reachable request records replay: a
+// passthrough request, or one of a reachable recipe, with or without a
+// decision.
 func (c *RouterConfig) UsesRouterReplay() bool {
-	uses := false
-	c.visitReachablePlugins(func(plugins []DecisionPlugin) {
-		uses = uses || RouterReplayPolicyOf(plugins) != nil
-	})
-	return uses
+	if RouterReplayPolicyOf(c.GlobalPlugins) != nil {
+		return true
+	}
+	for _, recipe := range c.ReachableRoutingRecipes() {
+		if RouterReplayPolicyOf(recipe.Profile.DefaultPlugins) != nil {
+			return true
+		}
+		for i := range recipe.Profile.Decisions {
+			if c.EffectiveRouterReplayConfig(&recipe.Profile.Decisions[i]) != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // RouterReplayPolicyOf is the replay policy of a request's plugins, nil when
-// none records.
+// none records: the default record without a router_replay plugin, else the
+// plugin's.
 func RouterReplayPolicyOf(plugins []DecisionPlugin) *RouterReplayPluginConfig {
 	index := pluginIndex(plugins, DecisionPluginRouterReplay)
-	if index < 0 || plugins[index].Configuration == nil {
+	if index < 0 {
+		return defaultRouterReplayPolicy()
+	}
+	if plugins[index].Configuration == nil {
 		return nil
 	}
 	plugin := plugins[index]
@@ -116,7 +163,7 @@ func personalDataPromptCapture(capture bool) string {
 }
 
 // ValidatePromptCapture refuses a prompt_capture other than none, raw or
-// verified, and a negative max_prompt_bytes.
+// verified, and a negative max_prompt_bytes or max_tool_trace_total_bytes.
 func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
 	switch p.PromptCapture {
 	case "", PromptCaptureNone, PromptCaptureRaw, PromptCaptureVerified:
@@ -126,22 +173,85 @@ func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
 	if p.MaxPromptBytes != nil && *p.MaxPromptBytes < 0 {
 		return fmt.Errorf("max_prompt_bytes cannot be negative; 0 keeps the whole prompt")
 	}
+	if p.MaxToolTraceTotalBytes != nil && *p.MaxToolTraceTotalBytes < 0 {
+		return fmt.Errorf("max_tool_trace_total_bytes cannot be negative; 0 keeps every step")
+	}
 	return nil
+}
+
+// validateRouterReplayCostBaseline refuses a cost_baseline_model that names
+// no model with rates, against which no record's savings could be priced.
+// cost_baseline_model names a providers.models entry, so a document validated
+// without any models in scope, such as the global block the Dashboard checks
+// alone (ParseGlobalYAMLBytesWithoutEnvExpansion), defers the reference to the
+// whole-config load that resolves it.
+func validateRouterReplayCostBaseline(cfg *RouterConfig, path string, p *RouterReplayPluginConfig) error {
+	model := strings.TrimSpace(p.CostBaselineModel)
+	if model == "" || len(cfg.ModelConfig) == 0 {
+		return nil
+	}
+	if _, priced := cfg.GetFullModelPricing(model); priced {
+		return nil
+	}
+	if _, configured := cfg.resolveModelConfig(model); !configured {
+		return fmt.Errorf("%s.cost_baseline_model: %q is not a configured model", path, model)
+	}
+	return fmt.Errorf("%s.cost_baseline_model: model %q has no pricing to compare savings with; set its providers.models[].pricing", path, model)
+}
+
+// ToolTraceByteLimit is how many bytes each tool text field a record keeps
+// may hold (the tool definitions, and a trace step's text, arguments and
+// output), 0 for no limit: max_tool_trace_bytes from the most specific layer
+// that sets it, a negative value meaning no limit as before; else 64 KiB.
+func (p *RouterReplayPluginConfig) ToolTraceByteLimit() int {
+	if p == nil || p.MaxToolTraceBytes == nil {
+		return defaultRouterReplayMaxToolTraceBytes
+	}
+	return max(*p.MaxToolTraceBytes, 0)
+}
+
+// RawToolTraceByteLimit is how many bytes a trace step's raw copies of its
+// arguments and output may hold, 0 for no limit. A configured
+// max_tool_trace_bytes keeps them whole, as before the default existed, for
+// readers that replay a call byte for byte; where no layer sets it, they keep
+// the default 64 KiB, since whole copies would leave the trace unbounded.
+func (p *RouterReplayPluginConfig) RawToolTraceByteLimit() int {
+	if p == nil || p.MaxToolTraceBytes == nil {
+		return defaultRouterReplayMaxToolTraceBytes
+	}
+	return 0
+}
+
+// ToolTraceTotalByteLimit is how many bytes the steps of a record's trace may
+// hold together, raw copies included, 0 for no limit: max_tool_trace_total_bytes
+// from the most specific layer that sets it; where none does, 256 KiB while
+// max_tool_trace_bytes is unset too, and no limit where a layer sets it, which
+// kept every step before the budget existed.
+func (p *RouterReplayPluginConfig) ToolTraceTotalByteLimit() int {
+	switch {
+	case p != nil && p.MaxToolTraceTotalBytes != nil:
+		return *p.MaxToolTraceTotalBytes
+	case p != nil && p.MaxToolTraceBytes != nil:
+		return 0
+	default:
+		return defaultRouterReplayMaxToolTraceTotalBytes
+	}
 }
 
 // PromptByteLimit is how many bytes of the prompt a record keeps under raw and
 // verified, 0 for the whole prompt: max_prompt_bytes from the most specific
-// layer that sets it; where none does, max_tool_trace_bytes when that is above
-// 0, since it bounded the prompt before max_prompt_bytes existed and no
+// layer that sets it; where none does, a max_tool_trace_bytes a layer sets
+// above 0, since it bounded the prompt before max_prompt_bytes existed and no
 // configuration may keep more of the prompt after an upgrade; else 64 KiB.
+// The trace's own default never feeds it.
 func (p *RouterReplayPluginConfig) PromptByteLimit() int {
 	switch {
 	case p == nil:
 		return defaultRouterReplayMaxPromptBytes
 	case p.MaxPromptBytes != nil:
 		return *p.MaxPromptBytes
-	case p.MaxToolTraceBytes > 0:
-		return p.MaxToolTraceBytes
+	case p.MaxToolTraceBytes != nil && *p.MaxToolTraceBytes > 0:
+		return *p.MaxToolTraceBytes
 	default:
 		return defaultRouterReplayMaxPromptBytes
 	}

@@ -57,7 +57,12 @@ recipes:
           - type: fast_response
             configuration:
               message: This request was blocked by the security policy.
+              block: true
 ```
+
+With `block: true` the client gets HTTP 400 with the message as an error in
+its own protocol, and Router Replay records the request as refused; see
+[Block a Request](../../plugin/fast-response.md#block-a-request).
 
 | Field | Meaning |
 | --- | --- |

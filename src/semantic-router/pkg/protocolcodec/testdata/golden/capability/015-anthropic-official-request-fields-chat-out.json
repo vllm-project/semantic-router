@@ -143,6 +143,28 @@
       }
     },
     {
+      "name": "safeguards",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 2048,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "safeguards",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "stop_sequences",
       "outcome": {
         "status": "ok",

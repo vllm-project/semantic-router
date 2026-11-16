@@ -251,22 +251,68 @@ func TestReplayGlobalDefaultsAndExplicitDecisionOverrides(t *testing.T) {
 	if !got.CaptureRequestBody || !got.CapturesRawContent() || got.CaptureResponseBody || got.MaxBodyBytes != 0 || got.MaxToolTraceSteps != 0 {
 		t.Fatalf("incorrect overlay: %+v", got)
 	}
-	for _, enabled := range []bool{false, true} {
+	// No plugin on any layer is the default record; a plugin replaces it.
+	for _, enabled := range []*bool{nil, &no, &yes} {
 		for _, override := range []*bool{nil, &yes, &no} {
 			var layer []DecisionPlugin
-			if enabled {
-				layer = []DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": true})}
+			want, decision := true, Decision{Name: "d"}
+			if enabled != nil {
+				want = *enabled
+				layer = []DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": *enabled})}
 			}
-			want, decision := enabled, Decision{Name: "d"}
 			if override != nil {
 				want = *override
 				decision.Plugins = []DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": *override})}
 			}
 			cfg := layeredRouting(layer, decision)
 			if (cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("d")) != nil) != want {
-				t.Fatalf("global %v override %v", enabled, override)
+				t.Fatalf("global %v override %v", enabled != nil && *enabled, override != nil && *override)
 			}
 		}
+	}
+}
+
+// With no router_replay plugin on any layer, every Chat request records its
+// routing data and no text. A plugin on any layer replaces that default: an
+// enabled: false turns it off, and one that does not enable recording keeps
+// it off, as before.
+func TestReplayRecordsRoutingDataWithoutAPlugin(t *testing.T) {
+	cfg := layeredRouting(nil, Decision{Name: "plain"})
+	for _, request := range []struct {
+		name   string
+		policy *RouterReplayPluginConfig
+	}{
+		{"passthrough", RouterReplayPolicyOf(cfg.GlobalPlugins)},
+		{"no decision", cfg.EffectiveRouterReplayConfig(nil)},
+		{"decision", cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("plain"))},
+	} {
+		policy := request.policy
+		if policy == nil || !policy.Enabled || policy.PromptCaptureMode() != PromptCaptureNone ||
+			policy.CapturesRequestText() || policy.CapturesResponseText() || policy.CapturesToolResults() ||
+			policy.MaxRecords != defaultRouterReplayMaxRecords {
+			t.Fatalf("%s: policy %+v, want routing data only", request.name, policy)
+		}
+	}
+	if !cfg.UsesRouterReplay() || cfg.ReplayNeedsPIIEvidence() {
+		t.Fatal("the default record must be in use and read no prompt")
+	}
+	cfg.Listeners = []Listener{{Name: "public", Port: 8899}}
+	if warning := UntrustedIdentityWarning(cfg); warning != "" {
+		t.Fatalf("the default record warns on every standalone start: %q", warning)
+	}
+	native := Decision{Name: "native", Algorithm: &AlgorithmConfig{Type: DecisionAlgorithmEscalate, Escalate: &EscalateAlgorithmConfig{Stages: []EscalateStage{{Model: "a"}}}}}
+	if layeredRouting(nil, native).EffectiveRouterReplayConfig(&native) != nil {
+		t.Fatal("native execution takes no Chat plugins and records no replay")
+	}
+	disabled := []DecisionPlugin{replayPlugin(map[string]interface{}{"enabled": false})}
+	for _, decision := range []Decision{{Name: "plain"}, native} {
+		if layeredRouting(disabled, decision).UsesRouterReplay() {
+			t.Fatalf("decision %s: enabled: false in global.plugins must turn the default record off", decision.Name)
+		}
+	}
+	declared := layeredRouting(nil, Decision{Name: "d", Plugins: []DecisionPlugin{replayPlugin(map[string]interface{}{"capture_request_body": false})}})
+	if declared.EffectiveRouterReplayConfig(declared.GetDecisionByName("d")) != nil {
+		t.Fatal("a plugin that does not enable recording must keep its decision unrecorded")
 	}
 }
 
@@ -303,7 +349,8 @@ global:
 		t.Fatal(err)
 	}
 	got := again.EffectiveRouterReplayConfig(nil)
-	if got == nil || !got.VerifiesPrompt() || got.CaptureRequestBody || got.CaptureResponseBody || got.MaxRecords != 77 || got.MaxBodyBytes != 0 || got.MaxToolTraceBytes != 0 || got.MaxToolTraceSteps != 0 {
+	if got == nil || !got.VerifiesPrompt() || got.CaptureRequestBody || got.CaptureResponseBody || got.MaxRecords != 77 || got.MaxBodyBytes != 0 ||
+		got.MaxToolTraceBytes == nil || *got.MaxToolTraceBytes != 0 || got.MaxToolTraceSteps != 0 {
 		t.Fatalf("roundtrip lost defaults: %+v", got)
 	}
 }

@@ -52,7 +52,13 @@ func dilutingGuardClassifier(t *testing.T, timeout, perState, perWord time.Durat
 // threshold and every state's P(jailbreak) score(state).
 func scoredGuardClassifier(t *testing.T, timeout, perState time.Duration, threshold float64, score func(state string) float64) (*Classifier, *runtimetest.Runtime) {
 	t.Helper()
-	return guardClassifierAnswering(t, timeout, perState, 0, threshold, func(state, _ string, question api.Question) (api.Answer, bool) {
+	return guardClassifierAnswering(t, timeout, perState, 0, threshold, scoredAnswer(score))
+}
+
+// scoredAnswer answers the jailbreak question about every state at
+// P(jailbreak) score(state).
+func scoredAnswer(score func(state string) float64) func(state, _ string, question api.Question) (api.Answer, bool) {
+	return func(state, _ string, question api.Question) (api.Answer, bool) {
 		if question.Choices == nil || !slices.ContainsFunc(*question.Choices, func(choice api.ChoiceOption) bool { return choice.Key == "jailbreak" }) {
 			return api.Answer{}, false
 		}
@@ -60,7 +66,7 @@ func scoredGuardClassifier(t *testing.T, timeout, perState time.Duration, thresh
 		kind, choice := "choice", map[bool]string{true: "jailbreak", false: "benign"}[attack >= 0.5]
 		probabilities := map[string]float64{"benign": 1 - attack, "jailbreak": attack}
 		return api.Answer{Type: &kind, Choice: &choice, Probabilities: &probabilities, Confidence: &attack}, true
-	})
+	}
 }
 
 // guardClassifierAnswering serves refusingGuardConfig with the jailbreak rule
@@ -604,9 +610,14 @@ func TestReReadsThatWaitAreLeftOutOfTheDeploymentsPace(t *testing.T) {
 // A window close below the threshold is still read again at once: an
 // injection that its grown window holds at 0.4 against a rule at 0.5, 0.4
 // below in log-odds, is read again before any re-read of the benign windows
-// around it (0.1, which wait for the windows still unread), and refused.
+// around it (0.1, which wait for the windows still unread), and refused. The
+// deployment reads one window at a time: windows sent together, up to its
+// max_parallel, reach the model in any order, so only then is the order the
+// fake sees the order the scan sends them in.
 func TestANearThresholdInjectionIsReadAgainBeforeTheWaitingReReads(t *testing.T) {
-	classifier, fake := scoredGuardClassifier(t, 20*time.Second, time.Millisecond, 0.5, func(state string) float64 {
+	document := strings.NewReplacer("TIMEOUT", "20000", "RULE\n", "", "predicate: {gte: 0.995}", "predicate: {gte: 0.5}",
+		"max_parallel: 4", "max_parallel: 1").Replace(refusingGuardConfig)
+	classifier, fake := guardClassifierOf(t, document, time.Millisecond, 0, scoredAnswer(func(state string) float64 {
 		switch {
 		case !strings.Contains(state, scanInjection):
 			return 0.1
@@ -614,7 +625,7 @@ func TestANearThresholdInjectionIsReadAgainBeforeTheWaitingReReads(t *testing.T)
 			return 0.4
 		}
 		return 0.7
-	})
+	}))
 	text := injectedAt(distinctProse(700_000, 10), 0.6)
 
 	results := evaluateTurn(classifier, text)

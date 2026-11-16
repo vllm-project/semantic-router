@@ -20,7 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 )
 
-func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t *testing.T) {
+func TestBenchmarkWorkflowResumePreservesBindingAndReceiptsEachTurnsCalls(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		streaming bool
@@ -103,12 +103,12 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 			}
 			pause := route(workflowChatBody(streaming))
 			assertWorkflowClientTrace(t, immediateBody(pause), true)
-			assertBenchmarkWorkflowReceipt(t, pause, hash, "worker-model")
+			assertBenchmarkWorkflowReceipt(t, pause, hash, "worker-model", "prepare-model", "worker-model")
 			resume := route(workflowResumeChatBodyWithStream(t, immediateBody(pause), streaming))
 			assertWorkflowClientTrace(t, immediateBody(resume), true)
-			// Workflows do not currently emit attempt traces. Neither an initial nor
-			// a resumed aggregate is proof of complete request-local accounting.
-			assertBenchmarkWorkflowReceipt(t, resume, hash, "verifier-model")
+			// Each turn's receipt holds the calls its trace kept, and is complete
+			// because they add up to the turn's usage.
+			assertBenchmarkWorkflowReceipt(t, resume, hash, "verifier-model", "worker-model", "verifier-model")
 			if !streaming {
 				// Each turn reports the calls it made: the resumed turn does not
 				// bill the preparation step again.
@@ -160,7 +160,7 @@ func TestBenchmarkUsageWorkflowHistoricalUsageFailsClosed(t *testing.T) {
 	}
 }
 
-func assertBenchmarkWorkflowReceipt(t *testing.T, resp *ext_proc.ProcessingResponse, hash, selected string) {
+func assertBenchmarkWorkflowReceipt(t *testing.T, resp *ext_proc.ProcessingResponse, hash, selected string, called ...string) {
 	t.Helper()
 	set := resp.GetImmediateResponse().GetHeaders().GetSetHeaders()
 	trace := traceOf(t, set)
@@ -175,7 +175,11 @@ func assertBenchmarkWorkflowReceipt(t *testing.T, resp *ext_proc.ProcessingRespo
 	if err := json.Unmarshal([]byte(usage), &receipt); err != nil {
 		t.Fatal(err)
 	}
-	if receipt.Version != 1 || receipt.Complete || len(receipt.Calls) != 0 {
-		t.Fatalf("untraced workflow incorrectly claims complete accounting: %+v", receipt)
+	models := make([]string, 0, len(receipt.Calls))
+	for _, call := range receipt.Calls {
+		models = append(models, call.Model)
+	}
+	if receipt.Version != 1 || !receipt.Complete || !reflect.DeepEqual(models, called) {
+		t.Fatalf("workflow receipt = %+v, want the complete calls %v", receipt, called)
 	}
 }

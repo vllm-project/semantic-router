@@ -64,17 +64,18 @@ func newProtectionPolicy(
 	policy.Scope = scope
 	sessionID, sessionHeader := protectionSessionID(ctx, cfg)
 	conversationID, conversationDerived := protectionConversationID(ctx, cfg, sessionID)
+	agentID, agentHeader := protectionAgentID(ctx, cfg)
 	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
 		nil,
 		newRouterLearningIdentityDiagnostics(routerLearningIdentity{
 			scope:               scope,
 			sessionHeader:       sessionHeader,
 			conversationHeader:  cfg.HeaderName("conversation"),
-			agentHeader:         cfg.HeaderName("agent"),
+			agentHeader:         agentHeader,
 			sessionID:           sessionID,
 			conversationID:      conversationID,
 			conversationDerived: conversationDerived,
-			agentID:             strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("agent"))),
+			agentID:             agentID,
 		}),
 	)
 	return policy

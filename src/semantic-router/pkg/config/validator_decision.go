@@ -16,6 +16,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateInputModalityContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateAgentContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateSystemOneContracts(cfg); err != nil {
 		return err
 	}
@@ -424,6 +427,8 @@ func validatePluginContracts(
 			err = validateContextPlugin(cfg, path, typed)
 		case *ResponseCachePluginConfig:
 			err = validateMatch(cfg, path+".semantic.match", typed.SemanticMatch(), MatchResponseCache)
+		case *RouterReplayPluginConfig:
+			err = validateRouterReplayCostBaseline(cfg, path, typed)
 		}
 		if err != nil {
 			return err

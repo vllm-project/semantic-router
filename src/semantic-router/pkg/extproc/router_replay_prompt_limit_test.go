@@ -17,7 +17,7 @@ import (
 // max_prompt_bytes nor max_tool_trace_bytes is set, under raw capture and
 // under verified capture once the prompt is read clean, with the whole
 // prompt's size and SHA-256; none keeps no prompt. The request trace keeps its
-// user turn to max_tool_trace_bytes alone.
+// user turn to the trace's own limit, 64 KiB where no layer sets one.
 func TestReplayCutsThePromptToMaxPromptBytesPerMode(t *testing.T) {
 	prompt := strings.Repeat("Summarize the meeting agenda. ", 4_000) + "Thanks."
 	sum := sha256.Sum256([]byte(prompt))
@@ -79,8 +79,8 @@ func TestReplayCutsThePromptToMaxPromptBytesPerMode(t *testing.T) {
 				t.Fatalf("the cut does not identify the prompt: %d bytes, sha256 %q", record.PromptOriginalBytes, record.PromptOriginalSHA256)
 			}
 			if test.mode == config.PromptCaptureRaw {
-				if record.ToolTrace == nil || len(record.ToolTrace.Steps) == 0 || record.ToolTrace.Steps[0].Text != prompt {
-					t.Fatalf("the request trace's user turn is not kept to max_tool_trace_bytes alone: %+v", record.ToolTrace)
+				if record.ToolTrace == nil || len(record.ToolTrace.Steps) == 0 || record.ToolTrace.Steps[0].Text != prompt[:64<<10] || !record.ToolTrace.Steps[0].Truncated {
+					t.Fatalf("the request trace's user turn is not kept to the trace's 64 KiB default: %+v", record.ToolTrace)
 				}
 			}
 		})
