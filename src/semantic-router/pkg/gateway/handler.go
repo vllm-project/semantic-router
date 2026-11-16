@@ -255,16 +255,8 @@ func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Se
 	ctx := routing.WithListenerModels(r.Context(), models)
 	x.record.RequestID = r.Header.Get(headers.RequestID)
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
-	if errors.Is(err, errBodyTooLarge) {
-		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
-		return
-	}
-	if errors.Is(err, os.ErrDeadlineExceeded) {
-		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request body did not arrive in time.")
-		return
-	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request_body", "The request body could not be read.")
+		writeBodyReadError(w, err)
 		return
 	}
 	var strip map[string]bool
@@ -461,6 +453,20 @@ func transportError(ctx context.Context, err error) error {
 }
 
 var errBodyTooLarge = errors.New("request body too large")
+
+// writeBodyReadError is shared by normal ingress and the h2c adapter, which
+// must consume the initial Upgrade body before it can enter the Handler.
+func writeBodyReadError(w http.ResponseWriter, err error) {
+	var sizeErr *http.MaxBytesError
+	switch {
+	case errors.Is(err, errBodyTooLarge), errors.As(err, &sizeErr):
+		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
+	case errors.Is(err, os.ErrDeadlineExceeded):
+		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request body did not arrive in time.")
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "The request body could not be read.")
+	}
+}
 
 func readBody(r *http.Request, limit int64) ([]byte, error) {
 	if r.Body == nil || r.Body == http.NoBody {
