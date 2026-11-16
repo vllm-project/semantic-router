@@ -16,6 +16,9 @@ PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr/"
 SERVE_SOURCE = ROOT / "tools/agent/skills/vllm-sr-serve"
 SERVE_DESTINATION = ROOT / "website/static/install/agent/vllm-sr-serve"
 SERVE_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-serve/"
+DECISION_SOURCE = ROOT / "tools/agent/skills/vllm-sr-decision-model"
+DECISION_DESTINATION = ROOT / "website/static/install/agent/vllm-sr-decision-model"
+DECISION_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-decision-model/"
 PUBLICATIONS = (
     (SOURCE, DESTINATION, PUBLIC_ORIGIN, "vllm-sr-agent-operations", "vllm-sr"),
     (
@@ -24,6 +27,13 @@ PUBLICATIONS = (
         SERVE_PUBLIC_ORIGIN,
         "vllm-sr-serve",
         "vllm-sr-serve",
+    ),
+    (
+        DECISION_SOURCE,
+        DECISION_DESTINATION,
+        DECISION_PUBLIC_ORIGIN,
+        "vllm-sr-decision-model",
+        "vllm-sr-decision-model",
     ),
 )
 MARKDOWN_LINK = re.compile(

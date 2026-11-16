@@ -26,10 +26,12 @@ from cli.main import main  # noqa: E402
 
 SKILL = REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-agent-operations"
 SERVE_SKILL = REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-serve"
+DECISION_SKILL = REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-decision-model"
 PAGES = [
     SKILL / "SKILL.md",
     *sorted((SKILL / "references").glob("*.md")),
     SERVE_SKILL / "SKILL.md",
+    DECISION_SKILL / "SKILL.md",
 ]
 INSTALLER = REPO_ROOT / "install.sh"
 FENCE = re.compile(r"^[ \t]*```(\w*)[^\n]*\n(.*?)^[ \t]*```", re.M | re.S)
