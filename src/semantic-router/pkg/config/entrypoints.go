@@ -118,9 +118,10 @@ func (c *RouterConfig) ValidateDelegateModels() error {
 }
 
 // IsReviewEntrypoint reports whether model names an entrypoint that another
-// entrypoint uses as its review_model, under any of the target's names.
+// entrypoint uses as its review_model, under any of the target's names, whatever
+// other role it serves.
 func (c *RouterConfig) IsReviewEntrypoint(api InferenceAPI, model string) bool {
-	return c.DelegateRole(api, model) == DelegateReview
+	return slices.Contains(c.DelegateRoles(api, model), DelegateReview)
 }
 
 // Roles an entrypoint serves for another one, as its review_model or
@@ -130,24 +131,28 @@ const (
 	DelegateMemory = "memory"
 )
 
-// DelegateRole is what another entrypoint sends to model: DelegateReview,
-// DelegateMemory, or "" when no entrypoint names it, under any of its names.
-func (c *RouterConfig) DelegateRole(api InferenceAPI, model string) string {
+// DelegateRoles is what other entrypoints send to model, under any of its
+// names: DelegateMemory, DelegateReview or both, in that order, and none when
+// no entrypoint names it.
+func (c *RouterConfig) DelegateRoles(api InferenceAPI, model string) []string {
 	if c == nil {
-		return ""
+		return nil
 	}
 	target, ok := c.ResolveEntrypoint(api, model)
 	if !ok {
-		return ""
+		return nil
 	}
+	var roles []string
 	for _, entrypoint := range c.EffectiveEntrypoints(api) {
 		for _, delegate := range [...]struct{ role, name string }{
 			{DelegateReview, entrypoint.ReviewModel}, {DelegateMemory, entrypoint.MemoryModel},
 		} {
-			if name := strings.TrimSpace(delegate.name); name != "" && slices.Contains(target.ModelNames, name) {
-				return delegate.role
+			name := strings.TrimSpace(delegate.name)
+			if name != "" && slices.Contains(target.ModelNames, name) && !slices.Contains(roles, delegate.role) {
+				roles = append(roles, delegate.role)
 			}
 		}
 	}
-	return ""
+	slices.Sort(roles)
+	return roles
 }

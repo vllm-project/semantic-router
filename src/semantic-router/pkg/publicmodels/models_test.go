@@ -1,6 +1,7 @@
 package publicmodels
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -104,7 +105,7 @@ func assertPublicModel(
 	}
 	wantRouting.API = config.ChatAPI
 	wantRouting.Source = model.Routing.Source
-	if model.Routing != wantRouting {
+	if !reflect.DeepEqual(model.Routing, wantRouting) {
 		t.Fatalf("%s routing metadata = %+v, want %+v", model.ID, model.Routing, wantRouting)
 	}
 	if model.Description != wantDescription {
@@ -202,8 +203,46 @@ recipes:
 		got[model.ID] = model.Routing
 	}
 	for id, want := range map[string]string{"vllm-sr/auto": "", "vllm-sr/review": "review", "vllm-sr/memory": "memory", "memory-alias": "memory"} {
-		if got[id].Delegate != want || got[id].Selectable != (want == "") {
-			t.Errorf("%s routing = %+v, want delegate %q", id, got[id], want)
+		roles := strings.Join(got[id].Delegates, ",")
+		if roles != want || got[id].Selectable != (want == "") {
+			t.Errorf("%s routing = %+v, want delegates %q", id, got[id], want)
+		}
+	}
+}
+
+// The default entrypoint stays offered for chat when another entrypoint sends
+// its memory calls there, marked default or not, and a target given both roles
+// lists both.
+func TestTheDefaultEntrypointStaysSelectableAsADelegate(t *testing.T) {
+	for _, marked := range []string{", default: true", ""} {
+		cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.5
+providers:
+  models:
+    - name: m
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.1:8000"}]
+entrypoints:
+  - {model_names: [vllm-sr/auto], recipe: default` + marked + `}
+  - {model_names: [coding], recipe: default, memory_model: vllm-sr/auto, review_model: helper}
+  - {model_names: [agent], recipe: default, memory_model: helper}
+  - {model_names: [helper], recipe: default}
+recipes:
+  - name: default
+`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]RoutingMetadata{}
+		for _, model := range NewOpenAIModelList(cfg, 0).Data {
+			got[model.ID] = model.Routing
+		}
+		for id, want := range map[string]struct {
+			roles      string
+			selectable bool
+		}{"vllm-sr/auto": {"memory", true}, "coding": {"", true}, "helper": {"memory,review", false}} {
+			if roles := strings.Join(got[id].Delegates, ","); roles != want.roles || got[id].Selectable != want.selectable {
+				t.Errorf("default%q: %s routing = %+v, want delegates %q selectable %v", marked, id, got[id], want.roles, want.selectable)
+			}
 		}
 	}
 }

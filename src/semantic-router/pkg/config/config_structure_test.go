@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -280,6 +281,25 @@ func TestIsReviewEntrypointMatchesTargetAliases(t *testing.T) {
 	var empty *RouterConfig
 	if empty.IsReviewEntrypoint(ChatAPI, "review") {
 		t.Error("a nil config has no review entrypoint")
+	}
+}
+
+// A target that one entrypoint sends its memory calls to and another its
+// reviews holds both roles, whichever entrypoint comes first.
+func TestADelegateTargetHoldsEveryRoleItIsGiven(t *testing.T) {
+	recipes := "recipes:\n  - name: main\n" + structureDecision
+	cfg, err := parseStructure(t, recipes+"entrypoints:\n"+
+		"  - model_names: [main]\n    recipe: main\n    default: true\n    memory_model: helper\n"+
+		"  - model_names: [coding]\n    recipe: main\n    review_model: helper\n"+
+		"  - model_names: [helper]\n    recipe: main\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.IsReviewEntrypoint(ChatAPI, "helper") {
+		t.Error("IsReviewEntrypoint(chat, helper) = false, want true")
+	}
+	if got := cfg.DelegateRoles(ChatAPI, "helper"); !slices.Equal(got, []string{DelegateMemory, DelegateReview}) {
+		t.Errorf("DelegateRoles(chat, helper) = %q, want memory and review", got)
 	}
 }
 

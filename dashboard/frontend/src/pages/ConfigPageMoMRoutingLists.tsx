@@ -228,6 +228,7 @@ export function ConfigPageMoMRecipesList({
       <div className={pageStyles.portfolioList}>
         {filtered.map((recipe) => {
           const syntheticDefault = isSyntheticDefaultRecipe(config, recipe)
+          const targetCount = collectRecipeTargetModels(recipe).length
           return (
             <article key={recipe.name} className={pageStyles.portfolioItem}>
               <div
@@ -243,8 +244,7 @@ export function ConfigPageMoMRecipesList({
                   </span>
                   <span>{recipe.routing.decisions?.length ?? 0} decisions</span>
                   <span>
-                    {collectRecipeTargetModels(recipe).length} model
-                    {collectRecipeTargetModels(recipe).length === 1 ? '' : 's'}
+                    {targetCount} model{targetCount === 1 ? '' : 's'}
                   </span>
                   {syntheticDefault ? <span>Built in</span> : null}
                 </div>

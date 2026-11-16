@@ -3946,6 +3946,28 @@ def test_pi_checks_the_login_and_limits_of_its_own_entrypoint(
     assert auto.exit_code == 1 and "own openai login upstream" in _flat(auto.output)
 
 
+@pytest.mark.parametrize(
+    "harness, other", [("claude-code", "openai"), ("codex", "anthropic")]
+)
+def test_claude_code_and_codex_check_the_login_of_their_own_entrypoint(
+    tmp_path, gateway, monkeypatch, harness, other
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    doc = _two_entrypoints(caller=True)
+    # only vllm-sr/auto reaches the caller backend, on the other harness's login
+    doc["providers"]["models"][1]["backend_refs"][0]["provider"] = other
+    config = tmp_path / "router.yaml"
+    config.write_text(yaml.safe_dump(doc))
+    args = ["connect", harness, "--config", str(config), "--base-url", url]
+    args += ["--no-vsr", "--yes"]
+    chat = CliRunner().invoke(main, [*args, "--model", "vllm-sr/chat"])
+    assert chat.exit_code == 0, chat.output
+    auto = CliRunner().invoke(main, [*args, "--model", "vllm-sr/auto"])
+    assert auto.exit_code == 1 and f"own {other} login upstream" in _flat(auto.output)
+
+
 def test_claude_code_asks_for_no_more_output_than_its_models_allow(
     tmp_path, gateway, monkeypatch
 ):
@@ -3973,6 +3995,10 @@ def test_one_model_needs_no_session_protection():
 
     assert rc.PROTECTION_NEED in needs("vllm-sr/auto")
     assert rc.PROTECTION_NEED not in needs("vllm-sr/chat")
+    # a recipe the document does not write shows no model, which is not one model
+    doc["entrypoints"].append({"model_names": ["vllm-sr/x"], "recipe": "elsewhere"})
+    assert rc.entrypoint_models(doc, "vllm-sr/x") == []
+    assert rc.PROTECTION_NEED in needs("vllm-sr/x")
 
 
 def test_a_preview_shows_a_key_variable_by_name():
