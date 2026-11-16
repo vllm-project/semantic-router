@@ -1518,7 +1518,7 @@ def _caller_login(harness: str, doc: dict | None, model: str | None = None) -> b
     if provider != own:
         raise click.ClickException(
             f"The gateway presents each client's own {provider} login upstream, and"
-            f" {name} sends a {own} login, so every call would be refused. Point"
+            f" {name} sends its {own} login, so every call would be refused. Point"
             f" {name} at a gateway whose caller backends name {own}."
         )
     return True
