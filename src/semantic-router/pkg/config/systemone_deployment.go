@@ -117,7 +117,7 @@ func (a *DeploymentAuth) Key() (string, error) {
 		return "", nil
 	}
 	if a.APIKeyFile != "" {
-		return readAPIKeyFile(a.APIKeyFile)
+		return readKeyFile("auth.api_key_file", a.APIKeyFile)
 	}
 	if key := strings.TrimSpace(os.Getenv(a.APIKeyEnv)); key != "" {
 		return key, nil
@@ -125,16 +125,17 @@ func (a *DeploymentAuth) Key() (string, error) {
 	return "", fmt.Errorf("auth.api_key_env %s is not set", a.APIKeyEnv)
 }
 
-// readAPIKeyFile reads a key file; an error names the path, never the key.
-func readAPIKeyFile(path string) (string, error) {
+// readKeyFile reads the key file the config field names; an error names the
+// field and the path, never the key.
+func readKeyFile(field, path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("auth.api_key_file %s cannot be read", path)
+		return "", fmt.Errorf("%s %s cannot be read", field, path)
 	}
 	if key := strings.TrimSpace(string(data)); key != "" {
 		return key, nil
 	}
-	return "", fmt.Errorf("auth.api_key_file %s is empty", path)
+	return "", fmt.Errorf("%s %s is empty", field, path)
 }
 
 func (d ModelDeployment) validateSystemOne() error {

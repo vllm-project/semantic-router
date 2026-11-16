@@ -79,7 +79,7 @@ func TestACallerPoolRefusesWhatWouldSendTheLoginElsewhere(t *testing.T) {
 			"https://claude-relay.example.com", "", "",
 			"so the backend is https://api.anthropic.com, or an endpoint on this machine",
 		},
-		"listener keys": {"https://api.anthropic.com", "", "", "api_keys authenticate clients"},
+		"listener keys": {"https://api.anthropic.com", "", "", "api_keys and api_key_files authenticate clients"},
 		"response cache": {"https://api.anthropic.com", "", `    plugins:
       - type: response_cache
         configuration: {enabled: true}

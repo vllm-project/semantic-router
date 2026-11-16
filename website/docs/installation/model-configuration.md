@@ -104,11 +104,13 @@ The Dashboard edits the same configuration document as YAML. Use one authoring o
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 
-The Dashboard never writes a provider key you enter into that document. Saving
-stores it in an owner-only file beside the configuration and sets the backend's
-`auth.api_key_file`, which the Router reads at every load. Any save also moves a
-key already written inline as `api_key`. See
-[Keys saved from the Dashboard](security-hardening#keys-saved-from-the-dashboard).
+The Dashboard never writes a provider key you enter into that document, and
+neither does `vllm-sr config apply`. Saving stores it in an owner-only file
+beside the configuration and sets the backend's `auth.api_key_file`, which the
+Router reads at every load; on Kubernetes it stores the key in the chart's key
+Secret and sets `auth.api_key_env`. Any save also moves a key already written
+inline as `api_key`. See
+[Keys saved from the Dashboard or the management API](security-hardening#keys-saved-from-the-dashboard-or-the-management-api).
 
 ## Routing capabilities
 

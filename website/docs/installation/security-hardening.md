@@ -106,6 +106,32 @@ The path must be absolute and the file holds only the key, with mode `600`.
 A missing or empty file stops the configuration from loading, and a hot
 reload then keeps the previous configuration.
 
+A listener's client keys, the gateway keys clients send, take the same two
+references. An `api_keys` entry written as `"${NAME}"` reads the key from that
+environment variable, and `api_key_files` names files that each hold one more
+key, read at every load:
+
+```yaml
+listeners:
+  - name: public
+    port: 8899
+    api_keys: ["${GATEWAY_KEY}"]
+    api_key_files: [/etc/vllm-sr/gateway-keys/team-a]
+```
+
+Standalone mode reads `api_key_files`. `--gateway extproc` refuses them,
+because the CLI writes the listener's keys into the Envoy configuration it
+generates; it reads each `"${NAME}"` key from its environment when it renders
+that configuration, and a key that expands to nothing stops it.
+
+Every surface reads a reference the way the Router does when it loads the
+configuration: `${NAME}` and `$NAME`, `${NAME:-default}` (the default when
+`NAME` is unset or empty) and `${NAME-default}` (when it is unset), where
+`NAME` is uppercase letters, digits and underscores and does not start with a
+digit, and `$$` for a literal `$`. Any other text is a literal key, so
+`${gateway_key}` is the literal key `${gateway_key}`, and a save moves it out
+like any other literal.
+
 For `vllm-sr serve --target kubernetes`, the CLI places sensitive environment
 values in an immutable Secret revision, scoped to the namespace and Helm
 release:
@@ -121,29 +147,71 @@ Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
 
-### Keys saved from the Dashboard
+### Keys saved from the Dashboard or the management API
 
 A key you enter in the Dashboard, in **Connect Models** or in a backend's
-**API key** field, never lands in the configuration. Each save moves a
-literal backend `api_key` into a new mode `600` file in a `provider-keys/`
-directory (created with mode `700`) beside the configuration file the Router
-reads, and names that file in `auth.api_key_file`. Under `vllm-sr serve` the
-directory is `.vllm-sr/provider-keys/` in the stack's state directory, which
-the Router and Dashboard containers mount at the same path. An environment
-reference such as `${OPENAI_API_KEY}` stays as written.
+**API key** field, never lands in the configuration, and neither does one in a
+file you apply with `vllm-sr config apply` (`PUT` or `PATCH /api/v1/config`).
+Each save moves every literal backend `api_key`, and every literal listener
+`api_keys` entry of a standalone Router, out of the document and writes a
+reference in its place. The configuration, its history, and every version a
+rollback can restore then hold only references. Your local file is sent as it
+is and never rewritten. An environment reference such as `${OPENAI_API_KEY}`
+stays as written.
 
-On Kubernetes the Dashboard saves to a ConfigMap, and the Router pod cannot
-read a file the Dashboard pod writes, so the Dashboard saves the key as given.
-Keep the key in a Kubernetes Secret and reference it with `auth.api_key_env`
-instead.
+- **A local file.** The key goes into a new mode `600` file, in a directory
+  created with mode `700` beside the configuration file the Router reads:
+  `provider-keys/` for a Dashboard save, `router-keys/` for a management API
+  save, so neither writer needs to write into a directory the other created.
+  A backend names the file in `auth.api_key_file`, a listener in
+  `api_key_files`. A key already stored keeps its file, so `vllm-sr config
+  plan` of a file you applied reports no change. A save that fails to write
+  the configuration removes the key files it created.
+- **`vllm-sr serve`.** The directories are in `.vllm-sr/` of the stack's state
+  directory, which the Router and Dashboard containers mount at the same path.
+  The Router container saves as root and the Dashboard reads as its own user,
+  so `serve` sets `VLLM_SR_KEY_FILE_GROUP` to the group the Dashboard's
+  entrypoint gives that directory (`65532`). With that variable set, key files
+  are mode `640` and their directories `750`, both of that group: the group
+  reads the keys and can change nothing. Without it, nothing is shared.
+- **Kubernetes.** The Dashboard and the Router save to the ConfigMap, and the
+  key goes into the chart's `<release>-provider-keys` Secret under a generated
+  name such as `VSR_KEY_3F2A…`. The chart loads that Secret into the Router's
+  and the Dashboard's environment, so a backend names the key in
+  `auth.api_key_env` and a listener as a `"${VSR_KEY_3F2A…}"` entry in
+  `api_keys`; the Dashboard reads it there for model verification and Try it.
+  Like the ConfigMap change itself, a new key takes effect when the pods
+  restart. A Helm upgrade keeps the Secret's entries. The chart's
+  `rbac.create` grants both service accounts `get` and `update` on that one
+  Secret.
+- **A ConfigMap without the key Secret.** The manifests outside the chart
+  (OpenShift, Istio, KServe and the observability Dashboard) declare a
+  ConfigMap target but no key Secret (`VLLM_SR_K8S_KEY_SECRET_NAME`). There,
+  and wherever the Secret is missing or the pod may not read and update it
+  (for example with `rbac.create: false`), a save keeps a literal key as
+  written, logs it by path, and answers with a `literal_key_kept` warning per
+  key. The key is never logged. Keep such keys in your own Secret and
+  reference them with `auth.api_key_env`.
+- **`--gateway extproc`.** A listener's keys stay in `api_keys`, as written:
+  the CLI writes them into the Envoy configuration it generates. Write them as
+  `"${NAME}"` references to keep them out of the Router's configuration.
+- **Your own file, copied as written.** `vllm-sr serve`, and the fallback of
+  `vllm-sr config apply` when a change needs a restart, copy the file you give
+  them into `.vllm-sr/runtime-config.yaml` as it is, so the Router loads it at
+  its next start, and the Router's configuration history records that load.
+  No key store runs on that path, so a literal key you wrote in your own file
+  is in that copy and that history entry too, until the next Dashboard or
+  management API save moves it. Keep keys out of your own file with
+  `${NAME}` or `auth.api_key_file`.
 
 ### Move an existing literal key
 
 A configuration that still holds a backend's literal `api_key` loads as
 before. To move the key out:
 
-- **From the Dashboard.** Save once, for example after changing any setting.
-  The save moves every literal backend key into a key file.
+- **From the Dashboard or the management API.** Save once, for example after
+  changing any setting, or apply the file with `vllm-sr config apply`. The save
+  moves every literal key into the key store.
 - **By hand.** Write the key to a file only the Router's user can read, for
   example with `install -m 600 /dev/stdin /etc/vllm-sr/provider-keys/openai`
   (paste the key, then press Ctrl-D). Replace `api_key: ...` with

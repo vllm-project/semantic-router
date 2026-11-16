@@ -11,6 +11,9 @@ listeners:
     # Optional client keys the listener requires (standalone mode and the
     # CLI-managed Envoy listener).
     api_keys: []
+    # Optional owner-only files that each hold one more client key, read at
+    # every load (standalone mode).
+    api_key_files: []
   # One-way TLS, served in standalone mode. Relative paths are relative to this
   # file's directory.
   - name: https-8443

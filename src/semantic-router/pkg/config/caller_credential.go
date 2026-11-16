@@ -53,8 +53,8 @@ func validateCallerUpstreams(cfg *RouterConfig) error {
 		}
 	}
 	for index, listener := range cfg.Listeners {
-		if len(listener.APIKeys) > 0 {
-			return fmt.Errorf("listeners[%d]: api_keys authenticate clients with the Authorization header, which carries the caller's login to %s; serve caller backends from a listener without api_keys", index, first)
+		if len(listener.APIKeys) > 0 || len(listener.APIKeyFiles) > 0 {
+			return fmt.Errorf("listeners[%d]: api_keys and api_key_files authenticate clients with the Authorization header, which carries the caller's login to %s; serve caller backends from a listener without client keys", index, first)
 		}
 	}
 	return cfg.validateCallerRequestOnly(first)

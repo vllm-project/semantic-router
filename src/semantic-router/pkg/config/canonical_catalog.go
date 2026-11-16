@@ -434,7 +434,7 @@ func resolveProviderCredential(credentials modelcatalog.CredentialsRef) (string,
 	case credentials.APIKey != "":
 		return credentials.APIKey, nil
 	case credentials.APIKeyFile != "":
-		return readAPIKeyFile(credentials.APIKeyFile)
+		return readKeyFile("auth.api_key_file", credentials.APIKeyFile)
 	case credentials.APIKeyEnv != "":
 		return os.Getenv(credentials.APIKeyEnv), nil
 	}

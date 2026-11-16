@@ -59,6 +59,16 @@ vllm-sr config plan --config config.yaml    # check the change against the runni
 vllm-sr config apply --config config.yaml   # activate it
 ```
 
+`apply` sends the file as it is and never rewrites it. The Router moves any
+literal provider key, and in standalone mode any literal listener key, out of
+the document before it writes it and its history, and stores a reference to
+each key instead (see
+[Keys saved from the Dashboard or the management API](security-hardening#keys-saved-from-the-dashboard-or-the-management-api)).
+A `plan` of the same file afterwards reads the stored keys the same way and
+reports no change. When the change needs a restart, `apply` instead saves your
+file for the next `vllm-sr serve` as `serve` copies it, keys included; see
+[Your own file, copied as written](security-hardening#keys-saved-from-the-dashboard-or-the-management-api).
+
 `vllm-sr config apply` waits up to 120 seconds for the change to activate,
 which covers loading another model; pass `--timeout` to wait longer. A timeout
 doesn't cancel the change: `vllm-sr config versions` shows whether it

@@ -37,8 +37,8 @@ from cli.masking_identity import inject_local_masking_identity
 from cli.models import UserConfig
 from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_env_names import (
-    _ENV_NAME,
     RESERVED_RUNTIME_ENV_NAMES,
+    expand_router_references,
     normalize_runtime_env_names,
 )
 from cli.runtime_stack import resolve_runtime_stack
@@ -160,37 +160,7 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
 
 def _router_consulted_env_names(value: str) -> set[str]:
     names: set[str] = set()
-    index = 0
-    while index < len(value):
-        if value[index] != "$":
-            index += 1
-            continue
-        if index + 1 < len(value) and value[index + 1] == "$":
-            index += 2
-            continue
-        if index + 1 < len(value) and value[index + 1] == "{":
-            close = value.find("}", index + 2)
-            if close < 0:
-                index += 1
-                continue
-            name, separator, _ = value[index + 2 : close].partition("-")
-            if separator:
-                name = name.removesuffix(":")
-            if _ENV_NAME.fullmatch(name):
-                names.add(name)
-            index = close + 1
-            continue
-        end = index + 1
-        while end < len(value) and (
-            value[end].isascii() and (value[end].isalnum() or value[end] == "_")
-        ):
-            end += 1
-        if end > index + 1:
-            if _ENV_NAME.fullmatch(value[index + 1 : end]):
-                names.add(value[index + 1 : end])
-            index = end
-            continue
-        index += 1
+    expand_router_references(value, names.add)
     return names
 
 

@@ -191,6 +191,38 @@ func TestAKeyFileSecretNamesTheFileNotTheKey(t *testing.T) {
 	}
 }
 
+func TestARotatedListenerKeyFileMovesOnlyItsSecret(t *testing.T) {
+	t.Setenv("TEST_HOSTED_KEY", "hosted-secret-value")
+	path := filepath.Join(t.TempDir(), "client.key")
+	compileWithKey := func(key string) *Resources {
+		if err := os.WriteFile(path, []byte(key), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		document := strings.Replace(testDocument, "api_keys: [client-key-1]", "api_key_files: ["+path+"]", 1)
+		return compileTest(t, parseTestConfig(t, document))
+	}
+	before, after := compileWithKey("client-file-key-1"), compileWithKey("client-file-key-2")
+	secret := mustGet(t, after, KindSecret, "listener/public")
+	if spec := secret.Spec.(SecretSpec); len(spec.Files) != 1 || spec.Files[0] != path || spec.Inline != 0 {
+		t.Fatalf("listener secret spec = %+v, want the key file", spec)
+	}
+	if secret.Hash == mustGet(t, before, KindSecret, "listener/public").Hash {
+		t.Fatal("a rotated key file left the listener secret's hash unchanged")
+	}
+	if mustGet(t, after, KindListener, "public").Hash != mustGet(t, before, KindListener, "public").Hash {
+		t.Fatal("the listener's own hash depends on its key")
+	}
+	for _, kind := range Kinds {
+		encoded, err := json.Marshal(after.List(kind))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(encoded), "client-file-key-2") {
+			t.Fatalf("%s resources expose the key: %s", kind, encoded)
+		}
+	}
+}
+
 // Hashes are what incremental rebuilds compare, so each change must move the
 // hash of the resource it belongs to and leave every other resource alone.
 func TestResourceHashesMoveOnlyWithTheirOwnConfiguration(t *testing.T) {
