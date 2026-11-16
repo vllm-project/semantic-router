@@ -9,7 +9,6 @@ import pytest
 import torch
 import torch.nn.functional as F
 from torch import nn
-
 from vllm_srun.accel import zentorch
 from vllm_srun.accel.cpu import CPUAccelerator
 
@@ -90,7 +89,7 @@ def test_zentorch_without_the_ops_is_not_used(monkeypatch):
     running = ".".join(torch.__version__.split("+")[0].split(".")[:2])
     module.__version__ = f"{running}.0.0"  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "zentorch", module)
-    monkeypatch.setattr(zentorch, "_ops", lambda: SimpleNamespace())
+    monkeypatch.setattr(zentorch, "_ops", SimpleNamespace)
     monkeypatch.setattr(zentorch, "_CACHE", {})
     assert zentorch.available() is False
 

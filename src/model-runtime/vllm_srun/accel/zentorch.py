@@ -81,8 +81,8 @@ def measured() -> bool:
 
 def _load() -> bool:
     try:
-        import zentorch  # noqa: F401, PLC0415  registers torch.ops.zentorch
-    except Exception as error:  # noqa: BLE001  any import failure keeps the reference
+        import zentorch  # registers torch.ops.zentorch
+    except Exception as error:  # any import failure keeps the reference
         log.info("zentorch not used: import failed (%s)", error)
         return False
     built = ".".join(str(getattr(zentorch, "__version__", "")).split(".")[:2])
