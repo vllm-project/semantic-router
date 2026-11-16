@@ -211,7 +211,18 @@ test("one pushback is consumed by only one of two concurrent child launches", as
       .snapshot("one")
       .decisions.some((decision) => decision.app === "escalate"),
   );
-  assert.ok(!JSON.stringify(store.snapshot("one")).includes("That was wrong"));
+  // The prompt is kept only as the escalation's clipped subject, which calibration asks about.
+  const snapshot = store.snapshot("one");
+  const escalation = snapshot.decisions.find(
+    (decision) => decision.app === "escalate",
+  );
+  assert.equal(escalation?.subject, "That was wrong.");
+  assert.deepEqual(escalation?.features, [0.95, 0]);
+  assert.equal(
+    JSON.stringify(snapshot).split("That was wrong").length - 1,
+    1,
+    "nowhere but the subject",
+  );
 });
 
 test("queued admissions do not replace the executing prompt, and foreign/synthetic messages do not inherit escalation", async () => {

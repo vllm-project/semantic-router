@@ -276,6 +276,11 @@ export async function inspectOutput(
     );
     const hidden = hide(text, [...ruled, ...found]);
     counts = addCounts(fixed.counts, hidden.counts);
+    // The surest personal-data span, under the line too: what calibration holds against piiThreshold.
+    const spans = read.parts.flatMap(({ value }) => value);
+    const surest = spans.length
+      ? Math.max(...spans.map((span) => span.probability))
+      : undefined;
     tags.push(...Object.keys(counts));
     const withheld =
       !!read.reason &&
@@ -290,6 +295,7 @@ export async function inspectOutput(
             ? "redacted"
             : "allowed",
       reason: read.reason ?? "selected",
+      ...(surest === undefined ? {} : { score: surest }),
       counts,
       labels: tags,
       coverage: { checked: read.checked, total: text.length },

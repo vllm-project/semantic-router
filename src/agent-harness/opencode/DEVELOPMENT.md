@@ -32,6 +32,12 @@ credential changes, and drops the previous runtime's listener rules.
 expected verdicts are the Claude Code plugin's smoke probes. `skills/vsr-setup`
 is registered as an OpenCode skill and carries no scripts: its commands mirror
 the Claude Code plugin's `local.py` and share its pin, venv and port.
+`log.ts` keeps the learnable decisions in plugin storage, one key per line;
+`calibration.ts` is a port of the Claude Code plugin's calibrate scripts
+(`fitting.py`, the sampling in `questions.py`, implied labels in
+`decisions.py`), and `test/fixtures/calibration-golden.json` holds fits those
+scripts computed, so the two stay equal. `calibrated.ts` applies and keeps the
+fitted thresholds; the questions and the suggestion text are in `view.ts`.
 `masking.ts` owns fixed secret patterns, validated Unicode spans and interval
 masking. `output-policy.ts` owns Redact/Shield scanning, coverage and attachment
 policy. `output-hooks.ts` adapts tool results/outgoing context and prevents

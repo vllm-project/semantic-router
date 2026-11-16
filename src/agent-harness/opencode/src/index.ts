@@ -12,6 +12,11 @@ import { Vsr } from "./rpc.ts";
 import { RuntimeClient } from "./runtime.ts";
 import { Listener } from "./listener.ts";
 import { verify } from "./verify.ts";
+import { DecisionLog, acted } from "./log.ts";
+import type { Label } from "./log.ts";
+import { labelsOf, sample, suggest } from "./calibration.ts";
+import type { Goal } from "./calibration.ts";
+import { Calibrated, REMIND_EVERY, thresholdsOf } from "./calibrated.ts";
 import {
   INTEGRATION,
   KEY_METHOD,
@@ -113,6 +118,41 @@ export default Plugin.define({
       settings.maxSessions,
       settings.maxDecisions,
     );
+    // Calibrated thresholds apply before any hook reads them; the log of learnable decisions outlives the server.
+    const calibrated = new Calibrated(settings, {
+      get: (key) => ctx.storage.get(key),
+      set: (key, value) => ctx.storage.set(key, value as never),
+    });
+    await calibrated.load();
+    const log = new DecisionLog(
+      {
+        get: (key) => ctx.storage.get(key),
+        set: (key, value) => ctx.storage.set(key, value as never),
+        remove: (key) => ctx.storage.remove(key),
+        scan: (options) => ctx.storage.scan(options),
+      },
+      settings,
+    );
+    await log.load();
+    decisions.sink = log;
+    const calibrationState = () => {
+      const { at } = calibrated.state();
+      const since = log.countSince(at ?? 0);
+      return {
+        ...(at === undefined ? {} : { at }),
+        since,
+        remind: since >= REMIND_EVERY,
+      };
+    };
+    const appOf = (input: unknown): App => {
+      if (!isRecord(input) || !APPS.includes(input.app as App))
+        throw new Error("Invalid app");
+      return input.app as App;
+    };
+    const goalOf = (input: unknown): Goal =>
+      isRecord(input) && typeof input.goal === "string"
+        ? (input.goal as Goal)
+        : "balanced";
     const controls = new Controls(
       settings,
       decisions.snapshot("").instanceID,
@@ -128,6 +168,7 @@ export default Plugin.define({
         apps: { ...settings.apps },
         waits: { ...settings.waits },
         controls: controls.state(),
+        calibration: calibrationState(),
         runtime: runtime.status(),
       }),
       diagnose: async (_input, request) => {
@@ -153,6 +194,74 @@ export default Plugin.define({
           models: listed.ok ? listed.value.map((model) => model.id) : [],
           probes,
         };
+      },
+      calibrationReport: async () => {
+        const lines = log.all();
+        const labels = labelsOf(lines);
+        const state = calibrated.state();
+        const thresholds = thresholdsOf(settings);
+        return {
+          persistence: log.persistence,
+          ...calibrationState(),
+          apps: APPS.map((app) => {
+            const mine = lines.filter((line) => line.app === app);
+            return {
+              app,
+              enabled: settings.apps[app],
+              decisions: mine.length,
+              answered: mine.filter((line) => labels.has(line.id)).length,
+              thresholds: thresholds[app],
+              calibrated: state.apps.includes(app),
+            };
+          }),
+        };
+      },
+      calibrationSample: async (input) => {
+        const app = appOf(input);
+        return sample(log.all(), app, thresholdsOf(settings)[app]).map(
+          (line) => ({
+            id: line.id,
+            app: line.app,
+            subject: line.subject,
+            acted: acted(line),
+            ...(line.scores ? { scores: line.scores } : {}),
+            ...(line.level === undefined ? {} : { level: line.level }),
+            ...(line.tier === undefined ? {} : { tier: line.tier }),
+            thresholds: thresholdsOf(settings)[app],
+          }),
+        );
+      },
+      calibrationLabel: async (input) => {
+        if (
+          !isRecord(input) ||
+          typeof input.id !== "string" ||
+          typeof input.label !== "string"
+        )
+          throw new Error("Invalid label");
+        return { saved: log.label(input.id, input.label as Label) };
+      },
+      calibrationSuggest: async (input) => {
+        const app = appOf(input);
+        return suggest(
+          log.all(),
+          app,
+          thresholdsOf(settings)[app],
+          goalOf(input),
+        );
+      },
+      // Fits again here, so what is applied is what the log supports now, not a value a client sends.
+      calibrationApply: async (input) => {
+        const app = appOf(input);
+        const found = suggest(
+          log.all(),
+          app,
+          thresholdsOf(settings)[app],
+          goalOf(input),
+        );
+        if (!found.changed) return { applied: false, suggestion: found };
+        await calibrated.apply(app, found.after);
+        await stateChanged();
+        return { applied: true, suggestion: found };
       },
       controls: async (input) => {
         const result = await controls.update(input);

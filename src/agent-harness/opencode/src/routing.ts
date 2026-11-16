@@ -5,6 +5,7 @@ import {
 } from "./questions.ts";
 import { choose, routeScores } from "./routing-policy.ts";
 import type { Candidate, ModelRef } from "./routing-policy.ts";
+import { subjectOf } from "./decisions.ts";
 import type { Decision } from "./decisions.ts";
 import { isRecord } from "./settings.ts";
 import type { Settings } from "./settings.ts";
@@ -145,8 +146,10 @@ export class Routing {
         app: "escalate",
         outcome: "escalated",
         score: Math.max(feedbackScore, repeatScore),
+        features: [feedbackScore, repeatScore],
         elapsedMs: Math.max(feedback.elapsedMs, repeat?.elapsedMs ?? 0),
         reason: "pushback",
+        subject: subjectOf(prompt.text),
       });
     else if (!feedback.ok || (repeat && !repeat.ok))
       this.record({
@@ -181,6 +184,7 @@ export class Routing {
       toolCallID,
       ...(prompt ? { turnID: prompt.id } : {}),
       app: "router" as const,
+      subject: subjectOf(task),
     };
     if (!session.parent || !this.settings.routing.tiers.length) {
       this.record({ ...anchor, outcome: "kept", reason: "unconfigured" });

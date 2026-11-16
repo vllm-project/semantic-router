@@ -14,5 +14,7 @@
   rules (`lib/profile.ts`, `lib/rules.ts`), port the change to `listener.ts`.
   When it bumps the runtime pin (`COMMIT` in `skills/setup/scripts/local.py`),
   bump the same commit in `skills/vsr-setup/SKILL.md`: both plugins install
-  one shared runtime. Test the packed artifact with
+  one shared runtime. When it changes the calibrate fit (`skills/calibrate/scripts`),
+  port it to `calibration.ts` and regenerate `test/fixtures/calibration-golden.json`
+  from its scripts. Test the packed artifact with
   the pinned OpenCode release whenever registration or package exports change.

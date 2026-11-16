@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Plugin } from "@opencode/plugin";
+import { subjectOf } from "./decisions.ts";
 import type { DecisionStore } from "./decisions.ts";
 import type { Settings } from "./settings.ts";
 import { isRecord } from "./settings.ts";
@@ -50,6 +51,13 @@ const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const markerOf = (rules: readonly string[]) =>
   new RegExp(`\\[vsr:(${[...TAGS, ...rules].map(escaped).join("|")})\\]`, "g");
 // Inspect only additions. Existing documentation tags in an edit/patch may remain unchanged.
+// What an output came from, for its decisions' subject: the file, address or command, never the output itself.
+function sourceOf(tool: string, input: unknown): string {
+  if (!isRecord(input)) return tool;
+  for (const key of ["filePath", "path", "url", "command"])
+    if (typeof input[key] === "string") return `${tool} ${input[key]}`;
+  return tool;
+}
 export function addedPlaceholders(
   tool: string,
   input: unknown,
@@ -142,6 +150,7 @@ export async function registerOutput(
     identity: string,
     tool: OutputTool,
     rendered: Rendered,
+    subject: string = tool,
   ): Promise<Inspection> {
     const current = state(sessionID),
       config = structuredClone(settings);
@@ -179,7 +188,12 @@ export async function registerOutput(
     );
     if (!result.withheld) for (const tag of result.tags) current.tags.add(tag);
     for (const decision of result.decisions)
-      decisions.record({ ...decision, sessionID, toolCallID: callID });
+      decisions.record({
+        ...decision,
+        sessionID,
+        toolCallID: callID,
+        subject: subjectOf(subject),
+      });
     if (result.decisions.length) await notify(sessionID);
     remember(key, result);
     // The host can lift attachments into separate user-message parts while
@@ -253,6 +267,7 @@ export async function registerOutput(
       `${event.messageID}:${event.id}`,
       event.tool,
       rendered,
+      sourceOf(event.tool, event.input),
     );
     if (result.text === rendered.text && !result.withheld) return;
     event.result = {
@@ -317,10 +332,14 @@ export async function registerOutput(
         for (const [index, part] of content.entries())
           if (part.type === "text" && /^<shell\s/.test(part.text)) {
             const id = `background:${message.id ?? createHash("sha256").update(part.text).digest("hex")}`;
-            const result = await inspect(event.sessionID, id, id, "shell", {
-              text: part.text,
-              files: [],
-            });
+            const result = await inspect(
+              event.sessionID,
+              id,
+              id,
+              "shell",
+              { text: part.text, files: [] },
+              "background shell",
+            );
             content[index] = { ...part, text: result.text };
           }
         messages.push({ ...message, content });

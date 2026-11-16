@@ -12,6 +12,7 @@ export interface ViewSnapshot extends Snapshot {
     persistence: "durable" | "unavailable";
     goal: Settings["routing"]["goal"];
   };
+  calibration: { at?: number; since: number; remind: boolean };
   runtime: RuntimeStatus;
 }
 export type ControlPatch = {
@@ -303,4 +304,120 @@ export function report(found: Verification): string {
       "No answer: offline, timeout or HTTP 401/403 mean the runtime is down, slower than the app's wait (F7) or refuses the token; HTTP 503 that its model did not load.",
     );
   return lines.join("\n");
+}
+
+export interface CalibrationQuestion {
+  id: string;
+  app: keyof typeof APP_NAMES;
+  subject: string;
+  acted: boolean;
+  scores?: number[];
+  level?: number;
+  tier?: number;
+  thresholds: number[];
+}
+export type CalibrationLabel = "yes" | "no" | "too-low" | "right" | "too-high";
+const TIER_NAMES = ["the light model", "the middle model", "the strong model"];
+const ASK: Record<Exclude<keyof typeof APP_NAMES, "router">, string> = {
+  guard: "Should vSR have asked you before this command ran?",
+  redact: "Should vSR have hidden personal data in this output?",
+  shield: "Should vSR have warned the agent about instructions in this?",
+  check: "Should vSR have marked the answer to this as unsupported?",
+  escalate: "Was this prompt pushback that should raise the next model?",
+};
+const DID: Record<
+  Exclude<keyof typeof APP_NAMES, "router">,
+  [string, string]
+> = {
+  guard: ["it asked", "it let it run"],
+  redact: ["it hid some", "it hid none"],
+  shield: ["it warned", "it did not warn"],
+  check: ["it marked it", "it did not"],
+  escalate: ["it escalated", "it did not"],
+};
+const two = (value: number) => value.toFixed(2);
+// One question about a logged decision, in plain words, with what vSR did and how near the line it was.
+export function calibrationQuestion(question: CalibrationQuestion): {
+  title: string;
+  description: string;
+  options: { value: CalibrationLabel | "skip" | "stop"; title: string }[];
+} {
+  const tail = [
+    { value: "skip" as const, title: "Not sure (skip)" },
+    { value: "stop" as const, title: "Stop asking" },
+  ];
+  if (question.app === "router")
+    return {
+      title: `This task went to ${TIER_NAMES[question.tier ?? 1]}. Was that right?`,
+      description: `${question.subject} · difficulty ${two(question.level ?? 0)} (lines ${two(question.thresholds[0]!)} and ${two(question.thresholds[1]!)})`,
+      options: [
+        { value: "too-low", title: "It needed a stronger model" },
+        { value: "right", title: "The model was right" },
+        { value: "too-high", title: "A lighter model would do" },
+        ...tail,
+      ],
+    };
+  const [yes, no] = DID[question.app];
+  const scores = (question.scores ?? [])
+    .map((score, i) => `${two(score)} (line ${two(question.thresholds[i]!)})`)
+    .join(", ");
+  return {
+    title: ASK[question.app],
+    description: `${question.subject} · ${question.acted ? yes : no}; score ${scores}`,
+    options: [
+      { value: "yes", title: "Yes" },
+      { value: "no", title: "No" },
+      ...tail,
+    ],
+  };
+}
+export interface CalibrationSuggestion {
+  app: keyof typeof APP_NAMES;
+  labels: number;
+  before: number[];
+  after: number[];
+  changed: boolean;
+  agreeBefore: { agree: number; total: number };
+  agreeAfter: { agree: number; total: number };
+  unrouted?: number;
+  why: string;
+}
+const LINE_NAMES: Record<keyof typeof APP_NAMES, string[]> = {
+  router: ["light below", "strong from", "confidence floor"],
+  escalate: ["pushback line", "repeat line"],
+  redact: ["personal-data line"],
+  shield: ["instruction line"],
+  guard: ["review line"],
+  check: ["unsupported line"],
+};
+// What the fit would change, and how many of the person's answers each setting agrees with.
+export function suggestionText(found: CalibrationSuggestion): string {
+  const lines = LINE_NAMES[found.app].map(
+    (name, i) =>
+      `${name}: ${two(found.before[i]!)}${found.after[i] === found.before[i] ? " (kept)" : ` → ${two(found.after[i]!)}`}`,
+  );
+  return [
+    ...lines,
+    `Agrees with ${found.agreeBefore.agree} of ${found.agreeBefore.total} answers now${found.changed ? `, ${found.agreeAfter.agree} of ${found.agreeAfter.total} after` : ""}.`,
+    ...(found.unrouted
+      ? [
+          `${found.unrouted} answered tasks are under the confidence floor and keep their model.`,
+        ]
+      : []),
+    `${found.labels} answers: ${found.why}. Each line moves at most 0.15 per calibration.`,
+  ].join("\n");
+}
+export interface CalibrationReport {
+  persistence: "durable" | "unavailable";
+  at?: number;
+  since: number;
+  remind: boolean;
+  apps: {
+    app: keyof typeof APP_NAMES;
+    enabled: boolean;
+    decisions: number;
+    answered: number;
+    thresholds: number[];
+    calibrated: boolean;
+  }[];
 }

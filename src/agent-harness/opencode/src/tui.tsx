@@ -3,7 +3,20 @@ import { createEffect, createSignal, For, Show } from "solid-js";
 import { Vsr } from "./rpc.ts";
 import { APPS } from "./settings.ts";
 import type { App, Wait } from "./settings.ts";
-import { APP_NAMES, DecisionView, emptyView, report, summary } from "./view.ts";
+import {
+  APP_NAMES,
+  calibrationQuestion,
+  DecisionView,
+  emptyView,
+  report,
+  suggestionText,
+  summary,
+} from "./view.ts";
+import type {
+  CalibrationQuestion,
+  CalibrationReport,
+  CalibrationSuggestion,
+} from "./view.ts";
 import type { ViewSnapshot, ViewState } from "./view.ts";
 import type { ControlResult } from "./controls.ts";
 import type { Decision, Feedback } from "./decisions.ts";
@@ -157,6 +170,110 @@ export default Plugin.define({
       });
       if (label) await controller.feedback(decision, label);
     }
+    const call = { ...options, signal: AbortSignal.timeout(10_000) };
+    // Calibration: pick an app, answer questions about its decisions nearest the line, pick a goal, then apply
+    // the fitted line or keep the current one. Nothing changes until the person applies it.
+    async function calibrate() {
+      try {
+        const found = (await remote.calibrationReport(
+          {},
+          call,
+        )) as CalibrationReport;
+        const app = await ctx.ui.dialog.select<App>({
+          title: "vSR calibrate: which app?",
+          options: found.apps
+            .filter((item) => item.decisions > 0)
+            .map((item) => ({
+              value: item.app,
+              title: `${names[item.app]}${item.enabled ? "" : " (off)"}`,
+              description: `${item.decisions} decisions · ${item.answered} answered${item.calibrated ? " · calibrated" : ""}`,
+            })),
+        });
+        if (!app) {
+          if (!found.apps.some((item) => item.decisions > 0))
+            ctx.ui.toast.show({
+              message: "vSR has no decisions to calibrate from yet.",
+            });
+          return;
+        }
+        const questions = (await remote.calibrationSample(
+          { app },
+          call,
+        )) as CalibrationQuestion[];
+        for (const question of questions) {
+          const asked = calibrationQuestion(question);
+          const answer = await ctx.ui.dialog.select({
+            title: asked.title,
+            options: asked.options.map((option) => ({
+              ...option,
+              description: asked.description,
+            })),
+          });
+          if (!answer || answer === "stop") break;
+          if (answer !== "skip")
+            await remote.calibrationLabel(
+              { id: question.id, label: answer },
+              call,
+            );
+        }
+        const goal =
+          app === "router"
+            ? "balanced"
+            : await ctx.ui.dialog.select({
+                title: "vSR calibrate: what matters more?",
+                options: [
+                  {
+                    value: "balanced" as const,
+                    title: "Balanced (recommended)",
+                    description: "as few wrong calls as possible either way",
+                  },
+                  {
+                    value: "fewer-false-alarms" as const,
+                    title: "Fewer false alarms",
+                    description: "step in only when sure; may miss some",
+                  },
+                  {
+                    value: "catch-more" as const,
+                    title: "Catch more",
+                    description: "step in on more borderline cases",
+                  },
+                ],
+              });
+        if (!goal) return;
+        const suggested = (await remote.calibrationSuggest(
+          { app, goal },
+          call,
+        )) as CalibrationSuggestion;
+        if (!suggested.changed) {
+          await ctx.ui.dialog.alert({
+            title: `vSR calibrate: ${names[app]}`,
+            message: suggestionText(suggested),
+          });
+          return;
+        }
+        const apply = await ctx.ui.dialog.confirm({
+          title: `vSR calibrate: ${names[app]}`,
+          message: suggestionText(suggested),
+          label: { confirm: "Apply", cancel: "Keep the current lines" },
+        });
+        if (!apply) return;
+        const done = (await remote.calibrationApply({ app, goal }, call)) as {
+          applied: boolean;
+        };
+        ctx.ui.toast.show({
+          message: done.applied
+            ? `vSR ${names[app]} calibrated.`
+            : `vSR ${names[app]}: nothing to change.`,
+          variant: done.applied ? "success" : "info",
+        });
+        await controller.refresh();
+      } catch {
+        ctx.ui.toast.show({
+          message: "vSR calibration unavailable; retry when connected.",
+          variant: "warning",
+        });
+      }
+    }
     const open = () => {
       const result = ctx.ui.panel.open("vsr.decisions");
       if (!result)
@@ -275,6 +392,13 @@ export default Plugin.define({
           },
         },
         {
+          id: "vsr.calibrate",
+          title: "vSR calibrate thresholds from your answers",
+          slash: { name: "vsr-calibrate" },
+          palette: true,
+          run: calibrate,
+        },
+        {
           id: "vsr.refresh",
           title: "vSR refresh decisions",
           slash: { name: "vsr-refresh" },
@@ -366,6 +490,23 @@ export default Plugin.define({
                     <text flexShrink={0}>
                       Controls: {snapshot().controls.persistence} ·{" "}
                       {view.busy ? "saving…" : "confirmed"}
+                    </text>
+                    <text
+                      flexShrink={0}
+                      fg={
+                        snapshot().calibration.remind
+                          ? ctx.theme.warning
+                          : ctx.theme.textMuted
+                      }
+                    >
+                      Calibration:{" "}
+                      {snapshot().calibration.at
+                        ? `last ${new Date(snapshot().calibration.at!).toLocaleDateString()}`
+                        : "not yet"}{" "}
+                      · {snapshot().calibration.since} decisions since
+                      {snapshot().calibration.remind
+                        ? " · time to run /vsr-calibrate"
+                        : ""}
                     </text>
                     <text flexShrink={0}>
                       {total().total} decisions · {total().masked} masking

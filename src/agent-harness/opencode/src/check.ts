@@ -1,5 +1,6 @@
 import type { Settings } from "./settings.ts";
 import type { RuntimeClient } from "./runtime.ts";
+import { subjectOf } from "./decisions.ts";
 import type { Decision } from "./decisions.ts";
 import { isRecord } from "./settings.ts";
 import { probability } from "./masking.ts";
@@ -187,6 +188,7 @@ export class AnswerCheck {
             ? "coverage-limit"
             : "selected",
       ...(score === undefined ? {} : { score }),
+      subject: subjectOf(turn.prompt || "the answer"),
       coverage: { checked, total },
       elapsedMs: asked.elapsedMs,
     });

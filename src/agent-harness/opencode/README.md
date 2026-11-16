@@ -3,8 +3,8 @@
 This package is under development for OpenCode 2.2.0. Router, Escalate, Guard,
 Redact, Shield and Check are implemented, with a native terminal decision panel
 and durable app/wait controls, and set up through OpenCode's `/connect` and a
-`vsr-setup` skill. Durable feedback/calibration and full combined qualification
-remain later implementation stages.
+`vsr-setup` skill, and calibrated from your own answers with `/vsr-calibrate`.
+Full combined qualification remains a later implementation stage.
 
 From this directory, install dependencies and check the package:
 
@@ -83,12 +83,14 @@ snapshots. Redirects are refused so authorization cannot move to another host.
 A remote decision runtime receives the text supplied for classification.
 
 The server registers RPC `vsr.opencode.v1` with `snapshot`, `diagnose`, `verify`,
-`controls` and `feedback` methods. `diagnose` queries runtime capabilities and
+`controls`, `feedback` and the `calibration*` methods. `diagnose` queries runtime capabilities and
 `verify` asks F9's cases; loading the package alone sends no content to a model. Import the exported `./rpc`
 definition to call these through an OpenCode client. Snapshots are scoped to the
-requested session. Only decision metadata is retained, not raw prompts, commands
-or output. Decision counts and feedback are currently memory-only and bounded
-by retention settings; durable calibration is a later stage. A new server has a
+requested session. Of a decision's text only its subject is kept: the command,
+child task, prompt or output source (file, address or command, never the output
+itself), on one line, at most 200 characters, with fixed secret patterns hidden.
+The session view is memory-only and bounded by retention settings; the
+calibration log below is kept in plugin storage. A new server has a
 new snapshot instance ID, allowing clients to discard obsolete revisions.
 
 Options also include `apps`, `waits`, `maxDecisions` and `maxSessions`. Apps default
@@ -276,16 +278,47 @@ Evidence is transient bounded memory and is absent from RPC/decision records.
 The native terminal loads the exported `./tui` entry automatically with the
 server plugin. Open a session, then use these keys or slash/palette commands:
 
-| Key     | Command         | Action                                                     |
-| ------- | --------------- | ---------------------------------------------------------- |
-| F5      | `/vsr`          | Open decisions for the selected session                    |
-| F6      | `/vsr-apps`     | Enable or disable an app, or follow the Router listener    |
-| F7      | `/vsr-waits`    | Choose Redact, Shield or Guard bounded/strict waits        |
-| F8      | `/vsr-feedback` | Label a retained decision; Router also offers model labels |
-| F9      | `/vsr-check`    | Check the decision runtime: one case per enabled app       |
-| F10     | `/vsr-sessions` | Select from the latest 100 accessible sessions             |
-| Palette | `/vsr-goal`     | Choose balanced, quality or save                           |
-| Palette | `/vsr-refresh`  | Refresh the authoritative snapshot                         |
+| Key     | Command          | Action                                                     |
+| ------- | ---------------- | ---------------------------------------------------------- |
+| F5      | `/vsr`           | Open decisions for the selected session                    |
+| F6      | `/vsr-apps`      | Enable or disable an app, or follow the Router listener    |
+| F7      | `/vsr-waits`     | Choose Redact, Shield or Guard bounded/strict waits        |
+| F8      | `/vsr-feedback`  | Label a retained decision; Router also offers model labels |
+| F9      | `/vsr-check`     | Check the decision runtime: one case per enabled app       |
+| F10     | `/vsr-sessions`  | Select from the latest 100 accessible sessions             |
+| Palette | `/vsr-goal`      | Choose balanced, quality or save                           |
+| Palette | `/vsr-refresh`   | Refresh the authoritative snapshot                         |
+| Palette | `/vsr-calibrate` | Calibrate an app's thresholds from your answers            |
+
+## Calibrate from your own answers
+
+vSR keeps the newest 5,000 decisions it can learn from, across sessions and
+restarts, in OpenCode's plugin storage: each with its subject, the scores it held
+against its thresholds and the thresholds in use then. A rule's decision, a
+skipped or withheld one, and a route outside the configured tiers are not kept.
+Run `/vsr-calibrate` and pick an app:
+
+1. It asks about the unanswered decisions nearest the app's line, on both sides:
+   "Should vSR have asked you before this command ran?" with what vSR did and
+   how near the line it was; for router, whether the routed model was too weak,
+   right or stronger than needed. Skip any you are unsure of, or stop.
+2. For apps other than router, pick what matters more: balanced, fewer false
+   alarms or catch more.
+3. It shows the new lines, and how many of your answers the current and the new
+   ones agree with. Apply, or keep the current ones.
+
+Some answers come without asking: F8 feedback on a decision, a held command you
+declined (it should have asked), and pushback within 15 minutes of a route to
+the lighter two models (it needed a stronger one). An app needs 8 answers before
+its lines move, and each line moves at most 0.15 per calibration, the same fit
+as the Claude Code plugin's `/vsr:calibrate`. Escalate only logs when it
+escalates, so its lines only rise.
+
+Calibrated thresholds are kept in plugin storage and apply over the plugin
+options at once and after a restart. Changing a threshold in `opencode.json`
+drops the calibration in favor of what you set. The panel's Calibration line
+says when you last calibrated and how many decisions came since, and suggests
+`/vsr-calibrate` after 300.
 
 Use arrows and Enter in native dialogs, Escape to dismiss. Composer counts and
 the panel show metadata, reasons, coverage, partial/withheld/unverified states,

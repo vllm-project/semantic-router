@@ -67,8 +67,53 @@ const decision = {
     confidence: { type: "number", minimum: 0, maximum: 1 },
     model: { type: "string" },
     labels: { type: "array", items: { type: "string" } },
+    subject: { type: "string", maxLength: 200 },
+    features: {
+      type: "array",
+      items: { type: "number", minimum: 0, maximum: 1 },
+      maxItems: 2,
+    },
   },
   required: ["id", "sessionID", "app", "outcome", "at"],
+  additionalProperties: false,
+} as const;
+const app = { type: "string", enum: [...APPS] } as const;
+const numbers = { type: "array", items: { type: "number" } } as const;
+const goal = {
+  enum: ["balanced", "fewer-false-alarms", "catch-more"],
+} as const;
+const agreement = {
+  type: "object",
+  properties: {
+    agree: { type: "integer", minimum: 0 },
+    total: { type: "integer", minimum: 0 },
+  },
+  required: ["agree", "total"],
+  additionalProperties: false,
+} as const;
+const suggestion = {
+  type: "object",
+  properties: {
+    app,
+    labels: { type: "integer", minimum: 0 },
+    before: numbers,
+    after: numbers,
+    changed: { type: "boolean" },
+    agreeBefore: agreement,
+    agreeAfter: agreement,
+    unrouted: { type: "integer", minimum: 0 },
+    why: { type: "string" },
+  },
+  required: [
+    "app",
+    "labels",
+    "before",
+    "after",
+    "changed",
+    "agreeBefore",
+    "agreeAfter",
+    "why",
+  ],
   additionalProperties: false,
 } as const;
 const appFlags = {
@@ -117,6 +162,16 @@ export const Vsr = Rpc.define({
             required: ["redact", "shield", "guard"],
             additionalProperties: false,
           },
+          calibration: {
+            type: "object",
+            properties: {
+              at: { type: "number" },
+              since: { type: "integer", minimum: 0 },
+              remind: { type: "boolean" },
+            },
+            required: ["since", "remind"],
+            additionalProperties: false,
+          },
           runtime: {
             type: "object",
             properties: {
@@ -139,6 +194,7 @@ export const Vsr = Rpc.define({
           "apps",
           "controls",
           "waits",
+          "calibration",
           "runtime",
         ],
         additionalProperties: false,
@@ -196,6 +252,114 @@ export const Vsr = Rpc.define({
           },
         },
         required: ["source", "models", "probes"],
+        additionalProperties: false,
+      },
+    },
+    // Calibration: what the log holds per app, questions about the decisions nearest each line, the person's
+    // answers, and new lines fitted to them, applied only on request.
+    calibrationReport: {
+      input: { type: "object", additionalProperties: false },
+      output: {
+        type: "object",
+        properties: {
+          persistence: { enum: ["durable", "unavailable"] },
+          at: { type: "number" },
+          since: { type: "integer", minimum: 0 },
+          remind: { type: "boolean" },
+          apps: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                app,
+                enabled: { type: "boolean" },
+                decisions: { type: "integer", minimum: 0 },
+                answered: { type: "integer", minimum: 0 },
+                thresholds: numbers,
+                calibrated: { type: "boolean" },
+              },
+              required: [
+                "app",
+                "enabled",
+                "decisions",
+                "answered",
+                "thresholds",
+                "calibrated",
+              ],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["persistence", "since", "remind", "apps"],
+        additionalProperties: false,
+      },
+    },
+    calibrationSample: {
+      input: {
+        type: "object",
+        properties: { app },
+        required: ["app"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            id,
+            app,
+            subject: { type: "string" },
+            acted: { type: "boolean" },
+            scores: numbers,
+            level: { type: "number" },
+            tier: { type: "integer", minimum: 0, maximum: 2 },
+            thresholds: numbers,
+          },
+          required: ["id", "app", "subject", "acted", "thresholds"],
+          additionalProperties: false,
+        },
+      },
+    },
+    calibrationLabel: {
+      input: {
+        type: "object",
+        properties: {
+          id,
+          label: { enum: ["yes", "no", "too-low", "right", "too-high"] },
+        },
+        required: ["id", "label"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: { saved: { type: "boolean" } },
+        required: ["saved"],
+        additionalProperties: false,
+      },
+    },
+    calibrationSuggest: {
+      input: {
+        type: "object",
+        properties: { app, goal },
+        required: ["app"],
+        additionalProperties: false,
+      },
+      output: suggestion,
+    },
+    calibrationApply: {
+      input: {
+        type: "object",
+        properties: { app, goal },
+        required: ["app"],
+        additionalProperties: false,
+      },
+      output: {
+        type: "object",
+        properties: {
+          applied: { type: "boolean" },
+          suggestion,
+        },
+        required: ["applied", "suggestion"],
         additionalProperties: false,
       },
     },

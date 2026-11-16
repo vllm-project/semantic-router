@@ -1,4 +1,4 @@
-import { isTagName } from "./masking.ts";
+import { hide, isTagName, secretsIn } from "./masking.ts";
 import type { Counts } from "./masking.ts";
 import { APPS } from "./settings.ts";
 import type { App } from "./settings.ts";
@@ -76,6 +76,11 @@ export interface Decision {
   confidence?: number;
   model?: string;
   labels?: string[];
+  // What the decision was about, in at most 200 characters with fixed secret patterns hidden: the command, task,
+  // prompt or output source. Calibration asks about it; nothing else of the text is kept.
+  subject?: string;
+  // Escalate's two scores, pushback and repeat, each held against its own threshold.
+  features?: number[];
 }
 export const FEEDBACK = [
   "right",
@@ -85,6 +90,22 @@ export const FEEDBACK = [
   "could-be-lighter",
 ] as const;
 export type Feedback = (typeof FEEDBACK)[number];
+export const SUBJECT_CHARS = 200;
+// A decision's subject: one line, fixed secret patterns hidden, at most SUBJECT_CHARS (without splitting a pair).
+export function subjectOf(text: string): string {
+  const line = hide(text, secretsIn(text)).text.replace(/\s+/g, " ").trim();
+  if (line.length <= SUBJECT_CHARS) return line;
+  // The ellipsis takes the last place; a cut between a surrogate pair drops its first half too.
+  const end = /[\uD800-\uDBFF]/.test(line[SUBJECT_CHARS - 2]!)
+    ? SUBJECT_CHARS - 2
+    : SUBJECT_CHARS - 1;
+  return line.slice(0, end) + "…";
+}
+export interface DecisionSink {
+  recorded(decision: Decision): void;
+  labeled(decision: Decision, feedback: Feedback): void;
+  settled(decision: Decision): void;
+}
 export interface Snapshot {
   version: 1;
   instanceID: string;
@@ -97,13 +118,14 @@ interface Session {
   decisions: Decision[];
   feedback: Record<string, Feedback>;
 }
-// Text, prompts, commands, file paths and model-provided explanations are deliberately absent.
+// Only a decision's clipped subject is kept of its text; prompts, outputs and model explanations are not.
 export class DecisionStore {
   private readonly sessions = new Map<string, Session>();
   private readonly instanceID = crypto.randomUUID();
   private revision = 0;
   private readonly maxSessions: number;
   private readonly maxDecisions: number;
+  sink: DecisionSink | undefined;
   constructor(maxSessions: number, maxDecisions: number) {
     if (
       !Number.isInteger(maxSessions) ||
@@ -161,6 +183,18 @@ export class DecisionStore {
       )
     )
       throw new Error("Invalid masking counts");
+    if (
+      (input.subject !== undefined &&
+        (typeof input.subject !== "string" ||
+          input.subject.length > SUBJECT_CHARS)) ||
+      (input.features !== undefined &&
+        (!Array.isArray(input.features) ||
+          input.features.length > 2 ||
+          input.features.some(
+            (value) => !Number.isFinite(value) || value < 0 || value > 1,
+          )))
+    )
+      throw new Error("Invalid decision subject");
     // Explicit projection also discards unexpected properties supplied by JS callers.
     const decision: Decision = {
       ...(input.coverage
@@ -190,12 +224,17 @@ export class DecisionStore {
         : { confidence: input.confidence }),
       ...(input.model === undefined ? {} : { model: input.model }),
       ...(input.labels === undefined ? {} : { labels: [...input.labels] }),
+      ...(input.subject === undefined ? {} : { subject: input.subject }),
+      ...(input.features === undefined
+        ? {}
+        : { features: [...input.features] }),
     };
     const session = this.touch(input.sessionID);
     session.decisions.push(decision);
     while (session.decisions.length > this.maxDecisions)
       delete session.feedback[session.decisions.shift()!.id];
     this.revision++;
+    this.sink?.recorded(structuredClone(decision));
     return structuredClone(decision);
   }
   observe(
@@ -254,6 +293,7 @@ export class DecisionStore {
       return;
     decision.outcome = outcome;
     this.revision++;
+    this.sink?.settled(structuredClone(decision));
   }
   label(sessionID: string, decisionID: string, feedback: Feedback): void {
     const session = this.sessions.get(sessionID);
@@ -270,6 +310,7 @@ export class DecisionStore {
     session!.feedback[decisionID] = feedback;
     this.touch(sessionID);
     this.revision++;
+    this.sink?.labeled(structuredClone(decision), feedback);
   }
   changed(): void {
     this.revision++;

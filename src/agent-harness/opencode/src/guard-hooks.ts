@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode/plugin";
 import type { Settings } from "./settings.ts";
 import { isRecord } from "./settings.ts";
 import type { RuntimeClient } from "./runtime.ts";
+import { subjectOf } from "./decisions.ts";
 import type { DecisionStore } from "./decisions.ts";
 import { guard } from "./guard-policy.ts";
 import type { GuardVerdict } from "./guard-policy.ts";
@@ -146,6 +147,7 @@ export async function registerGuard(
       elapsedMs: verdict.elapsedMs,
       ...(verdict.score === undefined ? {} : { score: verdict.score }),
       ...(verdict.labels ? { labels: verdict.labels } : {}),
+      subject: subjectOf(entry.command),
     });
     entry.decisionID = decision.id;
     for (const { rule } of verdict.unchecked ?? [])
