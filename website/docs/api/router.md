@@ -669,8 +669,9 @@ and `completion_tokens`, `cost` and `currency` for the calls that have a price,
 and `unpriced_calls` with `unpriced_reasons` for the others. A call is unpriced
 when its model has no price, it reported no usage or incomplete usage, it is in
 another currency than the first priced call, or no attempt trace kept it
-(`attempt_not_traced`: of the Looper algorithms only `escalate` traces its
-attempts). An unpriced call is never counted as free.
+(`attempt_not_traced`: a call past the trace's bound of 100 calls or 64 KiB).
+Every Looper algorithm traces its calls, so each one is priced at its own
+model's rates. An unpriced call is never counted as free.
 
 Request-scoped runtime calls also appear here: `decision_model` for native
 questions and selections, `systemone` for remote System One exchanges, and

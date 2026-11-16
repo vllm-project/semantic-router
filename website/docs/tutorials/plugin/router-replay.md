@@ -351,7 +351,10 @@ figure before them kept as `gross_saved`. A request whose Router call has no
 price leaves the savings instead of being netted as free. Router spend is also
 added to total spend. Auxiliary model calls made by internal Looper hops count
 in the parent request's router spend and coverage; hop generation costs count
-there once. See the
+there once. A hop's own record says so with `cost_accounting.unpriced_reason:
+counted_in_parent`, and its `original_model` names the algorithm that made the
+call, such as `Ratings`, `Escalate` or `ReMoM`, since no client asked for it.
+See the
 [aggregate fields](../../api/router#configured-rate-cost-estimates).
 
 Set deployment rates under `global.model_catalog.deployments.<name>.pricing`,
@@ -825,19 +828,21 @@ Top entrypoints
 shown apart when they cost anything. `Net savings` is `total_saved`, with
 `gross_saved` and `netted_router_call_spend` beside it, over the requests
 compared with a baseline; with none it reads `n/a`. Amounts stay per currency.
-`Requests` adds `in progress` and `unknown` when there are any. `Prompt cache`
-is the aggregate's provider prompt-cache saving, and `Reviews` appears when the
-window holds Codex approval reviews. These come from the aggregate. Sessions and
-the top three models and entrypoints come from the window's records: models by
+`Prompt cache` is the aggregate's provider prompt-cache saving, and `Reviews`
+appears when the window holds Codex approval reviews. These come from the
+aggregate. Requests, sessions and the top three models and entrypoints come
+from the window's records, each client request once: a Looper hop's record
+counts in the request that made it, not as a request of its own. `Requests`
+adds `in progress` and `unknown` when there are any. Models are ranked by
 `selected_model`, entrypoints by `original_model`, the model the client asked
 for. Above, one request asked for `qwen-chat` directly: it is the entrypoint of
 that one request and the selected model of three, the two review requests routed
 to it included. A row's spend adds its requests' own costs as `total_spend` adds
 them, `actual_cost` and the cost of the Router's calls for each request, per
-currency; a request with no price is counted as such, and a Looper hop's cost
-stays with the request that made it. `--json` prints the same, with the
-aggregate's `by_currency`, provider-cache and `reviews` objects as the Router
-returns them and an `unpriced` count on each row.
+currency; a request with no price is counted as such, so a row that reads
+`no price` has every one of its requests in `unpriced`. `--json` prints the
+same, with the aggregate's `by_currency`, provider-cache and `reviews` objects
+as the Router returns them and an `unpriced` count on each row.
 
 The command reads the management API at `--endpoint`, by default the local one
 on port 8080 plus `VLLM_SR_PORT_OFFSET`, and sends `VSR_MGMT_TOKEN` as the
