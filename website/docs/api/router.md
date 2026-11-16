@@ -838,7 +838,11 @@ Replay lifecycle values describe what the recorder observed:
   after routing uses `terminal_reason: request_rejected`. In standalone mode, a
   request no backend answered keeps the gateway's `503` or `504` local reply
   with `terminal_reason: upstream_<failure>`, such as
-  `upstream_connect_failure` or `upstream_reset`.
+  `upstream_connect_failure` or `upstream_reset`. A fallback chain that ends
+  without a success keeps the answer of its last attempt, in both modes:
+  `upstream_error_response` when that backend answered with an error,
+  `upstream_<failure>` when it did not answer, and `request_rejected` when a
+  candidate needs a delegated credential the request does not carry.
 - `aborted`: the stream ended without a valid terminal frame, for example
   after a disconnect or timeout.
 

@@ -494,12 +494,17 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 }
 
 // failAnsweredRouterReplay fails a record whose client already got an error
-// the response phases never see: the Router's own refusal, or the gateway's
-// local reply for a backend that did not answer. The record keeps what the
-// client got, since the stream then ends without a terminal response, which
-// would otherwise read as a client abort.
+// the response phases never see: the Router's own refusal, a fallback chain's
+// answer, or the gateway's local reply for a backend that did not answer. The
+// record keeps what the client got, since the stream then ends without a
+// terminal response, which would otherwise read as a client abort. A record
+// the Router already ended keeps what it holds.
 func (r *OpenAIRouter) failAnsweredRouterReplay(ctx *RequestContext, status int, body []byte, reason string) {
-	if status < 400 {
+	recorder := r.responseGuardReplayRecorder(ctx)
+	if status < 400 || recorder == nil {
+		return
+	}
+	if record, ok := recorder.GetRecord(ctx.RouterReplayID); !ok || record.LifecycleState != routerreplay.LifecycleInProgress {
 		return
 	}
 	r.updateRouterReplayStatus(ctx, status, false)
