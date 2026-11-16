@@ -146,6 +146,17 @@ class PublicSkillTests(unittest.TestCase):
             ),
             [],
         )
+        self.assertEqual(
+            skill.sync(
+                skill.DIAGNOSE_SOURCE,
+                skill.DIAGNOSE_DESTINATION,
+                check=True,
+                public_origin=skill.DIAGNOSE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-diagnose-routing",
+                public_name="vllm-sr-diagnose-routing",
+            ),
+            [],
+        )
         source_refs = list((skill.SOURCE / "references").glob("*.md"))
         self.assertEqual(
             {path.name for path in source_refs},

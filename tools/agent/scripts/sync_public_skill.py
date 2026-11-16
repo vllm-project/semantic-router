@@ -22,6 +22,9 @@ DECISION_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-decision-mode
 CONFIGURE_SOURCE = ROOT / "tools/agent/skills/vllm-sr-configure-recipe"
 CONFIGURE_DESTINATION = ROOT / "website/static/install/agent/vllm-sr-configure-recipe"
 CONFIGURE_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-configure-recipe/"
+DIAGNOSE_SOURCE = ROOT / "tools/agent/skills/vllm-sr-diagnose-routing"
+DIAGNOSE_DESTINATION = ROOT / "website/static/install/agent/vllm-sr-diagnose-routing"
+DIAGNOSE_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-diagnose-routing/"
 PUBLICATIONS = (
     (SOURCE, DESTINATION, PUBLIC_ORIGIN, "vllm-sr-agent-operations", "vllm-sr"),
     (
@@ -44,6 +47,13 @@ PUBLICATIONS = (
         CONFIGURE_PUBLIC_ORIGIN,
         "vllm-sr-configure-recipe",
         "vllm-sr-configure-recipe",
+    ),
+    (
+        DIAGNOSE_SOURCE,
+        DIAGNOSE_DESTINATION,
+        DIAGNOSE_PUBLIC_ORIGIN,
+        "vllm-sr-diagnose-routing",
+        "vllm-sr-diagnose-routing",
     ),
 )
 MARKDOWN_LINK = re.compile(
