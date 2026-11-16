@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"runtime/debug"
 	"strconv"
 
@@ -106,7 +107,12 @@ func (s *routingSession) RequestBody(body []byte, endOfStream bool) (*routing.Ef
 	}
 	return s.phase(func() (*ext_proc.ProcessingResponse, error) {
 		response, err := s.router.handleRequestBodyDispatch(v, s.ctx)
-		return s.router.requestBodyReply(response, err, s.ctx)
+		response, err = s.router.requestBodyReply(response, err, s.ctx)
+		if state, _ := replayLifecycleForProcessError(err); err != nil && state == routerreplay.LifecycleFailed {
+			// The gateway answers a request body phase that failed with 500.
+			s.router.updateRouterReplayStatus(s.ctx, http.StatusInternalServerError, false)
+		}
+		return response, err
 	}, func(response *ext_proc.ProcessingResponse) {
 		finishImmediateResponseTrace(s.ctx, response)
 	})

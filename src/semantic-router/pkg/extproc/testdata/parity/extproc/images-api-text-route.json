@@ -94,6 +94,12 @@
               "key": "x-vsr-selected-recipe",
               "rawValueText": "default"
             }
+          },
+          {
+            "header": {
+              "key": "x-vsr-replay-id",
+              "rawValueText": "<volatile>"
+            }
           }
         ]
       },
