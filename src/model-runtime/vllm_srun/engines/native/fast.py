@@ -756,7 +756,7 @@ class NoncausalMasks(Masks):
     """The masks of a noncausal backbone (``noncausal_masks``) from host-known padding.
 
     Both are read from the attention mask on the device without a read-back, so
-    a graph captures them: the full-attention key mask is given up to
+    a graph captures them: the full-attention key mask is given to rows of up to
     ``unmasked_above`` tokens (always when None), and the gated-delta layers get
     the 2D mask only when the batch is padded. Graphs hold at most
     ``MAX_GRAPH_TOKENS`` tokens, so a threshold no lower keeps every captured

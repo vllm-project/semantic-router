@@ -36,7 +36,8 @@ def test_all_keys_attends_to_every_key_and_not_causally():
     ("rows", "length", "padded", "unmasked_above", "unmasked"),
     [
         (1, 10, False, 8, True),
-        (2, 5, False, 8, True),
+        (2, 9, False, 8, True),
+        (2, 5, False, 8, False),
         (1, 8, False, 8, False),
         (1, 10, True, 8, False),
         (1, 10, False, None, False),

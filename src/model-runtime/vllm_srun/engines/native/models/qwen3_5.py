@@ -384,14 +384,14 @@ def noncausal_masks(
     """The full-attention padding mask ``[B, 1, 1, L]`` and the gated-delta padding mask.
 
     ``padded`` (host-known) skips reading the mask back; None derives it from the mask.
-    Unpadded rows of more than ``unmasked_above`` tokens in all attend to every key
+    Unpadded rows of more than ``unmasked_above`` tokens each attend to every key
     (``ALL_KEYS``): SDPA then takes flash attention with GQA in-kernel, not the
     memory-efficient kernel the key mask forces, which is not bit-identical.
     """
     if (
         padded is False
         and unmasked_above is not None
-        and attention_mask.numel() > unmasked_above
+        and attention_mask.shape[1] > unmasked_above
     ):
         return ALL_KEYS, None
     full = attention_mask.bool()[:, None, None, :]

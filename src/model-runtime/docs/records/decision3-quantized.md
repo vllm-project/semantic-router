@@ -286,7 +286,7 @@ later ones load them untimed, and three processes answered all 150 alike.
 ## Long rows without the key mask
 
 With approximate kernels on CUDA, a noncausal forward whose rows are unpadded
-and hold more than `MAX_GRAPH_TOKENS` (4,096) tokens in all passes no key mask
+and hold more than `MAX_GRAPH_TOKENS` (4,096) tokens each passes no key mask
 to the full-attention layers (`ALL_KEYS`, #5900): SDPA then takes flash
 attention with GQA in the kernel, where the mask kept the memory-efficient
 kernel on keys and values repeated to every head. Graph-captured shapes,
@@ -316,6 +316,20 @@ changes come from the kernel and not from run-to-run variation. NVFP4
 quantizes the activations of every projection to FP4, which carries the
 attention's rounding difference into the layers after it; the AWQ package
 keeps its activations in BF16.
+
+Against the BF16 package the NVFP4 package was made from (`vllm-sr/d3` at
+`093cffba`, exact kernels, the mask), the same 123 requests answered in a later
+NVFP4 process, where the mask moved a probability by at most 0.201 (the FP4
+GEMM's tiles are chosen per process):
+
+| NVFP4 against BF16 | Top choice changed | Largest probability change | Mean largest change |
+| --- | --- | --- | --- |
+| With the mask | 3 of 123 | 0.269 | 0.029 |
+| Without the mask | the same 3 of 123 | 0.301 | 0.033 |
+
+The mask's change is within the package's own distance from BF16 and changes
+no top choice; without the mask, 47 of the 123 answers moved closer to BF16,
+75 further away and one neither.
 
 Median of six answers of one request, three per setting in two alternating
 runs:

@@ -53,9 +53,9 @@ def test_a_long_unpadded_row_drops_the_mask_near_the_masked_forward(accelerator)
 
 
 @pytest.mark.parametrize(
-    ("lengths", "width"), [([6000, 5990], 6000), ([4096], 4096), ([2000, 2000], 2000)]
+    ("lengths", "width"), [([6000, 5990], 6000), ([4096], 4096), ([2100, 2100], 2100)]
 )
-def test_padded_and_graph_sized_batches_keep_the_mask(accelerator, lengths, width):
+def test_padded_batches_and_short_rows_keep_the_mask(accelerator, lengths, width):
     module = backbone(accelerator)
     unmasked = fast.NoncausalMasks(fast.MAX_GRAPH_TOKENS)
     got = forward(module, lengths, width, unmasked)
