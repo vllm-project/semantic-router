@@ -17,13 +17,20 @@ const (
 	PurposeEmbedding             ModelPurpose = "embedding"              // Generate text embeddings
 	PurposeSafety                ModelPurpose = "safety"                 // Detect unsafe content
 	PurposeHazard                ModelPurpose = "hazard"                 // Identify independent content hazards
-	PurposeReranking             ModelPurpose = "reranking"              // Rank query-document pairs
 	PurposeSemanticSimilarity    ModelPurpose = "semantic-similarity"    // Compute semantic similarity
 	PurposeRoutingSignals        ModelPurpose = "routing-signals"        // Answer several built-in routing signals in one call
 )
 
+// Vela3SignalModel is the registry path of Vela 3.0 vela3-fast, the default
+// model of every built-in signal it answers.
+const Vela3SignalModel = "models/vela3-fast"
+
+// VelaEmbeddingModel is the registry path of Vela Embedding, the model of the
+// pre-declared vela-embedding deployment.
+const VelaEmbeddingModel = "models/Vela-1.0-Encoder-307M-Embedding"
+
 // Vela2SignalModel is the registry path of Vela 2.0 0.3B, the default model
-// of every built-in signal it answers.
+// before Vela 3.0.
 const Vela2SignalModel = "models/Vela-2.0-0.3B"
 
 // Registry paths of the larger Vela 2.0 sizes a decision model may name.
@@ -113,6 +120,24 @@ var velaShieldArtifactPatterns = append([]string{"lc/*", "heads/*", "demo.py", "
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
+	// Vela 3.0 vela3-fast answers the built-in domain, Guard, safety,
+	// fact-check, feedback and modality signals as questions on its router
+	// adapters, and PII and hallucination with its span presets. The model
+	// runtime downloads and verifies it; it runs at its published FP32
+	// (src/model-runtime/docs/records/vela3-parity.md).
+	{
+		LocalPath:          Vela3SignalModel,
+		RepoID:             "vllm-sr/vela3-fast",
+		Revision:           "7cbefd4b92b57234bd0ffb9872451e81abcdac79",
+		Aliases:            []string{"vela3-fast"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call: domain, prompt attacks, safety, fact-check need, feedback and modality, with PII and hallucination spans. Supports up to 32K input.",
+		ParameterSize:      "380M encoder with adapters",
+		MaxContextLength:   32768,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		Tags:               []string{"vela", "vela3", "multi-task", "spans"},
+	},
 	// Vela 2.0 0.3B answers the built-in domain, Guard, safety, fact-check,
 	// feedback and modality signals as questions, and PII and hallucination
 	// with its span presets. The model runtime downloads and verifies it; on
@@ -257,7 +282,7 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:                    []string{"vela", "feedback", "classification", "merged", "multilingual", "long-context"},
 	},
 	{
-		LocalPath:               "models/Vela-1.0-Encoder-307M-Embedding",
+		LocalPath:               VelaEmbeddingModel,
 		RepoID:                  "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
 		Revision:                "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436",
 		DownloadExcludePatterns: velaTrainingArtifactPatterns,
@@ -320,18 +345,6 @@ var DefaultModelRegistry = []ModelSpec{
 		MaxContextLength:        32768,
 		Tags:                    []string{"vela", "multilingual", "long-context", "hazard", "multi-label-classification"},
 		NumClasses:              12,
-	},
-	{
-		LocalPath:               "models/Vela-1.0-Encoder-307M-Reranker",
-		RepoID:                  "vllm-sr/Vela-1.0-Encoder-307M-Reranker",
-		Revision:                "a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf",
-		DownloadExcludePatterns: velaTrainingArtifactPatterns,
-		Aliases:                 []string{"Vela-1.0-Encoder-307M-Reranker"},
-		Purpose:                 PurposeReranking,
-		Description:             "Rank multilingual query-document pairs with selectable encoder depth and representation size.",
-		ParameterSize:           "307M encoder + reranker",
-		MaxContextLength:        32768,
-		Tags:                    []string{"vela", "multilingual", "long-context", "reranker", "2d-matryoshka", "early-exit"},
 	},
 	// Domain/Intent Classification
 	{

@@ -1,0 +1,1 @@
+listeners[public].models: removed_field: a listener's models are the models of each API it serves; run `vllm-sr config migrate` (apis: {chat_completions: {models: [...]}, responses: {models: [...]}, messages: {models: [...]}, images: {models: [...]}})

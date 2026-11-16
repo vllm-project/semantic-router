@@ -64,7 +64,7 @@ providers:
           protocol: http
 ```
 
-Canonical v0.3 没有用户编写的全局家族注册表。旧的 `providers.defaults.reasoning_families` 加上按模型的 `reasoning_family` 组合会迁移到 `providers.models[].reasoning`：内置 ID 变为 `family` 引用，而自定义定义会被内联复制到每个使用它们的自定义 Model 上。
+Canonical v0.5 没有用户编写的全局家族注册表。旧的 `providers.defaults.reasoning_families` 加上按模型的 `reasoning_family` 组合会迁移到 `providers.models[].reasoning`：内置 ID 变为 `family` 引用，而自定义定义会被内联复制到每个使用它们的自定义 Model 上。
 
 在控制面板中使用 **Manual setup** 编写内联家族。将 **Built-in Catalog Model** 和 **Reasoning Family** 留空，然后填写 **Inline Reasoning** 字段。
 
@@ -84,26 +84,28 @@ Canonical v0.3 没有用户编写的全局家族注册表。旧的 `providers.de
 
 对于 `top_level_reasoning_effort`，`parameter` 必须是 `reasoning_effort`。仅 mode 的家族在决策中不接受 `reasoning_effort`。始终开启的家族不能用 `use_reasoning: false` 选择。
 
-## 在决策中选择推理
+## 在决策中选择推理 {#select-reasoning-in-a-decision}
 
 Model 拥有家族后，配置其决策引用：
 
 ```yaml
-routing:
-  decisions:
-    - name: complex-request
-      rules:
-        operator: AND
-        conditions:
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: private-reasoner
-          use_reasoning: true
-          reasoning_mode: enabled
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: complex-request
+        rules:
+          operator: AND
+          conditions:
+            - type: complexity
+              name: needs_reasoning
+              label: hard
+        modelRefs:
+          - model: private-reasoner
+            use_reasoning: true
+            reasoning_mode: enabled
+            reasoning_effort: high
 ```
 
-effort 必须由家族列出，并且被该 Model 的每个 Provider 绑定允许。`reasoning_mode` 必须与 `use_reasoning` 一致。省略 effort 以使用家族默认值，或在需要一个有效的部署级默认值优先时设置 `providers.defaults.reasoning_effort`。
+effort 必须由家族列出，并且被该 Model 的每个 Provider 绑定允许。`reasoning_mode` 必须与 `use_reasoning` 一致。省略 effort 以使用家族默认值，或在需要一个有效的部署级默认值优先时设置 `providers.defaults.reasoning_effort`。该默认值适用于家族列出它的每个 Model，因此这些 Model 的 Provider 绑定也必须允许它；家族未列出它的 Model 继续使用家族默认值。
 
 在控制面板决策编辑器中，先选择 Model。UI 从其有效家族派生 mode 和 effort 选项，并禁用 Model 或 Provider 不支持的控件。没有家族的自定义 Model 保持为透传模型，并且没有控制面板推理控件。

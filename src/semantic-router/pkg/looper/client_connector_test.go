@@ -45,10 +45,7 @@ func TestConnectorClientPreservesEndpointAndCallHeaders(t *testing.T) {
 				t.Errorf("%s = %q, want %q", name, got, want)
 			}
 		}
-		for _, internal := range []string{
-			headers.VSRInternalAuth, headers.VSRLooperRequest, headers.VSRLooperDecision,
-			headers.VSRLooperIteration, headers.VSRFusionDepth, headers.VSRSelectedRecipe,
-		} {
+		for _, internal := range []string{headers.VSRInternalAuth, headers.VSRRouteModel, headers.VSRSelectedRecipe} {
 			if got := request.Header.Get(internal); got != "" {
 				t.Errorf("a plain HTTP client sent the internal header %s = %q", internal, got)
 			}

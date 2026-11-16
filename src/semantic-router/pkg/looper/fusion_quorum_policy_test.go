@@ -37,7 +37,7 @@ import (
 // usable response against a quorum of two.
 func belowQuorumFusionRequest(fusion *config.FusionAlgorithmConfig) *Request {
 	req := newFusionTestRequest()
-	req.Algorithm = &config.AlgorithmConfig{Type: "fusion", Fusion: fusion}
+	req.Algorithm = &config.AlgorithmConfig{OnError: config.FusionOnErrorSkip, Type: "fusion", Fusion: fusion}
 	return req
 }
 
@@ -47,7 +47,6 @@ func belowQuorumFusionConfig(policy config.FusionQuorumFailurePolicy, target str
 		AnalysisModels:         []string{"panel-a", "panel-b", "panel-c"},
 		MaxConcurrent:          3,
 		MinSuccessfulResponses: 2,
-		OnError:                config.FusionOnErrorSkip,
 		QuorumFailurePolicy:    policy,
 		QuorumFallbackTarget:   target,
 	}
@@ -440,13 +439,13 @@ func TestFusionPanelQuorumDoesNotWaitForDiscardedWorker(t *testing.T) {
 
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:                  "judge",
 			AnalysisModels:         []string{"panel-a", "panel-b", "panel-c"},
 			MaxConcurrent:          3,
 			MinSuccessfulResponses: 2,
-			OnError:                config.FusionOnErrorSkip,
 		},
 	}
 
@@ -486,9 +485,8 @@ func TestFusionOnErrorFailTakesPrecedenceOverQuorumFallback(t *testing.T) {
 	})
 	defer server.Close()
 
-	cfg := belowQuorumFusionConfig(config.FusionQuorumFailurePolicyFallback, "backup-model")
-	cfg.OnError = config.FusionOnErrorFail
-	req := belowQuorumFusionRequest(cfg)
+	req := belowQuorumFusionRequest(belowQuorumFusionConfig(config.FusionQuorumFailurePolicyFallback, "backup-model"))
+	req.Algorithm.OnError = config.FusionOnErrorFail
 
 	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).
 		Execute(context.Background(), req)

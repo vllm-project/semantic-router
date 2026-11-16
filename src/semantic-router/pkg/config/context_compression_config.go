@@ -16,10 +16,6 @@ const (
 	ContextCompressionTargetRecoverable = "recoverable"
 	ContextCompressionTargetTruncate    = "truncate"
 
-	ContextCompressionScoringBM25      = "bm25"
-	ContextCompressionScoringEmbedding = "embedding"
-	ContextCompressionScoringHybrid    = "hybrid"
-
 	ContextCompressionFailureOpen   = "fail_open"
 	ContextCompressionFailureClosed = "fail_closed"
 )
@@ -113,12 +109,6 @@ func (limit *CompressionTokenLimit) Resolve(fallback int) int {
 	return limit.Value
 }
 
-type ContextCompressionBudgetConfig struct {
-	TriggerTokens       *CompressionTokenLimit `json:"trigger_tokens,omitempty" yaml:"trigger_tokens,omitempty"`
-	TargetTokens        *CompressionTokenLimit `json:"target_tokens,omitempty" yaml:"target_tokens,omitempty"`
-	ReserveOutputTokens *CompressionTokenLimit `json:"reserve_output_tokens,omitempty" yaml:"reserve_output_tokens,omitempty"`
-}
-
 type ContextCompressionTargetConfig struct {
 	Mode         string `json:"mode,omitempty" yaml:"mode,omitempty"`
 	MinTokens    int    `json:"min_tokens,omitempty" yaml:"min_tokens,omitempty"`
@@ -137,11 +127,6 @@ type ContextCompressionTargetsConfig struct {
 	History     ContextCompressionTargetConfig      `json:"history,omitempty" yaml:"history,omitempty"`
 	RAG         ContextCompressionTargetConfig      `json:"rag,omitempty" yaml:"rag,omitempty"`
 	Memory      ContextCompressionTargetConfig      `json:"memory,omitempty" yaml:"memory,omitempty"`
-}
-
-type ContextCompressionScoringConfig struct {
-	Method            string `json:"method,omitempty" yaml:"method,omitempty"`
-	EmbeddingModelRef string `json:"embedding_model_ref,omitempty" yaml:"embedding_model_ref,omitempty"`
 }
 
 type ContextCompressionRecoveryConfig struct {

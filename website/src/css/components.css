@@ -47,9 +47,9 @@
  * ------------------------------------------------------------------ */
 .theme-doc-markdown a:not(.card):not(.button):not([class*='anchor']),
 .site-prose a:not(.card):not(.button) {
-  color: var(--site-accent-strong);
+  color: var(--site-text-strong);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--site-accent) 40%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--site-accent) 55%, transparent);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
   transition: text-decoration-color var(--site-transition-fast);
@@ -57,6 +57,7 @@
 
 .theme-doc-markdown a:not(.card):not(.button):not([class*='anchor']):hover,
 .site-prose a:not(.card):not(.button):hover {
+  color: var(--site-accent-strong);
   text-decoration-color: var(--site-accent);
 }
 
@@ -77,13 +78,13 @@
 /* ------------------------------------------------------------------ *
  * Inline code
  * ------------------------------------------------------------------ */
-/* Same ground as a code block, and the same token docs.css uses, so a chip
- * looks identical in a sentence, in a fence, and across surfaces. */
+/* A light chip on the paper, the token docs.css uses too, while code blocks
+ * stay on ink. */
 :not(pre) > code {
   padding: 0.15em 0.4em;
   border: 1px solid var(--site-border);
   border-radius: var(--radius-sm);
-  background: var(--site-code-bg);
+  background: var(--site-code-inline-bg);
   color: var(--site-text-strong);
   font-size: 0.875em;
   font-weight: var(--site-font-weight-normal);
@@ -117,7 +118,7 @@ kbd {
 div[class*='codeBlockContainer'] {
   --ifm-pre-padding: var(--space-4);
   margin-bottom: var(--space-5);
-  border: 1px solid var(--site-border);
+  border: 1px solid var(--ink-hair);
   border-radius: var(--radius-md);
   background: var(--site-code-bg);
   box-shadow: none;
@@ -126,9 +127,9 @@ div[class*='codeBlockContainer'] {
 
 div[class*='codeBlockTitle'] {
   padding: 0.55rem var(--ifm-pre-padding, var(--space-4));
-  border-bottom: 1px solid var(--site-border);
-  background: var(--site-surface-alt);
-  color: var(--site-muted-bright);
+  border-bottom: 1px solid var(--ink-hair);
+  background: var(--code-bar);
+  color: var(--on-ink-2);
   font-family: var(--ifm-font-family-monospace);
   font-size: var(--text-xs);
   font-weight: var(--site-font-weight-medium);
@@ -162,10 +163,10 @@ div[class*='buttonGroup'] {
 }
 
 div[class*='buttonGroup'] button {
-  border: 1px solid var(--site-border);
+  border: 1px solid var(--ink-hair);
   border-radius: var(--radius-md);
-  background: var(--site-surface);
-  color: var(--site-muted);
+  background: var(--code-bar);
+  color: var(--on-ink-2);
   opacity: 0;
   transition:
     opacity var(--site-transition-fast),
@@ -179,40 +180,38 @@ div[class*='buttonGroup'] button:focus-visible {
 }
 
 div[class*='buttonGroup'] button:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-surface-raised);
-  color: var(--site-text-strong);
+  border-color: rgba(255, 255, 255, 0.28);
+  background: var(--code-bar);
+  color: var(--on-ink);
 }
 
 /* Standalone <pre> outside a code block container (MDX, raw HTML). */
 pre:not([class*='codeBlock']) {
   padding: var(--space-4);
-  border: 1px solid var(--site-border);
+  border: 1px solid var(--ink-hair);
   border-radius: var(--radius-md);
   background: var(--site-code-bg);
+  color: var(--code-text);
   font-size: var(--text-sm);
   line-height: 1.6;
   overflow-x: auto;
 }
 
 /* ------------------------------------------------------------------ *
- * Admonitions — a single tinted field carrying the variant colour, rather
- * than a grey card with a coloured rail. Each variant sets three values:
- * --admonition-tint  the icon, and the colour the field is derived from
- * --admonition-field the background wash
- * --admonition-edge  the hairline, which runs the whole way round
- * Heading and body stay in normal text colours; the tint alone identifies
- * the variant, which is what keeps a page of admonitions calm.
+ * Admonitions — Duo's callouts: the surface, a hairline round it and a
+ * 3 px bar in the variant's colour, which also tints the icon. Heading and
+ * body stay in normal text colours.
+ *   note, secondary  ink-2      info  sky
+ *   tip, success     green      warning, caution  ember   danger  deep ember
  * ------------------------------------------------------------------ */
 .theme-admonition {
-  --admonition-tint: var(--site-muted);
-  --admonition-field: rgba(15, 23, 42, 0.04);
-  --admonition-edge: rgba(15, 23, 42, 0.12);
+  --admonition-tint: var(--ink-2);
   margin-bottom: var(--space-5);
   padding: var(--space-4);
-  border: 1px solid var(--admonition-edge);
+  border: 1px solid var(--site-admonition-border);
+  border-left: 3px solid var(--admonition-tint);
   border-radius: var(--radius-md);
-  background: var(--admonition-field);
+  background: var(--site-admonition-bg);
   color: var(--site-text);
   box-shadow: none;
   font-size: var(--text-base);
@@ -242,69 +241,25 @@ pre:not([class*='codeBlock']) {
 
 .theme-admonition-note,
 .theme-admonition-secondary {
-  --admonition-tint: var(--site-muted);
-  --admonition-field: rgba(15, 23, 42, 0.04);
-  --admonition-edge: rgba(15, 23, 42, 0.12);
+  --admonition-tint: var(--ink-2);
+}
+
+.theme-admonition-info {
+  --admonition-tint: var(--sky);
 }
 
 .theme-admonition-tip,
 .theme-admonition-success {
-  --admonition-tint: #0d8f5e;
-  --admonition-field: rgba(13, 143, 94, 0.08);
-  --admonition-edge: rgba(13, 143, 94, 0.24);
-}
-
-.theme-admonition-info {
-  --admonition-tint: var(--site-accent-strong);
-  --admonition-field: rgba(48, 162, 255, 0.09);
-  --admonition-edge: rgba(48, 162, 255, 0.28);
+  --admonition-tint: var(--ok);
 }
 
 .theme-admonition-warning,
 .theme-admonition-caution {
-  --admonition-tint: #b06d0a;
-  --admonition-field: rgba(176, 109, 10, 0.09);
-  --admonition-edge: rgba(176, 109, 10, 0.26);
+  --admonition-tint: var(--ember);
 }
 
 .theme-admonition-danger {
-  --admonition-tint: #c2410c;
-  --admonition-field: rgba(194, 65, 12, 0.08);
-  --admonition-edge: rgba(194, 65, 12, 0.24);
-}
-
-/* Dark mode. Every variant is restated so no field or edge is inherited from
- * the light ramp — a wash tuned against white goes muddy on a dark ground. */
-html[data-theme='dark'] .theme-admonition-note,
-html[data-theme='dark'] .theme-admonition-secondary {
-  --admonition-field: rgba(255, 255, 255, 0.05);
-  --admonition-edge: rgba(255, 255, 255, 0.13);
-}
-
-html[data-theme='dark'] .theme-admonition-tip,
-html[data-theme='dark'] .theme-admonition-success {
-  --admonition-tint: #4ade80;
-  --admonition-field: rgba(74, 222, 128, 0.11);
-  --admonition-edge: rgba(74, 222, 128, 0.28);
-}
-
-html[data-theme='dark'] .theme-admonition-info {
-  --admonition-tint: #6cc0ff;
-  --admonition-field: rgba(108, 192, 255, 0.11);
-  --admonition-edge: rgba(108, 192, 255, 0.3);
-}
-
-html[data-theme='dark'] .theme-admonition-warning,
-html[data-theme='dark'] .theme-admonition-caution {
-  --admonition-tint: #fbbf24;
-  --admonition-field: rgba(251, 191, 36, 0.11);
-  --admonition-edge: rgba(251, 191, 36, 0.28);
-}
-
-html[data-theme='dark'] .theme-admonition-danger {
-  --admonition-tint: #fb923c;
-  --admonition-field: rgba(251, 146, 60, 0.11);
-  --admonition-edge: rgba(251, 146, 60, 0.28);
+  --admonition-tint: var(--key);
 }
 
 /* ------------------------------------------------------------------ *
@@ -333,7 +288,7 @@ html[data-theme='dark'] .theme-admonition-danger {
   border: 0;
   border-bottom: 1px solid var(--site-border);
   background: var(--site-table-header-bg);
-  color: var(--site-muted);
+  color: var(--site-interactive-rest);
   font-size: var(--text-xs);
   font-weight: var(--site-font-weight-semibold);
   letter-spacing: 0.07em;
@@ -495,7 +450,7 @@ details[class*='details_'] {
 }
 
 /* Primary is the only filled control, and it is filled with brand blue —
- * the same treatment as the hero's "Try the Playground". */
+ * the same treatment as the hero's "Try System Duo". */
 .site-btn--primary {
   border-color: var(--site-cta-border);
   background: var(--site-cta-bg);

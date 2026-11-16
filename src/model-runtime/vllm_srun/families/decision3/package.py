@@ -194,6 +194,10 @@ def verify_files(
     return actual
 
 
+def is_state_once(decision_config: dict[str, Any]) -> bool:
+    return decision_config.get("attention_mode", "causal") in STATE_ONCE_MODES
+
+
 def check_decision_config(config: Any) -> dict[str, Any]:
     """The released runtime's checks of ``decision_config.json``; returns it."""
     if not isinstance(config, dict):

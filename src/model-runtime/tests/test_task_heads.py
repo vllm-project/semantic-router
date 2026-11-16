@@ -261,6 +261,36 @@ def test_inputs_fail_in_place_and_requests_fail_whole(client):
     assert wrong.json()["results"][0]["error"] == "invalid_input"
 
 
+@pytest.mark.parametrize("name", ["sequence", "scores", "token"])
+def test_windows_without_content_room_fail_the_request(runtime, client, name):
+    model = served(runtime, name).model
+    envelope_size = model.heads[model.primary].envelope.size
+    no_room = "window size must leave room for content after special tokens"
+    too_wide = "window overlap must be smaller than its content width"
+    for tokens, overlap, message in (
+        (envelope_size, 0, no_room),
+        (envelope_size + 2, 2, too_wide),
+        (envelope_size + 2, 9, too_wide),
+    ):
+        response = client.post(
+            "/v1/classify",
+            json={
+                "model": name,
+                "input": ["one two three", "four five six"],
+                "options": {
+                    "overflow": "window",
+                    "window": {"tokens": tokens, "overlap": overlap},
+                },
+            },
+        )
+        assert response.status_code == 400, (tokens, overlap, response.text)
+        error = response.json()["error"]
+        assert (error["code"], error["message"]) == ("invalid_request", message)
+    window = {"tokens": envelope_size + 2, "overlap": 1}
+    body = classify(client, name, ["one two three"], overflow="window", window=window)
+    assert "error" not in body["results"][0]
+
+
 def count_forwards(monkeypatch, runtime, name):
     model = served(runtime, name).model
     calls = []

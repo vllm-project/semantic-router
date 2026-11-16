@@ -15,7 +15,7 @@ func TestActivatedConfigIsReadableByTheServeUser(t *testing.T) {
 		t.Skip("POSIX file modes")
 	}
 	path := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := writeActivationConfig(path, []byte("version: v0.3\n")); err != nil {
+	if err := writeActivationConfig(path, []byte("version: v0.5\n")); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)

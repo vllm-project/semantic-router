@@ -8,7 +8,7 @@ import (
 
 func rankingTraceFor(t *testing.T, decisions []config.Decision, strategy config.RoutingStrategy, signals *SignalMatches) *RankingTrace {
 	t.Helper()
-	engine := NewDecisionEngine(nil, nil, nil, decisions, strategy)
+	engine := NewDecisionEngine(decisions, strategy)
 	_, diagnostics, err := engine.EvaluateDecisionsWithDiagnostics(signals)
 	if err != nil {
 		t.Fatalf("EvaluateDecisionsWithDiagnostics() error = %v", err)
@@ -63,31 +63,6 @@ func TestRankingTraceReportsConfidenceWinner(t *testing.T) {
 		t.Fatalf("trace = %+v, want tier 1 of a tiered pool with two candidates", trace)
 	}
 	assertRunnerUp(t, trace, "law_route", "confidence 0.95 > 0.86")
-}
-
-// When the pool mixes kinds the trace says which decision made it
-// incomparable and which key decided instead.
-func TestRankingTraceReportsMixedKindFallback(t *testing.T) {
-	embedding := config.Decision{Name: "embedding_route", Priority: 60, Tier: 1, Rules: config.RuleNode{Type: "embedding", Name: "legal_analysis"}}
-	trace := rankingTraceFor(t,
-		[]config.Decision{domainDecision("law_route", 180, 1, "law"), embedding},
-		config.RoutingStrategyConfidence,
-		&SignalMatches{
-			DomainRules:       []string{"law"},
-			EmbeddingRules:    []string{"legal_analysis"},
-			SignalConfidences: map[string]float64{"domain:law": 0.70, "embedding:legal_analysis": 0.99},
-		})
-
-	if trace.Comparable {
-		t.Fatalf("trace = %+v, want an incomparable pool", trace)
-	}
-	if trace.Fallback != "embedding_route reported a similarity against a probability" {
-		t.Fatalf("fallback = %q, want the decision and the two kinds", trace.Fallback)
-	}
-	if trace.Winner != "law_route" || trace.DecidedBy != "priority" {
-		t.Fatalf("trace = %+v, want law_route decided by priority", trace)
-	}
-	assertRunnerUp(t, trace, "embedding_route", "no comparable confidence, priority 180 > 60")
 }
 
 // A member that reported no comparable score is named the same way.

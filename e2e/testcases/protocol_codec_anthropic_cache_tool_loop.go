@@ -122,7 +122,7 @@ func sendAnthropicCacheToolTurn(
 		return result, err
 	}
 	if backendFormat == "openai.responses.v1" {
-		if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "cache_control") {
+		if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "cache_control") {
 			return result, fmt.Errorf("%s omitted the cache drop warning: %q", sessionID, warnings)
 		}
 		if bytes.Contains(upstream, []byte("cache_control")) {

@@ -58,6 +58,47 @@ func setWorkflowStateClaimLease(t *testing.T, d time.Duration) {
 	})
 }
 
+// workflowStateManualClock is a store time source that only moves when a test
+// advances it, so lease assertions do not depend on scheduling.
+type workflowStateManualClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func newWorkflowStateManualClock() *workflowStateManualClock {
+	return &workflowStateManualClock{now: time.Now().UTC()}
+}
+
+func (c *workflowStateManualClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *workflowStateManualClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+}
+
+// useWorkflowStateClock points a memory or file store at clock. Redis leases
+// live in the server, so Redis tests advance miniredis instead.
+func useWorkflowStateClock(t *testing.T, s workflowToolStateStore, clock *workflowStateManualClock) {
+	t.Helper()
+	switch store := s.(type) {
+	case *workflowMemoryToolStateStore:
+		store.mu.Lock()
+		store.now = clock.Now
+		store.mu.Unlock()
+	case *workflowFileToolStateStore:
+		store.mu.Lock()
+		store.now = clock.Now
+		store.mu.Unlock()
+	default:
+		t.Fatalf("%T has no injectable clock", s)
+	}
+}
+
 func makeOversizedState() *workflowPendingToolState {
 	// Build a state whose JSON serialisation exceeds maxStatePayloadBytes.
 	big := make([]byte, maxStatePayloadBytes+1)
@@ -1015,9 +1056,9 @@ func TestStateStore_RenewKeepsClaimPastLease(t *testing.T) {
 		t.Run(backend.name, func(t *testing.T) {
 			s := backend.store()
 			t.Cleanup(func() { _ = s.Close() })
-			assertRenewKeepsClaimPastLease(t, s, func(step time.Duration) {
-				time.Sleep(step)
-			})
+			clock := newWorkflowStateManualClock()
+			useWorkflowStateClock(t, s, clock)
+			assertRenewKeepsClaimPastLease(t, s, clock.Advance)
 		})
 	}
 	t.Run("redis", func(t *testing.T) {

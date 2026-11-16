@@ -22,9 +22,11 @@ func TestMemoryWarnsThatRemoteEmbeddingIdentityIsUnverified(t *testing.T) {
 		})
 	}))
 	t.Cleanup(server.Close)
-	cfg := &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Milvus: config.MemoryMilvusConfig{Collection: "existing"}}}
-	cfg.EmbeddingConfig = config.HNSWConfig{Backend: config.EmbeddingBackendOpenAICompatible, ModelType: config.EmbeddingModelTypeRemote, TargetDimension: 2}
-	cfg.Endpoint = config.EmbeddingEndpointConfig{BaseURL: server.URL, Model: "text-embedding", Dimensions: 2}
+	cfg := &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, Milvus: config.MemoryMilvusConfig{Collection: "existing"}}}
+	cfg.EmbeddingDeployment = "remote-embedding"
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"remote-embedding": {
+		Provider: config.OpenAIEmbeddingsProvider, Endpoint: server.URL, Model: "text-embedding", Capabilities: &config.DeploymentCapabilities{Dimensions: 2},
+	}}
 	remote, err := modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), cfg, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +45,7 @@ func TestMemoryWarnsThatRemoteEmbeddingIdentityIsUnverified(t *testing.T) {
 		unchangedNamespace bool
 	}{
 		{name: "remote endpoint", set: remote, warnings: 1, unchangedNamespace: true},
-		{name: "local model", set: embedding.NewSet(map[string]embedding.Provider{config.DefaultEmbeddingModel: local}, config.DefaultEmbeddingModel), warnings: 0},
+		{name: "local model", set: embedding.NewSet(map[string]embedding.Provider{"remote-embedding": local}, "remote-embedding"), warnings: 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			logs := newObservedEventLogger(t)

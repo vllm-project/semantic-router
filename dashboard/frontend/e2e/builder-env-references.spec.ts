@@ -8,7 +8,7 @@ test.use({ screenshot: 'only-on-failure' })
 // These tests use the production Go compiler through its HTTP handler.
 // Deploy writes the imported values back, and the compiler preserves references instead of resolving its process
 // environment, so references and $$ escapes must survive the import as written.
-const referencesConfig = `version: v0.3
+const referencesConfig = `version: v0.5
 providers:
   models:
     - name: model-a
@@ -16,52 +16,52 @@ providers:
         - name: local
           endpoint: localhost:8000
           protocol: http
-routing:
-  modelCards:
-    - name: model-a
-      modality: text
-  signals:
-    keywords:
-      - name: billing
-        operator: OR
-        keywords: ["invoice"]
-  decisions:
-    - name: billing_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: billing
-      modelRefs:
-        - model: model-a
-      plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: "Quote every price in $$USD."
-        - type: header_mutation
-          configuration:
-            add:
-              - name: Authorization
-                value: "Bearer \${BILLING_GATEWAY_TOKEN}"
-              - name: X-Tenant
-                value: "\${TENANT_ID:-default-tenant}"
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: billing
+          operator: OR
+          keywords: ["invoice"]
+    decisions:
+      - name: billing_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: billing
+        modelRefs:
+          - model: model-a
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: "Quote every price in $$USD."
+          - type: header_mutation
+            configuration:
+              add:
+                - name: X-Billing-Token
+                  value: "Bearer \${BILLING_GATEWAY_TOKEN}"
+                - name: X-Tenant
+                  value: "\${TENANT_ID:-default-tenant}"
 `
 
 // The OpenAI RAG backend requires api_key, which the docs recommend setting via ${VAR}.
-const requiredReferenceConfig = `${referencesConfig}        - type: rag
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_billing_docs
-              api_key: \${OPENAI_API_KEY}
+const requiredReferenceConfig = `${referencesConfig}          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_billing_docs
+                    api_key: \${OPENAI_API_KEY}
 `
 
 // Each typed value is valid only once its reference takes the default, and the
 // RAG key is valid only as written.
-const typedDefaultsConfig = `version: v0.3
+const typedDefaultsConfig = `version: v0.5
 providers:
   models:
     - name: model-a
@@ -71,32 +71,32 @@ providers:
         - name: local
           endpoint: \${BACKEND_HOST:-127.0.0.1}:8000
           protocol: http
-routing:
-  modelCards:
-    - name: model-a
-      modality: text
-  signals:
-    context:
-      - name: long_context
-        min_tokens: \${CTX_MIN:-4k}
-  decisions:
-    - name: long_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: \${CTX_MIN:-4k}
+    decisions:
+      - name: long_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: model-a
+        plugins:
           - type: context
-            name: long_context
-      modelRefs:
-        - model: model-a
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_billing_docs
-              api_key: \${OPENAI_API_KEY}
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_billing_docs
+                    api_key: \${OPENAI_API_KEY}
 `
 
 test.beforeEach(async ({ page }) => {

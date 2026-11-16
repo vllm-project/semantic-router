@@ -54,6 +54,9 @@ func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, p
 
 func formatUnknownField(key, path string, known map[string]fieldEntry) string {
 	fullPath := joinPath(path, key)
+	if reason := explainUnknownField(key, path); reason != "" {
+		return fmt.Sprintf("unknown field %q in %s: %s", key, displayPath(fullPath), reason)
+	}
 	if suggestion := closestField(key, known); suggestion != "" {
 		return fmt.Sprintf("unknown field %q in %s; did you mean %q?", key, displayPath(fullPath), suggestion)
 	}

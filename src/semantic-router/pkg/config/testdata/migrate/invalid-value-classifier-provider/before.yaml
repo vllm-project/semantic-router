@@ -1,0 +1,33 @@
+# A classify deployment, and an http one that named an external[] model,
+# answered the removed classifier modules; no signal asks them, so migrate
+# drops them, and the external model with them.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      sequence-classifier:
+        provider: classify
+        endpoint: http://sequence-classifier:8080
+        auth: {api_key_env: SEQUENCE_CLASSIFIER_API_KEY}
+        timeout_ms: 5000
+      guard-service:
+        provider: http
+        external_model: guard
+    external:
+      - name: guard
+        llm_provider: vllm
+        model_role: guardrail
+        llm_endpoint: {address: guard.example.com, port: 8000}
+        llm_model_name: guard-v1

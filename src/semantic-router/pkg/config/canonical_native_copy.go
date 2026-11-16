@@ -8,30 +8,32 @@ func cloneNativeAlgorithm(source *AlgorithmConfig) *AlgorithmConfig {
 	}
 	result := *source
 	result.Budget = cloneNativeValue(source.Budget)
-	result.Quality = cloneNativeValue(source.Quality)
-	if result.Quality != nil {
-		result.Quality.Acceptance = cloneNativeAcceptance(source.Quality.Acceptance)
-		result.Quality.MaxRisk = cloneNativeValue(source.Quality.MaxRisk)
+	escalate := *source.Escalate
+	result.Escalate = &escalate
+	escalate.Quality = cloneNativeValue(source.Escalate.Quality)
+	if escalate.Quality != nil {
+		escalate.Quality.Accept = cloneNativeAccept(source.Escalate.Quality.Accept)
+		escalate.Quality.MaxRisk = cloneNativeValue(source.Escalate.Quality.MaxRisk)
 	}
-	result.Stages = append([]CascadeStage(nil), source.Stages...)
-	for index, stage := range source.Stages {
-		result.Stages[index].Enabled = cloneNativeValue(stage.Enabled)
-		result.Stages[index].Accept = cloneNativeAcceptance(stage.Accept)
-		result.Stages[index].Generation = cloneNativeValue(stage.Generation)
+	escalate.Stages = append([]EscalateStage(nil), source.Escalate.Stages...)
+	for index, stage := range source.Escalate.Stages {
+		escalate.Stages[index].Enabled = cloneNativeValue(stage.Enabled)
+		escalate.Stages[index].Accept = cloneNativeAccept(stage.Accept)
+		escalate.Stages[index].Generation = cloneNativeValue(stage.Generation)
 	}
 	return &result
 }
 
-func cloneNativeAcceptance(source *NativeAcceptance) *NativeAcceptance {
+func cloneNativeAccept(source *EscalateAccept) *EscalateAccept {
 	if source == nil {
 		return nil
 	}
-	result := &NativeAcceptance{Rules: append([]NativeAcceptanceRule(nil), source.Rules...)}
-	for index, rule := range source.Rules {
-		result.Rules[index].State = cloneNativeValue(rule.State)
-		result.Rules[index].Predicate = NumericPredicate{
-			GT: cloneNativeValue(rule.Predicate.GT), GTE: cloneNativeValue(rule.Predicate.GTE),
-			LT: cloneNativeValue(rule.Predicate.LT), LTE: cloneNativeValue(rule.Predicate.LTE),
+	result := &EscalateAccept{Native: append([]NativeAcceptanceRule(nil), source.Native...)}
+	for index, rule := range source.Native {
+		result.Native[index].State = cloneNativeValue(rule.State)
+		result.Native[index].NumericPredicate = NumericPredicate{
+			GT: cloneNativeValue(rule.GT), GTE: cloneNativeValue(rule.GTE),
+			LT: cloneNativeValue(rule.LT), LTE: cloneNativeValue(rule.LTE),
 		}
 	}
 	return result

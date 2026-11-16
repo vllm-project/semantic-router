@@ -18,7 +18,7 @@ spec:
         value: /
       headers:
       - type: Exact
-        name: x-selected-model
+        name: x-vsr-route-model
         value: phi4-mini
     timeouts:
       request: 300s

@@ -9,9 +9,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
-const managementRequestIDHeader = "X-Request-Id"
+// The management API's OpenAPI document spells it canonically: X-Request-Id.
+var managementRequestIDHeader = http.CanonicalHeaderKey(headers.RequestID)
 
 type requestContextKey string
 

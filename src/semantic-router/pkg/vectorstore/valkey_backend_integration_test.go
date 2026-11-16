@@ -243,6 +243,14 @@ var _ = Describe("ValkeyBackend integ Search", Label("storage", "storage:valkey"
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r[0].Content).To(Equal("hello"))
 	})
+	It("scores a COSINE match by its cosine", func() {
+		// "world" is orthogonal to the query: a cosine of 0, below 0.4.
+		r, err := backend.Search(ctx, vsID, normalizeVec([]float32{1, 0, 0}), 5, 0.4, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r).To(HaveLen(1))
+		Expect(r[0].Content).To(Equal("hello"))
+		Expect(r[0].Score).To(BeNumerically("~", 1, 1e-3))
+	})
 	It("threshold", func() {
 		r, err := backend.Search(ctx, vsID, normalizeVec([]float32{1, 0, 0}), 5, 0.99, nil)
 		Expect(err).NotTo(HaveOccurred())

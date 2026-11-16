@@ -7,7 +7,11 @@ from copy import deepcopy
 import click
 
 from cli.bootstrap import build_bootstrap_config
-from cli.decision_model import configured_decision_model, decision_model_deployment
+from cli.decision_model import (
+    configured_decision_model,
+    decision_model_deployment,
+    remote_decision_model,
+)
 from cli.model_revision import builtin_releases, resolve_model_revision
 from cli.utils import get_logger
 from cli.validator_decision_model import engine_args_error, public_model_name
@@ -33,8 +37,8 @@ prints a short summary (--verbose prints every detail). Saved routing
 configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
-Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
-0.3B). Only explicit model, placement and engine options override saved
+Omitting MODEL preserves that deployment (a new configuration uses Vela 3.0
+vela3-fast). Only explicit model, placement and engine options override saved
 settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
 and --enable-shared-context set the deployment's engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.
@@ -190,10 +194,18 @@ def apply_instance_options(
         global_config = document.setdefault("global", {})
         global_config.setdefault("router", {})["enabled"] = not engine
     key = configured_decision_model(document)
+    remote = remote_decision_model(document) is not None
+    if remote and model_options:
+        raise ValueError(
+            "serve model overrides apply to a local decision model; "
+            f"{key!r} is a systemone deployment, configured in --config"
+        )
     catalog = global_config.get("model_catalog") or {}
     deployments = catalog.get("deployments") or {}
     authored = key in deployments
-    if model_options or (not authored and platform in {"cuda", "rocm"}):
+    if not remote and (
+        model_options or (not authored and platform in {"cuda", "rocm"})
+    ):
         catalog = document.setdefault("global", {}).setdefault("model_catalog", {})
         deployments = catalog.setdefault("deployments", {})
         defaults = decision_model_deployment(document)
@@ -253,6 +265,6 @@ def apply_instance_options(
                 raise ValueError(
                     "A local MODEL needs an explicit public_name in --config"
                 )
-            bootstrap_listeners[0]["systemone"] = {"models": [name]}
+            bootstrap_listeners[0]["apis"] = {"systemone": {"models": [name]}}
             document["listeners"] = bootstrap_listeners
     return document != before

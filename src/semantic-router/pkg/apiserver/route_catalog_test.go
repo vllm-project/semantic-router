@@ -47,6 +47,8 @@ func TestAPIRouteCatalogHasUniqueDocumentedPatterns(t *testing.T) {
 			"/api/v1/nli",
 			"/api/v1/embeddings",
 			"/api/v1/similarity",
+			"/api/v1/diagnostics/embeddings",
+			"/api/v1/diagnostics/similarity",
 			"/config",
 			"/info",
 			"/metrics",

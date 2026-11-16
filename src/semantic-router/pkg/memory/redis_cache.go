@@ -163,7 +163,7 @@ func cacheKeyForVersion(prefix, userID string, opts RetrieveOptions, version str
 	}
 	for _, field := range []string{
 		opts.Query, opts.ProjectID, strconv.Itoa(opts.Limit),
-		strconv.FormatFloat(float64(opts.Threshold), 'g', -1, 32),
+		strconv.FormatFloat(float64(opts.Threshold), 'g', -1, 32), strconv.FormatBool(opts.ThresholdSet),
 		strconv.FormatBool(opts.HybridSearch), mode, strconv.FormatBool(opts.AdaptiveThreshold),
 		strconv.Itoa(len(opts.Types)),
 	} {

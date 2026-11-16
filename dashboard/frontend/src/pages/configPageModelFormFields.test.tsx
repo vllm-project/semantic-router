@@ -24,11 +24,14 @@ describe('model form effective fields', () => {
     const field = modelAPIFormatField(catalog)
     const data = newModelFormData()
     const markup = renderField(field, '', data)
-    expect(markup).toContain('value="" selected="">Inherit (openai)')
-    expect(markup).toContain('value="openai"')
+    expect(markup).toContain('value="" selected="">Inherit (chat_completions)')
+    expect(markup).toContain('value="chat_completions"')
     expect(markup).toContain('value="responses"')
-    expect(markup).toContain('value="anthropic"')
-    expect(markup).not.toContain('value="images"')
+    expect(markup).toContain('value="messages"')
+    expect(markup).toContain('value="images"')
+    expect(markup).not.toContain('value="openai"')
+    expect(markup).not.toContain('value="anthropic"')
+    expect(markup).not.toContain('value="speech"')
   })
 
   it('recomputes defaults from the current backend rather than freezing the opening value', () => {
@@ -37,8 +40,8 @@ describe('model form effective fields', () => {
       ...newModelFormData(),
       backend_refs: [{ provider: 'anthropic' }],
     })
-    expect(markup).toContain('Inherit (anthropic)')
-    expect(markup).not.toContain('Inherit (openai)')
+    expect(markup).toContain('Inherit (messages)')
+    expect(markup).not.toContain('Inherit (chat_completions)')
     expect(renderField(field, 'responses', newModelFormData())).toContain(
       'value="responses" selected=""',
     )
@@ -68,7 +71,6 @@ describe('model form effective fields', () => {
     }
     const model = getNormalizedModels(
       { providers: { models: [{ name: 'custom-alias', backend_refs: [{ provider: 'test' }] }] } },
-      true,
       customCatalog,
     )[0]
     const form = editModelFormData(model)
@@ -96,7 +98,6 @@ describe('model form effective fields', () => {
           ],
         },
       },
-      true,
       catalog,
     )[0]
     const data = editModelFormData(model)

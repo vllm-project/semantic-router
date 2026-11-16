@@ -61,8 +61,7 @@
       "content-type": "text/event-stream",
       "x-vsr-config-version": "1",
       "x-vsr-response-path": "looper",
-      "x-vsr-schema-version": "2",
-      "x-vsr-selected-confidence": "0.0000",
+      "x-vsr-schema-version": "3",
       "x-vsr-selected-decision": "looper_route",
       "x-vsr-selected-model": "model-c",
       "x-vsr-selected-recipe": "default"

@@ -66,11 +66,11 @@ type CalibrationBin struct {
 // No request performs file I/O. Missing runtime identity or an unmatched task,
 // arrival history or score bin is unresolved, never an uncalibrated success.
 func LoadCalibration(cfg *config.RouterConfig, recipe *config.RoutingRecipe, decision *config.Decision) (QualityEvaluator, error) {
-	if decision == nil || !decision.Algorithm.IsNative() || decision.Algorithm.Quality == nil {
-		return nil, errors.New("missing native quality configuration")
+	if decision == nil || !decision.Algorithm.IsNative() {
+		return nil, errors.New("missing native escalation")
 	}
-	quality := decision.Algorithm.Quality
-	if quality.Type != "calibrated" {
+	quality := decision.Algorithm.NativeQuality()
+	if quality.EffectiveType() != config.EscalateQualityCalibrated {
 		return nil, nil
 	}
 	if quality.Loss != "bundle_error" || quality.MaxRisk == nil || !probability(quality.MaxRisk) {
@@ -79,8 +79,8 @@ func LoadCalibration(cfg *config.RouterConfig, recipe *config.RoutingRecipe, dec
 	if recipe == nil || !emptyCalibrationCollections(recipe.Profile.Signals) || !emptyCalibrationCollections(recipe.Profile.Projections) {
 		return nil, errors.New("calibrated execution does not yet support routing signal or projection provenance")
 	}
-	for _, stage := range decision.Algorithm.Stages {
-		if stage.IsEnabled() && stage.Kind != "native" {
+	for _, stage := range decision.Algorithm.NativeStages() {
+		if stage.IsEnabled() && stage.StageKind() != config.EscalateStageNative {
 			return nil, errors.New("calibrated execution does not yet support judge identity and history evidence")
 		}
 	}
@@ -100,7 +100,7 @@ func LoadCalibration(cfg *config.RouterConfig, recipe *config.RoutingRecipe, dec
 	if err != nil {
 		return nil, err
 	}
-	if err := artifact.prepare(policySHA, decision.Algorithm.Stages, *quality.MaxRisk); err != nil {
+	if err := artifact.prepare(policySHA, decision.Algorithm.NativeStages(), *quality.MaxRisk); err != nil {
 		return nil, err
 	}
 	maxRisk := *quality.MaxRisk
@@ -124,7 +124,7 @@ func emptyCalibrationCollections(value any) bool {
 	return true
 }
 
-func (a *NativeCalibration) prepare(policySHA string, stages []config.CascadeStage, maxRisk float64) error {
+func (a *NativeCalibration) prepare(policySHA string, stages []config.EscalateStage, maxRisk float64) error {
 	cert := a.Certification
 	if a.SchemaVersion != "systemone-calibration/v1" || a.Loss != "bundle_error" || a.Feature != "min_top_probability" || a.PolicySHA256 != policySHA {
 		return errors.New("unsupported or mismatched native calibration contract")
@@ -136,13 +136,13 @@ func (a *NativeCalibration) prepare(policySHA string, stages []config.CascadeSta
 	if !finite(a.Alpha) || a.Alpha <= 0 || a.Alpha >= 1 || len(a.Cells) == 0 || len(stages) == 0 {
 		return errors.New("calibration requires cells and alpha in (0, 1)")
 	}
-	declared := make(map[string]config.CascadeStage, len(stages))
+	declared := make(map[string]config.EscalateStage, len(stages))
 	for _, stage := range stages {
-		declared[stage.Name] = stage
+		declared[stage.StageName()] = stage
 	}
 	seen, cells := map[string]bool{}, 0
 	for _, cell := range a.Cells {
-		if err := validateCalibrationCell(cell, declared, stages[0].Name); err != nil {
+		if err := validateCalibrationCell(cell, declared, stages[0].StageName()); err != nil {
 			return err
 		}
 		key, err := calibrationSHA(struct {
@@ -178,14 +178,14 @@ func (a *NativeCalibration) prepare(policySHA string, stages []config.CascadeSta
 	return nil
 }
 
-func validateCalibrationCell(cell CalibrationCell, stages map[string]config.CascadeStage, first string) error {
+func validateCalibrationCell(cell CalibrationCell, stages map[string]config.EscalateStage, first string) error {
 	if !validSHA256(cell.TaskSHA256) || len(cell.History) == 0 || len(cell.Bins) == 0 || cell.History[0].Stage != first {
 		return errors.New("calibration cell requires a task, full arrival history and bins")
 	}
 	visited := map[string]bool{}
 	for _, step := range cell.History {
 		stage, exists := stages[step.Stage]
-		if !exists || !stage.IsEnabled() || stage.Kind != "native" || stage.Model != step.Model || visited[step.Stage] || !step.Identity.Valid() {
+		if !exists || !stage.IsEnabled() || stage.StageKind() != config.EscalateStageNative || stage.Model != step.Model || visited[step.Stage] || !step.Identity.Valid() {
 			return fmt.Errorf("calibration contains an undeclared, repeated or unverified native stage %q", step.Stage)
 		}
 		visited[step.Stage] = true

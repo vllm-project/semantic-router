@@ -5,11 +5,11 @@ import (
 	"testing"
 )
 
-// buildDecisionRefConfig wraps a decisions block in an otherwise-valid v0.3
-// canonical config with a single backed model card "m1".
+// buildDecisionRefConfig wraps a decisions block in an otherwise-valid
+// canonical config with a single backed model "m1".
 func buildDecisionRefConfig(decisions string) []byte {
 	return []byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -20,10 +20,9 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
           api_key: secret
-routing:
-  modelCards:
-    - name: m1
-  decisions:
+recipes:
+  - name: default
+    decisions:
 ` + decisions)
 }
 
@@ -31,7 +30,7 @@ routing:
 // (an unknown default_model is already rejected today).
 func TestUnknownDefaultModelRejected_Sanity(t *testing.T) {
 	yaml := []byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -42,16 +41,15 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
           api_key: secret
-routing:
-  modelCards:
-    - name: m1
-  decisions:
-    - name: d1
-      priority: 1
-      rules: {operator: AND, conditions: []}
-      modelRefs:
-        - model: m1
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: d1
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: m1
+            use_reasoning: false
 `)
 	if _, err := ParseYAMLBytes(yaml); err == nil {
 		t.Fatal("expected unknown default_model to be rejected, got nil error")
@@ -63,12 +61,12 @@ routing:
 // also set, so a plain modelRef to an unknown model slips through and only
 // fails at request time with a misleading upstream 401.
 func TestDecisionModelRefUnknownModelRejected(t *testing.T) {
-	cfg := buildDecisionRefConfig(`    - name: d1
-      priority: 1
-      rules: {operator: AND, conditions: []}
-      modelRefs:
-        - model: ghost-model
-          use_reasoning: false
+	cfg := buildDecisionRefConfig(`      - name: d1
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: ghost-model
+            use_reasoning: false
 `)
 	_, err := ParseYAMLBytes(cfg)
 	if err == nil {
@@ -81,12 +79,12 @@ func TestDecisionModelRefUnknownModelRejected(t *testing.T) {
 
 // G1 baseline: a modelRef to a known model card must still be accepted.
 func TestDecisionModelRefKnownModelAccepted(t *testing.T) {
-	cfg := buildDecisionRefConfig(`    - name: d1
-      priority: 1
-      rules: {operator: AND, conditions: []}
-      modelRefs:
-        - model: m1
-          use_reasoning: false
+	cfg := buildDecisionRefConfig(`      - name: d1
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: m1
+            use_reasoning: false
 `)
 	if _, err := ParseYAMLBytes(cfg); err != nil {
 		t.Fatalf("known modelRef model should be accepted, got: %v", err)
@@ -95,18 +93,18 @@ func TestDecisionModelRefKnownModelAccepted(t *testing.T) {
 
 // G2: two decisions sharing the same name are ambiguous and must be rejected.
 func TestDuplicateDecisionNamesRejected(t *testing.T) {
-	cfg := buildDecisionRefConfig(`    - name: dup
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs:
-        - model: m1
-          use_reasoning: false
-    - name: dup
-      priority: 50
-      rules: {operator: AND, conditions: []}
-      modelRefs:
-        - model: m1
-          use_reasoning: false
+	cfg := buildDecisionRefConfig(`      - name: dup
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: m1
+            use_reasoning: false
+      - name: dup
+        priority: 50
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: m1
+            use_reasoning: false
 `)
 	_, err := ParseYAMLBytes(cfg)
 	if err == nil {
@@ -119,20 +117,42 @@ func TestDuplicateDecisionNamesRejected(t *testing.T) {
 
 // G2 baseline: distinct decision names must be accepted.
 func TestDistinctDecisionNamesAccepted(t *testing.T) {
-	cfg := buildDecisionRefConfig(`    - name: d1
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs:
-        - model: m1
-          use_reasoning: false
-    - name: d2
-      priority: 50
-      rules: {operator: AND, conditions: []}
-      modelRefs:
-        - model: m1
-          use_reasoning: false
+	cfg := buildDecisionRefConfig(`      - name: d1
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: m1
+            use_reasoning: false
+      - name: d2
+        priority: 50
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: m1
+            use_reasoning: false
 `)
 	if _, err := ParseYAMLBytes(cfg); err != nil {
 		t.Fatalf("distinct decision names should be accepted, got: %v", err)
+	}
+}
+
+// A candidate iteration's models are checked as modelRefs are: an unknown
+// model or an undeclared LoRA is refused at load in either place.
+func TestCandidateIterationModelsAreCheckedLikeModelRefs(t *testing.T) {
+	for _, ref := range []string{
+		"{model: ghost-model, use_reasoning: false}",
+		"{model: m1, lora_name: undeclared, use_reasoning: false}",
+	} {
+		for _, decision := range []string{
+			"        modelRefs: [" + ref + "]\n",
+			"        modelRefs: [{model: m1, use_reasoning: false}]\n" +
+				"        candidateIterations:\n" +
+				"          - {variable: candidate, source: models, models: [" + ref + "], outputs: [{type: model, value: candidate}]}\n",
+		} {
+			cfg := strings.Replace(string(buildDecisionRefConfig("      - name: d1\n        priority: 1\n"+decision)),
+				"          api_key: secret\n", "          api_key: secret\n      loras: [{name: declared}]\n", 1)
+			if _, err := ParseYAMLBytes([]byte(cfg)); err == nil {
+				t.Errorf("accepted %s in\n%s", ref, decision)
+			}
+		}
 	}
 }

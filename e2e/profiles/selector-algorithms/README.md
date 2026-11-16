@@ -1,7 +1,7 @@
 # Selector algorithms E2E profile
 
 This profile hosts deterministic deployed-path contracts for algorithms whose
-runtime catalog execution tier is `selector`. Looper coverage remains in the
+runtime catalog kind is `selector`. Looper coverage remains in the
 `looper` profile.
 
 The first contract covers `static`. A keyword fixture selects a decision with

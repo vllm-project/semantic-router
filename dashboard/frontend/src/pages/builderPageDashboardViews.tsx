@@ -2,7 +2,8 @@ import React, { useId } from 'react'
 
 import type { BoolExprNode, EditorMode } from '@/types/dsl'
 import { useDSLStore } from '@/stores/dslStore'
-import { formatRoutingMetadataValue } from '@/components/routingMetadataDisplay'
+import { formatRoutingMetadataValue, matchedSignalKey } from '@/components/routingMetadataDisplay'
+import { X_VSR_SELECTED_DECISION } from '@/generated/vsrHeaders'
 
 import styles from './BuilderPage.module.css'
 import { ModelIcon, PluginIcon, RouteIcon, SignalIcon } from './builderPageFormPrimitives'
@@ -251,7 +252,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     <span className={styles.routeMapTargetArrow}>└→</span>
                     <span className={styles.routeMapRouteName}>
                       &quot;
-                      {formatRoutingMetadataValue('x-vsr-selected-decision', route.name)}
+                      {formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, route.name)}
                       &quot;
                     </span>
                     <span className={styles.routeMapTargetArrow}>→</span>
@@ -276,7 +277,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     <span className={styles.routeMapTargetArrow}>└→</span>
                     <span className={styles.routeMapRouteName}>
                       &quot;
-                      {formatRoutingMetadataValue('x-vsr-selected-decision', defaultRoute.name)}
+                      {formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, defaultRoute.name)}
                       &quot;
                     </span>
                     <span className={styles.routeMapTargetArrow}>→</span>
@@ -438,21 +439,24 @@ const EntityListView: React.FC<EntityListViewProps> = ({
       <div className={styles.entityListGrid}>
         {items.map((item) => (
           <div
-            key={item.name}
+            key={`${item.type}:${item.name}`}
             className={styles.entityListCard}
-            onClick={() => onSelect({ kind, name: item.name })}
+            onClick={() =>
+              onSelect(
+                kind === 'signal'
+                  ? { kind, name: item.name, signalType: item.type }
+                  : { kind, name: item.name },
+              )
+            }
             style={{ '--entity-accent': meta.color } as React.CSSProperties}
           >
             <div className={styles.entityListCardHeader}>
               <Icon className={styles.entityListCardIcon} />
               <span className={styles.entityListCardName}>
                 {kind === 'route'
-                  ? formatRoutingMetadataValue('x-vsr-selected-decision', item.name)
+                  ? formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, item.name)
                   : kind === 'signal'
-                    ? formatRoutingMetadataValue(
-                        `x-vsr-matched-${item.type.replace('_', '-')}`,
-                        item.name,
-                      )
+                    ? formatRoutingMetadataValue(matchedSignalKey(item.type), item.name)
                     : item.name}
               </span>
             </div>

@@ -42,7 +42,6 @@ const (
 	reasonRuntimeConfigNotWritable = "runtime_config_not_writable"
 	reasonSRBenchAuthUnconfigured  = "sr_bench_auth_unconfigured"
 	reasonUpstreamUnreachable      = "upstream_unreachable"
-	reasonMLPipelineDisabled       = "ml_pipeline_disabled"
 	reasonMCPDisabled              = "mcp_disabled"
 )
 
@@ -50,7 +49,7 @@ const (
 var CapabilityReasons = []string{
 	reasonSetupInactive, reasonConfigUnreadable, reasonPermissionRequired, reasonServeNotAttached,
 	reasonRouterUnreachable, reasonProbePending, reasonServerReadonly, reasonRuntimeConfigNotWritable,
-	reasonSRBenchAuthUnconfigured, reasonUpstreamUnreachable, reasonMLPipelineDisabled, reasonMCPDisabled,
+	reasonSRBenchAuthUnconfigured, reasonUpstreamUnreachable, reasonMCPDisabled,
 }
 
 // Capability is the runtime state of one Dashboard feature for the caller.
@@ -128,7 +127,7 @@ func resolveCapability(facts capabilityFacts) Capability {
 // upstream.
 func CapabilitiesHandler(cfg *config.Config, setupResolver *setupmode.Resolver, prober *CapabilityProber) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -148,7 +147,6 @@ func collectCapabilities(cfg *config.Config, setupResolver *setupmode.Resolver, 
 		setupFacts(cfg, setupResolver, configReadable, perms),
 		configFacts(cfg, configReadable, probes, perms),
 		evaluationFacts(cfg, probes, perms),
-		mlPipelineFacts(cfg, probes, perms),
 		mcpFacts(cfg, perms),
 	}
 	response := CapabilitiesResponse{Capabilities: make([]Capability, 0, len(facts))}
@@ -208,21 +206,6 @@ func evaluationFacts(cfg *config.Config, probes map[string]probeResult, perms ma
 		return facts
 	}
 	facts.reachable, facts.checkedAt = probeCheck(probes, probeSRBench, reasonUpstreamUnreachable, "The sr-bench service did not answer its health check.")
-	return facts
-}
-
-func mlPipelineFacts(cfg *config.Config, probes map[string]probeResult, perms map[string]bool) capabilityFacts {
-	facts := capabilityFacts{
-		id: "mlPipeline", enabled: pass(), configured: pass(), reachable: pass(), healthy: pass(),
-		authorized: permitted(perms, auth.PermMlPipeline),
-	}
-	if !cfg.MLPipelineEnabled {
-		facts.enabled = fail(reasonMLPipelineDisabled, "Enable the ML pipeline with ML_PIPELINE_ENABLED=true.")
-		return facts
-	}
-	if cfg.MLServiceURL != "" {
-		facts.reachable, facts.checkedAt = probeCheck(probes, probeMLService, reasonUpstreamUnreachable, "The ML service did not answer its health check.")
-	}
 	return facts
 }
 

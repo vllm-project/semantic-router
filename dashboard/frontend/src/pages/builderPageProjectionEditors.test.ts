@@ -3,33 +3,20 @@ import { describe, expect, it } from 'vitest'
 import { projectionScoreToFields } from './builderPageProjectionEditors'
 
 describe('Builder projection score fields', () => {
-  it('keeps kb_metric knowledge base and metric without writing an empty name', () => {
+  it('writes each input by its signal type and name', () => {
     const fields = projectionScoreToFields({
-      name: 'privacy_kb_bias',
+      name: 'urgency',
       method: 'weighted_sum',
       inputs: [
-        {
-          signalType: 'kb_metric',
-          signalName: '',
-          kb: 'privacy_kb',
-          metric: 'private_vs_public',
-          weight: 1,
-          valueSource: 'score',
-        },
-        { signalType: 'keyword', signalName: 'urgent', weight: 0.5 },
+        { signalType: 'keyword', signalName: 'urgent', weight: 0.5, valueSource: 'binary' },
+        { signalType: 'projection', signalName: 'effort', weight: 1 },
       ],
       pos: { Line: 1, Column: 1 },
     })
 
     expect(fields.inputs).toEqual([
-      {
-        type: 'kb_metric',
-        kb: 'privacy_kb',
-        metric: 'private_vs_public',
-        weight: 1,
-        value_source: 'score',
-      },
-      { type: 'keyword', name: 'urgent', weight: 0.5 },
+      { type: 'keyword', name: 'urgent', weight: 0.5, value_source: 'binary' },
+      { type: 'projection', name: 'effort', weight: 1 },
     ])
   })
 })

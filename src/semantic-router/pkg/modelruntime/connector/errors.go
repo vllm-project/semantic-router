@@ -38,6 +38,9 @@ type Error struct {
 	Attempt    int
 	Retryable  bool
 	Cause      error
+	// RetryAfter is a status error's Retry-After header, as the server sent
+	// it.
+	RetryAfter string
 
 	body      []byte
 	truncated bool

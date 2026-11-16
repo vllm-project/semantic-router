@@ -22,12 +22,12 @@ import (
 func TestALooperRequestRecordsItsTemplateNodeDurations(t *testing.T) {
 	var fixture looperFixture
 	for _, candidate := range looperFixtures {
-		if candidate.name == "confidence" {
+		if candidate.name == "escalate" {
 			fixture = candidate
 		}
 	}
 	observations := func(nodeType string) uint64 {
-		histogram, ok := metrics.RequestGraphNodeDuration.WithLabelValues(nodeType, "looper.confidence").(prometheus.Metric)
+		histogram, ok := metrics.RequestGraphNodeDuration.WithLabelValues(nodeType, "looper.escalate").(prometheus.Metric)
 		require.True(t, ok)
 		var sample dto.Metric
 		require.NoError(t, histogram.Write(&sample))
@@ -75,7 +75,7 @@ func TestRecordSuccessfulLooperExecutionRecordsAggregateSessionUsageWithoutModel
 		},
 	}
 
-	router.recordSuccessfulLooperExecution(response, "vllm-sr/auto", decision, ctx, nil, nil)
+	router.recordSuccessfulLooperExecution(response, "vllm-sr/auto", decision, ctx, nil)
 
 	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("session-looper", time.Now())
 	require.True(t, ok)

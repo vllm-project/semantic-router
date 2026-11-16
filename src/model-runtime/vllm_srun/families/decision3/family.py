@@ -34,12 +34,12 @@ import itertools
 import math
 import time
 from dataclasses import dataclass, field, replace
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, TypeVar, cast
 
 import torch
 
+from ... import dtypes, quantization
 from ... import media as workers
-from ... import quantization
 from ...errors import (
     INVALID_MODEL_OUTPUT,
     INVALID_QUESTION,
@@ -50,6 +50,7 @@ from ...errors import (
     question_error,
 )
 from ...plugins.base import (
+    AdapterGate,
     BackboneSpec,
     DtypePolicy,
     EngineModel,
@@ -196,6 +197,9 @@ class Item:
     temperature: float | None = None
 
 
+ModelT = TypeVar("ModelT", bound="Decision3Model")
+
+
 class Decision3Family(ModelFamily):
     name = "decision3"
     surfaces = frozenset({"decisions"})
@@ -276,7 +280,11 @@ class Decision3Family(ModelFamily):
                 autocast=None,
                 bf16_resident=False,
                 gpu_weights="bfloat16",
-                cpu_weights="bfloat16",
+                # docs/records/d3-cpu-fp32.md: BF16 answers differ by CPU kernel and
+                # FP32 answers do not, so a CPU computes in FP32 (--dtype bfloat16
+                # opts in to BF16). A quantized package keeps its format's BF16
+                # activations.
+                cpu_weights=None if quantized is None else "bfloat16",
                 # docs/records/decision3-quantized.md: the fused int4 kernel and,
                 # in the FP8 d3-mini table, the fused element-wise kernels change
                 # few of a quantized package's answers; BF16 packages keep exact
@@ -293,15 +301,43 @@ class Decision3Family(ModelFamily):
         self, package: VerifiedPackage, spec: ModelSpec, engine_model: EngineModel
     ) -> Decision3Model:
         """A ``Decision3Model``, or a ``StateOnceModel`` for a package whose layout is state-once."""
+        decision = package.details["package"].decision_config
+        return self.load_as(package, spec, engine_model, model_class_of(decision))
+
+    def load_as(
+        self,
+        package: VerifiedPackage,
+        spec: ModelSpec,
+        engine_model: EngineModel,
+        model_class: type[ModelT],
+    ) -> ModelT:
+        """The package loaded as ``model_class``.
+
+        A family that runs this package as its base passes its own subclass of
+        the one the layout needs.
+        """
         from safetensors.torch import load_file
 
+        from .state_once import StateOnceModel
+
         details: pkg.Decision3Package = package.details["package"]
+        decision = details.decision_config
+        if issubclass(model_class, StateOnceModel) != pkg.is_state_once(decision):
+            raise TypeError(
+                f"{model_class.__name__} does not fit the package's layout "
+                f"({model_class_of(decision).__name__})"
+            )
         root = details.root
         prompt.check_chat_template(root)
         backend, pad_id = prompt.load_tokenizer(root)
-        decision = details.decision_config
         prompt.check_codes(backend, decision["codes"], decision["token_ids"])
-        readout_dtype = decision.get("readout_dtype", "float32")
+        held = dtypes.published(spec.dtype, engine_model.device.type != "cpu")
+        # readout_dtype names the BF16 runtime's readout; other dtypes read out in FP32.
+        readout_dtype = (
+            decision.get("readout_dtype", "float32")
+            if held == "bfloat16"
+            else "float32"
+        )
         readout = load_file(str(root / "readout.safetensors"))["weight"].to(
             engine_model.device, getattr(torch, readout_dtype)
         )
@@ -403,14 +439,14 @@ class Decision3Family(ModelFamily):
             limits=limits,
             licence=package.licence,
             parameters=parameters,
-            dtype=f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout",
+            dtype=(
+                "fp32"
+                if held == "float32"
+                else f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout"
+            ),
             modalities=modalities,
         )
-        model_class = Decision3Model
-        if decision.get("attention_mode", "causal") in pkg.STATE_ONCE_MODES:
-            from .state_once import StateOnceModel
-
-            model_class = StateOnceModel
+        if pkg.is_state_once(decision):
             # A state-once model counts each state once in usage.input_tokens, and that count of one request
             # is capped at the context length (max_request_tokens).
             info = replace(
@@ -568,10 +604,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
 
     def exact_batches(self, items: list[Item]) -> list[list[int]]:
         """Request order, eight questions per pass."""
-        return [
-            list(range(start, min(start + BATCH_SIZE, len(items))))
-            for start in range(0, len(items), BATCH_SIZE)
-        ]
+        return passes(len(items))
 
     # ------------------------------------------------------------------ planning
 
@@ -1150,7 +1183,10 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         images: ImageInputs | None,
         states: list[int] | None = None,
         packed: bool = False,
+        adapter: AdapterGate | None = None,
+        noncausal: bool = False,
     ) -> list[list[float] | None]:
+        """Each item's probabilities from one forward (``adapter`` and ``noncausal`` as ``ForwardBatch``'s)."""
         output = self.engine_model.forward(
             ForwardBatch(
                 input_ids=ids,
@@ -1161,6 +1197,8 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 images=images,
                 states=states,
                 packed=packed,
+                adapter=adapter,
+                noncausal=noncausal,
             )
         )
         return self._probabilities(items, output.query)
@@ -1282,3 +1320,20 @@ def _scaled(logits: torch.Tensor, temperatures: list[float]) -> torch.Tensor:
 
 def _bytes(tensor: torch.Tensor) -> int:
     return tensor.numel() * tensor.element_size()
+
+
+def passes(count: int) -> list[list[int]]:
+    """``range(count)`` in request order, ``BATCH_SIZE`` rows per pass."""
+    return [
+        list(range(start, min(start + BATCH_SIZE, count)))
+        for start in range(0, count, BATCH_SIZE)
+    ]
+
+
+def model_class_of(decision: dict[str, Any]) -> type[Decision3Model]:
+    """``Decision3Model``, or ``StateOnceModel`` for a package whose layout is state-once."""
+    if pkg.is_state_once(decision):
+        from .state_once import StateOnceModel
+
+        return StateOnceModel
+    return Decision3Model

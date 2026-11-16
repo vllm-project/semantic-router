@@ -135,7 +135,7 @@ def builtin_provider_fixture() -> dict[str, Any]:
         ("harbor/terminal-bench@2.1.0", "resolved", "published-agent"),
     )
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
         "providers": {
             "defaults": {"model": models[0]},
@@ -155,14 +155,6 @@ def builtin_provider_fixture() -> dict[str, Any]:
                         "prompt_per_1m": index + 1,
                         "completion_per_1m": index + 1,
                     },
-                }
-                for index, model in enumerate(models)
-            ],
-        },
-        "routing": {
-            "modelCards": [
-                {
-                    "name": model,
                     "context_window_size": 2_000_000,
                     "max_output_tokens": 128_000,
                     "capabilities": [
@@ -173,7 +165,7 @@ def builtin_provider_fixture() -> dict[str, Any]:
                         "structured_output",
                     ],
                 }
-                for model in models
+                for index, model in enumerate(models)
             ],
         },
         "evaluation": {
@@ -209,7 +201,7 @@ def verify_composed_policy(authored: dict, composed: dict, manifest: dict) -> No
     """Preserve authored policy except for the fixture's explicit deployment data."""
     actual = copy.deepcopy(composed.get("recipes", []))
     for recipe in actual:
-        for decision in recipe["routing"]["decisions"]:
+        for decision in recipe.get("decisions", []):
             decision.pop("modelRefs", None)
     if actual != authored.get("recipes", []):
         raise ValueError("runtime composition changed authored routing policy")

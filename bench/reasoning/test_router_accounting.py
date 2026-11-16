@@ -55,7 +55,7 @@ def test_response_accounting_reads_router_headers_and_usage():
     )
     headers = {
         "x-vsr-selected-model": "cloud",
-        "x-vsr-routing-latency-ms": "0.412",
+        "x-vsr-trace": "routing_latency_ms=0.412",
         "x-vsr-cost": "0.000054",
         "x-vsr-cost-currency": "USD",
     }

@@ -95,7 +95,7 @@ func TestSelectorAlgorithmCoverageTracksRuntimeCatalog(t *testing.T) {
 
 	selectorCount := 0
 	for _, algorithm := range loadRuntimeAlgorithmCatalog(t) {
-		if algorithm.Execution != "selector" {
+		if algorithm.Kind != "selector" {
 			continue
 		}
 		selectorCount++
@@ -120,7 +120,7 @@ func TestSelectorAlgorithmCoverageTracksRuntimeCatalog(t *testing.T) {
 
 // Run inside the router module so E2E can inspect the public catalog without
 // adding the router's dependency graph to the E2E module.
-func loadRuntimeAlgorithmCatalog(t *testing.T) []struct{ Type, Tier, Execution string } {
+func loadRuntimeAlgorithmCatalog(t *testing.T) []struct{ Type, Tier, Kind string } {
 	t.Helper()
 	helper, err := filepath.Abs("algorithm_catalog_helper.go")
 	if err != nil {
@@ -136,7 +136,7 @@ func loadRuntimeAlgorithmCatalog(t *testing.T) []struct{ Type, Tier, Execution s
 		}
 		t.Fatal(err)
 	}
-	var catalog []struct{ Type, Tier, Execution string }
+	var catalog []struct{ Type, Tier, Kind string }
 	if err := json.Unmarshal(raw, &catalog); err != nil {
 		t.Fatal(err)
 	}

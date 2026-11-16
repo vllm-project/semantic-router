@@ -1,10 +1,20 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func ValidateRequestParamsPluginConfig(cfg *RequestParamsPluginConfig) error {
 	if cfg == nil {
 		return nil
+	}
+	// The Router streams the answer exactly when the client asks for a stream,
+	// so stripping stream would answer a stream reader with one JSON body.
+	for _, field := range cfg.BlockedParams {
+		if strings.TrimSpace(field) == "stream" {
+			return fmt.Errorf("blocked_params cannot include stream: the Router streams the answer when the client asks for a stream")
+		}
 	}
 	if cfg.DefaultMaxTokens != nil {
 		if err := cfg.DefaultMaxTokens.Validate(); err != nil {

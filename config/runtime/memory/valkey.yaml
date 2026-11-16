@@ -54,7 +54,6 @@ tls_insecure_skip_verify: false    # Skip server cert verification (development 
 #         tls_enabled: false
 #         tls_ca_path: ""
 #         tls_insecure_skip_verify: false
-#       embedding_model: mmbert
 #       default_retrieval_limit: 5
 #       default_similarity_threshold: 0.40
 #       hybrid_search: true

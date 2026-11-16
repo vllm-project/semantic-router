@@ -33,10 +33,8 @@ const record: InsightsRecord = {
         total: -0.25,
         inputs: [
           {
-            type: 'knowledge',
+            type: 'context',
             name: 'coverage',
-            kb: 'manual',
-            metric: 'similarity',
             value: 0,
             weight: -0.5,
             contribution: 0,
@@ -70,7 +68,7 @@ describe('insight routing evidence presentation', () => {
     expect(html).toContain('0.0000')
     expect(html).toContain('-0.2500')
     expect(html).toContain('Not recorded')
-    expect(html).toContain('knowledge · manual · similarity')
+    expect(html).toContain('coverage<small>context</small>')
     expect(html).toContain('href="#projection-evidence-record-score-0"')
     expect(html).toContain('id="projection-evidence-record-score-0"')
     expect(html).not.toContain(' open=""')

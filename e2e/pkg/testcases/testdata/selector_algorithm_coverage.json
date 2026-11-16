@@ -1,75 +1,12 @@
 [
   {
-    "algorithm": "automix",
-    "tier": "experimental",
-    "status": "planned",
-    "target_profile": "selector-algorithms"
-  },
-  {
-    "algorithm": "decision",
-    "tier": "supported",
-    "status": "partial",
-    "profile": "model-runtime",
-    "testcase": "decision-runtime-routing",
-    "prerequisite": "decision-selector failure and fallback diagnostics"
-  },
-  {
-    "algorithm": "hybrid",
-    "tier": "supported",
-    "status": "planned",
-    "target_profile": "selector-algorithms"
-  },
-  {
-    "algorithm": "kmeans",
-    "tier": "experimental",
-    "status": "partial",
-    "profile": "ml-model-selection",
-    "testcase": "model-selection",
-    "prerequisite": "serialized model artifact"
-  },
-  {
-    "algorithm": "knn",
-    "tier": "experimental",
-    "status": "partial",
-    "profile": "ml-model-selection",
-    "testcase": "model-selection",
-    "prerequisite": "serialized model artifact"
-  },
-  {
-    "algorithm": "latency_aware",
-    "tier": "supported",
-    "status": "planned",
-    "target_profile": "selector-algorithms"
-  },
-  {
-    "algorithm": "mlp",
-    "tier": "experimental",
-    "status": "partial",
-    "profile": "ml-model-selection",
-    "testcase": "model-selection",
-    "prerequisite": "serialized model artifact"
-  },
-  {
     "algorithm": "multi_factor",
     "tier": "supported",
     "status": "planned",
     "target_profile": "selector-algorithms"
   },
   {
-    "algorithm": "prompt",
-    "tier": "experimental",
-    "status": "planned",
-    "target_profile": "selector-algorithms",
-    "prerequisite": "deterministic router-model fixture"
-  },
-  {
     "algorithm": "random",
-    "tier": "supported",
-    "status": "planned",
-    "target_profile": "selector-algorithms"
-  },
-  {
-    "algorithm": "router_dc",
     "tier": "supported",
     "status": "planned",
     "target_profile": "selector-algorithms"
@@ -82,11 +19,11 @@
     "testcase": "selector-static"
   },
   {
-    "algorithm": "svm",
-    "tier": "experimental",
+    "algorithm": "systemone",
+    "tier": "supported",
     "status": "partial",
-    "profile": "ml-model-selection",
-    "testcase": "model-selection",
-    "prerequisite": "serialized model artifact"
+    "profile": "model-runtime",
+    "testcase": "decision-runtime-routing",
+    "prerequisite": "System One selector failure and fallback diagnostics"
   }
 ]

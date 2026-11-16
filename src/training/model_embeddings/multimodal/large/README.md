@@ -28,6 +28,48 @@ smoke runs.
 | `preprocess.py`, `download_data.py` | data acquisition and cache materialization |
 | `evaluate.py`, `upload.py`, `watch.py` | evaluation and gated publication |
 
+## Install
+
+This directory is a uv project (`pyproject.toml` and `uv.lock`). `pyproject.toml`
+bounds each dependency and `uv.lock` pins the exact versions. Create the
+environment from the lock:
+
+```bash
+uv sync --locked --project src/training/model_embeddings/multimodal/large
+```
+
+`requirements.txt` stays for anyone who installs with pip. That file sends pip
+at the ROCm 7.1 wheel index. The uv project records the same index as the
+`rocm` extra, and also records a CPU build and the default PyPI build. Pick
+one accelerator:
+
+```bash
+uv sync --locked --project src/training/model_embeddings/multimodal/large --extra cpu
+uv sync --locked --project src/training/model_embeddings/multimodal/large --extra cuda
+uv sync --locked --project src/training/model_embeddings/multimodal/large --extra rocm
+```
+
+`cpu` installs wheels from `https://download.pytorch.org/whl/cpu`. `cuda`
+installs the default PyPI build, which is the CUDA build on Linux. `rocm`
+installs wheels from `https://download.pytorch.org/whl/rocm7.1` and applies on
+Linux. The three extras are mutually exclusive.
+
+`download_data.py` needs the `download` group. Upload and safetensors
+evaluation need the `publish` group:
+
+```bash
+uv sync --locked --project src/training/model_embeddings/multimodal/large \
+  --extra rocm --group download --group publish
+```
+
+The contract tests run from the repository root through `uv run --project`:
+
+```bash
+uv run --project src/training/model_embeddings/multimodal/large \
+  python -m unittest discover \
+  -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
+```
+
 ## Production command
 
 Set all storage locations explicitly and run from the repository root:
@@ -38,7 +80,8 @@ export MM_EMBED_LARGE_OUTPUT_DIR=/path/to/output
 export MM_EMBED_LARGE_TRAIN_CACHE=/path/to/cache/train
 export MM_EMBED_LARGE_VAL_CACHE=/path/to/cache/val
 
-python -m training.model_embeddings.multimodal.large.train \
+uv run --project src/training/model_embeddings/multimodal/large \
+  python -m training.model_embeddings.multimodal.large.train \
   --config src/training/model_embeddings/multimodal/large/configs/production.yaml
 ```
 

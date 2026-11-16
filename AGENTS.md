@@ -29,6 +29,7 @@ prescribe a work loop, or decide when the task is complete.
 - `src/semantic-router/`: Go router, ExtProc runtime, routing, and APIs
 - `src/vllm-sr/`: Python CLI and local stack orchestration
 - `src/model-runtime/`: model runtime that serves every model the router uses
+- `src/agent-harness/`: agent harness plugins: the decision model in Claude Code and Codex, the gateway's models in VS Code
 - `config/`: canonical configuration, fragments, schemas, and recipes
 - `dashboard/`: React frontend and Go management backend
 - `deploy/`: deployment artifacts and operator

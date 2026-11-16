@@ -43,17 +43,20 @@ class Target(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         phase = self.server.session_phase
-        if phase is None and self.headers.get("X-Session-Id"):
+        if phase is None and self.headers.get("X-VSR-Session-Id"):
             latest = body.get("messages", [])[-1:]
             phase = (
                 "tool_loop"
                 if latest and latest[0].get("role") in {"tool", "function"}
                 else "user_turn"
             )
+        trace = []
         if phase:
-            self.send_header("X-VSR-Session-Phase", phase)
+            trace.append(f'session_phase="{phase}"')
         if self.server.ack:
-            self.send_header("X-SR-Bench-Config-Hash", self.server.ack)
+            trace.append(f'config_hash="{self.server.ack}"')
+        if trace:
+            self.send_header("X-VSR-Trace", ", ".join(trace))
         self.end_headers()
         usage_events = self.server.usage_events
         if usage_events is None:
@@ -290,7 +293,9 @@ def test_session_aware_target_sends_case_stable_session_ids(
     run = Engine(store).start(document)
 
     assert wait_run(store, run["id"])["status"] == "completed"
-    session_ids = [headers.get("x-session-id") for headers in target.request_headers]
+    session_ids = [
+        headers.get("x-vsr-session-id") for headers in target.request_headers
+    ]
     assert len(session_ids) == 4
     assert all(session_ids)
     assert all(
@@ -381,12 +386,12 @@ def test_run_compares_session_modes_without_leaking_to_auxiliary_calls(
     ]
     assert len(aware) == len(plain) == 4
     assert len(auxiliary) == 8
-    assert all("x-session-id" not in headers for _, headers in plain)
-    assert all("x-session-id" not in headers for headers in auxiliary)
+    assert all("x-vsr-session-id" not in headers for _, headers in plain)
+    assert all("x-vsr-session-id" not in headers for headers in auxiliary)
     aware_ids_by_case = {}
     for body, headers in aware:
         case_id = body["messages"][0]["content"]
-        aware_ids_by_case.setdefault(case_id, set()).add(headers["x-session-id"])
+        aware_ids_by_case.setdefault(case_id, set()).add(headers["x-vsr-session-id"])
     assert set(aware_ids_by_case) == {"q1", "q2"}
     assert all(len(session_ids) == 1 for session_ids in aware_ids_by_case.values())
     assert len({next(iter(ids)) for ids in aware_ids_by_case.values()}) == 2
@@ -437,7 +442,7 @@ def test_session_mode_defaults_to_stateless_requests(tmp_path, target, monkeypat
     run = Engine(store).start(document)
 
     assert wait_run(store, run["id"])["status"] == "completed"
-    assert "x-session-id" not in target.request_headers[0]
+    assert "x-vsr-session-id" not in target.request_headers[0]
     assert target.request_headers[0]["x-vsr-debug"] == "true"
     call = store.calls(run["id"], summary=True)[0]
     assert call["phase_source"] == "request"
@@ -882,19 +887,19 @@ def test_session_phase_prefers_router_header_and_derives_router_phase_names():
     assert request_phase(non_adjacent_user_after_tool) == "user_turn"
     assert request_phase(structured_tool_result) == "tool_loop"
     assert request_phase(user_after_structured_tool_result) == "tool_loop"
-    assert session_phase(turn, {"x-vsr-session-phase": "provider_state"}) == (
+    assert session_phase(turn, {"x-vsr-trace": "session_phase=provider_state"}) == (
         "provider_state",
         "router",
     )
-    assert session_phase(turn, {"x-vsr-session-phase": "tool_loop"}) == (
+    assert session_phase(turn, {"x-vsr-trace": "session_phase=tool_loop"}) == (
         "tool_loop",
         "router",
     )
-    assert session_phase(turn, {"x-vsr-session-phase": " future_phase "}) == (
+    assert session_phase(turn, {"x-vsr-trace": 'session_phase=" future_phase "'}) == (
         "unknown",
         "router",
     )
-    assert session_phase(turn, {"x-vsr-session-phase": "  "}) == (
+    assert session_phase(turn, {"x-vsr-trace": 'session_phase="  "'}) == (
         "user_turn",
         "request",
     )
@@ -953,7 +958,7 @@ def test_multimodel_four_bucket_cost_receipt():
             for m in ("a", "b")
         ],
     }
-    result = mom_usage({"x-vsr-model-usage": json.dumps(receipt)}, None, prices)
+    result = mom_usage({"x-vsr-trace": usage_trace(receipt)}, None, prices)
     assert result["cost_usd"] == pytest.approx(54.6 / 1_000_000)
     assert result["usage"]["input_tokens"] == 14
     assert result["inference_call_count"] == 2
@@ -963,7 +968,7 @@ def test_multimodel_four_bucket_cost_receipt():
     assert all(call["cache_write_reported"] is None for call in result["model_usage"])
     receipt["complete"] = False
     assert (
-        mom_usage({"x-vsr-model-usage": json.dumps(receipt)}, None, prices)["cost_usd"]
+        mom_usage({"x-vsr-trace": usage_trace(receipt)}, None, prices)["cost_usd"]
         is None
     )
 
@@ -1207,3 +1212,9 @@ def test_evidence_pages_are_bounded_and_call_detail_is_run_scoped(tmp_path, targ
     assert len(store.page(run["id"], "results", limit=5)["results"]) == 5
     with pytest.raises(ValueError):
         store.page(run["id"], "calls", limit=501)
+
+
+def usage_trace(receipt: dict) -> str:
+    """The x-vsr-trace of a config-bound request with a usage receipt."""
+    encoded = json.dumps(receipt).replace("\\", "\\\\").replace('"', '\\"')
+    return f'config_hash="{"a" * 64}", model_usage="{encoded}"'

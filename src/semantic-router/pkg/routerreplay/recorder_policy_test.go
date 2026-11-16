@@ -15,7 +15,7 @@ func TestRecorderRequestPoliciesKeepConcurrentCaptureIndependent(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, owner.Close()) })
 	capture := owner.WithCapturePolicy(CapturePolicy{
 		CaptureRequestBody: true, CaptureResponseBody: true, MaxBodyBytes: 4,
-		MaxToolTraceBytes: 3, MaxToolTraceSteps: 1,
+		MaxPromptBytes: 3, MaxToolTraceBytes: 3, MaxToolTraceSteps: 1,
 	})
 	metadata := owner.WithCapturePolicy(CapturePolicy{MaxBodyBytes: 10})
 	var workers sync.WaitGroup
@@ -67,6 +67,22 @@ func TestRecorderRequestPoliciesKeepConcurrentCaptureIndependent(t *testing.T) {
 	require.Equal(t, "sec", record.ToolTrace.Steps[0].Arguments)
 }
 
+func TestRecorderAttachPromptKeepsThePromptLimit(t *testing.T) {
+	owner := NewRecorder(store.NewMemoryStore(10, 0))
+	t.Cleanup(func() { require.NoError(t, owner.Close()) })
+	view := owner.WithCapturePolicy(CapturePolicy{CaptureRequestBody: true, MaxPromptBytes: 3})
+	id, err := view.AddRecord(RoutingRecord{ID: "withheld-prompt"})
+	require.NoError(t, err)
+	require.NoError(t, view.AttachPrompt(id, "abcdef"))
+	record, found := owner.GetRecord(id)
+	require.True(t, found)
+	require.Equal(t, "abc", record.Prompt)
+	require.True(t, record.PromptTruncated)
+	require.Equal(t, 6, record.PromptOriginalBytes)
+	require.Equal(t, "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721", record.PromptOriginalSHA256)
+	require.Error(t, view.AttachPrompt("missing-record", "abc"))
+}
+
 func TestRecorderRequestViewsShareLifecycleAndCloseOwnership(t *testing.T) {
 	storage := &uncancelableOutcomeStore{Storage: store.NewMemoryStore(10, 0), closed: make(chan struct{})}
 	owner := NewRecorder(storage)
@@ -90,10 +106,13 @@ func TestRecorderRequestViewsShareLifecycleAndCloseOwnership(t *testing.T) {
 func TestRecorderRequestPolicyPreservesIgnoredLimitsAndExplicitZero(t *testing.T) {
 	owner := NewRecorder(store.NewMemoryStore(10, 0))
 	t.Cleanup(func() { require.NoError(t, owner.Close()) })
+	owner.SetMaxPromptBytes(3)
 	owner.SetMaxToolTraceBytes(3)
 	owner.SetMaxToolTraceSteps(2)
 	for _, limit := range []int{-1, 0} {
-		view := owner.WithCapturePolicy(CapturePolicy{MaxToolTraceBytes: limit, MaxToolTraceSteps: limit})
+		view := owner.WithCapturePolicy(CapturePolicy{
+			CaptureRequestBody: true, CaptureResponseBody: true, MaxPromptBytes: limit, MaxToolTraceBytes: limit, MaxToolTraceSteps: limit,
+		})
 		id, err := view.AddRecord(RoutingRecord{Prompt: "abcdef", ToolTrace: &ToolTrace{
 			Steps: []ToolTraceStep{{Arguments: "first"}, {Arguments: "second"}, {Arguments: "third"}},
 		}})

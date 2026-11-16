@@ -1,40 +1,38 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
-// handleMemoryRetrieval retrieves relevant memories and injects them into the request.
-// Per-decision plugin config takes precedence over global config.
-func (r *OpenAIRouter) handleMemoryRetrieval(
+// retrieveMemorySource recalls the user's memories for a memory source, or
+// lists the newest for a judge without recall, keeps them by the source's
+// match block after its reflection filter, and injects them. A failed
+// retrieval goes on without memories.
+func (r *OpenAIRouter) retrieveMemorySource(
 	ctx *RequestContext,
+	plugin *config.ContextPluginConfig,
+	source *config.ContextSource,
 	userContent string,
 	request *llmprotocol.Request,
+	eligible bool,
 ) error {
-	if requestBypassesRouting(ctx) {
-		return nil
-	}
-	ctx.MemoryBackend = r.Config.Memory.Backend
-	if ctx.MemoryBackend == "" {
-		ctx.MemoryBackend = "milvus"
-	}
-	memoryPluginConfig, shouldRetrieve := r.resolveMemoryPluginConfig(ctx)
-	if !shouldRetrieve {
-		return nil
-	}
-	if applies, reason := r.pluginApplies(ctx, config.DecisionPluginMemory); !applies {
-		// pluginApplies already counted the skip; only the replay-visible outcome is set here.
-		ctx.MemoryStatus, ctx.MemoryReason = "skipped", string(reason)
+	if status, reason, optedOut := r.memoryOptOut(ctx); optedOut {
+		logging.Debugf("Memory: skipped (%s)", reason)
+		recordMemoryOutcome(ctx, status, reason, false)
 		return nil
 	}
 	store := r.getMemoryStore()
@@ -43,14 +41,14 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		recordMemoryOutcome(ctx, "unavailable", "store_unavailable", true)
 		return nil
 	}
-
 	logging.Debugf("Memory: retrieval flow query=%s", logging.ContentDescriptor(userContent))
-	searchQuery, userID, shouldSearch := r.prepareMemorySearchQuery(ctx, userContent, request)
+	searchQuery, userID, shouldSearch := r.prepareMemorySearchQuery(ctx, userContent, request, eligible)
 	if !shouldSearch {
 		return nil
 	}
-	retrieveOpts := r.buildMemoryRetrieveOptions(memoryPluginConfig, searchQuery, userID)
-	memories, err := store.Retrieve(ctx.TraceContext, retrieveOpts)
+	index := &memoryIndex{router: r, source: source, store: store, userID: userID}
+	block := r.Config.MemoryMatch(source)
+	result, err := r.matcher().Match(ctx.TraceContext, config.MatchMemory, &block, match.Input{Request: searchQuery, Index: index})
 	if err != nil {
 		recordMemoryOutcome(ctx, "unavailable", "retrieval_error", true)
 		logging.Errorf("Memory: retrieval failed for user=%s decision=%s query=%s error_class=%T",
@@ -59,73 +57,131 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 		// provider's free-form text because it may echo tenant content or secrets.
 		return fmt.Errorf("memory retrieval failed (error_class=%T)", err)
 	}
-	retrievedCount := len(memories)
-	memories = r.filterRetrievedMemories(memoryPluginConfig, memories, userID)
+	memories := index.kept(result.Kept)
 	if len(memories) == 0 {
 		reason := "no_results"
-		if retrievedCount > 0 {
+		if index.retrieved > 0 {
 			reason = "filtered"
 		}
 		recordMemoryOutcome(ctx, "missing", reason, false)
 		return nil
 	}
-	r.injectRetrievedMemories(ctx, request, memories)
+	r.injectRetrievedMemories(ctx, plugin, memories)
 	return nil
 }
 
-func (r *OpenAIRouter) resolveMemoryPluginConfig(
-	ctx *RequestContext,
-) (*config.MemoryPluginConfig, bool) {
-	var memoryPluginConfig *config.MemoryPluginConfig
-	if ctx.VSRSelectedDecision != nil {
-		memoryPluginConfig = ctx.VSRSelectedDecision.GetMemoryConfig()
+// memoryOptOut reports a request whose memory the caller or the store's
+// routes and models turned off.
+func (r *OpenAIRouter) memoryOptOut(ctx *RequestContext) (string, string, bool) {
+	switch {
+	case strings.EqualFold(strings.TrimSpace(headerValueCI(ctx, headers.VSRMemory)), headers.MemoryOff):
+		return "policy_blocked", "request_opt_out", true
+	case r.isMemoryDisabledForRoute(ctx.Headers[":path"]):
+		return "policy_blocked", "route_config", true
+	case ctx.RequestModel != "" && r.isMemoryDisabledForModel(ctx.RequestModel):
+		return "policy_blocked", "model_config", true
 	}
+	return "", "", false
+}
 
-	memoryEnabled := r.Config.Memory.Enabled
-	if memoryPluginConfig != nil {
-		memoryEnabled = memoryPluginConfig.Enabled
-		if !memoryEnabled {
-			logging.Debugf("Memory: Disabled by per-decision plugin config for decision '%s'", ctx.VSRSelectedDecisionName)
-			recordMemoryOutcome(ctx, "disabled", "decision_config", false)
-			return memoryPluginConfig, false
+// memoryIndex recalls a user's memories from the memory store, bounded by
+// recall and filtered by the source's reflection, for a memory source's
+// match; a judge without recall reads them listed.
+type memoryIndex struct {
+	router    *OpenAIRouter
+	source    *config.ContextSource
+	store     memory.Store
+	userID    string
+	recalled  []*memory.RetrieveResult
+	retrieved int
+}
+
+func (x *memoryIndex) Recall(ctx context.Context, query string, recall config.MatchRecall) ([]match.Scored, error) {
+	cfg := x.router.Config
+	options := memory.RetrieveOptions{
+		Query:             query,
+		UserID:            x.userID,
+		Limit:             recall.TopK,
+		AdaptiveThreshold: cfg.Memory.AdaptiveThreshold,
+	}
+	// Without a bound, the store recalls above its default_similarity_threshold.
+	if recall.MinSimilarity != nil {
+		options.Threshold, options.ThresholdSet = float32(*recall.MinSimilarity), true
+	}
+	switch {
+	case x.source.HybridSearch:
+		options.HybridSearch, options.HybridMode = true, x.source.HybridMode
+	case cfg.Memory.HybridSearch:
+		options.HybridSearch, options.HybridMode = true, cfg.Memory.HybridMode
+	}
+	results, err := x.store.Retrieve(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	x.retrieved = len(results)
+	x.recalled = memory.NewMemoryFilter(cfg.Memory.Reflection, x.source.Reflection).Filter(results)
+	scored := make([]match.Scored, 0, len(x.recalled))
+	for index, result := range x.recalled {
+		if result == nil || result.Memory == nil {
+			continue
 		}
-	} else if !memoryEnabled {
-		logging.Debugf("Memory: Disabled in global config, skipping retrieval")
-		recordMemoryOutcome(ctx, "disabled", "global_config", false)
-		return nil, false
+		scored = append(scored, match.Scored{
+			Candidate:  match.Candidate{ID: strconv.Itoa(index), Text: result.Memory.Content},
+			Similarity: float64(result.Score),
+		})
 	}
+	return scored, nil
+}
 
-	// Check opt-out header (x-disable-router-memory: true)
-	if ctx.Headers[headers.DisableRouterMemory] == "true" {
-		logging.Debugf("Memory: Disabled via x-disable-router-memory header (SDK-managed memory opt-out)")
-		recordMemoryOutcome(ctx, "policy_blocked", "request_opt_out", false)
-		return memoryPluginConfig, false
+// List lists the user's memories, newest first and at most limit of them,
+// for a memory source whose judge reads them without recall, filtered by
+// the source's reflection. held counts the user's memories, but the ones
+// the reflection dropped.
+func (x *memoryIndex) List(ctx context.Context, limit int) ([]match.Candidate, int, error) {
+	var listed []*memory.RetrieveResult
+	total := 0
+	for len(listed) < limit {
+		page, err := x.store.List(ctx, memory.ListOptions{UserID: x.userID, Limit: limit - len(listed), Offset: len(listed)})
+		if err != nil {
+			return nil, 0, err
+		}
+		total = page.Total
+		for _, item := range page.Memories {
+			listed = append(listed, &memory.RetrieveResult{Memory: item})
+		}
+		if len(page.Memories) == 0 || len(listed) >= total {
+			break
+		}
 	}
-
-	// Check config-based per-route disable
-	requestPath := ctx.Headers[":path"]
-	if r.isMemoryDisabledForRoute(requestPath) {
-		logging.Debugf("Memory: Disabled for route %s via config (SDK-managed memory opt-out)", requestPath)
-		recordMemoryOutcome(ctx, "policy_blocked", "route_config", false)
-		return memoryPluginConfig, false
+	x.retrieved = len(listed)
+	x.recalled = memory.NewMemoryFilter(x.router.Config.Memory.Reflection, x.source.Reflection).Filter(listed)
+	candidates := make([]match.Candidate, 0, len(x.recalled))
+	for index, result := range x.recalled {
+		if result != nil && result.Memory != nil {
+			candidates = append(candidates, match.Candidate{ID: strconv.Itoa(index), Text: result.Memory.Content})
+		}
 	}
+	return candidates, max(total, len(listed)) - (len(listed) - len(candidates)), nil
+}
 
-	// Check config-based per-model disable
-	if ctx.RequestModel != "" && r.isMemoryDisabledForModel(ctx.RequestModel) {
-		logging.Debugf("Memory: Disabled for model %s via config (SDK-managed memory opt-out)", ctx.RequestModel)
-		recordMemoryOutcome(ctx, "policy_blocked", "model_config", false)
-		return memoryPluginConfig, false
+// kept are the recalled memories a match kept, best first.
+func (x *memoryIndex) kept(scored []match.Scored) []*memory.RetrieveResult {
+	memories := make([]*memory.RetrieveResult, 0, len(scored))
+	for _, candidate := range scored {
+		if index, err := strconv.Atoi(candidate.ID); err == nil && index < len(x.recalled) {
+			memories = append(memories, x.recalled[index])
+		}
 	}
-
-	return memoryPluginConfig, true
+	return memories
 }
 
 func (r *OpenAIRouter) prepareMemorySearchQuery(
 	ctx *RequestContext,
 	userContent string,
 	request *llmprotocol.Request,
+	eligible bool,
 ) (string, string, bool) {
-	if !ShouldSearchMemory(ctx, userContent) {
+	if !eligible {
 		logging.Debugf("Memory: skipping search (query type not suitable)")
 		recordMemoryOutcome(ctx, "ignored", "query_ineligible", false)
 		return "", "", false
@@ -150,15 +206,24 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 	return searchQuery, userID, true
 }
 
+// extractConversationHistory returns the routing view of the conversation that
+// memory query rewriting reads.
 func (r *OpenAIRouter) extractConversationHistory(
 	request *llmprotocol.Request,
 ) []ConversationMessage {
 	if request == nil {
 		return nil
 	}
+	selector := r.routingInputSelector()
 	history := make([]ConversationMessage, 0, len(request.Messages))
 	for _, message := range request.Messages {
 		text := semanticText(message.Content)
+		if message.Role == llmprotocol.RoleUser {
+			if textOnlyMessage(message) && selector.SkipsMessage(text) {
+				continue
+			}
+			text, _ = selector.Strip(text)
+		}
 		if text == "" {
 			continue
 		}
@@ -167,73 +232,9 @@ func (r *OpenAIRouter) extractConversationHistory(
 	return history
 }
 
-func (r *OpenAIRouter) buildMemoryRetrieveOptions(
-	memoryPluginConfig *config.MemoryPluginConfig,
-	searchQuery string,
-	userID string,
-) memory.RetrieveOptions {
-	retrieveLimit := r.Config.Memory.DefaultRetrievalLimit
-	retrieveThreshold := r.Config.Memory.DefaultSimilarityThreshold
-
-	if memoryPluginConfig != nil {
-		if memoryPluginConfig.RetrievalLimit != nil {
-			retrieveLimit = *memoryPluginConfig.RetrievalLimit
-		}
-		if memoryPluginConfig.SimilarityThreshold != nil {
-			retrieveThreshold = *memoryPluginConfig.SimilarityThreshold
-		}
-	}
-
-	retrieveOpts := memory.RetrieveOptions{
-		Query:             searchQuery,
-		UserID:            userID,
-		Limit:             retrieveLimit,
-		Threshold:         retrieveThreshold,
-		AdaptiveThreshold: r.Config.Memory.AdaptiveThreshold,
-	}
-	if memoryPluginConfig != nil && memoryPluginConfig.HybridSearch {
-		retrieveOpts.HybridSearch = true
-		retrieveOpts.HybridMode = memoryPluginConfig.HybridMode
-	} else if r.Config.Memory.HybridSearch {
-		retrieveOpts.HybridSearch = true
-		retrieveOpts.HybridMode = r.Config.Memory.HybridMode
-	}
-	if retrieveOpts.Limit <= 0 {
-		retrieveOpts.Limit = 5
-	}
-	if retrieveOpts.Threshold <= 0 {
-		retrieveOpts.Threshold = config.DefaultMemorySimilarityThreshold
-	}
-
-	return retrieveOpts
-}
-
-func (r *OpenAIRouter) filterRetrievedMemories(
-	memoryPluginConfig *config.MemoryPluginConfig,
-	memories []*memory.RetrieveResult,
-	userID string,
-) []*memory.RetrieveResult {
-	if len(memories) == 0 {
-		logging.Debugf("Memory: no memories found above threshold for user=%s", userID)
-		return nil
-	}
-	logging.Debugf("Memory: found %d memories for user=%s", len(memories), userID)
-
-	var perDecisionReflection *config.MemoryReflectionConfig
-	if memoryPluginConfig != nil && memoryPluginConfig.Reflection != nil {
-		perDecisionReflection = memoryPluginConfig.Reflection
-	}
-	filter := memory.NewMemoryFilter(r.Config.Memory.Reflection, perDecisionReflection)
-	filtered := filter.Filter(memories)
-	if len(filtered) == 0 {
-		logging.Debugf("Memory: all memories filtered by memory filter for user=%s", userID)
-	}
-	return filtered
-}
-
 func (r *OpenAIRouter) injectRetrievedMemories(
 	ctx *RequestContext,
-	request *llmprotocol.Request,
+	plugin *config.ContextPluginConfig,
 	memories []*memory.RetrieveResult,
 ) {
 	ctx.MemoryContext = FormatMemoriesAsContext(memories)
@@ -241,23 +242,12 @@ func (r *OpenAIRouter) injectRetrievedMemories(
 		recordMemoryOutcome(ctx, "missing", "empty_context", false)
 		return
 	}
-	if request == nil {
+	if err := r.injectContext(ctx, plugin, config.ContextSourceMemory, ctx.MemoryContext); err != nil {
 		recordMemoryOutcome(ctx, "unavailable", "injection_error", true)
 		ctx.MemoryContext = ""
 		return
 	}
-	memoryMessage := llmprotocol.Message{
-		Role:    llmprotocol.RoleUser,
-		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: ctx.MemoryContext}},
-	}
-	request.Messages = append([]llmprotocol.Message{memoryMessage}, request.Messages...)
-	request.Generation++
-	messageIndex := 0
 	ctx.MemoryResultCount = len(memories)
-	if ctx.MemoryMessageIndexes == nil {
-		ctx.MemoryMessageIndexes = make(map[int]struct{})
-	}
-	ctx.MemoryMessageIndexes[messageIndex] = struct{}{}
 	recordMemoryOutcome(ctx, "used", "injected", false)
 	logging.Debugf("Memory: Injected %d memories (decision=%s, context_len=%d)",
 		len(memories), ctx.VSRSelectedDecisionName, len(ctx.MemoryContext))
@@ -284,17 +274,14 @@ func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
 
 // handleFastResponse returns an immediate response for the fast_response plugin.
 func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName string) *ext_proc.ProcessingResponse {
-	if ctx.VSRSelectedDecision == nil {
-		return nil
-	}
-
-	fastCfg := ctx.VSRSelectedDecision.GetFastResponseConfig()
+	fastCfg := config.FastResponsePluginOf(requestPlugins(r.Config, ctx))
 	if fastCfg == nil {
 		return nil
 	}
 
 	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
 	metrics.RecordPluginExecution("fast_response", requestDecisionStateKey(ctx), "executed", 0)
+	ctx.VSRSelectedDecisionName = decisionName
 
 	body, contentType, _, err := r.encodeSyntheticTextResponse(
 		ctx,
@@ -309,10 +296,8 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 		})
 		return r.createErrorResponse(500, "Fast response could not be encoded")
 	}
-	response := httputil.CreateFastResponseWithBody(body, contentType, decisionName)
 	ctx.ImmediateResponseEncoded = true
-	appendRecipeHeaderToImmediateResponse(response, ctx)
-	return response
+	return httputil.CreateFastResponseWithBody(body, contentType)
 }
 
 // isMemoryDisabledForRoute checks if memory is disabled for the given route path.

@@ -26,6 +26,5 @@ separate algorithm list. It may change `planned` to `partial` while bringing up
 fixtures, but it should only use `covered` after the deterministic success,
 diagnostic, and applicable failure or fallback assertions are all maintained.
 
-The legacy `core-selection-*` registrations and their fixture remain during
-the rollout. Retire them together after every manifest entry is `covered`, so
-the migration never removes historical probes before their replacements land.
+Retired algorithms are removed from the manifest when they leave the runtime
+catalog.

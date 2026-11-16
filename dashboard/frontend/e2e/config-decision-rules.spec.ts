@@ -6,7 +6,7 @@ import { mockAuthenticatedAppShell } from './support/auth'
 const singleConditionRules = { type: 'jailbreak', name: 'prompt_injection' }
 
 const configResponse = {
-  version: 'v0.3',
+  version: 'v0.5',
   providers: {
     models: [
       {
@@ -15,22 +15,24 @@ const configResponse = {
       },
     ],
   },
-  routing: {
-    modelCards: [{ name: 'model-a', modality: 'text' }],
-    signals: { jailbreak: [{ name: 'prompt_injection', threshold: 0.7 }] },
-    decisions: [
-      {
-        name: 'guard_route',
-        description: 'Route detected prompt attacks.',
-        priority: 120,
-        rules: singleConditionRules,
-        modelRefs: [{ model: 'model-a', use_reasoning: false }],
-      },
-    ],
-  },
+  recipes: [
+    {
+      name: 'default',
+      signals: { jailbreak: [{ name: 'prompt_injection', predicate: { gte: 0.7 } }] },
+      decisions: [
+        {
+          name: 'guard_route',
+          description: 'Route detected prompt attacks.',
+          priority: 120,
+          rules: singleConditionRules,
+          modelRefs: [{ model: 'model-a', use_reasoning: false }],
+        },
+      ],
+    },
+  ],
 }
 
-type SavedConfig = { routing?: { decisions?: Array<{ name: string; rules?: unknown }> } }
+type SavedConfig = { recipes?: Array<{ decisions?: Array<{ name: string; rules?: unknown }> }> }
 
 test('keeps a single-condition rule when a decision is saved unchanged', async ({ page }) => {
   await mockAuthenticatedAppShell(page)
@@ -61,6 +63,6 @@ test('keeps a single-condition rule when a decision is saved unchanged', async (
   await editor.getByRole('button', { name: 'Save', exact: true }).click()
 
   await expect.poll(() => saved.length).toBe(1)
-  const decision = saved[0].routing?.decisions?.find((entry) => entry.name === 'guard_route')
+  const decision = saved[0].recipes?.[0]?.decisions?.find((entry) => entry.name === 'guard_route')
   expect(decision?.rules).toEqual(singleConditionRules)
 })
