@@ -1,0 +1,1 @@
+recipes[default].signals.safety[unsafe-privacy].hazard: removed_field: a safety rule's hazard part is removed; run `vllm-sr config migrate` (labels: the harm categories of its categories, predicate: {gte: <hazard.threshold>})

@@ -10,7 +10,7 @@ import (
 )
 
 func telemetryDocument(backendRefs string) string {
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: http-8899
     address: 127.0.0.1
@@ -22,9 +22,8 @@ providers:
     - name: qwen3-8b
       backend_refs:
 ` + backendRefs + `
-routing:
-  modelCards:
-    - name: qwen3-8b
+recipes:
+  - name: default
 `
 }
 

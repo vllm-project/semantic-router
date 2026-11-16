@@ -5,11 +5,14 @@ package apiserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -142,4 +145,78 @@ func vectorStoreResponseIDs(stores []*vectorstore.VectorStore) []string {
 		ids = append(ids, store.ID)
 	}
 	return ids
+}
+
+// unavailableStoreRegistry stands for a metadata database that is down: reads
+// work from the manager's in-memory index, every write fails.
+type unavailableStoreRegistry struct {
+	vectorstore.StoreRegistry
+	down bool
+}
+
+func (r *unavailableStoreRegistry) SaveStore(ctx context.Context, vs *vectorstore.VectorStore) error {
+	if r.down {
+		return errors.New("database unavailable")
+	}
+	return r.StoreRegistry.SaveStore(ctx, vs)
+}
+
+func (r *unavailableStoreRegistry) DeleteStore(ctx context.Context, id string) error {
+	if r.down {
+		return errors.New("database unavailable")
+	}
+	return r.StoreRegistry.DeleteStore(ctx, id)
+}
+
+func vectorStoreRouteServer(manager *vectorstore.Manager) *ClassificationAPIServer {
+	registry := routerruntime.NewRegistry(nil)
+	registry.SetVectorStoreRuntime(&routerruntime.VectorStoreRuntime{Manager: manager})
+	return &ClassificationAPIServer{runtimeRegistry: registry}
+}
+
+func serveVectorStoreRoute(handle http.HandlerFunc, method, path, body string) *httptest.ResponseRecorder {
+	response := httptest.NewRecorder()
+	handle(response, httptest.NewRequest(method, path, strings.NewReader(body)))
+	return response
+}
+
+// TestVectorStoreMutationsReportTheFailureTheyHit checks that a store the
+// router cannot persist answers 500, a reserved metadata key answers 400, and
+// only a store that does not exist answers 404.
+func TestVectorStoreMutationsReportTheFailureTheyHit(t *testing.T) {
+	registry := &unavailableStoreRegistry{StoreRegistry: vectorstore.NewMemoryMetadataRegistry()}
+	manager := vectorstore.NewManager(vectorstore.NewMemoryBackend(vectorstore.MemoryBackendConfig{}), registry, 3, vectorstore.BackendTypeMemory)
+	vs, err := manager.CreateStore(context.Background(), vectorstore.CreateStoreRequest{Name: "kb"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := vectorStoreRouteServer(manager)
+	storePath := apiStorageVectorStoresPath + "/" + vs.ID
+	reserved := `{"metadata":{"` + vectorstore.EmbeddingIdentityMetadataKey + `":"client"}}`
+
+	for _, tc := range []struct {
+		name, method, path, body string
+		handle                   http.HandlerFunc
+		down                     bool
+		status                   int
+		code                     string
+	}{
+		{"create with a reserved metadata key", http.MethodPost, apiStorageVectorStoresPath, reserved, server.handleCreateVectorStore, false, http.StatusBadRequest, "INVALID_INPUT"},
+		{"update with a reserved metadata key", http.MethodPost, storePath, reserved, server.handleUpdateVectorStore, false, http.StatusBadRequest, "INVALID_INPUT"},
+		{"update of an unknown store", http.MethodPost, apiStorageVectorStoresPath + "/vs_missing", `{"name":"x"}`, server.handleUpdateVectorStore, false, http.StatusNotFound, "NOT_FOUND"},
+		{"delete of an unknown store", http.MethodDelete, apiStorageVectorStoresPath + "/vs_missing", "", server.handleDeleteVectorStore, false, http.StatusNotFound, "NOT_FOUND"},
+		{"update while the registry is down", http.MethodPost, storePath, `{"name":"renamed"}`, server.handleUpdateVectorStore, true, http.StatusInternalServerError, "UPDATE_FAILED"},
+		{"delete while the registry is down", http.MethodDelete, storePath, "", server.handleDeleteVectorStore, true, http.StatusInternalServerError, "DELETE_FAILED"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry.down = tc.down
+			response := serveVectorStoreRoute(tc.handle, tc.method, tc.path, tc.body)
+			if response.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", response.Code, tc.status, response.Body.String())
+			}
+			if code := parseErrorResponse(t, response.Body.Bytes()); code != tc.code {
+				t.Fatalf("code = %s, want %s", code, tc.code)
+			}
+		})
+	}
 }

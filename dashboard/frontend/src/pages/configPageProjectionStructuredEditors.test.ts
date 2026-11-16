@@ -29,7 +29,7 @@ describe('projection structured editors', () => {
         'div',
         null,
         createElement(ProjectionInputsEditor, {
-          value: [{ type: 'embedding', name: 'support', weight: 0.5, value_source: 'confidence' }],
+          value: [{ type: 'domain', name: 'support', weight: 0.5, value_source: 'confidence' }],
           onChange: vi.fn(),
         }),
         createElement(ProjectionCalibrationEditor, {

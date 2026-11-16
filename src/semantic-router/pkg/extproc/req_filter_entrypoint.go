@@ -36,7 +36,7 @@ func (r *OpenAIRouter) classifierForRequest(ctx *RequestContext) *classification
 	// Programmatic single-profile routers may provide only the default
 	// classifier. Named recipes never fall back across the isolation boundary.
 	if r.RecipeClassifiers == nil {
-		if recipe.Name == config.DefaultRecipeName {
+		if r.Config.IsDefaultRecipe(recipe.Name) {
 			return r.Classifier
 		}
 		return nil

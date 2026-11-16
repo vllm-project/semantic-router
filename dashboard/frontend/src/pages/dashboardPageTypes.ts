@@ -22,17 +22,11 @@ export interface RouterConfig {
   signals?: Record<string, SignalConfig[]>
   decisions?: DecisionRule[]
   providers?: {
-    defaults?: {
-      default_model?: string
-    }
     models?: Array<{
       name?: string
       backend_refs?: Array<{ name?: string }>
-      endpoints?: Array<{ name?: string }>
-      preferred_endpoints?: string[]
       [key: string]: unknown
     }>
-    vllm_endpoints?: unknown[]
     [key: string]: unknown
   }
   routing?: {
@@ -40,6 +34,7 @@ export interface RouterConfig {
     signals?: Record<string, SignalConfig[]>
     decisions?: DecisionRule[]
   }
+  default_recipe?: { name: string; description?: string }
   entrypoints?: Array<{
     api?: 'chat' | 'systemone'
     model_names: string[]
@@ -56,8 +51,6 @@ export interface RouterConfig {
       strategy?: string
     }
   }>
-  vllm_endpoints?: Array<{ name?: string }>
-  plugins?: Record<string, unknown>
   global?: Record<string, unknown>
   [key: string]: unknown
 }

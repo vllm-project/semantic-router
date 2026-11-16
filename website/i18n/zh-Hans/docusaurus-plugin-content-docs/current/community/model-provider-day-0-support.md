@@ -107,7 +107,7 @@ OpenAI 绑定记录：工具需要 Responses；超过 272,000 输入 token 的�
 Astra 的工具调用请用 Responses。最小路由配置不需要手写 Model Card 或推理家族：
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: astra
@@ -117,18 +117,18 @@ providers:
         - name: primary
           provider: openai
           auth: {api_key_env: OPENAI_API_KEY}
-
-routing:
-  decisions:
-    - name: astra_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: astra
-          use_reasoning: true
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: astra_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 对没有工具的普通 Chat Completions 工作负载，省略 `api_format: responses`；同一目录绑定会发出顶层 `reasoning_effort`，并在启动时拒绝仅限 Responses 的 effort。Responses 发出 `reasoning.effort`。黑盒 E2E 还证明 Responses 工具定义能在 Router 到提供商的一跳中存活。生成的 Router、CLI、控制面板和网站视图都来自这些编写的资源。
@@ -148,7 +148,7 @@ make e2e-test-specific \
 内置卡片用一个可选的 `catalog` 引用选择。模型 `name` 仍是面向请求的别名，而 `backend_refs[].provider` 是目录 Provider ID：
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: production
@@ -162,11 +162,13 @@ providers:
           auth: {api_key_env: PROVIDER_API_KEY}
 ```
 
-内置卡片不需要 `routing.modelCards`。有意覆盖时，用规范目录身份作为卡片名：
+内置卡片不需要 `providers.models`。有意覆盖时，用规范目录身份作为卡片名：
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: organization/model
       tags: [production, approved]
 ```
@@ -196,7 +198,8 @@ providers:
         - name: lab
           provider: vllm
           endpoint: model-gateway.example:8000/v1
-
+      context_window_size: 131072
+      capabilities: [chat, tools, reasoning]
 evaluation:
   records:
     - model: private-reasoner
@@ -205,12 +208,8 @@ evaluation:
       reasoning_effort: high
       metrics:
         pass_rate: 0.82
-
-routing:
-  modelCards:
-    - name: private-reasoner
-      context_window_size: 131072
-      capabilities: [chat, tools, reasoning]
+recipes:
+  - name: default
 ```
 
 用户编写的记录刻意保持小表面：`model`、`benchmark` 和 `metrics`，外加可选的 `benchmark_profile`、`reasoning_effort`、`source`、`measured_at` 和标量 `metadata`。省略 `benchmark_profile` 以使用已知基准的默认配置；测量来自特定模型 effort 时设置 `reasoning_effort`。目录记录在内部保留更丰富的证据和出处。自定义基准身份仍带命名空间和版本，指标值必须有限。

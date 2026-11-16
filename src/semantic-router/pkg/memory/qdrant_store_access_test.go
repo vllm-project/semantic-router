@@ -206,9 +206,9 @@ func newReinforcementTestStore(t *testing.T, fake *fakePointsServer) *QdrantStor
 		collectionName: "reinforcement_test",
 		enabled:        true,
 		embeddingConfig: EmbeddingConfig{
-			Provider:  storageMemoryVectors(),
-			Model:     EmbeddingModelQwen3,
-			Dimension: 384,
+			Provider:   storageMemoryVectors(),
+			Deployment: "qwen3-embedding",
+			Dimension:  384,
 		},
 	}
 	// Registered after startFakeQdrant's client cleanup, so LIFO order drains

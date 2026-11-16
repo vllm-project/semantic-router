@@ -30,13 +30,16 @@ func testMemoryPersistenceBoundsAtConfigLoad(t *testing.T, source ConfigSource) 
 	} {
 		for _, value := range []int64{-1, 0, 1, field.max, field.max + 1, math.MaxInt64} {
 			for _, enabled := range []bool{false, true} {
-				t.Run(fmt.Sprintf("%s/%d/enabled=%t", field.name, value, enabled), func(t *testing.T) {
+				t.Run(fmt.Sprintf("%s/%d/memory=%t", field.name, value, enabled), func(t *testing.T) {
+					memory := ""
+					if enabled {
+						memory = "plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]\n"
+					}
 					payload := globalValidationDocument(t, source, fmt.Sprintf(`stores:
   memory:
-    enabled: %t
     persistence:
       %s: %d
-`, enabled, field.name, value))
+`, field.name, value)+memory)
 					// Parsing is the startup/reload boundary: it must reject unsafe
 					// values before a caller can construct the persistence runner,
 					// including Kubernetes startup before any CRDs are available.

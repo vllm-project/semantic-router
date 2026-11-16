@@ -17,6 +17,10 @@ type RequestFacts struct {
 	Metadata map[string]string
 	Context  context.Context
 
+	// Agent is the agent the request belongs to, read from its harness's
+	// headers for the agent signal.
+	Agent AgentFacts
+
 	// JailbreakInput, when present, supplies role-scoped Guard content separately
 	// from the general routing text. Nil preserves flat-text classifier callers.
 	JailbreakInput *JailbreakInput
@@ -35,10 +39,22 @@ type RequestFacts struct {
 	ContextTextBytes       int
 	ContextEquivalentBytes int
 	ContextHasNonText      bool
+	ContextReserveTokens   int
 
 	// InputModality carries structural input-modality presence counts for the
 	// input_modality signal family.
 	InputModality InputModalityFacts
+
+	// Turns are the user and assistant turns before the current user turn,
+	// Images every image the request carries, earlier turns and tool results
+	// included, and Videos the current user turn's, all as inline (base64
+	// data URL) media; systemone rules read them as their input asks. Remote
+	// media are never fetched: an image that is not inline is an empty entry,
+	// which a rule that reads images leaves out, and a coverage: full one
+	// resolves as its on_unscanned says.
+	Turns  []ConversationTurn
+	Images []string
+	Videos []string
 }
 
 // InputModalityFacts counts content parts per input modality across the

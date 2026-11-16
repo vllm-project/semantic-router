@@ -9,7 +9,7 @@ compatibility:
   router:
     min: 0.3.0
     max_exclusive: 0.6.0
-  config_schema: v0.3
+  config_schema: v0.5
   required_features:
     - entrypoints
     - isolated_recipes
@@ -134,6 +134,10 @@ inventory:
         representative_models:
           - thinking-machines/inkling
           - thinking-machines/inkling-small
+      - publisher: Writer
+        min_representatives: 1
+        representative_models:
+          - writer/palmyra-x6
       - publisher: Xiaomi
         representative_models:
           - xiaomi/mimo-v2.6-flash

@@ -1,0 +1,50 @@
+# Each model card's fields go on the providers.models[] entry of its name, or
+# of its catalog, once: every entry of that catalog reads them, and an entry
+# keeps its own fields (a native model's deployment). A card no entry names
+# becomes a metadata-only entry. A card's modality keyword moves with it, and
+# the multimodal form then states it as the model's modalities.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+    - name: painter
+      backend_refs: [{name: images, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+    - name: frontier-primary
+      catalog: openai/gpt-5.4
+      backend_refs: [{name: primary, provider: openai}]
+    - name: frontier-fallback
+      catalog: openai/gpt-5.4
+      backend_refs: [{name: fallback, provider: openai}]
+    - name: native-kai
+      api_format: systemone
+      deployment: decision-kai
+routing:
+  modelCards:
+    - name: general
+      description: Answers general questions.
+      capabilities: [chat]
+      context_window_size: 32768
+      modality: ar
+    - name: painter
+      capabilities: [image_generation]
+      modalities: {input: [text], output: [image]}
+    - name: openai/gpt-5.4
+      description: The frontier model, through either backend.
+    - name: native-kai
+      description: Decision 2.0 on the model runtime.
+    - name: reviewer
+      description: Reviews answers.
+  decisions:
+    - name: everything
+      rules: {}
+      modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      decision-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+        device: auto

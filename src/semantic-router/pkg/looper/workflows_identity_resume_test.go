@@ -51,7 +51,7 @@ func testWorkflowResumeAmbiguousIdentity(t *testing.T, conflictingID, policy str
 	req.Algorithm.Workflows.Mode = config.WorkflowModeDynamic
 	req.Algorithm.Workflows.Roles = nil
 	req.Algorithm.Workflows.Planner = config.WorkflowPlannerConfig{Model: "planner"}
-	req.Algorithm.Workflows.OnError = policy
+	req.Algorithm.OnError = policy
 	ctx := context.Background()
 	first, err := looper.Execute(ctx, req)
 	if err != nil {

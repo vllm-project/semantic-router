@@ -93,7 +93,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         serve_kwargs = (
             {"endpoint": upstream}
             if direct_endpoint
-            else {"base_url": f"http://{upstream}", "provider": "openai"}
+            else {"endpoint": f"http://{upstream}", "provider": "openai"}
         )
 
         with self._running_serve(
@@ -114,7 +114,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
                 if skip_processing:
                     request_headers["x-vsr-skip-processing"] = "true"
                 if selected_model_header:
-                    request_headers["x-selected-model"] = model
+                    request_headers["x-vsr-route-model"] = model
                 self._send_mock_chat_completion(
                     mock_container,
                     request_path=request_path,
@@ -410,7 +410,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         canary = "synthetic-provider-key-canary"
         with self._running_serve(
             env={"PROVIDER_KEY_CANARY": canary},
-            base_url=(
+            endpoint=(
                 f"http://{self.runtime_stack.stack_name}-envoy-log-upstream:"
                 f"{PROVIDER_MOCKER_PORT}"
             ),

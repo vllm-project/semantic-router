@@ -35,21 +35,6 @@ const inputFields: ObjectEditorField<ProjectionScoreInput>[] = [
     label: 'Signal or projection name',
     placeholder: 'technical_support',
     required: true,
-    shouldHide: (item) => item.type === 'kb_metric',
-  },
-  {
-    key: 'kb',
-    label: 'Knowledge base',
-    placeholder: 'privacy_kb',
-    required: true,
-    shouldHide: (item) => item.type !== 'kb_metric',
-  },
-  {
-    key: 'metric',
-    label: 'Knowledge-base metric',
-    placeholder: 'private_vs_public',
-    required: true,
-    shouldHide: (item) => item.type !== 'kb_metric',
   },
   { key: 'weight', label: 'Weight', type: 'number', step: 0.01, required: true },
   {
@@ -95,7 +80,7 @@ export function ProjectionMembersEditor({
       value={members}
       onChange={(nextValue) => onChange?.(nextValue)}
       addLabel="Add member"
-      emptyLabel="No domain or embedding signals in this partition."
+      emptyLabel="No domain signals in this partition."
       itemLabel="Member"
       placeholder="technical_support"
       disabled={disabled}
@@ -116,10 +101,10 @@ export function ProjectionInputsEditor({
       value={inputs}
       onChange={(nextValue) => onChange?.(nextValue)}
       fields={inputFields}
-      createItem={() => ({ type: 'embedding', name: '', weight: 1, value_source: 'binary' })}
+      createItem={() => ({ type: 'domain', name: '', weight: 1, value_source: 'binary' })}
       addLabel="Add input"
       emptyLabel="No weighted inputs configured."
-      itemLabel={(item, index) => item.name?.trim() || item.kb?.trim() || `Input ${index + 1}`}
+      itemLabel={(item, index) => item.name?.trim() || `Input ${index + 1}`}
       itemDescription={(item) =>
         `${item.type || 'Type required'} · weight ${Number.isFinite(item.weight) ? item.weight : 'required'}`
       }

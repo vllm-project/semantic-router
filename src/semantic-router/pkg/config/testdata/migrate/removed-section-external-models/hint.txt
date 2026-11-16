@@ -1,0 +1,1 @@
+global.model_catalog.external[rewriter]: removed_section: external models are removed; run `vllm-sr config migrate` (drop it; the model_role: memory_rewrite model is an openai_chat deployment global.stores.memory.query_rewrite names)

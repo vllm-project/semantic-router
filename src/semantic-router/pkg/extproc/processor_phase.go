@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"net/http"
+
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -22,6 +24,7 @@ func (r *OpenAIRouter) requestHeadersReply(
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }
@@ -38,13 +41,26 @@ func (r *OpenAIRouter) requestBodyReply(
 		var ok bool
 		if response, ok = r.processBodyRoutingError(err, ctx); !ok {
 			logging.Errorf("handleRequestBody failed: %v", err)
+			// The routed request's record ends with the failed phase.
+			r.openRoutedRouterReplay(ctx)
 			return nil, err
 		}
 	}
+	// A refusal after routing that came before any dispatch opens its replay
+	// record here, so its client gets the replay id as well.
+	if response.GetImmediateResponse().GetStatus().GetCode() >= http.StatusBadRequest {
+		r.openRoutedRouterReplay(ctx)
+	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	r.persistImmediateResponseObject(response, ctx)
+	// A refusal after routing, or a failure of the Router's own, has a replay
+	// record that no response phase will end.
+	immediate := response.GetImmediateResponse()
+	status := int(immediate.GetStatus().GetCode())
+	r.failAnsweredRouterReplay(ctx, status, immediate.GetBody(), requestAnswerReason(ctx, status))
 	return response, nil
 }
 
@@ -58,6 +74,7 @@ func (r *OpenAIRouter) responseHeadersReply(
 		return nil, err
 	}
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }
@@ -73,6 +90,7 @@ func (r *OpenAIRouter) responseBodyReply(
 		return nil, err
 	}
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }

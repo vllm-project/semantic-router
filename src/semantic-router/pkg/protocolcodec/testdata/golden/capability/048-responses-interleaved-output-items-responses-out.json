@@ -252,7 +252,7 @@
             "usage": {
               "input_tokens": 2,
               "input_tokens_details": {
-                "cached_tokens": null
+                "cached_tokens": 0
               },
               "output_tokens": 3,
               "output_tokens_details": {
@@ -267,5 +267,11 @@
         "event": "response.completed"
       }
     ]
-  }
+  },
+  "diagnostics": [
+    {
+      "field": "output.status",
+      "action": "dropped"
+    }
+  ]
 }

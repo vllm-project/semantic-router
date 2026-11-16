@@ -52,6 +52,25 @@ var _ = Describe("VectorStoreConfig Validate", func() {
 		Expect(err.Error()).To(ContainSubstring("must be 'memory', 'milvus', 'llama_stack', 'valkey', or 'qdrant'"))
 	})
 
+	It("should accept supported_formats that have a text extractor", func() {
+		cfg := &config.VectorStoreConfig{
+			Enabled: true, BackendType: "memory",
+			SupportedFormats: []string{".txt", "MD", ".json", ".csv", ".html", ".htm"},
+		}
+		Expect(cfg.Validate()).NotTo(HaveOccurred())
+	})
+
+	It("should fail with a supported_formats entry that has no text extractor", func() {
+		cfg := &config.VectorStoreConfig{
+			Enabled: true, BackendType: "memory",
+			SupportedFormats: []string{".txt", ".pdf"},
+		}
+		err := cfg.Validate()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("supported_formats must contain only"))
+		Expect(err.Error()).To(ContainSubstring("'.pdf'"))
+	})
+
 	Context("milvus", func() {
 		It("should fail without milvus config", func() {
 			cfg := &config.VectorStoreConfig{Enabled: true, BackendType: "milvus"}
@@ -129,8 +148,7 @@ var _ = Describe("VectorStoreConfig ApplyDefaults", func() {
 
 		Expect(cfg.FileStorageDir).To(Equal("/var/lib/vsr/data"))
 		Expect(cfg.MaxFileSizeMB).To(Equal(50))
-		Expect(cfg.EmbeddingModel).To(Equal(config.DefaultEmbeddingModel))
-		Expect(cfg.EmbeddingDimension).To(Equal(0))
+		Expect(cfg.Embedding).To(BeNil())
 		Expect(cfg.IngestionWorkers).To(Equal(2))
 		Expect(cfg.SupportedFormats).To(ContainElements(".txt", ".md", ".json", ".csv", ".html"))
 	})
@@ -139,15 +157,14 @@ var _ = Describe("VectorStoreConfig ApplyDefaults", func() {
 		cfg := &config.VectorStoreConfig{
 			Enabled: true, BackendType: "memory",
 			FileStorageDir: "/custom/path", MaxFileSizeMB: 100,
-			EmbeddingModel: "qwen3", EmbeddingDimension: 1024,
+			Embedding:        &config.EmbeddingBinding{Deployment: "qwen3-embedding", Dimension: 1024},
 			IngestionWorkers: 4, SupportedFormats: []string{".txt"},
 		}
 		cfg.ApplyDefaults()
 
 		Expect(cfg.FileStorageDir).To(Equal("/custom/path"))
 		Expect(cfg.MaxFileSizeMB).To(Equal(100))
-		Expect(cfg.EmbeddingModel).To(Equal("qwen3"))
-		Expect(cfg.EmbeddingDimension).To(Equal(1024))
+		Expect(*cfg.Embedding).To(Equal(config.EmbeddingBinding{Deployment: "qwen3-embedding", Dimension: 1024}))
 		Expect(cfg.IngestionWorkers).To(Equal(4))
 		Expect(cfg.SupportedFormats).To(Equal([]string{".txt"}))
 	})

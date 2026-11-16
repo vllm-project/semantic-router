@@ -26,19 +26,27 @@ it('derives backend engines and load-balancing options from the generated contra
 describe('model form backend targets', () => {
   it('keeps every canonical API format in the public dashboard config type', () => {
     expectTypeOf<NonNullable<ProviderModel['api_format']>>().toEqualTypeOf<
-      'openai' | 'responses' | 'anthropic' | 'systemone'
+      | 'chat_completions'
+      | 'responses'
+      | 'messages'
+      | 'images'
+      | 'systemone'
+      | 'openai'
+      | 'anthropic'
     >()
 
     const models = [
       { name: 'chat', api_format: 'openai' },
       { name: 'responses', api_format: 'responses' },
       { name: 'messages', api_format: 'anthropic' },
+      { name: 'painter', api_format: 'images' },
       { name: 'decision', api_format: 'systemone' },
     ] satisfies ProviderModel[]
     expect(models.map((model) => model.api_format)).toEqual([
       'openai',
       'responses',
       'anthropic',
+      'images',
       'systemone',
     ])
   })
@@ -49,17 +57,18 @@ describe('model form backend targets', () => {
       endpoint: 'provider.internal:8443',
       protocol: 'https',
       weight: 75,
-      base_url: 'https://provider.example/v1',
       provider: 'openai',
-      auth_header: 'Authorization',
-      auth_prefix: 'Bearer',
-      extra_headers: { 'X-Tenant': 'production' },
       api_version: '2026-09-01',
       chat_path: '/chat/completions',
       api_key: 'test-only-key',
-      api_key_env: 'PROVIDER_API_KEY',
       auth: { header: 'x-api-key', prefix: '', api_key_env: 'PROVIDER_API_KEY' },
       headers: { 'X-Org': 'acme' },
+      tls: {
+        ca_file: '/etc/vllm-sr/certs/example-corp-ca.pem',
+        server_name: 'provider.internal',
+        cert_file: '/etc/vllm-sr/certs/router.crt',
+        key_file: '/etc/vllm-sr/certs/router.key',
+      },
       engine: 'tensorrt-llm',
       metrics: { port: 8002, path: '/v2/metrics' },
     } as const
@@ -112,9 +121,9 @@ describe('model form backend targets', () => {
       backend_refs: [
         {
           name: 'raw-key',
-          base_url: 'https://provider.example/v1',
+          endpoint: 'https://provider.example/v1',
           provider: 'custom-provider',
-          auth_prefix: '',
+          auth: { prefix: '' },
         },
       ],
     })
@@ -122,13 +131,30 @@ describe('model form backend targets', () => {
     expect(payload.backend_refs).toEqual([
       {
         name: 'raw-key',
-        base_url: 'https://provider.example/v1',
+        endpoint: 'https://provider.example/v1',
         provider: 'custom-provider',
-        auth_prefix: '',
+        auth: { prefix: '' },
       },
     ])
-    expect(Object.prototype.hasOwnProperty.call(payload.backend_refs[0], 'auth_prefix')).toBe(true)
+    expect(Object.prototype.hasOwnProperty.call(payload.backend_refs[0].auth, 'prefix')).toBe(true)
   })
+
+  it.each(['delegated', 'caller'] as const)(
+    'keeps a %s credential mode through the model payload',
+    (credential) => {
+      const backend = {
+        name: 'litellm',
+        endpoint: 'https://litellm.internal/v1',
+        provider: 'openai-compatible',
+        auth: { credential },
+      }
+
+      expect(normalizeModelBackendRefs([backend])).toEqual([backend])
+      expect(
+        buildProviderModelPayload('gateway', { backend_refs: [backend] }).backend_refs,
+      ).toEqual([backend])
+    },
+  )
 
   it('leaves new-model pricing unset until the operator enters a value', () => {
     const form = newModelFormData()
@@ -181,7 +207,7 @@ describe('model form catalog and reasoning payloads', () => {
         catalog: 'vendor/frontier-v1',
         reasoning_family: 'gpt',
         provider_model_id: 'frontier-v1',
-        backend_refs: [{ name: 'primary', base_url: 'https://api.example/v1', provider: 'vendor' }],
+        backend_refs: [{ name: 'primary', endpoint: 'https://api.example/v1', provider: 'vendor' }],
       }),
     ).toMatchObject({
       name: 'frontier',

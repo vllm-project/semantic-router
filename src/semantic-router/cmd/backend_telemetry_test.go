@@ -14,7 +14,7 @@ import (
 
 func telemetryConfig(t *testing.T, hostPort, telemetry string) *config.RouterConfig {
 	t.Helper()
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 listeners:
   - name: http-8899
     address: 127.0.0.1
@@ -39,12 +39,6 @@ global:
     observability:
       backend_telemetry:
 ` + telemetry + `
-  stores:
-    semantic_cache:
-      enabled: false
-routing:
-  modelCards:
-    - name: m
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +110,7 @@ func TestBackendTelemetryDisabledCollectsNothing(t *testing.T) {
 
 func TestBackendTelemetryRejectsInvalidSettings(t *testing.T) {
 	_, err := config.ParseYAMLBytes([]byte(strings.ReplaceAll(
-		`version: v0.3
+		`version: v0.5
 providers:
   defaults:
     model: m
@@ -132,9 +126,6 @@ global:
         enabled: true
         poll_interval: 5s
         ttl: 1s
-routing:
-  modelCards:
-    - name: m
 `, "\t", "  ")))
 	if err == nil || !strings.Contains(err.Error(), "ttl must not be shorter than poll_interval") {
 		t.Fatalf("ParseYAMLBytes() = %v", err)

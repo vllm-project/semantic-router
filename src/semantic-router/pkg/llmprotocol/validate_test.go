@@ -40,7 +40,7 @@ func TestCapabilityNamesAndParserStayClosed(t *testing.T) {
 		CapabilityReasoningAdaptive, CapabilityReasoningSignature, CapabilityReasoningDisplay,
 		CapabilityMatchedStopSequence,
 		CapabilityImageGeneration,
-		CapabilitySamplingMinP, CapabilityRepetitionPenalty, CapabilityCacheIsolation,
+		CapabilitySamplingMinP, CapabilitySamplingLogitBias, CapabilityRepetitionPenalty, CapabilityCacheIsolation,
 	)
 	names := all.Names()
 	seen := make(map[string]struct{}, len(names))
@@ -590,4 +590,19 @@ func validSemanticRequest() Request {
 
 func authoritativeTestCount(value int64) TokenCount {
 	return TokenCount{Value: Int64(value), Provenance: UsageAuthoritative}
+}
+
+// Claude Code 2.1.323 describes its Artifact tool in 22,096 bytes; a request
+// carrying it must pass, and a description over the limit must not.
+func TestValidateRequestTakesAHarnessToolsLongDescription(t *testing.T) {
+	limits := DefaultPolicy().Limits
+	request := validSemanticRequest()
+	request.Tools = []Tool{{Name: "Artifact", Description: strings.Repeat("d", 22_096), InputSchema: json.RawMessage(`{"type":"object"}`)}}
+	if err := ValidateRequest(request, limits); err != nil {
+		t.Fatalf("a 22,096-byte tool description was refused: %v", err)
+	}
+	request.Tools[0].Description = strings.Repeat("d", limits.ToolDescriptionBytes+1)
+	if err := ValidateRequest(request, limits); err == nil {
+		t.Fatal("a description over the limit was accepted")
+	}
 }

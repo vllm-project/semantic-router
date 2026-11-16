@@ -1,5 +1,7 @@
 package llmprotocol
 
+import "slices"
+
 type UnknownFieldPolicy string
 
 const (
@@ -23,10 +25,39 @@ const LossyFieldToolResultError = "tool_result.is_error"
 // and Responses backends as user text.
 const LossyFieldSystemMessageRole = "messages[].role"
 
+// LossyFieldUnreadableFile names files in the conversation when the selected
+// model declares no file input. Accepting the loss sends each such file as a
+// short note, which ProjectUnreadableFiles writes.
+const LossyFieldUnreadableFile = "content.file"
+
+// LossyFieldToolDeferLoading names a tool's request to be loaded on demand
+// through the provider's tool search. Accepting the loss sends the tool with its
+// full definition, as a backend without tool search would see it.
+const LossyFieldToolDeferLoading = "tools.defer_loading"
+
+// LossyFieldReasoningSignature names the signature an Anthropic backend puts
+// on its thinking, which Chat Completions and Responses clients cannot carry.
+const LossyFieldReasoningSignature = "reasoning.signature"
+
+// LossyFieldStore names a request's store: true, which asks the provider to
+// keep the completion. Accepting the loss sends the request without it to a
+// backend whose wire format keeps no completions, which ProjectUnstoredRequest
+// writes.
+const LossyFieldStore = "store"
+
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldToolDeferLoading, LossyFieldReasoningSignature, LossyFieldStore}
+}
+
+// OptInHint is what a refusal of field adds when an operator may accept that
+// loss: the setting that lists it. It is empty for every other field.
+func OptInHint(field string) string {
+	if !slices.Contains(OptInLossyFields(), field) {
+		return ""
+	}
+	return "; an operator can accept this loss by listing " + field + " in global.router.allow_lossy_translation"
 }
 
 type MissingIDPolicy string
@@ -121,6 +152,7 @@ type Limits struct {
 	ReasoningEffortBytes int
 	StopSequences        int
 	StopBytes            int
+	LogitBiasEntries     int
 	TextBytes            int
 	MediaReferenceBytes  int
 	MediaDataBytes       int
@@ -141,11 +173,11 @@ func DefaultPolicy() Policy {
 			Alternatives: 32, OutputItems: 4096, ContentBlocks: 16_384,
 			Citations: 256, CitationURLBytes: 16 << 10, CitationTitleBytes: 16 << 10,
 			JSONDepth: 128, ToolResultDepth: 8,
-			Tools: 256, ToolNameBytes: 256, ToolDescriptionBytes: 16 << 10,
+			Tools: 256, ToolNameBytes: 256, ToolDescriptionBytes: 256 << 10,
 			IdentifierBytes: 1024, SchemaBytes: 4 << 20, MetadataBytes: 64 << 10,
 			MetadataEntries: 256, MetadataKeyBytes: 256, MetadataValueBytes: 8 << 10,
 			ToolArgumentsBytes: 4 << 20, ReasoningEffortBytes: 32,
-			StopSequences: 16, StopBytes: 64 << 10, TextBytes: 16 << 20,
+			StopSequences: 16, StopBytes: 64 << 10, LogitBiasEntries: 16_384, TextBytes: 16 << 20,
 			MediaReferenceBytes: 16 << 10, MediaDataBytes: 48 << 20,
 			SSEFrameBytes: 1 << 20, UnfinishedArguments: 4 << 20,
 			Events: 1_000_000, Diagnostics: 64,

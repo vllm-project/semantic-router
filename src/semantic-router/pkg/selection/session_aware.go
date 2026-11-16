@@ -13,7 +13,6 @@ import (
 
 // SessionAwareConfig configures agentic session-aware model selection.
 type SessionAwareConfig struct {
-	BaseMethod                   SelectionMethod
 	IdleTimeoutSeconds           int
 	MinTurnsBeforeSwitch         int
 	SwitchMargin                 float64
@@ -31,12 +30,15 @@ type SessionAwareConfig struct {
 	RemainingTurnPriorWeight     float64
 	RemainingTurnPriorHorizon    int
 	MinRemainingTurnPriorSamples int
+
+	// CacheEconomics prices a switch from the session's cache receipts in
+	// place of the heuristic prefix-cache terms. Off unless protection sets it.
+	CacheEconomics config.CacheEconomicsConfig
 }
 
 // DefaultSessionAwareConfig returns the production-oriented default policy.
 func DefaultSessionAwareConfig() *SessionAwareConfig {
 	return &SessionAwareConfig{
-		BaseMethod:                   MethodHybrid,
 		IdleTimeoutSeconds:           300,
 		MinTurnsBeforeSwitch:         1,
 		SwitchMargin:                 0.05,
@@ -79,7 +81,6 @@ func NewSessionAwareSelector(cfg *SessionAwareConfig) *SessionAwareSelector {
 
 func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
 	defaults := DefaultSessionAwareConfig()
-	cfg.BaseMethod = defaultSessionAwareBaseMethod(cfg.BaseMethod, defaults.BaseMethod)
 	cfg.IdleTimeoutSeconds = defaultNonNegativeInt(cfg.IdleTimeoutSeconds, defaults.IdleTimeoutSeconds)
 	cfg.MinTurnsBeforeSwitch = defaultNonNegativeInt(cfg.MinTurnsBeforeSwitch, defaults.MinTurnsBeforeSwitch)
 	cfg.SwitchMargin = defaultNonNegativeFloat(cfg.SwitchMargin, defaults.SwitchMargin)
@@ -95,13 +96,6 @@ func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
 	cfg.RemainingTurnPriorHorizon = defaultPositiveInt(cfg.RemainingTurnPriorHorizon, defaults.RemainingTurnPriorHorizon)
 	cfg.MinRemainingTurnPriorSamples = defaultNonNegativeInt(cfg.MinRemainingTurnPriorSamples, defaults.MinRemainingTurnPriorSamples)
 	return &cfg
-}
-
-func defaultSessionAwareBaseMethod(method, defaultMethod SelectionMethod) SelectionMethod {
-	if method == "" || method == MethodSessionAware {
-		return defaultMethod
-	}
-	return method
 }
 
 func defaultNonNegativeInt(value, defaultValue int) int {
@@ -137,10 +131,6 @@ func defaultAtLeastFloat(value, defaultValue, minimum float64) float64 {
 		return defaultValue
 	}
 	return value
-}
-
-func (s *SessionAwareSelector) Method() SelectionMethod {
-	return MethodSessionAware
 }
 
 func (s *SessionAwareSelector) SetBaseSelector(selector Selector) {
@@ -202,7 +192,8 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	timeout := secondsDuration(s.config.IdleTimeoutSeconds)
 	idleExpired := session.idleExpired(timeout)
 	trace.IdleExpired = idleExpired
-	continuityReset := idleExpired || driftDetected
+	trace.ExplicitRelease = session.ReleaseHonored
+	continuityReset := idleExpired || driftDetected || session.ReleaseHonored
 	if reason := s.sessionHardLockReason(session, continuityReset); reason != "" {
 		return s.forceCurrent(selCtx, base, current, reason, trace)
 	}
@@ -213,9 +204,15 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 		trace.MissingSignals = append(trace.MissingSignals, "adjusted_scores")
 		return s.wrapBaseSelection(base, "missing_adjusted_scores", trace), nil
 	}
+	scoreBest, proposal := adjusted[best].Candidate.Model, adjusted[best].Candidate.Model
+	if proposal == current {
+		proposal = base.SelectedModel
+	}
+	paying := withoutUnpaidSwitches(adjusted, candidateTraces)
+	best = paying.Best(HigherIsBetter, false)
 
-	bestRef, bestScore := &adjusted[best].Candidate, adjusted[best].Score
-	confidence := candidateScoreConfidence(best, adjusted)
+	bestRef, bestScore := &paying[best].Candidate, paying[best].Score
+	confidence := candidateScoreConfidence(best, paying)
 	reason := fmt.Sprintf(
 		"session_aware: base=%s current=%s selected=%s idle_expired=%t active_tool_loop=%t",
 		base.Method, current, bestRef.Model, idleExpired, session.ActiveToolLoop,
@@ -227,6 +224,7 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	if bestRef.Model == current {
 		trace.DecisionReason = "stay_has_best_adjusted_score"
 	}
+	recordCacheEconomics(trace, candidateTraces, proposal, scoreBest, bestRef.Model)
 	logging.Infof("[SessionAwareSelector] %s score=%.4f confidence=%.2f", reason, bestScore, confidence)
 	return &SelectionResult{
 		SelectedModel:     bestRef.Model,
@@ -437,22 +435,4 @@ func (s *SessionAwareSelector) newPolicyTrace(
 		trace.SessionID = selCtx.SessionID
 	}
 	return trace
-}
-
-func (s *SessionAwareSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if s.baseSelector == nil {
-		return nil
-	}
-	return s.baseSelector.UpdateFeedback(ctx, feedback)
-}
-
-func (s *SessionAwareSelector) Tier() AlgorithmTier {
-	return TierSupported
-}
-
-func (s *SessionAwareSelector) ExternalDependencies() []Dependency {
-	if s.baseSelector == nil {
-		return nil
-	}
-	return s.baseSelector.ExternalDependencies()
 }

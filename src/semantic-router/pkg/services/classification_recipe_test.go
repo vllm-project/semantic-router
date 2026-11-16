@@ -69,7 +69,7 @@ func TestRecipeClassificationServiceRejectsConcreteBackendModel(t *testing.T) {
 			Name: config.DefaultRecipeName,
 		}},
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(routerConfig, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(routerConfig)
 	require.NoError(t, err)
 	service := NewRecipeClassificationService(classifiers, routerConfig)
 
@@ -117,11 +117,8 @@ func TestRecipeClassificationServiceRefreshesNamedRecipePolicy(t *testing.T) {
 
 	initial := recipeConfig("alpha")
 	classifiers, err := classification.BuildRecipeClassifiers(
-		initial,
-		nil,
-		nil,
-		nil,
-	)
+		initial)
+
 	require.NoError(t, err)
 	service := NewRecipeClassificationService(classifiers, initial)
 

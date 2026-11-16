@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -250,25 +251,36 @@ func TestNativePreviewRejectsUnprojectedDynamicRequestsBeforeRender(t *testing.T
 		value        map[string]any
 		mutate       func(*RequestContext)
 	}{
-		{name: "rag", plugin: "rag", value: map[string]any{"enabled": true}},
-		{name: "memory", plugin: "memory", value: map[string]any{"enabled": true}},
-		{name: "tool-selection", plugin: "tool_selection", value: map[string]any{"enabled": true}, mutate: func(ctx *RequestContext) { ctx.SemanticRequest.ToolChoice.Mode = llmprotocol.ToolChoiceAuto }},
-		{name: "filtered-tools", plugin: "tools", value: map[string]any{"enabled": true, "mode": "filtered"}},
+		{name: "rag", plugin: config.DecisionPluginContext, value: map[string]any{"enabled": true, "sources": []any{map[string]any{"type": "rag", "backend": "vectorstore"}}}},
+		{name: "memory", plugin: config.DecisionPluginContext, value: map[string]any{"enabled": true, "sources": []any{map[string]any{"type": "memory"}}}},
+		{name: "tool-selection", plugin: "tools", value: map[string]any{"enabled": true, "select": map[string]any{"mode": "filter"}}, mutate: func(ctx *RequestContext) { ctx.SemanticRequest.ToolChoice.Mode = llmprotocol.ToolChoiceAuto }},
+		{name: "filtered-tools", plugin: "tools", value: map[string]any{"enabled": true, "policy": map[string]any{"mode": "filtered", "allow_tools": []string{"lookup"}}}},
 		{name: "history", mutate: func(ctx *RequestContext) {
 			ctx.SemanticRequest.Messages = append([]llmprotocol.Message{{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "previous"}}}}, ctx.SemanticRequest.Messages...)
 		}},
 		{name: "lora", mutate: func(ctx *RequestContext) { ctx.VSRSelectedDecision.ModelRefs[0].LoRAName = "adapter" }},
 		{name: "looper", mutate: func(ctx *RequestContext) {
-			ctx.VSRSelectedDecision.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmConfidence}
+			ctx.VSRSelectedDecision.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmEscalate}
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			calls := 0
 			r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 			if tt.plugin != "" {
-				payload, err := config.NewStructuredPayload(tt.value)
+				value := maps.Clone(tt.value)
+				existing := ctx.VSRSelectedDecision.GetPlugin(tt.plugin)
+				if existing != nil {
+					value = map[string]any{}
+					require.NoError(t, config.UnmarshalPluginConfig(existing.Configuration, &value))
+					maps.Copy(value, tt.value)
+				}
+				payload, err := config.NewStructuredPayload(value)
 				require.NoError(t, err)
-				ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, config.DecisionPlugin{Type: tt.plugin, Configuration: payload})
+				if existing != nil {
+					existing.Configuration = payload
+				} else {
+					ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, config.DecisionPlugin{Type: tt.plugin, Configuration: payload})
+				}
 			}
 			if tt.mutate != nil {
 				tt.mutate(ctx)
@@ -358,19 +370,18 @@ func nativePreviewObservationCounters(t *testing.T) string {
 }
 
 func TestNativePreviewDynamicGuardUsesEffectiveToolPolicy(t *testing.T) {
-	for _, mode := range []string{"blocked-choice", "stripped-history"} {
+	for _, mode := range []string{"required-choice", "stripped-history"} {
 		t.Run(mode, func(t *testing.T) {
 			calls := 0
 			r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 			ctx.SemanticRequest.ToolChoice.Mode = llmprotocol.ToolChoiceAuto
 			ctx.SemanticRequest.Tools = []llmprotocol.Tool{{Name: "lookup", InputSchema: json.RawMessage(`{"type":"object"}`)}}
-			plugin := map[string]any{"enabled": true}
-			kind := "tool_selection"
-			if mode == "blocked-choice" {
-				setAutomaticBlockedParams(t, ctx, []string{"tool_choice"})
+			plugin := map[string]any{"enabled": true, "select": map[string]any{"mode": "filter"}}
+			kind := "tools"
+			if mode == "required-choice" {
+				ctx.SemanticRequest.ToolChoice.Mode = llmprotocol.ToolChoiceRequired
 			} else {
-				kind = "tools"
-				plugin = map[string]any{"enabled": true, "mode": "none", "strip_tool_history": true}
+				plugin = map[string]any{"enabled": true, "policy": map[string]any{"mode": "none", "strip_tool_history": true}}
 				ctx.SemanticRequest.Messages = append([]llmprotocol.Message{
 					{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call", Name: "lookup", Arguments: "{}"}}}},
 					{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "saved result"}}}}}},

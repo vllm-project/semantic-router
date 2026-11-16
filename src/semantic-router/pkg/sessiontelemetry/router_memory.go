@@ -43,6 +43,10 @@ type RouterSessionSnapshot struct {
 	TurnCount   int
 	SwitchCount int
 	ModelTurns  map[string]int
+	// UserTurnCount counts committed requests outside a tool loop, so it moves
+	// with user input rather than with tool hops or client-side history edits.
+	UserTurnCount       int `json:"user_turn_count,omitempty"`
+	LastReleaseUserTurn int `json:"last_release_user_turn,omitempty"`
 
 	CumulativePromptTokens          int64
 	CumulativeCachedTokens          int64
@@ -59,6 +63,10 @@ type RouterSessionSnapshot struct {
 	LastPolicy                map[string]interface{}
 
 	RecentOutcomes []TurnOutcome `json:"recent_outcomes,omitempty"`
+
+	// LastCacheReceipt is the latest response's usage, which prices the
+	// prompt cache a model switch would throw away.
+	LastCacheReceipt *modelpricing.Receipt `json:"last_cache_receipt,omitempty"`
 }
 
 // SessionDecisionParams records the pre-dispatch policy result for one session
@@ -72,6 +80,8 @@ type SessionDecisionParams struct {
 	DecisionName      string
 	TurnIndex         int
 	ActiveToolLoop    bool
+	UserTurn          bool
+	Released          bool
 	Policy            map[string]interface{}
 	Timestamp         time.Time
 }
@@ -91,7 +101,9 @@ type SessionUsageParams struct {
 	Cost                        float64
 	EstimatedCacheSavings       float64
 	CacheAccountingSource       string
-	Timestamp                   time.Time
+	// CacheReported is true when the backend reported cache reads or writes.
+	CacheReported bool
+	Timestamp     time.Time
 }
 
 type routerSessionState struct {
@@ -110,6 +122,9 @@ type routerSessionState struct {
 	switchCount int
 	modelTurns  map[string]int
 
+	userTurnCount       int
+	lastReleaseUserTurn int
+
 	cumulativePrompt                int64
 	cumulativeCached                int64
 	cumulativeCacheWrite            int64
@@ -123,6 +138,7 @@ type routerSessionState struct {
 	lastDecisionReason        string
 	lastCacheAccountingSource string
 	lastPolicy                map[string]interface{}
+	lastCacheReceipt          *modelpricing.Receipt
 
 	recentOutcomes    []TurnOutcome
 	outcomeWindowSize int
@@ -194,6 +210,12 @@ func RecordSessionDecision(p SessionDecisionParams) {
 		st.turnCount++
 	}
 	st.modelTurns[p.SelectedModel]++
+	if p.UserTurn {
+		st.userTurnCount++
+		if p.Released {
+			st.lastReleaseUserTurn = st.userTurnCount
+		}
+	}
 	st.activeToolLoop = p.ActiveToolLoop
 	st.lastDecisionName = p.DecisionName
 	if p.Policy != nil {
@@ -245,6 +267,30 @@ func RecordSessionUsage(p SessionUsageParams) {
 	if p.CacheAccountingSource != "" {
 		st.lastCacheAccountingSource = p.CacheAccountingSource
 	}
+	// Responses can complete out of order; the latest one describes the cache.
+	if st.lastCacheReceipt == nil || !now.Before(st.lastCacheReceipt.At) {
+		st.lastCacheReceipt = &modelpricing.Receipt{
+			Model: p.Model,
+			Usage: modelpricing.Usage{
+				PromptTokens:       p.PromptTokens,
+				CachedInputTokens:  p.CachedPromptTokens,
+				CacheWriteTokens:   p.CacheWriteTokens,
+				CacheWrite5mTokens: p.CacheWrite5mTokens,
+				CacheWrite1hTokens: p.CacheWrite1hTokens,
+				CompletionTokens:   p.CompletionTokens,
+			},
+			CacheReported: p.CacheReported,
+			At:            now,
+		}
+	}
+}
+
+func cloneCacheReceipt(receipt *modelpricing.Receipt) *modelpricing.Receipt {
+	if receipt == nil {
+		return nil
+	}
+	clone := *receipt
+	return &clone
 }
 
 // GetRouterSessionSnapshot returns a clone of the router-owned session memory.
@@ -297,6 +343,8 @@ func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (Router
 		TurnCount:                       st.turnCount,
 		SwitchCount:                     st.switchCount,
 		ModelTurns:                      cloneIntMap(st.modelTurns),
+		UserTurnCount:                   st.userTurnCount,
+		LastReleaseUserTurn:             st.lastReleaseUserTurn,
 		CumulativePromptTokens:          st.cumulativePrompt,
 		CumulativeCachedTokens:          st.cumulativeCached,
 		CumulativeCacheWriteTokens:      st.cumulativeCacheWrite,
@@ -310,6 +358,7 @@ func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (Router
 		LastCacheAccountingSource:       st.lastCacheAccountingSource,
 		LastPolicy:                      clonePolicyMap(st.lastPolicy),
 		RecentOutcomes:                  cloneTurnOutcomes(st.recentOutcomes),
+		LastCacheReceipt:                cloneCacheReceipt(st.lastCacheReceipt),
 	}
 	s.mu.Unlock()
 	return snapshot, true

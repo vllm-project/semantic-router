@@ -176,7 +176,7 @@ func TestReusedClusterReadsEachSetsTelemetry(t *testing.T) {
 }
 
 func TestCompileMapsLoadAwarePolicyAndEndpointTelemetry(t *testing.T) {
-	topology := compileYAML(t, `version: v0.3
+	topology := compileYAML(t, `version: v0.5
 providers:
   defaults:
     model: m
@@ -192,7 +192,8 @@ providers:
         - name: gpu-b
           provider: vllm
           endpoint: 10.0.0.2:8000
-routing: {}
+recipes:
+  - name: default
 `)
 	cluster := topology.Clusters[0]
 	if cluster.LBPolicy != LBLoadAware {

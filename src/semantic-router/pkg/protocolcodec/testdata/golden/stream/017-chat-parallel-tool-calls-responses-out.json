@@ -213,7 +213,7 @@
           "usage": {
             "input_tokens": 8,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 6,
             "output_tokens_details": {

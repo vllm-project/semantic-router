@@ -5,7 +5,8 @@ export interface ConnectModelAdvancedValues {
   namePrefix: string
   reasoningFamily: string
   description: string
-  modality: string
+  inputModalities: string
+  outputModalities: string
   parameterSize: string
   contextWindow: string
   capabilities: string
@@ -26,7 +27,8 @@ export const emptyConnectModelAdvancedValues = (): ConnectModelAdvancedValues =>
   namePrefix: '',
   reasoningFamily: '',
   description: '',
-  modality: '',
+  inputModalities: '',
+  outputModalities: '',
   parameterSize: '',
   contextWindow: '',
   capabilities: '',
@@ -120,7 +122,7 @@ export function buildConnectedProviderModel({
     backend_refs: [
       {
         name: `${providerID}-primary`,
-        base_url: baseURL,
+        endpoint: baseURL,
         provider: providerID,
         ...(apiKey ? { api_key: apiKey } : {}),
       },

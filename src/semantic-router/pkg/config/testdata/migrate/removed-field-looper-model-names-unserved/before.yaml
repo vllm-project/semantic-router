@@ -1,0 +1,26 @@
+# A Looper algorithm's model names that no decision of the default recipe
+# ran served no request: here the built-in vllm-sr/remom, which an empty list
+# kept. A name an entrypoint serves stays that entrypoint's. Migrate drops both.
+version: v0.5
+providers:
+  defaults: {model: small}
+  models:
+    - name: small
+      backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: direct
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}]
+entrypoints:
+  - model_names: [team/flow]
+    recipe: default
+global:
+  integrations:
+    looper:
+      remom:
+        model_names: []
+      flow:
+        model_names: [team/flow]

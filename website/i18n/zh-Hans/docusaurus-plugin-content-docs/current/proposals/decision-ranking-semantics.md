@@ -13,7 +13,7 @@ is_mtpe: true
 > **状态：** 提案 · **创建于：** 2026-09-01
 
 :::note
-本提案用早期的 `type: llm` 字段称呼分类器规则，该字段已弃用：分类器规则现在指定自己的 `deployment`。[迁移模型资源](../installation/model-resource-migration.md#classifier-rules)给出了当前形式。
+本提案用早期的 `type: llm` 字段称呼分类器规则，该字段已弃用：分类器规则现在指定自己的 `deployment`。[迁移模型资源](../installation/model-resource-migration.md#what-else-changes)给出了当前形式。
 :::
 
 ## 问题 {#problem}

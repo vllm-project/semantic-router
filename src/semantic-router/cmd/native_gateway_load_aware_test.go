@@ -62,7 +62,7 @@ func newFakeVLLM(t *testing.T, name string, waiting int64) *fakeVLLM {
 func (f *fakeVLLM) hostPort() string { return strings.TrimPrefix(f.server.URL, "http://") }
 
 func loadAwareDocument(a, b *fakeVLLM) string {
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: http-8899
     address: 127.0.0.1
@@ -92,12 +92,6 @@ global:
         enabled: true
         poll_interval: 20ms
         ttl: 200ms
-  stores:
-    semantic_cache:
-      enabled: false
-routing:
-  modelCards:
-    - name: m
 `
 }
 

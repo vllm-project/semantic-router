@@ -1,0 +1,37 @@
+# A Looper algorithm's model_names served requests for those names with the
+# default recipe's decisions of that algorithm alone. Entrypoints name models
+# now: migrate writes one for those names and the recipe it serves, the
+# default recipe with only those decisions.
+version: v0.5
+providers:
+  defaults: {model: small}
+  models:
+    - name: small
+      backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+    - name: large
+      backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - {name: deliberate, operator: any, keywords: [compare, weigh]}
+    decisions:
+      - name: panel
+        priority: 100
+        rules: {type: keyword, name: deliberate}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: fusion
+          fusion:
+            model: large
+            analysis_models: [small, large]
+      - name: direct
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}]
+global:
+  integrations:
+    looper:
+      timeout_seconds: 120
+      fusion:
+        model_names: [vllm-sr/fusion, team/panel]

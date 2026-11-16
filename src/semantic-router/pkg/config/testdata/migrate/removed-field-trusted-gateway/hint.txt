@@ -1,0 +1,1 @@
+providers.models[gateway-model].backend_refs[gateway].trusted_gateway: removed_field: trusted_gateway is removed; run `vllm-sr config migrate` (auth: {credential: delegated})

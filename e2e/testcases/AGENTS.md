@@ -6,3 +6,7 @@
 - Accuracy, rate, and latency assertions need a stated non-zero threshold;
   “one request succeeded” is not a routing or classifier acceptance bar.
 - Shared helpers may hide mechanics, never acceptance semantics.
+- Give a case `Priority: pkgtestcases.P0` when its break would reach users or
+  fail open (refusals, blocks, no-dispatch, identity boundaries), and P2 only
+  for expensive qualification that just the full scope should pay for; leave
+  every other case at the P1 default.

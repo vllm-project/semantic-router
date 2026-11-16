@@ -10,7 +10,7 @@ import (
 
 func TestMetadataDecisionEvaluatesWithoutTextContent(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: model-a
@@ -19,29 +19,28 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: model-a
-  signals:
-    metadata:
-      - name: canary
-        key: cohort
-        predicate:
-          equals: canary
-  decisions:
-    - name: canary-route
-      priority: 10
-      rules:
-        type: metadata
-        name: canary
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      metadata:
+        - name: canary
+          key: cohort
+          predicate:
+            equals: canary
+    decisions:
+      - name: canary-route
+        priority: 10
+        rules:
+          type: metadata
+          name: canary
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	if err != nil {
 		t.Fatalf("NewClassifier() error = %v", err)
 	}

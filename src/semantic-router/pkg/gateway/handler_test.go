@@ -342,7 +342,7 @@ func TestHandlerWritesTheFallbackChainsAnswerAsIs(t *testing.T) {
 func TestHandlerForwardsTheCallAndRunsResponsePhases(t *testing.T) {
 	p := &fakeProcessor{effects: map[routing.Phase][]*routing.Effect{
 		routing.PhaseRequestBody: {{
-			Header:          &routing.HeaderMutation{Set: []routing.HeaderOption{set("x-selected-model", "model-a"), set(":path", "/v1/messages"), set("content-length", "4")}},
+			Header:          &routing.HeaderMutation{Set: []routing.HeaderOption{set("x-vsr-route-model", "model-a"), set(":path", "/v1/messages"), set("content-length", "4")}},
 			Body:            &routing.BodyMutation{Body: []byte("next")},
 			ClearRouteCache: true,
 		}},
@@ -353,7 +353,7 @@ func TestHandlerForwardsTheCallAndRunsResponsePhases(t *testing.T) {
 	rec := httptest.NewRecorder()
 	newTestHandler(t, p, u).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("ping")))
 	call := u.got[0]
-	if call.RouteKey != "model-a" || call.Path != "/v1/messages" || string(call.Body) != "next" || call.Header.Get("X-Selected-Model") != "model-a" {
+	if call.RouteKey != "model-a" || call.Path != "/v1/messages" || string(call.Body) != "next" || call.Header.Get("X-Vsr-Route-Model") != "model-a" {
 		t.Fatalf("upstream call = %+v", call)
 	}
 	if _, pseudo := call.Header[":path"]; pseudo {
@@ -406,9 +406,13 @@ func TestHandlerStreamsChunkByChunk(t *testing.T) {
 
 // Envoy's ext_proc ends processing on Envoy's own local replies, so the
 // response phases never see one: the client gets it as it is, and the session
-// ends as an ext_proc stream ends.
+// ends with the local reply, so it knows what the client got.
 func TestHandlerWritesLocalRepliesAsEnvoyDoes(t *testing.T) {
 	const connectFailure = "upstream connect error or disconnect/reset before headers. reset reason: remote connection failure"
+	closes := map[string]routing.LocalReply{
+		"a walker error":          {Status: http.StatusGatewayTimeout, Failure: "timeout"},
+		"an upstream local reply": {Status: http.StatusServiceUnavailable, Failure: "connect_failure"},
+	}
 	for name, u := range map[string]*fakeUpstream{
 		"a walker error": {err: &upstream.Error{Kind: upstream.KindTimeout, Stage: upstream.StageTotal}},
 		"an upstream local reply": {resp: func() *upstream.Response {
@@ -433,8 +437,9 @@ func TestHandlerWritesLocalRepliesAsEnvoyDoes(t *testing.T) {
 			if len(p.headers) != 1 || len(p.bodies) != 1 {
 				t.Fatalf("phases saw %d header sets and %d bodies, want the request's only", len(p.headers), len(p.bodies))
 			}
-			if len(p.closed) != 1 || p.closed[0] != nil {
-				t.Fatalf("session closed with %v, want one clean end", p.closed)
+			var local *routing.LocalReply
+			if len(p.closed) != 1 || !errors.As(p.closed[0], &local) || *local != closes[name] {
+				t.Fatalf("session closed with %v, want one end with the local reply %+v", p.closed, closes[name])
 			}
 		})
 	}

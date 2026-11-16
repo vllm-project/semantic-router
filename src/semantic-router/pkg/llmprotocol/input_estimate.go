@@ -20,6 +20,11 @@ type InputEstimate struct {
 	StructuredBytes int
 	EquivalentBytes int
 	HasNonText      bool
+	// ReserveTokens is the part of Tokens that is conservative reserve rather
+	// than a prose-rate count: structured bytes beyond the text rate, image
+	// reserves, and audio, video and file payloads. Tokens less ReserveTokens
+	// is an optimistic count, the only one a refusal may rest on.
+	ReserveTokens int
 }
 
 // EstimateInput walks neutral content, including retained history and tool
@@ -30,7 +35,7 @@ func EstimateInput(request *Request) InputEstimate {
 	}
 	var estimate InputEstimate
 	framing := saturatedMultiply(len(request.Messages)+len(request.Instructions), InputMessageFramingTokens)
-	images := 0
+	images, mediaBytes := 0, 0
 	var consume func([]Content)
 	consume = func(contents []Content) {
 		for _, content := range contents {
@@ -49,6 +54,7 @@ func EstimateInput(request *Request) InputEstimate {
 			case ContentAudio, ContentVideo, ContentFile:
 				estimate.HasNonText = true
 				estimate.StructuredBytes = SaturatingTokenSum(estimate.StructuredBytes, len(content.URL), len(content.Data), len(content.FileID))
+				mediaBytes = SaturatingTokenSum(mediaBytes, len(content.URL), len(content.Data), len(content.FileID))
 			case ContentToolCall:
 				framing = SaturatingTokenSum(framing, InputToolCallFramingTokens)
 				if content.ToolCall != nil {
@@ -80,13 +86,18 @@ func EstimateInput(request *Request) InputEstimate {
 	// is carried outside messages on the wire. Reserve its bytes consistently
 	// with tool schemas; this is conservative accounting, not tokenization.
 	estimate.StructuredBytes = SaturatingTokenSum(estimate.StructuredBytes, len(request.OutputFormat.Schema), len(request.OutputFormat.Name), len(request.OutputFormat.Description))
-	textTokens := estimate.TextBytes / InputTextBytesPerToken
-	if estimate.TextBytes%InputTextBytesPerToken != 0 {
-		textTokens++
-	}
-	estimate.Tokens = SaturatingTokenSum(textTokens, estimate.StructuredBytes, saturatedMultiply(images, InputImageTokens), framing)
+	estimate.Tokens = SaturatingTokenSum(textRateTokens(estimate.TextBytes), estimate.StructuredBytes, saturatedMultiply(images, InputImageTokens), framing)
 	estimate.EquivalentBytes = saturatedMultiply(estimate.Tokens, InputTextBytesPerToken)
+	optimistic := SaturatingTokenSum(textRateTokens(estimate.TextBytes), textRateTokens(estimate.StructuredBytes-mediaBytes), framing)
+	estimate.ReserveTokens = max(0, estimate.Tokens-optimistic)
 	return estimate
+}
+
+func textRateTokens(bytes int) int {
+	if bytes <= 0 {
+		return 0
+	}
+	return (bytes + InputTextBytesPerToken - 1) / InputTextBytesPerToken
 }
 
 // SaturatingTokenSum avoids overflowing admission calculations.

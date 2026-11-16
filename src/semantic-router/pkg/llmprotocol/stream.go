@@ -62,6 +62,9 @@ type StreamContext struct {
 	ProviderModel      string
 	ResponseID         string
 	PreviousResponseID string
+	// PreferProviderModel names events with the model the provider's stream
+	// reports, once it reports one, and with PublicModel until then.
+	PreferProviderModel bool
 }
 
 type StreamDecoder interface {

@@ -26,12 +26,10 @@ REJECTED_EXIT_CODE = 65
 
 
 def _compose(request: dict[str, Any]) -> dict[str, Any]:
-    config_path = Path(request["config_path"])
     return compose_builtin_recipe(
         request["recipe"],
         bundle=request["bundle"],
-        config=load_provider_config(config_path),
-        config_path=config_path,
+        config=load_provider_config(Path(request["config_path"])),
         bindings=request["bindings"],
         model_names=request["model_names"],
     )

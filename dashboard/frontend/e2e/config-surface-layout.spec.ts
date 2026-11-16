@@ -2,18 +2,10 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mockAuthenticatedAppShell } from './support/auth';
 
 const configResponse = {
-  version: 'v0.3',
+  version: 'v0.5',
   listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
   providers: {
-    defaults: {
-      default_model: 'test-model',
-      reasoning_families: {
-        qwen3: {
-          type: 'reasoning_effort',
-          parameter: 'reasoning_effort',
-        },
-      },
-    },
+    defaults: { model: 'test-model' },
     models: [
       {
         name: 'test-model',
@@ -26,67 +18,54 @@ const configResponse = {
             protocol: 'http',
           },
         ],
+        description: 'Primary routing model',
       },
     ],
   },
-  routing: {
-    modelCards: [{ name: 'test-model', description: 'Primary routing model' }],
-    signals: {
-      domains: [{ name: 'business', description: 'Business' }],
-      keywords: [{ name: 'pricing', value: 'pricing' }],
-    },
-    decisions: [
-      {
-        name: 'business-route',
-        priority: 1,
-        description: 'Route business requests',
-        rules: {
-          operator: 'AND',
-          conditions: [{ type: 'domain', name: 'business' }],
-        },
-        modelRefs: [
-          {
-            model: 'test-model',
-            use_reasoning: true,
-            reasoning_effort: 'medium',
-            lora_name: 'adapter-v1',
-            weight: 1,
-            reasoning_description: 'Use chain-of-thought for harder tasks',
+  recipes: [
+    {
+      name: 'default',
+      signals: {
+        domains: [{ name: 'business', description: 'Business' }],
+        keywords: [{ name: 'pricing', operator: 'OR', keywords: ['pricing'], case_sensitive: false }],
+      },
+      decisions: [
+        {
+          name: 'business-route',
+          priority: 1,
+          description: 'Route business requests',
+          rules: {
+            operator: 'AND',
+            conditions: [{ type: 'domain', name: 'business' }],
           },
-        ],
-      },
-    ],
-  },
+          modelRefs: [
+            {
+              model: 'test-model',
+              use_reasoning: true,
+              reasoning_effort: 'medium',
+              lora_name: 'adapter-v1',
+              weight: 1,
+              reasoning_description: 'Use chain-of-thought for harder tasks',
+            },
+          ],
+        },
+      ],
+    },
+  ],
   global: {
     router: { strategy: 'priority' },
     services: {
       response_api: { enabled: true },
     },
     model_catalog: {
-      modules: {
-        prompt_guard: {
-          enabled: true,
-          model_ref: 'prompt_guard',
-          threshold: 0.7,
-          use_cpu: true,
-        },
-      },
       system: {
-        prompt_guard: 'models/mmbert32k-jailbreak-detector-merged',
-        domain_classifier: 'models/mmbert32k-intent-classifier-merged',
-        pii_classifier: 'models/mmbert32k-pii-detector-merged',
+        decision_model: { deployment: 'main-judge' },
+      },
+      bindings: {
+        jailbreak: 'guard-judge',
       },
       embeddings: {
-        semantic: {
-          mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-          use_cpu: true,
-          embedding_config: {
-            model_type: 'mmbert',
-            preload_embeddings: true,
-            target_dimension: 768,
-            target_layer: 22,
-          },
-        },
+        default: 'qwen3-embedding',
       },
     },
   },
@@ -98,20 +77,12 @@ services:
   response_api:
     enabled: true
 model_catalog:
-  modules:
-    prompt_guard:
-      enabled: true
-      model_ref: prompt_guard
-      threshold: 0.7
-      use_cpu: true
   system:
-    prompt_guard: models/mmbert32k-jailbreak-detector-merged
-    domain_classifier: models/mmbert32k-intent-classifier-merged
-    pii_classifier: models/mmbert32k-pii-detector-merged
+    decision_model: {deployment: main-judge}
+  bindings:
+    jailbreak: guard-judge
   embeddings:
-    semantic:
-      mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-      use_cpu: true
+    default: {deployment: qwen3-embedding}
 `;
 
 async function mockConfigSurface(page: Page) {
@@ -170,7 +141,7 @@ async function expectInside(container: Locator, child: Locator) {
 }
 
 test.describe('Config surface layout regressions', () => {
-  test('opens decision model settings directly and saves bindings instead of system lines', async ({ page }) => {
+  test('opens decision model settings directly and saves the decision model and a binding', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await mockConfigSurface(page);
 
@@ -199,7 +170,6 @@ test.describe('Config surface layout regressions', () => {
     const card = page.locator('#global-section-system_models');
     await expect(card.getByRole('heading', { name: 'Decision Model & Bindings' })).toBeInViewport();
     await expect(card.getByText('main-judge', { exact: true })).toBeVisible();
-    await expect(card.getByText('3 deprecated model paths', { exact: true })).toBeVisible();
     await card.getByRole('button', { name: 'Edit', exact: true }).click();
 
     const modal = page.getByRole('dialog', { name: 'Edit Decision Model & Bindings' });
@@ -209,9 +179,8 @@ test.describe('Config surface layout regressions', () => {
     await modal.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(modal).toBeHidden();
     expect(patch).toEqual({
-      system: { decision_model: { deployment: 'alternate-judge' }, domain_classifier: null },
-      bindings: { domain: 'alternate-judge', domain_classifier: null },
-      modules: { classifier: { domain: { model_id: null, model_ref: null, backend: null } } },
+      system: { decision_model: { deployment: 'alternate-judge' } },
+      bindings: { domain: 'alternate-judge' },
     });
     await expect(card.getByText('alternate-judge', { exact: true })).toBeVisible();
   });
@@ -385,8 +354,8 @@ test.describe('Config surface layout regressions', () => {
 
     await expect(systemBindingsCard).toBeVisible();
     await expect(embeddingsCard).toBeVisible();
-    await expect(systemBindingsCard.getByText('models/.../mmbert32k-jailbreak-detector-merged')).toBeVisible();
-    await expect(embeddingsCard.getByText('models/mmbert-embed-32k-2d-matryoshka')).toBeVisible();
+    await expect(systemBindingsCard.getByText('guard-judge', { exact: true })).toBeVisible();
+    await expect(embeddingsCard.getByText('qwen3-embedding')).toBeVisible();
 
     const systemPath = systemBindingsCard.getByText('global.model_catalog.system');
     const systemButton = systemBindingsCard.getByRole('button', { name: 'Edit' });

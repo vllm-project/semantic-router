@@ -2,6 +2,8 @@ package responseapishared
 
 import (
 	"context"
+	"fmt"
+	"os/exec"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
@@ -16,14 +18,18 @@ var sharedResourceManifests = []string{
 type RedisProfile struct {
 	name        string
 	description string
+	redisReady  []string
 	stack       *gatewaystack.Stack
 }
 
 // NewRedisProfile constructs a shared Redis-backed Response API profile.
-func NewRedisProfile(name, description, valuesFile, redisManifest string) *RedisProfile {
+// redisReady is the `kubectl wait` condition and resource that mean Redis
+// accepts connections, such as {"--for=condition=available", "deployment/redis"}.
+func NewRedisProfile(name, description, valuesFile, redisManifest string, redisReady ...string) *RedisProfile {
 	return &RedisProfile{
 		name:        name,
 		description: description,
+		redisReady:  redisReady,
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     name,
 			SemanticRouterValuesFile: valuesFile,
@@ -43,9 +49,24 @@ func (p *RedisProfile) Description() string {
 	return p.description
 }
 
-// Setup deploys the shared gateway stack and Redis prerequisite.
+// Setup deploys Redis and waits until it is ready before the Router starts:
+// the Router opens its Response API store once, at startup, and answers 503
+// for the rest of its life when Redis was not there yet.
 func (p *RedisProfile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
-	return p.stack.Setup(ctx, opts)
+	if err := p.stack.ApplyPrerequisites(ctx, opts); err != nil {
+		return err
+	}
+	args := append([]string{"--kubeconfig", opts.KubeConfig, "-n", "default", "wait", "--timeout=5m"}, p.redisReady...)
+	if output, err := exec.CommandContext(ctx, "kubectl", args...).CombinedOutput(); err != nil {
+		return fmt.Errorf("wait for Redis: %w: %s", err, output)
+	}
+	if err := p.stack.DeployCore(ctx, opts); err != nil {
+		return err
+	}
+	if err := p.stack.ApplyResources(ctx, opts); err != nil {
+		return err
+	}
+	return p.stack.Verify(ctx, opts)
 }
 
 // Teardown removes the shared gateway stack and Redis prerequisite.

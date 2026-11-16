@@ -158,8 +158,12 @@ func TestTransformationBaselineProperty(t *testing.T) {
 func TestHistorySnapshotAndProvenance(t *testing.T) {
 	request := historyFixture()
 	snapshot := CaptureHistory(request)
-	request.Messages = append(request.Messages, textMessage(llmprotocol.RoleSystem, "memory fact"))
-	provenance := Provenance{OriginalHistory: snapshot, MemoryMessageIndexes: map[int]struct{}{5: {}}}
+	request.Messages = append(request.Messages,
+		llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "memory_1", Name: "vsr_memory_context", Arguments: "{}"}}}},
+		llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+			CallID: "memory_1", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "memory fact"}},
+		}}}})
+	provenance := Provenance{OriginalHistory: snapshot, MemoryToolCallIDs: map[string]struct{}{"memory_1": {}}}
 	ir := ParseSemanticRequest(request, provenance)
 	history := ir.OriginalHistory()
 	history.Messages[0].Content[0].Text = "changed"
@@ -170,7 +174,7 @@ func TestHistorySnapshotAndProvenance(t *testing.T) {
 	if ir.OriginalHistory().Instructions[0].Content[0].Text != "follow permissions" {
 		t.Fatal("instructions alias snapshot")
 	}
-	if ir.Messages[5].Source != SourceMemory || ir.Messages[5].Blocks[0].Source != TargetMemory {
+	if ir.Messages[6].Source != SourceMemory || ir.Messages[6].Blocks[0].Source != TargetMemory {
 		t.Fatal("memory origin lost")
 	}
 	if !reflect.DeepEqual(snapshot.Conversation(), ir.OriginalHistory()) {

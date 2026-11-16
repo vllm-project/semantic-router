@@ -76,7 +76,7 @@ Connect a **local runtime**, a separate **vLLM-SR Engine**, or a compatible **ex
 
 For a protected listener, add `-H "Authorization: Bearer $SYSTEMONE_API_KEY"`. Try the route in Dashboard's **System One → Decision Playground**, then see which model answered in **Decision Monitoring**.
 
-**[Build your first Auto route →](/docs/next/tutorials/algorithm/native/cascade)**
+**[Build your first Auto route →](/docs/tutorials/algorithm/looper/escalate#on-system-one)**
 
 ## Verify the result
 
@@ -89,7 +89,7 @@ The [evidence download](/img/blog/system-one-auto/evidence.zip) includes saved a
 
 **Uncertainty and calibration.** Of the 106 upgrades, 41 rescued Kai errors and three introduced errors where Kai had been right. The calibration target was 70% Kai coverage; the public suite achieved 54.11%, illustrating that coverage changes with the workload.
 
-Auto's gain over Kai has paired 95% interval **[11.34, 21.72] percentage points**; its gap below Vega has interval **[2.59, 8.89]**. The gate threshold, **0.6059704079536342**, was frozen using a separate 192-source calibration set before this evaluation. For Noul it checks `max(p, 1-p)`, so a confident “no” can exit early. The [complete YAML](/docs/next/tutorials/algorithm/native/cascade#define-the-cascade) reproduces this operating point; it is not a universal default.
+Auto's gain over Kai has paired 95% interval **[11.34, 21.72] percentage points**; its gap below Vega has interval **[2.59, 8.89]**. The gate threshold, **0.6059704079536342**, was frozen using a separate 192-source calibration set before this evaluation. For Noul it checks `max(p, 1-p)`, so a confident “no” can exit early. The [complete YAML](/docs/tutorials/algorithm/looper/escalate#define-the-stages) reproduces this operating point; it is not a universal default.
 
 **Requests.** The controlled collector uses the pinned upstream TypeSafe request mapping, adds `require_full_input: true` to each question and requests `options.return_meta`. The stock upstream CLI does not add those options. Three seeded, sequential passes compare direct Kai, direct Vega and Auto: 2,079 timed frontend requests plus nine separate typed warmups. There are no retries or discarded outliers. All measured requests succeeded and retained complete-input and runtime-identity evidence. Quality uses only pass 0; later passes check timing and determinism, not additional independent quality samples.
 
@@ -97,7 +97,7 @@ Auto's gain over Kai has paired 95% interval **[11.34, 21.72] percentage points*
 
 **Cost model.** The estimated saving assumes a constant price `C_vega` for each Vega call and negligible Kai cost. Vega-only costs `231 × C_vega`; Auto costs `231 × C_kai + 106 × C_vega`. Its relative saving is `125 / 231 − C_kai / C_vega`: **54.11% when `C_kai ≈ 0`**. Every request calls Kai, so any nonzero Kai cost applies to all 231 requests. This is a call-pricing estimate, separate from measured latency and accuracy. Length-dependent prices, serving overhead and reserved GPU capacity require their own cost model; the pilot retained two resident GPUs and did not measure a billing reduction.
 
-**Scope.** The measured path used no model-backed routing signal. `algorithm.budget` applies after decision selection; signals use their own timeouts and request cancellation. Both native models used the exact ROCm profile. The evidence package pins the checkpoint revisions, runtime identities, image content digests and the measured source snapshot. These receipts identify the historical measurement; a rerun on another software or numerical profile needs its own validation. Native compute time, reservation limits and fewer large-model calls are not dollar-cost measurements.
+**Scope.** The measured path used no model-backed routing signal. Native requests now share a deadline and physical-call ledger across signals and execution; each selected decision tightens the request ceiling using its `algorithm.budget`. Both native models used the exact ROCm profile. The evidence package pins the checkpoint revisions, runtime identities, image content digests and the measured source snapshot. These receipts identify the historical measurement; a rerun on another software or numerical profile needs its own validation. Native compute time, reservation limits and fewer large-model calls are not dollar-cost measurements.
 
 </details>
 
