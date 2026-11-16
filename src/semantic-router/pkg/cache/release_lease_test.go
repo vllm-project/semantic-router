@@ -43,3 +43,34 @@ func TestReleaseLeaseLetsTheNextRequestLead(t *testing.T) {
 		t.Fatal("the next lookup waited on the released lease")
 	}
 }
+
+// A leader whose lease expired no longer holds the key: a new leader took it.
+// Releasing the old lease must leave the new leader's flight running instead of
+// waking its waiters before it stores.
+func TestReleasingAnExpiredLeaseLeavesTheNewLeaderAlone(t *testing.T) {
+	service := NewResponseCacheService(nil, ResponseCacheServiceOptions{
+		SingleflightWait:  250 * time.Millisecond,
+		SingleflightLease: 30 * time.Second,
+	})
+	lookup := ExactLookup{Identity: CacheIdentity{ExactFingerprint: "fp"}}
+	_, stale, err := service.LookupExactCoalesced(context.Background(), lookup)
+	if err != nil || !stale.Leader {
+		t.Fatalf("first lookup: lease=%+v err=%v, want the leader's", stale, err)
+	}
+	service.mu.Lock()
+	service.inflight[stale.Key].expiresAt = time.Now().Add(-time.Second)
+	service.mu.Unlock()
+
+	_, next, err := service.LookupExactCoalesced(context.Background(), lookup)
+	if err != nil || !next.Leader {
+		t.Fatalf("second lookup: lease=%+v err=%v, want the new leader's", next, err)
+	}
+	service.ReleaseLease(stale)
+
+	service.mu.Lock()
+	active := service.inflight[next.Key]
+	service.mu.Unlock()
+	if active != next.entry {
+		t.Fatal("releasing an expired lease ended the new leader's flight")
+	}
+}
