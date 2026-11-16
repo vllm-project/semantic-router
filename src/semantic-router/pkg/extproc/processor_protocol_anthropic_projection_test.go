@@ -525,3 +525,38 @@ func TestSystemMessageProjectionKeepsTheCountOutOfTheMetricLabel(t *testing.T) {
 		t.Fatalf("llm_translation_lossy_total{reason=%q} rose by %v, want 3", label, got)
 	}
 }
+
+func TestAnthropicOmittedDisplaySurvivesReasoningOnForAnotherFormat(t *testing.T) {
+	for target, format := range map[llmprotocol.WireFormat]string{
+		llmprotocol.OpenAIResponsesV1: config.APIFormatResponses,
+		llmprotocol.OpenAIChatV1:      config.APIFormatChatCompletions,
+	} {
+		router := routingTestRouter("chat")
+		model := router.Config.ModelConfig["chat"]
+		model.APIFormat = format
+		model.ReasoningFamily = "reasoning"
+		router.Config.ModelConfig["chat"] = model
+		router.Config.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
+			"reasoning": {
+				Type: config.ReasoningFamilyTypeReasoningEffort, Parameter: "reasoning_effort",
+				Levels: []string{"low", "medium", "high"}, Default: "high",
+				Modes: []string{config.ReasoningModeEnabled, config.ReasoningModeDisabled},
+			},
+		}
+		request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(adaptiveClaudeCodeRequest))
+		if err != nil {
+			t.Fatal(err)
+		}
+		decision := &config.Decision{Name: "route", ModelRefs: []config.ModelRef{{
+			Model:                 "chat",
+			ModelReasoningControl: config.ModelReasoningControl{UseReasoning: boolPtr(true), ReasoningEffort: "high"},
+		}}}
+		router.applySemanticReasoningMode(&request, "chat", target, true, decision)
+		ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
+		// With reasoning on, the client's omitted display still keeps the
+		// backend's reasoning out of its response.
+		if !omitCrossFormatReasoning(ctx, target) {
+			t.Fatalf("%s: display = %q, want the client's omitted display kept", target, request.ReasoningDisplay)
+		}
+	}
+}
