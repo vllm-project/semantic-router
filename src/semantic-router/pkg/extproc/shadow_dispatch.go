@@ -569,7 +569,7 @@ func (d *shadowDispatcher) execute(job *shadowJob) {
 	defer metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Dec()
 
 	if job.budget != nil {
-		if !job.budget.EnterInflight() {
+		if !job.budget.EnterInflight(job.deadline) {
 			d.budgetDrop(job.decision, job.model, shadowReasonBudgetConcurrency)
 			job.budget.Refund()
 			return

@@ -3,6 +3,7 @@ package shadow
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -156,22 +157,60 @@ func TestShadowBudgetRefundReturnsAdmission(t *testing.T) {
 
 func TestShadowBudgetConcurrencyPerRequest(t *testing.T) {
 	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxConcurrencyPerRequest: 1}, 0)
-	if !b.EnterInflight() {
+	deadline := time.Now().Add(time.Second)
+	if !b.EnterInflight(deadline) {
 		t.Fatal("first in-flight slot must be granted")
 	}
-	if b.EnterInflight() {
-		t.Fatal("second in-flight slot must be refused under MaxConcurrencyPerRequest=1")
+	if b.EnterInflight(time.Now().Add(-time.Second)) {
+		t.Fatal("a slot taken past the deadline must not be granted")
 	}
 	b.LeaveInflight()
-	if !b.EnterInflight() {
+	if !b.EnterInflight(deadline) {
 		t.Fatal("slot must be reusable after LeaveInflight")
 	}
 	b.LeaveInflight()
 
 	unbounded := NewShadowBudget(config.ShadowDispatchBudgetConfig{}, 0)
 	for i := range 3 {
-		if !unbounded.EnterInflight() {
+		if !unbounded.EnterInflight(deadline) {
 			t.Fatalf("unbounded budget refused in-flight slot %d", i)
 		}
+	}
+}
+
+// A comparison with more arms than in-flight slots runs every arm: the later
+// arm waits for a slot instead of being dropped, so it still produces evidence.
+func TestShadowBudgetConcurrencyWaitsForASlot(t *testing.T) {
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxConcurrencyPerRequest: 1}, 0)
+	deadline := time.Now().Add(5 * time.Second)
+	if !b.EnterInflight(deadline) {
+		t.Fatal("first arm must take the slot")
+	}
+	entered := make(chan bool, 1)
+	go func() { entered <- b.EnterInflight(deadline) }()
+	select {
+	case <-entered:
+		t.Fatal("second arm entered while the slot was taken")
+	case <-time.After(50 * time.Millisecond):
+	}
+	b.LeaveInflight()
+	select {
+	case ok := <-entered:
+		if !ok {
+			t.Fatal("second arm must enter once the slot frees")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("second arm never entered after the slot freed")
+	}
+	b.LeaveInflight()
+}
+
+func TestShadowBudgetConcurrencyStopsAtTheDeadline(t *testing.T) {
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxConcurrencyPerRequest: 1}, 0)
+	if !b.EnterInflight(time.Now().Add(time.Second)) {
+		t.Fatal("first arm must take the slot")
+	}
+	if b.EnterInflight(time.Now().Add(-time.Second)) {
+		t.Fatal("a waiting arm must not enter after the deadline")
 	}
 }

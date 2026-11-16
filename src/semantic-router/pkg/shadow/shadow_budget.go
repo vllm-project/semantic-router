@@ -2,6 +2,7 @@ package shadow
 
 import (
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -30,7 +31,10 @@ type ShadowBudget struct {
 	mu                   sync.Mutex
 	limit                config.ShadowDispatchBudgetConfig
 	reserveResponseBytes int64
-	inflight             int64
+	// slots bounds the arms of one request in flight. A waiting arm holds its
+	// worker until a slot frees or the shared deadline passes, so a comparison
+	// with more arms than slots still runs every arm.
+	slots chan struct{}
 
 	calls int64
 	token int64
@@ -42,7 +46,11 @@ type ShadowBudget struct {
 // reserveResponseBytes is the per-arm response bound reserved at admission for
 // the aggregate byte cap.
 func NewShadowBudget(limit config.ShadowDispatchBudgetConfig, reserveResponseBytes int64) *ShadowBudget {
-	return &ShadowBudget{limit: limit, reserveResponseBytes: reserveResponseBytes}
+	budget := &ShadowBudget{limit: limit, reserveResponseBytes: reserveResponseBytes}
+	if limit.MaxConcurrencyPerRequest > 0 {
+		budget.slots = make(chan struct{}, limit.MaxConcurrencyPerRequest)
+	}
+	return budget
 }
 
 // TryEnter admits one arm when every enforced dimension allows it. On
@@ -92,26 +100,30 @@ func (b *ShadowBudget) costOf(tokens int64) float64 {
 	return float64(tokens) / 1e6 * b.limit.PricePerMillionTokens
 }
 
-// EnterInflight acquires one of the per-request in-flight slots. The caller
-// must LeaveInflight when the arm attempt ends. This is the concurrency
-// dimension of the aggregate budget; the lane semaphore bounds the decision
-// across requests instead.
-func (b *ShadowBudget) EnterInflight() bool {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.limit.MaxConcurrencyPerRequest > 0 && b.inflight >= b.limit.MaxConcurrencyPerRequest {
+// EnterInflight acquires one of the per-request in-flight slots, waiting for a
+// slot until deadline. Waiting rather than refusing keeps a comparison with
+// more arms than slots intact: refusing would run whichever arms won the
+// scheduler race and drop the rest. The caller must LeaveInflight when the arm
+// attempt ends. This is the concurrency dimension of the aggregate budget; the
+// lane semaphore bounds the decision across requests instead.
+func (b *ShadowBudget) EnterInflight(deadline time.Time) bool {
+	if b.slots == nil {
+		return true
+	}
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
+	select {
+	case b.slots <- struct{}{}:
+		return true
+	case <-timer.C:
 		return false
 	}
-	b.inflight++
-	return true
 }
 
 // LeaveInflight releases a slot acquired by EnterInflight.
 func (b *ShadowBudget) LeaveInflight() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.inflight > 0 {
-		b.inflight--
+	if b.slots != nil {
+		<-b.slots
 	}
 }
 
