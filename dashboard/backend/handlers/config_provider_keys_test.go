@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	fakeclientset "k8s.io/client-go/kubernetes/fake"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
@@ -79,7 +80,10 @@ func TestSavingABackendKeyStoresItInAnOwnerOnlyFile(t *testing.T) {
 
 func TestSavingKeepsAnEnvironmentReference(t *testing.T) {
 	configPath := createValidTestConfig(t, t.TempDir())
-	saveConfigWithBackendKey(t, configPath, "${OPENAI_API_KEY}")
+	body := backendBody("127.0.0.1:8000", map[string]interface{}{"api_key": "${OPENAI_API_KEY}"})
+	if response := postConfig(t, configPath, body, auth.PermConfigSecretsRead); response.Code != http.StatusOK {
+		t.Fatalf("save status = %d: %s", response.Code, response.Body.String())
+	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {

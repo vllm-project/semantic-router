@@ -21,8 +21,6 @@ import (
 func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_RequestHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	ctx.StartTime = time.Now()
 
-	span := startRequestHeaderSpan(v, ctx)
-
 	// The skip-processing opt-out would bypass a listener's model allow-list,
 	// so a restricted listener does not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
@@ -33,6 +31,13 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		ctx.identity = r.Config.Authz.Identity
 	}
 	r.gateDebugHeaders(ctx)
+	// A request without trace context joins its agent run's trace.
+	run := r.requestTraceRun(ctx)
+	ctx.TraceContext = tracing.WithRunParent(tracing.ExtractTraceContext(ctx.TraceContext, ctx.Headers), run)
+	span := startRequestHeaderSpan(v, ctx)
+	if run.SessionID != "" {
+		span.SetAttributes(run.Attributes()...)
+	}
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
 		return rejected, nil

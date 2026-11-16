@@ -67,6 +67,7 @@ const SIGNAL_INFO: Record<string, { label: string; type: HeaderType }> = {
   conversation: { label: 'Conversation Signal', type: 'info' },
   metadata: { label: 'Metadata Signal', type: 'info' },
   input_modality: { label: 'Input Modality Signal', type: 'info' },
+  agent: { label: 'Agent Signal', type: 'info' },
   systemone: { label: 'System One Answers', type: 'info' },
   projection: { label: 'Projection', type: 'info' },
 }

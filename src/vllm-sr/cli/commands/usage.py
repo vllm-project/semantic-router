@@ -40,10 +40,12 @@ def usage(since: str | None, endpoint: str | None, as_json: bool) -> None:
     """Show the requests, spend and savings the Router recorded in a window.
 
     Read from Router Replay's list and aggregate, the figures Insights shows,
-    with $VSR_MGMT_TOKEN as the bearer token when it is set. Top models and
-    entrypoints are those with the most requests, by selected model and by the
-    model the client asked for; each row adds its requests' own priced costs,
-    the Router's calls for them included, as the window's spend does.
+    with $VSR_MGMT_TOKEN as the bearer token when it is set. Requests count each
+    client request once: the record of a Looper hop counts in the request that
+    made it. Top models and entrypoints are those with the most requests, by
+    selected model and by the model the client asked for; each row adds its
+    requests' own priced costs, the Router's calls for them included, as the
+    window's spend does.
     """
 
     start = _window_start(since)
@@ -105,13 +107,17 @@ def _summary(client: RouterManagementClient, start: datetime) -> dict:
         client.timeout,
         window,
     )["data"]
-    lifecycle = aggregate.get("lifecycle") or {}
+    # a hop's call and cost are in the record of the request that made it
+    records = [r for r in records if not _hop(r)]
+    # a state the Router does not name is unknown, as its aggregate counts it
+    states = [r.get("lifecycle_state") for r in records]
+    states = [state if state in LIFECYCLE else "unknown" for state in states]
     return {
         "endpoint": client.base_url,
         "since": window["since"],
         "requests": {
-            "total": aggregate.get("record_count", 0),
-            **{state: lifecycle.get(state, 0) for state in LIFECYCLE},
+            "total": len(records),
+            **{state: states.count(state) for state in LIFECYCLE},
         },
         "sessions": len({r["session_id"] for r in records if r.get("session_id")}),
         "cost": summary.get("by_currency") or [],
@@ -144,7 +150,7 @@ def _top(records: list[dict], key: str) -> list[dict]:
         row["requests"] += 1
         costs = _costs(record)
         row["unpriced"] += costs == {}
-        for currency, amount in (costs or {}).items():
+        for currency, amount in costs.items():
             row["spend"][currency] = row["spend"].get(currency, 0) + amount
     ranked = sorted(rows.values(), key=lambda row: (-row["requests"], row["name"]))
     for row in ranked:
@@ -152,13 +158,16 @@ def _top(records: list[dict], key: str) -> list[dict]:
     return ranked[:TOP]
 
 
-def _costs(record: dict) -> dict[str, float] | None:
-    """A record's priced costs by currency, as the aggregate's total_spend adds
-    them: the selected model's and the Router's own calls'. None for a Looper
-    hop, whose cost the record of the request that made it carries."""
+def _hop(record: dict) -> bool:
+    """Whether record is a Looper hop's, one model call of a client request."""
     accounting = record.get("cost_accounting") or {}
-    if accounting.get("unpriced_reason") == "counted_in_parent":
-        return None
+    return accounting.get("unpriced_reason") == "counted_in_parent"
+
+
+def _costs(record: dict) -> dict[str, float]:
+    """A record's priced costs by currency, as the aggregate's total_spend adds
+    them: the selected model's and the Router's own calls'."""
+    accounting = record.get("cost_accounting") or {}
     costs: dict[str, float] = {}
     for priced in [record, *(accounting.get("router_calls") or [])]:
         # a record's own cost is actual_cost, a Router call's is cost

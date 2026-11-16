@@ -125,6 +125,9 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			http.Error(w, "Invalid redacted configuration credentials", http.StatusBadRequest)
 			return
 		}
+		if rejectKeyReferenceRedirect(w, r, existingData, yamlData) {
+			return
+		}
 		parsedConfig, err := routerconfig.ParseYAMLBytes(yamlData)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
@@ -258,6 +261,9 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 		yamlData, err = restoreConfigSecrets(existingData, yamlData)
 		if err != nil {
 			http.Error(w, "Invalid redacted configuration credentials", http.StatusBadRequest)
+			return
+		}
+		if rejectKeyReferenceRedirect(w, r, existingData, yamlData) {
 			return
 		}
 		parsedConfig, err := routerconfig.ParseYAMLBytes(yamlData)

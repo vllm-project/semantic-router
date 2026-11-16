@@ -128,6 +128,7 @@ func (r *OpenAIRouter) startRouterReplay(
 	ctx.RouterReplayContentOmitted = !r.replayPromptAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
 	headerSession := r.populateReplayIdentity(&record, ctx) || ctx.SessionProvenance == SessionProvenanceHeader
+	applyReplayRunParent(&record, ctx.replayRunParent)
 	applyReplayReviewSession(&record, headerSession)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
@@ -140,8 +141,9 @@ func (r *OpenAIRouter) startRouterReplay(
 
 // populateReplayIdentity records the same explicit identity used by protection,
 // including custom header names, without enabling protection or changing request
-// state. Optional Responses lineage remains the fallback for older clients. It
-// reports whether a header named the session.
+// state, and the agent run the harness names. Optional Responses lineage
+// remains the fallback for clients that name no session. It reports whether
+// a header named the session.
 func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) bool {
 	if r == nil || ctx == nil || record == nil {
 		return false
@@ -150,9 +152,17 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 	if r.Config != nil {
 		cfg = r.Config.RouterLearning.Protection
 	}
+	record.Agent = harnessRunAgent(ctx, cfg)
 	identity, ok := r.protectionIdentity(ctx, cfg)
 	if !ok {
-		return false
+		// Protection keys no state for the call, but the harness still names
+		// its run, which a per-call Responses key would split.
+		sessionID := harnessRunSession(ctx, cfg)
+		if sessionID == "" {
+			return false
+		}
+		record.SessionID = sessionID
+		return true
 	}
 	record.SessionID = identity.sessionID
 	if conversationID := identity.declaredConversationID(); conversationID != "" {
@@ -293,6 +303,8 @@ func buildReplayRoutingRecord(
 		record.ConversationID = state.ConversationID
 	}
 	record.RequestKind, record.Review = replayApprovalReview(ctx)
+	sessionKind, sessionName := replaySessionNaming(ctx)
+	record.RequestKind, record.SessionName = firstNonEmptyString(record.RequestKind, sessionKind), sessionName
 	record.ThreadID, record.TurnID, record.ParentTurnID = ctx.AgentTurn.ThreadID, ctx.AgentTurn.TurnID, ctx.AgentTurn.ParentTurnID
 	// The sanitiser drops tool-result payloads unless the route captures tool
 	// results; a masking route persists no request text at all, because Replay
@@ -308,6 +320,7 @@ func buildReplayRoutingRecord(
 		// Tool definitions are operator-authored, not user content, so they
 		// are kept even when the prompt is suppressed.
 		record.ToolDefinitions = toolDefinitions
+		record.ReasoningEffort = ctx.SemanticRequest.ReasoningEffort
 		if !suppressBody {
 			if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
 				record.RequestBody = string(requestBody)
@@ -376,6 +389,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Conversation:  ctx.VSRMatchedConversation,
 		Metadata:      ctx.VSRMatchedMetadata,
 		InputModality: ctx.VSRMatchedInputModality,
+		Agent:         ctx.VSRMatchedAgent,
 		Decision:      ctx.VSRMatchedDecisionModel,
 	}
 }
@@ -482,6 +496,7 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 	}
 
 	r.refreshReplayModelCalls(ctx, recorder)
+	settleReplaySessionName(ctx, recorder, state)
 	if err := recorder.FinalizeLifecycle(ctx.RouterReplayID, state, reason); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_lifecycle_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -500,16 +515,11 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 // terminal response, which would otherwise read as a client abort. A record
 // the Router already ended keeps what it holds.
 func (r *OpenAIRouter) failAnsweredRouterReplay(ctx *RequestContext, status int, body []byte, reason string) {
-	recorder := r.responseGuardReplayRecorder(ctx)
-	if status < 400 || recorder == nil {
-		return
-	}
-	if record, ok := recorder.GetRecord(ctx.RouterReplayID); !ok || record.LifecycleState != routerreplay.LifecycleInProgress {
+	if status < 400 || !r.routerReplayInProgress(ctx) {
 		return
 	}
 	r.updateRouterReplayStatus(ctx, status, false)
-	r.attachRouterReplayResponse(ctx, body, false)
-	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, reason)
+	r.failStreamedRouterReplay(ctx, body, reason)
 }
 
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.

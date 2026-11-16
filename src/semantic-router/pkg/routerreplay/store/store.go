@@ -30,6 +30,7 @@ type Signal struct {
 	Conversation  []string `json:"conversation,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
+	Agent         []string `json:"agent,omitempty"`
 	Decision      []string `json:"decision,omitempty"`
 }
 
@@ -272,6 +273,7 @@ type Record struct {
 	RequestKind              string                 `json:"request_kind,omitempty"`
 	Review                   *Review                `json:"review,omitempty"`
 	SessionID                string                 `json:"session_id,omitempty"`
+	SessionName              string                 `json:"session_name,omitempty"`
 	TurnIndex                int                    `json:"turn_index"`
 	PreviousResponseID       string                 `json:"previous_response_id,omitempty"`
 	ConversationID           string                 `json:"conversation_id,omitempty"`
@@ -283,6 +285,7 @@ type Record struct {
 	OriginalModel            string                 `json:"original_model,omitempty"`
 	SelectedModel            string                 `json:"selected_model,omitempty"`
 	ReasoningMode            string                 `json:"reasoning_mode,omitempty"`
+	ReasoningEffort          string                 `json:"reasoning_effort,omitempty"`
 	ConfidenceScore          float64                `json:"confidence_score,omitempty"`
 	SelectionMethod          string                 `json:"selection_method,omitempty"`
 	RouteDiagnostics         *RouteDiagnostics      `json:"route_diagnostics,omitempty"`
@@ -317,6 +320,10 @@ type Record struct {
 	ThreadID     string `json:"thread_id,omitempty"`
 	TurnID       string `json:"turn_id,omitempty"`
 	ParentTurnID string `json:"parent_turn_id,omitempty"`
+	// Agent is the agent of the run, SessionID, that sent the request, and
+	// ParentRequestID the client request a Looper hop was made for.
+	Agent           *AgentIdentity `json:"agent,omitempty"`
+	ParentRequestID string         `json:"parent_request_id,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -457,6 +464,9 @@ type Enricher interface {
 
 	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
 	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
+
+	// UpdateSessionName stores the name an existing record's answer gave its session.
+	UpdateSessionName(ctx context.Context, id string, name string) error
 }
 
 // StoredPrompt is a record's prompt as it is kept: the text and, when the text
@@ -585,6 +595,7 @@ func cloneSignal(signal Signal) Signal {
 		Conversation:  cloneStringSlice(signal.Conversation),
 		Metadata:      cloneStringSlice(signal.Metadata),
 		InputModality: cloneStringSlice(signal.InputModality),
+		Agent:         cloneStringSlice(signal.Agent),
 		Decision:      cloneStringSlice(signal.Decision),
 	}
 }
@@ -605,6 +616,7 @@ func cloneRecord(record Record) Record {
 	cloned.SessionPolicy = cloneInterfaceMap(record.SessionPolicy)
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
 	cloned.Review = CloneReview(record.Review)
+	cloned.Agent = cloneAgentIdentity(record.Agent)
 	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
 	cloned.HallucinationSpanDetails = cloneHallucinationSpanDetails(record.HallucinationSpanDetails)

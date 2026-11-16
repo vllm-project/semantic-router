@@ -123,14 +123,7 @@ func buildRouterReplaySignalDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		s := record.Signals
-		for name, matched := range map[string][]string{
-			"keyword": s.Keyword, "domain": s.Domain, "fact_check": s.FactCheck,
-			"user_feedback": s.UserFeedback, "turn_relation": s.TurnRelation, "language": s.Language,
-			"context": s.Context, "complexity": s.Complexity, "modality": s.Modality, "authz": s.Authz,
-			"jailbreak": s.Jailbreak, "safety": s.Safety, "pii": s.PII, "conversation": s.Conversation,
-			"metadata": s.Metadata, "input_modality": s.InputModality, "decision": s.Decision,
-		} {
+		for name, matched := range replaySignalGroups(record.Signals) {
 			if len(matched) > 0 {
 				counts[name] += len(matched)
 			}

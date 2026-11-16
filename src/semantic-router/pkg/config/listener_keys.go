@@ -47,7 +47,7 @@ func (l Listener) ResolveClientKeys() ([]string, error) {
 		keys = append(keys, processEnv.expandString(key))
 	}
 	resolved := []Listener{l}
-	if err := readListenerKeyFiles(resolved); err != nil {
+	if err := readListenerKeyFiles(resolved, false); err != nil {
 		return nil, err
 	}
 	return append(keys, resolved[0].FileKeys...), nil
@@ -55,13 +55,19 @@ func (l Listener) ResolveClientKeys() ([]string, error) {
 
 // readListenerKeyFiles reads each listener's api_key_files, at every load so
 // a reload picks up a rotated file. An error names the file, never the key.
-func readListenerKeyFiles(listeners []Listener) error {
+// With checkOnly it checks the paths and reads no file, as a validation that
+// reads no external asset does: the files may be mounted only where the
+// Router serves the configuration.
+func readListenerKeyFiles(listeners []Listener, checkOnly bool) error {
 	for index := range listeners {
 		listener := &listeners[index]
 		listener.FileKeys = nil
 		for _, path := range listener.APIKeyFiles {
 			if !filepath.IsAbs(path) {
 				return fmt.Errorf("listener '%s': api_key_files must name absolute paths", listener.Name)
+			}
+			if checkOnly {
+				continue
 			}
 			key, err := readKeyFile("api_key_files", path)
 			if err != nil {

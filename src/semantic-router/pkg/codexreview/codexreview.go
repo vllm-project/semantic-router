@@ -160,6 +160,9 @@ type Turn struct {
 	ThreadID     string `json:"thread_id"`
 	TurnID       string `json:"turn_id"`
 	ParentTurnID string `json:"parent_turn_id"`
+	// ThreadSource is what started the thread: user, subagent, or a feature
+	// such as thread_title.
+	ThreadSource string `json:"thread_source"`
 }
 
 // ReadTurn reads the turn metadata Codex sends with each Responses call. The
@@ -174,6 +177,7 @@ func ReadTurn(header string, body []byte) Turn {
 	return Turn{
 		SessionID: boundedID(turn.SessionID), ThreadID: boundedID(turn.ThreadID),
 		TurnID: boundedID(turn.TurnID), ParentTurnID: boundedID(turn.ParentTurnID),
+		ThreadSource: boundedID(turn.ThreadSource),
 	}
 }
 
@@ -196,6 +200,7 @@ func readClientMetadata(body []byte) Turn {
 	return Turn{
 		SessionID: pick("session_id", turn.SessionID), ThreadID: pick("thread_id", turn.ThreadID),
 		TurnID: pick("turn_id", turn.TurnID), ParentTurnID: pick("parent_turn_id", turn.ParentTurnID),
+		ThreadSource: turn.ThreadSource,
 	}
 }
 

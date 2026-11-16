@@ -91,7 +91,7 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 
-		if auth.RejectRevokedMutation(w, r) {
+		if rejectKeyReferenceRedirect(w, r, existingData, updatedYAML) || auth.RejectRevokedMutation(w, r) {
 			return
 		}
 		_, keptKeys, err := persistConfig(configPath, updatedYAML)

@@ -20,6 +20,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeConversation:  len(c.Config.ConversationRules) > 0,
 		config.SignalTypeMetadata:      len(c.Config.MetadataRules) > 0,
 		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
+		config.SignalTypeAgent:         len(c.Config.AgentRules) > 0,
 		config.SignalTypeSystemOne:     len(c.Config.SystemOneRules) > 0,
 	}
 	for _, rule := range c.applicationRules {

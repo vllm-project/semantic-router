@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import InsightsCharts from '../components/InsightsCharts'
+import { ModelLabelsContext, modelText } from './insightsModelLabelSupport'
 import { buildInsightsRecordSections, createInsightsTableColumns } from './insightsPageSupport'
 import type {
   InsightsAggregateCostCoverage,
@@ -31,20 +32,20 @@ const priced: InsightsRecord = {
   },
 }
 
-const usageAndCost = (record: InsightsRecord) =>
-  buildInsightsRecordSections(record, { isReadonly: false }).find(
+const usageAndCost = (record: InsightsRecord, modelLabels?: Record<string, string>) =>
+  buildInsightsRecordSections(record, { isReadonly: false, modelLabels }).find(
     (section) => section.title === 'Usage & Cost',
   )!
 
-const field = (record: InsightsRecord, label: string) =>
-  usageAndCost(record).fields.find((item) => item.label === label)?.value
+const field = (record: InsightsRecord, label: string, modelLabels?: Record<string, string>) =>
+  usageAndCost(record, modelLabels).fields.find((item) => item.label === label)?.value
 
 describe('Insights cost accounting labels', () => {
   it('marks list prices and caller logins as estimates and names the configured baseline', () => {
     expect(field(priced, 'Cost basis')).toBe(
       'Recorded tokens × the built-in catalog’s list price (an estimate: no pricing is configured) at capture time; not a GPU bill or provider invoice. It ran on the client’s own login: this is the API-price equivalent, not what the plan charges.',
     )
-    expect(field(priced, 'Baseline basis')).toContain('the configured baseline model (small)')
+    expect(field(priced, 'Baseline basis')).toContain('the configured baseline model, small.')
     expect(field(priced, 'Baseline basis')).toContain(
       'a negative saving means the baseline was cheaper',
     )
@@ -102,6 +103,42 @@ describe('Insights cost accounting labels', () => {
       '3 Looper calls, 0 input / 0 output tokens, 2 priced at $0.02, 1 unpriced (1 no price configured)',
     )
     expect(field(looper, 'Estimated model cost')).toBe('In router calls')
+  })
+})
+
+describe('Insights cost text names models by their labels', () => {
+  const labels = { premium: 'Qwen3.6 35B A3B', small: 'qwen36', 'qwen-chat': 'qwen36' }
+
+  it('keeps the configured name beside the label', () => {
+    expect(modelText(labels, 'premium')).toBe('Qwen3.6 35B A3B (premium)')
+    expect(modelText(labels, 'vllm-sr/auto')).toBe('vllm-sr/auto')
+  })
+
+  it('in the missing price, the baseline, the Router calls and the savings cell', () => {
+    const unpriced: InsightsRecord = {
+      ...priced,
+      actual_cost: undefined,
+      currency: undefined,
+      cost_accounting: {
+        unpriced_reason: 'pricing_not_configured',
+        router_calls: [{ kind: 'decision_model', model: 'qwen-chat', calls: 2 }],
+      },
+    }
+    expect(field(unpriced, 'Cost basis', labels)).toContain(
+      'No price is configured for Qwen3.6 35B A3B (premium).',
+    )
+    expect(field(priced, 'Baseline basis', labels)).toContain(
+      'the configured baseline model, qwen36 (small).',
+    )
+    expect(field(unpriced, 'Router calls', labels)).toContain('2 Decision model calls on qwen36 (qwen-chat)')
+    const savings = createInsightsTableColumns(labels).find(
+      (column) => column.key === 'cost_savings',
+    )!
+    const html = renderToStaticMarkup(
+      <ModelLabelsContext.Provider value={labels}>{savings.render!(priced)}</ModelLabelsContext.Provider>,
+    )
+    expect(html).toContain('Baseline (configured rates): <span')
+    expect(html).toContain('title="Configured as small">qwen36</span>')
   })
 })
 
@@ -264,10 +301,10 @@ describe('Router decision costs', () => {
       },
     }
     expect(field(record, 'Router calls')).toContain(
-      '1 Decision model call (primary), 120 input / 3 output tokens, 1 priced at $0.0020',
+      '1 Decision model call on primary, 120 input / 3 output tokens, 1 priced at $0.0020',
     )
     expect(field(record, 'Router calls')).toContain(
-      '1 System One call (remote), 10 input / 0 output tokens, 1 unpriced',
+      '1 System One call on remote, 10 input / 0 output tokens, 1 unpriced',
     )
     expect(field(priced, 'Router calls')).toBeUndefined()
     // The record's own savings are gross, as the table's column says.
@@ -279,5 +316,56 @@ describe('Router decision costs', () => {
       'Before its Router calls',
     )
     expect(renderToStaticMarkup(<>{savings.render!(priced)}</>)).not.toContain('Router calls')
+  })
+})
+
+describe('spend budget on a record', () => {
+  it('shows what the budget had left and what the call reserved and was charged', () => {
+    const settled: InsightsRecord = {
+      ...priced,
+      cost_accounting: {
+        ...priced.cost_accounting,
+        budget: {
+          scope: 'run',
+          currency: 'USD',
+          limit: 0.03,
+          remaining: 0.024,
+          estimate: 0.011,
+          charged: 0.006,
+          settlement: 'usage',
+        },
+      },
+    }
+    expect(field(settled, 'Spend budget')).toBe(
+      'run: $0.024 of $0.03 left; reserved $0.011, charged $0.0060 from its usage',
+    )
+  })
+
+  it('says a refused call did not fit', () => {
+    const refused: InsightsRecord = {
+      ...priced,
+      lifecycle_state: 'failed',
+      terminal_reason: 'budget_exceeded',
+      cost_accounting: {
+        budget: {
+          scope: 'user/daily',
+          currency: 'USD',
+          limit: 0.05,
+          remaining: 0.008,
+          estimate: 0.011,
+        },
+      },
+    }
+    expect(field(refused, 'Spend budget')).toBe(
+      'user/daily: $0.0080 of $0.05 left; refused: the call was estimated at $0.011',
+    )
+    const exhausted: InsightsRecord = {
+      ...refused,
+      cost_accounting: {
+        budget: { scope: 'run', currency: 'USD', limit: 0.03, remaining: 0, estimate: 0 },
+      },
+    }
+    expect(field(exhausted, 'Spend budget')).toBe('run: $0.0000 of $0.03 left; refused: nothing was left')
+    expect(field({ ...priced }, 'Spend budget')).toBeUndefined()
   })
 })

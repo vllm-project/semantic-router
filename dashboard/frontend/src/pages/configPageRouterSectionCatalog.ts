@@ -10,6 +10,7 @@ export const CURATED_ROUTER_SECTIONS = {
   router_replay: { path: ['services', 'router_replay'], layer: 'services' },
   authz: { path: ['services', 'authz'], layer: 'services' },
   ratelimit: { path: ['services', 'ratelimit'], layer: 'services' },
+  budgets: { path: ['services', 'budgets'], layer: 'services' },
   management_api: { path: ['services', 'management_api'], layer: 'services' },
   startup_status: { path: ['services', 'startup_status'], layer: 'services' },
   masking_identity: { path: ['services', 'masking_identity'], layer: 'services' },

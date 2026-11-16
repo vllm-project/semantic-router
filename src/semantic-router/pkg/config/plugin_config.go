@@ -87,6 +87,9 @@ type FastResponsePluginConfig struct {
 	// Enabled false turns off the fast_response a decision inherits.
 	Enabled *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Message string `json:"message" yaml:"message"`
+	// Block refuses the request with HTTP 400 and Message as the error,
+	// instead of answering with Message as the model's reply.
+	Block bool `json:"block,omitempty" yaml:"block,omitempty"`
 }
 
 // IsEnabled reports whether the fast_response runs: unless enabled is false.

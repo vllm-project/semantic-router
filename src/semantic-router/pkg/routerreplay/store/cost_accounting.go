@@ -46,7 +46,7 @@ const (
 	UnpricedPricingNotConfigured = "pricing_not_configured"
 	UnpricedCurrencyMismatch     = "currency_mismatch"
 	// UnpricedAttemptNotTraced is a Looper call whose price no attempt trace
-	// kept: past the trace bound, or made by an algorithm that traces none.
+	// kept: past the trace bound, or in a run that kept no trace.
 	// Its tokens are in the request's.
 	UnpricedAttemptNotTraced = "attempt_not_traced"
 	// UnpricedNotRecorded is a record that carries no cost accounting, such
@@ -84,6 +84,43 @@ type CostAccounting struct {
 	// RouterCalls are the model calls the Router made itself to serve the
 	// request, costed apart from ActualCost. Runtime tasks include their model.
 	RouterCalls []RouterCallCost `json:"router_calls,omitempty"`
+	// Budget is where the request left the tightest spend budget it belongs
+	// to (global.services.budgets).
+	Budget *BudgetAccounting `json:"budget,omitempty"`
+}
+
+// How a request's budget reservation ended.
+const (
+	// BudgetSettledUsage charged the call's priced usage.
+	BudgetSettledUsage = "usage"
+	// BudgetSettledEstimate charged the reservation: the call was answered
+	// but reported no usage that could be priced.
+	BudgetSettledEstimate = "estimate"
+	// BudgetSettledReleased charged nothing: no provider answered the call.
+	BudgetSettledReleased = "released"
+)
+
+// BudgetAccounting is a request's view of the tightest spend budget it
+// belongs to, in the budgets' currency.
+type BudgetAccounting struct {
+	// Scope is run, or user/<rule name>.
+	Scope    string  `json:"scope"`
+	Currency string  `json:"currency"`
+	Limit    float64 `json:"limit"`
+	// Remaining is what the budget had left once this request settled, or
+	// when it was refused. It falls below zero when calls cost more than
+	// their estimates.
+	Remaining float64 `json:"remaining"`
+	// Estimate is what the request's dispatch reserved, or would have.
+	Estimate float64 `json:"estimate"`
+	// Charged is what the request spent: its call and the Router model
+	// calls made for it. Absent until the reservation ends.
+	Charged *float64 `json:"charged,omitempty"`
+	// Settlement is how the reservation ended: usage, estimate or released.
+	Settlement string `json:"settlement,omitempty"`
+	// UnpricedCalls counts the calls admitted or made with no price in the
+	// budgets' currency, which spent nothing from the budget.
+	UnpricedCalls int `json:"unpriced_calls,omitempty"`
 }
 
 // RouterCallCost describes model calls the Router made itself. Cost sums
@@ -112,6 +149,11 @@ func cloneCostAccounting(value *CostAccounting) *CostAccounting {
 			call.UnpricedReasons = maps.Clone(call.UnpricedReasons)
 			result.RouterCalls[i] = call
 		}
+	}
+	if value.Budget != nil {
+		budget := *value.Budget
+		budget.Charged = cloneFloat64Ptr(budget.Charged)
+		result.Budget = &budget
 	}
 	return &result
 }

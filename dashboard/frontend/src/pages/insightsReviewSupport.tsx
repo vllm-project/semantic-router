@@ -5,6 +5,7 @@ import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDateTime, formatSeconds } from '../utils/dateTime'
 import { formatInsightsCost } from '../utils/insightsCost'
 
+import { ModelName } from './insightsModelLabelSupport'
 import styles from './InsightsPage.module.css'
 import type { InsightsRecord } from './insightsPageTypes'
 import type { InsightsTrajectoryRoute } from './insightsPageRoutingTypes'
@@ -198,8 +199,8 @@ export function createReviewTableColumns(): Column<InsightsRecord>[] {
       header: 'Model',
       width: '135px',
       render: (row) => (
-        <span className={styles.reviewModel} title={row.selected_model}>
-          {row.selected_model || '-'}
+        <span className={styles.reviewModel}>
+          <ModelName name={row.selected_model} compact />
         </span>
       ),
     },
