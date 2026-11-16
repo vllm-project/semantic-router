@@ -85,11 +85,15 @@ global:
 
 Without a `router_replay` plugin on any layer, Replay records each request's
 routing data only, as `prompt_capture: none` does: the recipe and decision,
-the requested and selected model, token usage, cost, latency, status, and the
-session, turn and agent identifiers the request carries. It keeps no request
-or response body and no prompt, and it writes to the store
-`global.services.router_replay` names: the `file` store unless you configure
-another, at most 1,000 records there. A
+the requested and selected model, token usage, cost, latency, status, the
+session, turn and agent identifiers the request carries, and the answer's
+SHA-256 and character count, which pair it with a shadow arm's answer without
+keeping its text. It keeps no request or response body and no prompt, and it
+writes to the store `global.services.router_replay` names: the `file` store
+unless you configure another, at most 1,000 records there. On the `memory`
+store, the decisions on this default and the requests that match no decision
+share one store of `max_records`; a decision with its own `router_replay`
+plugin keeps a store of its own `max_records`. A
 `router_replay` plugin on any layer replaces that default and records only
 where a layer sets `enabled: true`. The plugin in
 `global.plugins` holds the shared capture defaults; a recipe's plugin
@@ -365,10 +369,13 @@ global:
 
 Explicit deployment pricing wins. Otherwise, a deployment's `model` may name a
 provider model whose pricing is used. Omitted currency defaults to USD; an
-explicit empty pricing block declares zero rates. An unpriced deployment or a
-call without complete usage remains unpriced, never implicitly free, so the
-requests that call it are left out of savings: give a self-hosted deployment an
-empty `pricing: {}` block to count its calls as free. Remote System One usage
+explicit empty pricing block declares zero rates. A `model_runtime` deployment
+with neither, such as `primary` and `vela-embedding`, counts its calls as
+free, because it runs on your own hardware and bills no tokens; give it
+`pricing` to count a rate. A remote deployment without pricing, or a call
+without complete usage, remains unpriced, never implicitly free, so the
+requests that call it are left out of savings. A free call is netted at zero
+whatever its currency. Remote System One usage
 must include both input and output token counters, even when zero. These are token rate estimates; they do not measure local compute or GPU
 costs.
 

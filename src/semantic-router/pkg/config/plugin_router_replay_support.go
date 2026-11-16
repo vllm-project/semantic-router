@@ -67,9 +67,14 @@ func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 // response text, in the store's default bounds.
 func defaultRouterReplayPolicy() *RouterReplayPluginConfig {
 	policy := DefaultRouterReplayPluginConfig()
-	policy.PromptCapture = PromptCaptureNone
-	policy.CaptureRequestBody, policy.CaptureResponseBody = false, false
 	return &policy
+}
+
+// RecordsByDefault reports whether a request runs the default record: no
+// layer of its plugins, those of the decision or, for a request that matched
+// none, the default recipe's, has a router_replay plugin.
+func (c *RouterConfig) RecordsByDefault(decision *Decision) bool {
+	return pluginIndex(c.RequestPlugins(decision), DecisionPluginRouterReplay) < 0
 }
 
 // EffectiveRouterReplayConfig resolves the replay policy a request runs, from

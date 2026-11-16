@@ -451,7 +451,11 @@ export function buildInsightsRecordSections(
         value: formatRecordedCost(record, record.baseline_cost),
       },
       {
-        label: 'Estimated savings',
+        // The record's own savings are gross of its Router calls, as the
+        // table's column says.
+        label: record.cost_accounting?.router_calls?.length
+          ? 'Estimated savings before its Router calls'
+          : 'Estimated savings',
         value: getZeroSavingsReason(record)
           ? `No savings — ${getZeroSavingsReason(record)}`
           : formatRecordedCost(record, record.cost_savings),

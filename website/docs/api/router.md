@@ -686,9 +686,10 @@ calls made for the completed requests they compare (below); a record's own
 Deployment pricing is `global.model_catalog.deployments.<name>.pricing`, with
 the same per-million-token rates as provider model pricing. An explicit block
 wins (an empty block means zero rates); otherwise a deployment's `model` may
-name a priced provider model. Currency defaults to USD. Calls without usage or
-rates carry `no_usage` or `pricing_not_configured`, respectively. Local compute
-costs are not measured by these token-rate estimates.
+name a priced provider model, and a `model_runtime` deployment with neither
+costs nothing. Currency defaults to USD. Calls without usage or rates carry
+`no_usage` or `pricing_not_configured`, respectively. Local compute costs are
+not measured by these token-rate estimates.
 
 The default baseline covers the recipe's models across all its decisions: model
 references, explicit candidate-iteration models, and route destinations. A
