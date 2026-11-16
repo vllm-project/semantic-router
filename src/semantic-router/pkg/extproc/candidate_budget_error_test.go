@@ -32,7 +32,7 @@ func TestCandidatePoolBudgetRejectionRequiresEveryCandidate(t *testing.T) {
 		{"no capabilities", []config.ModelRef{{Model: "unknown"}}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := r.eligibleDemandModelRefs(r.Config.CandidateRequirements, test.refs, demand)
+			_, err := r.eligibleDemandModelRefs(r.Config.CandidateRequirements, test.refs, &demand, 1)
 			var budget *selection.RequestBudgetError
 			if !errors.Is(err, selection.ErrNoEligibleCandidates) || errors.As(err, &budget) != test.budget {
 				t.Fatalf("err=%v budget=%v", err, budget)
@@ -41,7 +41,8 @@ func TestCandidatePoolBudgetRejectionRequiresEveryCandidate(t *testing.T) {
 	}
 	request = strictCandidateRequest()
 	request.Sampling.MaxOutputTokens = llmprotocol.Int64(1025)
-	_, err := r.eligibleDemandModelRefs(r.Config.CandidateRequirements, []config.ModelRef{{Model: "vision"}, {Model: "text"}}, selection.DemandForRequest(request))
+	demand = selection.DemandForRequest(request)
+	_, err := r.eligibleDemandModelRefs(r.Config.CandidateRequirements, []config.ModelRef{{Model: "vision"}, {Model: "text"}}, &demand, 1)
 	var budget *selection.RequestBudgetError
 	if errors.As(err, &budget) {
 		t.Fatal("mixed capability and budget failure misclassified")
@@ -56,6 +57,7 @@ func TestCandidateBudgetRejectionClientAndReplayAgree(t *testing.T) {
 				r := &OpenAIRouter{ReplayRecorder: recorder}
 				replayConfig := config.DefaultRouterReplayPluginConfig()
 				replayConfig.Enabled = true
+				replayConfig.PromptCapture = config.PromptCaptureRaw
 				replayConfig.CaptureResponseBody = true
 				ctx := &RequestContext{RequestID: "budget-request", SourceFormat: format, SemanticRequest: testNeutralRequest("entrypoint-model", "hello"), RouterReplayPluginConfig: &replayConfig, ExpectStreamingResponse: stream}
 				rejection := &selection.RequestBudgetError{Code: "context_length_exceeded", Message: "estimated input plus requested output exceeds the 32768-token context window"}

@@ -3,15 +3,25 @@ display_name: vLLM
 description: Connect a private vLLM endpoint.
 category: start_here
 support_tier: runtime
+# vllm serve exposes /v1/messages since 0.11.1 behind the same bearer token as
+# its OpenAI routes, and vLLM-Omni serves image generation models on
+# /v1/images/generations. /v1/models is one OpenAI-shaped list whatever the
+# protocol, which is what the served context window check reads.
 protocols:
 - openai/chat-completions@1
 - openai/responses@1
+- openai/images@1
+- anthropic/messages@1
 default_protocol: openai/chat-completions@1
 supported_operations:
 - openai/chat-completions@1#create
 - openai/chat-completions@1#list_models
 - openai/responses@1#create
 - openai/responses@1#list_models
+- openai/images@1#create
+- openai/images@1#list_models
+- anthropic/messages@1#create
+- anthropic/messages@1#list_models
 auth:
   strategy: bearer
   header: Authorization
@@ -259,6 +269,23 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct
+- catalog: minimax/minimax-m3.1-flash
+  relationship: self_hosted
+  id: MiniMaxAI/MiniMax-M3.1-Flash
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  reasoning_modes:
+  - adaptive
+  restrictions:
+    minimum_vllm_version: 0.33.0
+    # The linked recipe requires the minimax-m31-flash image, not a stable pip release.
+    nightly_required: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-10-23
+    source: https://github.com/vllm-project/vllm/blob/eff8a5689681ea9db3c6390e5e4415d6dca42431/recipes/models/MiniMaxAI/MiniMax-M3.1-Flash.yaml
 - catalog: minimax/minimax-m2.5
   relationship: self_hosted
   id: MiniMaxAI/MiniMax-M2.5

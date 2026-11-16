@@ -18,6 +18,19 @@ def test_anthropic_diagnostics_are_probe_scoped() -> None:
     }
 
 
+def test_gateway_fields_are_probe_scoped() -> None:
+    base = {"model": "claude-test", "messages": [{"role": "user", "content": "hello"}]}
+    plain = build_message(base)
+    assert "total_cost" not in plain["usage"]
+    assert "gateway_trace_id" not in plain
+    decorated = build_message(
+        {**base, "messages": [{"role": "user", "content": "__mock_gateway_fields__"}]}
+    )
+    assert decorated["usage"]["total_cost"] == 3e-05
+    assert decorated["usage"]["speed"] == "standard"
+    assert decorated["gateway_trace_id"] == "trace-provider-mocker"
+
+
 def test_responses_decorations_are_probe_scoped() -> None:
     base = {"model": "gpt-5-nano", "input": "hello"}
     plain, _ = build_responses_response(base)

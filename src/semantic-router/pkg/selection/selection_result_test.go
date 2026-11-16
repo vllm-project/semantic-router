@@ -37,10 +37,6 @@ func (s stubSelector) Method() SelectionMethod {
 	return SelectionMethod("stub")
 }
 
-func (s stubSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	return nil
-}
-
 func (s stubSelector) Tier() AlgorithmTier {
 	return TierSupported
 }

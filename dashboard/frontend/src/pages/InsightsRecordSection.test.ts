@@ -18,7 +18,7 @@ describe('insight record section layout', () => {
     expect(getInsightsRecordSectionPresentation('Outcomes')).toEqual({ size: 'compact' })
     expect(getInsightsRecordSectionPresentation('Usage & Cost')).toMatchObject({
       size: 'wide',
-      noteFields: ['Cost basis'],
+      noteFields: ['Cost basis', 'Router calls'],
       secondaryFields: ['Baseline basis', 'Current pricing'],
     })
     expect(getInsightsRecordSectionPresentation('Signals').size).toBe('half')

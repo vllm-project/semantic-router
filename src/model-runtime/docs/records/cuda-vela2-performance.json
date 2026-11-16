@@ -1,0 +1,908 @@
+{
+ "context": {
+  "hardware": "NVIDIA H200",
+  "image": "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404",
+  "head": "ec307ad6ed081dd220b5dbb3571a1f9987d06914",
+  "date": "2026-10-20",
+  "device": "cuda:0",
+  "acceptance": "known regression: H200 ten-round 0.3B@32 p50 Worse. Tesla T4 five-round 0.3B@32 p50 Level is an additional card, not a replacement gate."
+ },
+ "t4_follow_up": {
+  "hardware": "NVIDIA Tesla T4",
+  "image": "Google Colab GPU runtime, torch 2.11.0+cu130, CUDA 13.0",
+  "head": "a1c137bcc9821766f9c0a440cc2912a21c671f3d",
+  "date": "2026-10-21",
+  "device": "cuda:0",
+  "package": "Vela-2.0-0.3B a3209a50",
+  "file": "Vela-2.0-0.3B.tokens32.rounds5.json",
+  "tokens": 32,
+  "rounds": 5,
+  "concurrency": 1,
+  "note": "Not pooled with the H200 ten-round follow-up. Level on this T4 does not clear the H200 p50 Worse row.",
+  "runtime_minus_reference": {
+   "p50_ms": {
+    "diff": -0.158,
+    "low": -0.447,
+    "high": 0.131,
+    "rounds": 5,
+    "baseline": 57.288,
+    "verdict": "Level"
+   },
+   "p95_ms": {
+    "diff": 0.02,
+    "low": -0.935,
+    "high": 0.975,
+    "rounds": 5,
+    "baseline": 59.194,
+    "verdict": "Level"
+   },
+   "mean_ms": {
+    "diff": -1.26,
+    "low": -4.461,
+    "high": 1.941,
+    "rounds": 5,
+    "baseline": 58.472,
+    "verdict": "Level"
+   },
+   "throughput_rps": {
+    "diff": 0.351,
+    "low": -0.532,
+    "high": 1.234,
+    "rounds": 5,
+    "baseline": 17.128,
+    "verdict": "Level"
+   }
+  },
+  "p50_ms_by_round": [
+   {"round": 0, "reference": 56.67, "runtime": 56.6},
+   {"round": 1, "reference": 56.83, "runtime": 56.91},
+   {"round": 2, "reference": 57.22, "runtime": 57.22},
+   {"round": 3, "reference": 58.02, "runtime": 57.55},
+   {"round": 4, "reference": 57.7, "runtime": 57.37}
+  ]
+ },
+ "jobs": [
+  {
+   "file": "Vela-2.0-0.3B.tokens32.rounds10.json",
+   "tokens": 32,
+   "rounds": 10,
+   "concurrency": 1,
+   "wholly_worse": [
+    "p50_ms"
+   ],
+   "runtime_minus_reference": {
+    "p50_ms": {
+     "diff": 0.508,
+     "low": 0.088424,
+     "high": 0.927576,
+     "rounds": 10,
+     "baseline": 21.959,
+     "verdict": "Worse"
+    },
+    "p95_ms": {
+     "diff": -3.406,
+     "low": -4.156608,
+     "high": -2.655392,
+     "rounds": 10,
+     "baseline": 28.226,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -0.202,
+     "low": -0.710654,
+     "high": 0.306654,
+     "rounds": 10,
+     "baseline": 22.793,
+     "verdict": "Level"
+    },
+    "throughput_rps": {
+     "diff": 0.4382,
+     "low": -0.7073,
+     "high": 1.5837,
+     "rounds": 10,
+     "baseline": 43.9493,
+     "verdict": "Level"
+    }
+   },
+   "p50_ms_by_round": [
+    {
+     "round": 0,
+     "reference": 20.97,
+     "runtime": 20.45
+    },
+    {
+     "round": 1,
+     "reference": 21.81,
+     "runtime": 22.49
+    },
+    {
+     "round": 2,
+     "reference": 22.79,
+     "runtime": 23.08
+    },
+    {
+     "round": 3,
+     "reference": 22.52,
+     "runtime": 22.49
+    },
+    {
+     "round": 4,
+     "reference": 21.98,
+     "runtime": 22.8
+    },
+    {
+     "round": 5,
+     "reference": 21.34,
+     "runtime": 22.51
+    },
+    {
+     "round": 6,
+     "reference": 22.21,
+     "runtime": 22.5
+    },
+    {
+     "round": 7,
+     "reference": 22.04,
+     "runtime": 22.7
+    },
+    {
+     "round": 8,
+     "reference": 21.05,
+     "runtime": 22.55
+    },
+    {
+     "round": 9,
+     "reference": 22.88,
+     "runtime": 23.1
+    }
+   ]
+  },
+  {
+   "file": "Vela-2.0-0.8B.tokens512.rounds10.json",
+   "tokens": 512,
+   "rounds": 10,
+   "concurrency": 1,
+   "wholly_worse": [],
+   "runtime_minus_reference": {
+    "p50_ms": {
+     "diff": -6.1,
+     "low": -6.337169,
+     "high": -5.862831,
+     "rounds": 10,
+     "baseline": 79.966,
+     "verdict": "Better"
+    },
+    "p95_ms": {
+     "diff": -14.12,
+     "low": -16.068269,
+     "high": -12.171731,
+     "rounds": 10,
+     "baseline": 90.949,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -7.755,
+     "low": -8.246481,
+     "high": -7.263519,
+     "rounds": 10,
+     "baseline": 82.139,
+     "verdict": "Better"
+    },
+    "throughput_rps": {
+     "diff": 1.2691,
+     "low": 1.191488,
+     "high": 1.346712,
+     "rounds": 10,
+     "baseline": 12.1756,
+     "verdict": "Better"
+    }
+   },
+   "p50_ms_by_round": [
+    {
+     "round": 0,
+     "reference": 80.57,
+     "runtime": 74.3
+    },
+    {
+     "round": 1,
+     "reference": 79.9,
+     "runtime": 73.94
+    },
+    {
+     "round": 2,
+     "reference": 79.91,
+     "runtime": 73.82
+    },
+    {
+     "round": 3,
+     "reference": 79.24,
+     "runtime": 73.77
+    },
+    {
+     "round": 4,
+     "reference": 80.15,
+     "runtime": 74.06
+    },
+    {
+     "round": 5,
+     "reference": 80.15,
+     "runtime": 73.8
+    },
+    {
+     "round": 6,
+     "reference": 79.44,
+     "runtime": 73.8
+    },
+    {
+     "round": 7,
+     "reference": 80.07,
+     "runtime": 73.78
+    },
+    {
+     "round": 8,
+     "reference": 80.26,
+     "runtime": 73.72
+    },
+    {
+     "round": 9,
+     "reference": 79.97,
+     "runtime": 73.67
+    }
+   ]
+  },
+  {
+   "file": "Vela-2.0-4B.tokens2048.rounds10.json",
+   "tokens": 2048,
+   "rounds": 10,
+   "concurrency": 1,
+   "wholly_worse": [],
+   "runtime_minus_reference": {
+    "p50_ms": {
+     "diff": -28.862,
+     "low": -29.26766,
+     "high": -28.45634,
+     "rounds": 10,
+     "baseline": 400.486,
+     "verdict": "Better"
+    },
+    "p95_ms": {
+     "diff": -32.546,
+     "low": -34.460558,
+     "high": -30.631442,
+     "rounds": 10,
+     "baseline": 407.716,
+     "verdict": "Better"
+    },
+    "mean_ms": {
+     "diff": -11.447,
+     "low": -50.813647,
+     "high": 27.919647,
+     "rounds": 10,
+     "baseline": 404.34,
+     "verdict": "Level"
+    },
+    "throughput_rps": {
+     "diff": 0.1079,
+     "low": -0.079579,
+     "high": 0.295379,
+     "rounds": 10,
+     "baseline": 2.4732,
+     "verdict": "Level"
+    }
+   },
+   "p50_ms_by_round": [
+    {
+     "round": 0,
+     "reference": 401.62,
+     "runtime": 371.62
+    },
+    {
+     "round": 1,
+     "reference": 400.49,
+     "runtime": 371.46
+    },
+    {
+     "round": 2,
+     "reference": 400.41,
+     "runtime": 371.72
+    },
+    {
+     "round": 3,
+     "reference": 400.71,
+     "runtime": 371.66
+    },
+    {
+     "round": 4,
+     "reference": 399.74,
+     "runtime": 371.59
+    },
+    {
+     "round": 5,
+     "reference": 400.94,
+     "runtime": 371.71
+    },
+    {
+     "round": 6,
+     "reference": 400.09,
+     "runtime": 371.67
+    },
+    {
+     "round": 7,
+     "reference": 400.87,
+     "runtime": 371.57
+    },
+    {
+     "round": 8,
+     "reference": 400.06,
+     "runtime": 371.72
+    },
+    {
+     "round": 9,
+     "reference": 399.93,
+     "runtime": 371.52
+    }
+   ]
+  }
+ ],
+ "earlier_four_by_four": {
+  "note": "Older saved files cover all four models at 32, 128, 512, and 2048 tokens. Separate stack from the three ten-round follow-ups. Do not pool.",
+  "jobs": [
+   {
+    "model": "Vela-2.0-0.3B",
+    "file": "Vela-2.0-0.3B.bench.json",
+    "provenance": "unknown head/image; not pooled with the 2026-10-20 ten-round follow-ups",
+    "workloads": [
+     {
+      "tokens": 32,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 61.858,
+       "diff": -2.008,
+       "low": -54.457,
+       "high": 50.441,
+       "verdict": "Level"
+      },
+      "p95_ms": {
+       "baseline": 158.73,
+       "diff": 42.5,
+       "low": -101.626,
+       "high": 186.626,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 68.95,
+       "diff": 2.528,
+       "low": -24.53,
+       "high": 29.586,
+       "verdict": "Level"
+      },
+      "throughput_rps": {
+       "baseline": 21.673,
+       "diff": -3.688,
+       "low": -21.165,
+       "high": 13.789,
+       "verdict": "Level"
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 63.342,
+       "diff": -10.37,
+       "low": -52.731,
+       "high": 31.991,
+       "verdict": "Level"
+      },
+      "p95_ms": {
+       "baseline": 136.98,
+       "diff": -2.482,
+       "low": -26.487,
+       "high": 21.523,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 63.832,
+       "diff": -4.916,
+       "low": -18.863,
+       "high": 9.031,
+       "verdict": "Level"
+      },
+      "throughput_rps": {
+       "baseline": 15.859,
+       "diff": 1.485,
+       "low": -3.14,
+       "high": 6.111,
+       "verdict": "Level"
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 28.352,
+       "diff": -2.638,
+       "low": -3.566,
+       "high": -1.71,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 41.466,
+       "diff": -2.654,
+       "low": -12.108,
+       "high": 6.8,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 31.376,
+       "diff": -3.97,
+       "low": -7.605,
+       "high": -0.335,
+       "verdict": "Better"
+      },
+      "throughput_rps": {
+       "baseline": 32.083,
+       "diff": 4.54,
+       "low": 0.888,
+       "high": 8.192,
+       "verdict": "Worse"
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 85.954,
+       "diff": -15.73,
+       "low": -18.801,
+       "high": -12.659,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 109.198,
+       "diff": -20.51,
+       "low": -32.269,
+       "high": -8.751,
+       "verdict": "Better"
+      },
+      "mean_ms": {
+       "baseline": 86.984,
+       "diff": -14.512,
+       "low": -19.352,
+       "high": -9.672,
+       "verdict": "Better"
+      },
+      "throughput_rps": {
+       "baseline": 11.548,
+       "diff": 2.315,
+       "low": 1.511,
+       "high": 3.119,
+       "verdict": "Worse"
+      }
+     }
+    ]
+   },
+   {
+    "model": "Vela-2.0-0.8B",
+    "file": "Vela-2.0-0.8B.bench.json",
+    "provenance": "unknown head/image; not pooled with the 2026-10-20 ten-round follow-ups",
+    "workloads": [
+     {
+      "tokens": 32,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 380.872,
+       "diff": -14.032,
+       "low": -30.154,
+       "high": 2.09,
+       "verdict": "Level"
+      },
+      "p95_ms": {
+       "baseline": 774.178,
+       "diff": -120.952,
+       "low": -342.287,
+       "high": 100.383,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 423.194,
+       "diff": -28.332,
+       "low": -40.101,
+       "high": -16.563,
+       "verdict": "Better"
+      },
+      "throughput_rps": {
+       "baseline": 2.428,
+       "diff": 0.189,
+       "low": 0.05,
+       "high": 0.327,
+       "verdict": "Worse"
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 377.078,
+       "diff": -23.09,
+       "low": -39.902,
+       "high": -6.278,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 571.25,
+       "diff": -4.212,
+       "low": -89.412,
+       "high": 80.988,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 390.182,
+       "diff": -16.44,
+       "low": -40.259,
+       "high": 7.379,
+       "verdict": "Level"
+      },
+      "throughput_rps": {
+       "baseline": 2.582,
+       "diff": 0.102,
+       "low": -0.039,
+       "high": 0.243,
+       "verdict": "Level"
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 417.4,
+       "diff": -35.88,
+       "low": -71.701,
+       "high": -0.059,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 1045.806,
+       "diff": 149.75,
+       "low": -309.14,
+       "high": 608.64,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 508.984,
+       "diff": 4.354,
+       "low": -57.704,
+       "high": 66.412,
+       "verdict": "Level"
+      },
+      "throughput_rps": {
+       "baseline": 2.251,
+       "diff": 0.087,
+       "low": -0.074,
+       "high": 0.247,
+       "verdict": "Level"
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 1088.666,
+       "diff": -34.45,
+       "low": -74.95,
+       "high": 6.05,
+       "verdict": "Level"
+      },
+      "p95_ms": {
+       "baseline": 2122.738,
+       "diff": -212.45,
+       "low": -595.043,
+       "high": 170.143,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 1246.294,
+       "diff": -53.99,
+       "low": -253.657,
+       "high": 145.677,
+       "verdict": "Level"
+      },
+      "throughput_rps": {
+       "baseline": 0.824,
+       "diff": 0.056,
+       "low": -0.06,
+       "high": 0.173,
+       "verdict": "Level"
+      }
+     }
+    ]
+   },
+   {
+    "model": "Vela-2.0-4B",
+    "file": "Vela-2.0-4B.bench.json",
+    "provenance": "unknown head/image; not pooled with the 2026-10-20 ten-round follow-ups",
+    "workloads": [
+     {
+      "tokens": 32,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 557.336,
+       "diff": -153.134,
+       "low": -230.206,
+       "high": -76.062,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 806.61,
+       "diff": -147.624,
+       "low": -199.305,
+       "high": -95.943,
+       "verdict": "Better"
+      },
+      "mean_ms": {
+       "baseline": 590.426,
+       "diff": -145.59,
+       "low": -208.917,
+       "high": -82.263,
+       "verdict": "Better"
+      },
+      "throughput_rps": {
+       "baseline": 1.841,
+       "diff": 0.647,
+       "low": 0.285,
+       "high": 1.009,
+       "verdict": "Worse"
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 416.014,
+       "diff": -99.042,
+       "low": -167.808,
+       "high": -30.276,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 535.512,
+       "diff": -127.878,
+       "low": -210.186,
+       "high": -45.57,
+       "verdict": "Better"
+      },
+      "mean_ms": {
+       "baseline": 426.596,
+       "diff": -99.306,
+       "low": -143.293,
+       "high": -55.319,
+       "verdict": "Better"
+      },
+      "throughput_rps": {
+       "baseline": 2.382,
+       "diff": 0.719,
+       "low": 0.407,
+       "high": 1.032,
+       "verdict": "Worse"
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 399.472,
+       "diff": -19.82,
+       "low": -24.945,
+       "high": -14.695,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 538.414,
+       "diff": -11.754,
+       "low": -100.443,
+       "high": 76.935,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 407.118,
+       "diff": -17.702,
+       "low": -30.076,
+       "high": -5.328,
+       "verdict": "Better"
+      },
+      "throughput_rps": {
+       "baseline": 2.463,
+       "diff": 0.116,
+       "low": 0.022,
+       "high": 0.21,
+       "verdict": "Worse"
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 741.146,
+       "diff": -79.56,
+       "low": -135.296,
+       "high": -23.824,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 3969.874,
+       "diff": 174.798,
+       "low": -1386.362,
+       "high": 1735.958,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 1231.272,
+       "diff": -41.69,
+       "low": -257.566,
+       "high": 174.186,
+       "verdict": "Level"
+      },
+      "throughput_rps": {
+       "baseline": 1.178,
+       "diff": 0.078,
+       "low": -0.067,
+       "high": 0.223,
+       "verdict": "Level"
+      }
+     }
+    ]
+   },
+   {
+    "model": "Vela-2.0-9B",
+    "file": "Vela-2.0-9B.bench.json",
+    "provenance": "unknown head/image; not pooled with the 2026-10-20 ten-round follow-ups",
+    "workloads": [
+     {
+      "tokens": 32,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 239.008,
+       "diff": -39.024,
+       "low": -107.946,
+       "high": 29.898,
+       "verdict": "Level"
+      },
+      "p95_ms": {
+       "baseline": 378.718,
+       "diff": -28.294,
+       "low": -152.7,
+       "high": 96.112,
+       "verdict": "Level"
+      },
+      "mean_ms": {
+       "baseline": 258.094,
+       "diff": -33.708,
+       "low": -93.566,
+       "high": 26.15,
+       "verdict": "Level"
+      },
+      "throughput_rps": {
+       "baseline": 4.308,
+       "diff": 0.407,
+       "low": -0.261,
+       "high": 1.075,
+       "verdict": "Level"
+      }
+     },
+     {
+      "tokens": 128,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 207.822,
+       "diff": -25.596,
+       "low": -29.527,
+       "high": -21.665,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 312.506,
+       "diff": -50.384,
+       "low": -93.621,
+       "high": -7.147,
+       "verdict": "Better"
+      },
+      "mean_ms": {
+       "baseline": 222.886,
+       "diff": -30.012,
+       "low": -36.514,
+       "high": -23.51,
+       "verdict": "Better"
+      },
+      "throughput_rps": {
+       "baseline": 4.491,
+       "diff": 0.697,
+       "low": 0.565,
+       "high": 0.828,
+       "verdict": "Worse"
+      }
+     },
+     {
+      "tokens": 512,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 486.268,
+       "diff": -62.594,
+       "low": -95.852,
+       "high": -29.336,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 646.418,
+       "diff": -97.644,
+       "low": -156.201,
+       "high": -39.087,
+       "verdict": "Better"
+      },
+      "mean_ms": {
+       "baseline": 499.168,
+       "diff": -63.85,
+       "low": -100.317,
+       "high": -27.383,
+       "verdict": "Better"
+      },
+      "throughput_rps": {
+       "baseline": 2.113,
+       "diff": 0.279,
+       "low": 0.225,
+       "high": 0.332,
+       "verdict": "Worse"
+      }
+     },
+     {
+      "tokens": 2048,
+      "concurrency": 1,
+      "rounds": 5,
+      "p50_ms": {
+       "baseline": 893.604,
+       "diff": -110.792,
+       "low": -136.075,
+       "high": -85.509,
+       "verdict": "Better"
+      },
+      "p95_ms": {
+       "baseline": 1390.374,
+       "diff": -189.19,
+       "low": -332.948,
+       "high": -45.432,
+       "verdict": "Better"
+      },
+      "mean_ms": {
+       "baseline": 966.284,
+       "diff": -48.998,
+       "low": -227.962,
+       "high": 129.966,
+       "verdict": "Level"
+      },
+      "throughput_rps": {
+       "baseline": 1.049,
+       "diff": 0.063,
+       "low": -0.12,
+       "high": 0.246,
+       "verdict": "Level"
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,5 +1,8 @@
 import type { EditFormData } from '../components/EditModal'
-import { EMBEDDING_MODELS_STRUCTURED_FIELDS } from './configPageEmbeddingStructuredSchema'
+import {
+  EMBEDDING_MODELS_STRUCTURED_FIELDS,
+  STORE_EMBEDDING_FIELD,
+} from './configPageEmbeddingStructuredSchema'
 import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import {
   boolean,
@@ -109,49 +112,6 @@ const redisSchema = object('Redis Backend', {
   }),
 })
 
-const modelModule = (label: string, detector = false): RouterStructuredSchema =>
-  object(label, {
-    model_ref: text('Model Ref'),
-    model_id: text('Model ID'),
-    threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-    use_cpu: boolean('Use CPU'),
-    ...(detector
-      ? {
-          min_span_length: number('Min Span Length', { min: 1 }),
-          min_span_confidence: number('Min Span Confidence', { min: 0, max: 1, step: 0.01 }),
-          context_window_size: number('Context Window Size', { min: 1 }),
-        }
-      : {}),
-  })
-
-const prototypeScoringSchema = object('Prototype Scoring', {
-  enabled: boolean('Enabled'),
-  cluster_similarity_threshold: number('Cluster Similarity Threshold', {
-    min: 0,
-    max: 1,
-    step: 0.01,
-  }),
-  max_prototypes: number('Max Prototypes', { min: 1 }),
-  best_weight: number('Best Weight', { min: 0, max: 1, step: 0.01 }),
-  top_m: number('Top M', { min: 1 }),
-  margin_threshold: number('Margin Threshold', { min: 0, step: 0.01 }),
-})
-
-const classifierModelSchema = (
-  label: string,
-  mappingField?: 'category_mapping_path' | 'pii_mapping_path',
-): RouterStructuredSchema =>
-  object(label, {
-    model_ref: text('Model Ref'),
-    model_id: text('Model ID'),
-    threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-    use_cpu: boolean('Use CPU'),
-    ...(mappingField ? { [mappingField]: text('Mapping Path') } : {}),
-    ...(mappingField === 'category_mapping_path'
-      ? { fallback_category: text('Fallback Category') }
-      : {}),
-  })
-
 const tracingSchema = object('Tracing', {
   enabled: boolean('Enabled'),
   provider: text('Provider'),
@@ -184,14 +144,6 @@ const metricsSchema = object('Metrics', {
 export const ROUTER_STRUCTURED_FIELDS: Partial<
   Record<RouterSystemKey, Record<string, RouterStructuredFieldDefinition>>
 > = {
-  system_models: {
-    decision_model: {
-      label: 'Default Decision Deployment',
-      description:
-        'Reference a declared deployment. Models and task overrides are managed in System One → Decision Models.',
-      schema: object('Decision Model', { deployment: text('Deployment', { required: true }) }),
-    },
-  },
   router_core: {
     streamed_body: {
       label: 'Streamed Body',
@@ -310,6 +262,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
   },
   memory: {
+    embedding: STORE_EMBEDDING_FIELD,
     milvus: {
       label: 'Milvus Memory Store',
       description: 'Connection and collection settings for agentic memory.',
@@ -334,6 +287,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
   },
   response_cache: {
+    embedding: STORE_EMBEDDING_FIELD,
     redis: {
       label: 'Redis Backend',
       description: 'Typed Redis connection, index, search, and lifecycle settings.',
@@ -346,6 +300,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
     },
   },
   vector_store: {
+    embedding: STORE_EMBEDDING_FIELD,
     supported_formats: {
       label: 'Supported Formats',
       description: 'File extensions accepted by ingestion.',
@@ -375,167 +330,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       }),
     },
   },
-  tools: {
-    advanced_filtering: {
-      label: 'Advanced Filtering',
-      description: 'Typed retrieval, weighting, category, allow/block, and history controls.',
-      schema: object('Advanced Filtering', {
-        enabled: boolean('Enabled'),
-        retrieval_strategy: select('Retrieval Strategy', ['weighted', 'hybrid_history']),
-        candidate_pool_size: number('Candidate Pool Size', { min: 0 }),
-        min_lexical_overlap: number('Min Lexical Overlap', { min: 0 }),
-        min_combined_score: number('Min Combined Score', { min: 0, max: 1, step: 0.01 }),
-        weights: object('Weights', {
-          embed: number('Embedding', { min: 0, max: 1, step: 0.01 }),
-          lexical: number('Lexical', { min: 0, max: 1, step: 0.01 }),
-          tag: number('Tag', { min: 0, max: 1, step: 0.01 }),
-          name: number('Name', { min: 0, max: 1, step: 0.01 }),
-          category: number('Category', { min: 0, max: 1, step: 0.01 }),
-        }),
-        use_category_filter: boolean('Use Category Filter'),
-        category_confidence_threshold: number('Category Confidence Threshold', {
-          min: 0,
-          max: 1,
-          step: 0.01,
-        }),
-        allow_tools: stringList('Allowed Tool', 'docs.search'),
-        block_tools: stringList('Blocked Tool', 'admin.delete'),
-        hybrid_history: object('Hybrid History', {
-          history_horizon: number('History Horizon', { min: 0 }),
-          min_history_steps: number('Min History Steps', { min: 0 }),
-          history_confidence_threshold: number('History Confidence Threshold', {
-            min: 0,
-            max: 1,
-            step: 0.01,
-          }),
-          weight_semantic: number('Semantic Weight', { min: 0, max: 1, step: 0.01 }),
-          weight_history_transition: number('History Transition Weight', {
-            min: 0,
-            max: 1,
-            step: 0.01,
-          }),
-          weight_decision_prior: number('Decision Prior Weight', {
-            min: 0,
-            max: 1,
-            step: 0.01,
-          }),
-          repetition_penalty_strength: number('Repetition Penalty Strength', {
-            min: 0,
-            max: 1,
-            step: 0.01,
-          }),
-        }),
-      }),
-    },
-  },
-  classifier: {
-    domain: {
-      label: 'Domain Module',
-      description: 'Domain classifier binding, threshold, mapping, and fallback.',
-      schema: classifierModelSchema('Domain Module', 'category_mapping_path'),
-    },
-    pii: {
-      label: 'PII Module',
-      description: 'PII classifier binding, threshold, and type mapping.',
-      schema: classifierModelSchema('PII Module', 'pii_mapping_path'),
-    },
-    mcp: {
-      label: 'MCP Module',
-      description: 'MCP classifier transport, process, environment, and timeout settings.',
-      schema: object('MCP Module', {
-        enabled: boolean('Enabled'),
-        transport_type: select('Transport Type', ['stdio', 'sse', 'streamable-http']),
-        command: text('Command'),
-        args: stringList('Argument', '-m'),
-        env: stringMap('Environment Variable'),
-        url: text('URL'),
-        tool_name: text('Tool Name'),
-        threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-        timeout_seconds: number('Timeout Seconds', { min: 0 }),
-      }),
-    },
-    preference: {
-      label: 'Preference Module',
-      description: 'Contrastive preference embedding and prototype scoring settings.',
-      schema: object('Preference Module', {
-        use_contrastive: boolean('Use Contrastive'),
-        embedding_model: text('Embedding Model'),
-        model_id: text('Model ID'),
-        threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-        use_cpu: boolean('Use CPU'),
-        prototype_scoring: prototypeScoringSchema,
-      }),
-    },
-  },
-  hallucination_mitigation: {
-    fact_check: {
-      label: 'Fact Check Module',
-      description: 'Fact-check model binding and threshold.',
-      schema: modelModule('Fact Check Module'),
-    },
-    detector: {
-      label: 'Detector Module',
-      description: 'Hallucination detector model and span thresholds.',
-      schema: modelModule('Detector Module', true),
-    },
-  },
-  external_models: {
-    items: {
-      label: 'External Models',
-      description: 'External provider models used by router-owned auxiliary workflows.',
-      schema: objectList(
-        'External Model',
-        {
-          llm_provider: text('Provider'),
-          model_role: text('Model Role', { required: true }),
-          llm_endpoint: object('Endpoint', {
-            address: text('Address'),
-            port: number('Port', { min: 1, max: 65535 }),
-            protocol: select('Protocol', ['http', 'https']),
-            name: text('Name'),
-            use_chat_template: boolean('Use Chat Template'),
-            prompt_template: text('Prompt Template'),
-          }),
-          llm_model_name: text('Model Name'),
-          llm_timeout_seconds: number('Timeout Seconds', { min: 0 }),
-          parser_type: text('Parser Type'),
-          threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
-          access_key: password('Access Key'),
-          max_tokens: number('Max Tokens', { min: 1 }),
-          temperature: number('Temperature', { min: 0 }),
-        },
-        'llm_model_name',
-      ),
-    },
-  },
   embedding_models: EMBEDDING_MODELS_STRUCTURED_FIELDS,
-  prompt_compression: {
-    skip_signals: {
-      label: 'Skip Signals',
-      description: 'Signals that bypass prompt compression.',
-      schema: stringList('Signal', 'jailbreak'),
-    },
-  },
-  modality_detector: {
-    classifier: {
-      label: 'Classifier',
-      description: 'Modality classifier model and device.',
-      schema: object('Classifier', {
-        model_path: text('Model Path'),
-        use_cpu: boolean('Use CPU'),
-      }),
-    },
-    keywords: {
-      label: 'Keywords',
-      description: 'Keywords used by keyword or hybrid detection.',
-      schema: stringList('Keyword', 'image'),
-    },
-    both_keywords: {
-      label: 'Required Keyword Pairs',
-      description: 'Keywords that must co-occur for a match.',
-      schema: stringList('Keyword', 'draw'),
-    },
-  },
   observability: {
     metrics: {
       label: 'Metrics',
@@ -553,71 +348,6 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       label: 'Headers',
       description: 'Headers added to every Looper model call.',
       schema: stringMap('Header'),
-    },
-  },
-  model_selection: {
-    knn: {
-      label: 'KNN',
-      description: 'K-nearest-neighbor model selection settings.',
-      schema: object('KNN', {
-        k: number('K', { min: 1 }),
-        pretrained_path: text('Pretrained Path'),
-      }),
-    },
-    kmeans: {
-      label: 'KMeans',
-      description: 'KMeans model selection settings.',
-      schema: object('KMeans', {
-        num_clusters: number('Clusters', { min: 1 }),
-        efficiency_weight: number('Efficiency Weight', { min: 0 }),
-        pretrained_path: text('Pretrained Path'),
-      }),
-    },
-    svm: {
-      label: 'SVM',
-      description: 'SVM model selection settings.',
-      schema: object('SVM', {
-        kernel: text('Kernel'),
-        gamma: number('Gamma', { min: 0 }),
-        pretrained_path: text('Pretrained Path'),
-      }),
-    },
-    router_dc: {
-      label: 'RouterDC',
-      description: 'RouterDC similarity and contrastive settings.',
-      schema: object('RouterDC', {
-        temperature: number('Temperature', { min: 0 }),
-        dimension_size: number('Dimension Size', { min: 1 }),
-        min_similarity: number('Min Similarity', { min: 0, max: 1, step: 0.01 }),
-        use_query_contrastive: boolean('Query Contrastive'),
-        use_model_contrastive: boolean('Model Contrastive'),
-        require_descriptions: boolean('Require Descriptions'),
-        use_capabilities: boolean('Use Capabilities'),
-      }),
-    },
-    automix: {
-      label: 'AutoMix',
-      description: 'AutoMix verification, escalation, and cost controls.',
-      schema: object('AutoMix', {
-        verification_threshold: number('Verification Threshold', { min: 0, max: 1, step: 0.01 }),
-        max_escalations: number('Max Escalations', { min: 0 }),
-        cost_aware_routing: boolean('Cost-Aware Routing'),
-        cost_quality_tradeoff: number('Cost Quality Tradeoff', { min: 0 }),
-        discount_factor: number('Discount Factor', { min: 0 }),
-        use_logprob_verification: boolean('Use Logprob Verification'),
-      }),
-    },
-    hybrid: {
-      label: 'Hybrid',
-      description: 'Hybrid selector weights and normalization.',
-      schema: object('Hybrid', {
-        experience_weight: number('Experience Weight', { min: 0 }),
-        router_dc_weight: number('RouterDC Weight', { min: 0 }),
-        automix_weight: number('AutoMix Weight', { min: 0 }),
-        cost_weight: number('Cost Weight', { min: 0 }),
-        quality_gap_threshold: number('Quality Gap Threshold', { min: 0 }),
-        normalize_scores: boolean('Normalize Scores'),
-      }),
     },
   },
   api: {

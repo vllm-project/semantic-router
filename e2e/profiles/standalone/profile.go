@@ -128,10 +128,14 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"standalone-chart-defaults",
 		"standalone-chat-completions",
+		"standalone-streaming",
 		"standalone-models",
 		"standalone-fallback",
+		"standalone-debug-headers-default-off",
 		"routing-error-codes",
 		"standalone-decision-model",
+		"standalone-listener-rules",
+		"standalone-helm-upgrade",
 		"standalone-config-rollout",
 	}
 }

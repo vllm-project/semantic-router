@@ -26,7 +26,7 @@ func physicalNamespace(cfg CacheConfig) []string {
 }
 
 func namespaceFixture(backend CacheBackendType, dimension int) CacheConfig {
-	cfg := CacheConfig{Enabled: true, BackendType: backend, EmbeddingModel: "mmbert", EmbeddingProvider: storagetest.Vectors{Size: 768}}
+	cfg := CacheConfig{Enabled: true, BackendType: backend, EmbeddingDeployment: "vela-embedding", EmbeddingProvider: storagetest.Vectors{Size: 768}}
 	switch backend {
 	case RedisCacheType:
 		cfg.Redis = &config.RedisConfig{}
@@ -111,17 +111,21 @@ func TestEmbeddingNamespaceIsolatesPhysicalIndexesAndPrefixesBeforeOpening(t *te
 	}
 }
 
-func TestEmbeddingNamespaceLeavesUnsupportedProvidersAndDisabledCachesUntouched(t *testing.T) {
+// A provider without a content identity (a remote endpoint), and a disabled
+// cache, keep the configured namespace.
+func TestEmbeddingNamespaceLeavesRemoteProvidersAndDisabledCachesUntouched(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		cfg := namespaceFixture(RedisCacheType, 768)
 		cfg.Enabled = enabled
-		cfg.EmbeddingModel = "qwen3"
+		cfg.EmbeddingDeployment = "remote-embedding"
 		got, identity, err := PrepareEmbeddingNamespace(cfg, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-			t.Fatal("unsupported provider resolved")
-			return embedding.ContentIdentity{}, nil
+			if !enabled {
+				t.Fatal("a disabled cache resolved its embedding identity")
+			}
+			return embedding.ContentIdentity{}, embedding.ErrIdentityUnsupported
 		})
 		if err != nil || identity != "" || !reflect.DeepEqual(got, cfg) {
-			t.Fatal("legacy behavior changed")
+			t.Fatal("the configured namespace changed")
 		}
 	}
 }

@@ -106,14 +106,13 @@ data:
         - name: local/custom
           backend_refs:
             - base_url: https://provider.example/v1
-    routing:
-      modelCards:
-        - name: local/custom
-      decisions:
-        - name: route
-          priority: 100
-          modelRefs:
-            - model: local/custom
+    recipes:
+      - name: default
+        decisions:
+          - name: route
+            priority: 100
+            modelRefs:
+              - model: local/custom
 """,
                 encoding="utf-8",
             )
@@ -121,12 +120,12 @@ data:
 
             rendered.write_text(
                 rendered.read_text(encoding="utf-8").replace(
-                    "          priority: 100\n", ""
+                    "            priority: 100\n", ""
                 ),
                 encoding="utf-8",
             )
             self.assertIn(
-                "rendered routing.decisions[0] must define positive priority",
+                "rendered recipes[0].decisions[0] must define positive priority",
                 matrix_check.validate_rendered_helm(rendered),
             )
 

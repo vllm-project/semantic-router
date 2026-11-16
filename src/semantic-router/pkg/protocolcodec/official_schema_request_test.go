@@ -270,7 +270,7 @@ func TestOfficialUnsupportedRequestFieldsFailWithTypedErrors(t *testing.T) {
 			format: llmprotocol.OpenAIChatV1,
 			base:   map[string]any{"model": "m", "messages": []any{map[string]any{"role": "user", "content": "hello"}}},
 			fields: fields(
-				"audio", "function_call", "functions", "logit_bias", "logprobs", "modalities", "moderation",
+				"audio", "function_call", "functions", "logprobs", "modalities", "moderation",
 				"prediction", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "web_search_options",
 			),
@@ -636,6 +636,37 @@ func assertTranslatedAnthropicOutputConfig(
 	if decoded.ReasoningEffort != "high" || decoded.OutputFormat.Kind != llmprotocol.OutputJSONSchema ||
 		!jsonSemanticallyEqual(decoded.OutputFormat.Schema, schema) {
 		t.Fatalf("Anthropic output_config changed through %s: %+v body=%s", target, decoded, translated.Body)
+	}
+}
+
+// Codex's Approve for me review asks for its answer with strict: false, since
+// its schema requires only some properties. Messages enforces the schema, which
+// gives the answer the shape the request asked for.
+func TestNonStrictJSONSchemaReachesMessagesEnforced(t *testing.T) {
+	engine := NewBuiltinEngine()
+	schema := `{"type":"object","additionalProperties":false,"properties":{"outcome":{"type":"string","enum":["allow","deny"]},"rationale":{"type":"string"}},"required":["outcome"]}`
+	bodies := map[llmprotocol.WireFormat]string{
+		llmprotocol.OpenAIResponsesV1: `{"model":"m","input":"review","text":{"format":{"type":"json_schema","strict":false,"schema":` + schema + `,"name":"codex_output_schema"}}}`,
+		llmprotocol.OpenAIChatV1:      `{"model":"m","messages":[{"role":"user","content":"review"}],"response_format":{"type":"json_schema","json_schema":{"name":"codex_output_schema","strict":false,"schema":` + schema + `}}}`,
+	}
+	for source, body := range bodies {
+		t.Run(string(source), func(t *testing.T) {
+			translated, err := engine.TranslateRequest(source, llmprotocol.AnthropicMessagesV1, []byte(body), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var wire anthropicRequestWire
+			if err := json.Unmarshal(translated.Body, &wire); err != nil {
+				t.Fatal(err)
+			}
+			if wire.OutputConfig == nil || wire.OutputConfig.Format == nil ||
+				!jsonSemanticallyEqual(wire.OutputConfig.Format.Schema, json.RawMessage(schema)) {
+				t.Fatalf("output schema did not reach Messages: %s", translated.Body)
+			}
+			if !hasDiagnostic(translated.Diagnostics, "output_format.strict", llmprotocol.DiagnosticApproximated) {
+				t.Fatalf("enforcing a non-strict schema was not reported: %+v", translated.Diagnostics)
+			}
+		})
 	}
 }
 

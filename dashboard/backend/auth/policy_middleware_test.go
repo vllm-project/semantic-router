@@ -191,7 +191,6 @@ func TestIndependentPermissionsAtProtectedRoutes(t *testing.T) {
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", PermReplayRead, ResourceOwnerReplay},
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", PermFeedbackSubmit, ResourceOwnerFeedback},
 		{http.MethodPost, "/api/router/v1/chat/completions", PermInferenceRun, ResourceOwnerInference},
-		{http.MethodPost, "/api/ml-pipeline/train", PermMlPipeline, ResourceOwnerML},
 		{http.MethodPost, "/api/mcp/servers", PermMcpManage, ResourceOwnerTools},
 	}
 	mux := NewPolicyMux()

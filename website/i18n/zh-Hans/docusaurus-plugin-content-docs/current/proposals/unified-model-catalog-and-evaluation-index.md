@@ -14,6 +14,10 @@ translation:
 >
 > 本记录中的目录架构仍然现行。其原先的基准集、指数权重、覆盖率阈值和清单计数是历史快照，已被 [Open Intelligence 架构](./open-intelligence-index-and-model-arena) 取代。活动 1.0 契约请使用 [Intelligence Index](../benchmarking/open-intelligence-index)。
 
+:::note
+本记录中的后端示例直接在后端 ref 上写 `api_key_env` 和 `base_url`。这些写法已弃用：它们仍可加载，并报告 `deprecated_model_field` 警告。[迁移模型资源](../installation/model-resource-migration.md#request-backends)给出了 `endpoint`、`auth` 和 `headers` 的形式。
+:::
+
 ## 问题 {#problem}
 
 vLLM Semantic Router 目前在几个独立位置描述模型支持：

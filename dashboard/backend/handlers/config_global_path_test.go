@@ -10,25 +10,22 @@ import (
 	"testing"
 )
 
+// markerTTLSeconds tells the configured file's global block apart from the
+// default config.yaml's.
+const markerTTLSeconds = 4242
+
 func TestRouterDefaultsHandlerUsesExactConfiguredPath(t *testing.T) {
 	tempDir := t.TempDir()
 	_ = createValidTestConfig(t, tempDir)
 
-	customPath := filepath.Join(tempDir, "remote-embedding-smoke.yaml")
+	customPath := filepath.Join(tempDir, "custom-global.yaml")
 	customConfig := `
-version: v0.3
+version: v0.5
 global:
-  model_catalog:
-    embeddings:
-      semantic:
-        embedding_config:
-          backend: openai_compatible
-          model_type: remote
-          target_dimension: 1536
-        endpoint:
-          base_url: https://api.openai.com/v1
-          model: text-embedding-3-small
-          dimensions: 1536
+  services:
+    response_api:
+      enabled: true
+      ttl_seconds: 4242
 `
 	if err := os.WriteFile(customPath, []byte(customConfig), 0o644); err != nil {
 		t.Fatalf("write custom config: %v", err)
@@ -46,15 +43,9 @@ global:
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	modelCatalog := requireMapValue(t, response, "model_catalog")
-	embeddings := requireMapValue(t, modelCatalog, "embeddings")
-	semantic := requireMapValue(t, embeddings, "semantic")
-	embeddingConfig := requireMapValue(t, semantic, "embedding_config")
-	if got := embeddingConfig["backend"]; got != "openai_compatible" {
-		t.Fatalf("embedding backend = %v, want openai_compatible", got)
-	}
-	if got := embeddingConfig["model_type"]; got != "remote" {
-		t.Fatalf("embedding model_type = %v, want remote", got)
+	responseAPI := requireMapValue(t, requireMapValue(t, response, "services"), "response_api")
+	if got := responseAPI["ttl_seconds"]; got != float64(markerTTLSeconds) {
+		t.Fatalf("response API ttl_seconds = %v, want %d from the configured file", got, markerTTLSeconds)
 	}
 }
 
@@ -66,30 +57,13 @@ func TestUpdateRouterDefaultsHandlerUsesExactConfiguredPath(t *testing.T) {
 		t.Fatalf("read decoy config: %v", err)
 	}
 
-	customPath := filepath.Join(tempDir, "remote-embedding-smoke.yaml")
+	customPath := filepath.Join(tempDir, "custom-global.yaml")
 	err = os.WriteFile(customPath, decoyBefore, 0o644)
 	if err != nil {
 		t.Fatalf("write custom config: %v", err)
 	}
 
-	patch := []byte(`{
-  "model_catalog": {
-    "embeddings": {
-      "semantic": {
-        "embedding_config": {
-          "backend": "openai_compatible",
-          "model_type": "remote",
-          "target_dimension": 1536
-        },
-        "endpoint": {
-          "base_url": "https://api.openai.com/v1",
-          "model": "text-embedding-3-small",
-          "dimensions": 1536
-        }
-      }
-    }
-  }
-}`)
+	patch := []byte(`{"services": {"response_api": {"enabled": true, "ttl_seconds": 4242}}}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/router/config/global/update", bytes.NewReader(patch))
 	recorder := httptest.NewRecorder()
 	UpdateRouterDefaultsHandler(customPath, false, tempDir)(recorder, req)
@@ -109,8 +83,8 @@ func TestUpdateRouterDefaultsHandlerUsesExactConfiguredPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read updated custom config: %v", err)
 	}
-	if got := updatedGlobal.ModelCatalog.Embeddings.Semantic.EmbeddingConfig.Backend; got != "openai_compatible" {
-		t.Fatalf("updated embedding backend = %q, want openai_compatible", got)
+	if got := updatedGlobal.Services.ResponseAPI.TTLSeconds; got != markerTTLSeconds {
+		t.Fatalf("updated response API ttl_seconds = %d, want %d", got, markerTTLSeconds)
 	}
 }
 

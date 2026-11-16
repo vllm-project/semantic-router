@@ -36,10 +36,9 @@ func TestOwnedMemoryProviderPreservesModelOptionsAndRawVector(t *testing.T) {
 		cfg  EmbeddingConfig
 		want embedding.Options
 	}{
-		{EmbeddingConfig{Model: EmbeddingModelMMBERT}, embedding.Options{Dimension: 256}},
-		{EmbeddingConfig{Model: EmbeddingModelMMBERT, Dimension: 128, Layer: 6}, embedding.Options{Dimension: 128, Layer: 6}},
-		{EmbeddingConfig{Model: EmbeddingModelMulti}, embedding.Options{Dimension: 2}},
-		{EmbeddingConfig{Model: EmbeddingModelQwen3, Dimension: 10}, embedding.Options{}},
+		{EmbeddingConfig{Deployment: "vela-embedding", Dimension: 2}, embedding.Options{Dimension: 2}},
+		{EmbeddingConfig{Deployment: "vela-embedding", Dimension: 2, Layer: 6}, embedding.Options{Dimension: 2, Layer: 6}},
+		{EmbeddingConfig{Deployment: "omni"}, embedding.Options{}},
 	} {
 		p := &recordingMemoryProvider{}
 		cfg := test.cfg
@@ -47,7 +46,7 @@ func TestOwnedMemoryProviderPreservesModelOptionsAndRawVector(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		vector, err := GenerateEmbeddingWithContext(ctx, "text", cfg)
 		if err != nil || !reflect.DeepEqual(vector, []float32{3, 4}) || p.options != test.want || p.ctx != ctx {
-			t.Fatalf("%s contract changed: vector=%v options=%+v err=%v", cfg.Model, vector, p.options, err)
+			t.Fatalf("%s contract changed: vector=%v options=%+v err=%v", cfg.Deployment, vector, p.options, err)
 		}
 		cancel()
 		if _, err := GenerateEmbeddingWithContext(ctx, "text", cfg); !errors.Is(err, context.Canceled) {
@@ -59,23 +58,23 @@ func TestOwnedMemoryProviderPreservesModelOptionsAndRawVector(t *testing.T) {
 	}
 }
 
-func TestRetiredEmbeddingModelsAreRefused(t *testing.T) {
-	for _, model := range []EmbeddingModelType{"bert", "gemma"} {
-		p := &recordingMemoryProvider{}
-		if _, err := GenerateEmbedding("text", EmbeddingConfig{Model: model, Provider: p}); err == nil || p.calls != 0 {
-			t.Fatalf("retired model %s accepted: err=%v calls=%d", model, err, p.calls)
-		}
+// A provider that answers another width than the view the store reads is
+// refused before the vector is stored.
+func TestMemoryEmbeddingWidthIsTheStoresView(t *testing.T) {
+	p := &recordingMemoryProvider{}
+	if _, err := GenerateEmbedding("text", EmbeddingConfig{Deployment: "vela-embedding", Dimension: 256, Provider: p}); err == nil {
+		t.Fatal("a 2-value vector was accepted for a 256-dimension store")
 	}
 }
 
 func TestOwnedMemoryProviderDoesNotUseNativeGlobalFallback(t *testing.T) {
 	t.Setenv(deterministicEmbeddingsEnv, "")
-	if _, err := GenerateEmbedding("text", EmbeddingConfig{Model: EmbeddingModelQwen3}); err == nil {
+	if _, err := GenerateEmbedding("text", EmbeddingConfig{Deployment: "qwen3-embedding"}); err == nil {
 		t.Fatal("nil provider accepted")
 	}
 	p := &recordingMemoryProvider{}
 	t.Setenv(deterministicEmbeddingsEnv, "true")
-	vector, err := GenerateEmbedding("text", EmbeddingConfig{Model: EmbeddingModelQwen3, Provider: p})
+	vector, err := GenerateEmbedding("text", EmbeddingConfig{Deployment: "qwen3-embedding", Provider: p})
 	if err != nil || !reflect.DeepEqual(vector, []float32{3, 4}) || p.calls != 1 {
 		t.Fatal("test environment replaced explicitly prepared provider")
 	}
@@ -85,7 +84,7 @@ func TestOmniMemoryUsesPreparedDimensionWithoutSlicing(t *testing.T) {
 	for _, size := range []int{384, 768} {
 		calls := 0
 		provider, _ := embedding.NewFuncProvider("test", size, func(context.Context, string) ([]float32, error) { calls++; return make([]float32, size), nil })
-		cfg := EmbeddingConfig{Model: EmbeddingModelMulti, Provider: provider}
+		cfg := EmbeddingConfig{Deployment: "omni", Provider: provider}
 		vector, err := GenerateEmbedding("text", cfg)
 		if err != nil || len(vector) != size {
 			t.Fatalf("dimension=%d vector=%d err=%v", size, len(vector), err)

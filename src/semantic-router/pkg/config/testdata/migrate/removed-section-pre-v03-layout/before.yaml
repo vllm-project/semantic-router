@@ -1,0 +1,33 @@
+# The Router's flat layout before config v0.3, with the global layout's
+# modules: endpoints, model settings, signals, decisions and global blocks at
+# the top level. Migrate writes it in the v0.3 layout and then as v0.5, in one
+# run: an endpoint a model prefers is its backend reference, a quality score
+# an operator rating, and the cache stays off unless it was enabled.
+default_model: general
+default_reasoning_effort: high
+reasoning_families:
+  qwen3: {type: chat_template_kwargs, parameter: enable_thinking}
+vllm_endpoints:
+  - {name: local, address: 127.0.0.1, port: 8000, weight: 1}
+  - {name: spare, address: "::1", port: 8001}
+model_config:
+  general:
+    reasoning_family: qwen3
+    preferred_endpoints: [local]
+    access_key: written-inline-test-key
+    quality_score: 0.8
+keyword_rules:
+  - {name: urgent, operator: OR, keywords: [urgent]}
+strategy: priority
+decisions:
+  - name: urgent
+    priority: 100
+    rules: {operator: AND, conditions: [{type: keyword, name: urgent}]}
+    modelRefs: [{model: general, use_reasoning: true}]
+semantic_cache:
+  backend_type: memory
+  similarity_threshold: 0.9
+jailbreak_mapping_path: models/jailbreak/label_mapping.json
+global:
+  modules:
+    prompt_guard: {threshold: 0.7}

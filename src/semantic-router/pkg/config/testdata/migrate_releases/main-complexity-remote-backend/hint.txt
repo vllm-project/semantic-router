@@ -1,0 +1,1 @@
+version: invalid_value: config schema v0.3 is removed; run `vllm-sr config migrate` (version: v0.5)

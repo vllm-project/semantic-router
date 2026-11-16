@@ -56,7 +56,7 @@ func TestDirStoreKeepsTheBackupLayoutAndReadsEveryWritersRecords(t *testing.T) {
 	store := NewDirStore(dir)
 	at := time.Date(2026, 10, 6, 12, 30, 0, 0, time.Local)
 	saved, saveErr := store.Save(Record{
-		ID: "20261006-123000", Version: 4, Hash: "h4", RecordedAt: at, Document: []byte("version: v0.3\n"),
+		ID: "20261006-123000", Version: 4, Hash: "h4", RecordedAt: at, Document: []byte("version: v0.5\n"),
 		Origin: Origin{Source: SourceAPI, Principal: "admin", RequestID: "req-1"},
 	})
 	if saveErr != nil {
@@ -109,7 +109,7 @@ func TestDirStoreKeepsTheBackupLayoutAndReadsEveryWritersRecords(t *testing.T) {
 	for _, r := range records {
 		byID[r.ID] = r
 	}
-	if got := byID["20261006-123000"]; got.Version != 4 || got.Origin.Principal != "admin" || string(got.Document) != "version: v0.3\n" {
+	if got := byID["20261006-123000"]; got.Version != 4 || got.Origin.Principal != "admin" || string(got.Document) != "version: v0.5\n" {
 		t.Fatalf("snapshot record = %+v", got)
 	}
 	if got := byID["20261006-110000"]; got.Version != 0 || got.Origin.Source != SourceRollback ||

@@ -36,12 +36,7 @@ export function getSignalReferenceCountInRoutingProfile(
   const type = SIGNAL_CONFIG_TYPES[signalType]
   return (
     countReferences(routing.decisions, type, signalName) +
-    countReferences(routing.projections?.scores, type, signalName) +
-    countReferences(
-      routing.signals?.complexity?.map((signal) => signal.composer),
-      type,
-      signalName,
-    )
+    countReferences(routing.projections?.scores, type, signalName)
   )
 }
 
@@ -51,26 +46,13 @@ export function getSignalReferenceCount(
   signalName: string,
 ): number {
   if (!config) return 0
-  const defaultRouting: RoutingConfig = config.routing ?? {
-    signals: config.signals,
-    projections: config.projections,
-    decisions: config.decisions,
-  }
-  const legacyReferences = config.routing
-    ? 0
-    : countReferences(
-        config.complexity_rules?.map((signal) => signal.composer),
-        SIGNAL_CONFIG_TYPES[signalType],
-        signalName,
-      )
 
   return (
-    getSignalReferenceCountInRoutingProfile(defaultRouting, signalType, signalName) +
+    getSignalReferenceCountInRoutingProfile(config.routing, signalType, signalName) +
     (config.recipes ?? []).reduce(
       (total, recipe) =>
         total + getSignalReferenceCountInRoutingProfile(recipe.routing, signalType, signalName),
       0,
-    ) +
-    legacyReferences
+    )
   )
 }

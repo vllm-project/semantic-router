@@ -15,17 +15,18 @@ import (
 
 func init() {
 	pkgtestcases.Register("hallucination-streaming-observation", pkgtestcases.TestCase{
-		Description: "Verify a streamed answer is checked by the hallucination rule and still delivered in full, because a streamed answer is observed and never enforced",
+		Description: "Verify a streamed answer under a response_guard that only annotates is delivered in full as it streams, and checked by the hallucination rule once the stream ends",
 		Tags:        []string{"kubernetes", "hallucination", "streaming"},
 		Fn:          testHallucinationStreamingObservation,
 	})
 }
 
 // testHallucinationStreamingObservation pins the streaming half of the
-// hallucination contract: the rule checks the answer the stream reconstructed
-// and the check is counted, while the plugin takes no action on it. The answer
-// arrives in full and carries no warning header, because its bytes were with
-// the client before the answer existed as a whole.
+// hallucination contract: the profile's guard only annotates, so the answer
+// streams to the client as it is generated, and the rule checks the answer
+// the stream reconstructed once it ended, which is counted. The answer
+// arrives in full and carries no warning header, because its headers left
+// before the answer existed as a whole.
 func testHallucinationStreamingObservation(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing that a streamed answer is checked for hallucination and still passes through")
@@ -61,7 +62,7 @@ func testHallucinationStreamingObservation(ctx context.Context, client *kubernet
 		return fmt.Errorf("streaming request failed: %w", err)
 	}
 	content, frames := chatStreamedContent(resp.Body)
-	warnings := resp.Headers.Get(responseWarningsHeader)
+	warnings := resp.Headers.Get(warningsHeader)
 
 	checkedAfter, err := readSignalExtractionCount(ctx, metricsSession, "hallucination", hallucinationRuleName)
 	if err != nil {
@@ -95,7 +96,7 @@ func testHallucinationStreamingObservation(ctx context.Context, client *kubernet
 	}
 	if strings.Contains(warnings, hallucinationWarningCode) {
 		return fmt.Errorf("a streamed answer carried %s = %q; the bytes were already delivered, so the plugin cannot have acted on the detection",
-			responseWarningsHeader, warnings)
+			warningsHeader, warnings)
 	}
 
 	return nil

@@ -59,7 +59,7 @@ const config = {
       name: 'privacy',
       routing: {
         signals: {
-          pii: [{ name: 'private-pii', threshold: 0.8 }],
+          pii: [{ name: 'private-pii', predicate: { gte: 0.8 } }],
         },
         decisions: [
           {

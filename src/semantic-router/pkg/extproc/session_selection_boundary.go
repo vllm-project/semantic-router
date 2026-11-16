@@ -11,6 +11,14 @@ import (
 // A lock cannot authorize an excluded model, and selector fallback must not
 // silently transfer the bound request to a different model. Checks run before
 // selection and after selector filters, before learning records a new owner.
+//
+// One carve-out: an active tool loop is portable by construction (the client
+// resends the full conversation each turn), so its lock binds the loop to the
+// decision state that admitted it. Decision drift is itself a continuity
+// boundary - the drifted decision releases the lock instead of rejecting
+// every candidate and deadlocking the loop, and the transfer is traced as
+// decision_drift rather than silent. Opaque provider state keeps the stricter
+// rule: it stays physically bound to the model that created it.
 func (r *OpenAIRouter) validateProtectedCandidateOwnership(selCtx *selection.SelectionContext, ctx *RequestContext) error {
 	if r == nil || r.Config == nil || selCtx == nil || ctx == nil ||
 		!r.Config.RouterLearning.Enabled || protectionMode(ctx) != config.DecisionAdaptationModeApply {
@@ -31,6 +39,9 @@ func (r *OpenAIRouter) validateProtectedCandidateOwnership(selCtx *selection.Sel
 	}
 	current := currentLearningModel(learningCtx)
 	if current == "" {
+		return nil
+	}
+	if session.ActiveToolLoop && !session.HasNonPortableContext && selectionDecisionDrift(learningCtx) {
 		return nil
 	}
 	if owner := session.PreviousCandidate; owner != nil {

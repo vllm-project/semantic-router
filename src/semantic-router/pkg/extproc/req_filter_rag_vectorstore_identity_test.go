@@ -34,7 +34,7 @@ func TestRAGVectorStoreRejectsHistoricalEmbeddingIdentity(t *testing.T) {
 	registry := routerruntime.NewRegistry(nil)
 	registry.SetVectorStoreRuntime(&routerruntime.VectorStoreRuntime{Manager: old, Embedder: forbiddenRAGIdentityEmbedder{t}})
 	router := &OpenAIRouter{RuntimeRegistry: registry}
-	rag := &config.RAGPluginConfig{Enabled: true, Backend: "vectorstore", CacheResults: true, BackendConfig: config.MustStructuredPayload(&config.VectorStoreRAGConfig{VectorStoreID: vs.ID})}
+	rag := &config.ContextSource{Type: config.ContextSourceRAG, Backend: "vectorstore", CacheResults: true, BackendConfig: config.MustStructuredPayload(&config.VectorStoreRAGConfig{VectorStoreID: vs.ID})}
 	router.setRAGCache(config.DefaultRecipeName, "source", "cached historical context", rag)
 	if cached, hit := router.getRAGCache(config.DefaultRecipeName, "source", rag); !hit || cached != "cached historical context" {
 		t.Fatal("compatible cache fixture missed")
@@ -52,15 +52,15 @@ func TestRAGVectorStoreRejectsHistoricalEmbeddingIdentity(t *testing.T) {
 	if _, hit := router.getRAGCache(config.DefaultRecipeName, "source", rag); hit {
 		t.Fatal("cached RAG context bypassed model compatibility")
 	}
-	hybrid := &config.RAGPluginConfig{Backend: "hybrid", CacheResults: true, BackendConfig: config.MustStructuredPayload(&config.HybridRAGConfig{Primary: "vectorstore", PrimaryConfig: rag.BackendConfig})}
+	hybrid := &config.ContextSource{Type: config.ContextSourceRAG, Backend: "hybrid", CacheResults: true, BackendConfig: config.MustStructuredPayload(&config.HybridRAGConfig{Primary: "vectorstore", PrimaryConfig: rag.BackendConfig})}
 	if key := router.buildRAGCacheKey(config.DefaultRecipeName, "source", hybrid); key != "" {
 		t.Fatal("hybrid RAG can cache an incompatible child")
 	}
-	text, err := router.retrieveFromVectorStore(ctx, &RequestContext{UserContent: "source"}, rag)
-	if text != "" || !errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
-		t.Fatalf("RAG used incompatible representations: %q, %v", text, err)
+	documents, err := router.recallFromVectorStore(ctx, rag, "source", config.MatchRecall{TopK: 5})
+	if len(documents) != 0 || !errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+		t.Fatalf("RAG used incompatible representations: %v, %v", documents, err)
 	}
-	text, err = router.retrieveContext(ctx, &RequestContext{UserContent: "source"}, rag)
+	text, err := router.ragSourceContext(ctx, &RequestContext{UserContent: "source"}, rag)
 	if text != "" || !errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
 		t.Fatalf("RAG result cache bypassed compatibility: %q, %v", text, err)
 	}

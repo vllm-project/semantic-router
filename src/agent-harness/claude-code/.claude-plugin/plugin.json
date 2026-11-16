@@ -1,0 +1,255 @@
+{
+  "name": "vsr",
+  "version": "0.1.11",
+  "description": "vSR runs a vLLM Semantic Router decision model (local CPU, local GPU or remote) inside Claude Code: routes subagents by difficulty, escalates when you push back, redacts personal data and secrets, shields against prompt injection, guards risky Bash commands, and checks answers against what Claude read.",
+  "author": {
+    "name": "Theo Hsiung"
+  },
+  "homepage": "https://github.com/vllm-project/semantic-router",
+  "repository": "https://github.com/vllm-project/semantic-router",
+  "license": "Apache-2.0",
+  "keywords": [
+    "vllm-semantic-router",
+    "routing",
+    "guardrails",
+    "pii",
+    "prompt-injection",
+    "subagents"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "runtime": {
+      "type": "string",
+      "title": "Classifier runtime",
+      "description": "Where the decision model runs: on this machine's CPU, on its GPU, or behind a remote API. Shown in /vsr; the URL below is what is called.",
+      "default": "local-cpu",
+      "options": [
+        "local-cpu",
+        "local-gpu",
+        "remote"
+      ]
+    },
+    "runtimeUrl": {
+      "type": "string",
+      "title": "Runtime URL",
+      "description": "The runtime's /v1/decisions endpoint. Its /health, at the same base, is checked when a session starts.",
+      "default": "http://127.0.0.1:8790/v1/decisions"
+    },
+    "runtimeToken": {
+      "type": "string",
+      "title": "Runtime token",
+      "description": "Sent as Authorization: Bearer <token> when set, for a remote runtime behind a proxy. Empty sends no header.",
+      "default": "",
+      "sensitive": true
+    },
+    "runtimeModel": {
+      "type": "string",
+      "title": "Runtime model",
+      "description": "Sent as the request's model when set, for a runtime that serves several models, such as a System One API (GET /v1/systemone/models lists them). Empty sends none.",
+      "default": ""
+    },
+    "router": {
+      "type": "boolean",
+      "title": "App: router",
+      "description": "Routes each general-purpose subagent to Haiku, Sonnet or Opus by how hard its task is, and sets its starting effort by how many steps it needs. Off: no classifier call, no card.",
+      "default": true
+    },
+    "routerTurns": {
+      "type": "boolean",
+      "title": "App: router · your turns",
+      "description": "The router also picks the model (Sonnet or Opus, Haiku too with the save goal) and effort for each prompt you send, on your own Claude login. A turn keeps its model through its tool calls, a short reply is read with the prompt before it and keeps the last turn's model, and a move to a smaller model waits while writing the conversation to its cache would cost more than it saves. A model you pick yourself pauses it until /vsr turns on. Off: your turns run on the model you picked.",
+      "default": false
+    },
+    "escalate": {
+      "type": "boolean",
+      "title": "App: escalate",
+      "description": "When you push back on an answer, tells Claude to re-check it and sends the next subagent one step up: from Haiku to Sonnet, otherwise at least the session's model with one effort level more. Off: no classifier call, no card.",
+      "default": true
+    },
+    "redact": {
+      "type": "boolean",
+      "title": "App: redact",
+      "description": "Hides personal data and secrets in what Claude reads from files and Bash output. Off: no classifier call, nothing hidden.",
+      "default": true
+    },
+    "shield": {
+      "type": "boolean",
+      "title": "App: shield",
+      "description": "Tells Claude to treat a file or page as data when it tries to give an AI agent instructions. Off: no classifier call, no card.",
+      "default": true
+    },
+    "guard": {
+      "type": "boolean",
+      "title": "App: guard",
+      "description": "Holds a Bash command for your confirmation when it could cause serious harm. Off: no classifier call, no card.",
+      "default": true
+    },
+    "check": {
+      "type": "boolean",
+      "title": "App: check",
+      "description": "Checks an answer against the files and command output Claude read that turn. Off by default: on a CPU runtime a long answer outlasts its 3 s limit, so turn it on with a GPU or remote runtime. Off: no classifier call, no card.",
+      "default": false
+    },
+    "redactWait": {
+      "type": "string",
+      "title": "Wait: redact",
+      "description": "How long redact waits for the decision model on a file or command output: 1, 2 or 3 seconds, then what it read in time is hidden and the rest goes to Claude unchecked. done: wait until the check finishes, at most 60 s; if it cannot finish (a timeout, an error, the decision model offline, an output too long to read whole), the output is withheld from Claude.",
+      "default": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "done"
+      ]
+    },
+    "shieldWait": {
+      "type": "string",
+      "title": "Wait: shield",
+      "description": "How long shield waits for the decision model on a file or page: 1, 2 or 3 seconds, then what it read in time is judged and the rest goes to Claude unchecked. done: wait until the check finishes, at most 60 s; if it cannot finish (a timeout, an error, the decision model offline, an output too long to read whole), the output is withheld from Claude.",
+      "default": "2",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "done"
+      ]
+    },
+    "guardWait": {
+      "type": "string",
+      "title": "Wait: guard",
+      "description": "How long guard waits for the decision model on a Bash command, all its steps together: 1, 2 or 3 seconds, then a command it could not check runs, as redact and shield step aside, and only its fixed rules hold. done: wait until every step is checked, at most 60 s; if one cannot be (a timeout, an error, the decision model offline), the command is held for your confirmation.",
+      "default": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "done"
+      ]
+    },
+    "routerEasyBelow": {
+      "type": "number",
+      "title": "Advanced: Router: easy below",
+      "description": "Expected difficulty level (0 to 2) below which a subagent goes to Haiku, always at medium effort.",
+      "default": 0.5
+    },
+    "routerHardFrom": {
+      "type": "number",
+      "title": "Advanced: Router: hard from",
+      "description": "Expected difficulty level (0 to 2) at or above which a subagent goes to Opus; in between, Sonnet. Never below the easy line.",
+      "default": 1.5
+    },
+    "routerMinConfidence": {
+      "type": "number",
+      "title": "Advanced: Router: minimum confidence",
+      "description": "Below this confidence (0 to 1) the subagent keeps its default model.",
+      "default": 0.3
+    },
+    "routerDowngradeConfidence": {
+      "type": "number",
+      "title": "Advanced: Router: smaller-model confidence",
+      "description": "With the balanced goal, the confidence a route to a smaller model than the session's needs (0 to 1); below it the subagent keeps its model.",
+      "default": 0.6
+    },
+    "routerStepsLow": {
+      "type": "number",
+      "title": "Advanced: Router: few steps below",
+      "description": "Expected reasoning steps (0 to 2) below which Sonnet starts at low effort and Opus at high.",
+      "default": 0.5
+    },
+    "routerStepsHigh": {
+      "type": "number",
+      "title": "Advanced: Router: many steps from",
+      "description": "Expected reasoning steps (0 to 2) at or above which Sonnet starts at high effort and Opus at xhigh; in between, medium and high. Never below the few-steps line.",
+      "default": 1.2
+    },
+    "routerStepsMinConfidence": {
+      "type": "number",
+      "title": "Advanced: Router: steps minimum confidence",
+      "description": "Below this confidence (0 to 1) the steps answer is ignored and the model's default effort is used: Sonnet medium, Opus high.",
+      "default": 0.3
+    },
+    "escalateFeedback": {
+      "type": "number",
+      "title": "Advanced: Escalate: feedback",
+      "description": "A WRONG_ANSWER or WANT_DIFFERENT probability (0 to 1) at or above this escalates.",
+      "default": 0.8
+    },
+    "escalateReask": {
+      "type": "number",
+      "title": "Advanced: Escalate: reask",
+      "description": "A score (0 to 1) at or above this, for a prompt that asks the prior one again, escalates.",
+      "default": 0.75
+    },
+    "redactPii": {
+      "type": "number",
+      "title": "Advanced: Redact: personal data",
+      "description": "A personal-data span with a probability (0 to 1) at or above this is hidden.",
+      "default": 0.7
+    },
+    "shieldInject": {
+      "type": "number",
+      "title": "Advanced: Shield: injection",
+      "description": "A prompt-injection probability (0 to 1) at or above this shields the output.",
+      "default": 0.9
+    },
+    "guardReview": {
+      "type": "number",
+      "title": "Advanced: Guard: review",
+      "description": "A review score (0 to 1) at or above this holds the command for your confirmation.",
+      "default": 0.9
+    },
+    "checkUnsupported": {
+      "type": "number",
+      "title": "Advanced: Check: unsupported",
+      "description": "A hallucination score (0 to 1) at or above this marks the answer UNVERIFIED.",
+      "default": 0.5
+    },
+    "display": {
+      "type": "string",
+      "title": "What each decision shows",
+      "description": "normal: a card where vSR needs your eyes (a held command, an injection, an unbacked answer), one line where it changed something (a route, hidden data), nothing where all went as usual. quiet: only the cards. verbose: every decision, with its scores. /vsr lists every decision in each mode.",
+      "default": "normal",
+      "options": [
+        "normal",
+        "quiet",
+        "verbose"
+      ]
+    },
+    "routerGoal": {
+      "type": "string",
+      "title": "Router goal",
+      "description": "quality: never give a subagent a smaller model than the session's; one the router would make lighter keeps the session's model and effort. balanced: a smaller model only when the classifier is sure (the smaller-model confidence below). save: a smaller model whenever the classifier answers clearly enough to route.",
+      "default": "balanced",
+      "options": [
+        "quality",
+        "balanced",
+        "save"
+      ]
+    },
+    "logo": {
+      "type": "string",
+      "title": "Logo",
+      "description": "The vLLM Semantic Router mark, the yellow and blue V, beside each vSR card and at the top of the /vsr pane. auto draws the picture in kitty, Ghostty and iTerm2 3.5 or later outside tmux; elsewhere it draws the V in characters, smooth ones (diagonal wedges) in VS Code 1.108+, GNOME Terminal and other VTE 0.60+ terminals, Konsole 22.04+ and foot, and block elements in the rest. image asks for the picture; smooth and blocks pick the characters (smooth suits Windows Terminal 1.25+); off leaves it out.",
+      "default": "auto",
+      "options": [
+        "auto",
+        "image",
+        "smooth",
+        "blocks",
+        "off"
+      ]
+    },
+    "logPath": {
+      "type": "string",
+      "title": "Decision log",
+      "description": "The JSON Lines file every decision is written to, the newest 5000 kept; a leading ~/ is your home directory. /vsr:calibrate reads it. Empty turns logging off.",
+      "default": "~/.claude/vsr/decisions.jsonl"
+    },
+    "calibrateEvery": {
+      "type": "number",
+      "title": "Advanced: Calibration reminder",
+      "description": "Decisions since the last calibration before a reminder to run /vsr:calibrate, once a session. 0 turns it off.",
+      "default": 200
+    }
+  }
+}

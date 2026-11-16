@@ -1,0 +1,1 @@
+global.stores.semantic_cache: removed_field: global.stores.semantic_cache is removed; run `vllm-sr config migrate` (global.stores.response_cache)

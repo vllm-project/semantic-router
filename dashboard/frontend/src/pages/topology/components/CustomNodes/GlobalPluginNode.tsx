@@ -1,4 +1,4 @@
-// CustomNodes/GlobalPluginNode.tsx - Global plugin node (Jailbreak, PII, Cache)
+// CustomNodes/GlobalPluginNode.tsx - Global plugin node (Cache)
 
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
@@ -17,35 +17,12 @@ function getPluginStatus(plugin: GlobalPluginConfig): { text: string; tooltip: s
     return { text: '✗ Disabled', tooltip: 'Plugin is disabled' }
   }
 
-  // PII Detection: Model loaded but requires decision-level activation
-  if (plugin.type === 'pii_detection') {
-    const mode = plugin.config?.mode as string
-    if (mode === 'model_loaded') {
-      return {
-        text: '◐ Model Loaded',
-        tooltip: 'Model loaded. Detection requires pii plugin in decision.',
-      }
-    }
-  }
-
-  // Jailbreak: Active for all requests (global AND decision)
-  if (plugin.type === 'prompt_guard') {
-    return {
-      text: `✓ Active`,
-      tooltip: `Threshold: ${plugin.threshold || 0.7}. Can be overridden per-decision.`,
-    }
-  }
-
   // Response Cache: Active globally, can be overridden
-  if (plugin.type === 'response_cache') {
-    const threshold = plugin.config?.similarity_threshold as number
-    return {
-      text: `✓ Active`,
-      tooltip: `Threshold: ${threshold || 0.85}. Can be overridden per-decision.`,
-    }
+  const threshold = plugin.config?.similarity_threshold as number
+  return {
+    text: `✓ Active`,
+    tooltip: `Threshold: ${threshold || 0.85}. Can be overridden per-decision.`,
   }
-
-  return { text: `✓ ${plugin.modelId || 'Enabled'}`, tooltip: '' }
 }
 
 export const GlobalPluginNode = memo<NodeProps<GlobalPluginNodeData>>(({ data }) => {
@@ -57,7 +34,6 @@ export const GlobalPluginNode = memo<NodeProps<GlobalPluginNodeData>>(({ data })
   }
 
   const status = getPluginStatus(plugin)
-  const isPartiallyActive = plugin.type === 'pii_detection' && plugin.config?.mode === 'model_loaded'
 
   return (
     <div
@@ -66,7 +42,6 @@ export const GlobalPluginNode = memo<NodeProps<GlobalPluginNodeData>>(({ data })
         background: plugin.enabled ? display.color : undefined,
         borderColor: plugin.enabled ? display.color : undefined,
         border: `2px solid ${plugin.enabled ? display.color : '#616161'}`,
-        opacity: isPartiallyActive ? 0.85 : 1,
       }}
       title={status.tooltip}
     >

@@ -1,0 +1,1 @@
+global.model_catalog.embeddings.default: invalid_value: embeddings.default "remote-embed" is a bare deployment name; run `vllm-sr config migrate` (embeddings.default: {deployment: remote-embed}, as system.decision_model names its deployment)

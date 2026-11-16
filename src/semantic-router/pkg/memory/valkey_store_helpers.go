@@ -456,6 +456,7 @@ func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]stri
 		"importance":    memory.Importance,
 		"last_accessed": memory.LastAccessed.Unix(),
 	}
+	putProvenanceMetadata(metadata, memory)
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal metadata: %w", err)
@@ -538,6 +539,7 @@ func valkeyApplyMetadata(mem *Memory, metadata map[string]interface{}) {
 	if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
 		mem.LastAccessed = time.Unix(int64(lastAccessed), 0)
 	}
+	applyProvenanceMetadata(mem, metadata)
 }
 
 // valkeyParseMetadata unmarshals a metadata JSON string and applies it to the Memory.

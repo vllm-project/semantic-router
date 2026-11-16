@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
 var errServerShuttingDown = errors.New("router server is shutting down")
@@ -147,6 +148,23 @@ func checkGatewayCapabilities(candidate *config.RouterConfig, mode config.Gatewa
 	return configsnapshot.RejectReasons(configsnapshot.StageValidate, reasons)
 }
 
+// checkLocalStorage rejects a candidate that has the Router write a directory
+// this process cannot write, with one reason per directory.
+func checkLocalStorage(candidate *config.RouterConfig) error {
+	unwritable := routerruntime.UnwritableDirs(candidate)
+	if len(unwritable) == 0 {
+		return nil
+	}
+	reasons := make([]configsnapshot.Reason, 0, len(unwritable))
+	for _, dir := range unwritable {
+		reasons = append(reasons, configsnapshot.Reason{
+			Stage: configsnapshot.StageValidate, Code: configsnapshot.CodeStorageUnavailable,
+			Path: dir.Setting, Message: dir.Problem(),
+		})
+	}
+	return configsnapshot.RejectReasons(configsnapshot.StageValidate, reasons)
+}
+
 // routerRuntime prepares and activates router generations for the lifecycle.
 type routerRuntime struct{ s *Server }
 
@@ -156,6 +174,10 @@ func (r routerRuntime) Validate(_ context.Context, c *configsnapshot.Candidate) 
 		return configsnapshot.Reject(configsnapshot.StageValidate, configsnapshot.CodeShuttingDown, errServerShuttingDown)
 	}
 	candidate := c.Snapshot().Config()
+	c.Step("local_storage")
+	if err := checkLocalStorage(candidate); err != nil {
+		return err
+	}
 	if !candidate.RoutingEnabled() {
 		return c.Current()
 	}
@@ -191,12 +213,6 @@ func (r routerRuntime) Warm(ctx context.Context, c *configsnapshot.Candidate) (c
 		return nil, configsnapshot.Reject(configsnapshot.StageWarm, configsnapshot.CodeBuildFailed, err)
 	}
 	attachRuntimeRegistry(router, s.runtime)
-	c.Step("warmup")
-	if err := warmupReloadRouter(router); err != nil {
-		_ = router.Close()
-		return nil, configsnapshot.Reject(configsnapshot.StageWarm, configsnapshot.CodeWarmupFailed,
-			fmt.Errorf("runtime warmup failed: %w", err))
-	}
 	if err := ctx.Err(); err != nil {
 		_ = router.Close()
 		return nil, err

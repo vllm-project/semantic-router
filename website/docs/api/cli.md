@@ -62,7 +62,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config envoy`](#vllm-sr-config-envoy) | Print the generated Envoy configuration. |
 | [`vllm-sr config get`](#vllm-sr-config-get) | Read the active canonical configuration from a Router. |
 | [`vllm-sr config init`](#vllm-sr-config-init) | Create a minimal canonical configuration template. |
-| [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.3 YAML. |
+| [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a config file to canonical v0.5 YAML. |
 | [`vllm-sr config plan`](#vllm-sr-config-plan) | Validate and plan an exact remote mutation without changing the Router. |
 | [`vllm-sr config propose`](#vllm-sr-config-propose) | Print a reviewable config proposal. This command does not apply it. |
 | [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a recorded version. |
@@ -70,6 +70,12 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config schema`](#vllm-sr-config-schema) | Discover the canonical config contract progressively. |
 | [`vllm-sr config validate`](#vllm-sr-config-validate) | Validate configuration file. |
 | [`vllm-sr config versions`](#vllm-sr-config-versions) | List the configuration history, newest first. |
+| [`vllm-sr connect`](#vllm-sr-connect) | Point an agent harness at a Router gateway (System Two). |
+| [`vllm-sr connect claude-code`](#vllm-sr-connect-claude-code) | Route Claude Code's model calls through the gateway. |
+| [`vllm-sr connect codex`](#vllm-sr-connect-codex) | Route Codex through the gateway, with a profile or (--app) as its default. |
+| [`vllm-sr connect pi`](#vllm-sr-connect-pi) | Route Pi's model calls through the gateway, as a provider in its models.json. |
+| [`vllm-sr connect sessions`](#vllm-sr-connect-sessions) | List the sessions --launch started and what is left of their worktrees. |
+| [`vllm-sr connect status`](#vllm-sr-connect-status) | Show what connect manages for each harness now, and whether it still holds. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
 | [`vllm-sr instance`](#vllm-sr-instance) | Inspect the serving state of an existing local instance. |
 | [`vllm-sr instance models`](#vllm-sr-instance-models) | Print actual native model cards for readiness checks, without inference. |
@@ -100,6 +106,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr storage`](#vllm-sr-storage) | Inspect Router storage or manage local storage credentials. |
 | [`vllm-sr storage rotate`](#vllm-sr-storage-rotate) | Replace this stack's storage credentials with freshly generated ones. |
 | [`vllm-sr storage vector-stores`](#vllm-sr-storage-vector-stores) | List vector stores known to the Router management API. |
+| [`vllm-sr usage`](#vllm-sr-usage) | Show the requests, spend and savings the Router recorded in a window. |
 
 ## `vllm-sr` {#vllm-sr}
 
@@ -805,12 +812,20 @@ Create a minimal canonical configuration template.
 Usage: vllm-sr config migrate [OPTIONS]
 ```
 
-Migrate a legacy or mixed config file to canonical v0.3 YAML.
+Migrate a config file to canonical v0.5 YAML.
+
+The Router rewrites the file: a local Router binary
+($VLLM_SR_ROUTER_BINARY) or, present here and never pulled, the Router
+image `vllm-sr serve` runs by default ($VLLM_SR_ROUTER_IMAGE,
+$VLLM_SR_IMAGE or this CLI's own); a running stack's Router is not asked.
+The output is written only when the CLI's structural checks and the
+Router's own validation accept it, in the gateway mode --gateway names.
 
 | Parameter | Description |
 | --- | --- |
 | `--config TEXT` | Path to source config file (default: config.yaml) Default: config.yaml. |
 | `--output TEXT` | Path for migrated canonical config (default: &lt;config&gt;.migrated.yaml) |
+| `--gateway CHOICE` | The gateway mode the configuration is served in (default: $VLLM_SR_GATEWAY or standalone). Choices: standalone, extproc. |
 | `--force` | Overwrite the output file if it already exists. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
@@ -848,7 +863,7 @@ vllm-sr config propose --config config.yaml \
 
 | Parameter | Description |
 | --- | --- |
-| `--config TEXT` | Path to a canonical v0.3 config file. The file is not modified.  [required] |
+| `--config TEXT` | Path to a canonical v0.5 config file. The file is not modified.  [required] |
 | `--intent TEXT` | Maintained proposal intent id, for example selection.latency-aware.  [required] |
 | `--decision TEXT` | Name of an existing routing decision. Used by decision intents. |
 | `--recipe TEXT` | Name of an existing recipe. Used by recipe intents. |
@@ -914,26 +929,32 @@ Usage: vllm-sr config validate [OPTIONS]
 
 Validate configuration file.
 
-The CLI's own checks run first. The Router's validation then decides, as
-it does when `vllm-sr serve` or `vllm-sr config apply` loads the file: the
-Router in its local image (never pulled), or the running Router --endpoint
-names.
+The Router's own validation decides, as it does when `vllm-sr serve` or
+`vllm-sr config apply` loads the file: a local Router binary
+(--router-binary or $VLLM_SR_ROUTER_BINARY), a Router image present here
+and never pulled (--image, else the one `vllm-sr serve` runs by default:
+$VLLM_SR_ROUTER_IMAGE, $VLLM_SR_IMAGE or this CLI's own), or the running
+Router --endpoint names. A running stack's Router is asked only when named.
+The CLI checks the file's structure and the rules it owns as well. With
+--offline, or when no Router can run, only the CLI's structural checks run.
 
 Examples:
 
 ```bash
 vllm-sr config validate
 vllm-sr config validate --config my-config.yaml
+vllm-sr config validate --router-binary bin/router
 vllm-sr config validate --endpoint http://localhost:8080
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `--config TEXT` | Path to config file (default: config.yaml) Default: config.yaml. |
-| `--endpoint TEXT` | Validate with this running Router instead of the local Router image. |
-| `--image TEXT` | Router image whose own validation to run (default: the stack's, if present). |
-| `--gateway CHOICE` | The gateway mode the configuration is served in (default: standalone). Choices: standalone, extproc. |
-| `--offline` | Run only the CLI's own checks, without the Router's validation. Default: false. |
+| `--endpoint TEXT` | Validate with this running Router instead of a local Router. |
+| `--router-binary PATH` | Local Router executable whose own validation to run, preferred over the image (default: $VLLM_SR_ROUTER_BINARY). |
+| `--image TEXT` | Router image whose own validation to run (default: the one `vllm-sr serve` runs without --image, if present). |
+| `--gateway CHOICE` | The gateway mode the configuration is served in (default: $VLLM_SR_GATEWAY or standalone). Choices: standalone, extproc. |
+| `--offline` | Run only the CLI's structural checks, without the Router's validation. Default: false. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
@@ -951,6 +972,138 @@ List the configuration history, newest first.
 | `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
+| `--help` | Show this message and exit. Default: false. |
+
+## `vllm-sr connect` {#vllm-sr-connect}
+
+```text
+Usage: vllm-sr connect [OPTIONS] COMMAND [ARGS]...
+```
+
+Point an agent harness at a Router gateway (System Two).
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect claude-code` {#vllm-sr-connect-claude-code}
+
+```text
+Usage: vllm-sr connect claude-code [OPTIONS] [HARNESS_ARGS]...
+```
+
+Route Claude Code's model calls through the gateway.
+
+| Parameter | Description |
+| --- | --- |
+| `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
+| `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
+| `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
+| `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
+| `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
+| `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code, Codex and Pi then budget with it instead of a window of their own.  [x&gt;=1] |
+| `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
+| `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
+| `--yes` | Write without asking. Default: false. |
+| `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
+| `--launch` | Start the harness through the gateway for this session only, writing none of its settings; arguments after -- go to the harness. Default: false. |
+| `--worktree DIRECTORY\|new[:NAME]` | With --launch, start the harness in this existing git worktree, or with new (new:NAME) in a new one: branch vllm-sr/NAME and the worktree &lt;checkout&gt;-NAME beside this checkout, from its HEAD. Nothing is switched or removed. |
+| `--home DIRECTORY` | With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR or $CODEX_HOME) in place of yours, for another login. Nothing is copied into it. |
+| `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
+| `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
+| `--scope CHOICE` | user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.  [default: user] Choices: user, project. |
+| `--status-line` | Also show in Claude Code's status line which models answered, the last first. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect codex` {#vllm-sr-connect-codex}
+
+```text
+Usage: vllm-sr connect codex [OPTIONS] [HARNESS_ARGS]...
+```
+
+Route Codex through the gateway, with a profile or (--app) as its default.
+
+The default is what the Codex app reads, and the Codex CLI without --profile.
+
+| Parameter | Description |
+| --- | --- |
+| `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
+| `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
+| `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
+| `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
+| `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
+| `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code, Codex and Pi then budget with it instead of a window of their own.  [x&gt;=1] |
+| `--vsr / --no-vsr` | Also set up vSR (System One) beside the agent when the listener publishes a System One model: install its plugin and point it there. Default: true. |
+| `--vsr-source TEXT` | Where the vSR plugin installs from: a marketplace's owner/repo, Git URL, or a local checkout.  [default: vllm-project/semantic-router] |
+| `--yes` | Write without asking. Default: false. |
+| `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
+| `--launch` | Start the harness through the gateway for this session only, writing none of its settings; arguments after -- go to the harness. Default: false. |
+| `--worktree DIRECTORY\|new[:NAME]` | With --launch, start the harness in this existing git worktree, or with new (new:NAME) in a new one: branch vllm-sr/NAME and the worktree &lt;checkout&gt;-NAME beside this checkout, from its HEAD. Nothing is switched or removed. |
+| `--home DIRECTORY` | With --launch, run the harness with this home ($CLAUDE_CONFIG_DIR or $CODEX_HOME) in place of yours, for another login. Nothing is copied into it. |
+| `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
+| `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
+| `--profile TEXT` | The Codex profile to write.  [default: vllm-sr] |
+| `--app` | Write the gateway as the default of Codex's shared config.toml in place of a profile, since the Codex app reads that file and no profile. This changes the default for the Codex CLI too; --undo takes it back. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect pi` {#vllm-sr-connect-pi}
+
+```text
+Usage: vllm-sr connect pi [OPTIONS]
+```
+
+Route Pi's model calls through the gateway, as a provider in its models.json.
+
+| Parameter | Description |
+| --- | --- |
+| `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
+| `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
+| `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
+| `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
+| `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
+| `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
+| `--context-window INTEGER RANGE` | The smallest context window, in tokens, of the models the gateway can pick; by default read from the configuration's model cards. Claude Code, Codex and Pi then budget with it instead of a window of their own.  [x&gt;=1] |
+| `--yes` | Write without asking. Default: false. |
+| `--check` | Then run the harness itself once on a tiny task through the gateway, with what was written (or, with --dry-run, would be), and report each step. Spends a few short model calls on your login or key. Default: false. |
+| `--key-command CMD` | A shell command that prints the listener's API key, in place of --api-key-env: written as the harness's own key helper (Claude Code's apiKeyHelper, the Codex provider's auth command, Pi's "!command" apiKey), which the harness runs itself: Claude Code and Codex again every 5 minutes by default, Pi before each request. connect itself runs it only when it calls the gateway, and never shows or writes what it prints. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect sessions` {#vllm-sr-connect-sessions}
+
+```text
+Usage: vllm-sr connect sessions [OPTIONS]
+```
+
+List the sessions --launch started and what is left of their worktrees.
+
+The newest comes first. For a worktree connect made, the steps that remove
+it are shown, but nothing is removed here. No step is offered while the
+worktree has uncommitted changes or commits on a detached HEAD, the branch
+is not deleted while it has commits no other branch or remote has, and the
+steps say first when the removal deletes files git ignores there.
+
+| Parameter | Description |
+| --- | --- |
+| `--json` | Print the sessions as JSON. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr connect status` {#vllm-sr-connect-status}
+
+```text
+Usage: vllm-sr connect status [OPTIONS]
+```
+
+Show what connect manages for each harness now, and whether it still holds.
+
+Read from the undo records beside Claude Code's settings (user and project),
+in the Codex home and in Pi's agent directory; the gateway gets one short
+request per connection.
+
+| Parameter | Description |
+| --- | --- |
+| `--json` | Print the status as JSON. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr dashboard` {#vllm-sr-dashboard}
@@ -1369,7 +1522,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 | `--max-completion-tokens INTEGER RANGE` | Completion token budget, including reasoning; omitted uses the backend default.  [x&gt;=1] |
 | `--timeout FLOAT` | [default: 120.0] |
 | `--target TEXT` | Deployment target used for URL resolution. |
-| `--debug / --no-debug` | [default: debug] |
+| `--debug / --no-debug` | Ask for x-vsr-trace. The Router sends it only when global.router.headers.debug allows this caller.  [default: debug] |
 | `--expect-status INTEGER` | [default: OK] |
 | `--expect-recipe TEXT` | — |
 | `--expect-decision TEXT` | — |
@@ -1422,22 +1575,17 @@ kubernetes - Kubernetes deployment via Helm (k8s is the old name, for this
              release only)
 ```
 
-MODEL SELECTION ALGORITHMS:
+ALGORITHM OVERRIDES (--algorithm):
 
 ```text
 static     - Use first configured model (default, no learning)
-router_dc  - Query-model matching via embedding similarity
-automix    - Cost-quality optimization using POMDP
-hybrid     - Combine multiple methods with configurable weights
-workflows  - Router Flow static/dynamic micro-agent orchestration
-latency_aware - TPOT/TTFT percentile-aware selection
-knn        - KNN selector using shared ML model-selection settings
-kmeans     - KMeans selector using shared ML model-selection settings
-svm        - SVM selector using shared ML model-selection settings
-mlp        - MLP selector using shared ML model-selection settings
-multi_factor - Quality, latency, cost, and load scoring
 random     - Uniform pick among eligible candidates (no configuration)
+multi_factor - Quality, latency, cost, and load scoring
+workflows  - Router Flow static/dynamic micro-agent orchestration
 ```
+
+The systemone selector and the escalate, fusion, remom and ratings
+executors need authored settings; configure them in config.yaml.
 
 Cross-request learning lives under global.router.learning.adaptation and
 global.router.learning.protection instead of --algorithm.
@@ -1456,7 +1604,7 @@ vllm-sr serve --config my-models.yaml --replace-active-config
 # Deploy a user-owned config to Kubernetes
 vllm-sr serve --target kubernetes --config my-models.yaml --namespace my-ns
 # Runtime policy and image overrides
-vllm-sr serve --algorithm latency_aware
+vllm-sr serve --algorithm multi_factor
 vllm-sr serve --image-pull-policy always
 vllm-sr serve --readonly
 vllm-sr serve --minimal
@@ -1487,8 +1635,8 @@ prints a short summary (--verbose prints every detail). Saved routing
 configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
-Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
-0.3B). Only explicit model, placement and engine options override saved
+Omitting MODEL preserves that deployment (a new configuration uses Vela 3.0
+vela3-fast). Only explicit model, placement and engine options override saved
 settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
 and --enable-shared-context set the deployment's engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.
@@ -1513,7 +1661,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `-v, --verbose` | Show every startup detail; engine mode otherwise prints a short summary. Default: false. |
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
 | `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
-| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |
+| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, random, multi_factor, workflows. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, random, multi_factor, workflows. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
@@ -1650,4 +1798,25 @@ List vector stores known to the Router management API.
 | `--endpoint TEXT` | Router management origin or /api/v1 root. |
 | `--timeout INTEGER` | [default: 15] |
 | `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
+| `--help` | Show this message and exit. Default: false. |
+
+## `vllm-sr usage` {#vllm-sr-usage}
+
+```text
+Usage: vllm-sr usage [OPTIONS]
+```
+
+Show the requests, spend and savings the Router recorded in a window.
+
+Read from Router Replay's list and aggregate, the figures Insights shows,
+with $VSR_MGMT_TOKEN as the bearer token when it is set. Top models and
+entrypoints are those with the most requests, by selected model and by the
+model the client asked for; each row adds its requests' own priced costs,
+the Router's calls for them included, as the window's spend does.
+
+| Parameter | Description |
+| --- | --- |
+| `--since TEXT` | Start of the window, as a time back from now such as 30m, 1h or 7d.  [default: midnight today, local time] |
+| `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
+| `--json` | Print the summary as JSON. Default: false. |
 | `--help` | Show this message and exit. Default: false. |

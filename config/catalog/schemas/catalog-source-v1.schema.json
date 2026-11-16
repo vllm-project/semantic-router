@@ -27,7 +27,7 @@
       "properties": {
         "cli": {"$ref": "#/$defs/versionRange"},
         "router": {"$ref": "#/$defs/versionRange"},
-        "config_schema": {"const": "v0.3"},
+        "config_schema": {"const": "v0.5"},
         "required_features": {
           "type": "array",
           "items": {"type": "string", "minLength": 1},

@@ -10,18 +10,18 @@ import (
 
 type values struct {
 	Config struct {
-		Routing struct {
+		Recipes []struct {
 			Signals struct {
-				Decision []struct {
+				SystemOne []struct {
 					Name       string `yaml:"name"`
 					Deployment string `yaml:"deployment"`
-				} `yaml:"decision"`
+				} `yaml:"systemone"`
 			} `yaml:"signals"`
 			ModelBindings map[string]any `yaml:"model_bindings"`
 			Decisions     []struct {
 				Name string `yaml:"name"`
 			} `yaml:"decisions"`
-		} `yaml:"routing"`
+		} `yaml:"recipes"`
 		Global struct {
 			ModelCatalog struct {
 				Deployments map[string]struct {
@@ -55,7 +55,7 @@ func load(t *testing.T) values {
 }
 
 // The names testcases/model_runtime_real.go relies on.
-func TestProfileServesRealKaiAndTheVelaDefaults(t *testing.T) {
+func TestProfileServesRealKaiAndTheDecisionModel(t *testing.T) {
 	profile := load(t)
 	kai, ok := profile.Config.Global.ModelCatalog.Deployments["kai"]
 	if !ok || kai.Provider != "model_runtime" || kai.Endpoint != "" || kai.Device != "cpu" {
@@ -65,20 +65,20 @@ func TestProfileServesRealKaiAndTheVelaDefaults(t *testing.T) {
 		t.Fatalf("kai must pin the published Kai-0.6B revision: %+v", kai)
 	}
 	if len(profile.Config.Global.ModelCatalog.Deployments) != 1 {
-		t.Fatal("the Vela models must come from the module defaults, not declared deployments")
+		t.Fatal("the built-in signals must be answered by the decision model, not a declared deployment")
 	}
-	if len(profile.Config.Global.ModelCatalog.Bindings) != 0 || len(profile.Config.Routing.ModelBindings) != 0 {
-		t.Fatal("bindings would replace the implicit @<module> deployments the cases wait for")
+	if len(profile.Config.Global.ModelCatalog.Bindings) != 0 || len(profile.Config.Recipes[0].ModelBindings) != 0 {
+		t.Fatal("bindings would move the built-in signals off the decision model the cases wait for")
 	}
 	signals := map[string]string{}
-	for _, rule := range profile.Config.Routing.Signals.Decision {
+	for _, rule := range profile.Config.Recipes[0].Signals.SystemOne {
 		signals[rule.Name] = rule.Deployment
 	}
 	if signals["request_kind"] != "kai" {
 		t.Fatalf("request_kind must ask kai: %v", signals)
 	}
 	decisions := map[string]bool{}
-	for _, decision := range profile.Config.Routing.Decisions {
+	for _, decision := range profile.Config.Recipes[0].Decisions {
 		decisions[decision.Name] = true
 	}
 	for _, name := range []string{"jailbreak_route", "pii_route", "code_route", "math_route", "default-route"} {

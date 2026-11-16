@@ -9,29 +9,22 @@ import (
 
 var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeKeyword:       func(target *MatchedSignals) *[]string { return &target.Keywords },
-	config.SignalTypeEmbedding:     func(target *MatchedSignals) *[]string { return &target.Embeddings },
 	config.SignalTypeDomain:        func(target *MatchedSignals) *[]string { return &target.Domains },
 	config.SignalTypeFactCheck:     func(target *MatchedSignals) *[]string { return &target.FactCheck },
 	config.SignalTypeUserFeedback:  func(target *MatchedSignals) *[]string { return &target.UserFeedback },
-	config.SignalTypeReask:         func(target *MatchedSignals) *[]string { return &target.Reask },
-	config.SignalTypePreference:    func(target *MatchedSignals) *[]string { return &target.Preferences },
+	config.SignalTypeTurnRelation:  func(target *MatchedSignals) *[]string { return &target.TurnRelation },
 	config.SignalTypeLanguage:      func(target *MatchedSignals) *[]string { return &target.Language },
 	config.SignalTypeContext:       func(target *MatchedSignals) *[]string { return &target.Context },
-	config.SignalTypeStructure:     func(target *MatchedSignals) *[]string { return &target.Structure },
 	config.SignalTypeComplexity:    func(target *MatchedSignals) *[]string { return &target.Complexity },
 	config.SignalTypeModality:      func(target *MatchedSignals) *[]string { return &target.Modality },
 	config.SignalTypeAuthz:         func(target *MatchedSignals) *[]string { return &target.Authz },
 	config.SignalTypeJailbreak:     func(target *MatchedSignals) *[]string { return &target.Jailbreak },
 	config.SignalTypeSafety:        func(target *MatchedSignals) *[]string { return &target.Safety },
 	config.SignalTypePII:           func(target *MatchedSignals) *[]string { return &target.PII },
-	config.SignalTypeKB:            func(target *MatchedSignals) *[]string { return &target.KB },
 	config.SignalTypeConversation:  func(target *MatchedSignals) *[]string { return &target.Conversation },
-	config.SignalTypeEvent:         func(target *MatchedSignals) *[]string { return &target.Event },
 	config.SignalTypeMetadata:      func(target *MatchedSignals) *[]string { return &target.Metadata },
-	config.SignalTypeClassifier:    func(target *MatchedSignals) *[]string { return &target.Classifier },
 	config.SignalTypeInputModality: func(target *MatchedSignals) *[]string { return &target.InputModality },
-	config.SignalTypeAction:        func(target *MatchedSignals) *[]string { return &target.Action },
-	config.SignalTypeDecision:      func(target *MatchedSignals) *[]string { return &target.Decision },
+	config.SignalTypeSystemOne:     func(target *MatchedSignals) *[]string { return &target.SystemOne },
 	config.SignalTypeProjection:    func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
@@ -42,29 +35,22 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 
 	return &MatchedSignals{
 		Keywords:      signals.MatchedKeywordRules,
-		Embeddings:    signals.MatchedEmbeddingRules,
 		Domains:       signals.MatchedDomainRules,
 		FactCheck:     signals.MatchedFactCheckRules,
 		UserFeedback:  signals.MatchedUserFeedbackRules,
-		Reask:         signals.MatchedReaskRules,
-		Preferences:   signals.MatchedPreferenceRules,
+		TurnRelation:  signals.MatchedTurnRelationRules,
 		Language:      signals.MatchedLanguageRules,
 		Context:       signals.MatchedContextRules,
-		Structure:     signals.MatchedStructureRules,
 		Complexity:    signals.MatchedComplexityRules,
 		Modality:      signals.MatchedModalityRules,
 		Authz:         signals.MatchedAuthzRules,
 		Jailbreak:     signals.MatchedJailbreakRules,
 		Safety:        signals.MatchedSafetyRules,
 		PII:           signals.MatchedPIIRules,
-		KB:            signals.MatchedKBRules,
 		Conversation:  signals.MatchedConversationRules,
-		Event:         signals.MatchedEventRules,
 		Metadata:      signals.MatchedMetadataRules,
-		Classifier:    signals.MatchedClassifierRules,
 		InputModality: signals.MatchedInputModalityRules,
-		Action:        signals.MatchedActionRules,
-		Decision:      signals.MatchedDecisionRules,
+		SystemOne:     signals.MatchedSystemOneRules,
 		Projection:    signals.MatchedProjectionRules,
 	}
 }
@@ -118,49 +104,37 @@ func getUnmatchedSignals(
 	}
 	cfg := classifier.Config
 	collectUnmatchedRuleNames(&unmatched.Keywords, cfg.KeywordRules, signals.MatchedKeywordRules, func(rule config.KeywordRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Embeddings, cfg.EmbeddingRules, signals.MatchedEmbeddingRules, func(rule config.EmbeddingRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Domains, cfg.Categories, signals.MatchedDomainRules, func(category config.Category) string { return category.Name })
-	collectUnmatchedRuleNames(&unmatched.FactCheck, cfg.FactCheckRules, signals.MatchedFactCheckRules, func(rule config.FactCheckRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.UserFeedback, cfg.UserFeedbackRules, signals.MatchedUserFeedbackRules, func(rule config.UserFeedbackRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Reask, cfg.ReaskRules, signals.MatchedReaskRules, func(rule config.ReaskRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Preferences, cfg.PreferenceRules, signals.MatchedPreferenceRules, func(rule config.PreferenceRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Language, cfg.LanguageRules, signals.MatchedLanguageRules, func(rule config.LanguageRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.Context, cfg.ContextRules, signals.MatchedContextRules, func(rule config.ContextRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Structure, cfg.StructureRules, signals.MatchedStructureRules, func(rule config.StructureRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Complexity, cfg.ComplexityRules, signals.MatchedComplexityRules, func(rule config.ComplexityRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Modality, cfg.ModalityRules, signals.MatchedModalityRules, func(rule config.ModalityRule) string { return rule.Name })
 	collectUnmatchedAuthzRules(&unmatched.Authz, cfg.GetRoleBindings(), signals.MatchedAuthzRules)
-	collectUnmatchedRuleNames(&unmatched.Jailbreak, cfg.JailbreakRules, signals.MatchedJailbreakRules, func(rule config.JailbreakRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Safety, cfg.SafetyRules, signals.MatchedSafetyRules, func(rule config.SafetyRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.PII, cfg.PIIRules, signals.MatchedPIIRules, func(rule config.PIIRule) string { return rule.Name })
 	collectUnmatchedProjectionOutputs(&unmatched.Projection, cfg.Projections.Mappings, signals.MatchedProjectionRules)
 	collectUnmatchedRuleNames(&unmatched.Metadata, cfg.MetadataRules, signals.MatchedMetadataRules, func(rule config.MetadataRule) string { return rule.Name })
-	collectUnmatchedClassifierRules(&unmatched.Classifier, cfg.ClassifierRules, signals.MatchedClassifierRules)
 	collectUnmatchedRuleNames(&unmatched.InputModality, cfg.InputModalityRules, signals.MatchedInputModalityRules, func(rule config.InputModalityRule) string { return rule.Name })
-	collectUnmatchedRuleNames(&unmatched.Action, cfg.ActionRules, signals.MatchedActionRules, func(rule config.ActionRule) string { return rule.Name })
-	collectUnmatchedDecisionRules(&unmatched.Decision, cfg.DecisionRules, signals.MatchedDecisionRules)
+	systemOne := make([]string, len(cfg.SystemOneRules))
+	for index, rule := range cfg.SystemOneRules {
+		systemOne[index] = rule.Name
+	}
+	collectUnreferencedRules(&unmatched.SystemOne, systemOne, signals.MatchedSystemOneRules)
+	for _, rule := range cfg.ApplicationRules() {
+		if rule.Rule.EffectiveStage() != config.SystemOneStageRequest {
+			continue
+		}
+		if target, ok := matchedSignalResolvers[rule.Type]; ok {
+			collectUnreferencedRules(target(unmatched), []string{rule.Rule.Name}, matchedReferences(signals, rule.Type))
+		}
+	}
 
 	return unmatched
 }
 
-func collectUnmatchedClassifierRules(
-	target *[]string,
-	rules []config.ClassifierSignalRule,
-	matched []string,
-) {
-	for _, rule := range rules {
-		prefix := rule.Name + ":"
-		matchedRule := false
-		for _, value := range matched {
-			if strings.HasPrefix(value, prefix) {
-				matchedRule = true
-				break
-			}
-		}
-		if !matchedRule {
-			*target = append(*target, rule.Name)
-		}
+// matchedReferences is the matched-reference list of a systemone or
+// application signal type.
+func matchedReferences(signals *classification.SignalResults, signalType string) []string {
+	resolver, ok := matchedSignalResolvers[signalType]
+	if !ok {
+		return nil
 	}
+	return *resolver(buildMatchedSignals(signals))
 }
 
 func appendSignalToMatchedSignals(target *MatchedSignals, signalType string, signalName string) {
@@ -222,19 +196,19 @@ func makeStringSet(values []string) map[string]bool {
 	return set
 }
 
-// collectUnmatchedDecisionRules lists decision signals with no matched answer;
-// a choice rule matches as "rule:choice".
-func collectUnmatchedDecisionRules(target *[]string, rules []config.DecisionSignalRule, matched []string) {
+// collectUnreferencedRules lists the systemone or application rules with no
+// matched reference, the rule's own or "rule:label".
+func collectUnreferencedRules(target *[]string, rules []string, matched []string) {
 	for _, rule := range rules {
 		hit := false
 		for _, name := range matched {
-			if name == rule.Name || strings.HasPrefix(name, rule.Name+":") {
+			if name == rule || strings.HasPrefix(name, rule+":") {
 				hit = true
 				break
 			}
 		}
 		if !hit {
-			*target = append(*target, rule.Name)
+			*target = append(*target, rule)
 		}
 	}
 }

@@ -116,7 +116,7 @@
             {
               "content": [
                 {
-                  "file_data": "aGVsbG8=",
+                  "file_data": "data:text/plain;base64,aGVsbG8=",
                   "filename": "brief.txt",
                   "type": "input_file"
                 }
@@ -217,10 +217,18 @@
     {
       "name": "encrypted_reasoning_item",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_input_encrypted_content"
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [],
+              "encrypted_content": "encrypted",
+              "id": "reasoning_1",
+              "summary": [],
+              "type": "reasoning"
+            }
+          ],
+          "model": "routed-model"
         }
       }
     },

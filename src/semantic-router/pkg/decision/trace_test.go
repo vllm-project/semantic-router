@@ -8,9 +8,7 @@ import (
 
 func TestEvaluateDecisionsWithTrace_BasicLeaf(t *testing.T) {
 	engine := NewDecisionEngine(
-		[]config.KeywordRule{{Name: "code_help", Keywords: []string{"code"}}},
-		nil,
-		nil,
+
 		[]config.Decision{
 			{
 				Name:     "code_route",
@@ -21,8 +19,7 @@ func TestEvaluateDecisionsWithTrace_BasicLeaf(t *testing.T) {
 				},
 			},
 		},
-		"priority",
-	)
+		"priority")
 
 	signals := &SignalMatches{
 		KeywordRules: []string{"code_help"},
@@ -53,7 +50,7 @@ func TestEvaluateDecisionsWithTrace_BasicLeaf(t *testing.T) {
 }
 
 func TestEvaluateDecisionsWithTrace_OmittedRulesFallback(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{
+	engine := NewDecisionEngine([]config.Decision{{
 		Name:     "default-route",
 		Priority: 10,
 	}}, config.RoutingStrategyPriority)
@@ -72,12 +69,7 @@ func TestEvaluateDecisionsWithTrace_OmittedRulesFallback(t *testing.T) {
 
 func TestEvaluateDecisionsWithTrace_ANDWithOneFailing(t *testing.T) {
 	engine := NewDecisionEngine(
-		[]config.KeywordRule{
-			{Name: "code_help", Keywords: []string{"code"}},
-			{Name: "math_help", Keywords: []string{"math"}},
-		},
-		nil,
-		nil,
+
 		[]config.Decision{
 			{
 				Name:     "both_route",
@@ -91,8 +83,7 @@ func TestEvaluateDecisionsWithTrace_ANDWithOneFailing(t *testing.T) {
 				},
 			},
 		},
-		"priority",
-	)
+		"priority")
 
 	signals := &SignalMatches{
 		KeywordRules: []string{"code_help"},
@@ -125,12 +116,7 @@ func TestEvaluateDecisionsWithTrace_ANDWithOneFailing(t *testing.T) {
 
 func TestEvaluateDecisionsWithTrace_MultipleDecisions(t *testing.T) {
 	engine := NewDecisionEngine(
-		[]config.KeywordRule{
-			{Name: "code_help", Keywords: []string{"code"}},
-			{Name: "math_help", Keywords: []string{"math"}},
-		},
-		nil,
-		nil,
+
 		[]config.Decision{
 			{
 				Name:     "code_route",
@@ -149,8 +135,7 @@ func TestEvaluateDecisionsWithTrace_MultipleDecisions(t *testing.T) {
 				},
 			},
 		},
-		"priority",
-	)
+		"priority")
 
 	signals := &SignalMatches{
 		KeywordRules: []string{"code_help"},

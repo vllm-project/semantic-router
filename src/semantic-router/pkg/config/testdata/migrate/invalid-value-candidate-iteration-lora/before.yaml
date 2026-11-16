@@ -1,0 +1,24 @@
+# A candidate iteration model names a LoRA its model does not declare, which
+# modelRefs refuses; a candidate iteration does not choose where a request
+# goes, so the name is dropped.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      loras: [{name: declared}]
+recipes:
+  - name: default
+    decisions:
+      - name: support
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        candidateIterations:
+          - variable: candidate
+            source: models
+            models:
+              - {model: general, lora_name: declared}
+              - {model: general, lora_name: undeclared}
+            outputs: [{type: model, value: candidate}]

@@ -43,7 +43,7 @@ func importSetupRuntimePatch(t *testing.T, path string, resolver *setupmode.Reso
 	// The fixture server is on loopback; declare it the way an operator would
 	// declare a real internal target (#1388).
 	allowLoopbackForTest(t)
-	patch["version"] = "v0.3"
+	patch["version"] = "v0.5"
 	raw, err := yaml.Marshal(patch)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func importSetupRuntimePatch(t *testing.T, path string, resolver *setupmode.Reso
 func TestManagedSetupRealizesImportedConfigBeforePublishingOwnedPath(t *testing.T) {
 	configPath, resolver := managedSetupRuntime(t)
 	patch := createValidSetupPatch()
-	patch["global"] = map[string]interface{}{"services": map[string]interface{}{"router_replay": map[string]interface{}{"enabled": false}}}
+	patch["global"] = map[string]interface{}{"services": map[string]interface{}{"router_replay": map[string]interface{}{"store_backend": "memory"}}}
 	imported := importSetupRuntimePatch(t, configPath, resolver, patch)
 	// Import must retain absent listener intent, so CLI realization can choose
 	// its container-reachable default instead of an explicit standalone bind.
@@ -123,7 +123,7 @@ func TestManagedSetupPreservesAuthoredGlobalThroughRealization(t *testing.T) {
 			name   string
 			global any
 		}{name: "empty management", global: map[string]any{
-			"services": map[string]any{"management_api": map[string]any{}, "router_replay": map[string]any{"enabled": false}},
+			"services": map[string]any{"management_api": map[string]any{}, "router_replay": map[string]any{"async_writes": false}},
 		}},
 		struct {
 			name   string
@@ -133,7 +133,7 @@ func TestManagedSetupPreservesAuthoredGlobalThroughRealization(t *testing.T) {
 			"services": map[string]any{
 				"management_api": map[string]any{"bind_address": "0.0.0.0", "port": 9099},
 				"response_api":   map[string]any{"enabled": false},
-				"router_replay":  map[string]any{"enabled": false, "ttl_seconds": 0},
+				"router_replay":  map[string]any{"async_writes": false, "ttl_seconds": 0},
 			},
 		}},
 	)
@@ -174,7 +174,7 @@ func TestManagedSetupPreservesAuthoredGlobalThroughRealization(t *testing.T) {
 				t.Fatalf("activation did not publish reachable runtime: listener=%+v setup=%v", parsed.ManagementAPI, resolver.Active())
 			}
 			// Sparse overrides still inherit the Router's model catalog defaults.
-			defaults, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion([]byte("version: v0.3\nglobal: {}\n"))
+			defaults, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion([]byte("version: v0.5\nglobal: {}\n"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -374,68 +374,4 @@ func setupFilesystemSnapshot(t *testing.T, root string) map[string]string {
 		t.Fatal(err)
 	}
 	return files
-}
-
-func TestManagedSetupValidationKeepsReferencedKBAssetsUnchanged(t *testing.T) {
-	configPath, resolver := managedSetupRuntime(t)
-	workspace := filepath.Dir(filepath.Dir(configPath))
-	source := filepath.Join(filepath.Dir(configPath), "remote-kb")
-	if err := os.Mkdir(source, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	manifest := []byte(`{"labels":{"safe":{"description":"Safe content","exemplars":["hello world"]}}}`)
-	if err := os.WriteFile(filepath.Join(source, "labels.json"), manifest, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	patch := createValidSetupPatch()
-	patch["global"] = map[string]interface{}{"model_catalog": map[string]interface{}{"kbs": []map[string]interface{}{{
-		"name": "remote_kb", "source": map[string]interface{}{"path": "remote-kb/", "manifest": "labels.json"}, "threshold": 0.55,
-	}}}}
-	patch["routing"].(map[string]interface{})["signals"].(map[string]interface{})["kb"] = []map[string]interface{}{{
-		"name": "safe_content", "kb": "remote_kb", "target": map[string]interface{}{"kind": "label", "value": "safe"}, "match": "best",
-	}}
-	body := mustJSONRaw(t, SetupConfigRequest{Config: importSetupRuntimePatch(t, configPath, resolver, patch)})
-	before := setupFilesystemSnapshot(t, workspace)
-	patch["routing"].(map[string]interface{})["signals"].(map[string]interface{})["kb"].([]map[string]interface{})[0]["target"].(map[string]interface{})["value"] = "missing-label"
-	invalidBody := mustJSONRaw(t, SetupConfigRequest{Config: mustJSONRaw(t, patch)})
-	rejected := httptest.NewRecorder()
-	SetupActivateHandler(configPath, false, workspace, resolver)(rejected, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(invalidBody)))
-	if rejected.Code != http.StatusBadRequest {
-		t.Fatalf("invalid KB label activation = %d: %s", rejected.Code, rejected.Body.String())
-	}
-	if !reflect.DeepEqual(before, setupFilesystemSnapshot(t, workspace)) || !resolver.Active() {
-		t.Fatal("invalid candidate created or changed runtime/KB files")
-	}
-	validated := httptest.NewRecorder()
-	SetupValidateHandler(configPath, resolver)(validated, httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body)))
-	if validated.Code != http.StatusOK {
-		t.Fatalf("validate referenced KB = %d: %s", validated.Code, validated.Body.String())
-	}
-	if !reflect.DeepEqual(before, setupFilesystemSnapshot(t, workspace)) || !resolver.Active() {
-		t.Fatal("validation created or changed runtime/KB files")
-	}
-	var response SetupValidateResponse
-	if err := json.Unmarshal(validated.Body.Bytes(), &response); err != nil {
-		t.Fatal(err)
-	}
-	// Activate the actual returned document so validation cannot discard the
-	// original asset location needed by the subsequent bootstrap copy.
-	activationBody := mustJSONRaw(t, SetupConfigRequest{Config: response.Config})
-	activated := httptest.NewRecorder()
-	SetupActivateHandler(configPath, false, workspace, resolver)(activated, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(activationBody)))
-	if activated.Code != http.StatusOK {
-		t.Fatalf("activate validated KB = %d: %s", activated.Code, activated.Body.String())
-	}
-	published, err := readSetupConfigFile(configPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	kb := published.Global.ModelCatalog.KBs[0]
-	if kb.Source.Path != "knowledge_bases/remote-kb/" {
-		t.Fatalf("runtime KB reference = %q", kb.Source.Path)
-	}
-	copied, err := os.ReadFile(kb.Source.ResolveManifestPath(filepath.Dir(configPath)))
-	if err != nil || !bytes.Equal(copied, manifest) {
-		t.Fatalf("activated KB manifest does not match source: %v", err)
-	}
 }

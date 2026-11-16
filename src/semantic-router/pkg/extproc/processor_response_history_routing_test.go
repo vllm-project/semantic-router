@@ -47,7 +47,7 @@ func TestRetainedResponseHistoryPrecedesSignalsAndToolsPolicy(t *testing.T) {
 				}
 
 				payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
-					Enabled: true, Mode: config.ToolsPluginModeNone, StripToolHistory: strip,
+					Enabled: true, Policy: &config.ToolsPolicyConfig{Mode: config.ToolsPolicyModeNone, StripToolHistory: strip},
 				})
 				if err != nil {
 					t.Fatal(err)

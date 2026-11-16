@@ -55,7 +55,7 @@ event: response.completed
 data: {"type":"response.completed","sequence_number":8,"response":{"id":"resp_fixture","status":"completed","output":[{"id":"msg_fixture","type":"message","role":"assistant","content":[{"type":"output_text","text":"fusion-none-answer","annotations":[]}]}]}}
 
 `)
-	valid := responseAPIStreamingSSEResult{statusCode: http.StatusOK, contentType: "text/event-stream", body: body, protocolWarnings: "dropped;router_extension_unsupported_protocol;fusion"}
+	valid := responseAPIStreamingSSEResult{statusCode: http.StatusOK, contentType: "text/event-stream", body: body, protocolWarnings: `protocol;action=dropped;reason="router_extension_unsupported_protocol";field="fusion"`}
 	for _, name := range []string{"complete", "buffered_200", "missing_completion", "missing_diagnostic", "wrong_answer"} {
 		t.Run(name, func(t *testing.T) {
 			result := valid

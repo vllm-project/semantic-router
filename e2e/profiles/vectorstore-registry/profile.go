@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 )
 
@@ -13,7 +14,6 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/response-api/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
@@ -28,8 +28,11 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "vectorstore-registry",
 			SemanticRouterValuesFile: valuesFile,
-			PrerequisiteManifests:    []string{postgresManifest},
-			ResourceManifests:        resourceManifests,
+			// provider-mocker serves the embedding fixture, which the Router
+			// prepares as it starts.
+			PrerequisiteManifests: []string{postgresManifest, "deploy/kubernetes/response-api/provider-mocker.yaml"},
+			PrerequisiteWaits:     []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
+			ResourceManifests:     resourceManifests,
 		}),
 	}
 }
@@ -41,7 +44,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests Vector Store Registry metadata persistence using Postgres across pod restarts"
+	return "Tests that vector store records in Postgres and file bytes on the Router's data volume survive a pod restart"
 }
 
 // Setup deploys Postgres, the router, and gateway resources.

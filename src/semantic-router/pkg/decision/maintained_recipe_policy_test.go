@@ -19,129 +19,101 @@ func maintainedRecipeEngine(t *testing.T, name string) *DecisionEngine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewDecisionEngine(cfg.KeywordRules, cfg.EmbeddingRules, cfg.Categories, cfg.Decisions, config.RoutingStrategyPriority)
+	return NewDecisionEngine(cfg.Decisions, config.RoutingStrategyPriority)
 }
 
-func TestBalanceTaskIntentPolicy(t *testing.T) {
+func TestBalanceQuestionPolicy(t *testing.T) {
 	engine := maintainedRecipeEngine(t, "balance")
-	tests := []evaluateSignalsCase{
+	lanes := []struct{ label, lane string }{
+		{"legal", "premium_legal"},
+		{"proof", "formal_math_proof"},
+		{"argument", "reasoning_deep"},
+		{"systems", "complex_specialist"},
+		{"science", "complex_specialist"},
+		{"code", "medium_code_general"},
+		{"health", "verified_health"},
+		{"explain", "medium_explainer"},
+		{"creative", "medium_creative"},
+		{"facts", "fast_qa"},
+		{"chat", "simple_general"},
+	}
+	var tests []evaluateSignalsCase
+	for _, l := range lanes {
+		tests = append(tests, evaluateSignalsCase{
+			name:             "task " + l.label + " picks " + l.lane,
+			signals:          &SignalMatches{SystemOneRules: []string{"task:" + l.label}},
+			expectedDecision: l.lane,
+		})
+	}
+	unknown := map[string]string{}
+	for _, name := range []string{"task", "verification", "correction", "clarify"} {
+		unknown["systemone:"+name] = "systemone_rejected"
+	}
+	tests = append(tests, []evaluateSignalsCase{
 		{
-			name: "health semantics retain verification when topic is uncertain",
-			signals: &SignalMatches{
-				DomainRules:     []string{"other"},
-				EmbeddingRules:  []string{"health_guidance"},
-				KeywordRules:    []string{"verification_markers", "reference_heavy_markers"},
-				ContextRules:    []string{"short_context"},
-				ProjectionRules: []string{"balance_simple", "verification_required"},
-			},
-			expectedDecision: "verified_health",
+			name:             "an explanation with a source request is verified",
+			signals:          &SignalMatches{SystemOneRules: []string{"task:explain", "verification"}},
+			expectedDecision: "verified_explainer",
 		},
 		{
-			name: "health semantics alone do not request verification",
-			signals: &SignalMatches{
-				EmbeddingRules: []string{"health_guidance"},
-			},
+			name:             "a source request alone picks no lane",
+			signals:          &SignalMatches{SystemOneRules: []string{"verification"}},
 			expectedDecision: "casual_chat",
 		},
 		{
-			name: "health correction keeps recovery priority",
+			name:             "a correction needs an earlier answer",
+			signals:          &SignalMatches{SystemOneRules: []string{"task:code", "correction"}},
+			expectedDecision: "medium_code_general",
+		},
+		{
+			name: "a correction after an answer outranks the code lane",
 			signals: &SignalMatches{
-				EmbeddingRules:    []string{"health_guidance"},
-				KeywordRules:      []string{"verification_markers"},
-				UserFeedbackRules: []string{"wrong_answer"},
-				ProjectionRules:   []string{"verification_required", "feedback_correction_verified"},
+				ConversationRules: []string{"has_prior_answer"},
+				SystemOneRules:    []string{"task:code", "correction"},
 			},
 			expectedDecision: "feedback_wrong_answer_verified",
 		},
 		{
-			name: "short health source request keeps verification",
+			name: "the legal lane outranks a correction",
 			signals: &SignalMatches{
-				DomainRules:     []string{"health"},
-				KeywordRules:    []string{"verification_markers"},
-				ProjectionRules: []string{"balance_simple"},
-			},
-			expectedDecision: "verified_health",
-		},
-		{
-			name: "architecture domain and semantic intent",
-			signals: &SignalMatches{
-				DomainRules:    []string{"computer science"},
-				EmbeddingRules: []string{"architecture_design"},
-			},
-			expectedDecision: "complex_specialist",
-		},
-		{
-			name: "architecture language and semantic intent survive topic uncertainty",
-			signals: &SignalMatches{
-				DomainRules:    []string{"business"},
-				KeywordRules:   []string{"architecture_markers"},
-				EmbeddingRules: []string{"architecture_design"},
-			},
-			expectedDecision: "complex_specialist",
-		},
-		{
-			name: "tradeoffs alone do not establish systems design",
-			signals: &SignalMatches{
-				DomainRules:  []string{"business"},
-				KeywordRules: []string{"architecture_markers"},
-			},
-			expectedDecision: "casual_chat",
-		},
-		{
-			name: "normative argument does not require medium difficulty",
-			signals: &SignalMatches{
-				DomainRules:     []string{"law"},
-				KeywordRules:    []string{"normative_topic_markers", "argument_request_markers"},
-				ProjectionRules: []string{"balance_simple"},
-			},
-			expectedDecision: "reasoning_deep",
-		},
-		{
-			name: "actual legal risk retains priority",
-			signals: &SignalMatches{
-				DomainRules:     []string{"law"},
-				KeywordRules:    []string{"normative_topic_markers", "argument_request_markers", "legal_risk_markers"},
-				ComplexityRules: []string{"legal_risk:hard"},
+				ConversationRules: []string{"has_prior_answer"},
+				SystemOneRules:    []string{"task:legal", "correction"},
 			},
 			expectedDecision: "premium_legal",
 		},
 		{
-			name: "explicit explanation and sources survive unnamed topic",
+			name: "a clarification after an answer outranks the explainer lane",
 			signals: &SignalMatches{
-				DomainRules:     []string{"other"},
-				KeywordRules:    []string{"explanation_request_markers", "verification_markers"},
-				ProjectionRules: []string{"balance_simple"},
+				ConversationRules: []string{"has_prior_answer"},
+				SystemOneRules:    []string{"task:explain", "clarify"},
 			},
-			expectedDecision: "verified_explainer",
+			expectedDecision: "feedback_need_clarification",
 		},
 		{
-			name: "ordinary explanation needs no redundant effort gate",
+			name: "a clarification that is also a correction recovers",
 			signals: &SignalMatches{
-				DomainRules:     []string{"psychology"},
-				KeywordRules:    []string{"explanation_request_markers"},
-				ProjectionRules: []string{"balance_simple"},
+				ConversationRules: []string{"has_prior_answer"},
+				SystemOneRules:    []string{"task:chat", "clarify", "correction"},
 			},
-			expectedDecision: "medium_explainer",
+			expectedDecision: "feedback_wrong_answer_verified",
 		},
 		{
-			name: "fictional drafting is a task",
+			name: "an image goes to the visual lane whatever the task",
 			signals: &SignalMatches{
-				KeywordRules:    []string{"drafting_action_markers", "creative_form_markers"},
-				ProjectionRules: []string{"balance_simple"},
+				InputModalityRules: []string{"has_image"},
+				SystemOneRules:     []string{"task:legal"},
 			},
-			expectedDecision: "medium_creative",
+			expectedDecision: "omni",
 		},
 		{
-			name: "tone without drafting does not establish creative work",
+			name: "unknown answers fall back",
 			signals: &SignalMatches{
-				KeywordRules:    []string{"personal_tone_markers"},
-				ContextRules:    []string{"short_context"},
-				StructureRules:  []string{"low_question_density"},
-				ProjectionRules: []string{"balance_simple"},
+				ConversationRules: []string{"has_prior_answer"},
+				SignalErrors:      unknown,
 			},
-			expectedDecision: "simple_general",
+			expectedDecision: "casual_chat",
 		},
-	}
+	}...)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
@@ -153,18 +125,18 @@ func TestBalanceTaskIntentPolicy(t *testing.T) {
 func TestPrivacyQuestionsKeepWorkLocal(t *testing.T) {
 	engine := maintainedRecipeEngine(t, "privacy")
 	unknown := map[string]string{
-		"decision:attack":        "decision_rejected",
-		"decision:confidential":  "decision_rejected",
-		"decision:personal_data": "decision_rejected",
-		"decision:depth":         "decision_rejected",
+		"systemone:attack":        "systemone_rejected",
+		"systemone:confidential":  "systemone_rejected",
+		"systemone:personal_data": "systemone_rejected",
+		"systemone:depth":         "systemone_rejected",
 	}
 	tests := []evaluateSignalsCase{
-		{name: "an attack outranks private material", signals: &SignalMatches{DecisionRules: []string{"attack", "confidential"}}, expectedDecision: "local_security_containment"},
-		{name: "private material stays local", signals: &SignalMatches{DecisionRules: []string{"confidential"}}, expectedDecision: "local_privacy_policy"},
-		{name: "personal data stays local", signals: &SignalMatches{DecisionRules: []string{"personal_data"}}, expectedDecision: "local_privacy_policy"},
-		{name: "deep reasoning on private material stays local", signals: &SignalMatches{DecisionRules: []string{"depth", "confidential"}}, expectedDecision: "local_privacy_policy"},
-		{name: "deep reasoning with personal data stays local", signals: &SignalMatches{DecisionRules: []string{"depth", "personal_data"}}, expectedDecision: "local_privacy_policy"},
-		{name: "only non-sensitive deep reasoning leaves", signals: &SignalMatches{DecisionRules: []string{"depth"}}, expectedDecision: "cloud_frontier_reasoning"},
+		{name: "an attack outranks private material", signals: &SignalMatches{SystemOneRules: []string{"attack", "confidential"}}, expectedDecision: "local_security_containment"},
+		{name: "private material stays local", signals: &SignalMatches{SystemOneRules: []string{"confidential"}}, expectedDecision: "local_privacy_policy"},
+		{name: "personal data stays local", signals: &SignalMatches{SystemOneRules: []string{"personal_data"}}, expectedDecision: "local_privacy_policy"},
+		{name: "deep reasoning on private material stays local", signals: &SignalMatches{SystemOneRules: []string{"depth", "confidential"}}, expectedDecision: "local_privacy_policy"},
+		{name: "deep reasoning with personal data stays local", signals: &SignalMatches{SystemOneRules: []string{"depth", "personal_data"}}, expectedDecision: "local_privacy_policy"},
+		{name: "only non-sensitive deep reasoning leaves", signals: &SignalMatches{SystemOneRules: []string{"depth"}}, expectedDecision: "cloud_frontier_reasoning"},
 		{name: "ordinary work stays local", signals: &SignalMatches{}, expectedDecision: "local_standard"},
 		{name: "an unanswered request stays on the privacy lane", signals: &SignalMatches{SignalErrors: unknown}, expectedDecision: "local_privacy_policy"},
 	}
@@ -180,8 +152,8 @@ func TestAgentQuestionsKeepPrivacyPriority(t *testing.T) {
 	engine := maintainedRecipeEngine(t, "agent")
 	answers := func(difficulty float64, rules ...string) *SignalMatches {
 		return &SignalMatches{
-			DecisionRules: rules,
-			SignalValues:  map[string]float64{"decision:difficulty": difficulty},
+			SystemOneRules: rules,
+			SignalValues:   map[string]float64{"systemone:difficulty": difficulty},
 		}
 	}
 	tests := []evaluateSignalsCase{
@@ -192,11 +164,12 @@ func TestAgentQuestionsKeepPrivacyPriority(t *testing.T) {
 		{name: "math that needs reasoning takes the STEM lane", signals: answers(3.4, "domain:math_science", "difficulty"), expectedDecision: "domain_stem_research"},
 		{name: "law and health keep their lane", signals: answers(1.9, "domain:legal_health", "difficulty"), expectedDecision: "domain_legal_health"},
 		{name: "hard software work takes the complex code lane", signals: answers(2.9, "domain:code", "difficulty"), expectedDecision: "domain_code_complex"},
-		{name: "medium software work takes the code lane", signals: answers(1.7, "domain:code", "difficulty"), expectedDecision: "domain_code"},
+		{name: "code work at the complex threshold escalates", signals: answers(1.75, "domain:code", "difficulty"), expectedDecision: "domain_code_complex"},
+		{name: "medium software work takes the code lane", signals: answers(1.4, "domain:code", "difficulty"), expectedDecision: "domain_code"},
 		{name: "a simple software question stays local", signals: answers(0.6, "domain:code"), expectedDecision: "simple_general"},
 		{name: "business keeps its lane", signals: answers(1.9, "domain:business", "difficulty"), expectedDecision: "domain_business"},
 		{name: "deep general reasoning escalates", signals: answers(3.0, "domain:general", "difficulty"), expectedDecision: "complex_general"},
-		{name: "a general comparison takes the medium lane", signals: answers(1.8, "domain:general", "difficulty"), expectedDecision: "medium_general"},
+		{name: "a general comparison takes the medium lane", signals: answers(1.6, "domain:general", "difficulty"), expectedDecision: "medium_general"},
 		{name: "no answer falls to the local lane", signals: &SignalMatches{}, expectedDecision: "simple_general"},
 	}
 	for _, tt := range tests {
@@ -204,5 +177,24 @@ func TestAgentQuestionsKeepPrivacyPriority(t *testing.T) {
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
 			assertDecisionResult(t, result, err, tt.expectedDecision)
 		})
+	}
+}
+
+func assertDecisionResult(t *testing.T, result *DecisionResult, err error, expected string) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals: %v", err)
+	}
+	if expected == "" {
+		if result != nil {
+			t.Errorf("expected no match, got %q", result.Decision.Name)
+		}
+		return
+	}
+	if result == nil {
+		t.Fatalf("expected match %q, got nil", expected)
+	}
+	if result.Decision.Name != expected {
+		t.Errorf("expected %q, got %q", expected, result.Decision.Name)
 	}
 }

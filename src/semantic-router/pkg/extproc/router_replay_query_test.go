@@ -61,6 +61,9 @@ func TestRouterReplayStreamingAggregateMatchesAllRecords(t *testing.T) {
 		if i%11 == 0 {
 			records[i].TotalTokens = nil
 		}
+		if i%5 == 0 {
+			records[i].ProviderCache = &store.ProviderCacheAccounting{State: "complete", NoCacheCost: replayFloatPtr(.5), CacheSavings: replayFloatPtr(float64(i%4) - 1.5)}
+		}
 	}
 	storage := &replayQueryTestStore{scan: func(visit func(store.Record) error) error {
 		for _, record := range records {

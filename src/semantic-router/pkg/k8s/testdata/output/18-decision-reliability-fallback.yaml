@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: qwen-2.5-7b
@@ -10,57 +10,6 @@ providers:
     - name: qwen-2.5-72b
       reasoning:
         family: qwen3
-routing:
-  modelCards:
-    - name: qwen-2.5-7b
-    - name: qwen-2.5-72b
-  signals:
-    keywords:
-      - name: long_report
-        operator: OR
-        keywords:
-          - full report
-          - long report
-        case_sensitive: false
-  decisions:
-    - name: long_report
-      description: Long reports get more time and their own fallback policy
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: long_report
-      modelRefs:
-        - model: qwen-2.5-72b
-          use_reasoning: false
-      reliability:
-        total_timeout: 600s
-        per_try_timeout: 300s
-        retry_count: 1
-        retry_on: reset
-        retriable_status_codes:
-          - 429
-      fallback:
-        enabled: true
-        max_attempts: 2
-        total_timeout: 15m0s
-        per_attempt_timeout: 7m30s
-        retryable_status_codes:
-          - 502
-          - 503
-          - 504
-    - name: default_route
-      description: Everything else keeps the provider model's reliability and the router's fallback
-      priority: 10
-      rules:
-        operator: OR
-        conditions:
-          - type: keyword
-            name: long_report
-      modelRefs:
-        - model: qwen-2.5-7b
-          use_reasoning: false
 global:
   router:
     config_source: kubernetes
@@ -75,8 +24,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           sample_rate: 1
           duration_buckets:
@@ -106,6 +53,8 @@ global:
           detailed_goroutine_tracking: true
     response_api:
       enabled: false
+      ttl_seconds: 0
+      max_responses: 0
     observability:
       tracing:
         enabled: false
@@ -130,90 +79,78 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
-      enabled: false
-      ttl_seconds: 0
-    memory: {}
+      backend_type: memory
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+    memory:
+      default_retrieval_limit: 0
   integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: config/tools_db.json
-      fallback_to_empty: true
     looper: {}
   model_catalog:
-    embeddings:
-      semantic:
-        qwen3_model_path: ""
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-          preload_embeddings: true
-          target_dimension: 768
-          target_layer: 22
-          enable_soft_matching: true
-          top_k: 1
-          min_score_threshold: 0.5
-    system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      domain_classifier: models/mmbert32k-intent-classifier-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
-    modules:
-      safety:
-        safety:
-          use_cpu: false
-        hazard:
-          use_cpu: false
-      prompt_compression:
-        enabled: false
-        max_tokens: 0
-      prompt_guard:
+    embeddings: {}
+    system: {}
+  plugins:
+    - type: response_cache
+      configuration:
         enabled: true
-        model_id: ""
-        threshold: 0.7
-        use_cpu: true
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        model_ref: prompt_guard
-      classifier:
-        domain:
-          model_id: ""
-          threshold: 0.5
-          use_cpu: true
-          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
-          model_ref: domain_classifier
-        mcp:
-          enabled: false
-          transport_type: ""
-          threshold: 0
-        pii:
-          model_id: ""
-          threshold: 0.9
-          use_cpu: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
-          model_ref: pii_classifier
-        preference: {}
-      complexity: {}
-      hallucination_mitigation:
-        fact_check:
-          model_id: ""
-          threshold: 0
-          use_cpu: false
-        detector:
-          model_id: ""
-          threshold: 0
-          use_cpu: false
-      feedback_detector:
-        enabled: false
-        model_id: ""
-        threshold: 0
-        use_cpu: false
-        feedback_mapping_path: ""
-      modality_detector:
-        enabled: false
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: long_report
+          operator: OR
+          keywords:
+            - full report
+            - long report
+          case_sensitive: false
+    decisions:
+      - name: long_report
+        description: Long reports get more time and their own fallback policy
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: long_report
+        modelRefs:
+          - model: qwen-2.5-72b
+            use_reasoning: false
+        reliability:
+          total_timeout: 600s
+          per_try_timeout: 300s
+          retry_count: 1
+          retry_on: reset
+          retriable_status_codes:
+            - 429
+        fallback:
+          enabled: true
+          max_attempts: 2
+          total_timeout: 15m0s
+          per_attempt_timeout: 7m30s
+          retryable_status_codes:
+            - 502
+            - 503
+            - 504
+      - name: default_route
+        description: Everything else keeps the provider model's reliability and the router's fallback
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: long_report
+        modelRefs:
+          - model: qwen-2.5-7b
+            use_reasoning: false

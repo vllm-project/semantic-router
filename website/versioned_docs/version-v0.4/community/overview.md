@@ -65,4 +65,4 @@ a visual change.
 - [Development Guide](./development)
 - [Documentation Guide](./documentation)
 - [Code Style and Quality](./code-style)
-- [Architecture overview](/docs/overview/semantic-router-overview)
+- [Architecture overview](/docs/v0.4/overview/semantic-router-overview)

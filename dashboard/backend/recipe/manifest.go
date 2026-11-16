@@ -184,6 +184,7 @@ type routingAssets struct {
 type evaluationSettings struct {
 	RequestTimeoutSeconds *float64 `yaml:"request_timeout_seconds"`
 	Concurrency           *int     `yaml:"concurrency"`
+	Shards                *int     `yaml:"shards"`
 }
 
 type acceptancePolicy struct {
@@ -323,6 +324,9 @@ func validateProbeEvaluationSettings(evaluation evaluationSettings, issues *[]st
 	}
 	if concurrency := evaluation.Concurrency; concurrency != nil && (*concurrency < 1 || *concurrency > 64) {
 		*issues = append(*issues, "evaluation.concurrency must be between 1 and 64")
+	}
+	if shards := evaluation.Shards; shards != nil && (*shards < 1 || *shards > 16) {
+		*issues = append(*issues, "evaluation.shards must be between 1 and 16")
 	}
 }
 

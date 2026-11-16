@@ -1,0 +1,1 @@
+global.model_catalog.modules.prompt_guard: removed_section: global.model_catalog.modules.prompt_guard is removed; run `vllm-sr config migrate` (drop it; its threshold is a jailbreak rule's predicate)

@@ -30,6 +30,9 @@ import (
 // concrete model are accumulated too, because dispatch can still rewrite the
 // model ID, translate the wire format, and add stream_options.include_usage.
 func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if ctx.streamedBodyRejected {
+		return nil, nil
+	}
 	// Honor x-vsr-skip-processing before allocating a streamed-body handler.
 	// This guarantees no chunk accumulation, model detection, or buffered
 	// pipeline runs for opted-out requests, regardless of streamed_body_mode.
@@ -40,14 +43,11 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 		return newContinueRequestBodyResponse(), nil
 	}
 
-	eos := v.RequestBody.GetEndOfStream()
-
 	// If we already have a handler from a previous chunk, continue streaming
 	if ctx.StreamedBody != nil {
 		resp, err := ctx.StreamedBody.HandleChunk(v.RequestBody, ctx)
-		if eos {
-			ctx.StreamedBody.Release()
-			ctx.StreamedBody = nil
+		if v.RequestBody.GetEndOfStream() || ctx.streamedBodyRejected || err != nil {
+			releaseStreamedBody(ctx)
 		}
 		return resp, err
 	}
@@ -70,9 +70,8 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	if streamedMode {
 		ctx.StreamedBody = newStreamedBodyHandler(r, ctx)
 		resp, err := ctx.StreamedBody.HandleChunk(v.RequestBody, ctx)
-		if eos {
-			ctx.StreamedBody.Release()
-			ctx.StreamedBody = nil
+		if v.RequestBody.GetEndOfStream() || ctx.streamedBodyRejected || err != nil {
+			releaseStreamedBody(ctx)
 		}
 		return resp, err
 	}
@@ -100,6 +99,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		// Requests that ended through a normal path already zeroed the token,
 		// making this a no-op.
 		releaseInflightAdmission(ctx)
+		releaseStreamedBody(ctx)
 		if retErr != nil && ctx != nil {
 			sendHeldHeaderReplyBeforeError(stream, ctx)
 		}
@@ -127,6 +127,11 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			r.finalizeRouterReplay(ctx, state, reason)
 			return err
 		}
+		// The guard reply was sent successfully. End the RPC normally after
+		// that single immediate response, without receiving any queued input.
+		if ctx.streamedBodyRejected {
+			return nil
+		}
 	}
 }
 
@@ -148,6 +153,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
+	r.recordHeldStreamOverMessageLimit(ctx, err)
 	if ctx.InflightToken != 0 {
 		releaseInflightAdmission(ctx)
 	}
@@ -234,6 +240,9 @@ func (r *OpenAIRouter) handleProcessRequest(
 	req *ext_proc.ProcessingRequest,
 	ctx *RequestContext,
 ) error {
+	if ctx.streamedBodyRejected {
+		return nil
+	}
 	if protocolConfig := req.GetProtocolConfig(); protocolConfig != nil {
 		mode := protocolConfig.GetRequestBodyMode()
 		ctx.FullDuplexRequestBody = mode == http_ext.ProcessingMode_FULL_DUPLEX_STREAMED
@@ -284,6 +293,9 @@ func (r *OpenAIRouter) processRequestBody(
 	v *ext_proc.ProcessingRequest_RequestBody,
 	ctx *RequestContext,
 ) error {
+	if ctx.streamedBodyRejected {
+		return nil
+	}
 	response, err := r.handleRequestBodyDispatch(v, ctx)
 	_, err = r.sendRequestBodyResult(stream, response, err, ctx)
 	return err
@@ -336,7 +348,13 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 	var maskingErr *maskingDispatchError
 	if errors.As(err, &maskingErr) {
 		// A stream error would let failure_mode_allow forward the unmasked
-		// body upstream, so a masking failure always answers here (#3566).
+		// body upstream, so a masking failure always answers here (#3566),
+		// and the client's protocol carries this message, not a generic one.
+		if ctx != nil {
+			ctx.ImmediateProtocolError = llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable, "masking_unavailable", maskingUnavailableMessage, nil,
+			)
+		}
 		return r.createErrorResponse(http.StatusServiceUnavailable, maskingUnavailableMessage), true
 	}
 	var protocolError *llmprotocol.ProtocolError
@@ -346,9 +364,7 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 	if ctx != nil {
 		ctx.ImmediateProtocolError = protocolError
 	}
-	response := r.createErrorResponse(http.StatusBadRequest, protocolError.Message)
-	addPromptCacheReceiptToImmediateResponse(response, ctx)
-	return response, true
+	return r.createErrorResponse(http.StatusBadRequest, protocolError.Message), true
 }
 
 func (r *OpenAIRouter) processResponseHeaders(

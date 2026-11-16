@@ -339,8 +339,10 @@ func (f *ResponseAPIFilter) buildInputItemsList(stored *responseapi.StoredRespon
 	if stored.Instructions != "" {
 		contentParts := []responseapi.ContentPart{{Type: "input_text", Text: stored.Instructions}}
 		contentJSON, _ := json.Marshal(contentParts)
+		// Derive this synthesized item's identity from the response so repeated
+		// reads, including of old records, stay stable without writing to storage.
 		items = append(items, responseapi.InputItem{
-			ID:      responseapi.GenerateItemID(),
+			ID:      responseapi.ItemIDPrefix + "instructions_" + stored.ID,
 			Type:    "message",
 			Role:    "system",
 			Content: contentJSON,
@@ -408,10 +410,15 @@ func determineSessionTrackingID(explicit string, history []*responseapi.StoredRe
 
 // createResponseAPIError creates an error response in OpenAI format.
 func createResponseAPIError(statusCode int, message string) *ext_proc.ProcessingResponse {
+	statusCode = errorResponseStatusCode(statusCode)
+	errorType := "invalid_request_error"
+	if statusCode >= 500 {
+		errorType = "api_error"
+	}
 	errorResp := map[string]interface{}{
 		"error": map[string]interface{}{
 			"message": message,
-			"type":    "invalid_request_error",
+			"type":    errorType,
 			"code":    statusCode,
 		},
 	}
@@ -426,7 +433,7 @@ func createImmediateJSONResponse(statusCode int, body []byte) *ext_proc.Processi
 		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
 			ImmediateResponse: &ext_proc.ImmediateResponse{
 				Status: &typev3.HttpStatus{
-					Code: statusCodeToEnumForResponseAPI(statusCode),
+					Code: statusCodeToImmediateResponseCode(statusCode),
 				},
 				Headers: &ext_proc.HeaderMutation{
 					SetHeaders: []*core.HeaderValueOption{
@@ -441,21 +448,5 @@ func createImmediateJSONResponse(statusCode int, body []byte) *ext_proc.Processi
 				Body: body,
 			},
 		},
-	}
-}
-
-// statusCodeToEnumForResponseAPI converts HTTP status code to Envoy enum.
-func statusCodeToEnumForResponseAPI(statusCode int) typev3.StatusCode {
-	switch statusCode {
-	case 200:
-		return typev3.StatusCode_OK
-	case 400:
-		return typev3.StatusCode_BadRequest
-	case 404:
-		return typev3.StatusCode_NotFound
-	case 500:
-		return typev3.StatusCode_InternalServerError
-	default:
-		return typev3.StatusCode_OK
 	}
 }

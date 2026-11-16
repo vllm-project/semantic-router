@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
+import type { BuiltInRecipeCatalog } from './configPageBuiltInRecipes'
 import {
   applyRecipeAssignments,
   assignmentState,
   assignDecisionModels,
+  builtInRecipeBindings,
+  builtInRecipeChoices,
   minimumCandidatesForDecision,
+  mixtureRecipeKey,
+  recipeAssignments,
+  resolveMixtureRecipe,
 } from './configPageMixtureSupport'
 import type { ConfigData, DecisionConfig } from './configPageSupport'
 
@@ -140,5 +146,83 @@ describe('Mixture model assignments', () => {
 
     expect(updated.routing?.decisions?.[0].modelRefs?.[0].model).toBe('local/balanced')
     expect(updated.decisions).toBeUndefined()
+  })
+})
+
+const builtInCatalog: BuiltInRecipeCatalog = {
+  catalog_version: 'latest',
+  bundles: [
+    {
+      name: 'mom-v1',
+      sha256: 'sha256:aaaa',
+      recipes: [
+        {
+          name: 'vault',
+          description: 'Keep private traffic inside the deployment boundary.',
+          decisions: [
+            {
+              name: 'guard',
+              description: 'Contain prompt attacks.',
+              algorithm: null,
+              minimum_candidates: 0,
+            },
+            {
+              name: 'private',
+              description: 'Serve private requests.',
+              algorithm: 'multi_factor',
+              minimum_candidates: 2,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}
+const vault = { bundle: 'mom-v1', name: 'vault' }
+
+describe('Built-in recipe assignments', () => {
+  it('lists installed recipes under keys distinct from config recipes of the same name', () => {
+    expect(builtInRecipeChoices(builtInCatalog)).toEqual([vault])
+    expect(builtInRecipeChoices(null)).toEqual([])
+    expect(mixtureRecipeKey(vault)).not.toBe(mixtureRecipeKey({ name: 'vault' }))
+  })
+
+  it('takes decision requirements from the listing and starts unassigned', () => {
+    const config: ConfigData = { recipes: [{ name: 'vault', routing: { decisions } }] }
+
+    expect(resolveMixtureRecipe(config, builtInCatalog, vault)).toEqual({
+      description: 'Keep private traffic inside the deployment boundary.',
+      decisions: [
+        { name: 'guard', description: 'Contain prompt attacks.', minimumCandidates: 0 },
+        { name: 'private', description: 'Serve private requests.', minimumCandidates: 2 },
+      ],
+    })
+    expect(recipeAssignments(config, vault)).toEqual({})
+    expect(
+      resolveMixtureRecipe(config, builtInCatalog, { name: 'vault' }).decisions.map(
+        (decision) => decision.minimumCandidates,
+      ),
+    ).toEqual([1, 1])
+    expect(recipeAssignments(config, { name: 'vault' })).toEqual(assignmentState(decisions))
+    expect(resolveMixtureRecipe(config, builtInCatalog, null)).toEqual({ decisions: [] })
+  })
+
+  it('binds only decisions that call a model, with the refs a config recipe receives', () => {
+    const assignments = { guard: ['local/fast'], private: ['local/fast', 'remote/frontier'] }
+    const bindings = builtInRecipeBindings(
+      resolveMixtureRecipe({}, builtInCatalog, vault).decisions,
+      assignments,
+    )
+    const [configured] = assignDecisionModels(
+      [{ ...decisions[0], name: 'private', modelRefs: [] }],
+      assignments,
+    )
+
+    expect(Object.keys(bindings)).toEqual(['private'])
+    expect(bindings.private).toEqual([
+      { model: 'local/fast', use_reasoning: false },
+      { model: 'remote/frontier', use_reasoning: false },
+    ])
+    expect(bindings.private).toEqual(configured.modelRefs)
   })
 })

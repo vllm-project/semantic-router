@@ -241,8 +241,7 @@
             "usage": {
               "input_tokens": 2,
               "input_tokens_details": {
-                "cache_write_tokens": null,
-                "cached_tokens": null
+                "cached_tokens": 0
               },
               "output_tokens": 5,
               "output_tokens_details": {

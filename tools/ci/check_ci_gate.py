@@ -20,6 +20,7 @@ from execution_batches import (
     expected_dispatch_jobs,
     image_producers,
     platform_batches,
+    scheduled_verifications,
 )
 from execution_targets import TARGET_FIELDS, target_errors
 from provider_mocker_image import validate_acquisition
@@ -124,6 +125,16 @@ def evaluate_gate(
         required
     ):
         errors.append("plan records do not exactly match expected verification IDs")
+    reused = plan.get("reused_verification_ids", [])
+    if not valid_inventory(reused) or any(
+        name not in planned
+        or planned[name].get("execution") != "automatic"
+        or planned[name].get("images")
+        for name in reused
+    ):
+        errors.append(
+            "reused inventory must contain only planned image-free automatic contracts"
+        )
     for name, record in planned.items():
         errors.extend(f"{name}: {error}" for error in target_errors(record))
         if record.get("contract_sha256") != digest(
@@ -155,7 +166,7 @@ def evaluate_gate(
             ("platform_batches", platform_batches),
             ("e2e_batches", e2e_batches),
         ):
-            if plan.get(field) != build_batches(plan["verifications"]):
+            if plan.get(field) != build_batches(scheduled_verifications(plan)):
                 errors.append(
                     f"plan {field} differs from required verification inventory"
                 )
@@ -275,13 +286,13 @@ def evaluate_gate(
     )
 
 
-def load_receipts(directory: Path, plan: dict) -> list[dict]:
+def receipt_artifact_names(plan: dict) -> set[str]:
     # A rerun can expand authorization and regroup workers. Artifacts from an
     # obsolete batch remain in the run even with upload-artifact overwrite.
     # Select physical containers from this plan; never deduplicate their cases.
     names = {
         f"ci-result-{record['id']}"
-        for record in plan["verifications"]
+        for record in scheduled_verifications(plan)
         if record["executor"] not in {"tools", "platform", "e2e"}
     }
     names.update(
@@ -291,9 +302,15 @@ def load_receipts(directory: Path, plan: dict) -> list[dict]:
         f"ci-result-{batch['id']}"
         for batch in [*plan["platform_batches"], *plan["e2e_batches"]]
     )
+    if plan.get("reused_verification_ids"):
+        names.add("ci-result-reused")
+    return names
+
+
+def load_receipts(directory: Path, plan: dict) -> list[dict]:
     return [
         json.loads(path.read_text())
-        for name in sorted(names)
+        for name in sorted(receipt_artifact_names(plan))
         for path in sorted((directory / name).glob("*.json"))
     ]
 

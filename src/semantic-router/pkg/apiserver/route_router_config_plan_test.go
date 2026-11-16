@@ -95,7 +95,7 @@ func TestHandleConfigPlanTreatsFormattingOnlyChangeAsUnchanged(t *testing.T) {
 
 func TestHandleConfigPlanRejectsUnknownMode(t *testing.T) {
 	configPath := writeDeployTestBaseConfig(t)
-	body, err := json.Marshal(routerConfigPlanRequest{YAML: "version: v0.3\n", Mode: "patch"})
+	body, err := json.Marshal(routerConfigPlanRequest{YAML: "version: v0.5\n", Mode: "patch"})
 	if err != nil {
 		t.Fatalf("marshal plan: %v", err)
 	}

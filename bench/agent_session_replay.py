@@ -31,7 +31,7 @@ FIXTURE_KEYS: frozenset[str] = frozenset(
 TURN_KEYS: frozenset[str] = frozenset({"id", "phase", "append_messages"})
 ROUTER_HEADERS: tuple[str, ...] = (
     "x-vsr-selected-decision",
-    "x-vsr-session-phase",
+    "session_phase",
     "x-vsr-replay-id",
 )
 

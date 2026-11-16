@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"io"
@@ -146,7 +147,8 @@ func (s *routingSession) Evidence() routing.Evidence {
 
 // Close ends the request the way the end of its ext_proc stream would: EOF
 // after a delivered response, cancellation or a deadline when the transport
-// gave up early.
+// gave up early. A local reply was delivered too, but no response phase saw
+// it, so its replay record keeps what the client got.
 func (s *routingSession) Close(err error) {
 	if s.closed {
 		return
@@ -160,8 +162,11 @@ func (s *routingSession) Close(err error) {
 		return
 	}
 	transportErr := io.EOF
+	var local *routing.LocalReply
 	switch {
 	case err == nil:
+	case errors.As(err, &local):
+		s.router.failAnsweredRouterReplay(s.ctx, local.Status, nil, "upstream_"+cmp.Or(local.Failure, "unavailable"))
 	case errors.Is(err, context.DeadlineExceeded):
 		transportErr = context.DeadlineExceeded
 	default:
@@ -198,6 +203,9 @@ func (s *routingSession) phase(
 		s.end(err)
 		return nil, err
 	}
+	if s.ctx.streamedBodyRejected {
+		s.end(nil)
+	}
 	return effect, nil
 }
 
@@ -207,6 +215,7 @@ func (s *routingSession) end(err error) {
 	}
 	s.ended = true
 	releaseInflightAdmission(s.ctx)
+	releaseStreamedBody(s.ctx)
 	finishRequestTrace(s.ctx, err)
 	if s.release != nil {
 		s.release()

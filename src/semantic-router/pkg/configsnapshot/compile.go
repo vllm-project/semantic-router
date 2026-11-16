@@ -203,8 +203,10 @@ func (c *compiler) clusterSecret(alias string, params config.ModelParams, endpoi
 	if params.AuthoredModel != nil {
 		for _, ref := range params.AuthoredModel.BackendRefs {
 			switch {
-			case ref.APIKeyEnv != "":
-				spec.Env = appendUnique(spec.Env, ref.APIKeyEnv)
+			case ref.Auth != nil && ref.Auth.APIKeyEnv != "":
+				spec.Env = appendUnique(spec.Env, ref.Auth.APIKeyEnv)
+			case ref.Auth != nil && ref.Auth.APIKeyFile != "":
+				spec.Files = appendUnique(spec.Files, ref.Auth.APIKeyFile)
 			case ref.APIKey != "":
 				spec.Inline++
 			}
@@ -231,9 +233,6 @@ func (c *compiler) programs() {
 	for _, recipe := range recipes {
 		name := string(recipe.Name)
 		path := "recipes[" + name + "]"
-		if recipe.Name == config.DefaultRecipeName {
-			path = "routing"
-		}
 		program := &Resource{Ref: Ref{Kind: KindProgram, Name: name}, Path: path, Hash: fingerprint(recipe)}
 		spec := ProgramSpec{}
 		clusters := make(map[string]bool)
@@ -292,18 +291,18 @@ func (c *compiler) listeners() {
 			Path: path,
 			Spec: ListenerSpec{Address: listener.Address, Port: listener.Port, Timeout: listener.Timeout},
 		}
-		if len(listener.APIKeys) > 0 {
+		if keys := listener.ClientKeys(); len(keys) > 0 {
 			secret := &Resource{
 				Ref:  Ref{Kind: KindSecret, Name: "listener/" + listener.Name},
 				Path: path + ".api_keys",
-				Spec: SecretSpec{Inline: len(listener.APIKeys)},
+				Spec: SecretSpec{Inline: len(listener.APIKeys), Files: listener.APIKeyFiles},
 			}
-			secret.Hash = secretFingerprint(secret.Name, listener.APIKeys)
+			secret.Hash = secretFingerprint(secret.Name, keys)
 			c.add(secret)
 			resource.Refs = []Ref{secret.Ref}
 		}
 		content := listener
-		content.APIKeys = nil
+		content.APIKeys, content.FileKeys = nil, nil
 		resource.Hash = fingerprint(content)
 		c.add(resource)
 	}

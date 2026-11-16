@@ -1,0 +1,13 @@
+# The model registry of the Router's flat layout before config v0.3, which
+# mapped a model's local path to the repository it was downloaded from.
+# Migrate drops it with a note: a deployment names its model as its artifact
+# in global.model_catalog.deployments.
+mom_registry:
+  "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
+  "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
+vllm_endpoints:
+  - {name: local, address: 127.0.0.1, port: 8000, weight: 1}
+model_config:
+  general: {preferred_endpoints: [local]}
+default_model: general
+strategy: priority

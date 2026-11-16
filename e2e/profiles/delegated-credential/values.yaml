@@ -1,0 +1,131 @@
+# delegated-credential E2E profile values.
+#
+# Two concrete models, each on its own provider-mocker instance:
+#   gateway-model → delegated-gateway (auth.credential: delegated). The mocker
+#                   accepts only "Bearer dc-virtual-key-alice", the credential
+#                   the stand-in authenticator issues alice.
+#   static-model  → static-backend (auth.api_key_env). The mocker accepts only
+#                   "Bearer static-key-e2e", so a leaked delegated credential
+#                   would fail this path.
+# The delegated decision-model deployment, delegated-decisions, is the System
+# One API of the same delegated-gateway mocker: a decision-model call without
+# alice's credential fails there, and its signal would be unknown.
+# Both mockers refuse any request that still carries x-vsr-delegated-credential.
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
+  pullPolicy: Never
+  tag: e2e-test
+service:
+  type: ClusterIP
+  port: 8080
+persistence:
+  enabled: false
+config:
+  version: v0.5
+  listeners: []
+  providers:
+    defaults:
+      model: static-model
+    models:
+      - name: gateway-model
+        api_format: openai
+        backend_refs:
+          - name: delegated-gateway
+            endpoint: delegated-gateway.delegated-credential-system.svc.cluster.local:8000
+            weight: 1
+            provider: openai-compatible
+            auth:
+              credential: delegated
+      - name: static-model
+        api_format: openai
+        backend_refs:
+          - name: static-backend
+            endpoint: static-backend.delegated-credential-system.svc.cluster.local:8000
+            weight: 1
+            provider: openai-compatible
+            auth:
+              api_key_env: DELEGATED_CREDENTIAL_E2E_STATIC_KEY
+  evaluation:
+    records:
+      - model: gateway-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.6
+      - model: static-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.5
+  recipes:
+    - name: default
+      decisions:
+        # The delegated decision model answers this rule with alice's
+        # credential; without one the request is answered 401 before the call.
+        - name: decision_model_route
+          description: Route requests the delegated decision model confirms to the delegated gateway
+          priority: 100
+          rules:
+            operator: AND
+            on_unknown: no_match
+            conditions:
+              - type: systemone
+                name: delegated_check
+          modelRefs:
+            - model: gateway-model
+              use_reasoning: false
+        - name: route_to_static
+          description: Route every other request to the static-key backend
+          priority: 50
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: all_requests
+          modelRefs:
+            - model: static-model
+              use_reasoning: false
+      signals:
+        keywords:
+          - name: all_requests
+            operator: OR
+            keywords:
+              - ""
+        systemone:
+          - name: delegated_check
+            description: Whether the delegated decision model confirms the request.
+            deployment: delegated-decisions
+            question:
+              type: noul
+              instructions: Does the request carry the delegated decision marker?
+  global:
+    router:
+      clear_route_cache: true
+      strategy: priority
+    model_catalog:
+      deployments:
+        # The provider-mocker's System One fixture answers a noul question
+        # true for a text carrying __SYSTEMONE_YES__.
+        delegated-decisions:
+          provider: systemone
+          endpoint: http://delegated-gateway.delegated-credential-system.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          schema: vllm-sr/4.0
+          timeout_ms: 5000
+          auth:
+            credential: delegated
+          capabilities:
+            question_types: [noul]
+    services:
+      authz:
+        delegated_credential:
+          enabled: true
+          header: x-vsr-delegated-credential
+      observability:
+        metrics:
+          enabled: true
+
+# The static backend's test key; the Router reads it from the environment,
+# never from its configuration.
+extraEnv:
+  - name: DELEGATED_CREDENTIAL_E2E_STATIC_KEY
+    value: static-key-e2e

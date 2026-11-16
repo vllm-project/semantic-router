@@ -70,8 +70,8 @@ func TestARoutingSessionIsAHopOnlyWhenTheProcessMarksIt(t *testing.T) {
 func TestAnInProcessHopIgnoresInternalHeaders(t *testing.T) {
 	ctx := &RequestContext{
 		Headers: map[string]string{
-			headers.VSRLooperRequest:  "true",
-			headers.VSRLooperDecision: "someone-elses-decision",
+			headers.VSRRouteModel:     "someone-elses-model",
+			headers.VSRKVSourcePod:    "10.0.0.9:8000",
 			headers.VSRSelectedRecipe: "someone-elses-recipe",
 			headers.VSRInternalAuth:   "forged",
 		},
@@ -84,7 +84,7 @@ func TestAnInProcessHopIgnoresInternalHeaders(t *testing.T) {
 	if looperHopDecision(ctx) != "fusion-route" || looperHopRecipe(ctx) != "default" {
 		t.Fatalf("decision %q recipe %q", looperHopDecision(ctx), looperHopRecipe(ctx))
 	}
-	for _, name := range looperInternalContextHeaders {
+	for _, name := range droppedClientHeaders {
 		if _, ok := ctx.Headers[name]; ok {
 			t.Fatalf("%s survived", name)
 		}
@@ -95,9 +95,9 @@ func TestAnInProcessHopIgnoresInternalHeaders(t *testing.T) {
 // that the Router did not mark is an ordinary request; the headers go.
 func TestInternalHeadersNeverMakeAHop(t *testing.T) {
 	ctx := &RequestContext{Headers: map[string]string{
-		headers.VSRLooperRequest:  "true",
-		headers.VSRInternalAuth:   "anything",
-		headers.VSRLooperDecision: "fusion-route",
+		headers.VSRRouteModel:   "someone-elses-model",
+		headers.VSRInternalAuth: "anything",
+		headers.VSRKVCacheID:    "forged-cache",
 	}}
 	markLooperHop(ctx)
 	if ctx.LooperRequest || len(ctx.Headers) != 0 {

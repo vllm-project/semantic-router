@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -12,18 +11,23 @@ import (
 type replayAggregateAccumulator struct {
 	payload                                               routerReplayAggregateResponse
 	models, decisions, signals                            map[string]int
-	currencies                                            map[string]*routerreplay.CurrencyCostSummary
+	costs                                                 *replayCostAccumulator
+	providerCache                                         *replayProviderCacheTotals
 	decisionTokens, modelTokens                           map[string]*routerReplayAggregateTokenEntry
 	availableRecipes, availableDecisions, availableModels map[string]struct{}
+	availableReviewModels                                 map[string]struct{}
+	reviews                                               *replayReviewAccumulator
 }
 
 func newReplayAggregateAccumulator() *replayAggregateAccumulator {
 	return &replayAggregateAccumulator{
 		payload: routerReplayAggregateResponse{Object: "router_replay.aggregate"},
 		models:  make(map[string]int), decisions: make(map[string]int), signals: make(map[string]int),
-		currencies:     make(map[string]*routerreplay.CurrencyCostSummary),
+		costs:          newReplayCostAccumulator(),
+		providerCache:  newReplayProviderCacheTotals(),
 		decisionTokens: make(map[string]*routerReplayAggregateTokenEntry), modelTokens: make(map[string]*routerReplayAggregateTokenEntry),
 		availableRecipes: make(map[string]struct{}), availableDecisions: make(map[string]struct{}), availableModels: make(map[string]struct{}),
+		availableReviewModels: make(map[string]struct{}), reviews: newReplayReviewAccumulator(),
 	}
 }
 
@@ -45,6 +49,9 @@ func (r *OpenAIRouter) queryRouterReplayAggregate(filters routerReplayFilters) (
 }
 
 func (a *replayAggregateAccumulator) addOptions(record routerreplay.RoutingRecord) {
+	if record.RequestKind != "" && record.SelectedModel != "" {
+		a.availableReviewModels[record.SelectedModel] = struct{}{}
+	}
 	for _, option := range []struct {
 		set   map[string]struct{}
 		value string
@@ -68,19 +75,9 @@ func (a *replayAggregateAccumulator) add(record routerreplay.RoutingRecord) {
 	a.payload.Lifecycle.Aborted += part.Lifecycle.Aborted
 	a.payload.Lifecycle.InProgress += part.Lifecycle.InProgress
 	a.payload.Lifecycle.Unknown += part.Lifecycle.Unknown
-	a.payload.Summary.CostRecordCount += part.Summary.CostRecordCount
-	a.payload.Summary.ExcludedRecordCount += part.Summary.ExcludedRecordCount
-	for _, currency := range part.Summary.ByCurrency {
-		group := a.currencies[currency.Currency]
-		if group == nil {
-			group = &routerreplay.CurrencyCostSummary{Currency: currency.Currency}
-			a.currencies[currency.Currency] = group
-		}
-		group.TotalSaved += currency.TotalSaved
-		group.ActualSpend += currency.ActualSpend
-		group.BaselineSpend += currency.BaselineSpend
-		group.CostRecordCount += currency.CostRecordCount
-	}
+	a.costs.add(record)
+	a.providerCache.add(record)
+	a.reviews.add(record)
 	for _, value := range part.ModelSelection {
 		a.models[value.Name] += value.Value
 	}
@@ -103,19 +100,8 @@ func (a *replayAggregateAccumulator) add(record routerreplay.RoutingRecord) {
 }
 
 func (a *replayAggregateAccumulator) result() routerReplayAggregateResponse {
-	for _, group := range a.currencies {
-		a.payload.Summary.ByCurrency = append(a.payload.Summary.ByCurrency, *group)
-	}
-	sort.Slice(a.payload.Summary.ByCurrency, func(i, j int) bool {
-		return a.payload.Summary.ByCurrency[i].Currency < a.payload.Summary.ByCurrency[j].Currency
-	})
-	if len(a.payload.Summary.ByCurrency) == 1 {
-		group := a.payload.Summary.ByCurrency[0]
-		a.payload.Summary.Currency = group.Currency
-		a.payload.Summary.TotalSaved = group.TotalSaved
-		a.payload.Summary.BaselineSpend = group.BaselineSpend
-		a.payload.Summary.ActualSpend = group.ActualSpend
-	}
+	a.payload.Summary = a.costs.result()
+	a.payload.ProviderCache = a.providerCache.summary()
 	a.payload.ModelSelection = sortRouterReplayAggregateValues(a.models, 10)
 	a.payload.DecisionDistribution = sortRouterReplayAggregateValues(a.decisions, 0)
 	a.payload.SignalDistribution = sortRouterReplayAggregateValues(a.signals, 0)
@@ -124,5 +110,9 @@ func (a *replayAggregateAccumulator) result() routerReplayAggregateResponse {
 	a.payload.AvailableRecipes = sortRouterReplayOptionSet(a.availableRecipes)
 	a.payload.AvailableDecisions = sortRouterReplayOptionSet(a.availableDecisions)
 	a.payload.AvailableModels = sortRouterReplayOptionSet(a.availableModels)
+	a.payload.Reviews = a.reviews.result()
+	if len(a.availableReviewModels) > 0 {
+		a.payload.AvailableReviewModels = sortRouterReplayOptionSet(a.availableReviewModels)
+	}
 	return a.payload
 }

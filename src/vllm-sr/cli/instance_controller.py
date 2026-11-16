@@ -20,10 +20,9 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from cli.commands.runtime_paths import cli_user_share_gid
+from cli.instance_paths import instance_socket_address
 from cli.instance_runtime import ContainerInstanceBackend
 from cli.instance_state import InstanceConflictError, InstanceController
-
-MAX_UNIX_SOCKET_PATH_BYTES = 103
 
 _UnixStreamServer = getattr(socketserver, "UnixStreamServer", socketserver.TCPServer)
 
@@ -116,11 +115,7 @@ def run(directory: Path):
     with (directory / "controller.lock").open("a") as lock:
         os.chmod(lock.name, 0o600)
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        path = directory / "socket" / "control.sock"
-        if len(os.fsencode(path)) > MAX_UNIX_SOCKET_PATH_BYTES:
-            raise ValueError(
-                "Instance socket path is too long; choose a shorter state root"
-            )
+        path = Path(instance_socket_address(directory))
         path.unlink(missing_ok=True)
         backend = ContainerInstanceBackend(manifest, directory)
         controller = InstanceController(directory, backend)
