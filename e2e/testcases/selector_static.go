@@ -45,8 +45,8 @@ func testStaticSelector(ctx context.Context, client *kubernetes.Clientset, opts 
 		if got := response.Headers.Get("x-vsr-selected-decision"); got != "selector_static" {
 			return fmt.Errorf("static selector request %d: x-vsr-selected-decision=%q, want selector_static", requestNumber, got)
 		}
-		if got := response.Headers.Get("x-vsr-selected-algorithm"); got != "static" {
-			return fmt.Errorf("static selector request %d: x-vsr-selected-algorithm=%q, want static", requestNumber, got)
+		if got := traceValue(response.Headers, "algorithm"); got != "static" {
+			return fmt.Errorf("static selector request %d: x-vsr-trace algorithm=%q, want static", requestNumber, got)
 		}
 		if got := response.Headers.Get("x-vsr-selected-model"); got != "static-first" {
 			return fmt.Errorf("static selector request %d: x-vsr-selected-model=%q, want static-first", requestNumber, got)

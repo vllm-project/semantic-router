@@ -25,6 +25,8 @@ configOverride:
   global:
     router:
       strategy: priority
+      headers:
+        debug: any
     services:
       response_api:
         enabled: false
