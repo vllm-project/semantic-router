@@ -116,6 +116,12 @@ def test_bare_model_renders_the_shared_defaults(tmp_path, monkeypatch):
         assert "retry_back_off" not in retry
     cluster = _cluster(rendered)
     assert cluster["connect_timeout"] == _seconds(DEFAULTS["connect_timeout"])
+    options = cluster["typed_extension_protocol_options"][
+        "envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
+    ]
+    assert options["common_http_protocol_options"]["idle_timeout"] == _seconds(
+        DEFAULTS["idle_connection_timeout"]
+    )
     assert cluster["lb_policy"] == DEFAULTS["lb_policy"].upper()
     thresholds = cluster["circuit_breakers"]["thresholds"][0]
     assert (

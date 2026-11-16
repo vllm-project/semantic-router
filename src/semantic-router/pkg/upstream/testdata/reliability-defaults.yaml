@@ -7,6 +7,9 @@
 # timeout and the stream idle timeout.
 listener_timeout: 300s
 connect_timeout: 10s
+# An idle backend connection closes after this, before a backend with a 5s
+# keep-alive (uvicorn, Node) closes it.
+idle_connection_timeout: 4s
 lb_policy: round_robin
 least_request_choice_count: 2
 

@@ -269,7 +269,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		}
 	}
 
-	if refused := r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx); refused != nil {
+	if refused := r.fallbackCredentialRefusal(ctx); refused != nil {
 		return refused
 	}
 	return r.failedAttemptResponse(ctx, ctx.fallbackLastFailure)

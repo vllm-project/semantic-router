@@ -24,6 +24,7 @@ import (
 type reliabilityDefaults struct {
 	ListenerTimeout                  string  `yaml:"listener_timeout"`
 	ConnectTimeout                   string  `yaml:"connect_timeout"`
+	IdleConnectionTimeout            string  `yaml:"idle_connection_timeout"`
 	LBPolicy                         string  `yaml:"lb_policy"`
 	LeastRequestChoiceCount          int     `yaml:"least_request_choice_count"`
 	RetryCount                       int     `yaml:"retry_count"`
@@ -98,6 +99,7 @@ func TestNativeDefaultsMatchTheSharedTable(t *testing.T) {
 		{"listener route timeout", listener.Total, mustDuration(t, table.ListenerTimeout)},
 		{"listener idle timeout", listener.Idle, mustDuration(t, table.ListenerTimeout)},
 		{"connect timeout", builtinPolicy().Timeouts.Connect, mustDuration(t, table.ConnectTimeout)},
+		{"idle connection timeout", idleConnTimeout, mustDuration(t, table.IdleConnectionTimeout)},
 		{"lb policy", string(topology.Clusters[0].LBPolicy), table.LBPolicy},
 		{"least request choices", leastRequestChoices, table.LeastRequestChoiceCount},
 		{"retry_on default", config.DefaultProviderRetryOn, table.RetryOn},
