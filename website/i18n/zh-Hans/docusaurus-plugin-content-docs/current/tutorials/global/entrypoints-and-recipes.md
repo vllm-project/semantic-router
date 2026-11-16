@@ -5,7 +5,7 @@ description: 在同一 Semantic Router 部署中，为客户端提供由隔离�
 translation:
   source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/tutorials/global/entrypoints-and-recipes.md"
-  outdated: false
+  outdated: true
 ---
 
 # 虚拟模型 {#virtual-models}

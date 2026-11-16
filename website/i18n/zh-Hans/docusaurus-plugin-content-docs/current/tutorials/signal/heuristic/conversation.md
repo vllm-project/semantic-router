@@ -3,7 +3,7 @@ is_mtpe: false
 translation:
   source_commit: "9fbd7d85183341c61c25dfc526160eb0599434f8"
   source_file: "docs/tutorials/signal/heuristic/conversation.md"
-  outdated: false
+  outdated: true
 ---
 
 # 会话信号 {#conversation-signal}

@@ -5,7 +5,7 @@ description: 通过受支持推理 API 的 model 字段，暴露用于选择路�
 translation:
   source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/tutorials/global/entrypoints.md"
-  outdated: false
+  outdated: true
 ---
 
 # 入口

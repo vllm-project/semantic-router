@@ -5,7 +5,7 @@ description: 一次加入内置模型或提供商，再从共享目录生成所�
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/community/model-provider-day-0-support.md"
-  outdated: false
+  outdated: true
 ---
 
 # 模型与提供商 Day-0 支持

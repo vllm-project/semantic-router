@@ -6,7 +6,7 @@ is_mtpe: false
 translation:
   source_commit: "118fb72eb67a0e7193697e350d7b494dc016631e"
   source_file: "docs/installation/migrate-to-v0-5.md"
-  outdated: false
+  outdated: true
 ---
 
 # 迁移到 v0.5 {#migrate-to-v05}
