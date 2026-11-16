@@ -191,6 +191,22 @@ def connect() -> None:
     is_flag=True,
     help="Also show in Claude Code's status line which models answered, the last first.",
 )
+@click.option(
+    "--delegate",
+    type=click.Choice(["codex"]),
+    default=None,
+    help="Also let Claude Code hand a task to Codex, which works on its own default"
+    " config and login: installs OpenAI's Codex plugin and keeps Claude Code's"
+    " variables out of the commands Codex runs. Needs --key-command for a keyed"
+    " listener, so the gateway key never sits in Claude Code's env.",
+)
+@click.option(
+    "--delegate-source",
+    default=hc.CODEX_PLUGIN_SOURCE,
+    show_default=True,
+    help="Where the Codex plugin installs from with --delegate codex: a"
+    " marketplace's owner/repo, Git URL, or a local checkout.",
+)
 def claude_code(
     router_config,
     base_url,
@@ -210,6 +226,8 @@ def claude_code(
     harness_args,
     scope,
     status_line,
+    delegate,
+    delegate_source,
 ):
     """Route Claude Code's model calls through the gateway."""
     env = dict(os.environ)
@@ -223,10 +241,13 @@ def claude_code(
         worktree,
         harness_home,
         "claude-code",
+        delegate,
     )
     if undo:
         _undo(path.parent)
         return
+    if delegate:
+        _require_clients("claude", "codex")
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
     login = _caller_login("claude-code", doc, model)
@@ -236,6 +257,15 @@ def claude_code(
         # the Router presents Claude Code's own login to Anthropic, or Claude Code
         # runs the key command itself, and a gateway token would go in its place
         token, from_env = "", False
+    if delegate and from_env:
+        # the settings' env reaches every program Claude Code starts: the
+        # plugin's Codex, and each command Codex runs
+        raise click.ClickException(
+            f"--delegate codex would leave the key from ${api_key_env} in Claude"
+            " Code's settings env, which reaches Codex and every command it runs."
+            " Give Claude Code a command that prints the key instead, such as"
+            " --key-command 'pass show vllm-sr/gateway'. Nothing was written."
+        )
     # the harness runs the key command in its session, so the probe's run does too
     session = hs.session_env("claude-code", env, harness_home)
     key = _key(
@@ -296,6 +326,11 @@ def claude_code(
         script, values["statusLine"] = hc.status_line(path)
         changes.append(script)
     changes.append(hc.Change(path, "json-env", values))
+    steps = []
+    if delegate:
+        changes.append(_codex_shell_change(env))
+        notes.append(_codex_default_note(env))
+        steps = _codex_plugin_steps(env, delegate_source)
     label = f"<${api_key_env}>" if from_env else token
     options, plugin_id, state = _vsr_claude_start(
         env, gateway, doc, vsr, from_env, api_key_env, key_command
@@ -316,6 +351,7 @@ def claude_code(
         notes,
         plan,
         model,
+        [shlex.join(argv) for _, _, argv in steps],
     ):
         if check:
             text = hc.set_json_env("", values)
@@ -338,6 +374,8 @@ def claude_code(
             ),
             plan,
         )
+    if delegate:
+        _install_codex_plugin(env, steps, path.parent)
     if scope == "project":
         for kept in hc.keep_out_of_git([path, path.parent / hc.MANIFEST], Path.cwd()):
             echo(f"Added {kept} to this repository's .git/info/exclude.")
@@ -376,6 +414,8 @@ def claude_code(
         settings = path.absolute()  # the harness runs in a directory of its own
         _check("claude-code", lambda *_: hk.claude_argv(settings), env, secrets)
     echo("Start a new Claude Code session to use it.")
+    if delegate:
+        echo("There, /codex:rescue <task> hands a task to Codex.")
 
 
 @connect.command("codex")
@@ -392,6 +432,20 @@ def claude_code(
     help="Write the gateway as the default of Codex's shared config.toml in place"
     " of a profile, since the Codex app reads that file and no profile. This"
     " changes the default for the Codex CLI too; --undo takes it back.",
+)
+@click.option(
+    "--delegate",
+    type=click.Choice(["claude-code"]),
+    default=None,
+    help="Also let Codex ask Claude Code, read-only, through Claude Code's own MCP"
+    " server, which answers on Claude Code's own login or key.",
+)
+@click.option(
+    "--delegate-edits",
+    is_flag=True,
+    help="With --delegate claude-code, also add a skill that hands Claude Code one"
+    " task that may edit files: claude -p, which Codex asks to run outside its"
+    " sandbox.",
 )
 def codex(
     router_config,
@@ -412,6 +466,8 @@ def codex(
     harness_args,
     profile,
     app,
+    delegate,
+    delegate_edits,
 ):
     """Route Codex through the gateway, with a profile or (--app) as its default.
 
@@ -421,6 +477,8 @@ def codex(
     home = hc.codex_home(env)
     if app and launch:
         raise click.UsageError("--launch writes nothing, so it does not take --app")
+    if delegate_edits and not delegate:
+        raise click.UsageError("--delegate-edits goes with --delegate claude-code")
     where = _check_launch(
         launch,
         harness_args,
@@ -429,10 +487,13 @@ def codex(
         worktree=worktree,
         home=harness_home,
         harness="codex",
+        delegate=delegate,
     )
     if undo:
         _undo(home)
         return
+    if delegate:
+        _require_clients("claude")
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
     context_window, notes = _context_window(doc, model, context_window)
@@ -538,7 +599,23 @@ def codex(
             )
     else:
         change = hc.codex_change(home, profile, *settings, key_command, memory_model)
-    changes = [change]
+    changes = [hc.with_claude_mcp(change) if delegate else change]
+    if delegate:
+        notes.append(
+            "Codex asks Claude Code, read-only, through the MCP server claude:"
+            " Claude Code's own `claude mcp serve`,"
+            " which answers on Claude Code's own login or key ($CLAUDE_CONFIG_DIR,"
+            " else ~/.claude). Only its Agent tool is on, approved ahead, and Codex"
+            " waits up to 300 seconds for it."
+        )
+    if delegate_edits:
+        changes.append(hc.claude_skill(home))
+        notes.append(
+            f"The {hc.CLAUDE_SKILL} skill hands Claude Code one task that may edit"
+            " files, when you ask for it: Codex runs claude -p once, with edit tools"
+            " only for a task that asks for edits, and asks you before it runs the"
+            " command outside its sandbox."
+        )
     if catalog_path:
         text = json.dumps(catalog, indent=2) + "\n"
         changes.append(hc.Change(catalog_path, "file", {"file": text}))
@@ -647,6 +724,11 @@ def codex(
         # model_catalog_json is read only when Codex starts (0.166)
         echo("Restart the Codex app so it reads the new model catalog.")
     echo(f"Start Codex with: {shlex.join(['codex', *selected])}")
+    if delegate:
+        echo(
+            "There, ask it to ask Claude Code"
+            + (", or to have Claude Code make an edit." if delegate_edits else ".")
+        )
 
 
 # Seconds the status waits for the gateway's basic reply.
@@ -882,12 +964,22 @@ def _show_status(entry: dict) -> None:
         rows.append((label, f"{item['path']} sets {', '.join(item['keys'])}{trusted}"))
     if entry.get("plugins"):
         rows.append(("vSR plugin", ", ".join(entry["plugins"])))
+    if delegate := entry.get("delegate"):
+        rows.append(("delegates to", _delegation(delegate)))
     probe = entry["probe"]
     rows.append(("gateway now", f"{probe['state']}: {probe['detail']}"))
     # not wrapped, so a path stays whole to copy
     width = max(len(label) for label, _ in rows)
     for label, value in rows:
         echo(f"  {label:<{width}}  {value}")
+
+
+def _delegation(delegate: dict) -> str:
+    if delegate["to"] == "codex":
+        by = "connect" if delegate["installed_by_connect"] else "you"
+        return f"codex: plugin {delegate['plugin']} (installed by {by})"
+    edits = f", edits through the skill {hc.CLAUDE_SKILL}" if delegate["edits"] else ""
+    return f"claude-code: MCP server claude, read-only{edits}"
 
 
 def _chatgpt_caller_backend(doc) -> bool:
@@ -943,6 +1035,7 @@ def _run(
     notes=(),
     plan=(),
     model=None,
+    delegation=(),
 ):
     """Show the changes, check the Router configuration, and write; False on a dry run."""
     heading(f"vllm-sr connect {harness}")
@@ -965,6 +1058,10 @@ def _run(
     if plan:
         echo("vSR (System One) beside it, then:")
         for line in plan:
+            echo(f"  {line}")
+    if delegation:
+        echo("So Claude Code can hand a task to Codex, then:")
+        for line in delegation:
             echo(f"  {line}")
     if dry_run:
         echo("Dry run: nothing was written.")
@@ -993,6 +1090,7 @@ def _check_launch(
     worktree=None,
     home=None,
     harness="",
+    delegate=None,
 ) -> hs.Workspace | None:
     """Refuse options that do not go together, and give the worktree --launch
     starts the harness in: checked to be one, or planned when it is new."""
@@ -1011,8 +1109,8 @@ def _check_launch(
         raise click.UsageError(
             "--undo leaves nothing to check, so it does not take --check"
         )
-    if launch and (undo or status_line):
-        flag = "--undo" if undo else "--status-line"
+    if launch and (undo or status_line or delegate):
+        flag = "--undo" if undo else "--status-line" if status_line else "--delegate"
         raise click.UsageError(f"--launch writes nothing, so it does not take {flag}")
     if not launch:
         return None
@@ -1501,6 +1599,80 @@ def _plugin_state(
     return strings, configured
 
 
+def _require_clients(*names: str) -> None:
+    """Refuse --delegate before anything is written when a client it needs is
+    missing: each runs the other through its own command."""
+    for name in names:
+        if shutil.which(name) is None:
+            raise click.ClickException(
+                f"--delegate needs {name}, which is not on PATH. Nothing was written."
+            )
+
+
+def _claude_listed(env: dict[str, str], kind: str) -> set[str]:
+    """The plugins (by id) or marketplaces (by name) Claude Code has."""
+    argv = ["claude", "plugin", *(["marketplace"] if kind == "marketplaces" else [])]
+    listed = _json_of([*argv, "list", "--json"], env)
+    field = "id" if kind == "plugins" else "name"
+    return {str(e.get(field)) for e in listed or [] if isinstance(e, dict)}
+
+
+def _codex_plugin_steps(env: dict[str, str], source: str) -> list[tuple]:
+    """What installs OpenAI's Codex plugin in Claude Code's own CLI: each step's
+    kind and name, as recorded for --undo, and its command; none when it is there."""
+    if hc.CODEX_PLUGIN in _claude_listed(env, "plugins"):
+        return []
+    steps = [
+        ("plugins", hc.CODEX_PLUGIN, ["claude", "plugin", "install", hc.CODEX_PLUGIN])
+    ]
+    if hc.CODEX_MARKETPLACE not in _claude_listed(env, "marketplaces"):
+        add = ["claude", "plugin", "marketplace", "add", source]
+        steps.insert(0, ("marketplaces", hc.CODEX_MARKETPLACE, add))
+    return steps
+
+
+def _install_codex_plugin(env, steps, manifest_dir: Path) -> None:
+    """Install the Codex plugin after the settings are written, recording each
+    step that ran; a failure leaves the settings and says what to run."""
+    for index, (kind, name, argv) in enumerate(steps):
+        try:
+            _must(argv, env)
+        except click.ClickException as exc:
+            warning(f"The Codex plugin is not installed: {exc.message}. Run:")
+            for _, _, left in steps[index:]:
+                echo(f"  {shlex.join(left)}")
+            return
+        hc.record_install(manifest_dir, kind, name)
+    success(f"{hc.CODEX_PLUGIN} hands Claude Code's tasks to Codex.")
+
+
+def _codex_shell_change(env: dict[str, str]) -> hc.Change:
+    try:
+        return hc.codex_shell_change(hc.codex_home(env))
+    except ValueError as exc:
+        raise click.ClickException(
+            f"{hc.codex_home(env) / 'config.toml'} cannot get the shell setting"
+            f" --delegate codex adds: {exc}. Nothing was written."
+        ) from exc
+
+
+def _codex_default_note(env: dict[str, str]) -> str:
+    """Where the Codex the plugin runs sends its model calls: the plugin runs it
+    with Codex's default config, never a profile."""
+    gateway = hc.codex_default_gateway(hc.codex_home(env))
+    if gateway:
+        return (
+            f"Codex's default config sends to {gateway}, so the Codex the plugin"
+            " runs works there, on Codex's own key or login."
+        )
+    return (
+        "The Codex plugin runs codex with no profile, and Codex's default"
+        f" config ({hc.codex_home(env) / 'config.toml'}) sends to no vLLM-SR gateway,"
+        " so Codex works on its own login, if it has one. Run vllm-sr connect codex"
+        " --app to send it through a gateway."
+    )
+
+
 def _json_of(argv: list[str], env: dict[str, str]):
     try:
         result = subprocess.run(
@@ -1589,6 +1761,20 @@ def _undo(manifest_dir: Path) -> None:
                 json.dumps(back),
             )
             echo(f"restored {plugin_id}: {', '.join(sorted(back))}")
+    # what connect installed, the plugins before their marketplace, each only while
+    # Claude Code still has it
+    added = hc.installed(manifest_dir)
+    if added and shutil.which("claude") is None:
+        raise click.ClickException(
+            "connect installed a Claude Code plugin here, and claude is not on PATH"
+            " to remove it, so nothing was undone."
+        )
+    removing = (("plugins", ["uninstall"]), ("marketplaces", ["marketplace", "remove"]))
+    for kind, verb in removing:
+        for name in added.get(kind, []):
+            if name in _claude_listed(env, kind):
+                _must(["claude", "plugin", *verb, name], env)
+                echo(f"removed {name}")
     try:
         for line in hc.undo_changes(manifest_dir):
             echo(line)

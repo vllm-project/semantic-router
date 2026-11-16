@@ -466,6 +466,135 @@ Restart the app afterwards: Codex reads `model_catalog_json` only when it
 starts. An app started from the desktop often does not see the variables your
 shell exports, so give it `--key-command` rather than `VLLM_SR_API_KEY`.
 
+### Hand work between Claude Code and Codex
+
+```bash
+vllm-sr connect codex --config codex.yaml --app --key-command "pass show vllm-sr/codex"
+vllm-sr connect claude-code --config claude-code.yaml \
+  --key-command "pass show vllm-sr/claude" --delegate codex
+vllm-sr connect codex --config codex.yaml --app \
+  --key-command "pass show vllm-sr/codex" --delegate claude-code
+```
+
+`--delegate` lets each client hand a task to the other, which does it in its
+own official client on its own login or key. No credential passes from one
+client to the other: connect only adds a plugin, an MCP server, a skill and
+settings to each client's own configuration. It previews them with
+`--dry-run`, asks before writing, takes them back with `--undo` like every
+other change it makes, and `connect status` names them under `delegates to`.
+
+**Claude Code to Codex.** `--delegate codex` installs OpenAI's Codex plugin for
+Claude Code ([openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc))
+with Claude Code's own commands, each only when what it adds is missing:
+
+```bash
+claude plugin marketplace add openai/codex-plugin-cc
+claude plugin install codex@openai-codex
+```
+
+`--delegate-source` installs from another source, such as a local checkout. In
+a new Claude Code session, `/codex:rescue <task>` hands the task to Codex, which
+can edit files in its workspace, and its answer comes back. The plugin runs
+`codex app-server` on Codex's default configuration and no profile, so connect
+Codex with `--app` for that Codex to use a gateway. The command says where
+Codex's default configuration sends; without a gateway there, Codex works on
+its own ChatGPT login, if it has one.
+
+Claude Code's settings `env` reaches every program Claude Code starts, the
+plugin's Codex and each command Codex runs included. Two settings keep Claude
+Code's credentials out of them:
+
+- For a listener that takes a key, `--delegate codex` needs `--key-command`,
+  which Claude Code runs itself as its `apiKeyHelper`, and refuses to write the
+  key from `VLLM_SR_API_KEY` into the settings. Claude Code on its own Claude
+  login, or a listener without keys, needs no key command.
+- It adds `ANTHROPIC_*` to `exclude` under `[shell_environment_policy]` in
+  Codex's `config.toml`, keeping the rest of that table, so a command Codex runs
+  sees no `ANTHROPIC_` variable. Codex's own provider still works, since it
+  reads none of them.
+
+`--undo` uninstalls the plugin, and removes its marketplace, only when connect
+added them, and takes the shell setting back. Connect leaves the plugin's
+review gate off: `/codex:setup --enable-review-gate` would have Codex review
+Claude Code's work every time Claude Code stops.
+
+**Codex to Claude Code.** `--delegate claude-code` adds Claude Code's own MCP
+server to the Codex profile, or with `--app` to `config.toml`:
+
+```toml
+[mcp_servers.claude]
+command = "claude"
+args = ["mcp", "serve"]
+env_vars = ["CLAUDE_CONFIG_DIR"]
+enabled_tools = ["Agent"]
+tool_timeout_sec = 300
+
+[mcp_servers.claude.tools.Agent]
+approval_mode = "approve"
+```
+
+Codex can then ask Claude Code. The `Agent` tool of `claude mcp serve` runs a
+Claude Code subagent on the login or key of `$CLAUDE_CONFIG_DIR` (else
+`~/.claude`), which reads files and answers. It cannot edit or run commands,
+since nobody answers its permission prompts, so this way is read-only. The
+other tools stay off. `Agent` is approved ahead, since `codex exec` refuses an
+MCP call it would have to ask about, and Codex waits up to 300 seconds for it.
+Codex offers it to the model as `mcp__claude__Agent`, with Claude Code's own
+description, which reads much like Codex's own `spawn_agent`. A model may run
+`spawn_agent` instead and still say Claude Code answered, so name the tool when
+you ask, and look for an MCP call to `claude` in Codex's output. Codex 0.166
+cannot be told to prefer it: its `tool_search_always_defer_mcp_tools` feature
+is removed and stays on whatever the configuration says, and connect's model
+catalog turns tool search off, so the tool is offered directly anyway.
+
+`--delegate-edits` adds a skill, `$CODEX_HOME/skills/vllm-sr-claude-code/SKILL.md`,
+for a task you ask Claude Code to do. Codex runs Claude Code's official command
+once for it:
+
+```bash
+claude -p --output-format json --max-turns 10 --tools Read,Grep,Glob -- "<task>"
+claude -p --output-format json --max-turns 10 \
+  --tools Read,Grep,Glob,Edit,Write --permission-mode acceptEdits -- "<task>"
+```
+
+The first, read-only, is the default, and the second is for a task that asks
+for edits. Claude Code reaches its model over the network and keeps its session
+in its own home, so Codex asks you to run that one command outside its sandbox
+(`require_escalated`), and Approve for me can answer for you. Network access
+stays off for every other command. The skill never uses `--bare`, which would
+skip Claude Code's own login.
+
+You still sign each client in, or connect each to its gateway, start a new
+Claude Code session, and restart Codex and the Codex app, which load MCP
+servers and skills when they start.
+
+**Loops.** A task one client hands to the other could come back. The command
+wires neither client to do that on its own: `claude -p` above has no `Bash` or
+`Agent` tool, so it cannot start Codex, the MCP subagent cannot run commands,
+and the skill tells Codex not to hand back a task Claude Code gave it. The
+plugin's `codex:codex-rescue` subagent is described to Claude Code as one to use
+proactively, so Claude Code may hand a task to Codex you did not ask it to. A
+`claude mcp serve` subagent does not stop when Codex stops waiting for it: in
+one test it made about 164 model calls in ten minutes and went on after Codex
+was killed. Stop such a process yourself, and
+[set budgets](#set-budgets-before-running-a-task) before a long task.
+
+**In Replay.** Each client calls its gateway itself, with its own session
+headers, so Router Replay files a handed-over task under a session of the
+client that did it: the Codex thread the plugin starts, or the session `claude
+mcp serve` or `claude -p` starts. Nothing links it to the session that handed
+it over. The gateway's access log names the client in its user agent: the
+plugin's Codex sends `Claude Code/<Codex version> (...) (Claude Code; <plugin
+version>)`, the MCP server `claude-cli/<version> (external, mcp)`, and the
+skill's `claude -p` `claude-cli/<version> (external, sdk-cli)`.
+
+**What delegation is not.** Caller mode forwards only the login that came with
+each request, and never connects or refreshes a second account. Using another
+provider's model inside one session needs that provider's API key on the
+gateway, and Anthropic does not support routing Claude Code to non-Claude
+models through a gateway. Delegation keeps each login inside its own official
+client.
+
 ### Router settings for Claude Code
 
 ```yaml

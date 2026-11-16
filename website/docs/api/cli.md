@@ -1014,6 +1014,8 @@ Route Claude Code's model calls through the gateway.
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--scope CHOICE` | user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.  [default: user] Choices: user, project. |
 | `--status-line` | Also show in Claude Code's status line which models answered, the last first. Default: false. |
+| `--delegate CHOICE` | Also let Claude Code hand a task to Codex, which works on its own default config and login: installs OpenAI's Codex plugin and keeps Claude Code's variables out of the commands Codex runs. Needs --key-command for a keyed listener, so the gateway key never sits in Claude Code's env. Choices: codex. |
+| `--delegate-source TEXT` | Where the Codex plugin installs from with --delegate codex: a marketplace's owner/repo, Git URL, or a local checkout.  [default: openai/codex-plugin-cc] |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr connect codex` {#vllm-sr-connect-codex}
@@ -1046,6 +1048,8 @@ The default is what the Codex app reads, and the Codex CLI without --profile.
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--profile TEXT` | The Codex profile to write.  [default: vllm-sr] |
 | `--app` | Write the gateway as the default of Codex's shared config.toml in place of a profile, since the Codex app reads that file and no profile. This changes the default for the Codex CLI too; --undo takes it back. Default: false. |
+| `--delegate CHOICE` | Also let Codex ask Claude Code, read-only, through Claude Code's own MCP server, which answers on Claude Code's own login or key. Choices: claude-code. |
+| `--delegate-edits` | With --delegate claude-code, also add a skill that hands Claude Code one task that may edit files: claude -p, which Codex asks to run outside its sandbox. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr connect pi` {#vllm-sr-connect-pi}
