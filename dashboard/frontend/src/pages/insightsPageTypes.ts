@@ -308,7 +308,11 @@ export interface InsightsAggregateValue {
 }
 
 export interface InsightsAggregateCurrencySummary {
+  /** Savings net of the Router calls of the compared requests. */
   total_saved: number
+  /** baseline_spend minus actual_spend, before those Router calls. */
+  gross_saved?: number
+  netted_router_call_spend?: number
   baseline_spend: number
   actual_spend: number
   router_call_spend?: number
@@ -330,10 +334,18 @@ export interface InsightsAggregateCostCoverage {
   unpriced_router_calls: number
   baseline_sources?: Record<string, number>
   baseline_unavailable?: Record<string, number>
+  /** Router calls netted out of savings, by kind. */
+  netted_router_calls?: Record<string, number>
+  /** Requests left out of savings for a Router call without a price, by why. */
+  net_unavailable?: Record<string, number>
 }
 
 export interface InsightsAggregateSummary {
+  /** Savings net of the Router calls of the compared requests. */
   total_saved: number
+  /** baseline_spend minus actual_spend, before those Router calls. */
+  gross_saved?: number
+  netted_router_call_spend?: number
   baseline_spend: number
   actual_spend: number
   router_call_spend?: number

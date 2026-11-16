@@ -287,6 +287,9 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
             <span className={styles.costSubtle}>
               Baseline (configured rates): {row.baseline_model}
             </span>
+            {row.cost_accounting?.router_calls?.length ? (
+              <span className={styles.costSubtle}>Before its Router calls</span>
+            ) : null}
           </div>
         )
       },
