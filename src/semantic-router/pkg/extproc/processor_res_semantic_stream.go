@@ -625,6 +625,31 @@ func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticRespons
 	r.attachRouterReplayResponse(ctx, encoded, true)
 }
 
+// reportStreamingAnswerEstimate debits a stream that carried no usage from its
+// rate-limit budget, with the provider-calibrated estimate of the answer the
+// stream reconstructed. The metrics stay unreported - nothing measured them -
+// but a token budget must not treat the output as free.
+func (r *OpenAIRouter) reportStreamingAnswerEstimate(ctx *RequestContext, response *llmprotocol.Response) int {
+	if r == nil || ctx == nil || r.RateLimiter == nil || ctx.RateLimitCtx == nil || response == nil {
+		return 0
+	}
+	bytes := 0
+	for _, item := range response.Output {
+		for _, content := range item.Content {
+			bytes += len(content.Text)
+		}
+	}
+	if bytes == 0 {
+		return 0
+	}
+	tokens, _ := r.classifierForRequest(ctx).EstimateTokens(tokenCalibrationCategory(ctx), bytes)
+	if tokens <= 0 {
+		return 0
+	}
+	r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{OutputTokens: tokens, TotalTokens: tokens})
+	return tokens
+}
+
 func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	ctx *RequestContext,
 	completionLatency time.Duration,
@@ -637,8 +662,10 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	if usage.invalid {
 		// The stream carried no usable usage, so the request is settled with
 		// what it knows, as the buffered path does: skipping the report would
-		// leave its output tokens out of a token budget.
+		// leave its output tokens out of a token budget. What it knows is an
+		// estimate of the answer it reconstructed.
 		r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
+		r.reportStreamingAnswerEstimate(ctx, ctx.SemanticResponse)
 		usage = responseUsageMetrics{}
 	}
 	totalTokens := responseUsageTotal(usage)
