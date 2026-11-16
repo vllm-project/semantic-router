@@ -109,6 +109,7 @@ func routerReplayFilterParameters() []OpenAPIParameter {
 		queryParameter("model", "Filter by selected model.", "string"),
 		queryParameter("session_id", "Filter by logical session identifier.", "string"),
 		queryParameter("turn_id", "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.", "string"),
+		queryParameter("since", "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.", "string"),
 		queryParameter("cache_status", "Filter by response-cache outcome.", "string", "all", "cached", "streamed"),
 		queryParameter("request_kind", "Filter by request kind; codex_approval_review selects Codex approval reviews.", "string", "all", "codex_approval_review"),
 		queryParameter("review_status", "Filter approval reviews by status.", "string", "all", "pending", "completed", "tool_call", "invalid", "failed", "cancelled"),

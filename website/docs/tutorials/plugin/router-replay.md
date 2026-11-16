@@ -758,6 +758,62 @@ Each record's `route_diagnostics` explains the route:
 - `looper` excludes prompts, tool arguments, credentials and raw errors. Its
   attempt details need `replay.detail`, and any truncation is marked.
 
+### Usage in the terminal
+
+```bash
+vllm-sr usage                     # since midnight today, local time
+vllm-sr usage --since 1h          # or 30m, 7d
+vllm-sr usage --since 7d --json
+vllm-sr usage --endpoint http://localhost:8080
+```
+
+`vllm-sr usage` prints the figures Insights shows for one window, read from
+the replay list and aggregate with `since`:
+
+```text
+Usage since 2026-11-16T00:00:00+09:00 (http://localhost:8080)
+  Requests      6: 6 completed, 0 failed, 0 aborted
+  Sessions      2
+  Spend         0.000094 USD
+  Net savings   0.001436 USD (gross 0.001436 USD, Router calls netted 0.000000 USD, 6 requests compared)
+  Prompt cache  saved 0.000000 USD over 6 requests
+  Reviews       2, approval 50% (1 allowed, 1 denied)
+Top models
+  qwen-chat  3 requests, 0.000071 USD
+  qwen-msg   3 requests, 0.000023 USD
+Top entrypoints
+  vllm-sr/auto    3 requests, 0.000023 USD
+  vllm-sr/review  2 requests, 0.000030 USD
+  qwen-chat       1 request, 0.000041 USD
+```
+
+`Spend` is the aggregate's `total_spend`, the Router's own calls included and
+shown apart when they cost anything. `Net savings` is `total_saved`, with
+`gross_saved` and `netted_router_call_spend` beside it, over the requests
+compared with a baseline; with none it reads `n/a`. Amounts stay per currency.
+`Requests` adds `in progress` and `unknown` when there are any. `Prompt cache`
+is the aggregate's provider prompt-cache saving, and `Reviews` appears when the
+window holds Codex approval reviews. These come from the aggregate. Sessions and
+the top three models and entrypoints come from the window's records: models by
+`selected_model`, entrypoints by `original_model`, the model the client asked
+for. Above, one request asked for `qwen-chat` directly: it is the entrypoint of
+that one request and the selected model of three, the two review requests routed
+to it included. A row's spend adds its requests' own costs as `total_spend` adds
+them, `actual_cost` and the cost of the Router's calls for each request, per
+currency; a request with no price is counted as such, and a Looper hop's cost
+stays with the request that made it. `--json` prints the same, with the
+aggregate's `by_currency`, provider-cache and `reviews` objects as the Router
+returns them and an `unpriced` count on each row.
+
+The command reads the management API at `--endpoint`, by default the local one
+on port 8080 plus `VLLM_SR_PORT_OFFSET`, and sends `VSR_MGMT_TOKEN` as the
+bearer token when set. When the Router answers `404` with `REPLAY_UNAVAILABLE`,
+the command says in one line that Replay is off and how to turn it on, and exits
+with status 1; any other error is printed as the Router gave it. It also exits
+with status 1, asking for an upgrade, when the Router predates it: one that
+still lists a record for a `since` a day ahead has no `since` filter, and one
+without `gross_saved` reports savings with its own calls left in.
+
 ### Agent approval reviews
 
 When Codex's **Approve for me** asks a reviewer whether to run a planned

@@ -1,6 +1,9 @@
 package store
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // QueryFilters is the metadata-only filter contract shared by replay lists and
 // storage queries. Search is a literal, case-insensitive match on the request
@@ -13,6 +16,8 @@ type QueryFilters struct {
 	// TurnID matches a record's turn_id or parent_turn_id: the requests one
 	// agent turn sent and the ones it started, such as its approval reviews.
 	TurnID string
+	// Since keeps the records at or after an instant; zero keeps every one.
+	Since time.Time
 	// RecipeSet distinguishes an explicit legacy empty recipe from no filter.
 	RecipeSet bool
 }
