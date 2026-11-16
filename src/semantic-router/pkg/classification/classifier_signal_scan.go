@@ -765,6 +765,11 @@ func (scan *guardScan) answersTo(question string) ([]windowAnswer, int, string) 
 			reason = "missing_answer"
 		case answer.Error != "":
 			reason = answer.Error
+		case answer.InputCoverage != "complete":
+			// A window's call succeeding says nothing about how much of the
+			// window it read: the answer covers the window only when the
+			// model proved it read all of it.
+			reason = "input_coverage_unknown"
 		default:
 			answered = true
 			read = append(read, windowAnswer{answer: answer, window: index})
