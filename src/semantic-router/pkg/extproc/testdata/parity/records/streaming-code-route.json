@@ -193,6 +193,10 @@
             {
               "name": "x-vsr-selected-model",
               "value": "general-large"
+            },
+            {
+              "name": "x-vsr-replay-id",
+              "value": "<volatile>"
             }
           ],
           "remove": [
@@ -331,6 +335,10 @@
       {
         "name": "x-vsr-selected-model",
         "value": "general-large"
+      },
+      {
+        "name": "x-vsr-replay-id",
+        "value": "<volatile>"
       }
     ],
     "chunks": [

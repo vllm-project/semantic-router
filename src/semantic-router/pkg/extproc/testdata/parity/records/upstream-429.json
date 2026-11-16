@@ -177,6 +177,10 @@
             {
               "name": "x-vsr-selected-model",
               "value": "general-small"
+            },
+            {
+              "name": "x-vsr-replay-id",
+              "value": "<volatile>"
             }
           ]
         }
@@ -272,6 +276,10 @@
       {
         "name": "x-vsr-selected-model",
         "value": "general-small"
+      },
+      {
+        "name": "x-vsr-replay-id",
+        "value": "<volatile>"
       },
       {
         "name": "content-type",

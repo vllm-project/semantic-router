@@ -32,6 +32,11 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 		}
 	}
 	shareReplayOutcomeQueueWithFallback(replayRecorders, globalRecorder)
+	if len(replayRecorders) > 0 || globalRecorder != nil {
+		logging.Warnf("Router replay store_backend is set to %q — all replay records "+
+			"will be lost on configuration reload or router restart. Use \"postgres\" or \"redis\" for durable storage in production.",
+			backend)
+	}
 	return replayRecorders, globalRecorder, false, nil
 }
 
@@ -63,7 +68,7 @@ func shareReplayOutcomeQueueWithFallback(recorders map[string]*routerreplay.Reco
 	routerreplay.ShareOutcomeQueue(group...)
 }
 
-// initializeReplayRecorders creates replay recorders for decisions with router_replay plugin configured.
+// initializeReplayRecorders creates replay recorders for the decisions that record replay.
 func initializeReplayRecorders(cfg *config.RouterConfig) map[string]*routerreplay.Recorder {
 	backend := resolveReplayStoreBackend(cfg.RouterReplay)
 	if usesSharedReplayStorage(backend) {
@@ -231,9 +236,6 @@ func createReplayStore(
 ) (store.Storage, error) {
 	switch backend {
 	case "memory":
-		logging.Warnf("Router replay store_backend is set to %q — all replay records "+
-			"will be lost on configuration reload or router restart. Use \"postgres\" or \"redis\" for durable storage in production.",
-			"memory")
 		return createReplayMemoryStore(decisionName, pluginCfg, globalCfg), nil
 	case "redis":
 		return createReplayRedisStore(globalCfg)

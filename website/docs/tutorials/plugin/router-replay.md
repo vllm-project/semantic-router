@@ -8,6 +8,10 @@ model, token usage, response, and tool trajectory. Configure storage in
 `router_replay` plugin in `global.plugins`; use a recipe's or a decision's
 `router_replay` plugin to override only the capture fields that differ.
 
+Replay is on by default. A configuration without a `router_replay` plugin
+records every request's routing data and none of its text, so Insights,
+sessions and cost work with no extra configuration.
+
 ## What Problem Does It Solve?
 
 Replay keeps request-level evidence together so you can understand a routing
@@ -15,8 +19,9 @@ choice and follow a conversation across requests.
 
 ## When to Use
 
-Enable Replay when you need request history for inspection or troubleshooting.
-Choose retention and capture limits that match the data you are allowed to keep.
+Configure Replay when you need request text for inspection or troubleshooting,
+records that survive a restart, or no records at all. Choose retention and
+capture limits that match the data you are allowed to keep.
 
 ## Configuration
 
@@ -51,7 +56,15 @@ global:
         max_tool_trace_steps: 100
 ```
 
-Without a `router_replay` plugin, Replay stays disabled. The plugin in
+Without a `router_replay` plugin on any layer, Replay records each request's
+routing data only, as `prompt_capture: none` does: the recipe and decision,
+the requested and selected model, token usage, cost, latency, status, and the
+session, turn and agent identifiers the request carries. It keeps no request
+or response body and no prompt, and it writes to the store
+`global.services.router_replay` names: the in-memory store unless you
+configure another, at most `max_records` records for each decision. A
+`router_replay` plugin on any layer replaces that default and records only
+where a layer sets `enabled: true`. The plugin in
 `global.plugins` holds the shared capture defaults; a recipe's plugin
 overrides them, and a decision's plugin overrides its recipe's, field by
 field. Storage, retention and asynchronous writes are global service settings.
@@ -160,8 +173,9 @@ How the layers combine:
 
 - **Opt out one decision** with `configuration: {enabled: false}`.
 - **Change the deployment-wide default** by setting `enabled: false` on the
-  `router_replay` plugin in `global.plugins`, or leaving that plugin out. A
-  recipe or decision can still opt in.
+  `router_replay` plugin in `global.plugins`. A recipe or decision can still
+  opt in. Leaving every `router_replay` plugin out keeps the default record of
+  routing data.
 - **Omitted fields inherit** from the layer below. An explicit `false` is an
   override, and `max_prompt_bytes: 0`, `max_tool_trace_bytes: 0`,
   `max_tool_trace_total_bytes: 0` or `max_tool_trace_steps: 0` removes that
@@ -747,8 +761,10 @@ review when it names an entrypoint that another entrypoint uses as its
 session model, when it carries Codex's review request: its judge instructions,
 the approval request block and the verdict schema
 (`identification_source: content`). Recognition only records; it never changes
-routing, authorization or masking. Replay must be on for the recipe that
-answers reviews; see
+routing, authorization or masking. The default record keeps each review's
+status, verdict, risk, tool and sessions; the action's summary, directory and
+arguments and the rationale need `prompt_capture: raw` with body capture on,
+on the recipe that answers reviews; see
 [Approve for me reviews](../../installation/agent-harness#approve-for-me-reviews).
 
 | Field | Holds |

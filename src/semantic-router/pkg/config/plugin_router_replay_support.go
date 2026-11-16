@@ -61,30 +61,61 @@ func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 	}
 }
 
+// defaultRouterReplayPolicy is the policy of a request none of whose layers
+// has a router_replay plugin: a record of its routing data (the route,
+// decision, models, usage, cost, latency, status and ids) and no request or
+// response text, in the store's default bounds.
+func defaultRouterReplayPolicy() *RouterReplayPluginConfig {
+	policy := DefaultRouterReplayPluginConfig()
+	policy.PromptCapture = PromptCaptureNone
+	policy.CaptureRequestBody, policy.CaptureResponseBody = false, false
+	return &policy
+}
+
 // EffectiveRouterReplayConfig resolves the replay policy a request runs, from
 // an already scoped decision (nil for a request that matched none): its
 // router_replay plugin, layered as RequestPlugins says, over the capture
-// defaults. Recording is off without one, or where no layer enables it.
-// Request-time callers pass the decision because decision names are
-// recipe-local and therefore cannot identify a decision globally.
+// defaults. Without one on any layer the request records its routing data
+// only; with one, recording is off unless a layer enables it. A native
+// decision takes no Chat plugins and records nothing. Request-time callers
+// pass the decision because decision names are recipe-local and therefore
+// cannot identify a decision globally.
 func (c *RouterConfig) EffectiveRouterReplayConfig(decision *Decision) *RouterReplayPluginConfig {
+	if decision != nil && decision.Algorithm.IsNative() {
+		return nil
+	}
 	return RouterReplayPolicyOf(c.RequestPlugins(decision))
 }
 
-// UsesRouterReplay reports whether a reachable request records replay.
+// UsesRouterReplay reports whether a reachable request records replay: a
+// passthrough request, or one of a reachable recipe, with or without a
+// decision.
 func (c *RouterConfig) UsesRouterReplay() bool {
-	uses := false
-	c.visitReachablePlugins(func(plugins []DecisionPlugin) {
-		uses = uses || RouterReplayPolicyOf(plugins) != nil
-	})
-	return uses
+	if RouterReplayPolicyOf(c.GlobalPlugins) != nil {
+		return true
+	}
+	for _, recipe := range c.ReachableRoutingRecipes() {
+		if RouterReplayPolicyOf(recipe.Profile.DefaultPlugins) != nil {
+			return true
+		}
+		for i := range recipe.Profile.Decisions {
+			if c.EffectiveRouterReplayConfig(&recipe.Profile.Decisions[i]) != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // RouterReplayPolicyOf is the replay policy of a request's plugins, nil when
-// none records.
+// none records: the default record without a router_replay plugin, else the
+// plugin's.
 func RouterReplayPolicyOf(plugins []DecisionPlugin) *RouterReplayPluginConfig {
 	index := pluginIndex(plugins, DecisionPluginRouterReplay)
-	if index < 0 || plugins[index].Configuration == nil {
+	if index < 0 {
+		return defaultRouterReplayPolicy()
+	}
+	if plugins[index].Configuration == nil {
 		return nil
 	}
 	plugin := plugins[index]

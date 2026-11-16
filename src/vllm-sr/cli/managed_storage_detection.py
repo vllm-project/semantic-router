@@ -234,12 +234,21 @@ def effective_service_backend(
 
 
 def _router_replay_in_use(config: Mapping[str, Any]) -> bool:
-    """A router_replay plugin turns capture on: in global.plugins, in a
-    recipe's plugins, or in a decision's."""
+    """Without a router_replay plugin in global.plugins the Router records each
+    request's routing data by default. With one there, a router_replay plugin
+    turns capture on: in global.plugins, in a recipe's plugins, or in a
+    decision's."""
     global_config = config.get("global")
-    plugin_lists = [
+    global_plugins = (
         global_config.get("plugins") if isinstance(global_config, Mapping) else None
-    ]
+    )
+    declared = global_plugins if isinstance(global_plugins, list) else []
+    if not any(
+        isinstance(plugin, Mapping) and plugin.get("type") == "router_replay"
+        for plugin in declared
+    ):
+        return True
+    plugin_lists = [global_plugins]
     for _, recipe in recipe_scopes(dict(config)):
         plugin_lists.append(recipe.get("plugins"))
         decisions = recipe.get("decisions")

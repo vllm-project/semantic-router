@@ -165,6 +165,12 @@
                 "key": "x-vsr-selected-model",
                 "rawValueText": "claude-compatible"
               }
+            },
+            {
+              "header": {
+                "key": "x-vsr-replay-id",
+                "rawValueText": "<volatile>"
+              }
             }
           ]
         }
