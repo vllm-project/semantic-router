@@ -240,7 +240,7 @@ func SetupActivateHandler(
 			return
 		}
 
-		if auth.RejectRevokedMutation(w, r) {
+		if rejectKeyReferenceRedirect(w, r, previousData, yamlData) || auth.RejectRevokedMutation(w, r) {
 			return
 		}
 		if _, freshErr := checkConfigMapMutationFresh(configPath); freshErr != nil {

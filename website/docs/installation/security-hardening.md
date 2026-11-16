@@ -104,7 +104,11 @@ providers:
 
 The path must be absolute and the file holds only the key, with mode `600`.
 A missing or empty file stops the configuration from loading, and a hot
-reload then keeps the previous configuration.
+reload then keeps the previous configuration. A check that resolves no
+reference, such as `vllm-sr config validate` or the one `vllm-sr serve` runs
+with the Router image before it restarts the stack, checks only the path, as
+it leaves an environment variable unread: the file may be mounted only where
+the Router runs. A listener's `api_key_files` are checked the same way.
 
 A listener's client keys, the gateway keys clients send, take the same two
 references. An `api_keys` entry written as `"${NAME}"` reads the key from that
@@ -203,6 +207,18 @@ stays as written.
   is in that copy and that history entry too, until the next Dashboard or
   management API save moves it. Keep keys out of your own file with
   `${NAME}` or `auth.api_key_file`.
+
+A Dashboard user without the `config.secrets.read` permission, such as the
+Write role, sees a saved key's reference but never the key. Such a user can
+save `auth.api_key_file`, or the key Secret's `VSR_KEY_` variable, only where
+the saved configuration already uses it, on the same destination (`endpoint`,
+`provider`, `protocol` and the other fields a redacted key is checked on).
+Moving that backend to another host, naming the reference from another
+backend, or naming a file the configuration does not use is refused with
+`403`, since the Router would send what it reads there. To send a key
+somewhere new, enter the key itself. A user with `config.secrets.read` can
+name any key file. A variable you wrote yourself, such as `${OPENAI_API_KEY}`,
+is not a saved key and is not checked.
 
 ### Move an existing literal key
 

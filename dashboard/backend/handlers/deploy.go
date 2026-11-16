@@ -286,6 +286,10 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
+	if rejectKeyReferenceRedirect(w, r, existingData, yamlBytes) {
+		return
+	}
+
 	warnings, err := validateMergedDeploy(yamlBytes)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")

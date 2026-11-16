@@ -30,6 +30,10 @@ import (
 // starts, which is when a ConfigMap save takes effect.
 const KeySecretNameEnv = "VLLM_SR_K8S_KEY_SECRET_NAME" //nolint:gosec // G101: a variable name, not a credential.
 
+// KeySecretEntryPrefix begins the name of each key the Secret holds, which is
+// also the environment variable a configuration reads it from.
+const KeySecretEntryPrefix = "VSR_KEY_"
+
 const keySecretTimeout = 10 * time.Second
 
 // envName is an entry name that envFrom loads as an environment variable.
@@ -60,7 +64,7 @@ func (s KeySecret) Ref(key string, create bool) (config.KeyRef, bool, error) {
 		}
 		suffix := make([]byte, 8)
 		_, _ = rand.Read(suffix) // crypto/rand.Read never fails since Go 1.24.
-		entry = "VSR_KEY_" + strings.ToUpper(hex.EncodeToString(suffix))
+		entry = KeySecretEntryPrefix + strings.ToUpper(hex.EncodeToString(suffix))
 		data[entry] = []byte(key)
 		return true
 	})
