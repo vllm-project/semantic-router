@@ -391,6 +391,20 @@ request without `store` and reports a `dropped` diagnostic for `store` in
 `x-vsr-warnings`. Chat Completions and Responses backends still receive
 `store` as the client sent it.
 
+### Chat reasoning budgets
+
+The Router maps Chat `reasoning_budget_tokens` to vLLM's
+`thinking_token_budget`. Other Chat providers cannot honor the neutral budget,
+so the Router rejects the request with `lossy_translation` by default.
+
+Listing `reasoning_budget_tokens` in `global.router.allow_lossy_translation`
+sends a non-vLLM Chat request without the budget and reports a `dropped`
+diagnostic in `x-vsr-warnings`. The Router preserves `reasoning_effort` and
+other request fields. If the source used `thinking.type: enabled`, the
+provider's default reasoning behavior applies after the budget is removed.
+This also applies when an Anthropic Messages request is routed to a non-vLLM
+Chat provider.
+
 ### Responses state, custom tools and verbosity
 
 - **Stored state.** A Responses client can still use `previous_response_id`
@@ -496,8 +510,8 @@ tools or error translation.
   and `content.file` for files a model cannot read and `tools.defer_loading`
   for deferred tool loading, all described above,
   `reasoning.signature` (see the signed thinking note above), `store` (see
-  stored completions above), and every other lossy translation still fails
-  closed.
+  stored completions above), and `reasoning_budget_tokens` (see Chat reasoning
+  budgets above). Every other lossy translation still fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.

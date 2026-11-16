@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -26,12 +27,76 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	shadows ...*shadowTarget,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
 	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(request, model, target, shadows...)
+	projected, budgetDiagnostics, err := r.projectUnsupportedReasoningBudget(projected, model, target)
+	if err != nil {
+		return projected, nil, err
+	}
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, samplingDiagnostics := r.projectUnsupportedSampling(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, samplingDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(reasoningDiagnostics, budgetDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, samplingDiagnostics, otherDiagnostics), err
+}
+
+// projectUnsupportedReasoningBudget follows the same projection path during
+// candidate qualification and final dispatch. A non-vLLM Chat provider fails
+// closed unless the operator explicitly accepts dropping its budget.
+func (r *OpenAIRouter) projectUnsupportedReasoningBudget(
+	request llmprotocol.Request,
+	model string,
+	target llmprotocol.WireFormat,
+) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
+	if request.ReasoningBudgetTokens == nil || target != llmprotocol.OpenAIChatV1 || r.providerTypeForModel(model) == vllmProviderType {
+		return request, nil, nil
+	}
+	field := llmprotocol.LossyFieldReasoningBudget
+	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, field) {
+		return request, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"lossy_translation",
+			"translation would lose "+field+llmprotocol.OptInHint(field),
+			nil,
+		)
+	}
+	projected, diagnostics := llmprotocol.ProjectUnsupportedReasoningBudget(request, target)
+	return projected, diagnostics, nil
+}
+
+// providerTypeForModel resolves the provider selected by the same primary
+// backend lookup used for dispatch. Legacy endpoints can still identify their
+// provider through VLLMEndpoint.Type.
+func (r *OpenAIRouter) providerTypeForModel(model string) string {
+	if r == nil || r.Config == nil {
+		return ""
+	}
+	_, endpointName, found, err := r.Config.ResolvePrimaryBackendForModel(model)
+	if err != nil || !found {
+		return ""
+	}
+	if profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName); profileErr == nil && profile != nil {
+		if providerType, typeErr := profile.ProviderType(); typeErr == nil {
+			return strings.ToLower(strings.TrimSpace(providerType))
+		}
+		return strings.ToLower(strings.TrimSpace(profile.Type))
+	}
+	if endpoint, exists := r.Config.GetEndpointByName(endpointName); exists {
+		return strings.ToLower(strings.TrimSpace(endpoint.Type))
+	}
+	return ""
+}
+
+// appendRequestProjectionDiagnostics keeps a projection warning to one entry
+// when the same request is encoded again during a retry or fallback.
+func appendRequestProjectionDiagnostics(ctx *RequestContext, diagnostics llmprotocol.Diagnostics) {
+	if ctx == nil {
+		return
+	}
+	for _, diagnostic := range diagnostics {
+		if !slices.Contains(ctx.ProtocolDiagnostics, diagnostic) {
+			ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostic)
+		}
+	}
 }
 
 // projectUnsupportedSampling sends a model the request without the sampling

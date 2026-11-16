@@ -35,7 +35,7 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	if err != nil {
 		return body, err
 	}
-	body, err = adaptChatReasoningBudget(body, dispatch)
+	body, err = r.adaptChatReasoningBudget(body, dispatch)
 	if err != nil {
 		return nil, err
 	}
@@ -79,10 +79,11 @@ func (r *OpenAIRouter) reportApproximatedReasoningDisplay(ctx *RequestContext, d
 	}
 }
 
-// adaptChatReasoningBudget projects the Router-neutral Chat budget only when
-// the selected provider is vLLM. If both fields reach the provider boundary,
-// the explicit vLLM-native value wins and the neutral alias is consumed.
-func adaptChatReasoningBudget(body []byte, dispatch *providerDispatch) ([]byte, error) {
+// adaptChatReasoningBudget projects the Router-neutral Chat budget to vLLM's
+// native field. Other providers should have been rejected or projected by the
+// shared request projection before encoding. An explicit non-null vLLM value
+// takes precedence.
+func (r *OpenAIRouter) adaptChatReasoningBudget(body []byte, dispatch *providerDispatch) ([]byte, error) {
 	if dispatch == nil || dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
 		return body, nil
 	}
@@ -95,11 +96,15 @@ func adaptChatReasoningBudget(body []byte, dispatch *providerDispatch) ([]byte, 
 	if dispatch.profile != nil {
 		providerType, _ = dispatch.profile.ProviderType()
 	}
+	if providerType == "" {
+		providerType = r.providerTypeForModel(dispatch.effectiveBackendModel())
+	}
 	if providerType != vllmProviderType {
+		field := llmprotocol.LossyFieldReasoningBudget
 		return nil, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
-			"unsupported_capability",
-			"the selected provider cannot honor reasoning_budget_tokens",
+			"lossy_translation",
+			"translation would lose "+field+llmprotocol.OptInHint(field),
 			nil,
 		)
 	}

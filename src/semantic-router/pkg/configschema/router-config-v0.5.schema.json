@@ -1223,6 +1223,7 @@
               "content.file",
               "tools.defer_loading",
               "reasoning.signature",
+              "reasoning_budget_tokens",
               "store"
             ]
           },

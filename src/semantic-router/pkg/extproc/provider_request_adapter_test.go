@@ -189,7 +189,7 @@ func TestVLLMChatReasoningBudgetProjection(t *testing.T) {
 	}
 }
 
-func TestChatReasoningBudgetRequiresSupportingProvider(t *testing.T) {
+func TestChatReasoningBudgetRequiresSharedProjectionForUnsupportedProvider(t *testing.T) {
 	decision := reasoningDecision("route", "", 0, "deepseek-model", boolPtr(true), "max")
 	router := newReasoningRouter(
 		config.ReasoningConfig{ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
@@ -209,20 +209,17 @@ func TestChatReasoningBudgetRequiresSupportingProvider(t *testing.T) {
 	ctx := &RequestContext{VSRSelectedDecision: &decision}
 
 	noBudgetBody := []byte(`{"model":"deepseek-model","messages":[]}`)
-	adapted, err := adaptChatReasoningBudget(noBudgetBody, dispatch)
+	adapted, err := router.adaptChatReasoningBudget(noBudgetBody, dispatch)
 	require.NoError(t, err)
 	assert.Equal(t, noBudgetBody, adapted)
 
-	adapted, err = router.adaptProviderRequest(
-		[]byte(`{"model":"deepseek-model","messages":[],"reasoning_effort":"max","reasoning_budget_tokens":1024}`),
-		dispatch,
-		ctx,
-	)
+	body := []byte(`{"model":"deepseek-model","messages":[],"reasoning_effort":"max","reasoning_budget_tokens":1024}`)
+	adapted, err = router.adaptProviderRequest(body, dispatch, ctx)
 	var protocolErr *llmprotocol.ProtocolError
 	require.ErrorAs(t, err, &protocolErr)
 	assert.Equal(t, llmprotocol.ErrorUnsupportedFeature, protocolErr.Category)
-	assert.Equal(t, "unsupported_capability", protocolErr.Code)
-	require.ErrorContains(t, err, "cannot honor reasoning_budget_tokens")
+	assert.Equal(t, "lossy_translation", protocolErr.Code)
+	assert.ErrorContains(t, err, "reasoning_budget_tokens in global.router.allow_lossy_translation")
 	assert.Nil(t, adapted)
 }
 
