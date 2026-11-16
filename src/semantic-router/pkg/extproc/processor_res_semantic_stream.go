@@ -569,8 +569,13 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 
 	usage := r.takeNeutralResponseUsage(ctx)
 	// The buffered path records the response's model; the stream reconstructs
-	// the same answer, so the span names the model it observed too.
-	observeUpstreamResponse(ctx, ctx.SemanticStreamState.model, usage)
+	// the same answer, so the span names the model it observed too. A stream
+	// that never initialised (unsupported source format) still settles here.
+	responseModel := ""
+	if state := ctx.SemanticStreamState; state != nil {
+		responseModel = state.model
+	}
+	observeUpstreamResponse(ctx, responseModel, usage)
 	r.reportSemanticStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 

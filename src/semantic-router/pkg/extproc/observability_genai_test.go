@@ -51,6 +51,20 @@ func TestUpstreamSpanCarriesGenAIAttributes(t *testing.T) {
 	}
 }
 
+// TestCompleteSemanticStreamSettlesAStreamThatNeverStarted pins the settle path
+// for a response body whose stream state was never created: an unsupported
+// source format never builds one, and settling must not read through it.
+func TestCompleteSemanticStreamSettlesAStreamThatNeverStarted(t *testing.T) {
+	router, _ := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	ctx := &RequestContext{Headers: map[string]string{}, SourceFormat: "bogus/v0", RequestID: "unstarted-stream"}
+
+	require.NotPanics(t, func() {
+		require.Nil(t, router.completeSemanticStream(ctx, nil))
+	})
+	require.True(t, ctx.StreamingComplete)
+	require.True(t, ctx.StreamingAborted)
+}
+
 // exportedUpstreamSpanAttributes dispatches one request and feeds the
 // provider's response through the same ExtProc handlers Process uses, then
 // returns the attributes of the upstream span the SDK exported.
