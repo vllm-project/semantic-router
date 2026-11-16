@@ -108290,15 +108290,6 @@ const builtInCatalogJSON = `{
             "currency": "USD",
             "prompt_per_1m": 0.1
           },
-          "restrictions": {
-            "long_context_pricing": {
-              "cache_write_multiplier": 5.0,
-              "cached_input_multiplier": 5.0,
-              "completion_multiplier": 5.0,
-              "input_threshold_tokens": 100000,
-              "prompt_multiplier": 5.0
-            }
-          },
           "verification": {
             "source": "https://platform.claude.com/docs/en/about-claude/pricing",
             "status": "claimed",
@@ -110539,15 +110530,6 @@ const builtInCatalogJSON = `{
             "currency": "USD",
             "prompt_per_1m": 2.0
           },
-          "restrictions": {
-            "long_context_pricing": {
-              "cache_write_multiplier": 2.0,
-              "cached_input_multiplier": 2.0,
-              "completion_multiplier": 1.5,
-              "input_threshold_tokens": 272000,
-              "prompt_multiplier": 2.0
-            }
-          },
           "verification": {
             "source": "https://developers.openai.com/api/docs/pricing",
             "status": "claimed",
@@ -110562,15 +110544,6 @@ const builtInCatalogJSON = `{
             "completion_per_1m": 5.0,
             "currency": "USD",
             "prompt_per_1m": 1.0
-          },
-          "restrictions": {
-            "long_context_pricing": {
-              "cache_write_multiplier": 2.0,
-              "cached_input_multiplier": 2.0,
-              "completion_multiplier": 1.5,
-              "input_threshold_tokens": 272000,
-              "prompt_multiplier": 2.0
-            }
           },
           "verification": {
             "source": "https://developers.openai.com/api/docs/pricing",
@@ -110587,15 +110560,6 @@ const builtInCatalogJSON = `{
             "currency": "USD",
             "prompt_per_1m": 2.0
           },
-          "restrictions": {
-            "long_context_pricing": {
-              "cache_write_multiplier": 2.0,
-              "cached_input_multiplier": 2.0,
-              "completion_multiplier": 1.5,
-              "input_threshold_tokens": 272000,
-              "prompt_multiplier": 2.0
-            }
-          },
           "verification": {
             "source": "https://developers.openai.com/api/docs/pricing",
             "status": "claimed",
@@ -110610,15 +110574,6 @@ const builtInCatalogJSON = `{
             "completion_per_1m": 0.5,
             "currency": "USD",
             "prompt_per_1m": 0.1
-          },
-          "restrictions": {
-            "long_context_pricing": {
-              "cache_write_multiplier": 2.0,
-              "cached_input_multiplier": 2.0,
-              "completion_multiplier": 1.5,
-              "input_threshold_tokens": 272000,
-              "prompt_multiplier": 2.0
-            }
           },
           "verification": {
             "source": "https://developers.openai.com/api/docs/pricing",

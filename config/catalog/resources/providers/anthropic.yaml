@@ -178,13 +178,6 @@ price_list:
     cache_write_per_1m: 0.125
     cache_write_1h_per_1m: 0.2
     completion_per_1m: 0.5
-  restrictions:
-    long_context_pricing:
-      input_threshold_tokens: 100000
-      prompt_multiplier: 5.0
-      cached_input_multiplier: 5.0
-      cache_write_multiplier: 5.0
-      completion_multiplier: 5.0
   verification:
     status: claimed
     verified_at: 2026-11-16

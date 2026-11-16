@@ -599,12 +599,6 @@ class ModelCatalogValidationTests(unittest.TestCase):
         entry = {
             "id": "listed-only",
             "pricing": {"currency": "USD", "prompt_per_1m": 1.0},
-            "restrictions": {
-                "long_context_pricing": {
-                    "input_threshold_tokens": 272000,
-                    "prompt_multiplier": 2.0,
-                }
-            },
             "verification": {
                 "status": "claimed",
                 "source": "https://example.com/pricing",
@@ -634,14 +628,23 @@ class ModelCatalogValidationTests(unittest.TestCase):
         catalog._validate_schema([entry], price_list_schema, "price_list")
         catalog._validate_provider_bindings(providers, models, protocols)
 
+        # A price list entry has no restrictions: nothing reads them.
+        restricted = {
+            **entry,
+            "restrictions": {
+                "long_context_pricing": {
+                    "input_threshold_tokens": 272000,
+                    "prompt_multiplier": 2.0,
+                }
+            },
+        }
+        with self.assertRaisesRegex(catalog.CatalogBuildError, "restrictions"):
+            catalog._validate_schema([restricted], price_list_schema, "price_list")
+
         for change, message in (
             ({"id": "native-model"}, "duplicates a provider-native model identifier"),
             ({"pricing": {}}, "pricing must declare a rate"),
-            ({"restrictions": {"tools_protocols": []}}, "unknown fields"),
-            (
-                {"restrictions": {"long_context_pricing": {"prompt_multiplier": 2}}},
-                "input_threshold_tokens must be a positive integer",
-            ),
+            ({"restrictions": restricted["restrictions"]}, "unknown fields"),
         ):
             with self.subTest(change=change):
                 provider["price_list"] = [{**entry, **change}]

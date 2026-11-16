@@ -143,7 +143,7 @@ def _validate_price_list(
 
     for index, item in enumerate(provider.get("price_list", [])):
         path = f"{provider_path}.price_list[{index}]"
-        _reject_unknown(item, {"id", "pricing", "restrictions", "verification"}, path)
+        _reject_unknown(item, {"id", "pricing", "verification"}, path)
         native_id = _nonempty_string(item.get("id"), f"{path}.id")
         if native_id in native_ids:
             raise CatalogBuildError(
@@ -152,13 +152,6 @@ def _validate_price_list(
         native_ids.add(native_id)
         if not _mapping(item.get("pricing"), f"{path}.pricing"):
             raise CatalogBuildError(f"{path}.pricing must declare a rate")
-        restrictions = _mapping(item.get("restrictions", {}), f"{path}.restrictions")
-        _reject_unknown(restrictions, {"long_context_pricing"}, f"{path}.restrictions")
-        if "long_context_pricing" in restrictions:
-            _validate_long_context_pricing(
-                restrictions["long_context_pricing"],
-                f"{path}.restrictions.long_context_pricing",
-            )
         verification = _mapping(item.get("verification"), f"{path}.verification")
         _validate_https_url(verification.get("source"), f"{path}.verification.source")
 
@@ -454,9 +447,37 @@ def _validate_provider_model_api_restrictions(
 
     long_context_pricing = restrictions.get("long_context_pricing")
     if long_context_pricing is not None:
-        _validate_long_context_pricing(
-            long_context_pricing, f"{path}.restrictions.long_context_pricing"
+        pricing_path = f"{path}.restrictions.long_context_pricing"
+        pricing = _mapping(long_context_pricing, pricing_path)
+        multiplier_fields = {
+            "prompt_multiplier",
+            "cached_input_multiplier",
+            "cache_write_multiplier",
+            "completion_multiplier",
+        }
+        _reject_unknown(
+            pricing,
+            {"input_threshold_tokens", *multiplier_fields},
+            pricing_path,
         )
+        threshold = pricing.get("input_threshold_tokens")
+        if (
+            not isinstance(threshold, int)
+            or isinstance(threshold, bool)
+            or threshold <= 0
+        ):
+            raise CatalogBuildError(
+                f"{pricing_path}.input_threshold_tokens must be a positive integer"
+            )
+        present_multipliers = multiplier_fields & pricing.keys()
+        if not present_multipliers:
+            raise CatalogBuildError(
+                f"{pricing_path} must declare at least one price multiplier"
+            )
+        for field in sorted(present_multipliers):
+            value = pricing[field]
+            if not _is_finite_number(value) or value <= 0:
+                raise CatalogBuildError(f"{pricing_path}.{field} must be positive")
 
     unsupported_include_values = restrictions.get("unsupported_include_values")
     if unsupported_include_values is not None:
@@ -497,33 +518,6 @@ def _validate_provider_model_api_restrictions(
                 raise CatalogBuildError(
                     f"{protocol_path}[{index}] must be a JSON field name"
                 )
-
-
-def _validate_long_context_pricing(value: Any, pricing_path: str) -> None:
-    pricing = _mapping(value, pricing_path)
-    multiplier_fields = {
-        "prompt_multiplier",
-        "cached_input_multiplier",
-        "cache_write_multiplier",
-        "completion_multiplier",
-    }
-    _reject_unknown(
-        pricing, {"input_threshold_tokens", *multiplier_fields}, pricing_path
-    )
-    threshold = pricing.get("input_threshold_tokens")
-    if not isinstance(threshold, int) or isinstance(threshold, bool) or threshold <= 0:
-        raise CatalogBuildError(
-            f"{pricing_path}.input_threshold_tokens must be a positive integer"
-        )
-    present_multipliers = multiplier_fields & pricing.keys()
-    if not present_multipliers:
-        raise CatalogBuildError(
-            f"{pricing_path} must declare at least one price multiplier"
-        )
-    for field in sorted(present_multipliers):
-        value = pricing[field]
-        if not _is_finite_number(value) or value <= 0:
-            raise CatalogBuildError(f"{pricing_path}.{field} must be positive")
 
 
 def _validate_binding_protocols(

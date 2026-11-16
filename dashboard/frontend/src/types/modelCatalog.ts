@@ -76,7 +76,6 @@ export interface CatalogProvider {
 export interface CatalogPriceListEntry {
   id: string
   pricing: Record<string, string | number | boolean>
-  restrictions?: Record<string, unknown>
   verification: CatalogModelBinding['verification']
 }
 

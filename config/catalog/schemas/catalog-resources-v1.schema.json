@@ -159,11 +159,6 @@
           "minProperties": 1,
           "additionalProperties": {"type": ["number", "string", "boolean"]}
         },
-        "restrictions": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {"long_context_pricing": {"type": "object"}}
-        },
         "verification": {"$ref": "#/$defs/modelBinding/properties/verification"}
       }
     },
