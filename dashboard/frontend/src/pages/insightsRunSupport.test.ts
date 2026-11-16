@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildRunLanes, formatRunCost, getRunPath, runAgentTreeText } from './insightsRunSupport'
+import {
+  buildRunLanes,
+  formatRunCost,
+  getRunPath,
+  runAgentTreeText,
+  runTitle,
+} from './insightsRunSupport'
+import { compactID } from './insightsReviewSupport'
 import type { RunCall, RunResponse } from './insightsRunTypes'
 
 const START = Date.parse('2026-11-16T09:00:00Z')
@@ -103,6 +110,17 @@ describe('run labels', () => {
       }),
     ).toBe('$0.0123')
     expect(formatRunCost({ ...cost, unpriced_records: 2 })).toBe('no price')
+  })
+
+  it('names a run by its session name, else its task, else its session', () => {
+    const summary = run([]).run
+    expect(runTitle({ ...summary, session_name: 'Average helper', prompt: 'fix average' })).toBe(
+      'Average helper',
+    )
+    expect(runTitle({ ...summary, prompt: ' fix average ' })).toBe('fix average')
+    expect(runTitle({ ...summary, session_id: '0123456789abcdef0123' })).toBe(
+      `Session ${compactID('0123456789abcdef0123')}`,
+    )
   })
 
   it('reads the agent tree at a glance and links a run with its step', () => {

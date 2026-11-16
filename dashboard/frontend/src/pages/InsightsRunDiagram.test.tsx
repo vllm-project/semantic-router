@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
-import { RunCallDetails, RunDiagram } from './InsightsRunDiagram'
+import { ModelLabelsContext } from './insightsModelLabelSupport'
+import { RunCallDetails, RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
 import { buildRunLanes } from './insightsRunSupport'
 import type { RunCall, RunResponse } from './insightsRunTypes'
 
@@ -89,5 +90,27 @@ describe('run diagram', () => {
     expect(html).toContain('failed 502')
     expect(html).toContain('Hidden from this viewer')
     expect(html).toContain('href="/insights/rec-2"')
+  })
+
+  it('shows each model by its label and keeps the configured name beside it', () => {
+    const labels = { 'qwen-msg': 'Qwen3.6 35B A3B', 'qwen-chat': 'qwen36' }
+    const [, subagent] = buildRunLanes(response)
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <ModelLabelsContext.Provider value={labels}>
+          <RunLegend run={response.run} />
+          <RunDiagram run={response.run} lanes={buildRunLanes(response)} onSelect={() => undefined} />
+          <RunSegmentPanel
+            segment={subagent.segments[0]}
+            call={failed}
+            onSelectCall={() => undefined}
+          />
+        </ModelLabelsContext.Provider>
+      </MemoryRouter>,
+    )
+    expect(html).toContain('Qwen3.6 35B A3B<small>qwen-msg</small>')
+    expect(html).toContain('title="Qwen3.6 35B A3B (qwen-msg) · 1 call"')
+    expect(html).toContain('subagent 1 · qwen36')
+    expect(html).toContain('qwen36<small>qwen-chat</small>')
   })
 })

@@ -12,6 +12,7 @@ import styles from './InsightsPage.module.css'
 import runStyles from './InsightsRun.module.css'
 import { fetchInsightsJSON } from './insightsPageApi'
 import { RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
+import { ModelLabelsProvider, ModelName } from './insightsModelLabelSupport'
 import { RunEvents, RunOutcomeBadge } from './InsightsRunsView'
 import { compactID } from './insightsReviewSupport'
 import {
@@ -23,6 +24,7 @@ import {
   HARNESS_LABELS,
   runAgentTreeText,
   RUN_MARKER_GLYPHS,
+  runTitle,
   type RunSegment,
 } from './insightsRunSupport'
 import type { RunCall, RunResponse } from './insightsRunTypes'
@@ -36,7 +38,12 @@ function createCallColumns(): Column<RunCall>[] {
       render: (call) => formatDateTime(call.timestamp),
     },
     { key: 'agent', header: 'Agent', width: '110px', render: (call) => call.agent },
-    { key: 'model', header: 'Model', width: '140px', render: (call) => call.model || '-' },
+    {
+      key: 'model',
+      header: 'Model',
+      width: '140px',
+      render: (call) => <ModelName name={call.model} compact />,
+    },
     { key: 'decision', header: 'Decision', width: '130px', render: (call) => call.decision || '-' },
     { key: 'status', header: 'Status', width: '110px', render: describeCallStatus },
     {
@@ -94,7 +101,7 @@ function RunHero({ response }: { response: RunResponse }) {
           {compactID(run.session_id)}
         </span>
         <h1 className={runStyles.task} title={run.prompt}>
-          {run.prompt?.trim() || `Session ${compactID(run.session_id)}`}
+          {runTitle(run)}
         </h1>
         <div className={runStyles.heroStats}>
           <span>{runAgentTreeText(run)}</span>
@@ -120,9 +127,18 @@ function RunHero({ response }: { response: RunResponse }) {
   )
 }
 
+// One agent run, its models read by their labels.
+export default function InsightsRunPage() {
+  return (
+    <ModelLabelsProvider>
+      <AgentRun />
+    </ModelLabelsProvider>
+  )
+}
+
 // One agent run: its agents as lanes on a time axis, a step's details on
 // click, and every call in a table one click further.
-export default function InsightsRunPage() {
+function AgentRun() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session') ?? ''

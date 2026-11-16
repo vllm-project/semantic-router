@@ -45,6 +45,8 @@ export interface RunOutcome {
 
 export interface RunSummary {
   session_id: string
+  // The name the harness gave the session: its title, or the user's rename.
+  session_name?: string
   harness?: string
   prompt?: string
   started_at: string

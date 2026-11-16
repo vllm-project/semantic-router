@@ -12,6 +12,7 @@ import styles from './InsightsPage.module.css'
 import InsightsEmptyState from './InsightsEmptyState'
 import InsightsReviewsView from './InsightsReviewsView'
 import InsightsRunsView from './InsightsRunsView'
+import { ModelLabelsProvider, modelText, useModelLabels } from './insightsModelLabelSupport'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { buildReplayQueryString } from './insightsPageFilters'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
@@ -80,8 +81,18 @@ export function InsightsTurnFilter() {
   )
 }
 
+// Insights, its models read by their labels.
 export default function InsightsPage() {
+  return (
+    <ModelLabelsProvider>
+      <InsightsViews />
+    </ModelLabelsProvider>
+  )
+}
+
+function InsightsViews() {
   const navigate = useNavigate()
+  const modelLabels = useModelLabels()
   const [searchParams] = useSearchParams()
   const reviewsView = searchParams.get('view') === 'reviews'
   const runsView = searchParams.get('view') === 'runs'
@@ -102,7 +113,7 @@ export default function InsightsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const requestSequenceRef = useRef(0)
   const requestAbortControllerRef = useRef<AbortController | null>(null)
-  const tableColumns = useMemo(() => createInsightsTableColumns(), [])
+  const tableColumns = useMemo(() => createInsightsTableColumns(modelLabels), [modelLabels])
 
   const activeFilters = useMemo(
     () => ({
@@ -388,7 +399,7 @@ export default function InsightsPage() {
               <option value="all">All Models</option>
               {availableModels.map((model) => (
                 <option key={model} value={model}>
-                  {model}
+                  {modelText(modelLabels, model)}
                 </option>
               ))}
             </select>

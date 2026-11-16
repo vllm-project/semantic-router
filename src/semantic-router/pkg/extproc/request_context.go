@@ -448,6 +448,11 @@ type RequestContext struct {
 	// metadata at ingress. Replay records it; protection and the agent signal
 	// read its session and thread when no header carries them.
 	AgentTurn codexreview.Turn
+	// SessionTitleRequest marks the side request a harness sends to name its
+	// session, and sessionName is the name its answer gave. Observational
+	// only, like ApprovalReview.
+	SessionTitleRequest bool
+	sessionName         string
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process

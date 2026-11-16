@@ -273,6 +273,7 @@ type Record struct {
 	RequestKind              string                 `json:"request_kind,omitempty"`
 	Review                   *Review                `json:"review,omitempty"`
 	SessionID                string                 `json:"session_id,omitempty"`
+	SessionName              string                 `json:"session_name,omitempty"`
 	TurnIndex                int                    `json:"turn_index"`
 	PreviousResponseID       string                 `json:"previous_response_id,omitempty"`
 	ConversationID           string                 `json:"conversation_id,omitempty"`
@@ -463,6 +464,9 @@ type Enricher interface {
 
 	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
 	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
+
+	// UpdateSessionName stores the name an existing record's answer gave its session.
+	UpdateSessionName(ctx context.Context, id string, name string) error
 }
 
 // StoredPrompt is a record's prompt as it is kept: the text and, when the text

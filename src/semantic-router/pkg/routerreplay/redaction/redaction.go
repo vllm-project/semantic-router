@@ -78,7 +78,7 @@ func redactRecordOrRunMap(item map[string]any) bool {
 
 // redactRunSummaryMap clears a run's agent hashes and the text of the
 // outcomes reported for it, keeping its tree, labels and counts. Its prompt
-// is cleared with a record's fields.
+// and session name are cleared with a record's fields.
 func redactRunSummaryMap(run map[string]any) bool {
 	changed := false
 	if agents, ok := run["agents"].([]any); ok && redactEach(agents, redactAgentIdentityMap) {
@@ -211,7 +211,7 @@ func redactReviewMap(review map[string]any) bool {
 
 func clearRecordPayloadFields(record map[string]any) bool {
 	changed := false
-	for _, field := range []string{"request_body", "response_body", "prompt", "prompt_original_sha256", "tool_definitions"} {
+	for _, field := range []string{"request_body", "response_body", "prompt", "prompt_original_sha256", "tool_definitions", "session_name"} {
 		if clearStringField(record, field) {
 			changed = true
 		}

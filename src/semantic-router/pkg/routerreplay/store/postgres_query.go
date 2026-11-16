@@ -124,8 +124,9 @@ func postgresSummarySelectColumns() string {
 	return strings.Join(columns, ",")
 }
 
-// ScanMetadata streams only the columns used by Insights. Large request,
-// response, tool, safety, and learning payloads never cross the database wire.
+// ScanMetadata streams only the columns used by Insights, with each record's
+// id and its place in its agent run. Large request, response, tool, safety,
+// and learning payloads never cross the database wire.
 func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) error) (err error) {
 	release, err := p.lifecycle.beginMutation()
 	if err != nil {
@@ -133,11 +134,12 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 	}
 	defer release()
 	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`SELECT COALESCE(request_id,''), COALESCE(recipe,''), COALESCE(decision,''),
+	query := fmt.Sprintf(`SELECT id, COALESCE(request_id,''), COALESCE(recipe,''), COALESCE(decision,''),
 		COALESCE(original_model,''), COALESCE(selected_model,''), COALESCE(session_id,''),
 		from_cache, streaming, lifecycle_state, COALESCE(signals, '{}'::jsonb),
 		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s, COALESCE(turn_id, ''), COALESCE(parent_turn_id, ''), cost_accounting
+		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s, COALESCE(turn_id, ''), COALESCE(parent_turn_id, ''), cost_accounting,
+		routing_metadata
 		FROM %s ORDER BY timestamp DESC, id DESC`, postgresReviewMetadataColumn, p.tableName)
 	rows, err := p.db.QueryContext(ctx, query)
 	if err != nil {
@@ -146,13 +148,16 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	for rows.Next() {
 		row := postgresRecordRow{}
-		if err = rows.Scan(&row.record.RequestID, &row.record.Recipe, &row.record.Decision,
+		if err = rows.Scan(&row.record.ID, &row.record.RequestID, &row.record.Recipe, &row.record.Decision,
 			&row.record.OriginalModel, &row.record.SelectedModel, &row.record.SessionID,
 			&row.record.FromCache, &row.record.Streaming, &row.record.LifecycleState, &row.signalsJSON,
 			&row.promptTokens, &row.completionTokens, &row.totalTokens, &row.actualCost,
 			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel, &row.providerCacheJSON,
 			&row.record.Timestamp, &row.record.DurationMS, &row.review.requestKind, &row.review.reviewJSON,
-			&row.record.TurnID, &row.record.ParentTurnID, &row.costAccountingJSON); err != nil {
+			&row.record.TurnID, &row.record.ParentTurnID, &row.costAccountingJSON, &row.routingMetadataJSON); err != nil {
+			return err
+		}
+		if err = unmarshalPostgresRoutingMetadata(row.routingMetadataJSON, &row.record); err != nil {
 			return err
 		}
 		if err = row.review.assign(&row.record); err != nil {

@@ -982,7 +982,8 @@ recipes: the same summary in `run` and every call in time order in `calls`.
 
 | Field | Holds |
 | --- | --- |
-| `prompt` | The main agent's first prompt, when Replay kept it, without `<system-reminder>` blocks. |
+| `session_name` | The name the harness last gave the session, when Replay saw one: see [Session names](#session-names). |
+| `prompt` | The main agent's first prompt, when Replay kept it, without `<system-reminder>` blocks. A session-title request is not the task. |
 | `harness`, `models`, `duration_ms` | The harness, the calls each model answered with Looper hops included, and the time from the first call's start to the last one's end. |
 | `agents` | Each agent: its `label` (`main`, then `subagent 1`, `subagent 2` by first call), the `parent` agent's label, `kind`, `id`, `calls`, first and last call, `spawned_after_record_id` (the parent's last call before this agent's first), `models` and `cost`. |
 | `outcome` | `status` from the main agent's last call: `answered` when it gave a final answer, `failed`, `aborted`, `in_progress`, or `unknown` when it asked for a tool and no call followed. With it `final_answer_record_id`, the tool results the calls carried and how many failed, each counted once, and `reported`, the outcomes posted to `/api/v1/observability/outcomes` for the run's calls. |
@@ -991,16 +992,20 @@ recipes: the same summary in `run` and every call in time order in `calls`.
 | `calls` | Each call's `agent` label, `decision`, matched `signals` as `type:name`, `entrypoint`, `model`, `previous_model` on a switch, `effort`, `selection_method`, `session_action`, `reason` (protection's reason, and the Looper algorithm with its final attempt's reason), lifecycle and status, tokens, `cost`, `router_calls`, `looper_attempts`, `tool_results`, `tool_failures`, `final_answer`, `outcomes`, `markers`, and the Looper `hops` it made. |
 
 Without `replay.detail` a run keeps its tree, labels, markers and counts, and
-loses what its records would: the prompt, the agent hashes, the reasons and the
-text of reported outcomes. The runs list reads the filtered records whole, so
-bound it with `since` on a large PostgreSQL store.
+loses what its records would: the session name, the prompt, the agent hashes,
+the reasons and the text of reported outcomes. The runs list reads the filtered
+records whole, so bound it with `since` on a large PostgreSQL store.
 
-In **Insights**, the **Runs** view lists one row per run: the task, the
-harness, the agents, the models, the outcome, the cost and duration, and the
-events. A run opens as a timeline: a lane per agent in tree order, a dashed
-tick where a subagent started, and consecutive calls of one agent on one model
-drawn as one segment with its calls' markers, so a run of hundreds of calls
-reads as a few blocks. A segment lists its calls, and a call shows its decision
+In **Insights**, the **Runs** view lists one row per run: its session name or
+task, the harness, the agents, the models, the outcome, the cost and duration,
+and the events. Insights shows a model by its label wherever it names one: the
+runs, records and reviews lists, the model filters and charts, a run's lanes,
+legend and step panel, and a record's route, routing, candidate scores, cost
+text and session history, with the configured name beside it, in its tooltip,
+or in parentheses after it. A run opens as a timeline: a lane per agent in
+tree order, a dashed tick where a subagent started, and consecutive calls of
+one agent on one model drawn as one segment with its calls' markers, so a run
+of hundreds of calls reads as a few blocks. A segment lists its calls, and a call shows its decision
 and signals, model and effort, tokens and cost, status and reason, with a link
 to its record. The table of every call is one click further. A record page
 opens its run with **Open run**.
@@ -1022,3 +1027,40 @@ Router's request span carries `session.id`, `vsr.harness`, `vsr.agent.id`,
 
 For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).
+
+#### Session names
+
+A run reads by the name its harness shows for the session, where the gateway
+can see that name. Each harness names a session with a side request of its own,
+which Replay recognises by what the harness marks, never by its prompt, and
+records with `request_kind: session_title`:
+
+| Harness | How it names the session | What Replay records |
+| --- | --- | --- |
+| Claude Code 2.1.273 and later | After the first prompt, an `x-claude-code-request-class: auxiliary` request asking for a JSON object of one `title` field. `/rename` sends nothing; the next request carries the command and its output in its history. | The title the answer gives on the title request's record, and the name a `/rename` gave on the record of each request whose history shows it. The latest names the run. |
+| Codex CLI 0.166.0 | Its terminal UI starts a thread of its own whose turn metadata says `thread_source: thread_title`, under a new `session-id`. No field of that request names the thread it titles, and `/rename` sends nothing. `codex exec` names no thread. | Neither name. A session holding only title requests is no run and is left out of the list. |
+
+Claude Code marks its request class only with `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1`,
+which `vllm-sr connect claude-code` sets. The title is response text and a rename
+request text, so `session_name` is kept only under `prompt_capture: raw` with
+that side's body capture on, never from a masking route's request, and cleared
+for a viewer without `replay.detail`. A run without a name reads by its first
+prompt, then by its session id.
+
+#### Model labels
+
+A record names the model as the configuration does, such as `qwen-msg`.
+`GET /api/v1/observability/replays/models` lists every configured model with
+the label a person reads it by, from the catalog the Router routes with: its
+card's display name when it is catalog-backed (`catalog:`) or its card gives
+one, else the display name of the catalog card its backend's provider maps its
+`provider_model_id` to, else that `provider_model_id`:
+
+```json
+{"object": "router_replay.models", "data": [
+  {"name": "qwen-msg", "label": "Qwen3.6 35B A3B"},
+  {"name": "premium-ref", "label": "qwen36"}
+]}
+```
+
+A record of a model the configuration no longer holds reads by its name.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const replayRunMainAgent = "main"
@@ -24,6 +25,14 @@ type replayRunBuilder struct {
 		recordID string
 		prompt   string
 	}
+	// named is the latest call that named the session, and titles counts
+	// the session-title requests among the calls.
+	named struct {
+		at   time.Time
+		id   string
+		name string
+	}
+	titles int
 }
 
 func newReplayRunBuilder(sessionID string) *replayRunBuilder {
@@ -43,6 +52,19 @@ func (b *replayRunBuilder) add(record routerreplay.RoutingRecord) {
 		(first.recordID == "" || record.Timestamp.Before(first.at)) {
 		first.at, first.recordID, first.prompt = record.Timestamp, record.ID, looper.WithoutSystemReminders(record.Prompt)
 	}
+	if record.RequestKind == store.RequestKindSessionTitle {
+		b.titles++
+	}
+	named := &b.named
+	if record.SessionName != "" && (named.at.Before(record.Timestamp) || (named.at.Equal(record.Timestamp) && named.id < record.ID)) {
+		named.at, named.id, named.name = record.Timestamp, record.ID, record.SessionName
+	}
+}
+
+// titlesOnly reports a session that only asked for a title: the thread
+// Codex starts to title another, which no field ties to that one.
+func (b *replayRunBuilder) titlesOnly() bool {
+	return b.titles == len(b.entries)
 }
 
 // build returns the run's summary and its calls in time order, each Looper
@@ -61,7 +83,7 @@ func (b *replayRunBuilder) build() (routerreplay.RunSummary, []routerreplay.RunC
 		calls = append(calls, lanes.place(entry))
 	}
 	summary := routerreplay.RunSummary{
-		SessionID: b.sessionID, Prompt: b.firstMain.prompt, Calls: len(calls),
+		SessionID: b.sessionID, Name: b.named.name, Prompt: b.firstMain.prompt, Calls: len(calls),
 		Agents: lanes.agents(b.agentCost, calls), Cost: replayRunCost(b.cost, calls),
 		Outcome: replayRunOutcome(entries, calls), Events: replayRunEvents(calls), Models: replayRunModels(calls),
 	}
@@ -197,7 +219,7 @@ func (l *replayRunLanes) place(entry replayRunEntry) routerreplay.RunCall {
 		call.PreviousModel = previous
 		call.Markers = append([]string{routerreplay.RunMarkerSwitch}, call.Markers...)
 	}
-	if call.Model != "" {
+	if call.Model != "" && call.RequestKind == "" {
 		l.lastModel[key] = call.Model
 	}
 	l.lastCall[label] = call

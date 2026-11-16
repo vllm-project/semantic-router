@@ -11,7 +11,7 @@ import styles from './InsightsPage.module.css'
 import runStyles from './InsightsRun.module.css'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
-import { compactID } from './insightsReviewSupport'
+import { ModelName } from './insightsModelLabelSupport'
 import {
   countText,
   formatRunCost,
@@ -23,6 +23,7 @@ import {
   RUN_MARKER_LABELS,
   RUN_OUTCOME_LABELS,
   runAgentTreeText,
+  runTitle,
 } from './insightsRunSupport'
 import type { RunListResponse, RunSummary } from './insightsRunTypes'
 
@@ -64,7 +65,7 @@ function createRunColumns(): Column<RunSummary>[] {
       width: '300px',
       render: (run) => (
         <Link className={runStyles.runTask} to={getRunPath(run.session_id)}>
-          <strong>{run.prompt?.trim() || `Session ${compactID(run.session_id)}`}</strong>
+          <strong title={run.session_name ? run.prompt : undefined}>{runTitle(run)}</strong>
           <span>
             {formatDateTime(run.started_at)} · {formatRunDuration(run.duration_ms)} ·{' '}
             {countText(run.calls, 'call')}
@@ -88,7 +89,7 @@ function createRunColumns(): Column<RunSummary>[] {
           {run.models.map((model) => (
             <span key={model.name} title={`${model.value} calls`}>
               <i style={{ background: modelHue(run.models, model.name) }} />
-              {model.name}
+              <ModelName name={model.name} compact />
             </span>
           ))}
         </span>

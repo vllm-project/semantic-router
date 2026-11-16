@@ -602,6 +602,7 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticResponse *llmprotocol.Response) {
 	recordPrimaryOutputDigest(ctx, semanticResponse)
 	observeApprovalReviewVerdict(ctx, semanticResponse)
+	observeSessionTitle(ctx, semanticResponse)
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	if ctx.ResponseGuard != nil {
 		ctx.ResponseGuard.live = true

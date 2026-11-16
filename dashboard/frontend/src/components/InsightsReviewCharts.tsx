@@ -14,6 +14,7 @@ import type {
   InsightsReviewCost,
   InsightsReviewTimeBucket,
 } from '../pages/insightsReviewTypes'
+import { modelText, useModelLabels } from '../pages/insightsModelLabelSupport'
 import { formatSeconds } from '../utils/dateTime'
 import { formatInsightsCost } from '../utils/insightsCost'
 import styles from './InsightsCharts.module.css'
@@ -129,8 +130,9 @@ function ReviewsOverTimeChart({
 }
 
 function ReviewModelChart({ reviews }: { reviews: InsightsReviewAggregate }) {
+  const labels = useModelLabels()
   const rows = reviews.by_model.map((entry) => ({
-    name: entry.model,
+    name: modelText(labels, entry.model),
     requests: entry.requests,
     cost: formatReviewCost(entry.cost),
   }))

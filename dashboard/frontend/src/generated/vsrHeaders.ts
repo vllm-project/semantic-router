@@ -40,7 +40,7 @@ export const X_CLAUDE_CODE_AGENT_ID = 'x-claude-code-agent-id'
 /** Subagent type Claude Code sends on a subagent's own turns when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: a built-in agent's name such as `Explore`, `Plan` or `general-purpose`, or `custom`, `teammate` or `fork`; `agent` signal rules match it as a type, and providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_AGENT_TYPE = 'x-claude-code-agent-type'
 
-/** Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, and providers receive it. Surface: control. */
+/** Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, Router Replay reads an `auxiliary` call asking for a JSON object of one `title` field as the session's title request and names its run with the answer, and providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_REQUEST_CLASS = 'x-claude-code-request-class'
 
 /** Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. Surface: control. */

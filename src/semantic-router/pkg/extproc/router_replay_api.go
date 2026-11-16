@@ -62,6 +62,8 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 		return r.handleRouterReplayRunsAPI(method, rawQuery)
 	case normalizedPath == routerReplayRunPath:
 		return r.handleRouterReplayRunAPI(method, rawQuery)
+	case normalizedPath == routerReplayModelsPath:
+		return r.handleRouterReplayModelsAPI(method)
 	case normalizedPath == routerReplayDatasetPath:
 		return r.handleRouterReplayDatasetAPI(method, rawQuery)
 	case normalizedPath == routerReplayJudgeTasksPath:

@@ -1,5 +1,6 @@
 import { formatInsightsCost } from '../utils/insightsCost'
 
+import { compactID } from './insightsReviewSupport'
 import type { RunAgent, RunCall, RunCost, RunResponse, RunSummary } from './insightsRunTypes'
 
 export const RUN_MARKER_LABELS: Record<string, string> = {
@@ -66,6 +67,12 @@ export function formatRunDuration(ms: number): string {
   if (seconds < 60) return `${seconds.toFixed(1)}s`
   const minutes = Math.floor(seconds / 60)
   return `${minutes}m ${Math.round(seconds % 60)}s`
+}
+
+// A run reads by the name its harness gave the session, else its main
+// agent's first prompt, else its session.
+export function runTitle(run: RunSummary): string {
+  return run.session_name || run.prompt?.trim() || `Session ${compactID(run.session_id)}`
 }
 
 export function countText(count: number, noun: string): string {

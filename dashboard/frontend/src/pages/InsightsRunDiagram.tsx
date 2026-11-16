@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { formatInsightsCost } from '../utils/insightsCost'
 
 import styles from './InsightsRun.module.css'
+import { ModelName, modelLabel, modelText, useModelLabels } from './insightsModelLabelSupport'
 import { getInsightsRecordPath } from './insightsPageSupport'
 import {
   countText,
@@ -41,8 +42,14 @@ interface RunDiagramProps {
   onSelect: (segment: RunSegment) => void
 }
 
+// A model's label with its configured name, for a tooltip.
+function modelTitle(labels: Record<string, string>, model: string): string {
+  return model ? modelText(labels, model) : 'no model'
+}
+
 // A lane per agent, in tree order, with its calls as segments on one time axis.
 export function RunDiagram({ run, lanes, selected, onSelect }: RunDiagramProps) {
+  const labels = useModelLabels()
   return (
     <div className={styles.diagram} role="list" aria-label="Run timeline">
       {lanes.map((lane) => (
@@ -78,7 +85,7 @@ export function RunDiagram({ run, lanes, selected, onSelect }: RunDiagramProps) 
                   width: `${segment.width}%`,
                   background: modelHue(run.models, segment.model),
                 }}
-                title={`${segment.model || 'no model'} · ${segment.calls.length} call${segment.calls.length === 1 ? '' : 's'}`}
+                title={`${modelTitle(labels, segment.model)} · ${countText(segment.calls.length, 'call')}`}
                 onClick={() => onSelect(segment)}
               >
                 {segment.calls.length > 1 ? (
@@ -105,7 +112,7 @@ export function RunLegend({ run }: { run: RunSummary }) {
       {run.models.map((model) => (
         <span key={model.name}>
           <i style={{ background: modelHue(run.models, model.name) }} />
-          {model.name}
+          <ModelName name={model.name} />
         </span>
       ))}
       {Object.entries(RUN_MARKER_LABELS).map(([marker, label]) => (
@@ -140,6 +147,7 @@ function callCost(call: RunCall) {
 // The details of one call: how it was routed and why, what answered, what it
 // cost, how it ended, and the record it came from.
 export function RunCallDetails({ call }: { call: RunCall }) {
+  const labels = useModelLabels()
   const tokens = `${call.prompt_tokens ?? '-'} in / ${call.completion_tokens ?? '-'} out`
   return (
     <dl className={styles.details}>
@@ -147,8 +155,8 @@ export function RunCallDetails({ call }: { call: RunCall }) {
       <Field label="Signals">{call.signals?.join(', ') || 'none matched'}</Field>
       <Field label="Model">
         {call.entrypoint ? `${call.entrypoint} → ` : ''}
-        {call.model || '-'}
-        {call.previous_model ? ` (was ${call.previous_model})` : ''}
+        <ModelName name={call.model} />
+        {call.previous_model ? ` (was ${modelTitle(labels, call.previous_model)})` : ''}
       </Field>
       <Field label="Effort">{call.effort || '-'}</Field>
       <Field label="Method">
@@ -174,7 +182,9 @@ export function RunCallDetails({ call }: { call: RunCall }) {
       ) : null}
       {call.hops?.length ? (
         <Field label="Hops">
-          {call.hops.map((hop) => `${hop.model} ${describeCallStatus(hop)}`).join(', ')}
+          {call.hops
+            .map((hop) => `${modelLabel(labels, hop.model) || 'no model'} ${describeCallStatus(hop)}`)
+            .join(', ')}
         </Field>
       ) : null}
       {call.outcomes?.length ? (
@@ -200,11 +210,12 @@ interface RunSegmentPanelProps {
 
 // A segment's calls, one per row, and the details of the one picked.
 export function RunSegmentPanel({ segment, call, onSelectCall }: RunSegmentPanelProps) {
+  const labels = useModelLabels()
   return (
     <aside className={styles.panel} aria-label="Step details">
       <header>
-        <strong>
-          {segment.agent} · {segment.model || 'no model'}
+        <strong title={modelTitle(labels, segment.model)}>
+          {segment.agent} · {modelLabel(labels, segment.model) || 'no model'}
         </strong>
         <span>
           {segment.calls.length} call{segment.calls.length === 1 ? '' : 's'}

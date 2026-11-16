@@ -183,3 +183,64 @@ func TestReplayRunRedactsWhatItsRecordsWould(t *testing.T) {
 		require.Empty(t, agent["parent_id"])
 	}
 }
+
+// newNamedRunRouter holds a Claude Code run whose title request came before
+// its first turn and that the user renamed later, and the lone thread Codex
+// starts for a title.
+func newNamedRunRouter(t *testing.T) *OpenAIRouter {
+	t.Helper()
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(20, 0))
+	recorder.SetCapturePolicy(true, true, 0)
+	router := &OpenAIRouter{ReplayStoreShared: true, ReplayRecorder: recorder}
+	start := time.Date(2026, 11, 16, 9, 0, 0, 0, time.UTC)
+	claude := &store.AgentIdentity{Harness: store.HarnessClaudeCode}
+	for _, record := range []routerreplay.RoutingRecord{
+		{
+			ID: "title", SessionID: "cc-run", Timestamp: start, RequestKind: store.RequestKindSessionTitle, Agent: claude,
+			Prompt: "<session>\nfix average\n</session>", SessionName: "Average helper", SelectedModel: "small",
+			LifecycleState: routerreplay.LifecycleCompleted,
+		},
+		{
+			ID: "turn-1", SessionID: "cc-run", Timestamp: start.Add(50 * time.Millisecond), Agent: claude,
+			Prompt: "fix average", SelectedModel: "large", LifecycleState: routerreplay.LifecycleCompleted,
+		},
+		{
+			ID: "turn-2", SessionID: "cc-run", Timestamp: start.Add(time.Minute), Agent: claude,
+			SessionName: "Renamed by the user", SelectedModel: "large", LifecycleState: routerreplay.LifecycleCompleted,
+		},
+		{
+			ID: "codex-title", SessionID: "title-thread", Timestamp: start.Add(2 * time.Minute), RequestKind: store.RequestKindSessionTitle,
+			Agent: &store.AgentIdentity{Harness: store.HarnessCodex}, SelectedModel: "large", LifecycleState: routerreplay.LifecycleCompleted,
+		},
+	} {
+		_, err := router.ReplayRecorder.AddRecord(record)
+		require.NoError(t, err)
+	}
+	return router
+}
+
+// A run takes the name its harness last gave the session and keeps the
+// first turn's prompt as the task; the title request is not the task, and a
+// session that only asked for a title is no agent run.
+func TestReplayRunTakesTheSessionName(t *testing.T) {
+	router := newNamedRunRouter(t)
+	var run routerreplay.RunResponse
+	require.Equal(t, 200, replayAPIJSON(t, router, "/api/v1/observability/replays/run?session_id=cc-run", &run))
+	require.Equal(t, "Renamed by the user", run.Run.Name)
+	require.Equal(t, "fix average", run.Run.Prompt)
+	require.Empty(t, run.Calls[1].Markers, "a side request's model is not the one the agent switched from")
+
+	var runs routerreplay.RunListResponse
+	require.Equal(t, 200, replayAPIJSON(t, router, "/api/v1/observability/replays/runs", &runs))
+	require.Equal(t, 1, runs.Total)
+	require.Equal(t, "cc-run", runs.Data[0].SessionID)
+	require.Equal(t, "Renamed by the user", runs.Data[0].Name)
+	require.Equal(t, "fix average", runs.Data[0].Prompt)
+
+	for _, path := range []string{"/api/v1/observability/replays/run?session_id=cc-run", "/api/v1/observability/replays/runs"} {
+		response := router.handleRouterReplayAPI("GET", path).GetImmediateResponse()
+		redacted, _, err := redaction.RedactResponseBody(response.Body)
+		require.NoError(t, err)
+		require.NotContains(t, string(redacted), "Renamed by the user", path)
+	}
+}

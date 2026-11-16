@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import InsightsCharts from '../components/InsightsCharts'
+import { ModelLabelsContext, modelText } from './insightsModelLabelSupport'
 import { buildInsightsRecordSections, createInsightsTableColumns } from './insightsPageSupport'
 import type {
   InsightsAggregateCostCoverage,
@@ -31,20 +32,20 @@ const priced: InsightsRecord = {
   },
 }
 
-const usageAndCost = (record: InsightsRecord) =>
-  buildInsightsRecordSections(record, { isReadonly: false }).find(
+const usageAndCost = (record: InsightsRecord, modelLabels?: Record<string, string>) =>
+  buildInsightsRecordSections(record, { isReadonly: false, modelLabels }).find(
     (section) => section.title === 'Usage & Cost',
   )!
 
-const field = (record: InsightsRecord, label: string) =>
-  usageAndCost(record).fields.find((item) => item.label === label)?.value
+const field = (record: InsightsRecord, label: string, modelLabels?: Record<string, string>) =>
+  usageAndCost(record, modelLabels).fields.find((item) => item.label === label)?.value
 
 describe('Insights cost accounting labels', () => {
   it('marks list prices and caller logins as estimates and names the configured baseline', () => {
     expect(field(priced, 'Cost basis')).toBe(
       'Recorded tokens × the built-in catalog’s list price (an estimate: no pricing is configured) at capture time; not a GPU bill or provider invoice. It ran on the client’s own login: this is the API-price equivalent, not what the plan charges.',
     )
-    expect(field(priced, 'Baseline basis')).toContain('the configured baseline model (small)')
+    expect(field(priced, 'Baseline basis')).toContain('the configured baseline model, small.')
     expect(field(priced, 'Baseline basis')).toContain(
       'a negative saving means the baseline was cheaper',
     )
@@ -102,6 +103,42 @@ describe('Insights cost accounting labels', () => {
       '3 Looper calls, 0 input / 0 output tokens, 2 priced at $0.02, 1 unpriced (1 no price configured)',
     )
     expect(field(looper, 'Estimated model cost')).toBe('In router calls')
+  })
+})
+
+describe('Insights cost text names models by their labels', () => {
+  const labels = { premium: 'Qwen3.6 35B A3B', small: 'qwen36', 'qwen-chat': 'qwen36' }
+
+  it('keeps the configured name beside the label', () => {
+    expect(modelText(labels, 'premium')).toBe('Qwen3.6 35B A3B (premium)')
+    expect(modelText(labels, 'vllm-sr/auto')).toBe('vllm-sr/auto')
+  })
+
+  it('in the missing price, the baseline, the Router calls and the savings cell', () => {
+    const unpriced: InsightsRecord = {
+      ...priced,
+      actual_cost: undefined,
+      currency: undefined,
+      cost_accounting: {
+        unpriced_reason: 'pricing_not_configured',
+        router_calls: [{ kind: 'decision_model', model: 'qwen-chat', calls: 2 }],
+      },
+    }
+    expect(field(unpriced, 'Cost basis', labels)).toContain(
+      'No price is configured for Qwen3.6 35B A3B (premium).',
+    )
+    expect(field(priced, 'Baseline basis', labels)).toContain(
+      'the configured baseline model, qwen36 (small).',
+    )
+    expect(field(unpriced, 'Router calls', labels)).toContain('2 Decision model calls on qwen36 (qwen-chat)')
+    const savings = createInsightsTableColumns(labels).find(
+      (column) => column.key === 'cost_savings',
+    )!
+    const html = renderToStaticMarkup(
+      <ModelLabelsContext.Provider value={labels}>{savings.render!(priced)}</ModelLabelsContext.Provider>,
+    )
+    expect(html).toContain('Baseline (configured rates): <span')
+    expect(html).toContain('title="Configured as small">qwen36</span>')
   })
 })
 
@@ -264,10 +301,10 @@ describe('Router decision costs', () => {
       },
     }
     expect(field(record, 'Router calls')).toContain(
-      '1 Decision model call (primary), 120 input / 3 output tokens, 1 priced at $0.0020',
+      '1 Decision model call on primary, 120 input / 3 output tokens, 1 priced at $0.0020',
     )
     expect(field(record, 'Router calls')).toContain(
-      '1 System One call (remote), 10 input / 0 output tokens, 1 unpriced',
+      '1 System One call on remote, 10 input / 0 output tokens, 1 unpriced',
     )
     expect(field(priced, 'Router calls')).toBeUndefined()
     // The record's own savings are gross, as the table's column says.
