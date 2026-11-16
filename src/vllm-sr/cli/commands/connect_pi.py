@@ -43,7 +43,7 @@ def pi(
         base._undo(home)
         return
     gateway, doc = base._gateway(router_config, base_url)
-    caller = rc.caller_provider(doc)
+    caller = rc.caller_provider(doc, model)
     if caller:
         raise click.ClickException(
             f"The gateway presents each client's own {caller} login upstream, and Pi"
@@ -64,7 +64,14 @@ def pi(
     key = base._key("pi", key_command, False, env, Path.cwd(), check or not dry_run)
     key_env = api_key_env if from_env else None
     context_window, notes = base._context_window(doc, model, context_window)
-    entry = hp.provider(gateway, model, key_env, context_window, key_command)
+    entry = hp.provider(
+        gateway,
+        model,
+        key_env,
+        context_window,
+        key_command,
+        base._output_limit(doc, model),
+    )
     secrets = [token] if from_env else [key] if key else []
     change = hp.models_change(home, entry)
     if not base._run("pi", [change], home, "", doc, dry_run, yes, notes, (), model):

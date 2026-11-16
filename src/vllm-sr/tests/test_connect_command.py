@@ -3376,6 +3376,96 @@ def test_pi_checks_only_the_models_its_entrypoint_reaches(
     assert "reasoning.signature" in auto.output
 
 
+def _two_entrypoints(caller=False, limit=16384):
+    local = {
+        "name": "local",
+        "api_format": "chat_completions",
+        "max_output_tokens": limit,
+    }
+    login = {"name": "login", "api_format": "responses", "max_output_tokens": 128000}
+    if caller:
+        login["backend_refs"] = [
+            {
+                "endpoint": "https://chatgpt.com/backend-api/codex",
+                "provider": "openai",
+                "auth": {"credential": "caller"},
+            }
+        ]
+
+    def recipe(name, models):
+        refs = [{"model": model} for model in models]
+        return {"name": name, "decisions": [{"name": name, "modelRefs": refs}]}
+
+    return {
+        "providers": {"models": [local, login]},
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "agent"},
+            {"model_names": ["vllm-sr/chat"], "recipe": "chat"},
+        ],
+        "recipes": [recipe("agent", ["local", "login"]), recipe("chat", ["local"])],
+    }
+
+
+def test_pi_checks_the_login_and_limits_of_its_own_entrypoint(
+    tmp_path, gateway, pi_home, monkeypatch
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    config = tmp_path / "pi.yaml"
+    config.write_text(yaml.safe_dump(_two_entrypoints(caller=True)))
+    args = ["connect", "pi", "--config", str(config), "--base-url", url, "--yes"]
+    # a caller login only vllm-sr/auto reaches does not stop Pi on vllm-sr/chat
+    chat = CliRunner().invoke(main, [*args, "--model", "vllm-sr/chat"])
+    assert chat.exit_code == 0, chat.output
+    held = json.loads((pi_home / "models.json").read_text())["providers"]["vllm-sr"]
+    # the model refuses more output than its max_output_tokens
+    assert held["models"][0]["maxTokens"] == 16384
+    auto = CliRunner().invoke(main, [*args, "--model", "vllm-sr/auto"])
+    assert auto.exit_code == 1 and "own openai login upstream" in _flat(auto.output)
+
+
+def test_claude_code_asks_for_no_more_output_than_its_models_allow(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    config = tmp_path / "router.yaml"
+    for limit, want in ((8192, "8192"), (64000, "32000")):
+        config.write_text(yaml.safe_dump(_two_entrypoints(limit=limit)))
+        args = ["connect", "claude-code", "--config", str(config), "--base-url", url]
+        result = CliRunner().invoke(
+            main, [*args, "--model", "vllm-sr/chat", "--no-vsr", "--yes"]
+        )
+        assert result.exit_code == 0, result.output
+        env = json.loads((tmp_path / "claude" / "settings.json").read_text())["env"]
+        assert env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == want
+
+
+def test_one_model_needs_no_session_protection():
+    doc = _two_entrypoints()
+
+    def needs(model):
+        return [f.need for f in rc.check_router_config(doc, "pi", model)]
+
+    assert rc.PROTECTION_NEED in needs("vllm-sr/auto")
+    assert rc.PROTECTION_NEED not in needs("vllm-sr/chat")
+
+
+def test_a_preview_shows_a_key_variable_by_name():
+    change = hc.Change(
+        Path("models.json"), "json", {"providers/vllm-sr": {"apiKey": "!cat key"}}
+    )
+    shown = change.shown(
+        '{"providers": {"vllm-sr": {"apiKey": "$VLLM_SR_API_KEY"}}}', ""
+    )
+    assert "$VLLM_SR_API_KEY" in shown
+    secret = change.shown('{"providers": {"vllm-sr": {"apiKey": "sk-live"}}}', "")
+    assert "sk-live" not in secret and "<hidden>" in secret
+
+
 def test_router_check_for_pi():
     needs = [f.need for f in rc.check_router_config(_router(), "pi")]
     assert any("reasoning.signature" in n for n in needs)

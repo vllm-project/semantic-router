@@ -28,12 +28,16 @@ const (
 // discovery. Display metadata and internal execution modes are not control
 // signals.
 type RoutingMetadata struct {
-	API          config.InferenceAPI     `json:"api"`
-	Source       config.EntrypointSource `json:"source,omitempty"`
-	Resolution   ResolutionKind          `json:"resolution"`
-	Selectable   bool                    `json:"selectable"`
-	DefaultRoute bool                    `json:"default_route,omitempty"`
-	Recipe       config.RecipeName       `json:"recipe,omitempty"`
+	API        config.InferenceAPI     `json:"api"`
+	Source     config.EntrypointSource `json:"source,omitempty"`
+	Resolution ResolutionKind          `json:"resolution"`
+	Selectable bool                    `json:"selectable"`
+	// Delegate is review or memory for an entrypoint another one sends its
+	// approval reviews or memory calls to; such an entrypoint is not offered
+	// for chat.
+	Delegate     string            `json:"delegate,omitempty"`
+	DefaultRoute bool              `json:"default_route,omitempty"`
+	Recipe       config.RecipeName `json:"recipe,omitempty"`
 }
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response.
@@ -83,6 +87,10 @@ func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 		}
 		metadata := selectableVirtualRoute(entrypoint.Recipe, cfg.IsDefaultRecipe(entrypoint.Recipe))
 		metadata.API, metadata.Source = entrypoint.API, entrypoint.Source
+		if len(entrypoint.ModelNames) > 0 {
+			metadata.Delegate = cfg.DelegateRole(config.ChatAPI, entrypoint.ModelNames[0])
+			metadata.Selectable = metadata.Delegate == ""
+		}
 		b.appendAll(entrypoint.ModelNames, routerOwner, description, metadata)
 	}
 }

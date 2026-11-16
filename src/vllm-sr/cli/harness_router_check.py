@@ -70,6 +70,9 @@ def _get(doc: Any, *keys: str) -> Any:
     return doc
 
 
+PROTECTION_NEED = "session protection on this harness's identity headers, so each session and subagent keeps its model"
+
+
 def _protection_finding(router: dict, headers: dict[str, str]) -> RouterFinding | None:
     learning = router.get("learning") or {}
     protection = learning.get("protection") or {}
@@ -83,7 +86,7 @@ def _protection_finding(router: dict, headers: dict[str, str]) -> RouterFinding 
         return None
     lines = "\n".join(f"            {k}: {v}" for k, v in headers.items())
     return RouterFinding(
-        "session protection on this harness's identity headers, so each session and subagent keeps its model",
+        PROTECTION_NEED,
         "global:\n  router:\n    learning:\n      enabled: true\n      protection:\n"
         "        enabled: true\n        scope: session\n        identity:\n          headers:\n"
         + lines,
@@ -333,16 +336,22 @@ def recipe_known_limits(doc: dict, model: str) -> bool:
     return _get(recipe, "candidate_requirements", "context") == "known_limits"
 
 
-def caller_provider(doc: dict | None) -> str | None:
+def caller_provider(doc: dict | None, entrypoint: str | None = None) -> str | None:
     """The provider whose login the Router presents upstream for each client
     (auth.credential: caller), which then has to come from the client in place of
-    a gateway key. Every caller backend names one provider; other models beside
-    them take a key of their own or none."""
+    a gateway key, among the models a request for entrypoint can reach (any model
+    when it is None or the configuration names none it reaches). Every caller
+    backend names one provider; other models beside them take a key of their
+    own or none."""
+    reachable = (
+        entrypoint_models(doc, entrypoint) if doc and entrypoint else None
+    ) or None
     return next(
         (
             str(ref.get("provider") or "").lower()
             for model in _get(doc, "providers", "models") or []
             if isinstance(model, dict)
+            and (reachable is None or model.get("name") in reachable)
             for ref in model.get("backend_refs") or []
             if isinstance(ref, dict)
             and (ref.get("auth") or {}).get("credential") == "caller"
@@ -391,7 +400,24 @@ def check_router_config(
     reach = (lambda _: True) if reachable is None else set(reachable).__contains__
     findings = {"claude-code": _claude_findings, "pi": _pi_findings}
     found = findings.get(harness, _codex_findings)(doc, router, reach)
-    return [f for f in found if f]
+    # an entrypoint that reaches one model has no model to keep
+    single = reachable is not None and len(set(reachable)) <= 1
+    return [f for f in found if f and not (single and f.need == PROTECTION_NEED)]
+
+
+def output_limit(doc: dict | None, entrypoint: str) -> int | None:
+    """The smallest max_output_tokens the models a request for entrypoint can
+    reach declare, None when none declares one."""
+    reachable = set(entrypoint_models(doc, entrypoint) or []) if doc else set()
+    limits = [
+        int(model["max_output_tokens"])
+        for model in _get(doc, "providers", "models") or []
+        if isinstance(model, dict)
+        and model.get("name") in reachable
+        and isinstance(model.get("max_output_tokens"), int)
+        and model["max_output_tokens"] > 0
+    ]
+    return min(limits) if limits else None
 
 
 # --- probes ------------------------------------------------------------------------
