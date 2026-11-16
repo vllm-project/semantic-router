@@ -99,3 +99,55 @@ func TestCollectorWithoutAdaptersIsIdle(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// pinnedAdapter holds its round until finish closes, then records when its
+// idle connections are closed.
+type pinnedAdapter struct {
+	started, finish chan struct{}
+	collecting      atomic.Bool
+	closedMidRound  atomic.Bool
+	idleClosed      chan struct{}
+}
+
+func (a *pinnedAdapter) Engine() Engine { return EngineVLLM }
+
+func (a *pinnedAdapter) Collect(context.Context) ([]Observation, error) {
+	a.collecting.Store(true)
+	close(a.started)
+	<-a.finish
+	a.collecting.Store(false)
+	return nil, nil
+}
+
+func (a *pinnedAdapter) CloseIdleConnections() {
+	a.closedMidRound.Store(a.collecting.Load())
+	close(a.idleClosed)
+}
+
+func TestCollectorClosesIdleConnectionsOnlyAfterItsLastRound(t *testing.T) {
+	adapter := &pinnedAdapter{started: make(chan struct{}), finish: make(chan struct{}), idleClosed: make(chan struct{})}
+	collector := StartCollector(CollectorOptions{Adapters: []Adapter{adapter}, Store: NewStore(time.Minute), Interval: time.Hour})
+	<-adapter.started
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if err := collector.Close(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("bounded Close() = %v", err)
+	}
+	select {
+	case <-adapter.idleClosed:
+		t.Fatal("idle connections closed while a scrape was in flight")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(adapter.finish)
+	if err := collector.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-adapter.idleClosed:
+	default:
+		t.Fatal("idle connections stayed open after the last round")
+	}
+	if adapter.closedMidRound.Load() {
+		t.Fatal("idle connections closed during a round")
+	}
+}

@@ -61,12 +61,28 @@ func New(cfg backendtelemetry.AdapterConfig) (backendtelemetry.Adapter, error) {
 }
 
 // scrapeClient reaches a backend as the Router's own backend calls do: never
-// through an environment proxy, and with the backend's TLS settings.
+// through an environment proxy, and with the backend's TLS settings. It never
+// follows a redirect, so its TLS identity reaches only its own target and a
+// redirected scrape fails instead of reporting another host's load.
 func scrapeClient(timeout time.Duration, tlsConfig *tls.Config) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
 	transport.TLSClientConfig = tlsConfig
-	return &http.Client{Timeout: timeout, Transport: transport}
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+// CloseIdleConnections closes the connections this generation's clients keep
+// between rounds. The collector calls it once its last round has ended.
+func (a *adapter) CloseIdleConnections() {
+	for _, client := range a.clients {
+		client.CloseIdleConnections()
+	}
 }
 
 type adapter struct {

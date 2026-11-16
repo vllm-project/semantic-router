@@ -19,7 +19,8 @@ const MaxBodyBytes = 8 << 20
 // Families are the metric families of one scrape, keyed by name.
 type Families map[string]*dto.MetricFamily
 
-// Fetch scrapes url and parses its text exposition.
+// Fetch scrapes url and parses its text exposition. Any status but 200, a
+// redirect the client did not follow included, makes the scrape unusable.
 func Fetch(ctx context.Context, client *http.Client, url string) (Families, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

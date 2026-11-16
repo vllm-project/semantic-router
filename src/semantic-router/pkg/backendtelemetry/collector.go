@@ -40,8 +40,22 @@ func StartCollector(opts CollectorOptions) *Collector {
 	return c
 }
 
+// idleCloser is an adapter that keeps connections between rounds.
+type idleCloser interface {
+	CloseIdleConnections()
+}
+
 func (c *Collector) run(ctx context.Context, opts CollectorOptions) {
 	defer close(c.done)
+	// Runs after the last round's Collect calls return, even when a bounded
+	// Close stopped waiting, so no in-flight scrape loses its connection.
+	defer func() {
+		for _, adapter := range opts.Adapters {
+			if closer, ok := adapter.(idleCloser); ok {
+				closer.CloseIdleConnections()
+			}
+		}
+	}()
 	ticker := time.NewTicker(opts.Interval)
 	defer ticker.Stop()
 	for {
