@@ -186,7 +186,6 @@ type ProviderDefinition struct {
 type PriceListEntry struct {
 	ID           string                     `json:"id"`
 	Pricing      Pricing                    `json:"pricing"`
-	Restrictions map[string]any             `json:"restrictions,omitempty"`
 	Verification CatalogBindingVerification `json:"verification"`
 }
 

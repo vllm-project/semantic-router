@@ -224,7 +224,7 @@ func applyBindingServiceMetadata(effective modelcatalog.EffectiveModelProvider, 
 		pricing = effective.CatalogBinding.Pricing
 	}
 	if pricing == (modelcatalog.Pricing{}) && params.AuthoredModel != nil && strings.TrimSpace(params.AuthoredModel.Catalog) == "" {
-		pricing = providerListPrice(effective.Provider.Definition, effective.Binding.ModelID)
+		pricing = providerListPrice(effective.Provider, effective.Binding.ModelID)
 	}
 	if params.Pricing == (ModelPricing{}) {
 		params.Pricing = modelPricingFromCatalog(pricing)
@@ -237,20 +237,40 @@ func applyBindingServiceMetadata(effective modelcatalog.EffectiveModelProvider, 
 // providerListPrice is the list price a provider's catalog gives the model ID
 // a backend calls, for a model declared without catalog: a binding's price,
 // or a price list entry's for a model ID with no card. Only the backend's own
-// provider is read, so a vllm backend serving a vendor's model ID is not
-// priced as the vendor.
-func providerListPrice(provider modelcatalog.ProviderDefinition, modelID string) modelcatalog.Pricing {
-	for _, binding := range provider.Models {
+// provider is read, and only on that provider's own hosts, so a vllm backend
+// or an OpenAI-compatible server serving a vendor's model ID is not priced as
+// the vendor.
+func providerListPrice(provider modelcatalog.EffectiveProvider, modelID string) modelcatalog.Pricing {
+	if !servedByProviderHosts(provider) {
+		return modelcatalog.Pricing{}
+	}
+	for _, binding := range provider.Definition.Models {
 		if binding.ID == modelID {
 			return binding.Pricing
 		}
 	}
-	for _, entry := range provider.PriceList {
+	for _, entry := range provider.Definition.PriceList {
 		if entry.ID == modelID {
 			return entry.Pricing
 		}
 	}
 	return modelcatalog.Pricing{}
+}
+
+// servedByProviderHosts reports whether every endpoint of a backend is on its
+// provider's default base URL host or a host that serves its logins.
+func servedByProviderHosts(provider modelcatalog.EffectiveProvider) bool {
+	hosts := slices.Clone(CallerCredentialHosts[provider.Definition.ID])
+	if host, _, _, err := endpointAddress(provider.Definition.DefaultBaseURL); err == nil {
+		hosts = append(hosts, host)
+	}
+	for _, endpoint := range effectiveProviderURLs(provider) {
+		host, _, _, err := endpointAddress(endpoint.url)
+		if err != nil || !slices.Contains(hosts, strings.ToLower(strings.TrimSuffix(host, "."))) {
+			return false
+		}
+	}
+	return true
 }
 
 func appendMaterializedEndpoint(

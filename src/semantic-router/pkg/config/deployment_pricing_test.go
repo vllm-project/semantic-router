@@ -47,7 +47,7 @@ func TestDeploymentPricingValidationAndYAML(t *testing.T) {
 			t.Fatalf("accepted %+v", pricing)
 		}
 	}
-	original := ModelDeployment{Provider: ModelRuntimeProvider, Pricing: &ModelPricing{PromptPer1M: 2}}
+	original := ModelDeployment{Provider: ModelRuntimeProvider, Pricing: &ModelPricing{Currency: "USD", PromptPer1M: 2}}
 	data, err := yaml.Marshal(original)
 	if err != nil {
 		t.Fatal(err)

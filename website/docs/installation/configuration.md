@@ -75,6 +75,8 @@ decision, algorithm, plugin and global block.
   `completion_per_1m`, `cached_input_per_1m`, `cache_write_per_1m` and
   `cache_write_1h_per_1m` rates. A model without it takes its provider's
   [list price](catalog-backed-models#list-prices) when the catalog lists one.
+  A written block always wins and defaults `currency` to `USD`, so zero rates
+  mark a model free.
 - **Backend format.** [Protocol Compatibility](protocol-compatibility) helps
   you choose a backend's `api_format`. Check
   [Backend Target Compatibility](backend-target-compatibility) before moving

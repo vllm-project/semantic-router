@@ -229,6 +229,62 @@ recipes:
 	}
 }
 
+// An openai backend on another host is an OpenAI-compatible server, which
+// OpenAI does not bill: a model ID takes the list price only on the
+// provider's own API.
+func TestVendorModelIDTakesTheListPriceOnlyOnTheProvidersHosts(t *testing.T) {
+	for endpoint, wantPriced := range map[string]bool{
+		"":                                true,
+		"https://api.openai.com/v1":       true,
+		"https://provider.example.com/v1": false,
+		"http://127.0.0.1:8000/v1":        false,
+	} {
+		cfg, err := ParseYAMLBytes([]byte(`version: v0.5
+providers:
+  models:
+    - name: hosted
+      provider_model_id: gpt-5.5
+      backend_refs:
+        - {name: hosted, endpoint: "` + endpoint + `", provider: openai}
+recipes:
+  - name: default
+`))
+		if err != nil {
+			t.Fatalf("%q: %v", endpoint, err)
+		}
+		if pricing, priced := cfg.GetFullModelPricing("hosted"); priced != wantPriced {
+			t.Fatalf("endpoint %q pricing = %+v, %v; want priced %v", endpoint, pricing, priced, wantPriced)
+		}
+	}
+}
+
+// A pricing block the operator wrote wins over the list price whatever its
+// rates, so zero rates make a model free.
+func TestWrittenZeroPricingWinsOverTheListPrice(t *testing.T) {
+	for _, model := range []string{"provider_model_id: gpt-5.5", "catalog: openai/gpt-5.5"} {
+		cfg, err := ParseYAMLBytes([]byte(`version: v0.5
+providers:
+  models:
+    - name: free
+      ` + model + `
+      pricing: {prompt_per_1m: 0, completion_per_1m: 0}
+      backend_refs:
+        - {name: openai, provider: openai}
+recipes:
+  - name: default
+`))
+		if err != nil {
+			t.Fatalf("%s: %v", model, err)
+		}
+		if got, priced := cfg.GetFullModelPricing("free"); !priced || !reflect.DeepEqual(got, ModelPricing{Currency: "USD"}) {
+			t.Fatalf("%s pricing = %+v, %v; want free", model, got, priced)
+		}
+		if provenance, _ := cfg.ModelPricingProvenance("free"); provenance.CatalogListPrice {
+			t.Fatalf("%s pricing is reported as the list price", model)
+		}
+	}
+}
+
 func TestRouterReplayCostBaselineModelLayersFromGlobalPlugins(t *testing.T) {
 	document := strings.Replace(string(costBaselineDocument("small")), "              cost_baseline_model: small\n", "", 1) + `global:
   plugins:

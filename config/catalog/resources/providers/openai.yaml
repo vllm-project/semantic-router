@@ -219,13 +219,6 @@ price_list:
     cached_input_per_1m: 0.1
     cache_write_per_1m: 2.5
     completion_per_1m: 10.0
-  restrictions:
-    long_context_pricing:
-      input_threshold_tokens: 272000
-      prompt_multiplier: 2.0
-      cached_input_multiplier: 2.0
-      cache_write_multiplier: 2.0
-      completion_multiplier: 1.5
   verification:
     status: claimed
     verified_at: 2026-11-16
@@ -237,13 +230,6 @@ price_list:
     cached_input_per_1m: 0.05
     cache_write_per_1m: 1.25
     completion_per_1m: 5.0
-  restrictions:
-    long_context_pricing:
-      input_threshold_tokens: 272000
-      prompt_multiplier: 2.0
-      cached_input_multiplier: 2.0
-      cache_write_multiplier: 2.0
-      completion_multiplier: 1.5
   verification:
     status: claimed
     verified_at: 2026-11-16
@@ -255,13 +241,6 @@ price_list:
     cached_input_per_1m: 0.2
     cache_write_per_1m: 2.5
     completion_per_1m: 10.0
-  restrictions:
-    long_context_pricing:
-      input_threshold_tokens: 272000
-      prompt_multiplier: 2.0
-      cached_input_multiplier: 2.0
-      cache_write_multiplier: 2.0
-      completion_multiplier: 1.5
   verification:
     status: claimed
     verified_at: 2026-11-16
@@ -273,13 +252,6 @@ price_list:
     cached_input_per_1m: 0.01
     cache_write_per_1m: 0.125
     completion_per_1m: 0.5
-  restrictions:
-    long_context_pricing:
-      input_threshold_tokens: 272000
-      prompt_multiplier: 2.0
-      cached_input_multiplier: 2.0
-      cache_write_multiplier: 2.0
-      completion_multiplier: 1.5
   verification:
     status: claimed
     verified_at: 2026-11-16
