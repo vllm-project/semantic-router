@@ -600,6 +600,7 @@ The Router handles them as follows:
 | `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
 | `input[].internal_chat_message_metadata_passthrough` | Accepted and not forwarded. Codex CLI 0.163 attaches it to every input message to record which instructions the message carries; it is client metadata, not model input. |
 | `text.verbosity` | Forwarded to `responses` backends, mapped to `verbosity` for `openai` Chat backends, and reported as `dropped` for `anthropic` Messages backends. The only accepted values are `low`, `medium`, and `high`. |
+| `text.format` with `strict: false` | Codex CLI's Approve for me review asks for its answer this way, with a schema that requires only some of its properties. Forwarded with the flag to `openai` and `responses` backends. Messages always enforces an output schema, so an `anthropic` backend receives the schema without the flag, and `x-vsr-warnings` reports `output_format.strict` as `approximated`. The same applies to a Chat `response_format`. |
 | Omitted `max_output_tokens` | Codex CLI sends no output limit, so a route to an `anthropic` backend gets `max_tokens: 4096` as described above. A reasoning model can spend all of it before it answers, which Codex CLI reports as `Incomplete response returned, reason: max_output_tokens`. Set a positive integer `request_params.default_max_tokens` on the decisions that send Codex CLI to an `anthropic` backend. |
 
 Responses reasoning replay is projected separately for each selected backend,
