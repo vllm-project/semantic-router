@@ -260,6 +260,33 @@ Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
 it, all required checks pass, and all review conversations are resolved.
 
+### Troubleshoot a PR workflow with no jobs
+
+When **PR Gate** is missing, open the PR's **Pull Request** Actions run before
+diagnosing Mergify. A run that remains **Queued** with zero jobs has not reached
+the CI planner or a runner; `/ci run` and queue retries cannot qualify that
+revision while its workflow has not started.
+
+For a fork PR, **Action required** on the Actions run can indicate an approval
+hold. Check **Files changed** for GitHub's **Awaiting approval** control. A
+maintainer may need to inspect the diff and approve the workflow run separately
+from approving the code review. If there is no approval hold,
+compare other workflow runs created at the same time, including unrelated
+issues or PRs, and check [GitHub Status][github-status]. A cluster of unstarted
+runs across event types points to Actions admission rather than this PR's CI
+plan or Mergify configuration.
+
+If runs remain queued with zero jobs after GitHub reports recovery, record the
+run URLs, creation times, head SHA, and zero-job result, then escalate through
+[GitHub Support][github-actions-troubleshooting]. Do not push a no-op commit or
+update a queued branch merely to provoke CI: a new head can dismiss reviews
+and restart qualification. Before treating a replacement run as recovery,
+verify that **PR Gate** is present on the current PR head and reports the
+result of the required work.
+
+[github-status]: https://www.githubstatus.com/
+[github-actions-troubleshooting]: https://docs.github.com/en/actions/how-tos/troubleshoot-workflows
+
 ### Troubleshoot the merge queue
 
 Check the **Mergify Merge Queue** check or Mergify's **Merge Queue Status**
