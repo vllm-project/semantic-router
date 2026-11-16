@@ -458,27 +458,83 @@ func TestUnencodableFastResponseReplayKeepsTheClientsStatus(t *testing.T) {
 }
 
 // A buffered answer the decision's response_guard blocks reaches the client
-// as a 403 refusal, and the record is that refusal, not the 200 the upstream
-// sent followed by an abort.
+// as the refusal a blocking fast_response gives, a 400 in the client's own
+// protocol, and the record is that refusal, not the 200 the upstream sent
+// followed by an abort.
 func TestBlockedAnswerReplayKeepsTheClientsStatus(t *testing.T) {
-	router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.95), config.ResponseGuardBlock, config.ResponseGuardBlock)
-	ctx.RequestID = "blocked-answer"
-	ctx.SourceFormat, ctx.TargetFormat = llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1
-	ctx.SemanticRequest = testNeutralRequest("vllm-sr/auto", "hi")
-	openReplay(t, router, ctx, "qwen-chat", ctx.VSRSelectedDecisionName)
-	_, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
-		ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
-			{Key: ":status", RawValue: []byte("200")}, {Key: "content-type", RawValue: []byte("application/json")},
-		}}},
-	}, ctx)
-	require.NoError(t, err)
+	engine := protocolcodec.NewBuiltinEngine()
+	for _, format := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIResponsesV1} {
+		t.Run(string(format), func(t *testing.T) {
+			router, ctx := newResponseStageRouter(t, newJailbreakDecider(0.95), config.ResponseGuardBlock, config.ResponseGuardBlock)
+			ctx.RequestID = "blocked-answer"
+			ctx.SourceFormat, ctx.TargetFormat = format, format
+			ctx.SemanticRequest = testNeutralRequest("vllm-sr/auto", "hi")
+			openReplay(t, router, ctx, "qwen-chat", ctx.VSRSelectedDecisionName)
+			_, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
+				ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+					{Key: ":status", RawValue: []byte("200")}, {Key: "content-type", RawValue: []byte("application/json")},
+				}}},
+			}, ctx)
+			require.NoError(t, err)
 
-	response, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
-		ResponseBody: &ext_proc.HttpBody{Body: extProcResponseFixture(llmprotocol.OpenAIChatV1), EndOfStream: true},
-	}, ctx)
-	require.NoError(t, err)
-	require.EqualValues(t, http.StatusForbidden, response.GetImmediateResponse().GetStatus().GetCode())
-	require.NoError(t, router.handleProcessReceiveError(ctx, io.EOF))
+			response, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
+				ResponseBody: &ext_proc.HttpBody{Body: extProcResponseFixture(format), EndOfStream: true},
+			}, ctx)
+			require.NoError(t, err)
+			require.EqualValues(t, http.StatusBadRequest, response.GetImmediateResponse().GetStatus().GetCode())
+			refusal, _, err := engine.DecodeTransportError(format, response.GetImmediateResponse().GetBody())
+			require.NoError(t, err)
+			require.Equal(t, llmprotocol.ErrorInvalidRequest, refusal.Error.Category)
+			require.Contains(t, refusal.Error.Message, "Response blocked")
+			if format != llmprotocol.AnthropicMessagesV1 { // a Messages error carries its type, not a code
+				require.Equal(t, "response_blocked", refusal.Error.Code)
+			}
+			require.NoError(t, router.handleProcessReceiveError(ctx, io.EOF))
 
-	requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "request_rejected", http.StatusForbidden)
+			requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "request_rejected", http.StatusBadRequest)
+		})
+	}
+}
+
+// A blocking fast_response refuses the request with its message as a 400
+// invalid-request error in the client's protocol, streamed or not, and the
+// record ends failed with request_rejected.
+func TestBlockingFastResponseRefusesTheRequest(t *testing.T) {
+	const message = "Subagents may not send personal data."
+	engine := protocolcodec.NewBuiltinEngine()
+	for _, format := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIResponsesV1} {
+		for _, streaming := range []bool{false, true} {
+			t.Run(string(format)+map[bool]string{false: "", true: "_stream"}[streaming], func(t *testing.T) {
+				cfg := immediateResponseTestConfig()
+				cfg.Decisions[0].Plugins[0].Configuration = config.MustStructuredPayload(config.FastResponsePluginConfig{Message: message, Block: true})
+				classifier, err := classification.NewClassifier(cfg)
+				require.NoError(t, err)
+				t.Cleanup(func() { require.NoError(t, classifier.Close()) })
+				router := &OpenAIRouter{Config: cfg, Classifier: classifier}
+				request := testNeutralRequest("vllm-sr/auto", "My email is ada@example.com.")
+				request.Stream = streaming
+				ctx := &RequestContext{
+					Headers: map[string]string{}, RequestID: "blocked-request", RequestModel: "vllm-sr/auto", TraceContext: context.Background(),
+					SemanticRequest: request, SourceFormat: format, ExpectStreamingResponse: streaming,
+				}
+				enableReplay(router, ctx)
+
+				_, response := router.runRequestPreRoutingStages("vllm-sr/auto", request, extractSemanticRequestSignals(request), ctx)
+				require.EqualValues(t, http.StatusBadRequest, response.GetImmediateResponse().GetStatus().GetCode())
+				require.Equal(t, headers.ResponsePathBlocked, immediateHeaderValue(response, headers.VSRResponsePath))
+				refusal, _, err := engine.DecodeTransportError(format, response.GetImmediateResponse().GetBody())
+				require.NoError(t, err)
+				require.Equal(t, message, refusal.Error.Message)
+				require.Equal(t, llmprotocol.ErrorInvalidRequest, refusal.Error.Category)
+				if format != llmprotocol.AnthropicMessagesV1 { // a Messages error carries its type, not a code
+					require.Equal(t, "request_blocked", refusal.Error.Code)
+				}
+				_, err = router.requestBodyReply(response, nil, ctx)
+				require.NoError(t, err)
+				require.NoError(t, router.handleProcessReceiveError(ctx, io.EOF))
+
+				requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "request_rejected", http.StatusBadRequest)
+			})
+		}
+	}
 }

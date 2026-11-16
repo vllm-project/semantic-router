@@ -1307,14 +1307,18 @@ The command writes these. Claude Code reads them from its settings:
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "vllm-sr/auto",
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
+    "CLAUDE_CODE_GATEWAY_HINT_HEADERS": "1"
   }
 }
 ```
 
 `CLAUDE_CODE_MAX_OUTPUT_TOKENS` is 32000, or the smallest `max_output_tokens`
 of the models the entrypoint reaches when that is lower, since a model refuses
-a request for more.
+a request for more. `CLAUDE_CODE_GATEWAY_HINT_HEADERS` has Claude Code send
+each request's class and each subagent's type, which Claude Code leaves out for
+a custom base URL otherwise; the
+[agent signal](../tutorials/signal/heuristic/agent) routes on them.
 
 Codex reads the profile from `~/.codex/vllm-sr.config.toml`, which
 `codex --profile vllm-sr` layers over `~/.codex/config.toml`, and the provider

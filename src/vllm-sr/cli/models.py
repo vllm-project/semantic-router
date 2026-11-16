@@ -593,6 +593,42 @@ class InputModalityRule(BaseModel):
         return self
 
 
+class AgentRule(BaseModel):
+    """Matches the agent a request belongs to, from its harness's headers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    role: Optional[Literal["main", "subagent"]] = None
+    harness: Optional[Literal["claude_code", "codex"]] = None
+    types: Optional[List[str]] = None
+    request_classes: Optional[
+        List[Literal["main", "subagent", "workflow", "compaction", "auxiliary"]]
+    ] = None
+
+    @model_validator(mode="after")
+    def validate_contract(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("agent signal name must be nonempty and trimmed")
+        if not (self.role or self.harness or self.types or self.request_classes):
+            raise ValueError(
+                "set at least one of role, harness, types or request_classes"
+            )
+        if self.request_classes and self.harness == "codex":
+            raise ValueError(
+                "only Claude Code sends a request class, so request_classes"
+                " cannot go with harness codex"
+            )
+        if self.role == "main" and self.types:
+            raise ValueError(
+                "types name a subagent's type, so role must be subagent or unset"
+            )
+        if any(not item or item != item.strip() for item in self.types or []):
+            raise ValueError("agent types must be nonempty and trimmed")
+        return self
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -614,6 +650,7 @@ class Signals(BaseModel):
     conversation: Optional[List[ConversationRule]] = []
     metadata: Optional[List[MetadataRule]] = []
     input_modality: Optional[List[InputModalityRule]] = []
+    agent: Optional[List[AgentRule]] = []
     systemone: Optional[List[SystemOneRule]] = []
 
     @model_validator(mode="after")
@@ -623,7 +660,7 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "input_modality"}
+                    if family in {"metadata", "input_modality", "agent"}
                     else signal.name
                 )
                 if name in seen:
@@ -1072,6 +1109,8 @@ class FastResponsePluginConfig(BaseModel):
 
     enabled: bool = True
     message: Optional[str] = None
+    # block refuses the request with HTTP 403 and the message as the error.
+    block: bool = False
 
     @model_validator(mode="after")
     def message_when_enabled(self):

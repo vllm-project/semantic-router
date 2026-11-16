@@ -118,6 +118,12 @@ These headers were checked with Codex CLI 0.167.0 and 0.166.0 and Claude Code
 [protocol compatibility guide](../../installation/protocol-compatibility)
 requires.
 
+To choose a subagent's model and effort by its kind, for example exploration
+subagents on a small model at low effort and reviews on a strong model at high
+effort, route on the [`agent`](../signal/heuristic/agent) signal. It reads the
+same agent identity, so protection then holds each subagent on the model its
+first request got.
+
 ### Explicit release
 
 A harness that knows its task has changed phase can ask for a fresh decision

@@ -87,6 +87,7 @@ type MatchedSignals struct {
 	Conversation  []string `json:"conversation,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
+	Agent         []string `json:"agent,omitempty"`
 	SystemOne     []string `json:"systemone,omitempty"`
 	Projection    []string `json:"projection,omitempty"`
 }

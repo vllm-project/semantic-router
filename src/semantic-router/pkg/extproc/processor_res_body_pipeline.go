@@ -3,6 +3,7 @@ package extproc
 import (
 	"bytes"
 	"errors"
+	"net/http"
 	"slices"
 	"strconv"
 	"time"
@@ -181,9 +182,12 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	}
 	if rule := ctx.ResponseGuard.blocking(); rule != nil {
 		ctx.ResponsePath = headers.ResponsePathBlocked
+		refusal := responseGuardRefusal(rule)
+		ctx.ImmediateProtocolError = refusal
 		return &responsePolicyPlan{
-			blocked: r.createErrorResponseOnPath(403, responseGuardBlockMessage(rule), ctx.ResponsePath),
-			refusal: responseGuardRefusal(rule),
+			blocked: r.encodeImmediateResponseForClient(
+				r.createErrorResponseOnPath(http.StatusBadRequest, refusal.Message, ctx.ResponsePath), ctx),
+			refusal: refusal,
 			commitFunc: func() {
 				r.recordRouterReplayResponseGuard(ctx)
 				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "response_blocked", false)

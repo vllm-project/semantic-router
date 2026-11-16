@@ -123,6 +123,7 @@ metadata. They ask no model.
 
 | Signal | Condition type | Use it to |
 | ------ | -------------- | --------- |
+| [Agent](./heuristic/agent) | `agent` | route by the agent a request belongs to: main agent or subagent, harness and subagent type |
 | [Authz](./heuristic/authz) | `authz` | route from trusted identity, role or tenant policy |
 | [Context](./heuristic/context) | `context` | route by the request's estimated token count |
 | [Conversation](./heuristic/conversation) | `conversation` | detect multi-turn, tool-heavy or agentic request structure |

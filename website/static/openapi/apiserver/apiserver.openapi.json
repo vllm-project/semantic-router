@@ -8698,6 +8698,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -9909,6 +9916,13 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
+                        "agent": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "authz": {
                           "nullable": true,
                           "type": "array",
@@ -22068,6 +22082,13 @@
                           "signals": {
                             "type": "object",
                             "properties": {
+                              "agent": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
                               "authz": {
                                 "nullable": true,
                                 "type": "array",
@@ -29150,6 +29171,13 @@
                     "signals": {
                       "type": "object",
                       "properties": {
+                        "agent": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "authz": {
                           "nullable": true,
                           "type": "array",
@@ -31757,6 +31785,9 @@
                     "nullable": true,
                     "type": "object",
                     "properties": {
+                      "block": {
+                        "type": "boolean"
+                      },
                       "enabled": {
                         "nullable": true,
                         "type": "boolean"
@@ -35002,6 +35033,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -35141,6 +35179,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -35273,6 +35318,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -35492,6 +35544,29 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
+                        "agent": {
+                          "type": "object",
+                          "properties": {
+                            "confidence": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "confidence_available": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
+                            "execution_time_ms": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "execution_time_ms",
+                            "confidence"
+                          ]
+                        },
                         "authz": {
                           "type": "object",
                           "properties": {
@@ -35901,6 +35976,7 @@
                         "conversation",
                         "metadata",
                         "input_modality",
+                        "agent",
                         "systemone"
                       ]
                     },
@@ -36572,6 +36648,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "agent": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -36711,6 +36794,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "agent": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -36843,6 +36933,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "agent": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -37062,6 +37159,29 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "type": "object",
+                              "properties": {
+                                "confidence": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "confidence_available": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "execution_time_ms": {
+                                  "type": "number"
+                                },
+                                "method": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "execution_time_ms",
+                                "confidence"
+                              ]
+                            },
                             "authz": {
                               "type": "object",
                               "properties": {
@@ -37471,6 +37591,7 @@
                             "conversation",
                             "metadata",
                             "input_modality",
+                            "agent",
                             "systemone"
                           ]
                         },

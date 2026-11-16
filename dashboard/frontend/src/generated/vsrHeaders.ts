@@ -37,6 +37,12 @@ export const X_AUTHZ_USER_ID = 'x-authz-user-id'
 /** Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_AGENT_ID = 'x-claude-code-agent-id'
 
+/** Subagent type Claude Code sends on a subagent's own turns when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: a built-in agent's name such as `Explore`, `Plan` or `general-purpose`, or `custom`, `teammate` or `fork`; `agent` signal rules match it as a type, and providers receive it. Surface: control. */
+export const X_CLAUDE_CODE_AGENT_TYPE = 'x-claude-code-agent-type'
+
+/** Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, and providers receive it. Surface: control. */
+export const X_CLAUDE_CODE_REQUEST_CLASS = 'x-claude-code-request-class'
+
 /** Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_SESSION_ID = 'x-claude-code-session-id'
 
@@ -115,7 +121,7 @@ export const X_FORWARDED_PROTO = 'x-forwarded-proto'
 /** Provider credential of Google APIs. Surface: internal. */
 export const X_GOOG_API_KEY = 'x-goog-api-key'
 
-/** Kind of subagent a Codex call comes from, such as `collab_spawn` or `review`, which Router Replay records with the agent; providers receive it. Surface: control. */
+/** Kind of child thread Codex sends a request for, `collab_spawn` for a `spawn_agent` child whatever its role and `review` for a review child, which `agent` signal rules match as a type and Router Replay records with the agent; providers receive it. Surface: control. */
 export const X_OPENAI_SUBAGENT = 'x-openai-subagent'
 
 /** Limit of the rate-limit window that rejected the request. Surface: public. */

@@ -346,6 +346,7 @@ type RequestContext struct {
 	VSRMatchedConversation    []string // Matched conversation-shape signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
+	VSRMatchedAgent           []string // Matched agent signal names: the request's agent role, harness and type
 	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
@@ -444,7 +445,8 @@ type RequestContext struct {
 	ApprovalReview        *routerreplay.Review
 	approvalReviewSettled bool
 	// AgentTurn is the Codex turn the request belongs to, read from its turn
-	// metadata at ingress. Replay records it; nothing routes on it.
+	// metadata at ingress. Replay records it; protection and the agent signal
+	// read its session and thread when no header carries them.
 	AgentTurn codexreview.Turn
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
