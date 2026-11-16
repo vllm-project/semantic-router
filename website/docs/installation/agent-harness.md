@@ -482,6 +482,11 @@ Protection reads the session and subagent ids Claude Code sends,
 headers configured, so each session and each subagent keeps its own model.
 Insights then names each subagent in a session's routing history.
 
+For every harness, `connect` leaves protection out of what it asks for only
+when the entrypoint reaches exactly one model, which leaves no model to keep.
+An entrypoint whose recipe the configuration does not write out reaches no
+model it can name, and is still asked for protection.
+
 ### Claude Code on its own Claude login
 
 Claude Code signed in to a Claude subscription can use the gateway without an
@@ -580,10 +585,11 @@ Keep `web_search = "disabled"` in the profile: the Router takes function tools
 only. `vllm-sr connect codex --config <your config>` writes this profile for
 such a configuration, with `requires_openai_auth` and without a key variable,
 and does not probe the gateway, which answers only on Codex's own login. Each
-`connect` command stops before writing anything for a gateway whose caller
-backends name the other provider: the Router takes an `anthropic` login only on
-Messages and an `openai` one only on Responses or Chat, so every call would be
-refused. The plan's usage limits apply to each call, and a cost and the login
+`connect` command stops before writing anything when the caller backends of the
+models its `--model` entrypoint reaches name the other provider: the Router takes
+an `anthropic` login only on Messages and an `openai` one only on Responses or
+Chat, so every call would be refused. A caller backend only another entrypoint
+reaches does not stop it. The plan's usage limits apply to each call, and a cost and the login
 work as for Claude Code above, with `gpt-6.1-sol` on an `openai` backend for
 example.
 

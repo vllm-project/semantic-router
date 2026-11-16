@@ -65,7 +65,7 @@ def pi(
         key_env,
         context_window,
         key_command,
-        base._output_limit(doc, model),
+        rc.output_limit(doc, model),
         login,
     )
     secrets = [token] if from_env else [key] if key else []

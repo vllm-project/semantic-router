@@ -229,7 +229,7 @@ def claude_code(
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    login = _caller_login("claude-code", doc)
+    login = _caller_login("claude-code", doc, model)
     # a key command gives the key, so the variable may be unset
     _require_key(doc, base_url, from_env, api_key_env, login or key_command)
     if login or key_command:
@@ -248,7 +248,7 @@ def claude_code(
     )
     context_window, notes = _context_window(doc, model, context_window)
     values = hc.claude_env(gateway, model, token, key_command)
-    values["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(_output_limit(doc, model))
+    values["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(rc.output_limit(doc, model))
     if context_window:
         values["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = str(context_window)
     if launch:
@@ -435,7 +435,7 @@ def codex(
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    login = _caller_login("codex", doc)
+    login = _caller_login("codex", doc, model)
     _require_key(doc, base_url, from_env, api_key_env, login or key_command)
     if login or key_command:
         # the Router presents Codex's own ChatGPT login or API key to OpenAI, or
@@ -1502,15 +1502,7 @@ def _json_of(argv: list[str], env: dict[str, str]):
         return None
 
 
-def _output_limit(doc: dict | None, model: str) -> int:
-    """The output limit a harness asks for: 32,000 tokens, or less when every
-    model the entrypoint reaches allows less, since a model refuses a request
-    for more than its max_output_tokens."""
-    limit = rc.output_limit(doc, model)
-    return min(int(hc.MAX_OUTPUT_TOKENS), limit) if limit else int(hc.MAX_OUTPUT_TOKENS)
-
-
-def _caller_login(harness: str, doc: dict | None, model: str | None = None) -> bool:
+def _caller_login(harness: str, doc: dict | None, model: str) -> bool:
     """Whether the gateway presents the harness's own login upstream for model.
     A gateway that presents another provider's login refuses every call of the
     harness, so nothing is written for it."""

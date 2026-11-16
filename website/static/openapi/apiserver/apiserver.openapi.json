@@ -49514,8 +49514,12 @@
                               "default_route": {
                                 "type": "boolean"
                               },
-                              "delegate": {
-                                "type": "string"
+                              "delegates": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "recipe": {
                                 "type": "string"

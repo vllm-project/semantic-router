@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 import requests
 
 from cli.durations import parse_duration
+from cli.harness_connect import MAX_OUTPUT_TOKENS
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.model_catalog_types import ModelCatalogError
 from cli.models import _fallback_duration_seconds
@@ -641,14 +642,15 @@ def check_router_config(
     found += _fallback_findings(doc, decisions)
     found += _total_timeout_findings(doc, reach, model, decisions)
     # an entrypoint that reaches one model has no model to keep
-    single = reachable is not None and len(set(reachable)) <= 1
+    single = len(set(reachable or [])) == 1
     needs = (PROTECTION_NEED, IDENTITY_NEED)
     return [f for f in found if f and not (single and f.need in needs)]
 
 
-def output_limit(doc: dict | None, entrypoint: str) -> int | None:
-    """The smallest max_output_tokens the models a request for entrypoint can
-    reach declare, None when none declares one."""
+def output_limit(doc: dict | None, entrypoint: str) -> int:
+    """The output limit a harness asks for: MAX_OUTPUT_TOKENS, or the smallest
+    max_output_tokens of the models a request for entrypoint can reach when that
+    is lower, since a model refuses a request for more."""
     reachable = set(entrypoint_models(doc, entrypoint) or []) if doc else set()
     limits = [
         int(model["max_output_tokens"])
@@ -658,7 +660,7 @@ def output_limit(doc: dict | None, entrypoint: str) -> int | None:
         and isinstance(model.get("max_output_tokens"), int)
         and model["max_output_tokens"] > 0
     ]
-    return min(limits) if limits else None
+    return min([int(MAX_OUTPUT_TOKENS), *limits])
 
 
 # --- probes ------------------------------------------------------------------------
