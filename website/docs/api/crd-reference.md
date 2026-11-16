@@ -1104,7 +1104,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled accumulates request body chunks before routing at end-of-stream. |  | Optional: \{\} <br /> |
-| `max_bytes` _integer_ | MaxBytes caps the accumulated body size. A larger body is rejected and the<br />ExtProc stream ends; the downstream response follows the gateway's ExtProc<br />failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `max_bytes` _integer_ | MaxBytes caps the accumulated body size. A larger body is rejected and the<br />ExtProc stream ends; the downstream response follows the gateway's ExtProc<br />failure policy. The Router refuses an enabled streamed body without a<br />ceiling, so an omitted value takes the default. | 10485760 | Minimum: 0 <br />Optional: \{\} <br /> |
 | `timeout_sec` _integer_ | TimeoutSec caps how long body accumulation may take. A slower body is<br />rejected and the ExtProc stream ends; the downstream response follows the<br />gateway's ExtProc failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 
 #### Tool
