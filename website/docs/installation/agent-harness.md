@@ -1353,7 +1353,9 @@ backend thinks and at what effort; the harness's own request does not:
 | `use_reasoning: true` | The decision's `reasoning_effort`, or the family default when none is set |
 
 This holds whatever effort the harness asks for. Claude Code, for example,
-asks for adaptive thinking with its effort setting on every call. Set
+asks for adaptive thinking with its effort setting on every call. When the
+decision turns reasoning off, the Router also drops the thinking display the
+harness asked for, since no thinking comes back. Set
 `use_reasoning: true` and the effort you want on the decisions behind an agent
 entrypoint. See [Model Reasoning](./model-reasoning#select-reasoning-in-a-decision).
 
