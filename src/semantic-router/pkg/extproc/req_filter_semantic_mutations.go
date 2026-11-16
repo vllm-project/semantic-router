@@ -33,8 +33,12 @@ func (r *OpenAIRouter) applySemanticReasoningMode(
 	effort, mode := semanticReasoningControls(r, family, decision, model, targetFormat, enabled)
 	mode, budget := messagesThinkingBudget(targetFormat, mode, request.ReasoningBudgetTokens)
 	display := request.ReasoningDisplay
-	if mode != llmprotocol.ReasoningModeEnabled && mode != llmprotocol.ReasoningModeAdaptive {
-		// A display mode only shapes thinking output, which this request no longer asks for.
+	// A Messages request carries reasoning on in its mode, so another mode
+	// means thinking is off and a display mode has nothing to shape. Chat and
+	// Responses carry it in the effort, and the client's display still says
+	// whether the backend's reasoning reaches its response.
+	if targetFormat == llmprotocol.AnthropicMessagesV1 &&
+		mode != llmprotocol.ReasoningModeEnabled && mode != llmprotocol.ReasoningModeAdaptive {
 		display = ""
 	}
 	if request.ReasoningEffort == effort && request.ReasoningMode == mode &&
