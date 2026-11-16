@@ -25,6 +25,8 @@ Ollama or vLLM server or a hosted API, and any constraints; the agent asks
 before it changes anything outside the stack.
 
 Once the Router is running, [connect your agent harness](agent-harness).
+For other tasks and contributor workflows, use the
+[skill catalog](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/README.md).
 
 :::note Release channel
 The Skill follows `main`, as these pages do. It installs the stable release
