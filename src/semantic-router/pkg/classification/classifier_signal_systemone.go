@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 const systemOneSignalErrorPrefix = "systemone_"
@@ -434,21 +435,17 @@ func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResul
 	}
 }
 
-// decodedImageTypes are the image data URLs the decision models decode.
-var decodedImageTypes = []string{"data:image/png;", "data:image/jpeg;", "data:image/jpg;", "data:image/webp;"}
-
-var decodedVideoTypes = []string{"data:video/mp4;", "data:video/webm;", "data:video/quicktime;", "data:video/x-matroska;"}
-
 // undecodedImage reports an image no decision model decodes: one that was
-// not inline, an empty entry, or another format such as GIF.
+// not inline, an empty entry, or another format such as GIF. The codec is the
+// one that reads the medium downstream, so it answers what decodes.
 func undecodedImage(image string) bool {
-	return !slices.ContainsFunc(decodedImageTypes, func(prefix string) bool { return strings.HasPrefix(image, prefix) })
+	return !systemonecodec.DecodesImage(image)
 }
 
 // undecodedVideo reports a video no decision model decodes: one that was
 // not inline, an empty entry, or another format.
 func undecodedVideo(video string) bool {
-	return !slices.ContainsFunc(decodedVideoTypes, func(prefix string) bool { return strings.HasPrefix(video, prefix) })
+	return !systemonecodec.DecodesVideo(video)
 }
 
 // decodedImages keeps the images a decision model decodes and reports

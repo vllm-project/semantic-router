@@ -183,6 +183,18 @@ func videoAsset(url string) (systemoneprotocol.Value, error) {
 	return systemoneprotocol.Value{}, fmt.Errorf("a video must be an MP4, WebM, QuickTime or Matroska data URL")
 }
 
+// DecodesImage reports whether the codec reads this data URL as an image.
+func DecodesImage(url string) bool {
+	_, err := imageAsset(url)
+	return err == nil
+}
+
+// DecodesVideo reports whether the codec reads this data URL as a video.
+func DecodesVideo(url string) bool {
+	_, err := videoAsset(url)
+	return err == nil
+}
+
 // assetDataURL is an image or video asset as the data URL vllm-sr/4.0 and the
 // internal form carry.
 func assetDataURL(kind string, asset systemoneprotocol.Value) (string, error) {

@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -18,8 +19,17 @@ func TestUnreadVideo(t *testing.T) {
 		t.Fatalf("a truncated rule reported %q", got)
 	}
 
-	videos, incomplete := decodedVideos([]string{"", "data:video/mp4;base64,QUJD", "https://cdn.example/clip.mp4"})
-	if len(videos) != 1 || videos[0] != "data:video/mp4;base64,QUJD" || !incomplete {
-		t.Fatalf("decodedVideos = %q, %v", videos, incomplete)
+	// A data URL the codec reads decodes whatever its case or parameters; one it
+	// rejects is reported unread instead of failing the rule.
+	videos, incomplete := decodedVideos([]string{
+		"",
+		"data:video/mp4;base64,QUJD",
+		"https://cdn.example/clip.mp4",
+		"data:VIDEO/MP4;base64,QUJD",
+		"data:video/mp4;codecs=avc1;base64,QUJD",
+	})
+	want := []string{"data:video/mp4;base64,QUJD", "data:VIDEO/MP4;base64,QUJD"}
+	if !slices.Equal(videos, want) || !incomplete {
+		t.Fatalf("decodedVideos = %q, %v; want %q", videos, incomplete, want)
 	}
 }
