@@ -69,6 +69,15 @@ export interface CatalogProvider {
     verified_at?: string
   }
   models?: CatalogModelBinding[]
+  price_list?: CatalogPriceListEntry[]
+}
+
+// The list price of a provider model ID that has no Model Card; never a model.
+export interface CatalogPriceListEntry {
+  id: string
+  pricing: Record<string, string | number | boolean>
+  restrictions?: Record<string, unknown>
+  verification: CatalogModelBinding['verification']
 }
 
 export interface CatalogModelBinding {

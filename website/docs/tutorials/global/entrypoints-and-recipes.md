@@ -140,6 +140,10 @@ This is the entry for `vllm-sr/auto`:
 }
 ```
 
+An entrypoint that another names as its `review_model` or `memory_model` is
+listed with `"selectable": false` and `"delegate": "review"` or `"memory"`:
+it serves those calls, so a client does not offer it for chat.
+
 Coding agents and other clients that size a request before sending it need
 these values in their own configuration. Any turn of a session can reach any
 model the recipe can select, including `providers.defaults.model`, so

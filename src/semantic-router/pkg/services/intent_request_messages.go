@@ -364,6 +364,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		},
 	}
 	previousWasToolResult := false
+	var toolFailures classification.ToolFailureCount
 	routing := selector.Walk(intentUserTexts(selector, messages)...)
 
 	for index, msg := range messages {
@@ -398,6 +399,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			msg.ToolCallID,
 			previousWasToolResult,
 		)
+		observeIntentToolFailure(&toolFailures, role, rawText)
 		if text != "" && (role == "user" || role == "assistant") {
 			history.turns = append(history.turns, classification.ConversationTurn{Role: role, Text: text})
 		}
@@ -407,8 +409,20 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		recordIntentNonUserMessage(&history, role, text)
 	}
 	history.routingInput = routing.Outcome()
+	history.conversationFacts.FailedToolResults = toolFailures.Failed
 
 	return history
+}
+
+// observeIntentToolFailure counts tool results as the data plane does. Chat
+// messages carry no failure flag, and a user message starts a new turn.
+func observeIntentToolFailure(failures *classification.ToolFailureCount, role, text string) {
+	switch role {
+	case "user":
+		*failures = classification.ToolFailureCount{}
+	case "tool":
+		failures.Observe(classification.ToolResultFailed(nil, text))
+	}
 }
 
 // intentUserTexts lists the user messages as routing_input reads them, for a

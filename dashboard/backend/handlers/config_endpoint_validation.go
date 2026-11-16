@@ -100,7 +100,7 @@ func validateCanonicalEndpointRefs(configData routerconfig.CanonicalConfig) erro
 				return fmt.Errorf("%s must be an http or https URL", field)
 			}
 			if parsed.User != nil {
-				return fmt.Errorf("%s must not carry credentials; the key comes from auth.api_key_env", field)
+				return fmt.Errorf("%s must not carry credentials; the key comes from auth.api_key_env or auth.api_key_file", field)
 			}
 		}
 	}

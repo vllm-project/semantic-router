@@ -44,7 +44,8 @@ on the selected backend.
 
 ## Configuration
 
-Enable Router Replay with a `router_replay` plugin in `global.plugins`; the
+Router Replay records each request's routing data by default. A
+`router_replay` plugin in `global.plugins` sets what it captures, and the
 service config holds its store:
 
 ```yaml

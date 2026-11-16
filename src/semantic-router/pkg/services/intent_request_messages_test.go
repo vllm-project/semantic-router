@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -609,4 +610,29 @@ func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t
 
 	assert.Equal(t, "That was not clear. Explain compound interest in one paragraph.", resp.OriginalText)
 	assert.NotNil(t, resp.Metrics)
+}
+
+// The classify API counts failed tool results the way the data plane does,
+// so a preview of a failing Codex loop matches the live route.
+func TestIntentRequestResolveSignalInput_FailedToolResultsMatchTheDataPlane(t *testing.T) {
+	exec := func(code int) json.RawMessage {
+		return mustMessageContent(t, fmt.Sprintf("Chunk ID: a\nProcess exited with code %d\nOutput:\nmake\n", code))
+	}
+	call := func(id string) IntentMessage {
+		return IntentMessage{Role: "assistant", Content: mustMessageContent(t, nil), ToolCalls: []json.RawMessage{json.RawMessage(`{"id":"` + id + `"}`)}}
+	}
+	messages := []IntentMessage{
+		{Role: "user", Content: mustMessageContent(t, "fix the build")},
+		call("c0"),
+		{Role: "tool", ToolCallID: "c0", Content: exec(2)},
+		call("c1"),
+		{Role: "tool", ToolCallID: "c1", Content: exec(1)},
+	}
+	input, err := IntentRequest{Messages: messages}.resolveSignalInput()
+	require.NoError(t, err)
+	assert.Equal(t, 2, input.conversationFacts.FailedToolResults)
+
+	input, err = IntentRequest{Messages: append(messages, IntentMessage{Role: "user", Content: mustMessageContent(t, "try again")})}.resolveSignalInput()
+	require.NoError(t, err)
+	assert.Zero(t, input.conversationFacts.FailedToolResults, "a new user turn resets the count")
 }

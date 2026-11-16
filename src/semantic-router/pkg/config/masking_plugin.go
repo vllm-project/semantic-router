@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
@@ -17,6 +18,9 @@ const (
 	// per-entity-type occurrence index. A template without it would collapse
 	// distinct values onto one placeholder, so the validator requires it.
 	MaskingPlaceholderIndexToken = "{index}"
+
+	MaskingIndexRegistry = "registry"
+	MaskingIndexSequence = "sequence"
 )
 
 // MaskingPluginConfig replaces personal data in the provider-bound request
@@ -41,6 +45,14 @@ type MaskingPluginConfig struct {
 	// Rules, to a template containing {index}. Types absent from the map use
 	// the default [TYPE_n] shape.
 	Placeholders map[string]string `json:"placeholders,omitempty" yaml:"placeholders,omitempty"`
+	// Index is how placeholders are numbered. registry keeps one index per
+	// value for good in IdentityNamespace, so a value has the same
+	// placeholder in every request and session. sequence numbers values in
+	// the order one request meets them. Left out, it is registry when
+	// IdentityNamespace is set and sequence otherwise.
+	Index string `json:"index,omitempty" yaml:"index,omitempty" jsonschema:"enum=registry,enum=sequence"`
+	// IdentityNamespace names a namespace of global.services.masking_identity.
+	IdentityNamespace string `json:"identity_namespace,omitempty" yaml:"identity_namespace,omitempty"`
 }
 
 // SignalRef names one signal rule of a recipe, as a decision condition does:
@@ -99,7 +111,32 @@ func MaskingEntityTypes() []string {
 	return preset.OptionKeys()
 }
 
+// RegistryMode reports whether placeholders come from an identity namespace.
+func (c *MaskingPluginConfig) RegistryMode() bool {
+	return c != nil && (c.Index == MaskingIndexRegistry || c.Index == "" && c.IdentityNamespace != "")
+}
+
+// CanonicalType is the type a registry keeps indexes under, which tells a pii
+// label from a rule of the same name.
+func (c *MaskingPluginConfig) CanonicalType(entityType string) string {
+	for _, rule := range c.Rules {
+		if rule.Name == entityType {
+			return "rule:" + rule.Type + ":" + rule.Name
+		}
+	}
+	return "pii:" + entityType
+}
+
 func validateMaskingPlugin(at PluginAt, p *MaskingPluginConfig) error {
+	if p.Index != "" && p.Index != MaskingIndexRegistry && p.Index != MaskingIndexSequence {
+		return at.Errorf("index must be %s or %s", MaskingIndexRegistry, MaskingIndexSequence)
+	}
+	if p.RegistryMode() && p.IdentityNamespace == "" {
+		return at.Errorf("index: %s needs identity_namespace", MaskingIndexRegistry)
+	}
+	if p.Index == MaskingIndexSequence && p.IdentityNamespace != "" {
+		return at.Errorf("identity_namespace applies only to index: %s", MaskingIndexRegistry)
+	}
 	if strings.TrimSpace(p.Signal) == "" && len(p.Rules) == 0 {
 		return at.Errorf("signal or rules is required: name the pii rule whose detections are masked, or the rules whose matches are")
 	}
@@ -132,12 +169,16 @@ func validateMaskingPlugin(at PluginAt, p *MaskingPluginConfig) error {
 		if strings.Count(template, MaskingPlaceholderIndexToken) != 1 {
 			return at.Errorf("placeholder for %q must contain %s exactly once", entityType, MaskingPlaceholderIndexToken)
 		}
-		// A digit next to {index} joins it: [X_{index}0] at 1 writes [X_10],
-		// which reads as [X_{index}] at 10, so one value's placeholder can
-		// read as another's.
+		// The index must end where the template says it does. A digit next to
+		// {index} joins it, [X_{index}0] at 1 writing [X_10], which reads as
+		// [X_{index}] at 10, and an index at the template's edge runs into a
+		// digit the text has beside the value: #{index} for Bob in "Bob5"
+		// writes #15.
 		before, after, _ := strings.Cut(template, MaskingPlaceholderIndexToken)
-		if strings.IndexFunc(before[max(len(before)-1, 0):]+after[:min(len(after), 1)], unicode.IsDigit) >= 0 {
-			return at.Errorf("placeholder for %q must not put a digit next to %s", entityType, MaskingPlaceholderIndexToken)
+		last, _ := utf8.DecodeLastRuneInString(before)
+		first, _ := utf8.DecodeRuneInString(after)
+		if before == "" || after == "" || unicode.IsDigit(last) || unicode.IsDigit(first) {
+			return at.Errorf("placeholder for %q must put a character other than a digit right before and right after %s, as in #%s#", entityType, MaskingPlaceholderIndexToken, MaskingPlaceholderIndexToken)
 		}
 	}
 	return validateMaskingPlaceholdersDistinct(at, p, labels)
@@ -189,6 +230,9 @@ func validateMaskingSignals(cfg *RouterConfig) error {
 // resolveMasking checks that what a masking plugin names is in this recipe
 // and finds text.
 func (c *RouterConfig) resolveMasking(masking *MaskingPluginConfig) error {
+	if err := c.resolveMaskingIdentity(masking); err != nil {
+		return err
+	}
 	if masking.Signal != "" && c.PIIRule(masking.Signal) == nil {
 		return fmt.Errorf("signal %q names no pii rule of this recipe", masking.Signal)
 	}

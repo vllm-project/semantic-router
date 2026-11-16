@@ -20,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/maskingregistry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -43,6 +44,8 @@ type OpenAIRouter struct {
 	KVHandoff KVHandoffPlanner
 
 	nativeExecutors map[string]*systemone.Executor
+	// maskingIdentities are the opened masking identity namespaces by name.
+	maskingIdentities map[string]*maskingregistry.Identity
 	// signals is the signal runtime this router extracts signals with; a
 	// later generation can share it.
 	signals *signalRuntime
