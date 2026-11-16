@@ -300,7 +300,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+	if _, err = checkConfigMapMutationFresh(configPath); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -325,7 +325,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
+	if yamlBytes, err = persistConfig(configPath, yamlBytes); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -632,7 +632,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+	if _, err = checkConfigMapMutationFresh(configPath); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -654,7 +654,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if err := writeConfigAtomically(configPath, backupData); err != nil {
+	if backupData, err = persistConfig(configPath, backupData); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}

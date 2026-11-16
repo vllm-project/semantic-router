@@ -10,17 +10,29 @@ import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.model_catalog_types import ModelCatalogError
+from cli.runtime_stack import resolve_runtime_stack
 
 CLAUDE_HEADERS = {
     "session": "x-claude-code-session-id",
     "agent": "x-claude-code-agent-id",
 }
 CODEX_HEADERS = {"session": "session-id", "agent": "thread-id"}
+# what Pi sends with the session-affinity compat connect writes; it names no agent
+PI_HEADERS = {"session": "x-session-id"}
+# what the Router reads when protection's identity.headers names none: the session
+# a request pins with a session_id_headers default, then these, as
+# defaultIdentityHeaders in its config package lists them
+SESSION_ID_HEADERS = ("x-session-id", "x-claude-code-session-id")
+IDENTITY_DEFAULTS = {
+    "session": ("session-id",),
+    "agent": ("x-claude-code-agent-id", "thread-id"),
+}
 MAYBE_ANTHROPIC = (
     " (if a model it can pick is served over Anthropic Messages;"
     " its api_format is not set here)"
@@ -66,23 +78,49 @@ def _get(doc: Any, *keys: str) -> Any:
     return doc
 
 
+PROTECTION_NEED = "session protection, so each session and subagent keeps its model"
+IDENTITY_NEED = (
+    "session protection on this harness's identity headers, which the configuration"
+    " names otherwise, so each session and subagent keeps its model"
+)
+
+
+def _reads_identity(router: dict, headers: dict[str, str]) -> bool:
+    """Whether protection reads the harness's identity headers: as identity.headers
+    names them, or, where it names none, by the Router's defaults."""
+    named = _get(router, "learning", "protection", "identity", "headers") or {}
+    pinned = _get(router, "headers", "session_id_headers") or SESSION_ID_HEADERS
+    return all(
+        (
+            named[key] == name
+            if named.get(key)
+            else name in IDENTITY_DEFAULTS[key] or (key == "session" and name in pinned)
+        )
+        for key, name in headers.items()
+    )
+
+
 def _protection_finding(router: dict, headers: dict[str, str]) -> RouterFinding | None:
     learning = router.get("learning") or {}
     protection = learning.get("protection") or {}
-    configured = _get(protection, "identity", "headers") or {}
+    reads = _reads_identity(router, headers)
     if (
         learning.get("enabled") is True
         and protection.get("enabled") is True
         and protection.get("scope") == "session"
-        and all(configured.get(k) == v for k, v in headers.items())
+        and reads
     ):
         return None
+    snippet = (
+        "global:\n  router:\n    learning:\n      enabled: true\n      protection:\n"
+        "        enabled: true\n        scope: session"
+    )
+    if reads:
+        return RouterFinding(PROTECTION_NEED, snippet)
     lines = "\n".join(f"            {k}: {v}" for k, v in headers.items())
     return RouterFinding(
-        "session protection on this harness's identity headers, so each session and subagent keeps its model",
-        "global:\n  router:\n    learning:\n      enabled: true\n      protection:\n"
-        "        enabled: true\n        scope: session\n        identity:\n          headers:\n"
-        + lines,
+        IDENTITY_NEED,
+        snippet + "\n        identity:\n          headers:\n" + lines,
     )
 
 
@@ -124,7 +162,7 @@ def _sets_default_max_tokens(decision: dict) -> bool:
     )
 
 
-def _claude_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
+def _claude_findings(doc: dict, router: dict, reach) -> list[RouterFinding | None]:
     findings = [
         _lossy_finding(
             router,
@@ -135,7 +173,7 @@ def _claude_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
         ),
         _protection_finding(router, CLAUDE_HEADERS),
     ]
-    formats = set(_model_formats(doc).values())
+    formats = {f for name, f in _model_formats(doc).items() if reach(name)}
     allowed = router.get("allow_lossy_translation") or []
     missing = [f for f in OPENAI_LOSSY if f not in allowed]
     if missing and formats & (OPENAI_FORMATS | {""}):
@@ -150,32 +188,40 @@ def _claude_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
     return findings
 
 
-def _codex_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
+def _to_anthropic(doc: dict, reach) -> list[tuple[dict, str]]:
+    """Each decision that can pick an anthropic model the entrypoint reaches, with
+    a hint when none of its models says so and one leaves api_format to its
+    backend bindings."""
     formats = _model_formats(doc)
-    findings: list[RouterFinding | None] = []
-    # each decision that can pick an anthropic model, with a hint when none of its
-    # models says so and one leaves api_format to its backend bindings
     to_anthropic = []
     for decision in _decisions(doc):
         kinds = {
             formats.get(ref.get("model"), "")
             for ref in decision.get("modelRefs") or []
-            if isinstance(ref, dict)
+            if isinstance(ref, dict) and reach(ref.get("model"))
         }
         if "messages" in kinds:
             to_anthropic.append((decision, ""))
         elif "" in kinds:
             to_anthropic.append((decision, MAYBE_ANTHROPIC))
-    if to_anthropic:
-        known = any(not maybe for _, maybe in to_anthropic)
-        findings.append(
-            _lossy_finding(
-                router,
-                "reasoning.signature",
-                "reasoning.signature, or a stream from an anthropic backend ends in lossy_translation"
-                " where its thinking block closes" + ("" if known else MAYBE_ANTHROPIC),
-            )
-        )
+    return to_anthropic
+
+
+def _signature_finding(router: dict, to_anthropic) -> RouterFinding | None:
+    if not to_anthropic:
+        return None
+    known = any(not maybe for _, maybe in to_anthropic)
+    return _lossy_finding(
+        router,
+        "reasoning.signature",
+        "reasoning.signature, or a reply in which an anthropic backend thinks fails with"
+        " lossy_translation" + ("" if known else MAYBE_ANTHROPIC),
+    )
+
+
+def _codex_findings(doc: dict, router: dict, reach) -> list[RouterFinding | None]:
+    to_anthropic = _to_anthropic(doc, reach)
+    findings = [_signature_finding(router, to_anthropic)]
     for decision, maybe in to_anthropic:
         if not _sets_default_max_tokens(decision):
             findings.append(
@@ -196,13 +242,31 @@ def _codex_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
     return findings
 
 
-def system_one_models(doc: dict | None, port: int | None = None) -> list[str]:
+def _pi_findings(doc: dict, router: dict, reach) -> list[RouterFinding | None]:
+    # Pi sends its own output limit, so an anthropic backend needs no default. On
+    # its own Anthropic login Pi speaks Messages, which keeps thinking signatures,
+    # and sends no session header, so neither finding applies.
+    if _caller_of(doc, reach) == "anthropic":
+        return []
+    return [
+        _signature_finding(router, _to_anthropic(doc, reach)),
+        _protection_finding(router, PI_HEADERS),
+    ]
+
+
+def system_one_models(doc: dict | None, gateway: str | None = None) -> list[str]:
     """The System One models a listener publishes, which vSR can ask there: the
-    listener on port, or the first."""
+    listener the gateway URL names, or the first. The local stack publishes each
+    listener on its port plus VLLM_SR_PORT_OFFSET, so a gateway on this host
+    names the listener that many ports lower."""
     listeners = [
         one for one in (doc or {}).get("listeners") or [] if isinstance(one, dict)
     ]
-    if port is not None:
+    url = urlsplit(gateway or "")
+    if url.port is not None:
+        port = url.port
+        if url.hostname in ("localhost", "127.0.0.1", "::1"):
+            port -= resolve_runtime_stack().port_offset
         listeners = [one for one in listeners if str(one.get("port")) == str(port)]
     first = listeners[0] if listeners else None
     return [str(m) for m in _get(first, "apis", "systemone", "models") or []]
@@ -213,9 +277,15 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
     model's own name, or an entrypoint's recipe, whose decisions name models and
     whose requests no decision takes go to providers.defaults.model. None when the
     configuration maps model nowhere."""
-    formats = _model_formats(doc)
-    if model in formats:
-        return [model]
+    groups = entrypoint_candidates(doc, model)
+    if groups is None:
+        return None
+    return list(dict.fromkeys(name for names, _ in groups for name in names))
+
+
+def _entrypoint_recipe(doc: dict, model: str) -> dict | None:
+    """The recipe an entrypoint maps model to, empty when the document does not
+    write it out, None when no entrypoint maps model."""
     recipes = [r for r in doc.get("recipes") or [] if isinstance(r, dict)]
     chat = [
         e
@@ -237,14 +307,38 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
             recipe = default
     if recipe is None:
         return None
-    # a decision's modelRefs, and the models its candidateIterations walk
-    picked = [
-        ref.get("model")
-        for r in recipes
-        if r.get("name") == recipe
-        for decision in r.get("decisions") or []
-        if isinstance(decision, dict)
-        for ref in [
+    return next((r for r in recipes if r.get("name") == recipe), {})
+
+
+# The Router's selector algorithms answer with one eligible candidate, so a
+# request has to fit only that one, or algorithm.minimum_candidates of them.
+# Any other algorithm may call every candidate.
+SELECTOR_ALGORITHMS = {"static", "random", "multi_factor", "systemone"}
+
+
+def _candidates_needed(decision: dict, models: list[str]) -> int:
+    algorithm = decision.get("algorithm") or {}
+    if algorithm.get("type") not in (None, "", *SELECTOR_ALGORITHMS):
+        return len(models)
+    return max(1, int(algorithm.get("minimum_candidates") or 1))
+
+
+def entrypoint_candidates(doc: dict, model: str) -> list[tuple[list[str], int]] | None:
+    """entrypoint_models, as the candidate lists the Router picks from, one per
+    decision and providers.defaults.model for requests no decision takes, each
+    with how many of its candidates a request has to fit."""
+    formats = _model_formats(doc)
+    if model in formats:
+        return [([model], 1)]
+    recipe = _entrypoint_recipe(doc, model)
+    if recipe is None:
+        return None
+    groups = []
+    for decision in recipe.get("decisions") or []:
+        if not isinstance(decision, dict):
+            continue
+        # a decision's modelRefs, and the models its candidateIterations walk
+        refs = [
             *(decision.get("modelRefs") or []),
             *(
                 one
@@ -253,27 +347,50 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
                 for one in it.get("models") or []
             ),
         ]
-        if isinstance(ref, dict) and ref.get("model")
-    ]
+        names = [r.get("model") for r in refs if isinstance(r, dict) and r.get("model")]
+        groups.append((names, _candidates_needed(decision, names)))
     fallback = _get(doc, "providers", "defaults", "model")
+    if fallback:
+        groups.append(([fallback], 1))
     # an image or System One model never answers a harness's turn
-    return [
-        name
-        for name in dict.fromkeys([*picked, *([fallback] if fallback else [])])
-        if formats.get(name, "") not in NOT_CHAT
+    groups = [
+        (
+            list(dict.fromkeys(n for n in names if formats.get(n, "") not in NOT_CHAT)),
+            need,
+        )
+        for names, need in groups
     ]
+    return [(names, min(need, len(names))) for names, need in groups if names]
 
 
-def caller_provider(doc: dict | None) -> str | None:
+def recipe_known_limits(doc: dict, model: str) -> bool:
+    """Whether the recipe model maps to drops the candidates a request no longer
+    fits (candidate_requirements.context: known_limits), so a decision falls
+    over to its larger models instead of refusing the request."""
+    recipe = _entrypoint_recipe(doc, model) or {}
+    return _get(recipe, "candidate_requirements", "context") == "known_limits"
+
+
+def caller_provider(doc: dict | None, entrypoint: str | None = None) -> str | None:
     """The provider whose login the Router presents upstream for each client
     (auth.credential: caller), which then has to come from the client in place of
-    a gateway key. The Router takes it on every backend or on none, all of one
-    provider."""
+    a gateway key, among the models a request for entrypoint can reach (any model
+    when it is None or the configuration names none it reaches). Every caller
+    backend names one provider; other models beside them take a key of their
+    own or none."""
+    reachable = (
+        entrypoint_models(doc, entrypoint) if doc and entrypoint else None
+    ) or None
+    return _caller_of(doc, lambda name: reachable is None or name in reachable)
+
+
+def _caller_of(doc: dict | None, reach) -> str | None:
+    """The provider the caller backends of the models reach accepts name."""
     return next(
         (
             str(ref.get("provider") or "").lower()
             for model in _get(doc, "providers", "models") or []
-            if isinstance(model, dict)
+            if isinstance(model, dict) and reach(model.get("name"))
             for ref in model.get("backend_refs") or []
             if isinstance(ref, dict)
             and (ref.get("auth") or {}).get("credential") == "caller"
@@ -311,15 +428,36 @@ def _catalog_windows() -> dict[str, int]:
     }
 
 
-def check_router_config(doc: dict, harness: str) -> list[RouterFinding]:
-    """What this harness needs from a v0.5 Router configuration and does not find."""
+def check_router_config(
+    doc: dict, harness: str, model: str | None = None
+) -> list[RouterFinding]:
+    """What this harness needs from a v0.5 Router configuration and does not find,
+    for the models a request for model can reach (all of them when model is None
+    or maps nowhere)."""
     router = _get(doc, "global", "router") or {}
-    found = (
-        _claude_findings(doc, router)
-        if harness == "claude-code"
-        else _codex_findings(doc, router)
-    )
-    return [f for f in found if f]
+    reachable = entrypoint_models(doc, model) if model else None
+    reach = (lambda _: True) if reachable is None else set(reachable).__contains__
+    findings = {"claude-code": _claude_findings, "pi": _pi_findings}
+    found = findings.get(harness, _codex_findings)(doc, router, reach)
+    # an entrypoint that reaches one model has no model to keep
+    single = reachable is not None and len(set(reachable)) <= 1
+    needs = (PROTECTION_NEED, IDENTITY_NEED)
+    return [f for f in found if f and not (single and f.need in needs)]
+
+
+def output_limit(doc: dict | None, entrypoint: str) -> int | None:
+    """The smallest max_output_tokens the models a request for entrypoint can
+    reach declare, None when none declares one."""
+    reachable = set(entrypoint_models(doc, entrypoint) or []) if doc else set()
+    limits = [
+        int(model["max_output_tokens"])
+        for model in _get(doc, "providers", "models") or []
+        if isinstance(model, dict)
+        and model.get("name") in reachable
+        and isinstance(model.get("max_output_tokens"), int)
+        and model["max_output_tokens"] > 0
+    ]
+    return min(limits) if limits else None
 
 
 # --- probes ------------------------------------------------------------------------
@@ -349,6 +487,19 @@ def _probe_request(harness: str, model: str) -> tuple[str, dict, dict]:
                 ],
             },
         )
+    if harness == "pi":
+        return (
+            "/v1/chat/completions",
+            {},
+            {
+                "model": model,
+                "max_completion_tokens": PROBE_TOKENS,
+                "messages": [
+                    {"role": "user", "content": "What time is it? Use the tool."}
+                ],
+                "tools": [{"type": "function", "function": PROBE_TOOL}],
+            },
+        )
     return (
         "/v1/responses",
         {},
@@ -364,7 +515,9 @@ def _probe_request(harness: str, model: str) -> tuple[str, dict, dict]:
 def _reply_of(harness: str, events: list[dict]) -> tuple[dict | None, str]:
     """The finished reply a stream carries, or None and why it is not one."""
     for event in events:
-        if event.get("type") in ("error", "response.failed"):
+        # a Chat Completions stream says so with an error object of its own
+        failed = isinstance(event.get("error"), dict)
+        if failed or event.get("type") in ("error", "response.failed"):
             return None, f"the stream ended in an error: {json.dumps(event)[:300]}"
     if harness == "claude-code":
         if not any(event.get("type") == "message_stop" for event in events):
@@ -388,6 +541,8 @@ def _reply_of(harness: str, events: list[dict]) -> tuple[dict | None, str]:
             None,
         )
         return {"content": blocks, "text": text, "stop_reason": stop}, ""
+    if harness == "pi":
+        return _chat_reply(events)
     done = next(
         (
             event["response"]
@@ -400,6 +555,33 @@ def _reply_of(harness: str, events: list[dict]) -> tuple[dict | None, str]:
     if done is None:
         return None, "the stream did not finish a Responses reply"
     return done, ""
+
+
+def _chat_reply(chunks: list[dict]) -> tuple[dict | None, str]:
+    """A streamed Chat Completions reply put together: its text, each tool call
+    with the arguments its deltas carry, and the finish reason."""
+    choices = [
+        choice
+        for chunk in chunks
+        for choice in chunk.get("choices") or []
+        if isinstance(choice, dict)
+    ]
+    finish = next(
+        (c["finish_reason"] for c in reversed(choices) if c.get("finish_reason")),
+        None,
+    )
+    if finish is None:
+        return None, "the stream did not finish a Chat Completions reply"
+    deltas = [c.get("delta") or {} for c in choices]
+    calls: dict[int, dict] = {}
+    for part in (call for delta in deltas for call in delta.get("tool_calls") or []):
+        call = calls.setdefault(part.get("index", 0), {"arguments": ""})
+        function = part.get("function") or {}
+        call["id"] = part.get("id") or call.get("id")
+        call["name"] = function.get("name") or call.get("name")
+        call["arguments"] += function.get("arguments") or ""
+    text = "".join(delta.get("content") or "" for delta in deltas)
+    return {"text": text, "tool_calls": list(calls.values()), "finish": finish}, ""
 
 
 def _events(response: requests.Response) -> list[dict]:
@@ -420,6 +602,8 @@ def _called_tool(harness: str, answer: dict) -> bool:
         return any(
             block.get("type") == "tool_use" for block in answer.get("content") or []
         )
+    if harness == "pi":
+        return bool(answer.get("tool_calls"))
     return any(
         item.get("type") == "function_call" for item in answer.get("output") or []
     )
@@ -434,6 +618,14 @@ def _plain_problem(harness: str, answer: Any) -> str:
             answer.get("content"), list
         ):
             return "the answer is not a Messages reply"
+        return ""
+    if harness == "pi":
+        # the Router names the object, which it also accepts from a backend unnamed
+        choices = answer.get("choices")
+        if answer.get("object") not in (None, "chat.completion") or not (
+            isinstance(choices, list) and choices
+        ):
+            return "the answer is not a Chat Completions reply"
         return ""
     if answer.get("object") != "response" or answer.get("status") not in (
         "completed",
@@ -451,12 +643,18 @@ def _plain_request(harness: str, model: str) -> dict:
             "max_tokens": 64,
             "messages": [{"role": "user", "content": question}],
         }
+    if harness == "pi":
+        return {
+            "model": model,
+            "max_completion_tokens": 64,
+            "messages": [{"role": "user", "content": question}],
+        }
     return {"model": model, "max_output_tokens": 64, "input": question}
 
 
 def _text_of(harness: str, reply: dict) -> str:
     """The text a finished reply gives, which the answer to a tool result needs."""
-    if harness == "claude-code":
+    if harness in ("claude-code", "pi"):
         return reply.get("text") or ""
     return "".join(
         part.get("text") or ""
@@ -481,6 +679,31 @@ def _with_result(harness: str, call: dict, first: dict) -> dict:
             {"role": "user", "content": results},
         ]
         return {**call, "stream": True, "messages": messages}
+    if harness == "pi":
+        calls = first["tool_calls"]
+        messages = [
+            *call["messages"],
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": one["id"],
+                        "type": "function",
+                        "function": {
+                            "name": one["name"],
+                            "arguments": one["arguments"],
+                        },
+                    }
+                    for one in calls
+                ],
+            },
+            *(
+                {"role": "tool", "tool_call_id": one["id"], "content": "12:00"}
+                for one in calls
+            ),
+        ]
+        return {**call, "stream": True, "messages": messages}
     # the items go back as Codex sends them, without the status a reply gives them
     output = [
         {k: v for k, v in item.items() if k != "status"}
@@ -503,17 +726,23 @@ def _post(url: str, headers: dict, body: dict, timeout: float):
             url, json=body, headers=headers, timeout=timeout, stream=True
         ) as response:
             if response.status_code != requests.codes.ok:
-                return (
-                    response,
-                    None,
-                    f"HTTP {response.status_code} {response.text[:300]}",
-                )
+                problem = f"HTTP {response.status_code} {response.text[:300]}"
+                if response.status_code == requests.codes.unauthorized:
+                    problem = f"the gateway did not accept the key ({problem})"
+                return response, None, problem
             if body.get("stream"):
                 return response, _events(response), ""
             try:
                 return response, response.json(), ""
             except ValueError:
                 return response, None, "the answer is not JSON"
+    except requests.Timeout:
+        return None, None, f"no answer within {timeout:g} s"
+    except requests.ConnectionError as exc:
+        # requests nests the socket error a few reprs deep
+        found = re.search(r"\[Errno -?\d+\] ([^'\")]+)", str(exc))
+        why = found[1] if found else "the connection failed"
+        return None, None, f"no connection ({why}). Is the gateway running there?"
     except requests.RequestException as exc:
         return None, None, str(exc)
 
@@ -561,6 +790,34 @@ def warning_notes(value: str) -> list[str]:
     return notes
 
 
+def _probe_target(harness: str, model: str, gateway: str, token: str):
+    path, extra, call = _probe_request(harness, model)
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        **extra,
+    }
+    return gateway.rstrip("/") + path, headers, call
+
+
+def basic_reply(
+    gateway: str, harness: str, model: str, token: str, timeout: float = 120
+) -> ProbeResult:
+    """A plain request in the harness's own protocol, and whether a finished
+    reply came back."""
+    url, headers, _ = _probe_target(harness, model, gateway, token)
+    response, answer, problem = _post(
+        url, headers, _plain_request(harness, model), timeout
+    )
+    return _result(
+        "Basic reply",
+        url,
+        response,
+        problem or _plain_problem(harness, answer),
+        "answered",
+    )
+
+
 def probe_gateway(
     gateway: str, harness: str, model: str, token: str, timeout: float = 120
 ) -> list[ProbeResult]:
@@ -568,23 +825,8 @@ def probe_gateway(
     passed: a plain reply, then a streamed tool loop, a tool call and the answer to
     its result, since both harnesses stream and some failures show only where a
     stream ends or once a tool result goes back."""
-    path, extra, call = _probe_request(harness, model)
-    url = gateway.rstrip("/") + path
-    headers = {
-        "content-type": "application/json",
-        "authorization": f"Bearer {token}",
-        **extra,
-    }
-    response, answer, problem = _post(
-        url, headers, _plain_request(harness, model), timeout
-    )
-    plain = _result(
-        "Basic reply",
-        url,
-        response,
-        problem or _plain_problem(harness, answer),
-        "answered",
-    )
+    url, headers, call = _probe_target(harness, model, gateway, token)
+    plain = basic_reply(gateway, harness, model, token, timeout)
     if not plain.ok:
         return [plain]
     response, events, problem = _post(url, headers, {**call, "stream": True}, timeout)
@@ -619,8 +861,10 @@ def _token_limit(where: str) -> str:
 
 def _hit_token_limit(reply: dict) -> bool:
     """Whether a finished reply stopped at its output-token limit: a Messages
-    stop reason, or a Responses reply left incomplete for that reason."""
+    stop reason, a Chat Completions finish reason, or a Responses reply left
+    incomplete for that reason."""
     return (
         reply.get("stop_reason") == "max_tokens"
+        or reply.get("finish") == "length"
         or (reply.get("incomplete_details") or {}).get("reason") == "max_output_tokens"
     )

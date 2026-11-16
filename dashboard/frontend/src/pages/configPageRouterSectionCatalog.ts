@@ -12,6 +12,7 @@ export const CURATED_ROUTER_SECTIONS = {
   ratelimit: { path: ['services', 'ratelimit'], layer: 'services' },
   management_api: { path: ['services', 'management_api'], layer: 'services' },
   startup_status: { path: ['services', 'startup_status'], layer: 'services' },
+  masking_identity: { path: ['services', 'masking_identity'], layer: 'services' },
   memory: { path: ['stores', 'memory'], layer: 'stores' },
   response_cache: { path: ['stores', 'response_cache'], layer: 'stores' },
   vector_store: { path: ['stores', 'vector_store'], layer: 'stores' },

@@ -32,12 +32,19 @@ func (r *OpenAIRouter) applySemanticReasoningMode(
 	}
 	effort, mode := semanticReasoningControls(r, family, decision, model, targetFormat, enabled)
 	mode, budget := messagesThinkingBudget(targetFormat, mode, request.ReasoningBudgetTokens)
-	if request.ReasoningEffort == effort && request.ReasoningMode == mode && request.ReasoningBudgetTokens == budget {
+	display := request.ReasoningDisplay
+	if mode != llmprotocol.ReasoningModeEnabled && mode != llmprotocol.ReasoningModeAdaptive {
+		// A display mode only shapes thinking output, which this request no longer asks for.
+		display = ""
+	}
+	if request.ReasoningEffort == effort && request.ReasoningMode == mode &&
+		request.ReasoningBudgetTokens == budget && request.ReasoningDisplay == display {
 		return false
 	}
 	request.ReasoningMode = mode
 	request.ReasoningEffort = effort
 	request.ReasoningBudgetTokens = budget
+	request.ReasoningDisplay = display
 	logging.Infof("Applied reasoning controls to model %q", model)
 	return true
 }

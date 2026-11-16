@@ -281,7 +281,8 @@ func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Se
 
 var errResponseStarted = errors.New("the response failed after it started")
 
-// serve answers a plan and returns why the exchange ended early, or nil.
+// serve answers a plan and returns why the exchange ended early, the local
+// reply it answered with, or nil.
 func (h *Handler) serve(ctx context.Context, w http.ResponseWriter, serving Serving, plan *routing.Plan, x *exchange) error {
 	if plan.Immediate != nil {
 		return transportError(ctx, writeResponse(w, plan.Immediate))
@@ -294,7 +295,13 @@ func (h *Handler) serve(ctx context.Context, w http.ResponseWriter, serving Serv
 		return transportError(ctx, err)
 	}
 	defer closeBody()
-	return transportError(ctx, writeResponse(w, resp))
+	if err := writeResponse(w, resp); err != nil {
+		return transportError(ctx, err)
+	}
+	if x.local != nil {
+		return x.local
+	}
+	return nil
 }
 
 // forward sends the planned call upstream and runs the response phases. The
@@ -302,7 +309,8 @@ func (h *Handler) serve(ctx context.Context, w http.ResponseWriter, serving Serv
 //
 // A local reply skips the response phases: Envoy's ext_proc ends processing
 // on Envoy's own local replies, so behind Envoy the client gets the reply as
-// it is, and the session ends as the ext_proc stream then does.
+// it is. The session then ends with the reply, as x.local, so it knows what
+// the client got.
 func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Plan, x *exchange) (*routing.Response, func(), error) {
 	sent := time.Now()
 	result, err := serving.Upstream.Execute(ctx, plan.Call, h.opts.Listener)
@@ -311,7 +319,9 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 			return nil, nil, ctx.Err()
 		}
 		x.record.UpstreamServiceTime = time.Since(sent)
-		return verbatim(localReply(err)), func() {}, nil
+		reply := localReply(err)
+		x.local = &routing.LocalReply{Status: reply.StatusCode, Failure: string(upstream.KindOf(err))}
+		return verbatim(reply), func() {}, nil
 	}
 	x.record.UpstreamServiceTime = time.Since(sent)
 	if result.Immediate != nil {
@@ -324,6 +334,7 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 	}
 	closeBody := func() { _ = resp.Body.Close() }
 	if resp.Local != nil {
+		x.local = &routing.LocalReply{Status: resp.StatusCode, Failure: string(resp.Local.Kind)}
 		return verbatim(resp), closeBody, nil
 	}
 	out, err := serving.Engine.Respond(ctx, plan, &routing.UpstreamResponse{

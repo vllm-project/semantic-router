@@ -82,9 +82,9 @@ func TestDelegatedBackendIsRejectedWhenTheContractIsOff(t *testing.T) {
 }
 
 func TestDelegatedBackendRejectsAStaticKey(t *testing.T) {
-	for _, key := range []string{"          api_key: shared-secret\n", "            api_key_env: GATEWAY_KEY\n"} {
+	for _, key := range []string{"          api_key: shared-secret\n", "            api_key_env: GATEWAY_KEY\n", "            api_key_file: /run/secrets/gateway-key\n"} {
 		_, err := ParseYAMLBytes([]byte(delegatedBackendConfig(delegatedGatewayBackend+key, true)))
-		if err == nil || !strings.Contains(err.Error(), "auth.credential: delegated cannot combine with a static key (api_key or auth.api_key_env)") {
+		if err == nil || !strings.Contains(err.Error(), "auth.credential: delegated cannot combine with a static key (api_key, auth.api_key_env or auth.api_key_file)") {
 			t.Fatalf("%s: error = %v, want the static key rejection", key, err)
 		}
 	}

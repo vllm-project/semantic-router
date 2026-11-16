@@ -71,7 +71,9 @@ decision, algorithm, plugin and global block.
   `providers.models[]` entry.
 - **Pricing.** `providers.models[].pricing` takes an optional uppercase
   three-letter `currency`, plus non-negative `prompt_per_1m`,
-  `completion_per_1m`, `cached_input_per_1m` and `cache_write_per_1m` rates.
+  `completion_per_1m`, `cached_input_per_1m`, `cache_write_per_1m` and
+  `cache_write_1h_per_1m` rates. A model without it takes its provider's
+  [list price](catalog-backed-models#list-prices) when the catalog lists one.
 - **Backend format.** [Protocol Compatibility](protocol-compatibility) helps
   you choose a backend's `api_format`. Check
   [Backend Target Compatibility](backend-target-compatibility) before moving
@@ -334,6 +336,8 @@ entrypoints:
 | `entrypoints[].model_names` | The public model aliases. |
 | `entrypoints[].recipe` | The recipe those aliases enter. |
 | `entrypoints[].default` | Marks the default chat entrypoint. |
+| `entrypoints[].review_model` | Optional model name of another entrypoint in the same API namespace for agent approval reviews. The target cannot have its own `review_model` or `memory_model`. See [Approve for me](agent-harness#approve-for-me-reviews). |
+| `entrypoints[].memory_model` | Optional model name of another entrypoint in the same API namespace for agent memory extraction and consolidation. The target cannot have its own `review_model` or `memory_model`. See [Codex memories](agent-harness#codex-memories). |
 | `recipes[]` | One recipe's policy: its signals, projections, decisions, algorithms, plugins, cache, learning and routing state. |
 
 Providers, stores and the model catalog's deployments can be shared without
@@ -468,6 +472,7 @@ every recipe.
 | Where | What it sets |
 | --- | --- |
 | `global.services.router_replay` | Shared storage and retention. |
+| No `router_replay` plugin on any layer | A record of each request's routing data, with no request or response text. |
 | A `router_replay` plugin in `global.plugins` | Whether capture is on, and the capture defaults. |
 | A recipe's or decision's `router_replay` plugin | Only the fields it sets. `enabled: false` turns capture off there; `enabled: true` opts in when the default is off. |
 

@@ -205,6 +205,8 @@ func (c *compiler) clusterSecret(alias string, params config.ModelParams, endpoi
 			switch {
 			case ref.Auth != nil && ref.Auth.APIKeyEnv != "":
 				spec.Env = appendUnique(spec.Env, ref.Auth.APIKeyEnv)
+			case ref.Auth != nil && ref.Auth.APIKeyFile != "":
+				spec.Files = appendUnique(spec.Files, ref.Auth.APIKeyFile)
 			case ref.APIKey != "":
 				spec.Inline++
 			}

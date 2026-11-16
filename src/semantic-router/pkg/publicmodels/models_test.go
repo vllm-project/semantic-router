@@ -177,3 +177,33 @@ recipes:
 		t.Fatalf("external-gateway listing = %s, want %s", got, want)
 	}
 }
+
+// An entrypoint another one sends its reviews or memory calls to is listed for
+// those callers, under its role, but not offered for chat.
+func TestDelegateEntrypointsAreNotOfferedForChat(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.5
+providers:
+  models:
+    - name: m
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.1:8000"}]
+entrypoints:
+  - {model_names: [vllm-sr/auto], recipe: default, default: true, review_model: vllm-sr/review, memory_model: vllm-sr/memory}
+  - {model_names: [vllm-sr/review], recipe: default}
+  - {model_names: [vllm-sr/memory, memory-alias], recipe: default}
+recipes:
+  - name: default
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]RoutingMetadata{}
+	for _, model := range NewOpenAIModelList(cfg, 0).Data {
+		got[model.ID] = model.Routing
+	}
+	for id, want := range map[string]string{"vllm-sr/auto": "", "vllm-sr/review": "review", "vllm-sr/memory": "memory", "memory-alias": "memory"} {
+		if got[id].Delegate != want || got[id].Selectable != (want == "") {
+			t.Errorf("%s routing = %+v, want delegate %q", id, got[id], want)
+		}
+	}
+}

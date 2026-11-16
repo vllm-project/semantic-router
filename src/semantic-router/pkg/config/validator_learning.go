@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"golang.org/x/net/http/httpguts"
@@ -347,9 +348,9 @@ func validateProtectionRelease(cfg RouterLearningProtectionConfig, sessionHeader
 		return fmt.Errorf("%s.header %q is reserved; use an x- header the router can remove before the backend", field, header)
 	}
 	for _, identity := range []string{"session", "conversation", "agent"} {
-		names := []string{cfg.HeaderName(identity)}
-		if identity == "session" && names[0] == "" {
-			names = sessionHeaders
+		names := cfg.IdentityHeaderNames(identity)
+		if identity == "session" && cfg.HeaderName(identity) == "" {
+			names = append(slices.Clone(sessionHeaders), names...)
 		}
 		for _, name := range names {
 			if strings.EqualFold(header, name) {

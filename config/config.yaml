@@ -343,6 +343,8 @@ entrypoints:
   - model_names: ["vllm-sr/exhaustive-default"]
     recipe: default
     default: true
+    review_model: vllm-sr/exhaustive-privacy
+    memory_model: vllm-sr/exhaustive-privacy
   - model_names: ["vllm-sr/exhaustive-privacy"]
     recipe: privacy-first
   - api: systemone
@@ -694,6 +696,14 @@ recipes:
             type: exists
             source:
               type: flow_tool_state
+        - name: repeated_tool_failures
+          description: Two tool results of the current turn failed since the last two successes in a row.
+          feature:
+            type: count
+            source:
+              type: failed_tool_result
+          predicate:
+            gte: 2
         - name: has_developer_msg
           description: Request contains a developer message.
           feature:
@@ -1020,6 +1030,11 @@ recipes:
           - type: router_replay
             configuration:
               enabled: true
+              # Savings compare each request with qwen3-32b at the same recorded
+              # tokens, so a request this route sends to a dearer model shows
+              # a negative saving. Unset, the baseline is the most expensive
+              # model of the recipe's pool. It must name a model with pricing.
+              cost_baseline_model: qwen3-32b
               shadow:
                 model: qwen3-32b
                 sample_rate: 0.05
@@ -1144,6 +1159,11 @@ recipes:
             configuration:
               enabled: true
               signal: business_contact_pii
+              # registry keeps one index per value for good in the identity
+              # namespace of global.services.masking_identity it names.
+              # sequence numbers values in the order one request meets them.
+              index: registry
+              identity_namespace: agents
               # Rules that find text are masked as well, each under its own
               # name; entity_types filters only the pii rule's labels.
               rules:
@@ -2322,11 +2342,13 @@ global:
         scope: conversation
         identity:
           headers:
-            # Unset, protection keys on the session id the request pins.
+            # Unset, protection keys on the session id the request pins, else
+            # on the session-id Codex sends.
             session: x-session-id
             conversation: x-conversation-id
             # Optional: holds each named agent (a delegated subagent) on its own
-            # model inside the session. Claude Code sends this on subagent calls.
+            # model inside the session. Unset, protection reads the agent Claude
+            # Code (this header, on subagent calls) or Codex (thread-id) sends.
             agent: x-claude-code-agent-id
         tuning:
           idle_timeout_seconds: 300
@@ -2364,6 +2386,19 @@ global:
           key_prefix: "vsr:router-session:v1:"
 
   services:
+    # Identity namespaces keep a masking placeholder per value across
+    # requests, sessions and restarts (masking index: registry). Each names a
+    # 32-byte key (key_file or key_env), scope: principal_or_installation,
+    # and a registry: {backend: file, path} or {backend: postgres, postgres}.
+    masking_identity:
+      namespaces:
+        agents:
+          key_env: VSR_MASKING_IDENTITY_KEY
+          scope: principal_or_installation
+          session_scope: false
+          registry:
+            backend: file
+            path: /var/lib/vllm-sr/masking/agents.log
     api:
       routing_preview:
         request_timeout_seconds: 120
@@ -2814,6 +2849,15 @@ global:
       primary:
         provider: model_runtime
         public_name: decision-public
+        # Explicit self-hosted rates; omit pricing to report unpriced calls.
+        # Remote deployments may inherit pricing from providers.models via model.
+        pricing:
+          currency: USD
+          prompt_per_1m: 0
+          completion_per_1m: 0
+          cached_input_per_1m: 0
+          cache_write_per_1m: 0
+          cache_write_1h_per_1m: 0
         artifact: vllm-sr/vela3-fast
         device: cpu
       # Vela 1.0 Omni-Nano, the embedding model of the vector store below:

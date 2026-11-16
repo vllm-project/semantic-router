@@ -228,6 +228,10 @@
   fill: none !important;
 }
 
+.reviewSummaryGrid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 @media (max-width: 1200px) {
   .summaryGrid,
   .chartsRow,

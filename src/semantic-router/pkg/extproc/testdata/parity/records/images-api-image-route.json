@@ -117,6 +117,7 @@
             "api-key",
             "api-subscription-key",
             "authorization",
+            "chatgpt-account-id",
             "content-length",
             "ocp-apim-subscription-key",
             "x-api-key",
@@ -180,6 +181,10 @@
             {
               "name": "x-vsr-selected-model",
               "value": "painter"
+            },
+            {
+              "name": "x-vsr-replay-id",
+              "value": "<volatile>"
             }
           ]
         }
@@ -272,6 +277,10 @@
       {
         "name": "x-vsr-selected-model",
         "value": "painter"
+      },
+      {
+        "name": "x-vsr-replay-id",
+        "value": "<volatile>"
       }
     ],
     "body": "{\"created\":0,\"data\":[{\"b64_json\":\"aGVsbG8=\"}]}"
