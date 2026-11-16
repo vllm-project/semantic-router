@@ -39,7 +39,7 @@ func (filters routerReplayFilters) storageFilters() store.QueryFilters {
 		Model: filters.model, CacheStatus: filters.cacheStatus, SessionID: filters.sessionID,
 		RequestKind: filters.review.requestKind, ReviewStatus: filters.review.status,
 		ReviewOutcome: filters.review.outcome, ReviewRisk: filters.review.risk,
-		TurnID: filters.turnID,
+		TurnID: filters.turnID, Since: filters.since,
 	}
 }
 

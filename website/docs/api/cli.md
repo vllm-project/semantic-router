@@ -106,6 +106,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr storage`](#vllm-sr-storage) | Inspect Router storage or manage local storage credentials. |
 | [`vllm-sr storage rotate`](#vllm-sr-storage-rotate) | Replace this stack's storage credentials with freshly generated ones. |
 | [`vllm-sr storage vector-stores`](#vllm-sr-storage-vector-stores) | List vector stores known to the Router management API. |
+| [`vllm-sr usage`](#vllm-sr-usage) | Show the requests, spend and savings the Router recorded in a window. |
 
 ## `vllm-sr` {#vllm-sr}
 
@@ -1796,4 +1797,25 @@ List vector stores known to the Router management API.
 | `--endpoint TEXT` | Router management origin or /api/v1 root. |
 | `--timeout INTEGER` | [default: 15] |
 | `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
+| `--help` | Show this message and exit. Default: false. |
+
+## `vllm-sr usage` {#vllm-sr-usage}
+
+```text
+Usage: vllm-sr usage [OPTIONS]
+```
+
+Show the requests, spend and savings the Router recorded in a window.
+
+Read from Router Replay's list and aggregate, the figures Insights shows,
+with $VSR_MGMT_TOKEN as the bearer token when it is set. Top models and
+entrypoints are those with the most requests, by selected model and by the
+model the client asked for; each row adds its requests' own priced costs,
+the Router's calls for them included, as the window's spend does.
+
+| Parameter | Description |
+| --- | --- |
+| `--since TEXT` | Start of the window, as a time back from now such as 30m, 1h or 7d.  [default: midnight today, local time] |
+| `--endpoint TEXT` | Router management base URL; defaults to the local Router API port. |
+| `--json` | Print the summary as JSON. Default: false. |
 | `--help` | Show this message and exit. Default: false. |

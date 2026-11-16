@@ -19283,6 +19283,14 @@
             }
           },
           {
+            "name": "since",
+            "in": "query",
+            "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -22215,6 +22223,14 @@
             }
           },
           {
+            "name": "since",
+            "in": "query",
+            "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -23292,6 +23308,14 @@
             }
           },
           {
+            "name": "since",
+            "in": "query",
+            "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -23893,6 +23917,14 @@
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
             "schema": {
               "type": "string"
             }

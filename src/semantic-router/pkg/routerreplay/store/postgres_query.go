@@ -56,7 +56,7 @@ func (p *PostgresStore) QueryPage(ctx context.Context, filters QueryFilters, lim
 func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 	var clauses []string
 	var args []interface{}
-	add := func(clause string, value string) {
+	add := func(clause string, value interface{}) {
 		args = append(args, value)
 		clauses = append(clauses, strings.ReplaceAll(clause, "?", fmt.Sprintf("$%d", len(args))))
 	}
@@ -83,6 +83,10 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 	}
 	if filters.Search != "" {
 		add("(strpos(lower(COALESCE(request_id, '')), lower(?)) > 0 OR strpos(lower(COALESCE(recipe, '')), lower(?)) > 0 OR strpos(lower(COALESCE(session_id, '')), lower(?)) > 0)", filters.Search)
+	}
+	if !filters.Since.IsZero() {
+		// timestamp holds UTC wall-clock time without a zone.
+		add("timestamp >= ?", filters.Since.UTC())
 	}
 	switch filters.CacheStatus {
 	case "cached":

@@ -17,6 +17,7 @@ from cli.commands.request import request
 from cli.commands.route import route
 from cli.commands.runtime import dashboard, logs, serve, status, stop
 from cli.commands.storage import storage
+from cli.commands.usage import usage
 from cli.terminal import brand
 
 logo = r"""
@@ -48,6 +49,7 @@ REGISTERED_COMMANDS = (
     recipe,
     storage,
     instance,
+    usage,
 )
 
 
