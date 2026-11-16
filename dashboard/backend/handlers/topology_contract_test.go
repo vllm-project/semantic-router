@@ -17,7 +17,7 @@ import (
 func topologyScopedConfig(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(path, []byte(`version: v0.3
+	require.NoError(t, os.WriteFile(path, []byte(`version: v0.5
 providers:
   models:
     - name: model-a
@@ -26,18 +26,15 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
-routing:
-  decisions: []
 entrypoints:
   - model_names: [public/balanced]
     recipe: balanced
+    default: true
 recipes:
   - name: balanced
-    routing:
-      decisions: []
+    decisions: []
   - name: unbound
-    routing:
-      decisions: []
+    decisions: []
 `), 0o600))
 	_, err := routerconfig.Parse(path)
 	require.NoError(t, err)

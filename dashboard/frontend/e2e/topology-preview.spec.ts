@@ -8,19 +8,16 @@ const decisions = ['chosen', 'rejected'].map((name, index) => ({
   modelRefs: [{ model: 'backend-a' }, { model: 'backend-b' }],
 }))
 const config = {
-  version: 'v0.3',
+  version: 'v0.5',
   providers: { models: [{ name: 'backend-a' }, { name: 'backend-b' }] },
-  routing: { decisions: [] },
-  entrypoints: [{ model_names: ['public/balanced'], recipe: 'balanced' }],
+  entrypoints: [{ model_names: ['public/balanced'], recipe: 'balanced', default: true }],
   recipes: [
     {
       name: 'balanced',
-      routing: {
-        signals: { keywords: [{ name: 'greeting', operator: 'OR', keywords: ['hello'] }] },
-        decisions,
-      },
+      signals: { keywords: [{ name: 'greeting', operator: 'OR', keywords: ['hello'] }] },
+      decisions,
     },
-    { name: 'unbound', routing: { decisions: [] } },
+    { name: 'unbound', decisions: [] },
   ],
 }
 const success = {
