@@ -696,6 +696,14 @@ recipes:
             type: exists
             source:
               type: flow_tool_state
+        - name: repeated_tool_failures
+          description: Two tool results of the current turn failed since the last two successes in a row.
+          feature:
+            type: count
+            source:
+              type: failed_tool_result
+          predicate:
+            gte: 2
         - name: has_developer_msg
           description: Request contains a developer message.
           feature:
