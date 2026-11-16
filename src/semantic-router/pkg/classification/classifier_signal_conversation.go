@@ -162,7 +162,6 @@ func codexHeaderKey(line string) string {
 		}
 	}
 	return ""
->>>>>>> upstream/main
 }
 
 func (c *Classifier) evaluateConversationSignal(
