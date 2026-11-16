@@ -296,7 +296,9 @@ read that engine's load metrics:
 Naming an engine changes nothing on its own; it only tells the Router where
 load evidence for that replica can be found. An `https` backend's metrics, on
 `metrics.port` too, are read over `https` with its `tls` block, as its chat
-calls are, and never through an environment proxy.
+calls are, and never through an environment proxy. Scrapes reject redirects
+rather than following them to another target; missing or stale telemetry uses
+the conservative fallback described below.
 
 ### Balance on serving-engine load
 

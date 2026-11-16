@@ -195,7 +195,7 @@ Envoy 数据面没有首字节超时，因此设置了 `first_byte_timeout` 的�
 | `metrics.port` | 后端端口 | 引擎提供 Prometheus 指标的端口；Triton 使用 `8002`。 |
 | `metrics.path` | `/metrics` | 指标路径。 |
 
-仅声明引擎不会改变路由行为，它只说明副本的负载证据来自哪里。`https` 后端的指标也通过 `https` 读取，包括覆盖后的 `metrics.port`；抓取沿用后端的 `tls` 配置，与聊天请求一致，不经过环境代理。
+仅声明引擎不会改变路由行为，它只说明副本的负载证据来自哪里。`https` 后端的指标也通过 `https` 读取，包括覆盖后的 `metrics.port`；抓取沿用后端的 `tls` 配置，与聊天请求一致，不经过环境代理。抓取会拒绝重定向，不跟随它访问其他目标；缺失或过期的遥测按下文的保守规则回退。
 
 ### 按服务引擎负载均衡 {#balance-on-serving-engine-load}
 
