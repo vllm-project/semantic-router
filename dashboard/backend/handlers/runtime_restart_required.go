@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -75,56 +76,61 @@ func ConfigureRouterVerdict(routerAPIURL string, provider routerauth.CredentialP
 	}
 }
 
-// routerRestartReason waits for the Router to take or refuse the document
-// with this SHA-256 and returns why it needs a restart, if that is the only
-// reason it refused.
-func routerRestartReason(ctx context.Context, documentSHA256 string) (string, bool) {
+// awaitRouterVerdict waits for the Router to take or refuse the document with
+// this SHA-256. A refusal is a restartNeededError when a restart is the only
+// reason, and an error with the Router's reasons otherwise. Without a Router,
+// or without its verdict in time, the document counts as applied.
+func awaitRouterVerdict(ctx context.Context, documentSHA256 string) error {
 	routerVerdict.RLock()
 	endpoint, client, provider := routerVerdict.endpoint, routerVerdict.client, routerVerdict.provider
 	routerVerdict.RUnlock()
 	if endpoint == "" {
-		return "", false
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, routerVerdictTimeout)
 	defer cancel()
 	for {
 		if response, err := fetchRouterConfigHash(ctx, client, endpoint, provider); err == nil {
-			if detail, done, restart := judgeRouterAttempt(response, documentSHA256); done {
-				return detail, restart
+			if verdict, done := judgeRouterAttempt(response, documentSHA256); done {
+				return verdict
 			}
 		}
 		select {
 		case <-ctx.Done():
-			return "", false
+			return nil
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
 }
 
 // judgeRouterAttempt reads the Router's verdict on one document: done once the
-// Router activated or refused it, restart when every reason it gave is
-// restart_required.
-func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (detail string, done bool, restart bool) {
+// Router activated or refused it, with the refusal as the error.
+func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (verdict error, done bool) {
 	digest := strings.TrimPrefix(documentSHA256, "sha256:")
 	if response.GeneratedRuntimeHash != digest {
-		return "", false, false
+		return nil, false
 	}
 	attempt := response.Activation
 	switch {
 	case attempt == nil || attempt.Status == "preparing" || strings.TrimPrefix(attempt.DocumentHash, "sha256:") != digest:
-		return "", false, false
+		return nil, false
 	case attempt.Status == "active":
-		return "", response.ActiveRuntimeHash == digest, false
+		return nil, response.ActiveRuntimeHash == digest
+	case attempt.Status == "superseded":
+		// A later document replaced it; its own save reports on it.
+		return nil, true
 	}
 	if len(attempt.Reasons) == 0 {
-		return "", true, false
+		return fmt.Errorf("the Router did not apply it: its attempt %s", attempt.Status), true
 	}
+	restart := true
 	messages := make([]string, 0, len(attempt.Reasons))
 	for _, reason := range attempt.Reasons {
-		if reason.Code != restartRequiredCode {
-			return "", true, false
-		}
+		restart = restart && reason.Code == restartRequiredCode
 		messages = append(messages, reason.Message)
 	}
-	return strings.Join(messages, "; "), true, true
+	if restart {
+		return &restartNeededError{detail: strings.Join(messages, "; ")}, true
+	}
+	return fmt.Errorf("the Router did not apply it: %s", strings.Join(messages, "; ")), true
 }

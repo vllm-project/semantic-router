@@ -3584,6 +3584,205 @@
     verification: claimed
     source: https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf
     redistributable: true
+- id: anthropic/claude-haiku-5-5-max-swe-bench-pro@1.0.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Haiku 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.648
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
+    redistributable: true
+- id: anthropic/claude-haiku-5-5-max-frontiercode-1-1-main@1.0.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: max
+  subject:
+    variant: Claude Haiku 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    subset: main
+    source_kind: official_system_card
+  metrics:
+    score: 0.464
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
+    redistributable: true
+- id: anthropic/claude-haiku-5-5-max-terminal-bench-4@1.0.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Haiku 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    harness: 'Claude Code --bare'
+    trials: 10
+    safeguards: 'enabled without a fallback model'
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.392
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
+    redistributable: true
+- id: anthropic/claude-haiku-5-5-max-humanitys-last-exam-no-tools@1.0.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: max
+  subject:
+    variant: Claude Haiku 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    tool_policy: no_tools
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.459
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
+    redistributable: true
+- id: anthropic/claude-haiku-5-5-max-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject:
+    variant: Claude Haiku 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.574
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
+    redistributable: true
+- id: independent/claude-haiku-5-5-max-critpt@1.0.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Haiku 5.5 (max)
+    source_model_slug: claude-haiku-5-5
+    run_kind: independent
+  metrics:
+    score: 0.188571428571429
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/claude-haiku-5-5
+    redistributable: true
+- id: independent/claude-haiku-5-5-max-humanitys-last-exam@1.0.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: max
+  subject:
+    source_model: Claude Haiku 5.5 (max)
+    source_model_slug: claude-haiku-5-5
+    run_kind: independent
+    tool_policy: no_tools
+  metrics:
+    accuracy: 0.443929564411492
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/claude-haiku-5-5
+    redistributable: true
+- id: independent/claude-haiku-5-5-max-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Haiku 5.5 (max)
+    source_model_slug: claude-haiku-5-5
+    run_kind: independent
+  metrics:
+    score: 0.826666666666667
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/claude-haiku-5-5
+    redistributable: true
+- id: independent/claude-haiku-5-5-max-omniscience@1.0.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Haiku 5.5 (max)
+    source_model_slug: claude-haiku-5-5
+    run_kind: independent
+  metrics:
+    index: 12.3
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/claude-haiku-5-5
+    redistributable: true
+- id: independent/claude-haiku-5-5-max-scicode@1.0.0
+  model: anthropic/claude-haiku-5.5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: Claude Haiku 5.5 (max)
+    source_model_slug: claude-haiku-5-5
+    run_kind: independent
+    tool_policy: no_tools
+  metrics:
+    score: 0.549768518518518
+  status: available
+  observed_at: 2026-11-17
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/claude-haiku-5-5
+    redistributable: true
 - id: anthropic/claude-fable-5-2-max-swe-bench-pro@1.0.0
   model: anthropic/claude-fable-5.2
   benchmark: swe-bench/pro@1.0.0

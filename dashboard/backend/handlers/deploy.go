@@ -290,7 +290,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
-	warnings, err := validateMergedDeploy(yamlBytes)
+	warnings, err := validateMergedDeploy(existingData, yamlBytes)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -386,7 +386,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 // validateMergedDeploy checks a merged deploy document as the Router loads
 // it with its own environment, which the Dashboard may not share, and returns
 // the Router's warnings about it.
-func validateMergedDeploy(data []byte) ([]routerconfig.ConfigWarning, error) {
+func validateMergedDeploy(previous, data []byte) ([]routerconfig.ConfigWarning, error) {
 	if err := routerconfig.ValidateYAMLBytesDeferringEnv(data); err != nil {
 		return nil, err
 	}
@@ -396,7 +396,7 @@ func validateMergedDeploy(data []byte) ([]routerconfig.ConfigWarning, error) {
 	if err != nil {
 		return []routerconfig.ConfigWarning{}, nil
 	}
-	return savedConfigWarnings(cfg), nil
+	return savedConfigWarnings(previous, cfg), nil
 }
 
 func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {

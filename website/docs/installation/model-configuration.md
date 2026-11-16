@@ -44,6 +44,10 @@ shows the supported combinations and invalid mixtures.
 
 ```yaml
 version: v0.5
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
 providers:
   defaults:
     model: local-chat

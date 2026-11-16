@@ -691,8 +691,10 @@ func newRouterActivationVerifier(routerAPIURL string, client *http.Client, crede
 				if response.ActivationStatus == "active" && response.GeneratedRuntimeHash == expected && response.ActiveRuntimeHash == expected {
 					return nil
 				}
-				if detail, done, restart := judgeRouterAttempt(response, expected); done && restart {
-					return &restartNeededError{detail: detail}
+				if verdict, done := judgeRouterAttempt(response, expected); done {
+					if restart, ok := asRestartNeeded(verdict); ok {
+						return restart
+					}
 				}
 			}
 			select {

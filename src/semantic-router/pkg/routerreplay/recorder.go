@@ -233,7 +233,7 @@ func capToolTrace(trace *ToolTrace, policy recorderPolicy) {
 }
 
 func (r *Recorder) SetMaxRecords(max int) {
-	if memStore, ok := r.storage.(*store.MemoryStore); ok {
+	if memStore, ok := r.storage.(interface{ SetMaxRecords(int) }); ok {
 		memStore.SetMaxRecords(max)
 	}
 }

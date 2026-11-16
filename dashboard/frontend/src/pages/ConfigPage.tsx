@@ -134,8 +134,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       }
       setSaveWarnings(await responseConfigWarnings(response))
 
-      // Refresh config after save
-      await fetchConfig()
+      // Refresh in place: the loading state would unmount the section, and
+      // with it the warnings and editor state a section keeps.
+      await fetchConfig(false)
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to save configuration')
     }
@@ -269,7 +270,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       isReadonly={configEditorReadonly}
       openEditModal={openEditModal}
       refreshConfig={async () => {
-        await fetchConfig()
+        await fetchConfig(false)
       }}
       saveConfig={saveConfig}
     />

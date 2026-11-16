@@ -30,16 +30,19 @@ func (r *OpenAIRouter) applyDecisionOutput(ctx *RequestContext) error {
 	if ctx.SourceFormat == llmprotocol.OpenAIImagesV1 {
 		return r.applyImagesEntryDecision(ctx, decision, request)
 	}
+	client := ctx.SourceFormat
+	if client == "" {
+		client = llmprotocol.OpenAIChatV1
+	}
+	if err := r.refuseUnreturnableRatings(ctx, decision, client); err != nil {
+		return err
+	}
 	if !decision.Output.GeneratesImages() {
 		return nil
 	}
 	if request.ImageGeneration == nil && request.ToolChoice.Mode == llmprotocol.ToolChoiceNone {
 		return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorInvalidRequest, "image_generation_forbidden",
 			"the matched route answers with a generated image, and the request's tool_choice none forbids the image_generation operation")
-	}
-	client := ctx.SourceFormat
-	if client == "" {
-		client = llmprotocol.OpenAIChatV1
 	}
 	if supported, ok := r.codecCapabilitiesForFormat(client); !ok || !supported.Supports(llmprotocol.CapabilityImageGeneration) {
 		return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
@@ -81,6 +84,21 @@ func (r *OpenAIRouter) applyImagesEntryDecision(ctx *RequestContext, decision *c
 	return nil
 }
 
+// refuseUnreturnableRatings refuses, before any model is called, a ratings
+// run whose answer, one choice per candidate model, the client's API cannot
+// carry.
+func (r *OpenAIRouter) refuseUnreturnableRatings(ctx *RequestContext, decision *config.Decision, client llmprotocol.WireFormat) error {
+	if !r.shouldUseLooper(decision) || decision.Algorithm.Type != config.DecisionAlgorithmRatings {
+		return nil
+	}
+	if supported, ok := r.codecCapabilitiesForFormat(client); ok && supported.Supports(llmprotocol.CapabilityMultipleCandidates) {
+		return nil
+	}
+	logRoutingFailure(ctx, "decision_output_refused", "unsupported_capability", fmt.Errorf("decision %q runs ratings", decision.Name))
+	return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+		fmt.Sprintf("the matched route answers with one choice per candidate model, which the %s API cannot return; call the Chat Completions API", clientAPIName(client)), nil)
+}
+
 // imagesEntryRejection refuses an Images API request that reached no decision
 // generating images: it matched no decision, or it names a model directly
 // instead of a recipe's entrypoint.
@@ -116,6 +134,8 @@ func clientAPIName(format llmprotocol.WireFormat) string {
 		return "Chat Completions"
 	case llmprotocol.AnthropicMessagesV1:
 		return "Anthropic Messages"
+	case llmprotocol.OpenAIResponsesV1:
+		return "Responses"
 	default:
 		return string(format)
 	}

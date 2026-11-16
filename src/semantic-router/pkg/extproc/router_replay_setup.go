@@ -20,42 +20,19 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 		return recorders, replayRecorder, replayRecorder != nil, err
 	}
 
-	var globalRecorder, defaultRecorder *routerreplay.Recorder
-	if policy := preDecisionReplayPolicy(cfg); policy != nil {
-		var err error
-		if globalRecorder, err = createReplayRecorder("global", backend, policy, &cfg.RouterReplay); err != nil {
-			return nil, nil, false, fmt.Errorf("failed to initialize global replay recorder: %w", err)
-		}
-	}
-	if cfg.RecordsByDefault(nil) {
-		defaultRecorder = globalRecorder
-	}
-	replayRecorders, err := initializeIsolatedReplayRecorders(cfg, backend, defaultRecorder)
+	replayRecorders, globalRecorder, err := initializeMemoryReplayRecorders(cfg, backend)
 	if err != nil {
-		_ = closeReplayRecorders(globalRecorder, nil, false)
 		return nil, nil, false, err
 	}
 	shareReplayOutcomeQueueWithFallback(replayRecorders, globalRecorder)
 	// The memory store a configuration chose; one that keeps text in memory
 	// because the file store holds none has already said so.
-	if resolveReplayStoreBackend(cfg.RouterReplay) == "memory" && (len(replayRecorders) > 0 || globalRecorder != nil) {
+	if cfg.RouterReplay.StoreBackendName() == "memory" && (len(replayRecorders) > 0 || globalRecorder != nil) {
 		logging.Warnf("Router replay store_backend is set to %q — all replay records "+
-			"will be lost on configuration reload or router restart. Use \"postgres\" or \"redis\" for durable storage in production.",
+			"will be lost on router restart. Use \"postgres\" or \"redis\" for durable storage in production.",
 			backend)
 	}
 	return replayRecorders, globalRecorder, false, nil
-}
-
-// preDecisionReplayPolicy sizes the store for requests without a decision. A
-// recipe's defaults layer its own plugins over the global ones, so a recipe
-// can record before a decision when the global plugins do not. Each request
-// still captures under its own recipe's policy.
-func preDecisionReplayPolicy(cfg *config.RouterConfig) *config.RouterReplayPluginConfig {
-	policy := cfg.EffectiveRouterReplayConfig(nil)
-	for i := 0; policy == nil && i < len(cfg.Recipes); i++ {
-		policy = config.RouterReplayPolicyOf(cfg.Recipes[i].Profile.DefaultPlugins)
-	}
-	return policy
 }
 
 func shareReplayOutcomeQueueWithFallback(recorders map[string]*routerreplay.Recorder, fallback *routerreplay.Recorder) {
@@ -76,48 +53,35 @@ func shareReplayOutcomeQueueWithFallback(recorders map[string]*routerreplay.Reco
 
 // initializeReplayRecorders creates replay recorders for the decisions that record replay.
 func initializeReplayRecorders(cfg *config.RouterConfig) map[string]*routerreplay.Recorder {
-	backend := replayBackend(cfg)
-	if usesSharedReplayStorage(backend) {
-		recorders, _, _ := initializeSharedReplayRecorders(cfg, backend)
-		return recorders
-	}
-	recorders, _ := initializeIsolatedReplayRecorders(cfg, backend, nil)
+	recorders, _, _, _ := createReplayRuntime(cfg)
 	return recorders
 }
 
-// initializeIsolatedReplayRecorders gives each decision with a router_replay
-// plugin a store of its max_records, and the decisions on the default record
-// one store between them: shared, or a new one when it is nil.
-func initializeIsolatedReplayRecorders(
+// initializeMemoryReplayRecorders opens the stores cfg names for records kept
+// in memory, and maps each decision to the recorder of its store.
+func initializeMemoryReplayRecorders(
 	cfg *config.RouterConfig,
 	backend string,
-	shared *routerreplay.Recorder,
-) (map[string]*routerreplay.Recorder, error) {
+) (map[string]*routerreplay.Recorder, *routerreplay.Recorder, error) {
 	recorders := make(map[string]*routerreplay.Recorder)
-
-	for _, ref := range cfg.RoutingDecisionRefs() {
-		decision := ref.Decision
-		pluginCfg := replayConfigForDecisionRef(cfg, ref)
-		if pluginCfg == nil {
-			continue
-		}
-		key := config.RoutingDecisionKey(ref.Recipe, decision.Name)
-		if cfg.RecordsByDefault(decision) && shared != nil {
-			recorders[key] = shared
-			continue
-		}
-
-		recorder, err := createReplayRecorder(key, backend, pluginCfg, &cfg.RouterReplay)
+	var globalRecorder *routerreplay.Recorder
+	for _, plan := range cfg.RouterReplayMemoryStores() {
+		recorder, err := createReplayRecorder(plan.Name, backend, plan.Policy, cfg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to initialize replay recorder for decision %s: %w", decision.Name, err)
+			_ = closeReplayRecorders(globalRecorder, recorders, false)
+			if plan.Global {
+				return nil, nil, fmt.Errorf("failed to initialize global replay recorder: %w", err)
+			}
+			return nil, nil, fmt.Errorf("failed to initialize replay recorder for decision %s: %w", plan.Name, err)
 		}
-		if cfg.RecordsByDefault(decision) {
-			shared = recorder
+		if plan.Global {
+			globalRecorder = recorder
 		}
-		recorders[key] = recorder
+		for _, decision := range plan.Decisions {
+			recorders[decision] = recorder
+		}
 	}
-
-	return recorders, nil
+	return recorders, globalRecorder, nil
 }
 
 func initializeSharedReplayRecorders(
@@ -131,7 +95,7 @@ func initializeSharedReplayRecorders(
 	)
 
 	// Global capture also covers direct requests and failures before a decision.
-	if policy := preDecisionReplayPolicy(cfg); policy != nil {
+	if policy := cfg.RouterReplayPreDecisionPolicy(); policy != nil {
 		storage, err := createSharedReplayStore(backend, cfg, policy)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to initialize global replay store: %w", err)
@@ -170,11 +134,11 @@ func createReplayRecorder(
 	decisionName string,
 	backend string,
 	pluginCfg *config.RouterReplayPluginConfig,
-	globalCfg *config.RouterReplayConfig,
+	cfg *config.RouterConfig,
 ) (*routerreplay.Recorder, error) {
 	maxBodyBytes := resolveReplayMaxBodyBytes(pluginCfg.MaxBodyBytes)
 
-	storage, err := createReplayStore(decisionName, backend, pluginCfg, globalCfg)
+	storage, err := createReplayStore(decisionName, backend, pluginCfg, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -218,46 +182,15 @@ func usesSharedReplayStorage(backend string) bool {
 	}
 }
 
-// replayBackend is the backend that keeps the configuration's records. The
-// file store holds routing data only, so where a router_replay plugin keeps
-// prompt, body or tool text, the records stay in memory instead.
+// replayBackend is the backend that keeps the configuration's records, and
+// logs when the records stay in memory because a plugin keeps text.
 func replayBackend(cfg *config.RouterConfig) string {
-	backend := resolveReplayStoreBackend(cfg.RouterReplay)
-	if backend == "file" && replayKeepsText(cfg) {
+	backend := cfg.RouterReplayStoreBackend()
+	if backend != cfg.RouterReplay.StoreBackendName() {
 		logging.Warnf("Router replay keeps prompt or body text, which the file store does not hold; " +
 			"its records stay in memory. Configure postgres or redis to keep them across restarts.")
-		return "memory"
 	}
 	return backend
-}
-
-// replayKeepsText reports whether a request may record text: the policy of
-// some layer it can run, global.plugins for a passthrough request included,
-// captures a prompt.
-func replayKeepsText(cfg *config.RouterConfig) (keeps bool) {
-	cfg.VisitEveryPlugins(func(plugins []config.DecisionPlugin) {
-		keeps = keeps || config.RouterReplayPolicyOf(plugins).PromptCaptureMode() != config.PromptCaptureNone
-	})
-	return keeps
-}
-
-func resolveReplayStoreBackend(cfg config.RouterReplayConfig) string {
-	if backend := strings.ToLower(strings.TrimSpace(cfg.StoreBackend)); backend != "" {
-		return backend
-	}
-	if cfg.Postgres != nil {
-		return "postgres"
-	}
-	if cfg.Redis != nil {
-		return "redis"
-	}
-	if cfg.Milvus != nil {
-		return "milvus"
-	}
-	if cfg.Qdrant != nil {
-		return "qdrant"
-	}
-	return "memory"
 }
 
 func resolveReplayMaxBodyBytes(maxBodyBytes int) int {
@@ -271,11 +204,12 @@ func createReplayStore(
 	decisionName string,
 	backend string,
 	pluginCfg *config.RouterReplayPluginConfig,
-	globalCfg *config.RouterReplayConfig,
+	cfg *config.RouterConfig,
 ) (store.Storage, error) {
+	globalCfg := &cfg.RouterReplay
 	switch backend {
 	case "memory":
-		return createReplayMemoryStore(decisionName, pluginCfg, globalCfg), nil
+		return createReplayMemoryStore(decisionName, pluginCfg, cfg), nil
 	case "redis":
 		return createReplayRedisStore(globalCfg)
 	case "postgres":
@@ -286,8 +220,8 @@ func createReplayStore(
 		return createReplayQdrantStore(globalCfg)
 	default:
 		return nil, fmt.Errorf(
-			"unknown store_backend: %s (supported: file, memory, redis, postgres, milvus, qdrant)",
-			backend,
+			"unknown store_backend: %s (supported: %s)",
+			backend, strings.Join(config.RouterReplayStoreBackends(), ", "),
 		)
 	}
 }
@@ -351,17 +285,25 @@ func replayStateDir(configDir string) string {
 	return filepath.Join(configDir, ".vllm-sr")
 }
 
+// createReplayMemoryStore keeps a recorder's records in memory. A reload of a
+// configuration read from a file shares the store of the generation it
+// replaces, keyed by that file's directory and the recorder, so the records
+// are lost only on restart.
 func createReplayMemoryStore(
 	decisionName string,
 	pluginCfg *config.RouterReplayPluginConfig,
-	globalCfg *config.RouterReplayConfig,
+	cfg *config.RouterConfig,
 ) store.Storage {
 	maxRecords := pluginCfg.MaxRecords
 	if maxRecords <= 0 {
 		maxRecords = routerreplay.DefaultMaxRecords
 	}
 	logging.Debugf("Router replay for %s using memory backend (max_records=%d)", decisionName, maxRecords)
-	return store.NewMemoryStore(maxRecords, globalCfg.TTLSeconds)
+	if cfg.ConfigBaseDir == "" {
+		return store.NewMemoryStore(maxRecords, cfg.RouterReplay.TTLSeconds)
+	}
+	key := filepath.Join(replayStateDir(cfg.ConfigBaseDir), "router-replay") + " " + decisionName
+	return store.OpenMemoryStore(key, maxRecords, cfg.RouterReplay.TTLSeconds)
 }
 
 func createReplayRedisStore(globalCfg *config.RouterReplayConfig) (store.Storage, error) {

@@ -14,6 +14,10 @@ keep the Model custom.
 
 ```yaml
 version: v0.5
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
 providers:
   defaults:
     model: private-chat

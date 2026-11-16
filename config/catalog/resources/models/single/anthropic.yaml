@@ -115,6 +115,45 @@
   - proprietary
   - agentic
   released_at: '2026-09-22'
+- id: anthropic/claude-haiku-5.5
+  display_name: Claude Haiku 5.5
+  description: Anthropic Haiku model for high-volume, latency-sensitive work such as classification, routing, extraction, and subagent tasks.
+  kind: physical
+  publisher: Anthropic
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://platform.claude.com/docs/en/models/haiku-5-5/overview
+  family: claude-haiku
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: 2026-11-17
+    source: https://platform.claude.com/docs/en/models/haiku-5-5/overview
+  tags:
+  - efficient
+  - proprietary
+  - agentic
+  released_at: '2026-10-07'
 - id: anthropic/claude-fable-5.1
   display_name: Claude Fable 5.1
   description: Anthropic high-capability model with extended context and output limits.

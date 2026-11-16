@@ -86,9 +86,10 @@ func TestHandleFusionQuorumFailurePersistsAccountingAndAttempts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleLooperExecution: %v", err)
 	}
-	// panel-c's 502 left the panel below quorum, so the client gets it.
-	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_BadGateway {
-		t.Fatalf("Fusion quorum failure status = %v, want %v", got, typev3.StatusCode_BadGateway)
+	// panel-b answered without usable content, so the miss is the Router's
+	// own, not panel-c's 502.
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_InternalServerError {
+		t.Fatalf("Fusion quorum failure status = %v, want %v", got, typev3.StatusCode_InternalServerError)
 	}
 	if got := judgeCalls.Load(); got != 0 {
 		t.Fatalf("judge calls = %d, want 0 below panel quorum", got)
@@ -186,8 +187,8 @@ func assertFusionQuorumFailureRecord(t *testing.T, record store.Record) {
 
 func assertFusionQuorumReplayTerminal(t *testing.T, record store.Record) {
 	t.Helper()
-	if record.ResponseStatus != http.StatusBadGateway || record.LifecycleState != routerreplay.LifecycleFailed {
-		t.Fatalf("Replay terminal state = status %d / %q, want 502 / %q", record.ResponseStatus, record.LifecycleState, routerreplay.LifecycleFailed)
+	if record.ResponseStatus != http.StatusInternalServerError || record.LifecycleState != routerreplay.LifecycleFailed {
+		t.Fatalf("Replay terminal state = status %d / %q, want 500 / %q", record.ResponseStatus, record.LifecycleState, routerreplay.LifecycleFailed)
 	}
 	if record.EndedAt == nil || record.TerminalReason != "looper_execution_failed" {
 		t.Fatalf("Replay terminal metadata = ended_at %v / reason %q", record.EndedAt, record.TerminalReason)

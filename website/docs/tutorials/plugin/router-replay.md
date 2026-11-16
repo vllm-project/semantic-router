@@ -59,9 +59,13 @@ For another deployment method, configure the PostgreSQL connection in the
 [shared Replay service](../learning/memory-and-replay#configuration).
 
 The `memory` store keeps records in the Router process only and loses them
-when the Router restarts or reloads configuration. Use PostgreSQL or Redis for
-records that keep text or that several Routers share. Set retention for the
-data you intend to keep.
+when the Router restarts. A reload of the configuration file, such as a
+Dashboard save, keeps them unless it changes `ttl_seconds`, or renames or
+removes a decision whose own `router_replay` plugin gives it a store of its
+own. A Dashboard save that does one of these, or moves the records out of
+memory, answers with a `replay_store_reset` warning that those records are
+lost. Use PostgreSQL or Redis for records that keep text or that several
+Routers share. Set retention for the data you intend to keep.
 
 ### Set shared capture defaults
 

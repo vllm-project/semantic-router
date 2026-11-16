@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -411,9 +412,8 @@ func newFusionQuorumError(
 	outcome fusionPanelOutcome,
 	cause error,
 ) error {
-	return &FusionQuorumError{
-		cause:    cause,
-		failures: outcome.failures,
+	quorumErr := &FusionQuorumError{
+		cause: cause,
 		evidence: FusionQuorumEvidence{
 			RequiredCount: required,
 			UsableCount:   len(outcome.responses),
@@ -421,6 +421,14 @@ func newFusionQuorumError(
 			Usage:         outcome.usage,
 		},
 	}
+	// The models' failures end the run only when they alone kept the panel
+	// below quorum. An answer the Router found unusable makes the miss the
+	// Router's own, whatever the other members answered.
+	unusable := func(attempt FusionPanelAttemptEvidence) bool { return attempt.State == FusionPanelAttemptUnusable }
+	if !slices.ContainsFunc(outcome.attempts, unusable) {
+		quorumErr.failures = outcome.failures
+	}
+	return quorumErr
 }
 
 func pluralSuffix(count int) string {

@@ -74,10 +74,11 @@ func applyWrittenConfig(configPath string, configDir string, previousData []byte
 }
 
 // savedConfigWarnings are the Router's warnings about a configuration its
-// validator accepted. A save response lists them only when there are any, so
-// a clean save answers as it always did.
-func savedConfigWarnings(cfg *routerconfig.RouterConfig) []routerconfig.ConfigWarning {
-	return routerconfig.Warnings(cfg)
+// validator accepted, and what saving it over previous loses. A save response
+// lists them only when there are any, so a clean save answers as it always
+// did.
+func savedConfigWarnings(previous []byte, cfg *routerconfig.RouterConfig) []routerconfig.ConfigWarning {
+	return append(routerconfig.Warnings(cfg), replayStoreResetWarnings(previous, cfg)...)
 }
 
 // writeConfigSavedResponse answers a saved change the runtime applied.
@@ -337,8 +338,9 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
 		return awaitManagedRuntime(effectiveConfigPath)
 	}
-
-	return nil
+	// Elsewhere the Router reads the saved file itself, and its verdict is
+	// what the save reports.
+	return awaitRouterVerdictOn(effectiveConfigPath)
 }
 
 func isManagedContainerConfigPath(configPath string) bool {
@@ -350,10 +352,6 @@ func isManagedContainerConfigPath(configPath string) bool {
 // awaitManagedRuntime finds out whether the stack's running containers take
 // the synced runtime config. If they can't, it returns the restart needed.
 func awaitManagedRuntime(effectiveConfigPath string) error {
-	runtimeConfig, err := os.ReadFile(effectiveConfigPath)
-	if err != nil {
-		return fmt.Errorf("read the synced runtime config: %w", err)
-	}
 	envoyChanged, err := refreshManagedSplitEnvoyConfig(effectiveConfigPath)
 	if err != nil {
 		return err
@@ -361,10 +359,17 @@ func awaitManagedRuntime(effectiveConfigPath string) error {
 	if envoyChanged {
 		return &restartNeededError{detail: envoyRestartDetail}
 	}
-	if detail, restart := routerRestartReason(context.Background(), activationDigest(runtimeConfig)); restart {
-		return &restartNeededError{detail: detail}
+	return awaitRouterVerdictOn(effectiveConfigPath)
+}
+
+// awaitRouterVerdictOn waits for the Router's verdict on the runtime config
+// at path.
+func awaitRouterVerdictOn(path string) error {
+	runtimeConfig, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read the synced runtime config: %w", err)
 	}
-	return nil
+	return awaitRouterVerdict(context.Background(), activationDigest(runtimeConfig))
 }
 
 // refreshManagedSplitEnvoyConfig regenerates the Envoy config a split stack
