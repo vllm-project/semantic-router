@@ -183,14 +183,18 @@ func envoyReliabilityHeaders(r *routing.Reliability, routeRetries bool) []*core.
 }
 
 // routeHasRetryPolicy reports whether the Envoy route for a provider model
-// has a retry policy: the template renders one for retries or a per-try
-// timeout.
+// has a retry policy wherever Envoy runs: the configuration asks for one with
+// a retry count or a per-try timeout. The default retries are on the route
+// only in the Envoy configuration the CLI renders; an Envoy configured
+// elsewhere has no retry policy for them, so a decision's count carries its
+// conditions itself, which on the CLI's route repeat the route's own.
 func (r *OpenAIRouter) routeHasRetryPolicy(model string) bool {
 	if r == nil || r.Config == nil {
 		return false
 	}
 	reliability := r.Config.ModelConfig[model].Reliability
-	return reliability.RetryCount > 0 || strings.TrimSpace(reliability.PerTryTimeout) != ""
+	return (reliability.RetryCount != nil && *reliability.RetryCount > 0) ||
+		strings.TrimSpace(reliability.PerTryTimeout) != ""
 }
 
 // routeKeyOf is the route key a header mutation sets, if any.

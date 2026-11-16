@@ -56,6 +56,10 @@ func mergeRouterSessionSnapshots(remote, local RouterSessionSnapshot) RouterSess
 	merged.RecentOutcomes = mergeTurnOutcomeWindows(remote.RecentOutcomes, local.RecentOutcomes, size, windowTTL, now)
 	merged.SwitchTimestamps = mergeSwitchTimestamps(remote.SwitchTimestamps, local.SwitchTimestamps, windowTTL, now)
 	merged.LastSwitchAt = laterTime(remote.LastSwitchAt, local.LastSwitchAt)
+	merged.LastCacheReceipt = local.LastCacheReceipt
+	if remote.LastCacheReceipt != nil && (local.LastCacheReceipt == nil || remote.LastCacheReceipt.At.After(local.LastCacheReceipt.At)) {
+		merged.LastCacheReceipt = remote.LastCacheReceipt
+	}
 
 	// Counters are per-replica accumulations of a shared baseline. Taking the
 	// maximum keeps whatever each replica observed without double counting a

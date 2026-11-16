@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"bytes"
+	"net/http"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -38,7 +39,7 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 	recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
-		return r.createErrorResponse(503, "protocol runtime unavailable")
+		return r.answerInPlaceOfUpstream(ctx, http.StatusServiceUnavailable, "protocol runtime unavailable", "request_processing_failed")
 	}
 	isConnectTimeout := isConnectTimeoutError(body)
 	if ctx != nil && !ctx.UpstreamErrorMetricRecorded {
@@ -52,6 +53,8 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 		ctx.UpstreamErrorMetricRecorded = true
 	}
 	source, target := responseWireFormats(ctx)
+	// An upstream may echo the caller's login in its error.
+	body = redactCallerCredential(ctx, body)
 	translated, err := engine.TranslateTransportError(source, target, body, normalizeUpstreamContextLength(ctx.UpstreamStatusCode))
 	if err != nil {
 		if !isConnectTimeout {
@@ -66,7 +69,7 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 		protocolError := upstreamTransportFallback(ctx.UpstreamStatusCode, body, err)
 		encoded, encodeErr := engine.EncodeError(target, protocolError)
 		if encodeErr != nil {
-			return r.createErrorResponse(502, "The selected model returned an invalid error response")
+			return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid error response")
 		}
 		translated.Body = encoded
 	}

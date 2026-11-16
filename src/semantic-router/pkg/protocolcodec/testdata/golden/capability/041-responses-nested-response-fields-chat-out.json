@@ -82,16 +82,33 @@
     {
       "name": "reasoning_and_namespaced_tool",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "upstream_unavailable",
-          "code": "empty_output_item"
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"q\":\"weather\"}",
+                      "name": "lookup"
+                    },
+                    "id": "call_1",
+                    "type": "function"
+                  }
+                ]
+              }
+            }
+          ],
+          "created": 100,
+          "id": "resp_tool",
+          "model": "routed-model",
+          "object": "chat.completion"
         },
         "diagnostics": [
-          {
-            "field": "output.encrypted_content",
-            "action": "dropped"
-          },
           {
             "field": "output.status",
             "action": "dropped"
@@ -105,11 +122,15 @@
             "action": "dropped"
           },
           {
-            "field": "output.namespace",
+            "field": "output.status",
             "action": "dropped"
           },
           {
-            "field": "output.status",
+            "field": "reasoning_details",
+            "action": "dropped"
+          },
+          {
+            "field": "output.namespace",
             "action": "dropped"
           }
         ]

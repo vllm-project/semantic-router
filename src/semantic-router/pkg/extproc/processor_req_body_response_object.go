@@ -58,6 +58,9 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	if history == nil || len(history.Instructions) == 0 && len(history.Messages) == 0 {
 		return false, nil
 	}
+	if err := llmprotocol.ClaimHistoryToolNames(request, *history); err != nil {
+		return false, err
+	}
 	// The developer and system items of the stored input decode as
 	// instructions, as they do at ingress. In turn order they follow this
 	// request's top-level instructions and precede the developer and system
@@ -153,7 +156,9 @@ func storedResponseItems(storedResponses []*responseapi.StoredResponse) ([]json.
 func marshalStoredInputItems(items []responseapi.InputItem) ([]json.RawMessage, error) {
 	encoded := make([]json.RawMessage, 0, len(items))
 	for _, item := range items {
-		item.Status = ""
+		if item.Type != responseapi.ItemTypeImageGenerationCall {
+			item.Status = ""
+		}
 		body, err := json.Marshal(item)
 		if err != nil {
 			return nil, err
@@ -166,7 +171,9 @@ func marshalStoredInputItems(items []responseapi.InputItem) ([]json.RawMessage, 
 func marshalStoredOutputItems(items []responseapi.OutputItem) ([]json.RawMessage, error) {
 	encoded := make([]json.RawMessage, 0, len(items))
 	for _, item := range items {
-		item.Status = ""
+		if item.Type != responseapi.ItemTypeImageGenerationCall {
+			item.Status = ""
+		}
 		body, err := json.Marshal(item)
 		if err != nil {
 			return nil, err

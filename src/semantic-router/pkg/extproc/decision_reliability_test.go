@@ -84,7 +84,7 @@ func TestEnvoyReliabilityHeadersAreTheConfiguredFive(t *testing.T) {
 func TestEnvoyReliabilityHeadersRideTheRouteMutation(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{BackendModels: config.BackendModels{
 		ModelConfig: map[string]config.ModelParams{
-			"model-a": {Reliability: config.ProviderReliability{RetryCount: 2}},
+			"model-a": {Reliability: config.ProviderReliability{RetryCount: intPtr(2)}},
 		},
 	}}}
 	routeTo := func(model string) *ext_proc.HeaderMutation {
@@ -109,7 +109,8 @@ func TestEnvoyReliabilityHeadersRideTheRouteMutation(t *testing.T) {
 	router.addEnvoyReliabilityHeaders(streamed, ctx)
 	got = headerValues(hold.routeMutation.GetSetHeaders())
 	require.Equal(t, "2000", got["x-envoy-upstream-rq-timeout-ms"])
-	require.Equal(t, config.DefaultProviderRetryOn, got["x-envoy-retry-on"], "model-b's route has no retry policy")
+	require.Equal(t, config.DefaultProviderRetryOn, got["x-envoy-retry-on"],
+		"model-b sets no retry count, so an Envoy the CLI did not configure has no route retry policy for the decision's")
 	require.Nil(t, streamed.GetRequestBody().GetResponse(), "Envoy ignores header mutations on full-duplex body replies")
 
 	ctx.fullDuplexHold = nil

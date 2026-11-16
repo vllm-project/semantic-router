@@ -203,6 +203,7 @@ class ImpactTests(unittest.TestCase):
                 "quality",
                 "security",
                 "cli-unit",
+                "agent-plugins",
                 "model-runtime",
                 "bench-tools",
                 "training",

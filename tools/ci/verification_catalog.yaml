@@ -242,6 +242,18 @@ verifications:
     workflow: .github/workflows/test-tools.yml
     target: vllm-sr-test
     inventory: cli-unittest-discovery
+  agent-plugins:
+    layer: integrations
+    execution: automatic
+    display_name: Agent Plugins
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: cli
+    workflow: .github/workflows/test-tools.yml
+    target: agent-plugins-test
+    inventory: agent-plugin-test-discovery
   model-runtime:
     layer: runtime
     execution: automatic
@@ -346,7 +358,7 @@ verifications:
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 # Authoring tools remain affected/manual contracts, outside product qualification.
 full_cpu:
-  version: 8
+  version: 9
   required:
     - quality
     - generated-contracts
@@ -363,6 +375,7 @@ full_cpu:
     - performance
     - cli-package
     - cli-unit
+    - agent-plugins
     - model-runtime
     - mock-provider
     - harness-tools

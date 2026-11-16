@@ -275,7 +275,9 @@ func assertFieldValue(
 	}
 }
 
-func TestRecorderMaxToolTraceBytesPromptTruncation(t *testing.T) {
+// MaxToolTraceBytes bounds tool definitions and trace steps; the prompt has a
+// limit of its own (MaxPromptBytes, 64 KiB by default).
+func TestRecorderMaxToolTraceBytesLeavesThePromptToItsOwnLimit(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
 	recorder.SetCapturePolicy(true, true, 4096)
 	recorder.SetMaxToolTraceBytes(15)
@@ -294,11 +296,8 @@ func TestRecorderMaxToolTraceBytesPromptTruncation(t *testing.T) {
 		t.Fatal("record not found")
 	}
 
-	if len(rec.Prompt) != 15 {
-		t.Errorf("expected Prompt len=15, got %d", len(rec.Prompt))
-	}
-	if !rec.PromptTruncated {
-		t.Error("expected PromptTruncated=true")
+	if rec.Prompt != "This prompt exceeds fifteen bytes" || rec.PromptTruncated {
+		t.Errorf("expected the whole prompt, got %q (truncated %v)", rec.Prompt, rec.PromptTruncated)
 	}
 	// ToolDefinitions is shorter than 15 bytes only if json is short enough;
 	// here `[{"type":"function"}]` is 22 bytes so it should be truncated too.

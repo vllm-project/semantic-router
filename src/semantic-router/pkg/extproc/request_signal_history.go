@@ -43,6 +43,7 @@ type signalConversationHistory struct {
 	lastMessageFlowToolResult bool
 	lastAssistantToolCall     bool
 	lastUserAfterToolResult   bool
+	failedToolResults         int
 }
 
 func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signalConversationHistory {
@@ -82,6 +83,7 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 		lastMessageFlowToolResult: result.LastMessageFlowToolResult,
 		lastAssistantToolCall:     result.LastAssistantToolCall,
 		lastUserAfterToolResult:   result.LastUserAfterToolResult,
+		failedToolResults:         result.ToolFailures.Failed,
 	}
 }
 

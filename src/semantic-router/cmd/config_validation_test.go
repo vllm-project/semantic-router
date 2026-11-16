@@ -155,3 +155,14 @@ global:
 		t.Fatalf("the migrated file is not in the canonical form:\n%s", report.Migrated)
 	}
 }
+
+// `vllm-sr serve` validates with the Router image, which does not mount the
+// stack's state directory, so a key file the Dashboard saved is not there.
+func TestValidateConfigLeavesAKeyFileToTheServingRouter(t *testing.T) {
+	document := strings.Replace(outputValidationConfig, "        - endpoint: 127.0.0.1:8000\n",
+		"        - endpoint: 127.0.0.1:8000\n          auth: {api_key_file: /app/.vllm-sr/provider-keys/key-1}\n", 1)
+	document = strings.NewReplacer("CONDITION", "wants_text", "OUTPUT", "").Replace(document)
+	if status, report := runValidation(t, document); status != 0 || !report.Valid {
+		t.Fatalf("status %d, report %+v: a key file that is not mounted here must not fail validation", status, report)
+	}
+}

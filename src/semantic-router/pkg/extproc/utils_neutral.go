@@ -84,6 +84,8 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 	result := &requestSignalSnapshot{
 		Model: request.Model, Stream: request.Stream,
 		JailbreakInput: extractJailbreakInput(request),
+		sourceFormat:   request.Trusted.SourceFormat,
+		toolCalls:      map[string]*llmprotocol.ToolCall{},
 	}
 	switch request.ToolChoice.Mode {
 	case llmprotocol.ToolChoiceRequired, llmprotocol.ToolChoiceNamed:
@@ -148,6 +150,9 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		result.UserMessageCount++
 		result.LastUserHasText = strings.TrimSpace(text) != ""
 		result.LastUserAfterToolResult = previousWasTool
+		if !message.WithToolResults {
+			result.ToolFailures = classification.ToolFailureCount{}
+		}
 		recordUserInputModalities(result, message.Content, text)
 		result.UserVideos = userInlineVideos(message.Content)
 		if text != "" {
@@ -189,10 +194,18 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 			if message.Role == llmprotocol.RoleAssistant {
 				result.LastAssistantToolCall = true
 			}
+			if content.ToolCall != nil {
+				result.toolCalls[content.ToolCall.ID] = content.ToolCall
+			}
 		case llmprotocol.ContentToolResult:
 			result.ToolResultCount++
 			result.LastMessageToolResult = true
-			if content.ToolResult != nil && looper.IsWorkflowToolCallID(content.ToolResult.CallID) {
+			if content.ToolResult == nil {
+				continue
+			}
+			result.ToolFailures.Observe(classification.ToolResultStatusOf(result.sourceFormat,
+				result.toolCalls[content.ToolResult.CallID], content.ToolResult.IsError, semanticText(content.ToolResult.Content)))
+			if looper.IsWorkflowToolCallID(content.ToolResult.CallID) {
 				result.LastMessageFlowToolResult = true
 			}
 		}

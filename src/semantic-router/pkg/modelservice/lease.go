@@ -281,6 +281,7 @@ func (l *Lease) observe(m member, deployment, surface string, started time.Time,
 // bundle when there is one; the bundle answers it together with the stage's
 // other questions to the same model.
 func (l *Lease) Decide(ctx context.Context, deployment string, request Request) (Response, error) {
+	ctx = WithMeterDeployment(ctx, deployment)
 	m, err := l.call(deployment)
 	if err != nil {
 		return Response{}, err
@@ -316,6 +317,7 @@ func (l *Lease) Decide(ctx context.Context, deployment string, request Request) 
 
 // Classify runs a classify request on a deployment, inside the context's bundle when there is one.
 func (l *Lease) Classify(ctx context.Context, deployment string, request ClassifyRequest) (ClassifyResponse, error) {
+	ctx = WithMeterDeployment(ctx, deployment)
 	m, err := l.call(deployment)
 	if err != nil {
 		return ClassifyResponse{}, err
@@ -343,6 +345,7 @@ func (l *Lease) Classify(ctx context.Context, deployment string, request Classif
 
 // Embed runs an embeddings request on a deployment, inside the context's bundle when there is one.
 func (l *Lease) Embed(ctx context.Context, deployment string, request EmbedRequest) (EmbedResponse, error) {
+	ctx = WithMeterDeployment(ctx, deployment)
 	m, err := l.call(deployment)
 	if err != nil {
 		return EmbedResponse{}, err
@@ -355,6 +358,7 @@ func (l *Lease) Embed(ctx context.Context, deployment string, request EmbedReque
 
 // Rerank runs a rerank request on a deployment, inside the context's bundle when there is one.
 func (l *Lease) Rerank(ctx context.Context, deployment string, request RerankRequest) (RerankResponse, error) {
+	ctx = WithMeterDeployment(ctx, deployment)
 	m, err := l.call(deployment)
 	if err != nil {
 		return RerankResponse{}, err

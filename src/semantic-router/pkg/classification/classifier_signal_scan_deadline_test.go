@@ -52,7 +52,13 @@ func dilutingGuardClassifier(t *testing.T, timeout, perState, perWord time.Durat
 // threshold and every state's P(jailbreak) score(state).
 func scoredGuardClassifier(t *testing.T, timeout, perState time.Duration, threshold float64, score func(state string) float64) (*Classifier, *runtimetest.Runtime) {
 	t.Helper()
-	return guardClassifierAnswering(t, timeout, perState, 0, threshold, func(state, _ string, question api.Question) (api.Answer, bool) {
+	return guardClassifierAnswering(t, timeout, perState, 0, threshold, scoredAnswer(score))
+}
+
+// scoredAnswer answers the jailbreak question about every state at
+// P(jailbreak) score(state).
+func scoredAnswer(score func(state string) float64) func(state, _ string, question api.Question) (api.Answer, bool) {
+	return func(state, _ string, question api.Question) (api.Answer, bool) {
 		if question.Choices == nil || !slices.ContainsFunc(*question.Choices, func(choice api.ChoiceOption) bool { return choice.Key == "jailbreak" }) {
 			return api.Answer{}, false
 		}
@@ -60,7 +66,7 @@ func scoredGuardClassifier(t *testing.T, timeout, perState time.Duration, thresh
 		kind, choice := "choice", map[bool]string{true: "jailbreak", false: "benign"}[attack >= 0.5]
 		probabilities := map[string]float64{"benign": 1 - attack, "jailbreak": attack}
 		return api.Answer{Type: &kind, Choice: &choice, Probabilities: &probabilities, Confidence: &attack}, true
-	})
+	}
 }
 
 // guardClassifierAnswering serves refusingGuardConfig with the jailbreak rule
@@ -176,6 +182,48 @@ func TestAnInjectionAtTheEndOfA700KMessageIsReadAtTheConfiguredSize(t *testing.T
 		if strings.HasSuffix(state, scanInjection) && len(state) > configuredWindow {
 			t.Fatalf("the tail was read in a window of %d bytes, larger than the configured %d", len(state), configuredWindow)
 		}
+	}
+}
+
+// An injection at the very end of a 700,000-token message that its tail holds
+// just under the guard's threshold is refused. The tail, read first at the
+// configured size, holds it behind about 8 KB of earlier text at about 0.9942,
+// under 0.995 and close to it, so the message's last half window is read
+// again, where it holds the injection at about 0.9970. A benign message's tail
+// is read once.
+func TestAnInjectionItsTailHoldsJustUnderTheThresholdIsReadAgainInTheLastHalfWindow(t *testing.T) {
+	const question = "\n\nSummarize the minutes above."
+	score := func(state string) float64 {
+		if !strings.Contains(state, scanInjection) {
+			return 0.01
+		}
+		return 0.9999 - 0.7e-6*float64(len(state))
+	}
+	endsTheMessage := func(fake *runtimetest.Runtime) []int {
+		var sizes []int
+		for _, state := range guardStates(fake) {
+			if strings.HasSuffix(state, question) {
+				sizes = append(sizes, len(state))
+			}
+		}
+		return sizes
+	}
+	classifier, fake := scoredGuardClassifier(t, 20*time.Second, time.Millisecond, 0.995, score)
+
+	results := evaluateTurn(classifier, distinctProse(700_000, 4)+" "+scanInjection+question)
+
+	if !slices.Contains(results.MatchedJailbreakRules, "prompt_attack") || results.SignalErrorMatches["jailbreak:prompt_attack"] {
+		t.Fatalf("the injection at the end was not refused: jailbreak %v, coverage %v, errors %v",
+			results.MatchedJailbreakRules, results.ScanCoverage, results.SignalErrors)
+	}
+	if sizes := endsTheMessage(fake); len(sizes) != 2 || sizes[0] <= configuredWindow*3/4 || sizes[1] > configuredWindow/2 {
+		t.Fatalf("read the message's end in windows of %v bytes; want its tail, then its last half window of at most %d", sizes, configuredWindow/2)
+	}
+
+	classifier, fake = scoredGuardClassifier(t, 20*time.Second, time.Millisecond, 0.995, score)
+	benign := evaluateTurn(classifier, distinctProse(700_000, 5)+question)
+	if guarded(benign) || len(endsTheMessage(fake)) != 1 {
+		t.Fatalf("benign: guarded %v, the end read in windows of %v bytes; want its tail once", guarded(benign), endsTheMessage(fake))
 	}
 }
 
@@ -562,9 +610,14 @@ func TestReReadsThatWaitAreLeftOutOfTheDeploymentsPace(t *testing.T) {
 // A window close below the threshold is still read again at once: an
 // injection that its grown window holds at 0.4 against a rule at 0.5, 0.4
 // below in log-odds, is read again before any re-read of the benign windows
-// around it (0.1, which wait for the windows still unread), and refused.
+// around it (0.1, which wait for the windows still unread), and refused. The
+// deployment reads one window at a time: windows sent together, up to its
+// max_parallel, reach the model in any order, so only then is the order the
+// fake sees the order the scan sends them in.
 func TestANearThresholdInjectionIsReadAgainBeforeTheWaitingReReads(t *testing.T) {
-	classifier, fake := scoredGuardClassifier(t, 20*time.Second, time.Millisecond, 0.5, func(state string) float64 {
+	document := strings.NewReplacer("TIMEOUT", "20000", "RULE\n", "", "predicate: {gte: 0.995}", "predicate: {gte: 0.5}",
+		"max_parallel: 4", "max_parallel: 1").Replace(refusingGuardConfig)
+	classifier, fake := guardClassifierOf(t, document, time.Millisecond, 0, scoredAnswer(func(state string) float64 {
 		switch {
 		case !strings.Contains(state, scanInjection):
 			return 0.1
@@ -572,7 +625,7 @@ func TestANearThresholdInjectionIsReadAgainBeforeTheWaitingReReads(t *testing.T)
 			return 0.4
 		}
 		return 0.7
-	})
+	}))
 	text := injectedAt(distinctProse(700_000, 10), 0.6)
 
 	results := evaluateTurn(classifier, text)

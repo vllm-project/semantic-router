@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -22,8 +23,9 @@ type failedAttempt struct {
 	body   []byte
 	format llmprotocol.WireFormat
 	// transport reports that no backend answered: the connection failed,
-	// was reset or timed out.
+	// was reset or timed out. failure then classifies why, when known.
 	transport bool
+	failure   string
 }
 
 // failedCandidateAttempt describes a response-phase candidate call that
@@ -34,7 +36,7 @@ func failedCandidateAttempt(dispatch *providerDispatch, status int, body []byte,
 		attempt.transport, attempt.body = true, nil
 		attempt.status = http.StatusServiceUnavailable
 		if errors.Is(callErr, context.DeadlineExceeded) {
-			attempt.status = http.StatusGatewayTimeout
+			attempt.status, attempt.failure = http.StatusGatewayTimeout, "timeout"
 		}
 	}
 	return attempt
@@ -44,7 +46,7 @@ func failedCandidateAttempt(dispatch *providerDispatch, status int, body []byte,
 // what pkg/upstream saw of it.
 func failedOutcomeAttempt(candidate *fallbackCandidate, outcome routing.Outcome) *failedAttempt {
 	if outcome.Local {
-		return &failedAttempt{status: outcome.Status, format: candidate.dispatch.targetFormat, transport: true}
+		return &failedAttempt{status: outcome.Status, format: candidate.dispatch.targetFormat, transport: true, failure: outcome.Failure}
 	}
 	return &failedAttempt{status: outcome.Status, body: failedReplyBody(outcome), format: candidate.dispatch.targetFormat}
 }
@@ -53,7 +55,8 @@ func failedOutcomeAttempt(candidate *fallbackCandidate, outcome routing.Outcome)
 // fallback chain that ended without a success: the backend's error, with its
 // status, in the client's protocol (a refusal of a prompt over the window as
 // context_length_exceeded), or, when no backend answered, an unavailable
-// error that keeps the transport's detail out of the client's message.
+// error that keeps the transport's detail out of the client's message. No
+// response phase sees that answer, so the record ends with it here.
 func (r *OpenAIRouter) failedAttemptResponse(ctx *RequestContext, attempt *failedAttempt) *ext_proc.ProcessingResponse {
 	if attempt == nil {
 		return nil
@@ -61,11 +64,22 @@ func (r *OpenAIRouter) failedAttemptResponse(ctx *RequestContext, attempt *faile
 	protocolError := r.failedAttemptError(attempt)
 	ctx.ImmediateProtocolError = protocolError
 	response := r.encodeImmediateResponseForClient(r.createErrorResponse(attempt.status, protocolError.Message), ctx)
-	r.updateRouterReplayStatus(ctx, attempt.status, false)
-	if immediate := response.GetImmediateResponse(); immediate != nil {
-		r.attachRouterReplayResponse(ctx, immediate.Body, false)
+	reason := "upstream_error_response"
+	if attempt.transport {
+		reason = "upstream_" + cmp.Or(attempt.failure, "unavailable")
 	}
+	r.failAnsweredRouterReplay(ctx, attempt.status, response.GetImmediateResponse().GetBody(), reason)
 	return response
+}
+
+// fallbackCredentialRefusal is the request's 401 when a chain ended at a
+// candidate refused for want of the request's delegated credential, and ends
+// the record with it; nil when no candidate was refused.
+func (r *OpenAIRouter) fallbackCredentialRefusal(ctx *RequestContext) *ext_proc.ProcessingResponse {
+	refused := r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
+	immediate := refused.GetImmediateResponse()
+	r.failAnsweredRouterReplay(ctx, int(immediate.GetStatus().GetCode()), immediate.GetBody(), "request_rejected")
+	return refused
 }
 
 func (r *OpenAIRouter) failedAttemptError(attempt *failedAttempt) *llmprotocol.ProtocolError {
