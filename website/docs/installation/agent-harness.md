@@ -1223,12 +1223,69 @@ its `bash` tool, no session file, and no extensions, skills or instruction
 files. Pi has no allowlist for a single command, so it runs whatever the model
 asks for, in the check's empty temporary directory. With `--dry-run` the check
 gives Pi an agent directory of its own that holds only the `models.json` the
-command would write, so it runs without your Pi login and settings.
+command would write, so it runs without your Pi login and settings, except
+on [Pi's own login](#pi-on-its-own-claude-or-chatgpt-login).
 
 There is no `--launch` for Pi: it reads providers only from `models.json`, so
 it cannot reach a gateway for one session without one being written. There is
 no vSR plugin for Pi. A gateway that presents each caller's own login upstream
-is refused, since Pi sends only the key `models.json` gives it.
+gets Pi's own login, as the next section describes.
+
+### Pi on its own Claude or ChatGPT login
+
+Pi signed in with `/login` (or `pi auth login anthropic`, `pi auth login
+openai-codex`) keeps that login on a gateway whose caller backends name its
+provider, as [Claude Code](#claude-code-on-its-own-claude-login) and
+[Codex](#codex-on-its-own-chatgpt-login) do. `vllm-sr connect pi --config
+<your config>` then gives the provider Pi's own command for that login as its
+key:
+
+```json
+{
+  "providers": {
+    "vllm-sr": {
+      "name": "vLLM Semantic Router",
+      "baseUrl": "http://localhost:8899",
+      "api": "anthropic-messages",
+      "apiKey": "!pi auth print-bearer-token --provider anthropic",
+      "compat": { "supportsEagerToolInputStreaming": false },
+      "models": [
+        { "id": "vllm-sr/auto", "maxTokens": 32000, "contextWindow": 200000 }
+      ]
+    }
+  }
+}
+```
+
+- Before each request Pi runs `pi auth print-bearer-token`, the command Pi
+  offers external clients: it prints the OAuth login Pi stored in `auth.json`,
+  and refreshes it first when it expires within 30 minutes. The login stays in
+  Pi's store and its refresh stays Pi's. `connect` reads only which kind of
+  credential each provider holds there; it never runs the command, so it never
+  holds or shows the login.
+- A login goes only to the provider that issued it. A gateway whose caller
+  backends name `anthropic` gets Pi's `anthropic` login, and one that names
+  `openai` its `openai-codex` login (ChatGPT for Codex), or else its `openai`
+  login (Sign in with ChatGPT). The command stops before writing anything when
+  Pi holds no OAuth login of that provider, a login of the other provider or a
+  stored API key included. A gateway key in `$VLLM_SR_API_KEY` is not used.
+- The Router takes an Anthropic login only on Messages, so on one Pi talks to
+  the gateway over Messages (`api: anthropic-messages`, the listener without
+  `/v1` as `baseUrl`), with the login, Claude's OAuth beta and Claude Code's
+  identity as Pi sends them to Anthropic. The Router refuses Pi's default
+  `tools[].eager_input_streaming` there, so the provider turns it off and Pi
+  asks for fine-grained tool streaming with its beta header instead. Pi sends
+  no session header on this login, so session protection cannot hold its
+  model for a session, and Messages keeps thinking signatures: the Router
+  settings below do not apply.
+- On an `openai` login Pi stays on Chat Completions. It sends the ChatGPT login
+  without the `chatgpt-account-id` header Codex sends beside it.
+
+The gateway is not probed, since it answers only on Pi's login. `--check` runs
+Pi on that login. With `--dry-run` the provider in the check's own agent
+directory runs the command with `PI_CODING_AGENT_DIR` set to yours, so it reads
+your login there. `vllm-sr connect status` shows `Pi's own login (anthropic)`
+and sends nothing, and `--undo` takes the provider back as for a key.
 
 ### Router settings for Pi
 

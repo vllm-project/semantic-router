@@ -833,8 +833,10 @@ def _show_status(entry: dict) -> None:
     }[harness]
     heading(f"{harness} ({where})")
     window = entry["context_window"]
+    # Pi's, with the provider it signed in to
+    own = f" ({entry['pi_login']})" if entry.get("pi_login") else ""
     login = {
-        "own login": f"{name}'s own login",
+        "own login": f"{name}'s own login{own}",
         "no key": "no key",
         "gateway key": (
             f"gateway key from ${entry['key_env']}"

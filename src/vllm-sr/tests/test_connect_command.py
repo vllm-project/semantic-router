@@ -3,6 +3,7 @@ import importlib
 import json
 import os
 import re
+import shlex
 import signal
 import stat
 import subprocess
@@ -3448,17 +3449,116 @@ def test_pi_takes_a_key_command_as_its_api_key_and_never_the_key(
     assert {auth for _, _, auth in seen} == {"Bearer sk-from-file"}
 
 
-def test_pi_refuses_a_gateway_that_presents_each_callers_login(
-    tmp_path, gateway, pi_home, monkeypatch
+def _pi_logins(pi_home, **logins):
+    """Pi's auth.json with a made-up OAuth login for each provider named."""
+    pi_home.mkdir(parents=True, exist_ok=True)
+    stored = {
+        name: {"type": "oauth", "access": access, "refresh": "r", "expires": 4e12}
+        for name, access in logins.items()
+    }
+    (pi_home / "auth.json").write_text(json.dumps(stored))
+    return (pi_home / "auth.json").read_text()
+
+
+@pytest.mark.parametrize(
+    ("caller", "login", "api", "path"),
+    [
+        ("anthropic", "anthropic", "anthropic-messages", ""),
+        ("openai", "openai-codex", "openai-completions", "/v1"),
+    ],
+)
+def test_pi_sends_its_own_login_to_a_caller_gateway_of_its_provider(
+    tmp_path, gateway, pi_home, monkeypatch, caller, login, api, path
 ):
     url, seen, _ = gateway
     _homes(tmp_path, monkeypatch)
-    config = _caller_config(tmp_path, "openai")
+    # a gateway key in the shell never replaces the login
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    stored = _pi_logins(pi_home, **{login: "the-login-token"})
+    config = _caller_config(tmp_path, caller)
+    args = ["connect", "pi", "--config", str(config), "--base-url", url]
+    result = CliRunner().invoke(main, [*args, "--key-command", "cat key", "--yes"])
+    assert result.exit_code == 2
+    assert "this gateway takes Pi's own login instead" in _flat(result.output)
+
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    models = pi_home / "models.json"
+    held = json.loads(models.read_text())["providers"]["vllm-sr"]
+    # Pi runs the command it offers external clients, which prints its stored
+    # login and refreshes it, before each request
+    assert held["apiKey"] == f"!pi auth print-bearer-token --provider {login}"
+    assert (held["api"], held["baseUrl"]) == (api, url + path)
+    if api == "anthropic-messages":
+        # the Router refuses tools[].eager_input_streaming, Pi's default there
+        assert held["compat"] == {"supportsEagerToolInputStreaming": False}
+    output = _flat(result.output)
+    assert f"Pi sends its own {login} login" in output
+    assert "Not probed: the gateway answers only on the login Pi itself" in output
+    for secret in ("the-login-token", "sk-secret"):
+        assert secret not in result.output + models.read_text()
+    assert not seen
+
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    (pi,) = [
+        e for e in json.loads(result.output)["connections"] if e["harness"] == "pi"
+    ]
+    assert (pi["login"], pi["pi_login"], pi["key_command"]) == (
+        "own login",
+        login,
+        None,
+    )
+    assert pi["probe"] == {
+        "state": "not probed",
+        "detail": "the gateway answers only on the login Pi itself sends",
+    }
+    status = CliRunner().invoke(main, ["connect", "status"]).output
+    assert f"Pi's own login ({login})" in status
+    assert "the-login-token" not in result.output + status and not seen
+
+    assert CliRunner().invoke(main, ["connect", "pi", "--undo"]).exit_code == 0
+    assert not models.exists()
+    assert (pi_home / "auth.json").read_text() == stored
+
+
+@pytest.mark.parametrize(
+    ("caller", "stored"),
+    [
+        # a login reaches only the provider that issued it
+        ("anthropic", {"openai-codex": {"type": "oauth", "access": "the-login"}}),
+        ("openai", {"anthropic": {"type": "oauth", "access": "the-login"}}),
+        # a key Pi stored is no login
+        ("anthropic", {"anthropic": {"type": "api_key", "key": "the-login"}}),
+        ("openai", None),
+    ],
+)
+def test_pi_refuses_a_caller_gateway_without_a_login_of_its_provider(
+    tmp_path, gateway, pi_home, monkeypatch, caller, stored
+):
+    url, seen, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    if stored is not None:
+        pi_home.mkdir(parents=True)
+        (pi_home / "auth.json").write_text(json.dumps(stored))
+    config = _caller_config(tmp_path, caller)
     args = ["connect", "pi", "--config", str(config), "--base-url", url, "--yes"]
     result = CliRunner().invoke(main, args)
     assert result.exit_code == 1
-    assert "own openai login upstream" in _flat(result.output)
-    assert not pi_home.exists() and not seen
+    output = _flat(result.output)
+    assert f"own {caller} login upstream, and Pi holds no {caller} login" in output
+    login = {"anthropic": "anthropic", "openai": "openai-codex"}[caller]
+    assert f"pi auth login {login}" in output
+    assert "the-login" not in output
+    assert not (pi_home / "models.json").exists() and not seen
+
+
+def test_pi_takes_chatgpt_for_codex_before_chatgpt_for_the_api(tmp_path):
+    _pi_logins(tmp_path, openai="api")
+    assert hp.login(tmp_path, "openai") == "openai"
+    _pi_logins(tmp_path, openai="api", **{"openai-codex": "codex"})
+    assert hp.login(tmp_path, "openai") == "openai-codex"
+    assert hp.login(tmp_path, "anthropic") is None
 
 
 def test_pi_refuses_a_key_of_its_own_and_a_keyed_listener_without_one(
@@ -3716,6 +3816,13 @@ def test_router_check_for_pi():
     complete = _router(["reasoning.signature"], _learning(rc.PI_HEADERS))
     assert rc.check_router_config(complete, "pi") == []
     assert rc.PI_HEADERS == {"session": "x-session-id"}
+    # on its own Anthropic login Pi speaks Messages, which keeps the signature,
+    # and sends no session header
+    login = _router()
+    login["providers"]["models"][0]["backend_refs"] = [
+        {"provider": "anthropic", "auth": {"credential": "caller"}}
+    ]
+    assert rc.check_router_config(login, "pi") == []
 
 
 def test_check_runs_pi_on_the_provider_connect_wrote(
@@ -3776,6 +3883,35 @@ def test_check_runs_pi_on_the_provider_connect_wrote(
     output = _flat(result.output)
     assert "Login failed 401 the key <hidden> is not valid" in output
     assert "Tool round trip not run" in output and "Nothing was written" in output
+
+
+def test_check_runs_pi_on_its_own_login(
+    tmp_path, gateway, checked_harness, pi_home, monkeypatch
+):
+    url, seen, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("FAKE_EVENTS", json.dumps(PI_EVENTS))
+    _pi_logins(pi_home, anthropic="the-login-token")
+    config = _caller_config(tmp_path, "anthropic")
+    args = ["connect", "pi", "--config", str(config), "--base-url", url, "--check"]
+    command = "pi auth print-bearer-token --provider anthropic"
+    # a dry run's agent directory holds only models.json, so its provider asks
+    # Pi for the login stored in yours
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    ran = json.loads(checked_harness.read_text())
+    assert ran["agent"] != str(pi_home)
+    held = json.loads(ran["models"])["providers"]["vllm-sr"]
+    pinned = f"PI_CODING_AGENT_DIR={shlex.quote(str(pi_home))} {command}"
+    assert held["apiKey"] == f"!{pinned}"
+    assert not (pi_home / "models.json").exists()
+
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    ran = json.loads(checked_harness.read_text())
+    assert ran["agent"] == str(pi_home)
+    assert json.loads(ran["models"])["providers"]["vllm-sr"]["apiKey"] == f"!{command}"
+    assert "the-login-token" not in result.output and not seen
 
 
 def test_codex_app_sets_the_shared_defaults_and_undo_keeps_the_rest(
