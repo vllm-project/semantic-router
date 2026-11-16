@@ -12,8 +12,19 @@ export const DEFAULT_RECIPE_NAME = 'default'
 
 export interface EntrypointFormState {
   modelNames: string
+  reviewModel?: string
+  memoryModel?: string
   recipe: string
 }
+
+/** The bindings that send an agent's reviews or memory calls to another entrypoint. */
+const DELEGATES = [
+  { key: 'review_model', field: 'reviewModel', label: 'Reviews go to', noun: 'review' },
+  { key: 'memory_model', field: 'memoryModel', label: 'Memories go to', noun: 'memory' },
+] as const
+
+/** Whether an entrypoint sends reviews or memory calls on, so it cannot take them. */
+export const delegatesCalls = (entry: EntrypointConfig) => DELEGATES.some(({ key }) => entry[key])
 
 export interface RecipeFormState {
   name: string
@@ -28,6 +39,14 @@ export function normalizeRecipeStrategy(value: unknown): RoutingStrategy {
 export function normalizeEntrypointModelNames(value: string | string[]): string[] {
   const values = Array.isArray(value) ? value : value.split(/[\n,]/)
   return [...new Set(values.map((item) => item.trim()).filter(Boolean))]
+}
+
+export function requireEntrypointModelNames(value: string | string[]): string[] {
+  const modelNames = normalizeEntrypointModelNames(value)
+  if (modelNames.length === 0) {
+    throw new Error('Add at least one request-facing model name.')
+  }
+  return modelNames
 }
 
 export function getRecipeNames(config: ConfigData | null): string[] {
@@ -120,10 +139,7 @@ export function validateEntrypointForm(
   models: NormalizedModel[],
   originalIndex: number | null,
 ): EntrypointConfig {
-  const modelNames = normalizeEntrypointModelNames(form.modelNames)
-  if (modelNames.length === 0) {
-    throw new Error('Add at least one request-facing model name.')
-  }
+  const modelNames = requireEntrypointModelNames(form.modelNames)
 
   const recipe = form.recipe.trim()
   if (!getRecipeNames(config).includes(recipe)) {
@@ -154,7 +170,54 @@ export function validateEntrypointForm(
     }
   }
 
-  return { model_names: modelNames, recipe }
+  const api = originalIndex === null ? 'chat' : (config.entrypoints?.[originalIndex]?.api ?? 'chat')
+  const delegates = DELEGATES.map((delegate) => ({
+    ...delegate,
+    name: form[delegate.field]?.trim(),
+  }))
+  for (const { label, noun, name } of delegates) {
+    if (!name) continue
+    if (modelNames.includes(name)) {
+      throw new Error(`${label} must name another entrypoint.`)
+    }
+    const target = (config.entrypoints ?? []).find(
+      (entry, index) =>
+        index !== originalIndex &&
+        (entry.api ?? 'chat') === api &&
+        entry.model_names.includes(name),
+    )
+    if (!target) throw new Error(`The ${noun} entrypoint "${name}" does not exist.`)
+    if (delegatesCalls(target)) {
+      throw new Error(`A ${noun} entrypoint cannot have its own review_model or memory_model.`)
+    }
+  }
+  const originalNames =
+    originalIndex === null ? [] : (config.entrypoints?.[originalIndex]?.model_names ?? [])
+  for (const entry of config.entrypoints ?? []) {
+    if ((entry.api ?? 'chat') !== api) continue
+    for (const { key, noun } of DELEGATES) {
+      const used = entry[key]
+      if (!used || !originalNames.includes(used)) continue
+      if (!modelNames.includes(used)) {
+        throw new Error(`Keep ${noun} model name "${used}" while another entrypoint uses it.`)
+      }
+      if (delegates.some(({ name }) => name)) {
+        throw new Error(
+          `An entrypoint used as a ${noun} model cannot have its own review_model or memory_model.`,
+        )
+      }
+    }
+  }
+  const result: EntrypointConfig = {
+    ...(originalIndex === null ? {} : config.entrypoints?.[originalIndex]),
+    model_names: modelNames,
+    recipe,
+  }
+  for (const { key, name } of delegates) {
+    delete result[key]
+    if (name) result[key] = name
+  }
+  return result
 }
 
 export function validateRecipeForm(

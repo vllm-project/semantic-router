@@ -7,8 +7,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// PolicyFromConfig is the policy of a context plugin's compress block within
+// its budget; targetOverride, a request's target directive, replaces the
+// budget's target.
 func PolicyFromConfig(
-	cfg *config.ContextCompressionPluginConfig,
+	cfg *config.ContextCompressConfig,
+	budget *config.ContextBudgetConfig,
 	targetOverride *int,
 ) Policy {
 	if cfg == nil {
@@ -28,13 +32,9 @@ func PolicyFromConfig(
 		targets.Memory = targetPolicyFromConfig(cfg.Targets.Memory)
 	}
 	policy := Policy{
-		Mode:    Mode(cfg.EffectiveMode()),
-		Budget:  budgetFromConfig(cfg.Budget),
-		Targets: targets,
-		Scoring: Scoring{
-			Method:            cfg.EffectiveScoring().Method,
-			EmbeddingModelRef: cfg.EffectiveScoring().EmbeddingModelRef,
-		},
+		Mode:        Mode(cfg.EffectiveMode()),
+		Budget:      budgetFromConfig(budget),
+		Targets:     targets,
 		FailureMode: FailureMode(cfg.EffectiveFailureMode()),
 	}
 	if targetOverride != nil && *targetOverride > 0 {
@@ -67,8 +67,11 @@ func targetPolicyFromConfig(
 	}
 }
 
+// budgetFromConfig reads the context budget: an explicit max_tokens both
+// starts compression and is its target; auto resolves both from the model's
+// context window less the reserved output.
 func budgetFromConfig(
-	budget *config.ContextCompressionBudgetConfig,
+	budget *config.ContextBudgetConfig,
 ) Budget {
 	if budget == nil {
 		return Budget{
@@ -77,12 +80,13 @@ func budgetFromConfig(
 			ReserveAuto: true,
 		}
 	}
+	maxTokens := budget.MaxTokens
 	return Budget{
-		TriggerTokens:       tokenLimitValue(budget.TriggerTokens),
-		TargetTokens:        tokenLimitValue(budget.TargetTokens),
+		TriggerTokens:       tokenLimitValue(maxTokens),
+		TargetTokens:        tokenLimitValue(maxTokens),
 		ReserveOutputTokens: tokenLimitValue(budget.ReserveOutputTokens),
-		TriggerAuto:         budget.TriggerTokens == nil || budget.TriggerTokens.Auto,
-		TargetAuto:          budget.TargetTokens == nil || budget.TargetTokens.Auto,
+		TriggerAuto:         maxTokens == nil || maxTokens.Auto,
+		TargetAuto:          maxTokens == nil || maxTokens.Auto,
 		ReserveAuto:         budget.ReserveOutputTokens == nil || budget.ReserveOutputTokens.Auto,
 	}
 }

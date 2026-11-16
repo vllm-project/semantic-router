@@ -106,7 +106,7 @@ func assertCacheImmediateResponse(
 ) {
 	t.Helper()
 	ctx := immediateResponseContext(t, clientFormat, backendFormat, streaming)
-	response := router.createCacheHitResponse(ctx, extProcResponseFixture(clientFormat), "", "", nil, 0)
+	response := router.createCacheHitResponse(ctx, extProcResponseFixture(clientFormat))
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("cache hit did not return an immediate response")
 	}
@@ -130,7 +130,7 @@ func TestImmediateResponsesIDsIgnoreSharedRequestID(t *testing.T) {
 			router.persistImmediateResponseObject(createImmediateJSONResponse(200, []byte(`{}`)), ctx)
 		},
 		"cache_hit": func(t *testing.T, router *OpenAIRouter, ctx *RequestContext) {
-			response := router.createCacheHitResponse(ctx, extProcResponseFixture(llmprotocol.OpenAIResponsesV1), "", "", nil, 1)
+			response := router.createCacheHitResponse(ctx, extProcResponseFixture(llmprotocol.OpenAIResponsesV1))
 			if response.GetImmediateResponse().GetStatus().GetCode() != 200 {
 				t.Fatalf("cache hit response = %v", response)
 			}

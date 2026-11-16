@@ -48,7 +48,7 @@ func TestEnvoyAIGatewayProfileKeepsKubernetesAlias(t *testing.T) {
 
 func TestRoutingErrorsRetainBothTransportsAndBaselineFallback(t *testing.T) {
 	for name, required := range map[string][]string{
-		"routing-errors":   {"routing-error-codes", "chat-completions-request"},
+		"remote-embedding": {"routing-error-codes", "remote-embedding-routing"},
 		"standalone":       {"routing-error-codes", "standalone-chat-completions"},
 		"envoy-ai-gateway": {"unknown-model-error-codes", "decision-fallback-behavior"},
 	} {

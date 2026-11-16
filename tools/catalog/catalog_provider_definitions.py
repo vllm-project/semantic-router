@@ -31,6 +31,7 @@ PROVIDER_FIELDS = {
     "presentation",
     "conformance",
     "models",
+    "price_list",
 }
 
 

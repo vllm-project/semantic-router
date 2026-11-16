@@ -24,7 +24,7 @@ func TestGoldenRejectionMatrix(t *testing.T) {
 	if len(inputs) == 0 {
 		t.Fatalf("no rejection protocol golden inputs found in %s", directory)
 	}
-	engine := NewBuiltinEngine()
+	engine := conformanceEngine()
 	for _, inputPath := range inputs {
 		runGoldenRejectionInput(t, engine, directory, inputPath)
 	}
@@ -74,7 +74,7 @@ func TestGoldenStreamRejectionsAreChunkBoundaryIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := NewBuiltinEngine()
+	engine := conformanceEngine()
 	for _, inputPath := range inputs {
 		prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
 		source, input := loadGoldenRejectionInput(t, inputPath, prefix)
@@ -101,7 +101,7 @@ func TestGoldenStreamRejectionsPoisonAndFailClosedAcrossProtocolMatrix(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := NewBuiltinEngine()
+	engine := conformanceEngine()
 	for _, inputPath := range inputs {
 		prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
 		source, input := loadGoldenRejectionInput(t, inputPath, prefix)
@@ -251,7 +251,7 @@ func goldenRejectionEngine(base *Engine, input goldenRejectionInput) (*Engine, e
 	if limits.BodyBytes == 0 && limits.JSONDepth == 0 && limits.SSEFrameBytes == 0 && limits.Events == 0 {
 		return base, nil
 	}
-	policy := llmprotocol.DefaultPolicy()
+	policy := conformancePolicy()
 	if limits.BodyBytes != 0 {
 		policy.Limits.BodyBytes = limits.BodyBytes
 	}
@@ -351,7 +351,7 @@ func runGoldenTranslationMatrix(t *testing.T, kind string, translate goldenTrans
 	if len(inputs) == 0 {
 		t.Fatalf("no %s protocol golden inputs found in %s", kind, directory)
 	}
-	engine := NewBuiltinEngine()
+	engine := conformanceEngine()
 	for _, inputPath := range inputs {
 		runGoldenTranslationInput(t, engine, directory, inputPath, translate)
 	}

@@ -39,7 +39,7 @@ func TestDashboardHeadReachesReadHandlers(t *testing.T) {
 		"/healthz", "/api/setup/state", "/api/settings", "/api/instance",
 		"/api/auth/me", "/api/auth/bootstrap/can-register", "/api/auth/invitations/missing",
 		"/api/admin/users", "/api/admin/permissions", "/api/admin/audit-logs", "/api/admin/invitations",
-		"/api/mcp/servers", "/api/mcp/tools", "/api/ml-pipeline/jobs",
+		"/api/mcp/servers", "/api/mcp/tools",
 		"/api/router/config/all", "/api/router/config/yaml", "/api/router/config/versions",
 		"/api/router/config/global", "/api/router/config/global/raw", "/api/tools/web-search/stats",
 		"/api/logs", "/api/v1/capabilities", "/api/workflows/health", "/api/recipe", "/api/recipe/probes", "/api/recipe/packages",

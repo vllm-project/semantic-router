@@ -421,10 +421,10 @@ func TestBuildReplayUsageCostIncludesRecipeGenerationTargets(t *testing.T) {
 			baseline: "selected", cost: 0.001,
 		},
 		{
-			name: "auxiliary selector and unassigned default are excluded",
+			name: "decision-model selector and unassigned default are excluded",
 			decision: config.Decision{
 				ModelRefs: []config.ModelRef{{Model: "selected"}},
-				Algorithm: &config.AlgorithmConfig{Type: "prompt", Prompt: &config.PromptSelectionConfig{Model: "auxiliary"}},
+				Algorithm: &config.AlgorithmConfig{Type: "systemone", SystemOne: &config.SystemOneSelectionConfig{Instructions: "Choose."}},
 			},
 			baseline: "selected", cost: 0.001,
 		},

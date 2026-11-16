@@ -12,6 +12,7 @@ func TestOutputItemReasoningJSONRoundTrip(t *testing.T) {
 		`{"type":"reasoning","id":"reason","summary":[],"content":[{"type":"reasoning_text","text":"Inspect the shape."}]}`,
 		`{"type":"reasoning","id":"reason","summary":[{"type":"summary_text","text":"The shape is round."}]}`,
 		`{"type":"reasoning","id":"reason","summary":[]}`,
+		`{"type":"reasoning","id":"reason","summary":[],"encrypted_content":"cipher+/=\\value"}`,
 	} {
 		t.Run(wire, func(t *testing.T) {
 			var item OutputItem

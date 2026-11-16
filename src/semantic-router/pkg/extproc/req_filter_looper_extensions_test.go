@@ -89,14 +89,15 @@ func TestLooperTraceExtensionsCrossResponseBoundary(t *testing.T) {
 							require.Empty(t, ctx.ProtocolDiagnostics)
 						} else {
 							require.NotContains(t, string(body), `"fusion"`)
+							appendRoutedResponseHeaders(out, ctx)
 							warning := ""
 							for _, header := range out.GetImmediateResponse().GetHeaders().GetSetHeaders() {
-								if header.GetHeader().GetKey() == headers.VSRProtocolWarnings {
+								if header.GetHeader().GetKey() == headers.VSRWarnings {
 									warning = string(header.GetHeader().GetRawValue())
 								}
 							}
-							require.Contains(t, warning, "dropped;router_extension_unsupported_protocol;fusion")
-							require.LessOrEqual(t, len(warning), lossinessHeaderSizeLimit)
+							require.Contains(t, warning, `protocol;action=dropped;reason="router_extension_unsupported_protocol";field="fusion"`)
+							require.LessOrEqual(t, len(warning), warningsSizeLimit)
 						}
 						if tools {
 							require.Contains(t, string(body), "weather")
@@ -154,11 +155,12 @@ func TestLooperExtensionsEnforceFinalEncodedLimits(t *testing.T) {
 							require.NotContains(t, string(body), `"fusion"`)
 							require.Len(t, ctx.ProtocolDiagnostics, 1)
 							require.Equal(t, "router_extension_size_limit", ctx.ProtocolDiagnostics[0].Reason)
+							appendRoutedResponseHeaders(out, ctx)
 							found := false
 							for _, header := range out.GetImmediateResponse().GetHeaders().GetSetHeaders() {
-								if header.GetHeader().GetKey() == headers.VSRProtocolWarnings {
+								if header.GetHeader().GetKey() == headers.VSRWarnings {
 									found = true
-									require.Contains(t, string(header.GetHeader().GetRawValue()), "router_extension_size_limit;fusion")
+									require.Contains(t, string(header.GetHeader().GetRawValue()), `reason="router_extension_size_limit";field="fusion"`)
 								}
 							}
 							require.True(t, found, "immediate response must carry the omission diagnostic")
@@ -259,15 +261,16 @@ func TestLooperOmissionWarningRemainsVisibleAndBounded(t *testing.T) {
 	}
 	out, _, _, err := (&OpenAIRouter{}).prepareLooperResponse(response, ctx)
 	require.NoError(t, err)
+	appendRoutedResponseHeaders(out, ctx)
 	warning := ""
 	for _, header := range out.GetImmediateResponse().GetHeaders().GetSetHeaders() {
-		if header.GetHeader().GetKey() == headers.VSRProtocolWarnings {
+		if header.GetHeader().GetKey() == headers.VSRWarnings {
 			warning = string(header.GetHeader().GetRawValue())
 		}
 	}
-	require.LessOrEqual(t, len(warning), lossinessHeaderSizeLimit)
-	require.True(t, strings.HasPrefix(warning, "dropped;router_extension_unsupported_protocol;fusion"))
-	require.Contains(t, warning, "diagnostics_truncated")
+	require.LessOrEqual(t, len(warning), warningsSizeLimit)
+	require.True(t, strings.HasPrefix(warning, `protocol;action=dropped;reason="router_extension_unsupported_protocol";field="fusion"`))
+	require.Contains(t, warning, "truncated;count=")
 }
 
 func TestLooperWorkflowTraceVisibility(t *testing.T) {

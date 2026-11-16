@@ -309,7 +309,7 @@ class GateTests(unittest.TestCase):
         plan, receipts, builds = completed(full=True)
         jobs = {name: {"result": "success"} for name in plan["expected_dispatch_jobs"]}
         self.assertTrue(evaluate_gate(plan, receipts, builds=builds, jobs=jobs).passed)
-        for identity in ("platform.image-calibration-cpu", "e2e.vela-omni"):
+        for identity in ("platform.models-cpu", "e2e.envoy-ai-gateway"):
             selected = [receipt for receipt in receipts if receipt["id"] != identity]
             verdict = evaluate_gate(plan, selected, builds=builds, jobs=jobs)
             self.assertFalse(verdict.passed)

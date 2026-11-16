@@ -7,12 +7,25 @@ import (
 )
 
 func TestReadToolSelectionReturnsToolsDBPath(t *testing.T) {
-	configPath := writeRouterConfig(t, `
-version: v0.3
-global:
-  integrations:
-    tools:
-      tools_db_path: "/var/lib/vsr/tools.json"
+	configPath := writeRouterConfig(t, `version: v0.5
+providers:
+  defaults: {model: local}
+  models:
+    - name: local
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Local model
+recipes:
+  - name: default
+    decisions:
+      - name: agent
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              select: {mode: add, tools_db_path: "/var/lib/vsr/tools.json"}
 `)
 
 	selection, err := ReadToolSelection(configPath)
@@ -24,8 +37,18 @@ global:
 	}
 }
 
+func TestReadToolSelectionWithoutCatalogIsEmpty(t *testing.T) {
+	selection, err := ReadToolSelection(writeRouterConfig(t, "version: v0.5\nglobal: {}\n"))
+	if err != nil {
+		t.Fatalf("ReadToolSelection() error = %v", err)
+	}
+	if selection.ToolsDBPath != "" {
+		t.Fatalf("ToolsDBPath = %q, want none", selection.ToolsDBPath)
+	}
+}
+
 func TestReadToolSelectionReturnsParseError(t *testing.T) {
-	configPath := writeRouterConfig(t, "routing: [")
+	configPath := writeRouterConfig(t, "recipes: [")
 
 	_, err := ReadToolSelection(configPath)
 	if err == nil {

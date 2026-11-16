@@ -204,7 +204,7 @@ def test_harbor_cancel_records_before_environment_start_and_cleans(
     request = {
         "case": {"metadata": {"task_path": str(task), "tree_sha256": digest({})}},
         "artifact_dir": str(artifact),
-        "config": {},
+        "config": {"verifier_timeout_s": 99},
         "limits": {
             "case_timeout_s": 12,
             "max_run_seconds": 1200,
@@ -215,3 +215,4 @@ def test_harbor_cancel_records_before_environment_start_and_cleans(
         asyncio.run(worker._terminal_job(request))
     assert started and cleanups == [str(artifact)]
     assert configs[0]["agents"][0]["override_timeout_sec"] == 12
+    assert configs[0]["verifier"]["override_timeout_sec"] == 99

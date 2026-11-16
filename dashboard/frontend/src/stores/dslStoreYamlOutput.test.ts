@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderCanonicalYaml } from './dslStoreYamlSupport'
 
+const noBase = { baseConfigYaml: '', baseConfigFromRouter: false }
+
 describe('renderCanonicalYaml', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -11,7 +13,7 @@ describe('renderCanonicalYaml', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(renderCanonicalYaml('routing: {}', 'ROUTING {}', '')).resolves.toBe(
+    await expect(renderCanonicalYaml('routing: {}', 'ROUTING {}', noBase)).resolves.toBe(
       'routing: {}',
     )
     expect(fetchMock).not.toHaveBeenCalled()
@@ -36,7 +38,7 @@ describe('renderCanonicalYaml', () => {
     const result = await renderCanonicalYaml(
       'routing: {}',
       'ENTRYPOINT { model_names: ["vllm-sr/balanced"] recipe: "balanced" }',
-      'version: v0.3',
+      { baseConfigYaml: 'version: v0.3', baseConfigFromRouter: false },
     )
 
     expect(result).toContain('entrypoints:')

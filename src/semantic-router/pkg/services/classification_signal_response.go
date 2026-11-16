@@ -54,6 +54,7 @@ func (s *ClassificationService) buildEvalResponse(
 		SignalValues:           signals.SignalValues,
 		SignalErrors:           signals.SignalErrors,
 		SignalErrorMatches:     signals.SignalErrorMatches,
+		ScanCoverage:           signals.ScanCoverage,
 		AppliedUnknownPolicies: signals.Diagnostics.AppliedUnknownPolicies,
 		DecisionRanking:        signals.Diagnostics.Ranking,
 	}

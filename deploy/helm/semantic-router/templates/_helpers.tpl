@@ -79,6 +79,13 @@ Get the router ConfigMap name
 {{- end }}
 
 {{/*
+The Secret that keeps the keys a ConfigMap save moves out of config.yaml.
+*/}}
+{{- define "semantic-router.keySecretName" -}}
+{{- printf "%s-provider-keys" (include "semantic-router.fullname" .) }}
+{{- end }}
+
+{{/*
 After installation, management APIs may update config.yaml in the live
 ConfigMap. Helm values are the install seed. A changed revision explicitly
 reapplies them once; --reuse-values with the same revision preserves later
@@ -136,6 +143,47 @@ Get the PVC name
 {{- else }}
 {{- printf "%s-models" (include "semantic-router.fullname" .) }}
 {{- end }}
+{{- end }}
+
+{{/*
+Get the Router data directory PVC name
+*/}}
+{{- define "semantic-router.dataPvcName" -}}
+{{- if .Values.data.persistence.existingClaim }}
+{{- .Values.data.persistence.existingClaim }}
+{{- else }}
+{{- printf "%s-data" (include "semantic-router.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+"true" when extraVolumeMounts supplies the Router's data directory, which then
+replaces the chart's data volume.
+*/}}
+{{- define "semantic-router.customDataMount" -}}
+{{- $custom := false -}}
+{{- range .Values.extraVolumeMounts -}}
+{{- if eq (trimSuffix "/" (.mountPath | default "")) "/var/lib/vsr" -}}
+{{- $custom = true -}}
+{{- end -}}
+{{- end -}}
+{{- $custom -}}
+{{- end }}
+
+{{/*
+The install note for a vector store that keeps its uploaded files in the
+chart's data directory while that is an emptyDir, which a new Pod starts empty.
+*/}}
+{{- define "semantic-router.dataVolumeNote" -}}
+{{- $effective := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $vectorStore := dig "global" "stores" "vector_store" (dict) $effective -}}
+{{- $fileDir := (get $vectorStore "file_storage_dir") | default "/var/lib/vsr/data" -}}
+{{- $onDataVolume := or (eq $fileDir "/var/lib/vsr") (hasPrefix "/var/lib/vsr/" $fileDir) -}}
+{{- if and (get $vectorStore "enabled") $onDataVolume (not .Values.data.persistence.enabled) (ne (include "semantic-router.customDataMount" .) "true") -}}
+NOTE: The vector store keeps uploaded files in the Router's data directory,
+/var/lib/vsr, an emptyDir that a new Pod starts empty. To keep them across
+Pod replacement, upgrade with --set data.persistence.enabled=true.
+{{- end -}}
 {{- end }}
 
 {{/*

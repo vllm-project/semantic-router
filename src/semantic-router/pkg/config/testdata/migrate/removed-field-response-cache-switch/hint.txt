@@ -1,0 +1,1 @@
+global.stores.response_cache: removed_field: global.stores.response_cache.enabled and similarity_threshold are removed; run `vllm-sr config migrate` (a response_cache plugin turns caching on: in global.plugins for every request, in a decision's plugins for its own)

@@ -1,7 +1,7 @@
 # Minimal canonical YAML starter for vLLM Semantic Router.
 # Replace the model name and backend endpoint, then validate before applying.
 
-version: v0.3
+version: v0.5
 
 listeners:
   - name: "http-8899"
@@ -21,18 +21,16 @@ providers:
           protocol: "http"
           weight: 100
 
-routing:
-  modelCards:
-    - name: "replace-with-your-model"
-
-  decisions:
-    - name: "default-route"
-      description: "Catch-all route for every request while you build out more specific signals and decisions."
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        # A provider model is routable only when a decision references it here.
-        - model: "replace-with-your-model"
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "Catch-all route for every request while you build out more specific signals and decisions."
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          # A provider model is routable only when a decision references it here.
+          - model: "replace-with-your-model"
+            use_reasoning: false

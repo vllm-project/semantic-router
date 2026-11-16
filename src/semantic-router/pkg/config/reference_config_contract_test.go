@@ -18,7 +18,7 @@ func TestReferenceConfigUsesStrictCanonicalSchema(t *testing.T) {
 		t.Fatalf("config/config.yaml no longer matches the strict canonical schema: %v", err)
 	}
 
-	if canonical.Version != "v0.3" {
+	if canonical.Version != "v0.5" {
 		t.Fatalf("expected reference config version v0.3, got %q", canonical.Version)
 	}
 
@@ -51,7 +51,16 @@ func TestReferenceConfigCoversSupportedRoutingSurfaces(t *testing.T) {
 // referenceRecipeDecisions includes API-specific examples without requiring
 // incompatible native algorithms in the default Chat recipe.
 func referenceRecipeDecisions(t testingT, root map[string]interface{}) []interface{} {
-	result := append([]interface{}(nil), mustSliceAt(t, root, "routing", "decisions")...)
-	profiles := collectChildMapsFromSlice(t, mustSliceAt(t, root, "recipes"), "routing", "recipes")
-	return append(result, collectNestedSliceItems(t, profiles, "decisions", "recipes[].routing")...)
+	return collectNestedSliceItems(t, mustSliceAt(t, root, "recipes"), "decisions", "recipes")
+}
+
+// referenceDefaultRecipe is the reference config's recipe named default.
+func referenceDefaultRecipe(t testingT, recipes []interface{}) map[string]interface{} {
+	for _, item := range recipes {
+		if recipe, ok := item.(map[string]interface{}); ok && recipe["name"] == string(DefaultRecipeName) {
+			return recipe
+		}
+	}
+	t.Fatalf("the reference config declares no recipe named %s", DefaultRecipeName)
+	return nil
 }

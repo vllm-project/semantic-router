@@ -79,6 +79,27 @@ func TestRunWithoutRespondFails(t *testing.T) {
 	}
 }
 
+func TestRunDoesNotReturnResponseAfterRunFailure(t *testing.T) {
+	program := &Program{Steps: Sequence{
+		call("draft", "model"),
+		{ID: "fail", Type: "test", Node: nodeFunc(func(_ context.Context, x *Exec, _ *State) error {
+			x.Fail(ErrTokenLimit)
+			return nil
+		})},
+		respond(),
+	}}
+	outcome, err := run(t, program, &fakeCaller{})
+	if !errors.Is(err, ErrTokenLimit) {
+		t.Fatalf("err %v, want ErrTokenLimit", err)
+	}
+	if outcome.Response != nil {
+		t.Fatalf("response %+v", outcome.Response)
+	}
+	if outcome.Hops != 1 || outcome.Usage.TotalTokens != 1 {
+		t.Fatalf("hops %d usage %+v", outcome.Hops, outcome.Usage)
+	}
+}
+
 func TestHopLimitFailsClosedBeforeSending(t *testing.T) {
 	caller := &fakeCaller{}
 	program := &Program{

@@ -8,7 +8,6 @@ never pooled away.
 """
 
 import math
-import re
 import sys
 import unittest
 from pathlib import Path
@@ -360,9 +359,9 @@ class IntervalTest(unittest.TestCase):
 class WindowTest(unittest.TestCase):
     """The scan a score belongs to.
 
-    The router keeps the riskiest window of a long document rather than the
-    first 512 tokens of it, so a contract that scores one truncated window
-    reports a number the deployment never reads.
+    A long document is scanned window by window and its riskiest window kept,
+    rather than the first 512 tokens of it, so a contract that scores one
+    truncated window reports a number the scan never reads.
     """
 
     def test_a_document_inside_one_window_reads_as_one_window(self):
@@ -388,26 +387,6 @@ class WindowTest(unittest.TestCase):
         """A window that never advances would scan the head forever."""
         with self.assertRaises(ValueError):
             guard_metrics.token_windows(4096, 512, 510)
-
-    def test_the_router_guard_window_scans(self):
-        """The contract and the runtime read the same geometry.
-
-        The values come from the window the router gives Vela 1.0 Guard, so a
-        change there is a change here rather than a silent disagreement.
-        """
-        source = (
-            Path(__file__).resolve().parents[4]
-            / "src/semantic-router/pkg/classification"
-            / "classifier_jailbreak_window_default.go"
-        ).read_text()
-        window = re.search(
-            r"SequenceHeadWindowConfig\{Size: (\d+), Overlap: (\d+)\}", source
-        )
-        self.assertIsNotNone(window, "the router gives Vela 1.0 Guard no window")
-        size, overlap = int(window[1]), int(window[2])
-        ranges = guard_metrics.token_windows(size * 2, size, overlap)
-        self.assertGreater(len(ranges), 1)
-        self.assertEqual(ranges[-1][1], size * 2)
 
 
 if __name__ == "__main__":

@@ -42,3 +42,34 @@ func TestClassifierInfoRedactsResolvedSecrets(t *testing.T) {
 		t.Fatalf("/api/v1/inventory/classifier leaked a resolved credential value in its response body")
 	}
 }
+
+// The loader keeps a password such as $Secr3tPass as written, since only an
+// uppercase name is an environment reference. It must not pass as one here.
+func TestClassifierInfoRedactsADollarPasswordThatIsNoReference(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
+global:
+  services:
+    response_api:
+      store_backend: redis
+      redis:
+        address: 127.0.0.1:6379
+        password: "$Secr3tPass"
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	if cfg.ResponseAPI.Redis.Password != "$Secr3tPass" {
+		t.Fatalf("loaded password = %q", cfg.ResponseAPI.Redis.Password)
+	}
+	s := &ClassificationAPIServer{config: cfg}
+
+	rr := httptest.NewRecorder()
+	s.handleClassifierInfo(rr, httptest.NewRequest(http.MethodGet, "/api/v1/inventory/classifier", nil))
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), "Secr3tPass") {
+		t.Fatalf("/api/v1/inventory/classifier showed a password that is not an environment reference")
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -44,6 +45,7 @@ type runtimeOptions struct {
 	secure                 bool
 	downloadOnly           bool
 	validateConfig         bool
+	migrateConfig          bool
 	gateway                config.GatewayMode
 	listenerAddress        string
 	configHistoryLimit     int
@@ -65,6 +67,7 @@ func parseRuntimeOptions() runtimeOptions {
 		namespace              = flag.String("namespace", kubernetesNamespaceDefault(), "Kubernetes namespace to watch for CRDs")
 		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
 		validateConfig         = flag.Bool("validate-config", false, "Validate the -config file as the Router loads it, print a JSON report on stdout and exit: 0 when it would load, 1 when it would not")
+		migrateConfig          = flag.Bool("migrate-config", false, "With -validate-config, also write the file with its deprecated model fields in the forms that replace them in the report's migrated field")
 		gatewayMode            = flag.String("gateway", string(config.GatewayExtProc), "What serves client traffic: extproc (the ext_proc gRPC server behind an Envoy-based gateway) or standalone (the OpenAI-compatible API on the configured listeners)")
 		listenerAddress        = flag.String("listener-address", "", "Standalone mode only: bind every listener on this address instead of its configured one, as in a container whose configured address governs the host port publication")
 		configHistoryLimit     = flag.Int("config-history-limit", configsnapshot.DefaultHistoryLimit, "How many configuration versions to keep for rollback, beside the configuration file")
@@ -86,6 +89,7 @@ func parseRuntimeOptions() runtimeOptions {
 		secure:                 *secure,
 		downloadOnly:           *downloadOnly,
 		validateConfig:         *validateConfig,
+		migrateConfig:          *migrateConfig,
 		gateway:                config.GatewayMode(*gatewayMode),
 		listenerAddress:        *listenerAddress,
 		configHistoryLimit:     *configHistoryLimit,
@@ -162,22 +166,28 @@ func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
 	return cfg
 }
 
-func newStartupWriter(cfg *config.RouterConfig, configPath string, registry *routerruntime.Registry) startupstatus.StatusWriter {
-	writer := registry.StartupStatusWriter(buildStartupWriter(cfg, configPath))
+func newStartupWriter(cfg *config.RouterConfig, configPath string, registry *routerruntime.Registry) (startupstatus.StatusWriter, func() error) {
+	backend := buildStartupWriter(cfg, configPath, registry.InstanceID())
+	closeWriter := func() error { return nil }
+	if closer, ok := backend.(io.Closer); ok {
+		closeWriter = closer.Close
+	}
+	writer := registry.StartupStatusWriter(backend)
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "starting",
 		Ready:   false,
 		Message: "Router process booting...",
 	}, "Failed to write initial startup status")
-	return writer
+	return writer, closeWriter
 }
 
-func buildStartupWriter(cfg *config.RouterConfig, configPath string) startupstatus.StatusWriter {
+func buildStartupWriter(cfg *config.RouterConfig, configPath, instanceID string) startupstatus.StatusWriter {
 	if cfg.StartupStatus.StoreBackend == "redis" && cfg.StartupStatus.Redis != nil {
 		rw, err := startupstatus.NewRedisWriter(startupstatus.RedisWriterConfig{
-			Address:  cfg.StartupStatus.Redis.Address,
-			Password: cfg.StartupStatus.Redis.Password,
-			DB:       cfg.StartupStatus.Redis.DB,
+			InstanceID: instanceID,
+			Address:    cfg.StartupStatus.Redis.Address,
+			Password:   cfg.StartupStatus.Redis.Password,
+			DB:         cfg.StartupStatus.Redis.DB,
 		})
 		if err != nil {
 			logging.ComponentWarnEvent("router", "startup_status_redis_fallback", map[string]interface{}{
@@ -209,18 +219,6 @@ func writeStartupState(writer startupstatus.StatusWriter, state startupstatus.St
 			"error":   err.Error(),
 		})
 	}
-}
-
-func failStartup(writer startupstatus.StatusWriter, format string, args ...interface{}) {
-	message := fmt.Sprintf(format, args...)
-	_ = writer.Write(startupstatus.State{
-		Phase:   "error",
-		Ready:   false,
-		Message: message,
-	})
-	logging.ComponentFatalEvent("router", "startup_failed", map[string]interface{}{
-		"message": message,
-	})
 }
 
 func initializeTracing(cfg *config.RouterConfig) func(context.Context) error {
@@ -391,35 +389,31 @@ func startProfilingServerIfEnabled(
 }
 
 func initializeRuntimeDependencies(
-	ctx context.Context,
 	cfg *config.RouterConfig,
 	writer startupstatus.StatusWriter,
 	shutdownHooks *[]func(context.Context) error,
 	runtimeRegistry *routerruntime.Registry,
-) (modelruntime.EmbeddingRuntimeState, error) {
+) error {
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "initializing_models",
 		Ready:   false,
-		Message: "Initializing embedding models and router dependencies...",
+		Message: "Initializing router dependencies...",
 	}, "Failed to write initialization startup status")
-
-	embeddingState := modelruntime.EmbeddingRuntimeState{}
-
-	writeStartupState(writer, startupstatus.State{
-		Phase:             "initializing_models",
-		Ready:             false,
-		Message:           "Runtime dependencies initialized. Starting router services...",
-		EmbeddingProvider: startupEmbeddingProviderStatus(embeddingState),
-	}, "Failed to write runtime dependency startup status")
 
 	// Vector store ingestion embeds through the managed model runtime.
 	startModelRuntimeManager(cfg, shutdownHooks, runtimeRegistry)
 	// Explicit global stores serve management APIs as well as routing and
 	// keep their own scoped embedding lease across capability changes.
 	if err := initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry); err != nil {
-		return embeddingState, err
+		return err
 	}
-	return embeddingState, nil
+
+	writeStartupState(writer, startupstatus.State{
+		Phase:   "initializing_models",
+		Ready:   false,
+		Message: "Runtime dependencies initialized. Starting router services...",
+	}, "Failed to write runtime dependency startup status")
+	return nil
 }
 
 // startModelRuntimeManager starts the model_runtime deployments the config
@@ -469,28 +463,6 @@ func cloneBoolPtr(value *bool) *bool {
 	return &clone
 }
 
-func logRuntimeLifecycleEvent(event modelruntime.Event) {
-	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
-		return
-	}
-	payload := map[string]interface{}{
-		"task":        event.Task,
-		"best_effort": event.BestEffort,
-	}
-	if event.Error != nil {
-		payload["error"] = event.Error.Error()
-	}
-	if event.Status == modelruntime.TaskSkipped {
-		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_skipped", payload)
-		return
-	}
-	if event.BestEffort {
-		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_failed", payload)
-		return
-	}
-	logging.ComponentErrorEvent("router", "runtime_lifecycle_task_failed", payload)
-}
-
 func initializeVectorStoreIfEnabled(
 	cfg *config.RouterConfig,
 	shutdownHooks *[]func(context.Context) error,
@@ -531,14 +503,6 @@ func registerVectorStoreShutdownHook(
 			return err
 		}
 		return nil
-	})
-}
-
-func warmupRouterRuntime(ctx context.Context, server *extproc.Server) error {
-	return server.WarmupRouter(ctx, modelruntime.WarmupRouterOptions{
-		Component:      "router",
-		MaxParallelism: 2,
-		OnEvent:        logRuntimeLifecycleEvent,
 	})
 }
 

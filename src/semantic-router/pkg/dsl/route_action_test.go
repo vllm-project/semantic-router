@@ -10,9 +10,7 @@ import (
 const routeActionDSL = `
 MODEL "safe-model" {}
 
-SIGNAL jailbreak "prompt_injection" {
-  type: "prompt_guard"
-}
+SIGNAL jailbreak "prompt_injection" {}
 
 ROUTE "prompt_attack_guard_route" {
   PRIORITY 120
@@ -93,9 +91,7 @@ ROUTE "guard" {
 			`
 MODEL "safe-model" {}
 
-SIGNAL jailbreak "prompt_injection" {
-  type: "prompt_guard"
-}
+SIGNAL jailbreak "prompt_injection" {}
 
 ROUTE "guard" {
   PRIORITY 120
@@ -110,9 +106,7 @@ ROUTE "guard" {
 			`
 MODEL "other-model" {}
 
-SIGNAL jailbreak "prompt_injection" {
-  type: "prompt_guard"
-}
+SIGNAL jailbreak "prompt_injection" {}
 
 ROUTE "guard" {
   PRIORITY 120

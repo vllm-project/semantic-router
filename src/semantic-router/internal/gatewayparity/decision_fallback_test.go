@@ -9,7 +9,7 @@ import (
 // decisionFallbackConfig is fallbackConfig with RECIPE_FALLBACK as the
 // recipe's policy and DECISION_FALLBACK as the decision's override.
 const decisionFallbackConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -35,25 +35,23 @@ providers:
           endpoint: SECONDARY
           protocol: http
           provider: vllm
-routing:
-  modelCards:
-    - name: primary-model
-    - name: fallback-model
-  decisions:
-    - name: default_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: primary-model
-          use_reasoning: false
-        - model: fallback-model
-          use_reasoning: false
-      algorithm:
-        type: static
-      fallback: DECISION_FALLBACK
-  fallback: RECIPE_FALLBACK
+recipes:
+  - name: default
+    decisions:
+      - name: default_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: primary-model
+            use_reasoning: false
+          - model: fallback-model
+            use_reasoning: false
+        algorithm:
+          type: static
+        fallback: DECISION_FALLBACK
+    fallback: RECIPE_FALLBACK
 `
 
 // A decision's fallback block overrides its recipe's policy field by field,

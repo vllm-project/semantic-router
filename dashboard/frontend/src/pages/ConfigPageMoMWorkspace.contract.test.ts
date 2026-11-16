@@ -66,9 +66,20 @@ describe('Mixture-of-Models workspace contracts', () => {
 
     expect(routing).toContain('<ConfigPageMixtureDialog')
     expect(dialog).toContain('Choose a recipe. Assign the right models.')
-    expect(dialog).toContain('minimumCandidatesForDecision')
+    expect(dialog).toContain('resolveMixtureRecipe')
     expect(dialog).toContain('applyRecipeAssignments')
+    expect(support).toContain('minimumCandidatesForDecision(decision)')
     expect(support).toContain('assignDecisionModels')
+  })
+
+  it('publishes built-in recipes through the packaged CLI composition', () => {
+    const routing = readSource('./ConfigPageMoMRoutingPanel.tsx')
+    const dialog = readSource('./ConfigPageMixtureDialog.tsx')
+
+    expect(routing).toContain('useBuiltInRecipes()')
+    expect(routing).toContain('<ConfigPageMoMBuiltInRecipesList')
+    expect(dialog).toContain('composeBuiltInRecipe(')
+    expect(dialog).toContain('builtInRecipeBindings(decisions, assignments)')
   })
 
   it('uses the dashboard role as the single authoring gate', () => {

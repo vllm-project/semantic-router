@@ -12,7 +12,7 @@ import (
 // x-envoy-upstream-rq-timeout-ms (covered by the Kind profile); the native
 // gateway applies the same override from the planned call.
 const decisionTimeoutConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -30,20 +30,19 @@ providers:
           endpoint: SLOW
           protocol: http
           provider: vllm
-routing:
-  modelCards:
-    - name: slow-model
-  decisions:
-    - name: bounded_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: slow-model
-          use_reasoning: false
-      reliability:
-        total_timeout: 200ms
+recipes:
+  - name: default
+    decisions:
+      - name: bounded_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: slow-model
+            use_reasoning: false
+        reliability:
+          total_timeout: 200ms
 `
 
 func TestNativeGatewayAppliesTheDecisionsTotalTimeout(t *testing.T) {

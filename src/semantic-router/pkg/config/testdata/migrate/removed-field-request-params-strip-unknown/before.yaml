@@ -1,0 +1,20 @@
+# The Router never read request_params' strip_unknown: it already refuses a
+# request field its wire format does not declare, so migrate deletes it.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: bounded
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: request_params
+            configuration:
+              max_tokens_limit: 4096
+              strip_unknown: true

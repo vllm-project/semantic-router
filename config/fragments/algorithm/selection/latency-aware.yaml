@@ -1,6 +1,6 @@
 algorithm:
-  type: latency_aware
-  latency_aware:
-    tpot_percentile: 90
-    ttft_percentile: 95
-
+  type: multi_factor
+  multi_factor:
+    weights:
+      latency: 1
+    latency_percentile: 90

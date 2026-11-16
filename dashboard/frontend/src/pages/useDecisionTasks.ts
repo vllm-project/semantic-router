@@ -1,4 +1,5 @@
 import { useDashboardObservation } from '../utils/useDashboardObservation'
+import type { ModelBindingValue } from './modelBindings'
 import type { SystemOneQuestion } from './systemOnePlayground'
 
 export interface DecisionTask {
@@ -7,7 +8,6 @@ export interface DecisionTask {
     kind: 'signal' | 'plugin' | 'algorithm'
     type: string
     binding?: string
-    optional?: boolean
   }>
   title: string
   description: string
@@ -22,26 +22,23 @@ export interface DecisionTask {
 }
 export interface DecisionTaskBinding {
   task_id: string
+  /** The Router's consumer name: a signal type, or selector.<decision>. */
   consumer: string
   recipe: string
   deployment: string
   model: string
-  source: 'recipe' | 'global' | 'default' | 'module'
+  /** rule: a decision selector names its deployment in its algorithm block. */
+  source: 'recipe' | 'global' | 'default' | 'rule'
   ready: boolean
   editable: boolean
-  path: string[]
-  binding: {
-    deployment: string
-    contract: string
-    adapter?: string
-    head?: string
-    mapping_path?: string
-  }
+  /** Where the binding is written; null for a selector, which its decision writes. */
+  path: string[] | null
+  binding: ModelBindingValue
 }
 export interface DecisionTasks {
   default_deployment: string
-  global_bindings?: Record<string, { deployment: string; contract: string }>
-  default_bindings?: Record<string, { deployment: string; contract: string }>
+  global_bindings?: Record<string, ModelBindingValue>
+  default_bindings?: Record<string, ModelBindingValue>
   tasks: DecisionTask[]
   deployments: Array<{
     deployment: string
@@ -51,7 +48,7 @@ export interface DecisionTasks {
     tasks: Array<{
       task_id: string
       supported: boolean
-      implementation?: 'native' | 'composed_noul'
+      implementation?: 'native' | 'trained' | 'composed_noul' | 'trained_noul'
       reason?: string
       quality: 'unevaluated'
     }>

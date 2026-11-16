@@ -134,6 +134,29 @@ def test_every_encoder_stack_replays_its_own_graphs(tmp_path):
     assert set(receipt["branches"]) == {"choice", "score"}
 
 
+def test_padded_batches_stay_on_the_eager_layout_off_npus(tmp_path):
+    # Only NPUs replay a family's padded batches through the buckets; CUDA and
+    # ROCm answer them exactly as an engine without graphs does.
+    accelerator, device = _device()
+    family = Decision1Family()
+    spec = family.describe(
+        family.verify(PackageRef(write_package(tmp_path / "v", runtime=pkg.VELA)))
+    )
+    engine = NativeEngine().load(spec, accelerator, device, EngineOptions())
+    eager = NativeEngine().load(spec, accelerator, device, EngineOptions(graphs=False))
+    ids = torch.tensor([[2, 5, 9, 11, 7, 1], [2, 8, 1, 0, 0, 0]])
+    mask = torch.tensor([[1, 1, 1, 1, 1, 1], [1, 1, 1, 0, 0, 0]])
+    last = engine.backbone.num_layers
+    for branch in engine.stacks():
+        padded = EncoderBatch(ids, mask, branch=branch)
+        runs = [engine.encode(padded).hidden[last] for _ in range(3)]
+        reference = eager.encode(padded).hidden[last]
+        assert all(torch.equal(run, reference) for run in runs), branch
+    receipt = engine.receipt()["encoder_graphs"]
+    for stats in (receipt, *receipt["branches"].values()):
+        assert stats["replays"] == stats["padded_eager"] == stats["padded_skip"] == 0
+
+
 def test_decoders_sharing_a_gpu_answer_concurrent_requests_while_they_capture(tmp_path):
     _device()
     names = ("first", "second")

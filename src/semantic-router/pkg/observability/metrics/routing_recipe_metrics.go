@@ -92,3 +92,23 @@ func ObserveStreamedBodyArrival(recipe string, seconds float64, bytes, chunks in
 func RecordPromptCompressionOutcome(recipe, outcome string) {
 	promptCompressionOutcomes.WithLabelValues(labelOrUnknown(recipe), outcome).Inc()
 }
+
+var routingInputRemovals = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "llm_routing_input_removed_total",
+	Help: "User messages skipped and blocks stripped from the routing text by global.router.routing_input.",
+}, []string{"kind"})
+
+// Routing input removal kinds. The set is closed so the kind label stays bounded.
+const (
+	RoutingInputSkippedMessage = "skipped_message"
+	RoutingInputStrippedBlock  = "stripped_block"
+)
+
+func RecordRoutingInputRemovals(skippedMessages, strippedBlocks int) {
+	if skippedMessages > 0 {
+		routingInputRemovals.WithLabelValues(RoutingInputSkippedMessage).Add(float64(skippedMessages))
+	}
+	if strippedBlocks > 0 {
+		routingInputRemovals.WithLabelValues(RoutingInputStrippedBlock).Add(float64(strippedBlocks))
+	}
+}

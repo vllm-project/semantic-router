@@ -45,18 +45,6 @@ func comparableEvidence(left, right *modelcatalog.IndexResult) bool {
 		left.Score != nil && right.Score != nil && left.Index == right.Index
 }
 
-func evidenceForCandidate(modelParams map[string]config.ModelParams, candidate config.ModelRef) *modelcatalog.IndexResult {
-	params, ok := modelParams[candidate.Model]
-	if !ok {
-		return nil
-	}
-	result, ok := params.EvidenceResultAt("", candidate.ReasoningEffort)
-	if !ok || result.Status != "available" || result.Score == nil {
-		return nil
-	}
-	return &result
-}
-
 func candidateScoreKey(candidates []config.ModelRef, index int) string {
 	model := candidates[index].Model
 	for i := range candidates {

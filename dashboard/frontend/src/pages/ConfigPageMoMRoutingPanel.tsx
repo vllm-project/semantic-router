@@ -6,8 +6,13 @@ import type { FieldConfig } from '../components/EditModal'
 import ConfigPageMixtureDialog from './ConfigPageMixtureDialog'
 import ConfigPageModelUsageDialog from './ConfigPageModelUsageDialog'
 import ConfigPageMoMTopologyDialog from './ConfigPageMoMTopologyDialog'
-import { ConfigPageMoMEntrypointsList, ConfigPageMoMRecipesList } from './ConfigPageMoMRoutingLists'
+import {
+  ConfigPageMoMBuiltInRecipesList,
+  ConfigPageMoMEntrypointsList,
+  ConfigPageMoMRecipesList,
+} from './ConfigPageMoMRoutingLists'
 import pageStyles from './ConfigPageEntrypointsRecipesSection.module.css'
+import { useBuiltInRecipes } from './configPageBuiltInRecipes'
 import { cloneConfigData } from './configPageCanonicalization'
 import {
   collectRecipeTargetModels,
@@ -17,6 +22,7 @@ import {
   type RecipeFormState,
   validateRecipeForm,
 } from './configPageEntrypointsRecipesSupport'
+import type { MixtureRecipeChoice } from './configPageMixtureSupport'
 import type {
   ConfigData,
   EntrypointConfig,
@@ -70,8 +76,10 @@ export default function ConfigPageMoMRoutingPanel({
   const [mixtureEditor, setMixtureEditor] = useState<{
     entrypoint?: EntrypointConfig
     index?: number
+    recipe?: MixtureRecipeChoice
   } | null>(null)
   const [usageTarget, setUsageTarget] = useState<EntrypointConfig | null>(null)
+  const builtInRecipes = useBuiltInRecipes()
 
   const entrypoints = effectiveChatEntrypoints(config)
 
@@ -241,17 +249,26 @@ export default function ConfigPageMoMRoutingPanel({
             onTopology={(entrypoint, recipe) => setTopologyTarget({ entrypoint, recipe })}
           />
         ) : (
-          <ConfigPageMoMRecipesList
-            config={config}
-            isReadonly={isReadonly}
-            onAdd={() => openRecipeEditor('add')}
-            onView={viewRecipe}
-            onEdit={(recipe) => openRecipeEditor('edit', recipe)}
-            onDelete={(recipe) => {
-              setDeleteError(getRecipeDeleteBlocker(config, recipe.name))
-              setRecipePendingDelete(recipe)
-            }}
-          />
+          <>
+            <ConfigPageMoMRecipesList
+              config={config}
+              isReadonly={isReadonly}
+              onAdd={() => openRecipeEditor('add')}
+              onView={viewRecipe}
+              onEdit={(recipe) => openRecipeEditor('edit', recipe)}
+              onDelete={(recipe) => {
+                setDeleteError(getRecipeDeleteBlocker(config, recipe.name))
+                setRecipePendingDelete(recipe)
+              }}
+            />
+            <ConfigPageMoMBuiltInRecipesList
+              catalog={builtInRecipes.data}
+              failed={Boolean(builtInRecipes.error) && !builtInRecipes.refreshing}
+              isReadonly={isReadonly}
+              onRetry={() => void builtInRecipes.refresh()}
+              onCreate={(recipe) => setMixtureEditor({ recipe })}
+            />
+          </>
         )}
       </div>
 
@@ -259,6 +276,8 @@ export default function ConfigPageMoMRoutingPanel({
         <ConfigPageMixtureDialog
           config={config}
           models={models}
+          builtInRecipes={builtInRecipes.data}
+          initialRecipe={mixtureEditor.recipe}
           entrypoint={mixtureEditor.entrypoint}
           entrypointIndex={mixtureEditor.index}
           onClose={() => setMixtureEditor(null)}

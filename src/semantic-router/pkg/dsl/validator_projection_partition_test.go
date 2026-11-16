@@ -19,7 +19,7 @@ PROJECTION partition test_group {
 	diags, _ := Validate(input)
 	found := false
 	for _, d := range diags {
-		if strings.Contains(d.Message, "supported runtime signal type") &&
+		if strings.Contains(d.Message, "members must be domain signals") &&
 			strings.Contains(d.Message, "keyword") {
 			found = true
 		}
@@ -31,10 +31,8 @@ PROJECTION partition test_group {
 
 func TestValidateProjectionPartitionMixedMemberTypes(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL embedding ai {
-  examples: ["transformer", "neural network"]
-}
+SIGNAL domain math { labels: ["math"] }
+SIGNAL jailbreak ai { predicate: { gte: 0.75 } }
 
 PROJECTION partition test_group {
   semantics: "softmax_exclusive"
@@ -46,9 +44,8 @@ PROJECTION partition test_group {
 	diags, _ := Validate(input)
 	found := false
 	for _, d := range diags {
-		if strings.Contains(d.Message, "share one supported runtime signal type") &&
-			strings.Contains(d.Message, "domain") &&
-			strings.Contains(d.Message, "embedding") {
+		if strings.Contains(d.Message, "members must be domain signals") &&
+			strings.Contains(d.Message, "jailbreak") {
 			found = true
 		}
 	}
@@ -59,8 +56,8 @@ PROJECTION partition test_group {
 
 func TestValidateProjectionPartitionImpossibleAndCondition(t *testing.T) {
 	input := `
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain science { mmlu_categories: ["physics"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain science { labels: ["physics"] }
 
 PROJECTION partition domain_taxonomy {
   semantics: "exclusive"
@@ -101,9 +98,9 @@ func TestProjectionPartitionChecksWholeBooleanCondition(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			input := fmt.Sprintf(`
-SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain science { mmlu_categories: ["physics"] }
-SIGNAL domain history { mmlu_categories: ["history"] }
+SIGNAL domain math { labels: ["math"] }
+SIGNAL domain science { labels: ["physics"] }
+SIGNAL domain history { labels: ["history"] }
 SIGNAL keyword explain { operator: "any" patterns: ["explain"] }
 SIGNAL keyword details { operator: "any" patterns: ["details"] }
 PROJECTION partition topics { semantics: "exclusive" members: ["math", "science", "history"] default: "history" }

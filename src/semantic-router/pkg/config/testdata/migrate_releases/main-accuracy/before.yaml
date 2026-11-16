@@ -1,0 +1,368 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+
+global:
+  stores:
+    response_cache:
+      enabled: false
+      backend_type: memory
+  integrations:
+    looper:
+      timeout_seconds: 300
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.8B
+    system:
+      decision_model:
+        deployment: primary
+providers:
+  defaults:
+    model: qwen-coordinator
+    reasoning_effort: medium
+  models:
+    - name: local/omni
+      provider_model_id: local/omni
+      api_format: openai
+      backend_refs:
+        - name: local-omni
+          endpoint: vllm-omni:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+    - name: qwen-coordinator
+      provider_model_id: qwen-coordinator
+      api_format: openai
+      reasoning:
+        family: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 0
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+      backend_refs:
+        - name: local-qwen
+          endpoint: qwen-coordinator:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+    - name: opus48-worker
+      provider_model_id: anthropic/claude-opus-4.8
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+      backend_refs:
+        - name: openrouter
+          endpoint: https://openrouter.ai/api/v1
+          provider: openai
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gemini31-worker
+      provider_model_id: google/gemini-3.1-pro-preview
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+      backend_refs:
+        - name: openrouter
+          endpoint: https://openrouter.ai/api/v1
+          provider: openai
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
+          weight: 1
+    - name: gpt55-worker
+      provider_model_id: openai/gpt-5.5
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0
+        cached_input_per_1m: 0
+        completion_per_1m: 0
+      backend_refs:
+        - name: openrouter
+          endpoint: https://openrouter.ai/api/v1
+          provider: openai
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
+          weight: 1
+
+evaluation:
+  records:
+    - model: qwen-coordinator
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.88
+    - model: opus48-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.95
+    - model: gemini31-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.93
+    - model: gpt55-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
+routing:
+  modelCards:
+    - name: local/omni
+      capabilities:
+        - chat
+        - image_understanding
+        - multimodal
+        - omni
+        - text
+        - vision
+      modality: omni
+    - name: qwen-coordinator
+      context_window_size: 32768
+      description: Local planner and synthesis model for Router Flow dynamic plans.
+      capabilities:
+        - chat
+        - planning
+        - synthesis
+        - code
+      modality: text
+      tags:
+        - deployment:self_hosted
+        - role:planner
+    - name: opus48-worker
+      context_window_size: 1000000
+      description: OpenRouter worker for long-horizon agentic work.
+      capabilities:
+        - chat
+        - code
+        - reasoning
+        - long-context
+      modality: text
+      tags:
+        - deployment:openrouter
+        - role:worker
+    - name: gemini31-worker
+      context_window_size: 1000000
+      description: OpenRouter worker for broad reasoning and coding.
+      capabilities:
+        - chat
+        - code
+        - reasoning
+        - long-context
+      modality: text
+      tags:
+        - deployment:openrouter
+        - role:worker
+    - name: gpt55-worker
+      context_window_size: 1048576
+      description: OpenRouter worker for long-context planning and frontier synthesis.
+      capabilities:
+        - chat
+        - code
+        - reasoning
+        - long-context
+        - planning
+        - synthesis
+      modality: text
+      tags:
+        - deployment:openrouter
+        - role:worker
+        - role:planner
+  signals:
+    context:
+      - name: accuracy_long_context
+        min_tokens: 16K
+        max_tokens: 1M
+        description: Long inputs stay on one capable worker to avoid multiplying context cost across a
+          fan-out workflow.
+    conversation:
+      - name: accuracy_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
+    decision:
+      - name: accuracy_mode
+        description: The way of working the request asks for.
+        question:
+          type: choice
+          instructions: Which way of working does this request ask for?
+          choices:
+            - key: direct
+              description: A single direct answer, explanation or summary, including when the user asks
+                not to split the work, compare options or use several models
+            - key: workstreams
+              description: An investigation or plan with several workstreams, such as research, diagnosis
+                or evidence gathering
+            - key: independent_review
+              description: Independent opinions, a debate or an adversarial review that ends in a verdict
+      - name: accuracy_difficulty
+        description: How much reasoning a strong expert needs, from 0 (none) to 4 (research level).
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer this request well?
+          levels:
+            - Answer immediately, with no thinking
+            - A little thought, one or two simple steps
+            - Multi-step reasoning or a careful check
+            - Deep expert reasoning on a hard problem
+            - Research-level work on an open or frontier problem
+        predicate:
+          gte: 1.5
+  decisions:
+    - name: omni
+      description: Understand image-bearing requests with the dedicated visual-language model.
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+          - type: conversation
+            name: accuracy_has_images
+      modelRefs:
+        - model: local/omni
+      algorithm:
+        type: static
+    - name: accuracy_workflow
+      description: 'Several workstreams (accuracy_mode: workstreams) that need multi-step reasoning (accuracy_difficulty
+        1.5 or more) run as a bounded parallel workflow.'
+      priority: 100
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: accuracy_mode
+            label: workstreams
+            predicate:
+              gte: 0.6
+          - type: decision
+            name: accuracy_difficulty
+      modelRefs:
+        - model: opus48-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gemini31-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gpt55-worker
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: workflows
+        workflows:
+          mode: dynamic
+          template: micro_agent
+          planner:
+            model: gpt55-worker
+            max_completion_tokens: 2048
+          max_steps: 4
+          max_parallel: 3
+          min_successful_responses: 2
+          max_completion_tokens: 8192
+          include_intermediate_responses: true
+          on_error: skip
+    - name: accuracy_long_context_direct
+      description: Keep long-context work on one frontier model instead of paying the latency and token
+        multiplier of fan-out.
+      priority: 95
+      rules:
+        operator: AND
+        conditions:
+          - type: context
+            name: accuracy_long_context
+      modelRefs:
+        - model: gpt55-worker
+          use_reasoning: true
+          reasoning_effort: high
+      algorithm:
+        type: static
+    - name: accuracy_deliberation
+      description: 'Independent opinions or a verdict (accuracy_mode: independent_review) that need multi-step
+        reasoning (accuracy_difficulty 1.5 or more) get independent frontier perspectives.'
+      priority: 90
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: accuracy_mode
+            label: independent_review
+            predicate:
+              gte: 0.6
+          - type: decision
+            name: accuracy_difficulty
+          - operator: NOT
+            conditions:
+              - type: decision
+                name: accuracy_mode
+                label: workstreams
+                predicate:
+                  gte: 0.6
+      modelRefs:
+        - model: opus48-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gemini31-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gpt55-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: qwen-coordinator
+          use_reasoning: false
+      algorithm:
+        type: fusion
+        fusion:
+          model: qwen-coordinator
+          analysis_models:
+            - opus48-worker
+            - gemini31-worker
+            - gpt55-worker
+          max_concurrent: 3
+          min_successful_responses: 2
+          include_analysis: true
+          include_intermediate_responses: true
+          on_error: skip
+    - name: accuracy_direct
+      description: Everything else, including a request for one direct answer and requests the decision
+        model cannot answer, goes to one frontier worker that the decision model picks.
+      priority: 10
+      modelRefs:
+        - model: gpt55-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: opus48-worker
+          use_reasoning: true
+          reasoning_effort: medium
+        - model: gemini31-worker
+          use_reasoning: true
+          reasoning_effort: medium
+      algorithm:
+        type: decision
+        decision:
+          instructions: Which worker should answer this request?
+          candidates:
+            gpt55-worker: Long-context reading, planning and synthesis across many sources
+            opus48-worker: Long-horizon agentic work and large code changes
+            gemini31-worker: Broad reasoning, mathematics and everyday coding
+          timeout_ms: 30000
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

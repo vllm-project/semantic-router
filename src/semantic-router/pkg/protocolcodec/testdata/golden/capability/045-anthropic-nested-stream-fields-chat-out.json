@@ -7,7 +7,21 @@
         "error": {
           "category": "unsupported_feature",
           "code": "lossy_translation"
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "stream.message.usage.inference_geo",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.message.usage.service_tier",
+            "action": "dropped"
+          },
+          {
+            "field": "stream.message.usage.speed",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

@@ -1,0 +1,24 @@
+# A deployment's operating_point named a policy file of its package and the
+# file's digest, but nothing reads it: the model runtime applies the operating
+# point the package declares and reports its digest. Migrate drops it.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: chat
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      hazard:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
+        revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
+        device: cpu

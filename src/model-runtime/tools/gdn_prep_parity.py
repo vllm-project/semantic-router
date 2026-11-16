@@ -4,13 +4,21 @@
         [--no-causal-conv1d] [--shape B,T,C,KW,K_HEADS,HEAD_DIM ...]
 
 The released path is ``gdn_prep_ref``: depthwise causal conv + SiLU, split q/k/v,
-sigmoid ``beta``, and ``g = -exp(A_log) * softplus(a + dt_bias)``. Acceptance
-requires ``causal-conv1d`` (``validation=released-reference``). ``--no-causal-conv1d``
-is a torch-only diagnostic and never sets ``passed``. Convolution-only is not
-enough: q, k, v, g, and beta are all scored.
+sigmoid ``beta``, and ``g = -exp(A_log) * softplus(a + dt_bias)``. This tool
+qualifies bit-exact prep against the installed causal-conv1d released path
+(``validation=released-reference``). ``--no-causal-conv1d`` compares the torch
+fallback as a diagnostic and never sets ``passed``. All five outputs are scored.
+The installed-package comparison bypasses kernel selection: CUDA now classifies
+causal-conv1d as approximate and selects torch reference for exact-only or
+non-consenting models, even where their package runtime uses causal-conv1d.
 
-Does not enable the CUDA fused slot. Enable only if every representative shape
-is bit-exact and model parity still passes.
+``passed`` is not a gate for approximate CUDA fusion. That registration needs
+Ampere, Triton and FLA, and selection additionally needs family consent; it does
+not require causal-conv1d. Approximate fusion has separate model-parity evidence
+in ``docs/records/cuda-fused-approximate.md`` and
+``docs/records/cuda-gdn-prep-without-causal-conv1d.md``. Exact-profile eligibility
+would require bit-exact representative shapes and model parity. This tool does
+not change registration.
 
 Shapes default to the H200 fused-kernel probe plus a slightly longer sequence.
 """
@@ -41,7 +49,7 @@ OUTPUTS = ("q", "k", "v", "g", "beta")
 
 
 def conv_reference(no_causal_conv1d: bool) -> tuple[Any, str, str]:
-    """Released-reference is causal-conv1d. Torch-only is diagnostic, not acceptance."""
+    """Choose the installed released path for exact qualification, or a diagnostic."""
     if no_causal_conv1d:
         return None, "torch-reference", "torch-diagnostic"
     raw = _optional("causal_conv1d", "causal_conv1d_fn")
@@ -163,8 +171,12 @@ def main() -> int:
             "Does not change CUDAAccelerator registration. "
             "Registration is per slot, but the fused decoder path requires "
             "several slots together; passing gdn_prep alone will not activate "
-            "that whole path. Enable gdn_prep only after exact=true on "
-            "representative shapes and a model-level gpu_parity pass."
+            "that whole path. Exact-profile eligibility requires exact=true on "
+            "representative shapes and a model-level gpu_parity pass. "
+            "Approximate CUDA fusion uses separate model-parity evidence and "
+            "family consent; this exact-qualification result does not gate it. "
+            "The installed causal-conv1d comparison bypasses CUDA selection policy, "
+            "which uses torch reference for exact-only/non-consenting models."
         ),
         "passed": accepted,
         "exact_vs_reference": all_exact,

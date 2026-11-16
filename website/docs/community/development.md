@@ -153,7 +153,7 @@ offset.
 - Inspect component logs with `vllm-sr logs <service>` before relying on
   container names.
 - Inspect worker readiness and failure reasons through the model-runtime status
-  and logs; see [runtime troubleshooting](../model-runtime/troubleshooting.md).
+  and logs; see [runtime troubleshooting](../model-runtime/deploy/troubleshooting.md).
 - Set `SR_LOG_LEVEL=debug` for Router diagnostics.
 - Run `vllm-sr config validate --config <file>` before debugging a configuration at
   runtime.

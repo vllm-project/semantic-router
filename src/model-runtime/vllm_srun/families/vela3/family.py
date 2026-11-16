@@ -45,25 +45,27 @@ from ..vela2.encoder_layout import (
 from ..vela2.layout import Row, SchemaTooLongError, Tokens, fail_unscanned, read_parts
 from ..vela2.raw import RawRow
 from ..vela2.request import Plan as PartsPlan
+from ..vela3_shared import PRESETS, text
 from .answers import Answerer
 from .network import DECISION_BUDGET, Call, Networks, Output, Vela3Item
 from .package import (
     BACKBONE_FILE,
     ENCODER,
     LORA_TARGETS,
+    VELA3V_ENCODER,
     Vela3Package,
     member_of,
+    member_of_vision,
     verify,
 )
-from .request import DECISION, ROUTER, Asked, Read, Reader, text
+from .request import DECISION, ROUTER, Asked, Read, Reader
 from .routing import SPAN_BUDGET, SPAN_ROWS, Router
 
 QUESTION_TYPES = ("choice", "noul", "span")
-PRESETS = ("pii", "halu")
 TOKEN_CACHE = 8192
 # A question reads a part whole up to this many windows' worth of tokens by
 # default (``max_scan_tokens``); a request may set another budget. A question
-# that truncates reads one window.
+# that truncates reads one window of its route: 32,768 tokens for evidence.
 SCAN_INPUTS = {"cpu": 4, "gpu": 32}
 LICENCE = {"spdx": "apache-2.0"}
 GOLDEN_STATE = {
@@ -156,14 +158,22 @@ class Vela3Family(ModelFamily):
     def descriptor(cls) -> dict[str, Any]:
         return {
             "surfaces": sorted(cls.surfaces),
-            "formats": [ENCODER],
+            "formats": [ENCODER, VELA3V_ENCODER],
             "question_types": list(QUESTION_TYPES),
         }
 
     def detect(self, package: PackageRef) -> bool:
-        return member_of(package.root) is not None
+        return (
+            member_of(package.root) is not None
+            or member_of_vision(package.root) is not None
+        )
 
     def verify(self, package: PackageRef) -> VerifiedPackage:
+        if member_of_vision(package.root) is not None:
+            raise PackageError(
+                f"{package.repo_id or package.root.name}: the {VELA3V_ENCODER} image"
+                " package is recognized, but the image serving path is not implemented"
+            )
         known = builtin.lookup(package.repo_id) if package.repo_id else None
         pinned = (
             known if known is not None and known.revision == package.revision else None
@@ -309,7 +319,6 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         self.answerer = Answerer(router)
         self.tokens = _tokens(package)
         self.scan_tokens = scan_tokens
-        self.truncate_tokens = router.window
         self.layout = _layout(package, router.window, router.overlap)
         self.evidence_layout = _layout(package, router.evidence_window, router.overlap)
         config = package.config
@@ -323,6 +332,14 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
 
     def run(self, items: list[Vela3Item]) -> list[Output]:
         return self.networks.run(items)
+
+    def run_approximate(self, items: list[Vela3Item]) -> list[Output]:
+        """On a GPU, batches that merge requests share forwards between their equal calls.
+
+        A CPU gains no throughput from them and holds the dense masks of long
+        rows in host memory, so its forwards stay those of ``run``.
+        """
+        return self.networks.run(items, merged=self.engine_model.device.type != "cpu")
 
     # -- planning ------------------------------------------------------------
 
@@ -396,7 +413,10 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         if not asked or request.state is None:
             return
         budget = max(scan or self.scan_tokens or 0, self.router.window)
-        cut = self.truncate_tokens
+        cut = max(
+            (self._layout_of(a).max_len for a in asked if a.question.truncate),
+            default=0,
+        )
         parts_plan = PartsPlan(
             request.state, request.question_ids, [a.question for a in asked]
         )
@@ -411,7 +431,6 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         kept = {question.id for question in whole} | {
             a.question.id for a in asked if a.question.truncate
         }
-        cut_parts = [part.cut(cut) for part in parts]
         groups: dict[tuple[Any, ...], list[Asked]] = {}
         for entry in asked:
             if entry.question.id not in kept:
@@ -432,20 +451,28 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
             else:
                 key = ("span", question.id)
             groups.setdefault(key, []).append(entry)
+        turns: dict[tuple[str, int], int] = {}
         for key, members in groups.items():
             first = members[0]
-            row = Row(
-                [entry.question for entry in members],
-                cut_parts if first.question.truncate else parts,
-            )
+            layout = self._layout_of(first)
+            row = Row([entry.question for entry in members], parts)
+            if first.question.truncate:
+                # Only the parts the row reads get its layout's window: the
+                # others stay at the router window, as they would on any row.
+                read = row.read_roles()
+                row.parts = [
+                    part.cut(
+                        layout.max_len if part.role in read else self.layout.max_len
+                    )
+                    for part in parts
+                ]
             if key[0] == ROUTER:
                 assert first.router is not None
                 _, adapters = self.router.router_adapters(first.router.id)
-                layout, budget_tokens = self.layout, SPAN_BUDGET
+                budget_tokens = SPAN_BUDGET
             else:
                 assert first.route is not None
                 adapters = (first.route.adapter,)
-                layout = self.evidence_layout if first.route.evidence else self.layout
                 budget_tokens = max(first.route.window, SPAN_BUDGET)
             try:
                 sequences = layout.sequences(
@@ -460,7 +487,9 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
                 continue
             placed = Placed(row, layout, [])
             for adapter in adapters:
-                call = Call(adapter, budget_tokens, SPAN_ROWS)
+                turn = turns.get((adapter, budget_tokens), 0)
+                turns[adapter, budget_tokens] = turn + 1
+                call = Call(adapter, budget_tokens, SPAN_ROWS, turn)
                 placed.calls.append(
                     list(range(len(items), len(items) + len(sequences)))
                 )
@@ -469,6 +498,13 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
                 plan.rows[question.id] = placed
                 if question.require_full_input:
                     plan.complete.add(question.id)
+
+    def _layout_of(self, asked: Asked) -> EncoderLayout:
+        """The layout a row question reads in: evidence spans one long window."""
+        evidence = (
+            asked.path != ROUTER and asked.route is not None and asked.route.evidence
+        )
+        return self.evidence_layout if evidence else self.layout
 
     # -- answers -------------------------------------------------------------
 

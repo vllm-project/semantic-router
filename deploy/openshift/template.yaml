@@ -321,9 +321,10 @@ parameters:
   description: Memory request for container
   value: 3Gi
   required: true
+# Sized as in the Helm chart: the Router and the model runtime it starts for the decision model.
 - name: MEMORY_LIMIT
   description: Memory limit for container
-  value: 6Gi
+  value: 12Gi
   required: true
 - name: CPU_REQUEST
   description: CPU request for container

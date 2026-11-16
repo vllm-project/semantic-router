@@ -83,12 +83,10 @@ clear the switch guard before it becomes the final model.
 
 ## Diagnostics
 
-Headers stay compact:
+The `learning` member of `x-vsr-trace` stays compact:
 
 ```http
-x-vsr-learning-methods: adaptation,protection
-x-vsr-learning-actions: adaptation=keep_base,protection=hold_current
-x-vsr-learning-reasons: adaptation=base_best,protection=cache_cost_high
+x-vsr-trace: learning=(adaptation;action=keep_base;reason=base_best protection;action=hold_current;reason=cache_cost_high)
 ```
 
 Router Replay stores candidate scores, posterior mean, sampled value, base

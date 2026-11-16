@@ -17,11 +17,11 @@ def startup(tmp_path, monkeypatch):
     source.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "private", "address": "127.0.0.1", "port": 8899}
                 ],
-                "routing": {"strategy": "confidence"},
+                "recipes": [{"name": "default", "strategy": "confidence"}],
                 "global": {
                     "services": {"observability": {"tracing": {"enabled": False}}}
                 },
@@ -51,13 +51,13 @@ def assert_owned(path, expected=True):
 
 
 def test_router_defaults_do_not_modify_authored_document():
-    document = {"version": "v0.3"}
+    document = {"version": "v0.5"}
     assert not apply_instance_options(document)
-    assert document == {"version": "v0.3"}
+    assert document == {"version": "v0.5"}
 
 
 def test_gpu_platform_materializes_meaningful_default_placement():
-    document = {"version": "v0.3"}
+    document = {"version": "v0.5"}
     assert apply_instance_options(document, platform="rocm")
     primary = document["global"]["model_catalog"]["deployments"]["primary"]
     assert primary["device"] == "auto"
@@ -95,7 +95,7 @@ def test_source_change_replaces_old_cli_selection_without_three_way_merge(
     source, prepare = startup
     path = prepare(model_options={"artifact": MODEL, "data_parallel_size": 2})
     changed = yaml.safe_load(source.read_text())
-    changed["routing"]["strategy"] = "priority"
+    changed["recipes"][0]["strategy"] = "priority"
     if replacement_model:
         changed["global"]["model_catalog"] = {
             "system": {"decision_model": {"deployment": "chosen"}},
@@ -111,7 +111,7 @@ def test_source_change_replaces_old_cli_selection_without_three_way_merge(
     source.write_text(yaml.safe_dump(changed))
     prepare()
     current = yaml.safe_load(path.read_text())
-    assert current["routing"] == changed["routing"]
+    assert current["recipes"] == changed["recipes"]
     assert current["listeners"] == changed["listeners"]
     assert current["global"].get("model_catalog") == changed["global"].get(
         "model_catalog"
@@ -123,16 +123,16 @@ def test_mode_projection_keeps_dashboard_edit_ownership(startup):
     source, prepare = startup
     path = prepare()
     edited = yaml.safe_load(path.read_text())
-    edited["routing"]["strategy"] = "priority"
+    edited["recipes"][0]["strategy"] = "priority"
     path.write_text(yaml.safe_dump(edited))
     prepare(engine=True)
-    assert yaml.safe_load(path.read_text())["routing"]["strategy"] == "priority"
+    assert yaml.safe_load(path.read_text())["recipes"][0]["strategy"] == "priority"
     assert_owned(path, False)
     changed = yaml.safe_load(source.read_text())
     changed["listeners"][0]["port"] = 8898
     source.write_text(yaml.safe_dump(changed))
     prepare()
-    assert yaml.safe_load(path.read_text())["routing"]["strategy"] == "priority"
+    assert yaml.safe_load(path.read_text())["recipes"][0]["strategy"] == "priority"
     assert_owned(path, False)
 
 
@@ -157,14 +157,14 @@ def test_interrupted_startup_write_recovers_only_exact_cli_projection(
     assert yaml.safe_load(path.read_text())["global"]["router"]["enabled"] is False
     if user_edited:
         document = yaml.safe_load(path.read_text())
-        document["routing"]["strategy"] = "priority"
+        document["recipes"][0]["strategy"] = "priority"
         path.write_text(yaml.safe_dump(document))
     changed = yaml.safe_load(source.read_text())
     changed["listeners"][0]["port"] = 8898
     source.write_text(yaml.safe_dump(changed))
     prepare()
     current = yaml.safe_load(path.read_text())
-    assert current["routing"]["strategy"] == (
+    assert current["recipes"][0]["strategy"] == (
         "priority" if user_edited else "confidence"
     )
     assert current["listeners"][0]["port"] == (8899 if user_edited else 8898)

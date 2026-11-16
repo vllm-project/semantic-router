@@ -37,7 +37,7 @@ kubectl apply -f deploy/kubernetes/llmd-base/httproute-phi4-pool.yaml
 ```
 
 Do not also apply the direct-Service routes from the Istio example. Both sets
-match the same `x-selected-model` values and would create ambiguous ownership.
+match the same `x-vsr-route-model` values and would create ambiguous ownership.
 
 The endpoint-picker manifests currently use the model Services and labels from
 the Istio example:
@@ -95,7 +95,7 @@ you need to validate endpoint selection inside a pool.
 - EPP is not ready: inspect the EPP deployment logs and its RBAC resources.
 - Requests bypass a pool: remove the direct-Service route for the same selected
   model.
-- Wrong model pool: compare the Router alias and emitted `x-selected-model`
+- Wrong model pool: compare the Router alias and emitted `x-vsr-route-model`
   value with the `HTTPRoute` header match.
 
 ```bash

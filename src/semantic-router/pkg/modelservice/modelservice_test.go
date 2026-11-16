@@ -147,8 +147,21 @@ func sampleRequest(state string) Request {
 	}}
 }
 
+// shortSocketPath returns a unix socket path inside the darwin sun_path limit.
+// t.TempDir() embeds the test name, which pushes the path past the 104-byte
+// limit on macOS and makes net.Listen fail with "bind: invalid argument".
+func shortSocketPath(t *testing.T, name string) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "sr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, name)
+}
+
 func TestClientDecideOverUnixSocket(t *testing.T) {
-	socket := filepath.Join(t.TempDir(), "runtime.sock")
+	socket := shortSocketPath(t, "runtime.sock")
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
@@ -186,9 +199,9 @@ func TestManagedCommandAndModelsFile(t *testing.T) {
 	if got := strings.Join(managedCommand([]string{"vllm-srun"}, "/run/x.sock", "/run/x.models.json", "", 4), " "); !strings.HasSuffix(got, "--max-bundle-tasks 1024 --threads 4") {
 		t.Fatalf("a CPU share passes its thread count: %s", got)
 	}
-	seqs, shared := 4, false
+	seqs, shared, inputs := 4, false, 32000
 	plan := planProcesses(map[string]config.ModelDeployment{
-		"kai": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("b", 40), Device: "cpu", MaxNumSeqs: &seqs, EnableSharedContext: &shared},
+		"kai": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/Decision-2.0-Kai-0.6B", Revision: strings.Repeat("b", 40), Device: "cpu", MaxNumSeqs: &seqs, EnableSharedContext: &shared, MaxModelLen: &inputs},
 	}, nil, "", 0, "")[0]
 	path := filepath.Join(t.TempDir(), "models.json")
 	if err := plan.writeModelsFile(path); err != nil {
@@ -199,6 +212,9 @@ func TestManagedCommandAndModelsFile(t *testing.T) {
 	file := string(data)
 	if info.Mode().Perm() != 0o600 || !strings.Contains(file, `"max_num_seqs": 4`) || !strings.Contains(file, `"enable_shared_context": false`) || !strings.Contains(file, `"name": "kai"`) {
 		t.Fatalf("models file (%v): %s", info.Mode(), data)
+	}
+	if !strings.Contains(file, `"max_model_len": 32000`) {
+		t.Fatalf("models file must pass max_model_len: %s", data)
 	}
 	if strings.Contains(file, "profile") || strings.Contains(file, "dtype") || strings.Contains(file, "max_num_batched_tokens") {
 		t.Fatalf("unset engine arguments must keep the runtime's defaults: %s", data)
@@ -212,8 +228,8 @@ func runtimeConfig(deployments map[string]config.ModelDeployment) *config.Router
 		if name == "unused" {
 			continue
 		}
-		cfg.DecisionRules = append(cfg.DecisionRules, config.DecisionSignalRule{
-			Name: "hard_" + name, Deployment: name, Question: config.DecisionQuestion{Type: "noul", Instructions: "Hard?"},
+		cfg.SystemOneRules = append(cfg.SystemOneRules, config.SystemOneRule{
+			Name: "hard_" + name, Deployment: name, Question: config.SystemOneQuestion{Type: "noul", Instructions: "Hard?"},
 		})
 	}
 	return cfg
@@ -429,9 +445,9 @@ func TestCardFailsFastWhenTheRuntimeCommandCannotRun(t *testing.T) {
 func TestCardAcceptsOnlyARuntimeOfItsOwnContractVersion(t *testing.T) {
 	for version, served := range map[string]string{
 		RuntimeAPIVersion: "",
-		"3.0.1":           "serves contract 3.0.1",
+		"3.2.0":           "serves contract 3.2.0",
 		"3.0.0":           "serves contract 3.0.0",
-		"3":               "serves contract 3",
+		"4":               "serves contract 4",
 		"2.4.0":           "serves contract 2.4.0",
 		"4.0.0":           "serves contract 4.0.0",
 		"":                "reports no contract version",

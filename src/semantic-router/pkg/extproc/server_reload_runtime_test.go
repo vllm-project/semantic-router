@@ -61,15 +61,6 @@ func TestReloadRouterFromConfigSkipsReplaceForKubernetesSource(t *testing.T) {
 		}
 		return &OpenAIRouter{Config: cfg}, nil
 	}
-	warmupCalls := 0
-	warmupReloadRouter = func(router *OpenAIRouter) error {
-		warmupCalls++
-		if router == nil || router.Config != candidateCfg {
-			t.Fatalf("warmupReloadRouter() router config mismatch")
-		}
-		return nil
-	}
-
 	replaceCalls := 0
 	replaceReloadConfig = func(cfg *config.RouterConfig) {
 		replaceCalls++
@@ -81,9 +72,6 @@ func TestReloadRouterFromConfigSkipsReplaceForKubernetesSource(t *testing.T) {
 
 	if buildCalls != 1 {
 		t.Fatalf("buildReloadRouter() calls = %d, want 1", buildCalls)
-	}
-	if warmupCalls != 1 {
-		t.Fatalf("warmupReloadRouter() calls = %d, want 1", warmupCalls)
 	}
 	if replaceCalls != 0 {
 		t.Fatalf("replaceReloadConfig() calls = %d, want 0", replaceCalls)
@@ -115,10 +103,6 @@ func TestReloadRouterFromConfigDoesNotSwapWhenRuntimePreparationFails(t *testing
 			t.Fatal("model preparation received a foreign candidate")
 		}
 		return nil, errors.New("modality init failed")
-	}
-	warmupReloadRouter = func(router *OpenAIRouter) error {
-		t.Fatalf("warmupReloadRouter() should not be called when runtime prep fails")
-		return nil
 	}
 	replaceReloadConfig = func(cfg *config.RouterConfig) {
 		t.Fatalf("replaceReloadConfig() should not be called when runtime prep fails")
@@ -177,7 +161,6 @@ func TestReloadRouterFromConfigPublishesRuntimeRegistryAfterSwap(t *testing.T) {
 			ModelSelector:         newModelSelector,
 		}, nil
 	}
-	warmupReloadRouter = func(router *OpenAIRouter) error { return nil }
 	replaceReloadConfig = func(cfg *config.RouterConfig) {
 		t.Fatalf("replaceReloadConfig() should not run for registry-backed reload")
 	}

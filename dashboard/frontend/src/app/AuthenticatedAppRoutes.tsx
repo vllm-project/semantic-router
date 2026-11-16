@@ -22,8 +22,8 @@ import {
   loadEvaluationPage,
   loadInsightsPage,
   loadInsightsRecordPage,
+  loadInsightsRunPage,
   loadLogsPage,
-  loadMLSetupPage,
   loadModelHubPage,
   loadMonitoringPage,
   loadPlaygroundFullscreenPage,
@@ -36,7 +36,6 @@ import {
 } from './routeLoaders'
 
 interface AuthenticatedAppRoutesProps {
-  canAccessMLSetup: boolean
   user: PermissionUser | null
   setupMode: boolean
   capabilities: DashboardCapabilities | null
@@ -65,6 +64,7 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   'insights-record': (
     <RecoverableLazyRoute loader={loadInsightsRecordPage} routeLabel="Insight record" />
   ),
+  'insights-run': <RecoverableLazyRoute loader={loadInsightsRunPage} routeLabel="Agent run" />,
   logs: <RecoverableLazyRoute loader={loadLogsPage} routeLabel="Logs" />,
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
   models: <RecoverableLazyRoute loader={loadModelHubPage} routeLabel="Model Hub" />,
@@ -109,7 +109,6 @@ const renderShellElement = (
 }
 
 export const renderAuthenticatedAppRoutes = ({
-  canAccessMLSetup,
   user,
   setupMode,
   capabilities,
@@ -150,27 +149,6 @@ export const renderAuthenticatedAppRoutes = ({
           loader={loadPlaygroundFullscreenPage}
           routeLabel="Fullscreen playground"
         />
-      }
-    />
-    <Route
-      path="/ml-setup"
-      element={
-        canAccessMLSetup ? (
-          <EvaluationAvailabilityRoute
-            capability={capabilities?.mlPipeline}
-            isLoading={capabilitiesLoading}
-            error={capabilitiesError}
-            onRefreshAccess={onRefreshAccess}
-            featureName="ML pipeline"
-          >
-            {renderShellContent(
-              {},
-              <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
-            )}
-          </EvaluationAvailabilityRoute>
-        ) : (
-          <Navigate to="/dashboard" replace />
-        )
       }
     />
     <Route path="*" element={<Navigate to={fallbackRouteTarget(setupMode)} replace />} />

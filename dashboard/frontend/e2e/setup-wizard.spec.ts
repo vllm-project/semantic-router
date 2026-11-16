@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mockAuthenticatedAppShell } from "./support/auth";
 
 const importedConfig = {
-  version: "v0.3",
+  version: "v0.5",
   providers: {
     defaults: { model: "remote-model-primary" },
     models: [
@@ -30,36 +30,48 @@ const importedConfig = {
       },
     ],
   },
-  routing: {
-    modelCards: [
-      { name: "remote-model-primary", modality: "text" },
-      { name: "remote-model-backup", modality: "text" },
-    ],
-    signals: {
-      domains: [{ name: "remote-domain-a" }, { name: "remote-domain-b" }],
-      keywords: [{ name: "remote-keyword-a" }, { name: "remote-keyword-b" }],
+  recipes: [
+    {
+      name: "default",
+      signals: {
+        domains: [{ name: "remote-domain-a" }, { name: "remote-domain-b" }],
+        keywords: [
+          {
+            name: "remote-keyword-a",
+            operator: "OR",
+            keywords: ["remote-a"],
+            case_sensitive: false,
+          },
+          {
+            name: "remote-keyword-b",
+            operator: "OR",
+            keywords: ["remote-b"],
+            case_sensitive: false,
+          },
+        ],
+      },
+      decisions: [
+        {
+          name: "remote-route-primary",
+          priority: 900,
+          rules: { operator: "AND", conditions: [] },
+          modelRefs: [{ model: "remote-model-primary", use_reasoning: false }],
+        },
+        {
+          name: "remote-route-secondary",
+          priority: 800,
+          rules: { operator: "AND", conditions: [] },
+          modelRefs: [{ model: "remote-model-backup", use_reasoning: false }],
+        },
+        {
+          name: "remote-default",
+          priority: 100,
+          rules: { operator: "AND", conditions: [] },
+          modelRefs: [{ model: "remote-model-primary", use_reasoning: false }],
+        },
+      ],
     },
-    decisions: [
-      {
-        name: "remote-route-primary",
-        priority: 900,
-        rules: { operator: "AND", conditions: [] },
-        modelRefs: [{ model: "remote-model-primary", use_reasoning: false }],
-      },
-      {
-        name: "remote-route-secondary",
-        priority: 800,
-        rules: { operator: "AND", conditions: [] },
-        modelRefs: [{ model: "remote-model-backup", use_reasoning: false }],
-      },
-      {
-        name: "remote-default",
-        priority: 100,
-        rules: { operator: "AND", conditions: [] },
-        modelRefs: [{ model: "remote-model-primary", use_reasoning: false }],
-      },
-    ],
-  },
+  ],
 };
 
 async function mockFirstRunSetup(
@@ -197,20 +209,23 @@ test.describe("Setup wizard routing import", () => {
               },
             ],
           },
-          routing: {
-            decisions: [
-              {
-                name: "default-route",
-                description:
-                  "Generated during setup to route all requests to the default model.",
-                priority: 100,
-                rules: { operator: "AND", conditions: [] },
-                modelRefs: [
-                  { model: "qwen/qwen3.5-rocm", use_reasoning: false },
-                ],
-              },
-            ],
-          },
+          recipes: [
+            {
+              name: "default",
+              decisions: [
+                {
+                  name: "default-route",
+                  description:
+                    "Generated during setup to route all requests to the default model.",
+                  priority: 100,
+                  rules: { operator: "AND", conditions: [] },
+                  modelRefs: [
+                    { model: "qwen/qwen3.5-rocm", use_reasoning: false },
+                  ],
+                },
+              ],
+            },
+          ],
         },
       });
     await expect(page.getByText("Ready")).toBeVisible();
