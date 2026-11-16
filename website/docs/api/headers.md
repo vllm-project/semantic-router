@@ -168,7 +168,10 @@ Clients send these to steer or identify a request. See [Session identification](
 | `x-vsr-session-id` | no | v0.5 | Session id the client pins; without it the Router reads the headers `global.router.headers.session_id_headers` names, in order. |
 | `x-session-id` | yes | v0.3 | Client session id `session_id_headers` accepts by default; providers receive it. |
 | `x-claude-code-session-id` | yes | v0.3 | Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. |
-| `x-codex-turn-metadata` | yes | v0.5 | Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it, files an approval review under the session it judged, and providers receive it. |
+| `x-claude-code-agent-id` | yes | v0.5 | Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. |
+| `session-id` | yes | v0.5 | Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it. |
+| `thread-id` | yes | v0.5 | Thread id Codex sends on every call, equal to `session-id` on a root thread, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. |
+| `x-codex-turn-metadata` | yes | v0.5 | Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it. |
 | `x-conversation-id` | yes | v0.4 | Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it. |
 | `x-vsr-memory` | no | v0.5 | `off` keeps Router-managed memory out of the request. |
 | `x-vsr-skip-processing` | no | v0.3 | `true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set. |

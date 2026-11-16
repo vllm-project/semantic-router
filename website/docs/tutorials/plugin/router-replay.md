@@ -735,10 +735,11 @@ often, how many times the model switched, how the calls ended, and the time from
 the first call's start to the last one's end. Below it each call is one row, the
 request on the page marked and a model switch highlighted. Subagents are named
 `subagent 1`, `subagent 2` and so on in order of their first call, with the
-short hash of the agent identity header in the row's title, and the main
-conversation is `main`. The hash is recorded only when `identity.headers.agent`
-names that header (see [Session identification](../../api/session-identification));
-without it, every call shows `main`. A Codex root thread, whose agent and session
+short hash of the agent id in the row's title, and the main conversation is
+`main`. The hash is recorded when protection runs and reads an agent id: the
+one Claude Code or Codex sends, or the header `identity.headers.agent` names
+(see [Session identification](../../api/session-identification#choose-the-identity-you-need)).
+A call without one shows `main`. A Codex root thread, whose agent and session
 ids are equal, is `main`. A viewer without `replay.detail` gets no hash, as with
 the rest of the redacted session policy, so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),

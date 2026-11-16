@@ -372,10 +372,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: x-claude-code-session-id
-            agent: x-claude-code-agent-id
 ```
 
 Claude Code's tool search marks tools for loading on demand. Without
@@ -384,6 +380,11 @@ Claude Code goes on without tool search. Toward an `openai` backend, also list
 `tool_result.is_error`, `messages[].role` and `content.file`, as
 [protocol compatibility](protocol-compatibility#validation-and-failure-behavior)
 describes. An `anthropic` backend receives those as sent.
+
+Protection reads the session and subagent ids Claude Code sends,
+`x-claude-code-session-id` and `x-claude-code-agent-id`, with no identity
+headers configured, so each session and each subagent keeps its own model.
+Insights then names each subagent in a session's routing history.
 
 ### Claude Code on its own Claude login
 
@@ -444,10 +445,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: session-id
-            agent: thread-id
   services:
     response_api:
       enabled: true
@@ -461,6 +458,10 @@ ends in a `lossy_translation` error where the thinking block closes, and Codex
 reconnects until it gives up. The Responses endpoint needs the Router's
 Responses service and store. See [Codex CLI](protocol-compatibility#codex-cli)
 for the other fields Codex sends.
+
+Protection reads the `session-id` and `thread-id` Codex sends with no identity
+headers configured, so the root thread and each subagent or review child keep
+their own models, and Replay files their calls under the Codex session.
 
 ### Codex on its own ChatGPT login
 
@@ -561,10 +562,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: session-id
-            agent: thread-id
   services:
     response_api:
       enabled: true
@@ -665,10 +662,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: session-id
-            agent: thread-id
   services:
     response_api:
       enabled: true
@@ -815,10 +808,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: session-id
-            agent: thread-id
   services:
     response_api:
       enabled: true
@@ -950,10 +939,11 @@ Router records the call's `thread_id`, `turn_id` and `parent_turn_id` from it.
 An approval review and a subagent name the turn that started them as their
 parent turn, so `GET /api/v1/observability/replays?turn_id=<id>` returns the
 turn's calls, reviews and subagent calls, and the plugin asks for the turn id
-its `Stop` hook receives. The line does not use the session: Codex sends its
-session in `session-id`, which the Router reads only when
-`global.router.headers.session_id_headers` or protection's `identity.headers`
-name it, so by default a Codex call is filed under a session the Router derives.
+its `Stop` hook receives. The line does not use the session. Replay files a
+Codex call under the `session-id` Codex sends when protection reads it, as it
+does by default under `scope: session`
+([Session identification](../api/session-identification#choose-the-identity-you-need)),
+and under a session the Router derives otherwise.
 
 - **Router Replay** records the turn and its reviews by default; a recipe
   whose `router_replay` plugin sets `enabled: false` leaves them out. A
@@ -1187,9 +1177,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: x-session-id
 ```
 
 Pi names no subagent, and it sends its own output limit
@@ -1310,9 +1297,10 @@ retains tool permissions, task state, and the outer loop; recipes do not configu
 delegated agents.
 
 Claude Code sends `x-claude-code-session-id` instead of `x-session-id`, and
-Codex CLI sends `session-id` and `thread-id`. See
+Codex CLI sends `session-id` and `thread-id`. Protection reads both without
+identity headers configured; see
 [Agents that delegate to subagents](../tutorials/learning/protection#agents-that-delegate-to-subagents)
-for the identity headers that hold their runs and their subagents.
+for how they hold a run and its subagents.
 
 ### Agents that send tool output as messages
 
