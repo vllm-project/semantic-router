@@ -257,14 +257,14 @@ def test_apply_config_sends_a_merge_as_patch_with_the_if_match_header(
     calls = _recorded_requests(monkeypatch)
 
     RouterManagementClient("http://localhost:8080").apply_config(
-        "version: v0.3\n", "merge", '"v7"'
+        "version: v0.5\n", "merge", '"v7"'
     )
 
     method, url, kwargs = calls[0]
     assert method == "PATCH"
     assert url == "http://localhost:8080/api/v1/config"
     assert kwargs["headers"]["If-Match"] == '"v7"'
-    assert kwargs["json"] == {"yaml": "version: v0.3\n"}
+    assert kwargs["json"] == {"yaml": "version: v0.5\n"}
 
 
 def test_apply_config_sends_a_replace_as_put(
@@ -273,7 +273,7 @@ def test_apply_config_sends_a_replace_as_put(
     calls = _recorded_requests(monkeypatch)
 
     RouterManagementClient("http://localhost:8080").apply_config(
-        "version: v0.3\n", "replace", '"v7"'
+        "version: v0.5\n", "replace", '"v7"'
     )
 
     assert calls[0][0] == "PUT"
@@ -283,7 +283,7 @@ def test_apply_config_sends_a_replace_as_put(
 def test_apply_config_rejects_an_unknown_mode() -> None:
     with pytest.raises(ValueError, match="mode must be merge or replace"):
         RouterManagementClient("http://localhost:8080").apply_config(
-            "version: v0.3\n", "reset", '"v7"'
+            "version: v0.5\n", "reset", '"v7"'
         )
 
 
@@ -292,7 +292,7 @@ def test_apply_config_rejects_an_etag_that_is_blank() -> None:
 
     for blank in ("", "   "):
         with pytest.raises(ValueError, match="requires the current ETag"):
-            client.apply_config("version: v0.3\n", "merge", blank)
+            client.apply_config("version: v0.5\n", "merge", blank)
 
 
 def test_rollback_config_submits_the_version_with_the_if_match_header(
@@ -320,13 +320,13 @@ def test_plan_config_posts_the_document_and_mode(
     calls = _recorded_requests(monkeypatch)
 
     RouterManagementClient("http://localhost:8080").plan_config(
-        "version: v0.3\n", "merge"
+        "version: v0.5\n", "merge"
     )
 
     method, url, kwargs = calls[0]
     assert method == "POST"
     assert url == "http://localhost:8080/api/v1/config/plan"
-    assert kwargs["json"] == {"yaml": "version: v0.3\n", "mode": "merge"}
+    assert kwargs["json"] == {"yaml": "version: v0.5\n", "mode": "merge"}
 
 
 def test_config_versions_reads_the_history(
@@ -363,7 +363,7 @@ def test_a_stale_etag_answers_precondition_failed(
 
     with pytest.raises(ValueError, match="412: PRECONDITION_FAILED") as excinfo:
         RouterManagementClient("http://localhost:8080").apply_config(
-            "version: v0.3\n", "merge", '"old"'
+            "version: v0.5\n", "merge", '"old"'
         )
 
     error = excinfo.value

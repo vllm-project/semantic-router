@@ -3,15 +3,12 @@ import { expect, test } from '@playwright/test'
 import { mockAuthenticatedAppShell } from './support/auth'
 
 const config = {
-  version: 'v0.3',
+  version: 'v0.5',
   providers: {
-    defaults: { default_model: 'model-a' },
+    defaults: { model: 'model-a' },
     models: [{ name: 'model-a' }],
   },
-  routing: {
-    modelCards: [{ name: 'model-a' }],
-    decisions: [],
-  },
+  recipes: [{ name: 'default', decisions: [] }],
 }
 
 test('dashboard overview reports a failed config request and recovers on retry', async ({

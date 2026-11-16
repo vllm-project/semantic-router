@@ -77,17 +77,7 @@ class ModelContractTests(unittest.TestCase):
         self.assertFalse(run_model_tests.validate_results([], set())["success"])
 
     def test_every_package_variable_names_a_runtime_built_in(self):
-        self.assertEqual(
-            set(run_model_tests.PACKAGES),
-            {
-                "VLLM_SR_DOMAIN_MODEL",
-                "VLLM_SR_PII_MODEL",
-                "VLLM_SR_JAILBREAK_MODEL",
-                "VLLM_SR_FACTCHECK_MODEL",
-                "VLLM_SR_FEEDBACK_MODEL",
-                "VLLM_SR_MMBERT_TEST_MODEL",
-            },
-        )
+        self.assertEqual(set(run_model_tests.PACKAGES), {"VLLM_SR_MMBERT_TEST_MODEL"})
         self.assertTrue(
             all(
                 repo.startswith("vllm-sr/Vela-1.0-")

@@ -83,8 +83,8 @@ func setupValkeyMemoryIntegration(t *testing.T) (*ValkeyStore, *glide.Client) {
 		ValkeyConfig: vc,
 		Enabled:      true,
 		EmbeddingConfig: &EmbeddingConfig{
-			Provider: storageMemoryVectors(),
-			Model:    EmbeddingModelQwen3,
+			Provider:   storageMemoryVectors(),
+			Deployment: "qwen3-embedding",
 		},
 	})
 	if err != nil {
@@ -251,14 +251,11 @@ func TestValkeyStoreInteg_Retrieve(t *testing.T) {
 		Threshold: 0.3, // Low threshold for integration test
 	})
 	require.NoError(t, err)
-	assert.NotEmpty(t, results, "should find at least one result")
-
-	// Verify results have scores
-	for _, r := range results {
-		assert.NotEmpty(t, r.Memory.ID)
-		assert.NotEmpty(t, r.Memory.Content)
-		assert.Positive(t, r.Score, "score should be positive")
-	}
+	// The fixture embeds the query and the dark mode memory identically; the
+	// other two memories sit at a cosine near 0, below the 0.3 threshold.
+	require.Len(t, results, 1)
+	assert.Equal(t, memories[0].Content, results[0].Memory.Content)
+	assert.InDelta(t, 1.0, float64(results[0].Score), 1e-3)
 }
 
 // StorageIntegration: valkey

@@ -1,0 +1,1 @@
+recipes[support].routing: removed_field: recipes[].routing is removed; run `vllm-sr config migrate` (its fields on the recipe: recipes[].signals, recipes[].decisions, ...)

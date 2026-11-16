@@ -10,7 +10,6 @@ import (
 )
 
 const validDSL = `MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 
@@ -106,7 +105,6 @@ ROUTE r1 {
 
 func TestValidateSoftmaxProjectionPartitionDoesNotAddBrowserRuntimeWarning(t *testing.T) {
 	input := js.ValueOf(`MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 
@@ -140,7 +138,6 @@ PROJECTION partition intent_partition {
 
 func TestValidateTestBlocksStillAddBrowserRuntimeWarning(t *testing.T) {
 	input := js.ValueOf(`MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 
@@ -185,57 +182,59 @@ func TestValidateNoArgs(t *testing.T) {
 }
 
 func TestDecompileValidYAML(t *testing.T) {
-	yamlInput := js.ValueOf(`version: v0.3
+	yamlInput := js.ValueOf(`version: v0.5
 providers:
   defaults:
     model: qwen
   models:
     - name: qwen
+      modalities:
+        input: [text]
+        output: [text]
       backend_refs:
         - name: primary
           provider: vllm
           endpoint: localhost:8000
           protocol: http
-routing:
-  modelCards:
-    - name: qwen
-      modality: text
-  signals:
-    keywords:
-      - name: s1
-        operator: any
-        keywords: ["hello"]
-  decisions:
-    - name: r1
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: s1
-      modelRefs:
-        - model: qwen
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/private]
     recipe: private
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: s1
+          operator: any
+          keywords: ["hello"]
+    decisions:
+      - name: r1
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: s1
+        modelRefs:
+          - model: qwen
   - name: private
-    routing:
-      signals:
-        keywords:
-          - name: private-signal
-            operator: any
-            keywords: ["private"]
-      decisions:
-        - name: private-route
-          priority: 10
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: private-signal
-          modelRefs:
-            - model: qwen`)
+    signals:
+      keywords:
+        - name: private-signal
+          operator: any
+          keywords: ["private"]
+    decisions:
+      - name: private-route
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: private-signal
+        modelRefs:
+          - model: qwen`)
 
 	result := decompile(js.Undefined(), []js.Value{yamlInput})
 	str := result.(string)
@@ -279,7 +278,7 @@ func TestDecompileNoArgs(t *testing.T) {
 	}
 }
 
-const envReferenceConfigPrefix = `version: v0.3
+const envReferenceConfigPrefix = `version: v0.5
 providers:
   models:
     - name: qwen
@@ -288,10 +287,12 @@ providers:
           provider: vllm
           endpoint: localhost:8000
           protocol: http
-routing:
-  modelCards:
-    - name: qwen
-      modality: text
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+recipes:
+- name: default
   signals:
     keywords:
       - name: docs
@@ -338,7 +339,7 @@ func TestDecompileKeepsEnvironmentReferences(t *testing.T) {
         - type: header_mutation
           configuration:
             add:
-              - name: Authorization
+              - name: X-Upstream-Token
                 value: "Bearer ${UPSTREAM_TOKEN}"
               - name: X-Tenant
                 value: "${TENANT_ID:-default-tenant}"
@@ -359,13 +360,15 @@ func TestDecompileKeepsEnvironmentReferences(t *testing.T) {
 }
 
 func TestDecompileAcceptsRequiredEnvironmentReference(t *testing.T) {
-	yamlSource := envReferenceConfigPrefix + `        - type: rag
+	yamlSource := envReferenceConfigPrefix + `        - type: context
           configuration:
             enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_docs
-              api_key: ${OPENAI_API_KEY}
+            sources:
+              - type: rag
+                backend: openai
+                backend_config:
+                  vector_store_id: vs_docs
+                  api_key: ${OPENAI_API_KEY}
 `
 
 	dslText, yamlText := decompileAndRecompile(t, yamlSource)
@@ -379,7 +382,7 @@ func TestDecompileAcceptsRequiredEnvironmentReference(t *testing.T) {
 
 // Each typed value is valid only once its reference takes the default, and the
 // RAG key is valid only as written.
-const typedEnvDefaultsConfig = `version: v0.3
+const typedEnvDefaultsConfig = `version: v0.5
 providers:
   models:
     - name: qwen
@@ -390,32 +393,36 @@ providers:
           provider: vllm
           endpoint: ${BACKEND_HOST:-127.0.0.1}:8000
           protocol: http
-routing:
-  modelCards:
-    - name: qwen
-      modality: text
-  signals:
-    context:
-      - name: long_context
-        min_tokens: ${CTX_MIN:-4k}
-  decisions:
-    - name: long_route
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: ${CTX_MIN:-4k}
+    decisions:
+      - name: long_route
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: qwen
+        plugins:
           - type: context
-            name: long_context
-      modelRefs:
-        - model: qwen
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_docs
-              api_key: ${OPENAI_API_KEY}
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_docs
+                    api_key: ${OPENAI_API_KEY}
 `
 
 func TestDecompileAcceptsTypedEnvironmentDefaults(t *testing.T) {

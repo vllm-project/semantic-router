@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -38,12 +39,38 @@ func validateProviderReliability(modelName string, reliability ProviderReliabili
 // without one, as the CLI renders it for Envoy.
 const DefaultProviderRetryOn = "connect-failure,refused-stream"
 
+// RetryOnConditions are the retry_on names Envoy documents, the HTTP ones
+// and the gRPC ones. The standalone gateway (pkg/upstream) acts on the HTTP
+// conditions it implements and ignores the others.
+var RetryOnConditions = []string{
+	"5xx", "gateway-error", "reset", "reset-before-request", "connect-failure",
+	"envoy-ratelimited", "retriable-4xx", "refused-stream", "retriable-status-codes",
+	"retriable-headers", "http3-post-connect-failure",
+	"cancelled", "deadline-exceeded", "internal", "resource-exhausted", "unavailable",
+}
+
+// validateRetryOn refuses a name outside RetryOnConditions. Envoy and the
+// native gateway both ignore a name they do not know, so a typo would turn off
+// the retries it names without a word.
+func validateRetryOn(path, value string) error {
+	for _, token := range strings.Split(value, ",") {
+		if token = strings.TrimSpace(token); token != "" && !slices.Contains(RetryOnConditions, token) {
+			return fmt.Errorf("%s has unknown condition %q; expected any of %s",
+				path, token, strings.Join(RetryOnConditions, ", "))
+		}
+	}
+	return nil
+}
+
 func validateProviderRetry(modelName string, reliability ProviderReliability) error {
 	if reliability.RetryCount < 0 || reliability.RetryCount > 5 {
 		return fmt.Errorf(
 			"providers.models[%s].reliability.retry_count must be between 0 and 5",
 			modelName,
 		)
+	}
+	if err := validateRetryOn(fmt.Sprintf("providers.models[%s].reliability.retry_on", modelName), reliability.RetryOn); err != nil {
+		return err
 	}
 	for _, code := range reliability.RetriableStatusCodes {
 		if code < 100 || code > 599 {

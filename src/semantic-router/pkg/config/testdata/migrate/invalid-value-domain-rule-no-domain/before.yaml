@@ -1,0 +1,45 @@
+# A declared domain rule whose name is no domain and that sets no
+# mmlu_categories matched none of the domains the classifier reported, so it
+# never matched: migrate drops it, a decision that needs it, its term of an
+# OR, and a score's input on it, as for any condition that never matches.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    signals:
+      domains:
+        - {name: general, description: General knowledge and conversation}
+        - {name: math}
+    projections:
+      scores:
+        - name: technical
+          method: weighted_sum
+          inputs:
+            - {type: domain, name: general, weight: 0.5}
+            - {type: domain, name: math, weight: 0.5}
+      mappings:
+        - name: technical_band
+          source: technical
+          method: threshold_bands
+          outputs: [{name: technical_heavy, gte: 0.5}]
+    decisions:
+      - name: general
+        priority: 100
+        rules: {type: domain, name: general}
+        modelRefs: [{model: general}]
+      - name: math_or_general
+        priority: 90
+        rules:
+          operator: OR
+          conditions:
+            - {type: domain, name: math}
+            - {type: domain, name: general}
+        modelRefs: [{model: general}]
+      - name: technical
+        priority: 80
+        rules: {type: projection, name: technical_heavy}
+        modelRefs: [{model: general}]

@@ -146,7 +146,7 @@ func replay(ctx context.Context, sessions []session, opts replayOptions) (report
 		return report{}, errors.New("scenario has no sessions")
 	}
 	// Deterministic vectors depend only on the dimension; 384 is the one the replay's reports were recorded with.
-	embedding := memory.EmbeddingConfig{Model: memory.EmbeddingModelMMBERT, Dimension: 384}
+	embedding := memory.EmbeddingConfig{Dimension: 384}
 	fingerprint, deterministic := memory.DeterministicEmbeddingFingerprint(embedding)
 	if !deterministic {
 		return report{}, fmt.Errorf("the replay runs on deterministic embeddings; set %s=1", deterministicEmbeddingsEnv)

@@ -153,6 +153,8 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
 	ctx.SemanticRequest = &request
+	observeAgentTurn(ctx, body)
+	r.observeApprovalReview(ctx, body, &request)
 	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
@@ -235,18 +237,8 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream &&
-		!streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
-		// The Router always asks Chat backends for the final usage chunk so
-		// accounting observes authoritative tokens. Public stream rendering uses
-		// the original client preference retained in ctx.SemanticRequest.
-		includeUsage := true
-		dispatchRequest.StreamOptions.IncludeUsage = &includeUsage
-		// Source bytes no longer describe the dispatch request, so retire the
-		// replay claim on them. Without this the encoder forwards the original
-		// client bytes and the forced flag never reaches the backend.
-		dispatchRequest.Generation++
-	}
+	requestBackendStreamUsage(format, &dispatchRequest)
+	r.requestUnstoredOnCallerLogin(format, &dispatchRequest)
 	encoded, err := engine.EncodeRequest(format, dispatchRequest, ctx.ProtocolEnvelope)
 	if err != nil {
 		return nil, err
@@ -258,6 +250,23 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		return nil, err
 	}
 	return encodeLooperEvidence(body, format, ctx)
+}
+
+// requestBackendStreamUsage asks a Chat backend for the final usage chunk of
+// a streamed call, whatever the client asked, so accounting observes
+// authoritative tokens. Public stream rendering uses the original client
+// preference retained in ctx.SemanticRequest.
+func requestBackendStreamUsage(format llmprotocol.WireFormat, dispatchRequest *llmprotocol.Request) {
+	if format != llmprotocol.OpenAIChatV1 || !dispatchRequest.Stream ||
+		streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
+		return
+	}
+	includeUsage := true
+	dispatchRequest.StreamOptions.IncludeUsage = &includeUsage
+	// Source bytes no longer describe the dispatch request, so retire the
+	// replay claim on them. Without this the encoder forwards the original
+	// client bytes and the forced flag never reaches the backend.
+	dispatchRequest.Generation++
 }
 
 func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {
@@ -375,12 +384,6 @@ func (r *OpenAIRouter) encodeClientResponseWithReplay(
 }
 
 func requestWirePath(format llmprotocol.WireFormat) string {
-	// The Images wire predates the protocol catalog and is not registered
-	// there; keep its canonical path stable instead of falling back to the
-	// chat-completions default.
-	if format == llmprotocol.OpenAIImagesV1 {
-		return "/v1/images/generations"
-	}
 	registry, err := modelcatalog.BuiltIn()
 	if err != nil {
 		return "/v1/chat/completions"
@@ -398,6 +401,8 @@ func requestWireProtocol(format llmprotocol.WireFormat) string {
 		return "openai/responses@1"
 	case llmprotocol.AnthropicMessagesV1:
 		return "anthropic/messages@1"
+	case llmprotocol.OpenAIImagesV1:
+		return "openai/images@1"
 	default:
 		return "openai/chat-completions@1"
 	}
@@ -503,9 +508,9 @@ func setImmediateContentType(response *ext_proc.ImmediateResponse, value string)
 
 // logProtocolRejection records why the Router refused a request. Every refusal
 // that carries a protocol error leaves through encodeImmediateResponseForClient,
-// and the client's error body is otherwise the only trace: the request never
-// reaches replay. Only the protocol error's own message is logged, never the
-// request body.
+// and the client's error body is otherwise the only trace of a refusal before
+// routing, which never reaches replay. Only the protocol error's own message
+// is logged, never the request body.
 func logProtocolRejection(ctx *RequestContext, protocolError *llmprotocol.ProtocolError, status int) {
 	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", map[string]interface{}{
 		"request_id": ctx.RequestID,

@@ -76,7 +76,10 @@ type FusionQuorumEvidence struct {
 // FusionQuorumError reports an unmet usable-response quorum while retaining
 // per-attempt evidence for internal callers.
 type FusionQuorumError struct {
-	cause    error
+	cause error
+	// failures are the panel attempts' own errors. They unwrap, so a caller
+	// can read the status a model answered, but stay out of the message.
+	failures error
 	evidence FusionQuorumEvidence
 }
 
@@ -96,11 +99,11 @@ func (e *FusionQuorumError) Error() string {
 	return message
 }
 
-func (e *FusionQuorumError) Unwrap() error {
+func (e *FusionQuorumError) Unwrap() []error {
 	if e == nil {
 		return nil
 	}
-	return e.cause
+	return []error{e.cause, e.failures}
 }
 
 // Evidence returns a defensive copy of the internal panel evidence.
@@ -125,6 +128,11 @@ func (e *FusionQuorumError) WithPolicyOutcome(
 	totalUsage TokenUsage,
 ) *FusionQuorumError {
 	updated := &FusionQuorumError{cause: e.cause, evidence: e.Evidence()}
+	// Once a fallback is tried, the fallback's failure ends the run, not the
+	// panel's.
+	if fallbackTarget == "" {
+		updated.failures = e.failures
+	}
 	updated.evidence.SelectedPolicy = policy
 	updated.evidence.FallbackTarget = fallbackTarget
 	updated.evidence.Disposition = disposition
@@ -169,7 +177,9 @@ type fusionPanelOutcome struct {
 	responses    []*ModelResponse
 	failedModels []FusionFailedModel
 	attempts     []FusionPanelAttemptEvidence
-	usage        TokenUsage
+	// failures joins the failed attempts' errors.
+	failures error
+	usage    TokenUsage
 	// dispatchedModels lists, in configured-panel order, the panel models whose
 	// worker crossed the dispatch gate. Callers report calls actually made from
 	// this rather than from the configured panel.
@@ -402,7 +412,8 @@ func newFusionQuorumError(
 	cause error,
 ) error {
 	return &FusionQuorumError{
-		cause: cause,
+		cause:    cause,
+		failures: outcome.failures,
 		evidence: FusionQuorumEvidence{
 			RequiredCount: required,
 			UsableCount:   len(outcome.responses),

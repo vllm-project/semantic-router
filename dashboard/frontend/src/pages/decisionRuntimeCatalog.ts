@@ -1,7 +1,7 @@
-import type { DecisionModelSignal } from '../types/config'
+import type { SystemOneSignal } from '../types/config'
 import runtimeCatalog from './decisionRuntimeCatalog.generated.json'
 
-export type DecisionQuestionKind = DecisionModelSignal['question']['type']
+export type DecisionQuestionKind = SystemOneSignal['question']['type']
 export interface DecisionRuntimeCatalogEntry {
   id: string
   name: string

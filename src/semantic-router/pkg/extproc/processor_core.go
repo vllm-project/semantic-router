@@ -153,6 +153,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
+	r.recordHeldStreamOverMessageLimit(ctx, err)
 	if ctx.InflightToken != 0 {
 		releaseInflightAdmission(ctx)
 	}
@@ -347,7 +348,13 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 	var maskingErr *maskingDispatchError
 	if errors.As(err, &maskingErr) {
 		// A stream error would let failure_mode_allow forward the unmasked
-		// body upstream, so a masking failure always answers here (#3566).
+		// body upstream, so a masking failure always answers here (#3566),
+		// and the client's protocol carries this message, not a generic one.
+		if ctx != nil {
+			ctx.ImmediateProtocolError = llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable, "masking_unavailable", maskingUnavailableMessage, nil,
+			)
+		}
 		return r.createErrorResponse(http.StatusServiceUnavailable, maskingUnavailableMessage), true
 	}
 	var protocolError *llmprotocol.ProtocolError
@@ -357,9 +364,7 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 	if ctx != nil {
 		ctx.ImmediateProtocolError = protocolError
 	}
-	response := r.createErrorResponse(http.StatusBadRequest, protocolError.Message)
-	addPromptCacheReceiptToImmediateResponse(response, ctx)
-	return response, true
+	return r.createErrorResponse(http.StatusBadRequest, protocolError.Message), true
 }
 
 func (r *OpenAIRouter) processResponseHeaders(

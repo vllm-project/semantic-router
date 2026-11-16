@@ -251,6 +251,15 @@ readinessProbe:
   timeoutSeconds: 10
   # -- Failure threshold
   failureThreshold: 5
+# -- (int) Seconds Kubernetes waits, once it signals the Router to stop, before
+# it kills it. Unset, Kubernetes waits 30 s, which fits the standalone gateway's
+# default drain (config global.router.drain_timeout_seconds, 25 s) and the 5 s
+# after it. A longer drain or a preStop delay needs at least preStop delay +
+# drain + 5 s, with some margin.
+terminationGracePeriodSeconds: null
+# -- The Router container's lifecycle hooks, such as a preStop sleep that gives
+# load balancers time to take the pod out of rotation before its listeners close.
+lifecycle: {}
 # Persistent Volume Claim for models
 persistence:
   # -- Enable persistent volume
@@ -308,7 +317,7 @@ configMap:
   applyValuesRevision: ""
 # Application configuration
 config:
-  version: v0.3
+  version: v0.5
   # Standalone mode serves these listeners and the Service exposes them;
   # extproc mode doesn't use them.
   listeners:
@@ -329,24 +338,23 @@ config:
             endpoint: "replace-with-your-vllm-service:8000"
             protocol: "http"
             weight: 100
-  routing:
-    modelCards:
-      - name: "replace-with-your-model"
-    signals:
-      domains:
-        - name: "general"
-          description: "Catch-all domain"
-          mmlu_categories: ["other"]
-    decisions:
-      - name: "default-route"
-        description: "Default route for every request while you wire real backends."
-        priority: 100
-        rules:
-          operator: "AND"
-          conditions: []
-        modelRefs:
-          - model: "replace-with-your-model"
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        domains:
+          - name: "general"
+            description: "Catch-all domain"
+            labels: ["other"]
+      decisions:
+        - name: "default-route"
+          description: "Default route for every request while you wire real backends."
+          priority: 100
+          rules:
+            operator: "AND"
+            conditions: []
+          modelRefs:
+            - model: "replace-with-your-model"
+              use_reasoning: false
   global:
     services:
       response_api:
@@ -357,7 +365,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true
@@ -382,24 +389,10 @@ config:
             deployment_environment: "development"
     stores:
       response_cache:
-        enabled: true
         backend_type: "memory"
-        similarity_threshold: 0.8
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: "fifo"
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
-    integrations:
-      tools:
-        enabled: true
-        top_k: 3
-        similarity_threshold: 0.2
-        tools_db_path: "config/tools_db.json"
-        fallback_to_empty: true
 # Tools database configuration
 toolsDb:
   - tool:
@@ -507,11 +500,9 @@ toolsDb:
 # When multiple models are specified in modelRefs, use
 # algorithm.type to determine which model handles the request.
 #
-# Supported algorithms:
-#   - knn: K-Nearest Neighbors (semantic similarity)
-#   - kmeans: KMeans clustering (pattern-based routing)
-#   - svm: Support Vector Machine (classification-based)
-#   - mlp: Multi-Layer Perceptron (neural selector)
+# Selectors choose one model before calling it: static, random,
+# multi_factor and systemone. Executors call several and return one
+# response: escalate, fusion, remom, ratings and workflows.
 #
 # Example configuration:
 #
@@ -519,7 +510,7 @@ toolsDb:
 #   routing:
 #     decisions:
 #       - name: "multi_model_routing"
-#         description: "Route to best model using ML"
+#         description: "Let the decision model pick the model"
 #         priority: 100
 #         rules:
 #           operator: "OR"
@@ -527,26 +518,16 @@ toolsDb:
 #             - type: "domain"
 #               name: "general"
 #         algorithm:
-#           type: "knn"       # Per-decision selector choice
+#           type: "systemone"   # Per-decision selector choice
+#           systemone:
+#             instructions: "Which model should answer this request?"
 #         modelRefs:
 #           - model: "model-small"
 #             use_reasoning: false
-#   global:
-#     router:
-#       model_selection:
-#         ml:
-#           knn:
-#             k: 5
-#           kmeans:
-#             num_clusters: 8
-#           svm:
-#             kernel: "rbf"
-#           mlp:
-#             device: "cpu"
-#         - model: "model-medium"
-#           use_reasoning: false
-#         - model: "model-large"
-#           use_reasoning: true
+#           - model: "model-medium"
+#             use_reasoning: false
+#           - model: "model-large"
+#             use_reasoning: true
 #
 # ============================================================================
 

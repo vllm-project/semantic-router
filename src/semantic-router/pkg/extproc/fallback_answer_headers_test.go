@@ -31,6 +31,10 @@ func withRoutingFacts(ctx *RequestContext) *RequestContext {
 	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: "support"})
 	ctx.VSRSelectionMethod = "static"
 	ctx.RoutingLatency = 1500 * time.Microsecond
+	if ctx.Headers == nil {
+		ctx.Headers = map[string]string{}
+	}
+	ctx.Headers[headers.VSRDebug] = "true"
 	return ctx
 }
 
@@ -42,20 +46,22 @@ func upstreamStatus(status string) *ext_proc.ProcessingRequest_ResponseHeaders {
 
 func requireFallbackAnswerHeaders(t *testing.T, set []*core.HeaderValueOption) {
 	t.Helper()
-	got := map[string]string{}
-	for _, option := range set {
-		got[option.GetHeader().GetKey()] = string(option.GetHeader().GetRawValue())
-	}
+	got := headerValuesByName(set)
 	for name, want := range map[string]string{
-		headers.VSRSelectedRecipe:    "support",
-		headers.VSRSelectedDecision:  "chat_fallback_decision",
-		headers.VSRSelectedAlgorithm: "static",
-		headers.VSRRoutingLatencyMs:  "1.500",
-		headers.VSRSelectedModel:     "model-fallback-1",
-		headers.VSRFallbackAttempts:  "2",
-		headers.VSRResponsePath:      headers.ResponsePathFallback,
+		headers.VSRSelectedRecipe:   "support",
+		headers.VSRSelectedDecision: "chat_fallback_decision",
+		headers.VSRSelectedModel:    "model-fallback-1",
+		headers.VSRResponsePath:     headers.ResponsePathFallback,
 	} {
 		require.Equal(t, want, got[name], "%s in %v", name, got)
+	}
+	trace := traceOf(t, set)
+	for member, want := range map[string]string{
+		headers.TraceAlgorithm:        "static",
+		headers.TraceRoutingLatencyMs: "1.5",
+		headers.TraceFallbackAttempts: "2",
+	} {
+		require.Equal(t, want, trace[member], "%s in %v", member, trace)
 	}
 }
 
@@ -70,6 +76,7 @@ func TestResponsePhaseFallbackAnswerCarriesTheRoutingFacts(t *testing.T) {
 	require.NoError(t, err)
 	immediate := response.GetImmediateResponse()
 	require.NotNil(t, immediate, "the candidate's answer replaces the primary's 503")
+	appendRoutedResponseHeaders(response, ctx)
 	requireFallbackAnswerHeaders(t, immediate.GetHeaders().GetSetHeaders())
 }
 

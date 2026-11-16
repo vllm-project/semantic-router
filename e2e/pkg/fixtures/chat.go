@@ -47,7 +47,7 @@ type ChatCompletionsRequest struct {
 	Messages []ChatMessage `json:"messages"`
 	// User is optional; forwarded for per-user routing and session correlation in tests.
 	User string `json:"user,omitempty"`
-	// Tools is optional; used by tool_selection filter-mode E2E contracts.
+	// Tools is optional; used by the tools plugin E2E contracts.
 	Tools []ChatTool `json:"tools,omitempty"`
 	// ToolChoice is optional; when omitted the gateway uses default auto behavior.
 	ToolChoice json.RawMessage `json:"tool_choice,omitempty"`

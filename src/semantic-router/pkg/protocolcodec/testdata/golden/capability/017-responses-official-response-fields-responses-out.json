@@ -38,7 +38,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -97,7 +97,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -156,7 +156,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -215,7 +215,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -274,7 +274,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -333,7 +333,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -392,7 +392,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -447,7 +447,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -518,7 +518,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -577,7 +577,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -634,7 +634,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -689,7 +689,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -744,7 +744,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -803,7 +803,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -858,7 +858,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -917,7 +917,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -976,7 +976,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1035,7 +1035,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1090,7 +1090,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1149,7 +1149,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1204,7 +1204,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1259,7 +1259,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1314,7 +1314,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1373,7 +1373,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1432,7 +1432,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1491,7 +1491,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1550,7 +1550,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1609,7 +1609,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1668,7 +1668,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1727,7 +1727,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1786,7 +1786,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1845,7 +1845,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1904,7 +1904,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -1963,7 +1963,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2018,7 +2018,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2077,7 +2077,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2136,7 +2136,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2195,7 +2195,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2254,7 +2254,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2313,7 +2313,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2372,7 +2372,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2431,7 +2431,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2490,7 +2490,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {
@@ -2625,7 +2625,7 @@
           "usage": {
             "input_tokens": 2,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 1,
             "output_tokens_details": {

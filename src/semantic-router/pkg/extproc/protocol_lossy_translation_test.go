@@ -45,14 +45,14 @@ func TestAllowLossyTranslationDispatchesFailedToolResultWithWarning(t *testing.T
 			t.Fatalf("opted-in dispatch: body=%s error=%v", encoded, err)
 		}
 		builder := newResponseHeaderMutationBuilder()
-		builder.addProtocolDiagnostics(ctx, ctx.ProtocolDiagnostics)
+		builder.addWarnings(ctx)
 		warning := ""
 		for _, header := range builder.setHeaders {
-			if header.Header.Key == headers.VSRProtocolWarnings {
+			if header.Header.Key == headers.VSRWarnings {
 				warning = string(header.Header.RawValue)
 			}
 		}
-		if !strings.HasPrefix(warning, "approximated;") || !strings.HasSuffix(warning, ";tool_result.is_error") {
+		if !strings.HasPrefix(warning, "protocol;action=approximated;") || !strings.HasSuffix(warning, `;field="tool_result.is_error"`) {
 			t.Fatalf("opted-in loss is not visible to the caller: %q", warning)
 		}
 	}

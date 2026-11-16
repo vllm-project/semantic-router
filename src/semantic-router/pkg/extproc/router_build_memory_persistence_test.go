@@ -13,7 +13,7 @@ import (
 )
 
 func memoryPersistenceConfig(persistence config.MemoryPersistenceConfig) *config.RouterConfig {
-	return &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Persistence: persistence}}
+	return &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, Persistence: persistence}}
 }
 
 func memoryPersistenceExtractor() *memory.MemoryExtractor {

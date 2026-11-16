@@ -9,7 +9,7 @@ import (
 
 func TestProviderReliabilityRoundTripsCanonicalConfig(t *testing.T) {
 	parsed, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: model-a
@@ -28,15 +28,14 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: model-a
-  decisions:
-    - name: default
-      rules:
-        operator: AND
-      modelRefs:
-        - model: model-a
+recipes:
+  - name: default
+    decisions:
+      - name: default
+        rules:
+          operator: AND
+        modelRefs:
+          - model: model-a
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes: %v", err)
@@ -54,7 +53,7 @@ routing:
 
 func TestProviderReliabilityTimeoutsAndRetriesRoundTrip(t *testing.T) {
 	const doc = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: model-a
@@ -76,7 +75,8 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing: {}
+recipes:
+  - name: default
 `
 	want := ProviderReliability{
 		RetryCount: 2, ConnectTimeout: "3s", TotalTimeout: "0s", IdleTimeout: "45s", PerTryTimeout: "20s",

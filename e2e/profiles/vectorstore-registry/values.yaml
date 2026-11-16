@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,21 +16,33 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      - name: default_decision
-        description: Default catch-all decision
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-    signals: {}
-    modelCards:
-      - name: openai/gpt-oss-20b
+  recipes:
+    - name: default
+      decisions:
+        - name: default_decision
+          description: Default catch-all decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+      signals: {}
   global:
+    model_catalog:
+      deployments:
+        # provider-mocker's embedding fixture (see its README) stands in for
+        # the embedding model, so the Router downloads none.
+        fixture-embedding:
+          provider: openai_embeddings
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1
+          model: e2e/fixture-embedding
+          timeout_ms: 5000
+          capabilities:
+            dimensions: 256
+      embeddings:
+        default: {deployment: fixture-embedding}
     router:
       strategy: priority
     services:
@@ -42,8 +54,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: false
@@ -53,14 +63,9 @@ config:
         tracing:
           enabled: false
     stores:
-      response_cache:
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
       vector_store:
         enabled: true
         backend_type: memory
-        embedding_model: mmbert
         metadata_store: postgres
         metadata_postgres:
           host: postgres.default.svc.cluster.local
@@ -74,19 +79,6 @@ config:
           conn_max_lifetime: 300
           table_name: vector_store_registry
     integrations: {}
-    model_catalog:
-      kbs: []
-      modules:
-        prompt_guard:
-          enabled: false
-          jailbreak_mapping_path: ""
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
 resources:
   limits:
     cpu: '2'

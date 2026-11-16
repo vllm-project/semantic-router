@@ -24,7 +24,7 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 	}
 
 	var globalRecorder *routerreplay.Recorder
-	if policy := cfg.EffectiveRouterReplayConfig(nil); policy != nil {
+	if policy := preDecisionReplayPolicy(cfg); policy != nil {
 		globalRecorder, err = createReplayRecorder("global", backend, policy, &cfg.RouterReplay)
 		if err != nil {
 			_ = closeReplayRecorders(nil, replayRecorders, false)
@@ -32,7 +32,24 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 		}
 	}
 	shareReplayOutcomeQueueWithFallback(replayRecorders, globalRecorder)
+	if len(replayRecorders) > 0 || globalRecorder != nil {
+		logging.Warnf("Router replay store_backend is set to %q — all replay records "+
+			"will be lost on configuration reload or router restart. Use \"postgres\" or \"redis\" for durable storage in production.",
+			backend)
+	}
 	return replayRecorders, globalRecorder, false, nil
+}
+
+// preDecisionReplayPolicy sizes the store for requests without a decision. A
+// recipe's defaults layer its own plugins over the global ones, so a recipe
+// can record before a decision when the global plugins do not. Each request
+// still captures under its own recipe's policy.
+func preDecisionReplayPolicy(cfg *config.RouterConfig) *config.RouterReplayPluginConfig {
+	policy := cfg.EffectiveRouterReplayConfig(nil)
+	for i := 0; policy == nil && i < len(cfg.Recipes); i++ {
+		policy = config.RouterReplayPolicyOf(cfg.Recipes[i].Profile.DefaultPlugins)
+	}
+	return policy
 }
 
 func shareReplayOutcomeQueueWithFallback(recorders map[string]*routerreplay.Recorder, fallback *routerreplay.Recorder) {
@@ -51,7 +68,7 @@ func shareReplayOutcomeQueueWithFallback(recorders map[string]*routerreplay.Reco
 	routerreplay.ShareOutcomeQueue(group...)
 }
 
-// initializeReplayRecorders creates replay recorders for decisions with router_replay plugin configured.
+// initializeReplayRecorders creates replay recorders for the decisions that record replay.
 func initializeReplayRecorders(cfg *config.RouterConfig) map[string]*routerreplay.Recorder {
 	backend := resolveReplayStoreBackend(cfg.RouterReplay)
 	if usesSharedReplayStorage(backend) {
@@ -147,10 +164,19 @@ func createReplayRecorder(
 	}
 
 	recorder := routerreplay.NewRecorder(storage)
-	recorder.SetCapturePolicy(pluginCfg.CaptureRequestBody, pluginCfg.CaptureResponseBody, maxBodyBytes)
-	recorder.SetMaxToolTraceBytes(pluginCfg.MaxToolTraceBytes)
-	recorder.SetMaxToolTraceSteps(pluginCfg.MaxToolTraceSteps)
+	recorder.SetCapturePolicy(pluginCfg.CapturesRequestText(), pluginCfg.CapturesResponseText(), maxBodyBytes)
+	setReplayTextLimits(recorder, pluginCfg)
 	return recorder, nil
+}
+
+// setReplayTextLimits gives a recorder the plugin's limits on the prompt and
+// the tool trace.
+func setReplayTextLimits(recorder *routerreplay.Recorder, pluginCfg *config.RouterReplayPluginConfig) {
+	recorder.SetMaxPromptBytes(pluginCfg.PromptByteLimit())
+	recorder.SetMaxToolTraceBytes(pluginCfg.ToolTraceByteLimit())
+	recorder.SetMaxRawToolTraceBytes(pluginCfg.RawToolTraceByteLimit())
+	recorder.SetMaxToolTraceTotalBytes(pluginCfg.ToolTraceTotalByteLimit())
+	recorder.SetMaxToolTraceSteps(pluginCfg.MaxToolTraceSteps)
 }
 
 func createSharedReplayRecorder(
@@ -159,12 +185,11 @@ func createSharedReplayRecorder(
 ) *routerreplay.Recorder {
 	recorder := routerreplay.NewRecorder(storage)
 	recorder.SetCapturePolicy(
-		pluginCfg.CaptureRequestBody,
-		pluginCfg.CaptureResponseBody,
+		pluginCfg.CapturesRequestText(),
+		pluginCfg.CapturesResponseText(),
 		resolveReplayMaxBodyBytes(pluginCfg.MaxBodyBytes),
 	)
-	recorder.SetMaxToolTraceBytes(pluginCfg.MaxToolTraceBytes)
-	recorder.SetMaxToolTraceSteps(pluginCfg.MaxToolTraceSteps)
+	setReplayTextLimits(recorder, pluginCfg)
 	return recorder
 }
 
@@ -211,9 +236,6 @@ func createReplayStore(
 ) (store.Storage, error) {
 	switch backend {
 	case "memory":
-		logging.Warnf("Router replay store_backend is set to %q — all replay records "+
-			"will be lost on configuration reload or router restart. Use \"postgres\" or \"redis\" for durable storage in production.",
-			"memory")
 		return createReplayMemoryStore(decisionName, pluginCfg, globalCfg), nil
 	case "redis":
 		return createReplayRedisStore(globalCfg)

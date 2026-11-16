@@ -12,34 +12,23 @@ import (
 // values mirrors the parts of values.yaml this test checks.
 type values struct {
 	Config struct {
-		Routing struct {
+		Recipes []struct {
 			Signals struct {
-				Domains     []struct{ Name string } `yaml:"domains"`
-				Classifiers []struct {
-					Deployment string `yaml:"deployment"`
-				} `yaml:"classifiers"`
-				Decision []struct {
+				SystemOne []struct {
 					Name       string `yaml:"name"`
 					Deployment string `yaml:"deployment"`
-				} `yaml:"decision"`
+				} `yaml:"systemone"`
 			} `yaml:"signals"`
 			ModelBindings map[string]string `yaml:"model_bindings"`
 			Decisions     []struct {
 				Name      string `yaml:"name"`
 				Algorithm *struct {
-					Decision *struct {
+					SystemOne *struct {
 						Deployment string `yaml:"deployment"`
-					} `yaml:"decision"`
+					} `yaml:"systemone"`
 				} `yaml:"algorithm"`
-				Plugins []struct {
-					Configuration struct {
-						Rerank *struct {
-							Deployment string `yaml:"deployment"`
-						} `yaml:"rerank"`
-					} `yaml:"configuration"`
-				} `yaml:"plugins"`
 			} `yaml:"decisions"`
-		} `yaml:"routing"`
+		} `yaml:"recipes"`
 		Global struct {
 			ModelCatalog struct {
 				Deployments map[string]struct {
@@ -51,7 +40,9 @@ type values struct {
 				} `yaml:"deployments"`
 				Bindings   map[string]string `yaml:"bindings"`
 				Embeddings struct {
-					Default string `yaml:"default"`
+					Default struct {
+						Deployment string `yaml:"deployment"`
+					} `yaml:"default"`
 				} `yaml:"embeddings"`
 			} `yaml:"model_catalog"`
 		} `yaml:"global"`
@@ -106,8 +97,7 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	// device: the lifecycle case checks independent workers, including auto
 	// resolving to CPU on a node without an accelerator.
 	managed := map[string]struct{ device string }{
-		"decision-fixture": {"cpu"}, "vela-domain": {"cpu"}, "vela-pii": {"cpu"}, "vela-guard": {"cpu"},
-		"vela-embedding": {"auto"}, "vela-reranker": {"cpu"}, "vela-modality": {"cpu"},
+		"decision-fixture": {"cpu"}, "vela-embedding": {"auto"},
 	}
 	for name, want := range managed {
 		deployment, ok := deployments[name]
@@ -119,7 +109,7 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 			t.Fatalf("%s names %s, which runtime_with_fixtures.py does not write", name, deployment.Artifact)
 		}
 	}
-	attached := map[string]string{"attached-decisions": "decision-a", "attached-feedback": "feedback-a", "attached-vela2": "vela2-a"}
+	attached := map[string]string{"attached-decisions": "decision-a", "attached-vela2": "vela2-a"}
 	for name, served := range attached {
 		deployment := deployments[name]
 		if !strings.Contains(deployment.Endpoint, "model-runtime-attached.") || deployment.Model != served {
@@ -150,27 +140,19 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 		}
 	}
 
-	used := map[string]bool{profile.Config.Global.ModelCatalog.Embeddings.Default: true}
+	used := map[string]bool{profile.Config.Global.ModelCatalog.Embeddings.Default.Deployment: true}
 	for _, deployment := range profile.Config.Global.ModelCatalog.Bindings {
 		used[deployment] = true
 	}
-	for _, deployment := range profile.Config.Routing.ModelBindings {
+	for _, deployment := range profile.Config.Recipes[0].ModelBindings {
 		used[deployment] = true
 	}
-	for _, rule := range profile.Config.Routing.Signals.Classifiers {
+	for _, rule := range profile.Config.Recipes[0].Signals.SystemOne {
 		used[rule.Deployment] = true
 	}
-	for _, rule := range profile.Config.Routing.Signals.Decision {
-		used[rule.Deployment] = true
-	}
-	for _, decision := range profile.Config.Routing.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Decision != nil {
-			used[decision.Algorithm.Decision.Deployment] = true
-		}
-		for _, plugin := range decision.Plugins {
-			if plugin.Configuration.Rerank != nil {
-				used[plugin.Configuration.Rerank.Deployment] = true
-			}
+	for _, decision := range profile.Config.Recipes[0].Decisions {
+		if decision.Algorithm != nil && decision.Algorithm.SystemOne != nil {
+			used[decision.Algorithm.SystemOne.Deployment] = true
 		}
 	}
 	delete(used, "")
@@ -183,9 +165,6 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 		if _, ok := deployments[name]; !ok {
 			t.Fatalf("a consumer names undeclared deployment %s", name)
 		}
-	}
-	if len(profile.Config.Routing.Signals.Domains) != 14 {
-		t.Fatalf("one domain rule per domain fixture label is needed, got %d", len(profile.Config.Routing.Signals.Domains))
 	}
 }
 
@@ -205,44 +184,6 @@ func TestRouterStartsManagedRuntimesThroughTheFixtureScript(t *testing.T) {
 	for key, path := range configMapFiles {
 		if _, err := os.Stat(strings.TrimPrefix(path, profileDir)); err != nil {
 			t.Fatalf("ConfigMap key %s: %v", key, err)
-		}
-	}
-}
-
-// The modules name no mapping file, so the lane covers labels taken from the
-// served cards; a mapping file would also be a Hub fetch HF_HUB_OFFLINE forbids.
-func TestModulesTakeTheirLabelsFromTheServedCards(t *testing.T) {
-	var profile struct {
-		Config struct {
-			Global struct {
-				ModelCatalog struct {
-					Modules struct {
-						Classifier struct {
-							Domain struct {
-								Mapping   string  `yaml:"category_mapping_path"`
-								Threshold float64 `yaml:"threshold"`
-							} `yaml:"domain"`
-							PII struct {
-								Mapping string `yaml:"pii_mapping_path"`
-							} `yaml:"pii"`
-						} `yaml:"classifier"`
-						PromptGuard struct {
-							Mapping string `yaml:"jailbreak_mapping_path"`
-						} `yaml:"prompt_guard"`
-					} `yaml:"modules"`
-				} `yaml:"model_catalog"`
-			} `yaml:"global"`
-		} `yaml:"config"`
-	}
-	load(t, "values.yaml", &profile)
-	modules := profile.Config.Global.ModelCatalog.Modules
-	// testcases/model_runtime_signals.go (mrDomainThreshold) checks matches against it.
-	if modules.Classifier.Domain.Threshold != 0.01 {
-		t.Fatalf("domain threshold %v, the task-signal case expects 0.01", modules.Classifier.Domain.Threshold)
-	}
-	for _, path := range []string{modules.Classifier.Domain.Mapping, modules.Classifier.PII.Mapping, modules.PromptGuard.Mapping} {
-		if path != "" {
-			t.Fatalf("label map %q: the modules must take their labels from the served cards", path)
 		}
 	}
 }

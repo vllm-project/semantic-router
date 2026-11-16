@@ -22,8 +22,8 @@ func calibrationFixture(t *testing.T) (*NativeRequest, *config.RoutingRecipe, Na
 	}
 	risk := 0.05
 	plan := cascadePlan()
-	plan.Quality = &config.NativeQualityConfig{Type: "calibrated", Calibration: "held-out", Loss: "bundle_error", MaxRisk: &risk}
-	plan.Stages[0].Accept = nil
+	plan.Escalate.Quality = &config.EscalateQuality{Type: "calibrated", Calibration: "held-out", Loss: "bundle_error", MaxRisk: &risk}
+	plan.Escalate.Stages[0].Accept = nil
 	recipe := &config.RoutingRecipe{Name: "native", Profile: config.RoutingProfile{
 		Decisions: []config.Decision{{Name: "classify", Algorithm: plan}},
 	}}
@@ -175,7 +175,7 @@ func TestCalibrationRejectsIncompatibleOrAdaptiveEvidence(t *testing.T) {
 			case "signals":
 				recipe.Profile.Signals.KeywordRules = []config.KeywordRule{{Name: "gate"}}
 			case "judge":
-				recipe.Profile.Decisions[0].Algorithm.Stages = append(recipe.Profile.Decisions[0].Algorithm.Stages, config.CascadeStage{Name: "judge", Kind: "judge", Model: "reviewer"})
+				recipe.Profile.Decisions[0].Algorithm.Escalate.Stages = append(recipe.Profile.Decisions[0].Algorithm.Escalate.Stages, config.EscalateStage{Name: "judge", Kind: "judge", Model: "reviewer"})
 			}
 			if _, err := calibrationLoader(t, recipe, artifact); err == nil {
 				t.Fatal("invalid evidence accepted")
@@ -276,12 +276,12 @@ func TestCalibrationFingerprintsBindSemanticsWithoutDeploymentGeneration(t *test
 	before, _ := CalibrationPolicySHA256(recipe, &recipe.Profile.Decisions[0])
 	recipe.Description = "new explanatory text"
 	recipe.Profile.Decisions[0].Description = "new description"
-	recipe.Profile.Decisions[0].Algorithm.Quality.Calibration = "resource-relocated"
+	recipe.Profile.Decisions[0].Algorithm.Escalate.Quality.Calibration = "resource-relocated"
 	after, _ := CalibrationPolicySHA256(recipe, &recipe.Profile.Decisions[0])
 	if before != after {
 		t.Fatal("non-execution metadata changed calibration policy")
 	}
-	recipe.Profile.Decisions[0].Algorithm.Stages[0].Accept = gate(0.95)
+	recipe.Profile.Decisions[0].Algorithm.Escalate.Stages[0].Accept = gate(0.95)
 	after, _ = CalibrationPolicySHA256(recipe, &recipe.Profile.Decisions[0])
 	if before == after {
 		t.Fatal("prior arrival gate was not bound")

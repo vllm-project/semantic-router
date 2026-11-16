@@ -37,6 +37,22 @@ type HybridSearcher interface {
 	) ([]SearchResult, error)
 }
 
+// LexicalSearcher is an optional interface of a backend that keeps a BM25
+// index of its chunks and searches it without a query embedding, for a
+// local knowledge base that recalls by bm25.
+type LexicalSearcher interface {
+	LexicalSearch(ctx context.Context, vectorStoreID, query string,
+		topK int, threshold float32, filter map[string]interface{},
+	) ([]SearchResult, error)
+}
+
+// ChunkLister is an optional interface of a backend that lists a
+// collection's chunks, most recently inserted first, with how many it holds,
+// for a judge that reads a small knowledge base whole.
+type ChunkLister interface {
+	ListChunks(ctx context.Context, vectorStoreID string, limit int, filter map[string]interface{}) ([]SearchResult, int, error)
+}
+
 // HybridSearchConfig configures hybrid search behavior.
 type HybridSearchConfig struct {
 	// Mode selects the score fusion method: "weighted" (default) or "rrf".
@@ -59,6 +75,12 @@ type HybridSearchConfig struct {
 	NgramSize int `json:"ngram_size,omitempty"`
 }
 
+// The BM25 parameters a query is scored with when its search sets none.
+const (
+	DefaultBM25K1 = 1.2
+	DefaultBM25B  = 0.75
+)
+
 func (c *HybridSearchConfig) applyDefaults() {
 	if c.Mode == "" {
 		c.Mode = "weighted"
@@ -72,10 +94,10 @@ func (c *HybridSearchConfig) applyDefaults() {
 		c.RRFConstant = 60
 	}
 	if c.BM25K1 == 0 {
-		c.BM25K1 = 1.2
+		c.BM25K1 = DefaultBM25K1
 	}
 	if c.BM25B == 0 {
-		c.BM25B = 0.75
+		c.BM25B = DefaultBM25B
 	}
 	if c.NgramSize <= 0 {
 		c.NgramSize = 3

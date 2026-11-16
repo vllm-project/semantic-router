@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: gpt-4o-mini
@@ -8,45 +8,16 @@ providers:
       pricing:
         prompt_per_1m: 0.15
         completion_per_1m: 0.6
-    - name: gpt-4o
-      pricing:
-        prompt_per_1m: 2.5
-        completion_per_1m: 10
-routing:
-  modelCards:
-    - name: gpt-4o-mini
       loras:
         - name: legal-assistant
           description: Legal assistant
     - name: gpt-4o
+      pricing:
+        prompt_per_1m: 2.5
+        completion_per_1m: 10
       loras:
         - name: legal-expert
           description: Legal domain specialist
-  signals:
-    domains:
-      - name: law
-        description: Legal questions and law-related topics
-        mmlu_categories:
-          - law
-      - name: business
-        description: Business and management related queries
-        mmlu_categories:
-          - business
-  decisions:
-    - name: legal_advice
-      description: Legal domain with system prompt
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: law
-      modelRefs:
-        - model: gpt-4o
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-        - type: semantic-cache
 global:
   router:
     config_source: kubernetes
@@ -61,8 +32,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           sample_rate: 1
           duration_buckets:
@@ -92,6 +61,8 @@ global:
           detailed_goroutine_tracking: true
     response_api:
       enabled: false
+      ttl_seconds: 0
+      max_responses: 0
     observability:
       tracing:
         enabled: false
@@ -116,80 +87,52 @@ global:
     ratelimit: {}
     management_api: {}
     router_replay:
-      enabled: false
       ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
-      enabled: false
-      ttl_seconds: 0
-    memory: {}
+      backend_type: memory
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+    memory:
+      default_retrieval_limit: 0
   integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: config/tools_db.json
-      fallback_to_empty: true
     looper: {}
   model_catalog:
-    embeddings:
-      semantic:
-        qwen3_model_path: ""
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-          preload_embeddings: true
-          target_dimension: 768
-          target_layer: 22
-          enable_soft_matching: true
-          top_k: 1
-          min_score_threshold: 0.5
-    system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      domain_classifier: models/mmbert32k-intent-classifier-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
-    modules:
-      safety:
-        safety:
-          use_cpu: false
-        hazard:
-          use_cpu: false
-      prompt_compression:
-        enabled: false
-        max_tokens: 0
-      prompt_guard:
+    embeddings: {}
+    system: {}
+  plugins:
+    - type: response_cache
+      configuration:
         enabled: true
-        threshold: 0.7
-        use_cpu: true
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        model_ref: prompt_guard
-      classifier:
-        domain:
-          threshold: 0.5
-          use_cpu: true
-          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
-          model_ref: domain_classifier
-        mcp:
-          enabled: false
-          transport_type: ""
-        pii:
-          threshold: 0.9
-          use_cpu: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
-          model_ref: pii_classifier
-        preference: {}
-      complexity: {}
-      hallucination_mitigation:
-        fact_check:
-          use_cpu: false
-        detector:
-          use_cpu: false
-      feedback_detector:
-        enabled: false
-        use_cpu: false
-        feedback_mapping_path: ""
-      modality_detector:
-        enabled: false
+        scope: global
+        semantic:
+          match:
+            recall:
+              min_similarity: 0.8
+              top_k: 1
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: law
+          description: Legal questions and law-related topics
+        - name: business
+          description: Business and management related queries
+    decisions:
+      - name: legal_advice
+        description: Legal domain with system prompt
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: law
+        modelRefs:
+          - model: gpt-4o
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+          - type: response_cache

@@ -146,19 +146,22 @@ def test_parse_token_count_overflow_matches_router(value):
 
 def test_user_config_loads_open_ended_final_band():
     config = UserConfig(
-        version="0.3",
-        routing={
-            "signals": {
-                "context": [
-                    {"name": "short", "min_tokens": 0, "max_tokens": "8K"},
-                    {"name": "medium", "min_tokens": 8001, "max_tokens": "64K"},
-                    {"name": "long", "min_tokens": 64001},
-                ]
+        version="v0.5",
+        recipes=[
+            {
+                "name": "default",
+                "signals": {
+                    "context": [
+                        {"name": "short", "min_tokens": 0, "max_tokens": "8K"},
+                        {"name": "medium", "min_tokens": 8001, "max_tokens": "64K"},
+                        {"name": "long", "min_tokens": 64001},
+                    ]
+                },
             }
-        },
+        ],
     )
 
-    bands = config.routing.signals.context
+    bands = config.default_recipe.signals.context
     assert [band.name for band in bands] == ["short", "medium", "long"]
     assert bands[-1].max_tokens is None
 
@@ -166,11 +169,17 @@ def test_user_config_loads_open_ended_final_band():
 def test_user_config_reports_context_band_path_on_error():
     with pytest.raises(ValidationError) as excinfo:
         UserConfig(
-            version="0.3",
-            routing={"signals": {"context": [{"name": "empty"}]}},
+            version="v0.5",
+            recipes=[{"name": "default", "signals": {"context": [{"name": "empty"}]}}],
         )
 
-    assert excinfo.value.errors()[0]["loc"][:4] == ("routing", "signals", "context", 0)
+    assert excinfo.value.errors()[0]["loc"][:5] == (
+        "recipes",
+        0,
+        "signals",
+        "context",
+        0,
+    )
 
 
 @pytest.mark.parametrize("case", router_token_count_cases())
@@ -247,13 +256,14 @@ def test_full_width_digits_rejected_like_router():
 def _context_band_document(scalar: str) -> str:
     """The yaml_cases document the Go test loads, under the default profile."""
     return (
-        "version: '0.3'\n"
-        "routing:\n"
-        "  signals:\n"
-        "    context:\n"
-        "      - name: probe\n"
-        f"        min_tokens: {scalar}\n"
-        "        max_tokens: 100M\n"
+        "version: v0.5\n"
+        "recipes:\n"
+        "  - name: default\n"
+        "    signals:\n"
+        "      context:\n"
+        "        - name: probe\n"
+        f"          min_tokens: {scalar}\n"
+        "          max_tokens: 100M\n"
     )
 
 
@@ -264,7 +274,7 @@ def test_yaml_scalar_reaches_pydantic_as_the_router_reads_it(case):
         "error" in case
     ), "case must set exactly one of value or error"
     data = safe_load_router_config(_context_band_document(case["scalar"]))
-    loaded = data["routing"]["signals"]["context"][0]["min_tokens"]
+    loaded = data["recipes"][0]["signals"]["context"][0]["min_tokens"]
     assert ("" if loaded is None else loaded) == case["text"]
     if "error" in case:
         with pytest.raises(ValidationError, match=f"min_tokens: {case['error']}"):
@@ -272,7 +282,8 @@ def test_yaml_scalar_reaches_pydantic_as_the_router_reads_it(case):
         return
     config = UserConfig(**data)
     assert (
-        parse_token_count(config.routing.signals.context[0].min_tokens) == case["value"]
+        parse_token_count(config.default_recipe.signals.context[0].min_tokens)
+        == case["value"]
     )
 
 
@@ -319,24 +330,23 @@ def test_format_go_float_matches_strconv_g(value, expected):
 
 def test_safe_load_router_config_types_token_counts_only_in_context_rules():
     data = safe_load_router_config(
-        "routing:\n"
-        "  signals:\n"
-        "    context:\n"
-        "      - {name: a, min_tokens: 0123, max_tokens: 1:30}\n"
-        "      - {name: b, min_tokens: ~, max_tokens: 8K}\n"
         "recipes:\n"
+        "  - name: default\n"
+        "    signals:\n"
+        "      context:\n"
+        "        - {name: a, min_tokens: 0123, max_tokens: 1:30}\n"
+        "        - {name: b, min_tokens: ~, max_tokens: 8K}\n"
         "  - name: r\n"
-        "    routing:\n"
-        "      signals:\n"
-        "        context:\n"
-        "          - {name: c, min_tokens: 0o17}\n"
+        "    signals:\n"
+        "      context:\n"
+        "        - {name: c, min_tokens: 0o17}\n"
         "elsewhere: {min_tokens: 0123, other: 1:30}\n"
     )
 
-    default_bands = data["routing"]["signals"]["context"]
+    default_bands = data["recipes"][0]["signals"]["context"]
     assert default_bands[0] == {"name": "a", "min_tokens": "83", "max_tokens": "1:30"}
     assert default_bands[1] == {"name": "b", "min_tokens": None, "max_tokens": "8K"}
-    recipe_bands = data["recipes"][0]["routing"]["signals"]["context"]
+    recipe_bands = data["recipes"][1]["signals"]["context"]
     assert recipe_bands[0] == {"name": "c", "min_tokens": "15"}
     # Keys of the same name outside a context rule keep PyYAML's typing.
     assert data["elsewhere"] == {"min_tokens": 83, "other": 90}
@@ -344,14 +354,10 @@ def test_safe_load_router_config_types_token_counts_only_in_context_rules():
 
 def test_safe_load_router_config_types_explicit_tags_like_yaml_v2():
     data = safe_load_router_config(
-        "routing:\n"
-        "  signals:\n"
-        "    context:\n"
-        "      - {name: a, min_tokens: '0123', max_tokens: \"1:30\"}\n"
-        "      - {name: b, min_tokens: !!str 0123, max_tokens: !!float 0123}\n"
+        "recipes:\n  - name: default\n    signals:\n      context:\n        - {name: a, min_tokens: '0123', max_tokens: \"1:30\"}\n        - {name: b, min_tokens: !!str 0123, max_tokens: !!float 0123}\n"
     )
 
-    quoted, tagged = data["routing"]["signals"]["context"]
+    quoted, tagged = data["recipes"][0]["signals"]["context"]
     assert (quoted["min_tokens"], quoted["max_tokens"]) == ("0123", "1:30")
     # yaml.v2 types the text under any tag but !!str, so !!float 0123 is 83.
     assert (tagged["min_tokens"], tagged["max_tokens"]) == ("0123", "83")
@@ -360,17 +366,10 @@ def test_safe_load_router_config_types_explicit_tags_like_yaml_v2():
 def test_anchor_shared_with_another_field_is_typed_everywhere():
     """yaml.v2 typing follows the scalar, so an alias of 0123 is 83 in every field."""
     data = safe_load_router_config(
-        "version: '0.3'\n"
-        "routing:\n"
-        "  signals:\n"
-        "    context:\n"
-        "      - name: probe\n"
-        "        min_tokens: &count 0123\n"
-        "        max_tokens: 100M\n"
-        "        description: *count\n"
+        "version: v0.5\nrecipes:\n  - name: default\n    signals:\n      context:\n        - name: probe\n          min_tokens: &count 0123\n          max_tokens: 100M\n          description: *count\n"
     )
 
-    rule = UserConfig(**data).routing.signals.context[0]
+    rule = UserConfig(**data).default_recipe.signals.context[0]
     assert (rule.min_tokens, rule.description) == ("83", "83")
 
 
@@ -381,16 +380,10 @@ def test_safe_load_router_config_matches_safe_load_for_empty_document():
 
 def test_merge_key_token_counts_are_typed_like_router():
     data = safe_load_router_config(
-        "version: '0.3'\n"
-        "routing:\n"
-        "  signals:\n"
-        "    context:\n"
-        "      - &base {name: base, min_tokens: 0123, max_tokens: 0x1p10}\n"
-        "      - <<: *base\n"
-        "        name: inherited\n"
+        "version: v0.5\nrecipes:\n  - name: default\n    signals:\n      context:\n        - &base {name: base, min_tokens: 0123, max_tokens: 0x1p10}\n        - !!merge <<: *base\n          name: inherited\n"
     )
 
-    base, inherited = UserConfig(**data).routing.signals.context
+    base, inherited = UserConfig(**data).default_recipe.signals.context
     assert (base.min_tokens, base.max_tokens) == ("83", "0x1p10")
     assert (inherited.min_tokens, inherited.max_tokens) == ("83", "0x1p10")
     assert parse_token_count(inherited.min_tokens) == 83
@@ -398,27 +391,20 @@ def test_merge_key_token_counts_are_typed_like_router():
 
 def test_recipe_context_band_is_validated_as_the_router_reads_it():
     data = safe_load_router_config(
-        "version: '0.3'\n"
-        "recipes:\n"
-        "  - name: long-form\n"
-        "    routing:\n"
-        "      signals:\n"
-        "        context:\n"
-        "          - name: sexagesimal\n"
-        "            min_tokens: 1:30\n"
+        "version: v0.5\nrecipes:\n  - name: default\n  - name: long-form\n    signals:\n      context:\n        - name: sexagesimal\n          min_tokens: 1:30\nentrypoints:\n  - model_names: [vllm-sr/auto]\n    recipe: default\n    default: true\n"
     )
 
     with pytest.raises(ValidationError) as excinfo:
         UserConfig(**data)
 
     error = excinfo.value.errors()[0]
-    assert error["loc"][:6] == ("recipes", 0, "routing", "signals", "context", 0)
+    assert error["loc"][:5] == ("recipes", 1, "signals", "context", 0)
     assert "min_tokens: invalid token count format: 1:30" in error["msg"]
 
 
 def _minimal_config_with_context_band(min_tokens: str, max_tokens: str) -> str:
     return (
-        "version: v0.3\n"
+        "version: v0.5\n"
         "listeners:\n"
         "  - {name: http-8899, address: 0.0.0.0, port: 8899}\n"
         "providers:\n"
@@ -426,19 +412,19 @@ def _minimal_config_with_context_band(min_tokens: str, max_tokens: str) -> str:
         "  models:\n"
         "    - name: demo-model\n"
         "      backend_refs: [{endpoint: 127.0.0.1:8000}]\n"
-        "routing:\n"
-        "  modelCards: [{name: demo-model}]\n"
-        "  signals:\n"
-        "    context:\n"
-        "      - name: probe\n"
-        f"        min_tokens: {min_tokens}\n"
-        f"        max_tokens: {max_tokens}\n"
-        "  decisions:\n"
-        "    - name: default-route\n"
-        "      description: fallback\n"
-        "      priority: 100\n"
-        "      rules: {operator: AND, conditions: []}\n"
-        "      modelRefs: [{model: demo-model}]\n"
+        "recipes:\n"
+        "  - name: default\n"
+        "    signals:\n"
+        "      context:\n"
+        "        - name: probe\n"
+        f"          min_tokens: {min_tokens}\n"
+        f"          max_tokens: {max_tokens}\n"
+        "    decisions:\n"
+        "      - name: default-route\n"
+        "        description: fallback\n"
+        "        priority: 100\n"
+        "        rules: {operator: AND, conditions: []}\n"
+        "        modelRefs: [{model: demo-model}]\n"
     )
 
 
@@ -463,12 +449,12 @@ def test_parse_user_config_reads_yaml_typed_token_count_like_router(tmp_path):
     )
 
     config = parse_user_config(str(config_path), log_summary=False)
-    band = config.routing.signals.context[0]
+    band = config.default_recipe.signals.context[0]
     assert (band.min_tokens, band.max_tokens) == ("83", "64K")
     assert parse_token_count(band.min_tokens) == 83
 
     raw = load_config_file(str(config_path))
-    assert raw["routing"]["signals"]["context"][0]["min_tokens"] == "83"
+    assert raw["recipes"][0]["signals"]["context"][0]["min_tokens"] == "83"
 
 
 # ---------------------------------------------------------------------------
@@ -494,7 +480,9 @@ def test_environment_reference_is_deferred_to_the_router(value):
     assert ContextRule(name="deferred", min_tokens=value).max_tokens is None
 
 
-@pytest.mark.parametrize("value", ["$$5", "5$", "${CTX", "$", "$-5"])
+@pytest.mark.parametrize(
+    "value", ["$$5", "5$", "${CTX", "$", "$-5", "$5", "$ctx_min", "${ctx_min:-8K}"]
+)
 def test_escaped_or_broken_dollar_is_a_literal_on_both_sides(value):
     assert not references_environment(value)
     with pytest.raises(ValidationError, match="min_tokens: invalid token count format"):
@@ -512,7 +500,7 @@ def test_deferred_limit_does_not_skip_the_other_limit():
 
 def test_environment_reference_passes_the_yaml_boundary_untouched():
     data = safe_load_router_config(_context_band_document("${CTX_MIN}"))
-    assert data["routing"]["signals"]["context"][0]["min_tokens"] == "${CTX_MIN}"
+    assert data["recipes"][0]["signals"]["context"][0]["min_tokens"] == "${CTX_MIN}"
 
 
 def test_parse_user_config_warns_for_environment_referenced_limit(tmp_path, caplog):
@@ -524,13 +512,13 @@ def test_parse_user_config_warns_for_environment_referenced_limit(tmp_path, capl
     with caplog.at_level(logging.WARNING, logger="cli.parser"):
         config = parse_user_config(str(config_path), log_summary=False)
 
-    band = config.routing.signals.context[0]
+    band = config.default_recipe.signals.context[0]
     assert (band.min_tokens, band.max_tokens) == ("${CTX_MIN}", "$CTX_MAX")
     assert (
-        "routing.signals.context[probe].min_tokens references the environment: ${CTX_MIN}"
+        "recipes[default].signals.context[probe].min_tokens references the environment: ${CTX_MIN}"
         in caplog.text
     )
     assert (
-        "routing.signals.context[probe].max_tokens references the environment: $CTX_MAX"
+        "recipes[default].signals.context[probe].max_tokens references the environment: $CTX_MAX"
         in caplog.text
     )

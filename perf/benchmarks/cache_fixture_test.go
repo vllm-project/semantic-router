@@ -204,7 +204,8 @@ func runCacheLookupBenchmark(b *testing.B, scenario cacheScenario) {
 			SimilarityThreshold: 0.85, MaxEntries: scenario.entries * 2,
 			TTLSeconds: 0, Enabled: true, EvictionPolicy: cache.LRUEvictionPolicyType,
 			UseHNSW: scenario.hnsw, HNSWM: 16, HNSWEfConstruction: 200, HNSWEfSearch: 50,
-			EmbeddingModel: cacheEmbeddingModelType, EmbeddingProvider: provider,
+			EmbeddingDeployment: cacheEmbeddingDeployment, EmbeddingDimension: cacheEmbeddingDimension,
+			EmbeddingLayer: cacheEmbeddingLayer, EmbeddingProvider: provider,
 		})
 		stores = append(stores, store)
 		pool, err := prepareCacheLookup(store, scenario)

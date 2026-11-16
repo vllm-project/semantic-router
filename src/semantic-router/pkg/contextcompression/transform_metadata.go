@@ -29,15 +29,17 @@ func (request *RequestIR) initializeTransformMetadata(provenance Provenance) {
 }
 
 func messageSource(message *MessageIR, provenance Provenance) ContentSource {
-	if _, ok := provenance.MemoryMessageIndexes[message.Index]; ok {
-		return SourceMemory
-	}
-	rag, history := false, false
+	rag, memory, history := false, false, false
 	ids := append(messageResultIDs(message), messageToolCallIDs(message)...)
 	for _, id := range ids {
-		if _, ok := provenance.RAGToolCallIDs[id]; ok && id != "" {
+		_, injectedRAG := provenance.RAGToolCallIDs[id]
+		_, injectedMemory := provenance.MemoryToolCallIDs[id]
+		switch {
+		case id != "" && injectedRAG:
 			rag = true
-		} else {
+		case id != "" && injectedMemory:
+			memory = true
+		default:
 			history = true
 		}
 	}
@@ -47,11 +49,13 @@ func messageSource(message *MessageIR, provenance Provenance) ContentSource {
 		}
 	}
 
-	if rag && history {
+	switch {
+	case (rag || memory) && history, rag && memory:
 		return SourceMixed
-	}
-	if rag {
+	case rag:
 		return SourceRAG
+	case memory:
+		return SourceMemory
 	}
 	return SourceHistory
 }
@@ -139,7 +143,7 @@ func (request *RequestIR) protectCurrentTurn(turn int) {
 
 func (request *RequestIR) attachOriginalHistory(provenance Provenance) {
 	request.originalHistory = provenance.OriginalHistory
-	if request.originalHistory == nil && len(provenance.RAGToolCallIDs) == 0 && len(provenance.MemoryMessageIndexes) == 0 {
+	if request.originalHistory == nil && len(provenance.RAGToolCallIDs) == 0 && len(provenance.MemoryToolCallIDs) == 0 {
 		request.originalHistory = CaptureHistory(request.Semantic)
 	}
 }

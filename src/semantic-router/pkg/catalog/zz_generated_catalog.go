@@ -7642,6 +7642,510 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-5-5-max-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.899
+      },
+      "model": "anthropic/claude-opus-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "trials": 5,
+        "variant": "Claude Opus 5.5"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-5-5-max-frontiercode-1-1-main@1.0.0",
+      "metrics": {
+        "score": 0.544
+      },
+      "model": "anthropic/claude-opus-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "subset": "main",
+        "thinking_mode": "adaptive",
+        "trials": 5,
+        "variant": "Claude Opus 5.5"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-5-5-max-terminal-bench-4@1.0.0",
+      "metrics": {
+        "resolved": 0.648
+      },
+      "model": "anthropic/claude-opus-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "harness": "Claude Code --bare",
+        "reasoning_effort": "max",
+        "safeguards": "enabled with default server-side fallback",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "trials": 5,
+        "variant": "Claude Opus 5.5"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-5-5-max-humanitys-last-exam-no-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.644
+      },
+      "model": "anthropic/claude-opus-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "no_tools",
+        "trials": 5,
+        "variant": "Claude Opus 5.5"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-5-5-max-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.677
+      },
+      "model": "anthropic/claude-opus-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "trials": 5,
+        "variant": "Claude Opus 5.5"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-5-5-max-deep-swe-1-1@1.0.0",
+      "metrics": {
+        "resolved": 0.742
+      },
+      "model": "anthropic/claude-opus-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "trials": 5,
+        "variant": "Claude Opus 5.5"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-opus-5-5-max-automation-bench@1.0.6",
+      "metrics": {
+        "score": 0.4
+      },
+      "model": "anthropic/claude-opus-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "max",
+        "run_by": "Zapier",
+        "source_kind": "official_system_card",
+        "subset": "private held-out",
+        "thinking_mode": "adaptive",
+        "variant": "Claude Opus 5.5"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-5-max-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.813
+      },
+      "model": "anthropic/claude-sonnet-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "trials": 5,
+        "variant": "Claude Sonnet 5.5"
+      }
+    },
+    {
+      "benchmark": "cognition/frontiercode@1.1.0",
+      "benchmark_profile": "main",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-5-max-frontiercode-1-1-main@1.0.0",
+      "metrics": {
+        "score": 0.462
+      },
+      "model": "anthropic/claude-sonnet-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "subset": "main",
+        "thinking_mode": "adaptive",
+        "variant": "Claude Sonnet 5.5"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-5-max-terminal-bench-4@1.0.0",
+      "metrics": {
+        "resolved": 0.706
+      },
+      "model": "anthropic/claude-sonnet-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "harness": "Claude Code --bare",
+        "reasoning_effort": "max",
+        "safeguards": "enabled with default server-side fallback",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "trials": 5,
+        "variant": "Claude Sonnet 5.5"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-5-max-humanitys-last-exam-no-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.569
+      },
+      "model": "anthropic/claude-sonnet-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "no_tools",
+        "trials": 5,
+        "variant": "Claude Sonnet 5.5"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-5-max-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.645
+      },
+      "model": "anthropic/claude-sonnet-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "trials": 5,
+        "variant": "Claude Sonnet 5.5"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-sonnet-5-5-max-automation-bench@1.0.6",
+      "metrics": {
+        "score": 0.447
+      },
+      "model": "anthropic/claude-sonnet-5.5",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "fallbacks": "API default",
+        "reasoning_effort": "max",
+        "run_by": "Zapier",
+        "source_kind": "official_system_card",
+        "subset": "private",
+        "thinking_mode": "adaptive",
+        "variant": "Claude Sonnet 5.5"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-fable-5-2-max-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.93
+      },
+      "model": "anthropic/claude-fable-5.2",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "trials": 5,
+        "variant": "Claude Fable 5.2"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-fable-5-2-max-terminal-bench-4@1.0.0",
+      "metrics": {
+        "resolved": 0.676
+      },
+      "model": "anthropic/claude-fable-5.2",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "harness": "Claude Code --bare",
+        "reasoning_effort": "max",
+        "safeguards": "enabled with default server-side fallback",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "trials": 10,
+        "variant": "Claude Fable 5.2"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-fable-5-2-max-humanitys-last-exam-no-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.732
+      },
+      "model": "anthropic/claude-fable-5.2",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "no_tools",
+        "trials": 5,
+        "variant": "Claude Fable 5.2"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-fable-5-2-max-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.742
+      },
+      "model": "anthropic/claude-fable-5.2",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "tool_policy": "with_tools",
+        "trials": 5,
+        "variant": "Claude Fable 5.2"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-fable-5-2-max-deep-swe-1-1@1.0.0",
+      "metrics": {
+        "resolved": 0.743
+      },
+      "model": "anthropic/claude-fable-5.2",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_source": "table_8_1_a_standard_configuration",
+        "reasoning_effort": "max",
+        "source_kind": "official_system_card",
+        "thinking_mode": "adaptive",
+        "trials": 5,
+        "variant": "Claude Fable 5.2"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf",
+        "verification": "claimed"
+      },
+      "id": "anthropic/claude-fable-5-2-max-automation-bench@1.0.6",
+      "metrics": {
+        "score": 0.514
+      },
+      "model": "anthropic/claude-fable-5.2",
+      "observed_at": "2026-11-16",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "fallbacks": "API default",
+        "reasoning_effort": "max",
+        "run_by": "Zapier",
+        "source_kind": "official_system_card",
+        "subset": "private held-out",
+        "thinking_mode": "adaptive",
+        "variant": "Claude Fable 5.2"
+      }
+    },
+    {
       "benchmark": "tau-bench/tau3@1.0.0",
       "benchmark_profile": "published-avg-at-4",
       "evidence": {
@@ -43305,6 +43809,936 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "default",
       "score": null,
       "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "anthropic/claude-fable-5.2",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "anthropic/claude-sonnet-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "anthropic/claude-opus-5.5",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
@@ -99724,6 +101158,156 @@ const builtInCatalogJSON = `{
         "vision",
         "long_context"
       ],
+      "description": "Anthropic Fable model for demanding reasoning and long-horizon agentic work.",
+      "display_name": "Claude Fable 5.2",
+      "distribution": {
+        "source": "https://platform.claude.com/docs/en/models/fable-5-2/overview",
+        "type": "proprietary_api"
+      },
+      "family": "claude-fable",
+      "id": "anthropic/claude-fable-5.2",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:anthropic",
+        "monochrome": true,
+        "monogram": "A"
+      },
+      "publisher": "Anthropic",
+      "released_at": "2026-11-09",
+      "tags": [
+        "frontier",
+        "proprietary",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Anthropic",
+        "source": "https://platform.claude.com/docs/en/models/fable-5-2/overview",
+        "status": "claimed",
+        "verified_at": "2026-11-16"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "long_context"
+      ],
+      "description": "Anthropic Sonnet model combining speed and intelligence for coding, agents, and enterprise work.",
+      "display_name": "Claude Sonnet 5.5",
+      "distribution": {
+        "source": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+        "type": "proprietary_api"
+      },
+      "family": "claude-sonnet",
+      "id": "anthropic/claude-sonnet-5.5",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:anthropic",
+        "monochrome": true,
+        "monogram": "A"
+      },
+      "publisher": "Anthropic",
+      "released_at": "2026-09-28",
+      "tags": [
+        "frontier",
+        "proprietary",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Anthropic",
+        "source": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+        "status": "claimed",
+        "verified_at": "2026-11-16"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "long_context"
+      ],
+      "description": "Anthropic Opus model for long-running agentic coding and knowledge work.",
+      "display_name": "Claude Opus 5.5",
+      "distribution": {
+        "source": "https://platform.claude.com/docs/en/models/opus-5-5/overview",
+        "type": "proprietary_api"
+      },
+      "family": "claude-opus",
+      "id": "anthropic/claude-opus-5.5",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:anthropic",
+        "monochrome": true,
+        "monogram": "A"
+      },
+      "publisher": "Anthropic",
+      "released_at": "2026-09-22",
+      "tags": [
+        "frontier",
+        "proprietary",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Anthropic",
+        "source": "https://platform.claude.com/docs/en/models/opus-5-5/overview",
+        "status": "claimed",
+        "verified_at": "2026-11-16"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "long_context"
+      ],
       "description": "Anthropic high-capability model with extended context and output limits.",
       "display_name": "Claude Fable 5.1",
       "distribution": {
@@ -105875,7 +107459,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -105965,7 +107549,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106058,7 +107642,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106170,7 +107754,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106240,7 +107824,7 @@ const builtInCatalogJSON = `{
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106318,6 +107902,27 @@ const builtInCatalogJSON = `{
         }
       ],
       "wire_format": "openai.responses.v1"
+    },
+    {
+      "capabilities": [
+        "image_generation"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "OpenAI Images",
+      "id": "openai/images@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/images/generations"
+        },
+        {
+          "id": "list_models",
+          "method": "GET",
+          "path": "/v1/models"
+        }
+      ],
+      "wire_format": "openai.images.v1"
     },
     {
       "capabilities": [
@@ -106492,9 +108097,83 @@ const builtInCatalogJSON = `{
       "id": "anthropic",
       "models": [
         {
+          "catalog": "anthropic/claude-fable-5.2",
+          "id": "claude-fable-5-2",
+          "lifecycle": "active",
+          "pricing": {
+            "cache_write_1h_per_1m": 16.0,
+            "cache_write_per_1m": 10.0,
+            "cached_input_per_1m": 0.2,
+            "completion_per_1m": 40.0,
+            "currency": "USD",
+            "prompt_per_1m": 8.0
+          },
+          "protocols": [
+            "anthropic/messages@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://platform.claude.com/docs/en/models/fable-5-2/overview",
+            "status": "claimed",
+            "verified_at": "2026-11-16"
+          }
+        },
+        {
+          "catalog": "anthropic/claude-sonnet-5.5",
+          "id": "claude-sonnet-5-5",
+          "lifecycle": "active",
+          "pricing": {
+            "cache_write_1h_per_1m": 4.0,
+            "cache_write_per_1m": 2.5,
+            "cached_input_per_1m": 0.1,
+            "completion_per_1m": 10.0,
+            "currency": "USD",
+            "prompt_per_1m": 2.0
+          },
+          "protocols": [
+            "anthropic/messages@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://platform.claude.com/docs/en/models/sonnet-5-5/overview",
+            "status": "claimed",
+            "verified_at": "2026-11-16"
+          }
+        },
+        {
+          "catalog": "anthropic/claude-opus-5.5",
+          "id": "claude-opus-5-5",
+          "lifecycle": "active",
+          "pricing": {
+            "cache_write_1h_per_1m": 8.0,
+            "cache_write_per_1m": 5.0,
+            "cached_input_per_1m": 0.2,
+            "completion_per_1m": 20.0,
+            "currency": "USD",
+            "prompt_per_1m": 4.0
+          },
+          "protocols": [
+            "anthropic/messages@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://platform.claude.com/docs/en/models/opus-5-5/overview",
+            "status": "claimed",
+            "verified_at": "2026-11-16"
+          }
+        },
+        {
           "catalog": "anthropic/claude-sonnet-5",
           "id": "claude-sonnet-5",
           "lifecycle": "active",
+          "pricing": {
+            "cache_write_1h_per_1m": 4.0,
+            "cache_write_per_1m": 2.5,
+            "cached_input_per_1m": 0.2,
+            "completion_per_1m": 10.0,
+            "currency": "USD",
+            "prompt_per_1m": 2.0
+          },
           "protocols": [
             "anthropic/messages@1"
           ],
@@ -106509,6 +108188,14 @@ const builtInCatalogJSON = `{
           "catalog": "anthropic/claude-opus-4.8",
           "id": "claude-opus-4-8",
           "lifecycle": "active",
+          "pricing": {
+            "cache_write_1h_per_1m": 10.0,
+            "cache_write_per_1m": 6.25,
+            "cached_input_per_1m": 0.5,
+            "completion_per_1m": 25.0,
+            "currency": "USD",
+            "prompt_per_1m": 5.0
+          },
           "protocols": [
             "anthropic/messages@1"
           ],
@@ -106523,6 +108210,14 @@ const builtInCatalogJSON = `{
           "catalog": "anthropic/claude-opus-5",
           "id": "claude-opus-5",
           "lifecycle": "active",
+          "pricing": {
+            "cache_write_1h_per_1m": 10.0,
+            "cache_write_per_1m": 6.25,
+            "cached_input_per_1m": 0.5,
+            "completion_per_1m": 25.0,
+            "currency": "USD",
+            "prompt_per_1m": 5.0
+          },
           "protocols": [
             "anthropic/messages@1"
           ],
@@ -106537,6 +108232,14 @@ const builtInCatalogJSON = `{
           "catalog": "anthropic/claude-fable-5.1",
           "id": "claude-fable-5-1",
           "lifecycle": "active",
+          "pricing": {
+            "cache_write_1h_per_1m": 20.0,
+            "cache_write_per_1m": 12.5,
+            "cached_input_per_1m": 0.25,
+            "completion_per_1m": 50.0,
+            "currency": "USD",
+            "prompt_per_1m": 10.0
+          },
           "protocols": [
             "anthropic/messages@1"
           ],
@@ -106551,6 +108254,14 @@ const builtInCatalogJSON = `{
           "catalog": "anthropic/claude-fable-5",
           "id": "claude-fable-5",
           "lifecycle": "active",
+          "pricing": {
+            "cache_write_1h_per_1m": 20.0,
+            "cache_write_per_1m": 12.5,
+            "cached_input_per_1m": 1.0,
+            "completion_per_1m": 50.0,
+            "currency": "USD",
+            "prompt_per_1m": 10.0
+          },
           "protocols": [
             "anthropic/messages@1"
           ],
@@ -106568,6 +108279,33 @@ const builtInCatalogJSON = `{
         "monochrome": true,
         "monogram": "A"
       },
+      "price_list": [
+        {
+          "id": "claude-haiku-5-5",
+          "pricing": {
+            "cache_write_1h_per_1m": 0.2,
+            "cache_write_per_1m": 0.125,
+            "cached_input_per_1m": 0.01,
+            "completion_per_1m": 0.5,
+            "currency": "USD",
+            "prompt_per_1m": 0.1
+          },
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 5.0,
+              "cached_input_multiplier": 5.0,
+              "completion_multiplier": 5.0,
+              "input_threshold_tokens": 100000,
+              "prompt_multiplier": 5.0
+            }
+          },
+          "verification": {
+            "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+            "status": "claimed",
+            "verified_at": "2026-11-16"
+          }
+        }
+      ],
       "protocols": [
         "anthropic/messages@1"
       ],
@@ -108513,14 +110251,17 @@ const builtInCatalogJSON = `{
       },
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "openai/images@1"
       ],
       "support_tier": "compatible",
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models"
       ]
     },
     {
@@ -108613,11 +110354,25 @@ const builtInCatalogJSON = `{
           "catalog": "openai/gpt-5.4",
           "id": "gpt-5.4",
           "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.25,
+            "completion_per_1m": 15.0,
+            "currency": "USD",
+            "prompt_per_1m": 2.5
+          },
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
           "relationship": "first_party",
+          "restrictions": {
+            "long_context_pricing": {
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            }
+          },
           "verification": {
             "source": "https://developers.openai.com/api/docs/models/gpt-5.4",
             "status": "claimed",
@@ -108628,6 +110383,12 @@ const builtInCatalogJSON = `{
           "catalog": "openai/gpt-5.4-mini",
           "id": "gpt-5.4-mini",
           "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.075,
+            "completion_per_1m": 4.5,
+            "currency": "USD",
+            "prompt_per_1m": 0.75
+          },
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
@@ -108643,11 +110404,25 @@ const builtInCatalogJSON = `{
           "catalog": "openai/gpt-5.5",
           "id": "gpt-5.5",
           "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.5,
+            "completion_per_1m": 30.0,
+            "currency": "USD",
+            "prompt_per_1m": 5.0
+          },
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
           "relationship": "first_party",
+          "restrictions": {
+            "long_context_pricing": {
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            }
+          },
           "verification": {
             "source": "https://developers.openai.com/api/docs/models/gpt-5.5",
             "status": "claimed",
@@ -108658,11 +110433,27 @@ const builtInCatalogJSON = `{
           "catalog": "openai/gpt-5.6-sol",
           "id": "gpt-5.6-sol",
           "lifecycle": "active",
+          "pricing": {
+            "cache_write_per_1m": 5.0,
+            "cached_input_per_1m": 0.4,
+            "completion_per_1m": 20.0,
+            "currency": "USD",
+            "prompt_per_1m": 4.0
+          },
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
           "relationship": "first_party",
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            }
+          },
           "verification": {
             "source": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
             "status": "claimed",
@@ -108673,11 +110464,27 @@ const builtInCatalogJSON = `{
           "catalog": "openai/gpt-5.6-terra",
           "id": "gpt-5.6-terra",
           "lifecycle": "active",
+          "pricing": {
+            "cache_write_per_1m": 2.5,
+            "cached_input_per_1m": 0.2,
+            "completion_per_1m": 12.0,
+            "currency": "USD",
+            "prompt_per_1m": 2.0
+          },
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
           "relationship": "first_party",
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            }
+          },
           "verification": {
             "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
             "status": "claimed",
@@ -108688,11 +110495,27 @@ const builtInCatalogJSON = `{
           "catalog": "openai/gpt-5.6-luna",
           "id": "gpt-5.6-luna",
           "lifecycle": "active",
+          "pricing": {
+            "cache_write_per_1m": 0.25,
+            "cached_input_per_1m": 0.02,
+            "completion_per_1m": 1.2,
+            "currency": "USD",
+            "prompt_per_1m": 0.2
+          },
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
           "relationship": "first_party",
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            }
+          },
           "verification": {
             "source": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
             "status": "claimed",
@@ -108706,9 +110529,108 @@ const builtInCatalogJSON = `{
         "monochrome": true,
         "monogram": "O"
       },
+      "price_list": [
+        {
+          "id": "gpt-6.1-sol",
+          "pricing": {
+            "cache_write_per_1m": 2.5,
+            "cached_input_per_1m": 0.1,
+            "completion_per_1m": 10.0,
+            "currency": "USD",
+            "prompt_per_1m": 2.0
+          },
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            }
+          },
+          "verification": {
+            "source": "https://developers.openai.com/api/docs/pricing",
+            "status": "claimed",
+            "verified_at": "2026-11-16"
+          }
+        },
+        {
+          "id": "gpt-6.1-terra",
+          "pricing": {
+            "cache_write_per_1m": 1.25,
+            "cached_input_per_1m": 0.05,
+            "completion_per_1m": 5.0,
+            "currency": "USD",
+            "prompt_per_1m": 1.0
+          },
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            }
+          },
+          "verification": {
+            "source": "https://developers.openai.com/api/docs/pricing",
+            "status": "claimed",
+            "verified_at": "2026-11-16"
+          }
+        },
+        {
+          "id": "gpt-6-sol",
+          "pricing": {
+            "cache_write_per_1m": 2.5,
+            "cached_input_per_1m": 0.2,
+            "completion_per_1m": 10.0,
+            "currency": "USD",
+            "prompt_per_1m": 2.0
+          },
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            }
+          },
+          "verification": {
+            "source": "https://developers.openai.com/api/docs/pricing",
+            "status": "claimed",
+            "verified_at": "2026-11-16"
+          }
+        },
+        {
+          "id": "gpt-6-luna",
+          "pricing": {
+            "cache_write_per_1m": 0.125,
+            "cached_input_per_1m": 0.01,
+            "completion_per_1m": 0.5,
+            "currency": "USD",
+            "prompt_per_1m": 0.1
+          },
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            }
+          },
+          "verification": {
+            "source": "https://developers.openai.com/api/docs/pricing",
+            "status": "claimed",
+            "verified_at": "2026-11-16"
+          }
+        }
+      ],
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "openai/images@1"
       ],
       "reasoning_transport": "top_level_effort",
       "support_tier": "native",
@@ -108716,7 +110638,9 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models"
       ]
     },
     {
@@ -111500,6 +113424,7 @@ const builtInCatalogJSON = `{
       "protocols": [
         "openai/chat-completions@1",
         "openai/responses@1",
+        "openai/images@1",
         "anthropic/messages@1"
       ],
       "support_tier": "runtime",
@@ -111508,6 +113433,8 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
         "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models",
         "anthropic/messages@1#create",
         "anthropic/messages@1#list_models"
       ]

@@ -6,7 +6,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 - Router-side config schema and shared config files consumed directly by the runtime.
 - The canonical Go types and routing registries generate the JSON schema,
-  `src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`, and
+  `src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`, and
   `dashboard/frontend/src/generated/routerConfigContract.ts`.
   CLI and container builds stage that artifact without tracked mirrors; the
   Dashboard frontend imports it directly. Do not maintain a parallel field or
@@ -159,8 +159,9 @@ This document defines the project-level surfaces used by skills, reports, and va
   `.github/workflows/**`.
 - Contributor prose lives in `AGENTS.md`, `CONTRIBUTING.md`, this directory,
   and the nearest local `AGENTS.md`. It does not duplicate executable routing.
-- `make generated-contract-check` recomputes config JSON/TypeScript, OpenAPI
-  JSON and its endpoint index, model catalogs, CLI/CRD references, the configuration
+- `make generated-contract-check` recomputes config JSON/TypeScript, the
+  header reference and Dashboard header constants, OpenAPI JSON and its
+  endpoint index, model catalogs, CLI/CRD references, the configuration
   catalog, and the public operations skill with all Markdown references.
   It fails on drift without rewriting authored or published files.
   `make generated-contract-generate` refreshes those artifacts in dependency

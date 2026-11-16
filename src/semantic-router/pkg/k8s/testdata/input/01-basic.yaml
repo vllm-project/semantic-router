@@ -39,14 +39,10 @@ spec:
         operator: "OR"
         keywords: ["urgent", "emergency", "asap"]
         caseSensitive: false
-    embeddings:
       - name: "tech_support"
-        threshold: 0.75
-        candidates:
-          - "I need help with technical issues"
-          - "Can you help me troubleshoot this problem?"
-          - "Something is not working correctly"
-        aggregationMethod: "max"
+        operator: "OR"
+        keywords: ["I need help with technical issues", "Can you help me troubleshoot this problem?", "Something is not working correctly"]
+        caseSensitive: false
     domains:
       - name: "computer science"
         description: "Computer science and programming"
@@ -62,7 +58,7 @@ spec:
         conditions:
           - type: "keyword"
             name: "urgent"
-          - type: "embedding"
+          - type: "keyword"
             name: "tech_support"
       modelRefs:
         - model: "qwen-2.5-72b"
@@ -70,10 +66,10 @@ spec:
           useReasoning: true
           reasoningEffort: "high"
       plugins:
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.9
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.9}}}
 
     - name: "general_tech"
       priority: 50
@@ -81,7 +77,7 @@ spec:
       signals:
         operator: "OR"
         conditions:
-          - type: "embedding"
+          - type: "keyword"
             name: "tech_support"
           - type: "domain"
             name: "computer science"

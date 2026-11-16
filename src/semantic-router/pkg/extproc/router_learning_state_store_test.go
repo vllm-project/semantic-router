@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"errors"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -64,18 +63,16 @@ func TestBuildRouterComponentsReplayFailurePreservesPublishedSessionStore(t *tes
 		newRouterSessionStateStore = originalStoreBuilder
 	})
 
-	cfg := newCoreSignalMappingGateConfig(t)
+	cfg := newDefaultRouteConfig()
 	cfg.RouterLearning.StateStore = config.RouterLearningStateStoreConfig{
 		Backend: "redis",
 		Redis: config.RouterLearningRedisStateStoreConfig{
 			Address: "candidate.invalid:6379",
 		},
 	}
-	cfg.RouterReplay = config.RouterReplayConfig{
-		Enabled:      true,
-		StoreBackend: "redis",
-	}
+	cfg.RouterReplay = config.RouterReplayConfig{StoreBackend: "redis"}
 	cfg.IntelligentRouting.Decisions[0].ModelRefs = []config.ModelRef{{Model: "model-a"}}
+	withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": true}))
 
 	_, err := buildRouterComponents(cfg)
 	if err == nil || !strings.Contains(err.Error(), "redis config required") {
@@ -101,7 +98,7 @@ func TestBuildRouterComponentsReplayFailurePreservesPublishedSessionStore(t *tes
 	}
 }
 
-func TestReloadWarmupFailurePreservesPublishedSessionStore(t *testing.T) {
+func TestRejectedReloadCandidatePreservesPublishedSessionStore(t *testing.T) {
 	restoreReloadSeams := stubReloadSeams(t)
 	t.Cleanup(restoreReloadSeams)
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
@@ -139,21 +136,19 @@ func TestReloadWarmupFailurePreservesPublishedSessionStore(t *testing.T) {
 	})
 
 	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
+		server.lifecycle.beginShutdown()
 		return candidateRouter, nil
 	}
-	warmupReloadRouter = func(*OpenAIRouter) error {
-		return errors.New("injected warmup failure")
-	}
 	replaceReloadConfig = func(*config.RouterConfig) {
-		t.Fatal("replaceReloadConfig() called after warmup failure")
+		t.Fatal("replaceReloadConfig() called for a rejected candidate")
 	}
 
 	err := server.reloadRouterFromConfig("kubernetes", "/unused/config.yaml", candidateCfg)
-	if err == nil || !strings.Contains(err.Error(), "injected warmup failure") {
-		t.Fatalf("reloadRouterFromConfig() error = %v, want injected warmup failure", err)
+	if err == nil || !strings.Contains(err.Error(), errServerShuttingDown.Error()) {
+		t.Fatalf("reloadRouterFromConfig() error = %v, want the candidate rejected at shutdown", err)
 	}
 	if got := server.service.GetRouter(); got != oldRouter {
-		t.Fatalf("router changed on warmup failure: got %p, want %p", got, oldRouter)
+		t.Fatalf("router changed for a rejected candidate: got %p, want %p", got, oldRouter)
 	}
 	if got := activeStore.closeCalls.Load(); got != 0 {
 		t.Fatalf("active store close calls = %d, want 0", got)
@@ -163,12 +158,12 @@ func TestReloadWarmupFailurePreservesPublishedSessionStore(t *testing.T) {
 	}
 
 	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
-		SessionID:     "active-after-warmup-failure",
+		SessionID:     "active-after-rejected-candidate",
 		SelectedModel: "model-a",
 		Timestamp:     time.Now(),
 	})
 	if got := activeStore.saveCalls.Load(); got != 1 {
-		t.Fatalf("active store save calls = %d, want 1 after warmup failure", got)
+		t.Fatalf("active store save calls = %d, want 1 after a rejected candidate", got)
 	}
 	if got := candidateStore.saveCalls.Load(); got != 0 {
 		t.Fatalf("candidate store save calls = %d, want 0", got)

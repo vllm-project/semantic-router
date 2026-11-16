@@ -21,15 +21,17 @@ func TestConvertDecisionPreservesNestedContextCompression(t *testing.T) {
 	decision, err := converter.convertDecision(v1alpha1.Decision{
 		Name: "compressed",
 		Plugins: []v1alpha1.DecisionPlugin{{
-			Type: config.DecisionPluginContextCompression,
+			Type: config.DecisionPluginContext,
 			Configuration: &runtime.RawExtension{Raw: []byte(`{
 				"enabled": true,
-				"mode": "auto",
-				"targets": {
-					"tool_outputs": {
-						"mode": "extractive",
-						"min_tokens": 2000,
-						"target_tokens": 1000
+				"compress": {
+					"mode": "auto",
+					"targets": {
+						"tool_outputs": {
+							"mode": "extractive",
+							"min_tokens": 2000,
+							"target_tokens": 1000
+						}
 					}
 				}
 			}`)},
@@ -37,7 +39,7 @@ func TestConvertDecisionPreservesNestedContextCompression(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, decision.Plugins, 1)
-	var pluginConfig config.ContextCompressionPluginConfig
+	var pluginConfig config.ContextPluginConfig
 	require.NoError(
 		t,
 		config.UnmarshalPluginConfig(
@@ -45,8 +47,9 @@ func TestConvertDecisionPreservesNestedContextCompression(t *testing.T) {
 			&pluginConfig,
 		),
 	)
-	require.NotNil(t, pluginConfig.Targets)
-	assert.Equal(t, 1000, pluginConfig.Targets.ToolOutputs.TargetTokens)
+	require.NotNil(t, pluginConfig.Compress)
+	require.NotNil(t, pluginConfig.Compress.Targets)
+	assert.Equal(t, 1000, pluginConfig.Compress.Targets.ToolOutputs.TargetTokens)
 }
 
 func TestConvertDecisionPreservesOnUnknown(t *testing.T) {
@@ -311,39 +314,42 @@ func TestConvertProviderMetadataUsesCatalogAndNestedReasoning(t *testing.T) {
 	assert.Equal(t, "high", converted[1].Reasoning.Default)
 }
 
-func TestConvertRoutingModelCardsUsesCatalogIdentity(t *testing.T) {
-	cards := convertRoutingModelCards([]v1alpha1.ModelConfig{
+func TestConvertProviderMetadataDeclaresEveryPoolModel(t *testing.T) {
+	models := convertProviderMetadata([]v1alpha1.ModelConfig{
 		{Name: "frontier", Catalog: "vendor/reasoner-v1", LoRAs: []v1alpha1.LoRAConfig{{Name: "expert"}}},
 		{Name: "private-model"},
 	})
 
-	require.Len(t, cards, 2)
-	assert.Equal(t, "vendor/reasoner-v1", cards[0].Name)
-	require.Len(t, cards[0].LoRAs, 1)
-	assert.Equal(t, "expert", cards[0].LoRAs[0].Name)
-	assert.Equal(t, "private-model", cards[1].Name)
+	require.Len(t, models, 2)
+	assert.Equal(t, "frontier", models[0].Name)
+	assert.Equal(t, "vendor/reasoner-v1", models[0].Catalog)
+	require.Len(t, models[0].LoRAs, 1)
+	assert.Equal(t, "expert", models[0].LoRAs[0].Name)
+	assert.Equal(t, "private-model", models[1].Name)
 }
 
-func TestCRDConverterConvertsEventSignals(t *testing.T) {
+func TestCRDConverterConvertsKeywordCounts(t *testing.T) {
 	pool := testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"})
+	four, sixteen := 4.0, 16.0
 	route := &v1alpha1.IntelligentRoute{
 		Spec: v1alpha1.IntelligentRouteSpec{
 			Signals: v1alpha1.Signals{
-				Events: []v1alpha1.EventSignal{
+				Keywords: []v1alpha1.KeywordSignal{
 					{
-						Name:        "critical_payment_event",
-						Description: "Critical payment incident payload.",
-						EventTypes:  []string{"payment_failed"},
-						Severities:  []string{"critical"},
-						ActionCodes: []string{"TXN_DECLINE"},
-						Temporal:    true,
+						Name:        "many_questions",
+						Description: "Prompts that contain many explicit questions.",
+						Operator:    "OR",
+						Method:      "regex",
+						Keywords:    []string{`[?？]`},
+						Count:       &v1alpha1.NumericPredicate{GTE: &four},
 					},
+					{Name: "constraint_dense", Operator: "OR", Keywords: []string{"at most"}, Density: &v1alpha1.NumericPredicate{GT: &sixteen}},
 				},
 			},
 			Decisions: []v1alpha1.Decision{
 				testDecision(
 					[]v1alpha1.ModelRef{{Model: "test-model"}},
-					v1alpha1.SignalCondition{Type: "event", Name: "critical_payment_event"},
+					v1alpha1.SignalCondition{Type: "keyword", Name: "many_questions"},
 				),
 			},
 		},
@@ -354,15 +360,14 @@ func TestCRDConverterConvertsEventSignals(t *testing.T) {
 
 	outputConfig, err := NewCRDConverter().Convert(pool, route, &config.CanonicalConfig{})
 	require.NoError(t, err)
-	require.Len(t, outputConfig.Routing.Signals.EventRules, 1)
+	require.Len(t, outputConfig.Recipes[0].Signals.Keywords, 2)
 
-	eventRule := outputConfig.Routing.Signals.EventRules[0]
-	assert.Equal(t, "critical_payment_event", eventRule.Name)
-	assert.Equal(t, "Critical payment incident payload.", eventRule.Description)
-	assert.Equal(t, []string{"payment_failed"}, eventRule.EventTypes)
-	assert.Equal(t, []string{"critical"}, eventRule.Severities)
-	assert.Equal(t, []string{"TXN_DECLINE"}, eventRule.ActionCodes)
-	assert.True(t, eventRule.Temporal)
+	counted, dense := outputConfig.Recipes[0].Signals.Keywords[0], outputConfig.Recipes[0].Signals.Keywords[1]
+	assert.Equal(t, "Prompts that contain many explicit questions.", counted.Description)
+	assert.Equal(t, "regex", counted.Method)
+	assert.Equal(t, config.NumericPredicate{GTE: &four}, *counted.Count)
+	assert.Nil(t, counted.Density)
+	assert.Equal(t, config.NumericPredicate{GT: &sixteen}, *dense.Density)
 }
 
 // TestCRDValidationErrors tests that validation catches various error conditions
@@ -411,22 +416,25 @@ func coreCRDValidationErrorCases() []crdValidationErrorCase {
 			wantError: "references unknown keyword signal: nonexistent",
 		},
 		{
-			name: "UnknownEventSignalReference",
+			name: "UnknownConversationSignalReference",
 			pool: testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"}),
 			route: &v1alpha1.IntelligentRoute{
 				Spec: v1alpha1.IntelligentRouteSpec{
 					Signals: v1alpha1.Signals{
-						Events: []v1alpha1.EventSignal{{Name: "critical_event"}},
+						Conversation: []v1alpha1.ConversationSignal{{
+							Name:    "has_tools",
+							Feature: v1alpha1.ConversationCRDFeature{Type: "exists", Source: v1alpha1.ConversationCRDSource{Type: "tool_definition"}},
+						}},
 					},
 					Decisions: []v1alpha1.Decision{
 						testDecision(
 							[]v1alpha1.ModelRef{{Model: "test-model"}},
-							v1alpha1.SignalCondition{Type: "event", Name: "missing_event"},
+							v1alpha1.SignalCondition{Type: "conversation", Name: "missing_conversation"},
 						),
 					},
 				},
 			},
-			wantError: "references unknown event signal: missing_event",
+			wantError: "references unknown conversation signal: missing_conversation",
 		},
 		{
 			name: "UnknownModelReference",
@@ -508,9 +516,9 @@ func TestCRDConverterConvertsOpenEndedContextRule(t *testing.T) {
 
 	outputConfig, err := NewCRDConverter().Convert(pool, route, &config.CanonicalConfig{})
 	require.NoError(t, err)
-	require.Len(t, outputConfig.Routing.Signals.Context, 2)
+	require.Len(t, outputConfig.Recipes[0].Signals.Context, 2)
 
-	overflow := outputConfig.Routing.Signals.Context[1]
+	overflow := outputConfig.Recipes[0].Signals.Context[1]
 	assert.Equal(t, "overflow_context", overflow.Name)
 	assert.Equal(t, config.TokenCount("8001"), overflow.MinTokens)
 	assert.False(t, overflow.MaxTokens.IsSet())

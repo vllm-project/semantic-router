@@ -135,7 +135,6 @@ const QUICK_START_SNIPPET = `# ============================================
 # ============================================
 
 MODEL "qwen2.5:3b" {
-  modality: "text"
   capabilities: ["general", "reasoning"]
 }
 
@@ -150,25 +149,21 @@ SIGNAL keyword urgent_request {
   case_sensitive: false
 }
 
-SIGNAL embedding ai_topics {
-  threshold: 0.75
-  candidates: ["machine learning", "neural network", "deep learning"]
-  aggregation_method: "max"
+SIGNAL domain ai_topics {
+  description: "Computer science and machine learning"
+  labels: ["computer science"]
 }
 
 SIGNAL domain math {
   description: "Mathematics and quantitative reasoning"
-  mmlu_categories: ["math"]
+  labels: ["math"]
 }
 
 # ============================================
 # PLUGINS
 # ============================================
 
-PLUGIN safe_pii pii {
-  enabled: true
-  pii_types_allowed: []
-}
+PLUGIN replay router_replay {}
 
 # ============================================
 # ROUTES
@@ -177,26 +172,21 @@ PLUGIN safe_pii pii {
 ROUTE ai_route (description = "AI-related requests") {
   PRIORITY 100
 
-  WHEN keyword("urgent_request") AND embedding("ai_topics")
+  WHEN keyword("urgent_request") AND domain("ai_topics")
 
   MODEL "qwen2.5:3b" (reasoning = false)
 
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
-    on_error: "skip"
+  ALGORITHM multi_factor {
+    weights: { quality: 0.6, cost: 0.4 }
   }
 
-  PLUGIN safe_pii
-}
-
-# ============================================
+  PLUGIN replay
 }`
 
 const MODEL_SNIPPET = `MODEL "qwen2.5:3b" {
   param_size: "3b"
-  modality: "text"
   capabilities: ["general", "reasoning"]
+  modalities: { input: ["text", "image"], output: ["text"] }
 }`
 
 const SIGNAL_SNIPPET = `SIGNAL keyword my_signal {
@@ -213,37 +203,38 @@ const ROUTE_SNIPPET = `ROUTE my_route (description = "Description") {
 
   MODEL "qwen2.5:3b" (reasoning = false)
 
-  ALGORITHM confidence {
-    confidence_method: "hybrid"
-    threshold: 0.5
+  ALGORITHM multi_factor {
+    weights: { quality: 0.6, cost: 0.4 }
   }
 }`
 
-const PLUGIN_SNIPPET = `PLUGIN my_plugin pii {
-  enabled: true
-  pii_types_allowed: []
-}`
+const PLUGIN_SNIPPET = `PLUGIN my_plugin router_replay {}`
 
 // Signal type descriptions
 const SIGNAL_DESCRIPTIONS: Record<string, string> = {
-  keyword: 'Match queries by keyword lists (regex, BM25, n-gram)',
-  embedding: 'Semantic similarity matching via embedding vectors',
-  domain: 'MMLU-based academic domain detection',
+  keyword: 'Match queries by keyword lists (regex, BM25, n-gram), or count how often they occur',
+  domain: "Match the request's subject area against the rule's labels",
   fact_check: 'Flag queries requiring factual verification',
-  user_feedback: 'Route based on user feedback signals',
-  reask: 'Detect repeated user questions as implicit dissatisfaction',
-  preference: 'User preference-based routing',
+  user_feedback: 'Match the feedback a user turn gives about the previous answer',
   language: 'Detect query language',
   context: 'Context window length requirements',
-  structure: 'Detect request-shape features such as counts, density, and ordered markers',
-  complexity: 'Estimate query difficulty from example sets or a remote scoring model',
-  modality: 'Detect multi-modal input (text, image, audio)',
+  complexity: 'Match how difficult the request is: easy, medium or hard',
+  modality: 'Match the output the request asks for, such as text, image, speech or video',
   authz: 'Authorization-based routing (RBAC)',
-  jailbreak: 'Detect jailbreak attempts via classifier or contrastive methods',
+  jailbreak:
+    'Detect prompt injection or jailbreak attempts in the request or, at the response stage, the answer',
   safety:
-    'Detect unsafe content with built-in or external models; optionally require any selected hazard category to reach its threshold',
+    'Detect harmful content in the request or, at the response stage, the answer; with labels, in those harm categories',
+  hallucination:
+    "Flag claims in the model's answer that its retrieved documents and tool results do not support (response stage)",
+  refusal: 'Match an answer in which the model refused the request (response stage)',
+  turn_relation:
+    'Match how the current turn relates to the earlier ones: continue, reask, shift or return',
   pii: 'Detect personally identifiable information in queries',
-  kb: 'Knowledge base signal for taxonomy-driven classification',
+  conversation: 'Count or detect conversation features: messages, tool definitions and tool calls',
+  metadata: 'Match caller-provided request metadata by key (untrusted, never an identity)',
+  input_modality: 'Match a request that contains text, image, audio or video input',
+  systemone: 'Ask a System One model a named question and match its answer',
 }
 
 const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
@@ -316,7 +307,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       )}
 
       {/* Models */}
-      {matchesSearch('model catalog reasoning family capability modality') && (
+      {matchesSearch('model catalog reasoning family capability modalities') && (
         <Section title="Model Catalog" icon="📦">
           <p className={styles.hint}>
             Top-level models define the semantic routing catalog. Syntax:{' '}
@@ -363,11 +354,12 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
               </tr>
               <tr>
                 <td>
-                  <code>modality</code>
+                  <code>modalities</code>
                 </td>
-                <td>string</td>
+                <td>object</td>
                 <td>
-                  Expected modality such as <code>text</code> or <code>image</code>
+                  What the model reads and writes, such as{' '}
+                  <code>{'{ input: ["text", "image"], output: ["text"] }'}</code>
                 </td>
               </tr>
             </tbody>
@@ -377,7 +369,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       )}
 
       {/* Signals */}
-      {matchesSearch('signal keyword embedding domain') && (
+      {matchesSearch('signal keyword domain') && (
         <Section title={`Signals (${SIGNAL_TYPES.length} types)`} icon="📡">
           <p className={styles.hint}>
             Signals detect patterns in user queries. Syntax:{' '}
@@ -498,7 +490,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
                   </td>
                   <td>Medium</td>
                   <td>
-                    <code>keyword(&quot;a&quot;) AND embedding(&quot;b&quot;)</code>
+                    <code>keyword(&quot;a&quot;) AND domain(&quot;b&quot;)</code>
                   </td>
                 </tr>
                 <tr>
@@ -513,7 +505,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
               </tbody>
             </table>
             <CodeBlock
-              code={`WHEN keyword("urgent") AND (domain("math") OR domain("code")) AND NOT embedding("general")`}
+              code={`WHEN keyword("urgent") AND (domain("math") OR domain("code")) AND NOT keyword("casual")`}
               label="Complex WHEN example"
             />
           </div>
@@ -588,7 +580,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
 
       {/* Algorithms */}
       {matchesSearch(
-        'algorithm confidence ratings remom fusion workflows static router_dc automix hybrid',
+        'algorithm static random multi_factor systemone escalate fusion remom ratings workflows',
       ) && (
         <Section title={`Algorithms (${ALGORITHM_TYPES.length} types)`} icon="🧮">
           <p className={styles.hint}>
@@ -610,7 +602,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
 
       {/* Plugins */}
       {matchesSearch(
-        'plugin jailbreak pii cache memory rag request_params fast_response response_jailbreak tools',
+        'plugin masking cache context request_params fast_response response_guard tools',
       ) && (
         <Section title={`Plugins (${PLUGIN_TYPES.length} types)`} icon="🔌">
           <p className={styles.hint}>

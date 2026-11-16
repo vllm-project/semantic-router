@@ -3,8 +3,6 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,21 +12,32 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
+// trustedFactsCatalogPath names the catalog the test selections add from;
+// its read is the availability evidence the gate weighs.
+const trustedFactsCatalogPath = "tools.json"
+
 // trustedFactsTestConfig builds an enabled tools plugin config carrying the
-// given trusted-facts block. Semantic selection stays off so allow-path tests
-// stop at the commit step without touching retrieval.
+// given trusted-facts block. Its catalog is empty, so a selection the gate
+// allows has no candidate and asks no model.
 func trustedFactsTestConfig(t *testing.T, trusted *config.TrustedFactsConfig) *config.ToolsPluginConfig {
 	t.Helper()
 	return &config.ToolsPluginConfig{
-		Enabled:           true,
-		Mode:              config.ToolsPluginModePassthrough,
-		SemanticSelection: boolPtr(false),
-		TrustedFacts:      trusted,
+		Enabled: true,
+		Policy:  &config.ToolsPolicyConfig{TrustedFacts: trusted},
+		Select:  &config.ToolsSelectConfig{Mode: config.ToolsSelectModeAdd, ToolsDBPath: trustedFactsCatalogPath},
 	}
+}
+
+// trustedFactsRouter serves catalog as the decision's, none when nil.
+func trustedFactsRouter(catalog *toolCatalog) *OpenAIRouter {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	if catalog != nil {
+		router.toolCatalogs = map[string]*toolCatalog{trustedFactsCatalogPath: catalog}
+	}
+	return router
 }
 
 func trustedFactsTestContext(t *testing.T, cfg *config.ToolsPluginConfig) *RequestContext {
@@ -41,19 +50,10 @@ func trustedFactsTestContext(t *testing.T, cfg *config.ToolsPluginConfig) *Reque
 	}
 }
 
-// loadedTrustedFactsToolsDB returns an enabled tools database that completed
-// a successful load, so it carries fresh availability evidence.
-func loadedTrustedFactsToolsDB(t *testing.T) *tools.ToolsDatabase {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "tools.json")
-	if err := os.WriteFile(path, []byte("[]"), 0o600); err != nil {
-		t.Fatalf("write tools file: %v", err)
-	}
-	db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{Enabled: true})
-	if err := db.LoadToolsFromFile(path); err != nil {
-		t.Fatalf("load tools file: %v", err)
-	}
-	return db
+// loadedTrustedFactsCatalog is a catalog read now, so it carries fresh
+// availability evidence.
+func loadedTrustedFactsCatalog() *toolCatalog {
+	return &toolCatalog{loadedAt: time.Now()}
 }
 
 // trustedFactsTestRequest carries function tools with object schemas so the
@@ -88,7 +88,7 @@ func TestResolveTrustedFactsGateMapsDistinctFacts(t *testing.T) {
 		t.Fatal("operator-policy declaration must authorize")
 	}
 	if !facts.Available {
-		t.Fatal("live tools database must count as available")
+		t.Fatal("a catalog read now must count as available")
 	}
 	if facts.Stage != llmprotocol.TrustedStageCandidate {
 		t.Fatalf("stage = %q, want candidate", facts.Stage)
@@ -102,8 +102,8 @@ func TestResolveTrustedFactsGateSkipsWhenDisabled(t *testing.T) {
 	req := trustedFactsTestRequest()
 	for name, cfg := range map[string]*config.ToolsPluginConfig{
 		"nil config":     nil,
-		"nil block":      {Enabled: true, Mode: config.ToolsPluginModePassthrough},
-		"disabled block": {Enabled: true, TrustedFacts: &config.TrustedFactsConfig{Enabled: false}},
+		"nil block":      {Enabled: true, Policy: &config.ToolsPolicyConfig{}},
+		"disabled block": {Enabled: true, Policy: &config.ToolsPolicyConfig{TrustedFacts: &config.TrustedFactsConfig{Enabled: false}}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, ok := resolveTrustedFactsGate(req, cfg, true, trustedFactsRequestStage); ok {
@@ -149,12 +149,10 @@ func TestHandleToolSelectionTrustedFactsDenyStripsTools(t *testing.T) {
 		FreshnessSeconds: 60,
 		StageRoles:       []string{config.TrustedStageCandidate},
 	})
-	router := &OpenAIRouter{}
+	router := trustedFactsRouter(nil)
 	req := trustedFactsTestRequest()
 	resp := &ext_proc.ProcessingResponse{}
-	if err := router.handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)); err != nil {
-		t.Fatalf("handleToolSelection returned unexpected error: %v", err)
-	}
+	router.applyToolsPlugin(req, resp, trustedFactsTestContext(t, cfg))
 	if len(req.Tools) != 0 {
 		t.Fatalf("deny must strip all tools, got %v", req.Tools)
 	}
@@ -167,19 +165,17 @@ func TestHandleToolSelectionTrustedFactsDenyDisallowedStage(t *testing.T) {
 		TrustSources: []string{config.TrustedSourceOperatorPolicy},
 		StageRoles:   []string{config.TrustedStageFinal},
 	})
-	router := &OpenAIRouter{}
+	router := trustedFactsRouter(nil)
 	req := trustedFactsTestRequest()
 	resp := &ext_proc.ProcessingResponse{}
-	if err := router.handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)); err != nil {
-		t.Fatalf("handleToolSelection returned unexpected error: %v", err)
-	}
+	router.applyToolsPlugin(req, resp, trustedFactsTestContext(t, cfg))
 	if len(req.Tools) != 0 {
 		t.Fatalf("candidate-stage request against a final-only policy must be denied, got %v", req.Tools)
 	}
 }
 
 func TestHandleToolSelectionTrustedFactsNarrowKeepsExplicitToolsOnly(t *testing.T) {
-	// Authorized but the tools database is unavailable: narrow keeps
+	// Authorized but the decision has no catalog: narrow keeps
 	// explicitly allowed tools and skips retrieval expansion.
 	cfg := trustedFactsTestConfig(t, &config.TrustedFactsConfig{
 		Enabled:      true,
@@ -187,13 +183,11 @@ func TestHandleToolSelectionTrustedFactsNarrowKeepsExplicitToolsOnly(t *testing.
 		TrustSources: []string{config.TrustedSourceOperatorPolicy},
 		StageRoles:   []string{config.TrustedStageCandidate},
 	})
-	cfg.AllowTools = []string{"search"}
-	router := &OpenAIRouter{}
+	cfg.Policy.Mode, cfg.Policy.AllowTools = config.ToolsPolicyModeFiltered, []string{"search"}
+	router := trustedFactsRouter(nil)
 	req := trustedFactsTestRequest()
 	resp := &ext_proc.ProcessingResponse{}
-	if err := router.handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)); err != nil {
-		t.Fatalf("handleToolSelection returned unexpected error: %v", err)
-	}
+	router.applyToolsPlugin(req, resp, trustedFactsTestContext(t, cfg))
 	if len(req.Tools) != 1 || req.Tools[0].Name != "search" {
 		t.Fatalf("narrow must keep only explicitly allowed tools, got %v", req.Tools)
 	}
@@ -218,13 +212,13 @@ func TestHandleToolSelectionTrustedFactsNarrowReconcilesNamedToolChoice(t *testi
 				TrustSources: []string{config.TrustedSourceOperatorPolicy},
 				StageRoles:   []string{config.TrustedStageCandidate},
 			})
-			cfg.AllowTools = []string{"search"}
+			cfg.Policy.Mode, cfg.Policy.AllowTools = config.ToolsPolicyModeFiltered, []string{"search"}
 			req := trustedFactsTestRequest()
 			req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: tc.forced}
 			require.NoError(t, llmprotocol.ValidateRequest(*req, llmprotocol.DefaultPolicy().Limits), "fixture must start valid")
 
 			resp := &ext_proc.ProcessingResponse{}
-			require.NoError(t, (&OpenAIRouter{}).handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)))
+			trustedFactsRouter(nil).applyToolsPlugin(req, resp, trustedFactsTestContext(t, cfg))
 
 			require.Len(t, req.Tools, 1)
 			require.Equal(t, "search", req.Tools[0].Name)
@@ -235,7 +229,7 @@ func TestHandleToolSelectionTrustedFactsNarrowReconcilesNamedToolChoice(t *testi
 }
 
 func TestHandleToolSelectionTrustedFactsAllowAndObserveContinue(t *testing.T) {
-	db := loadedTrustedFactsToolsDB(t)
+	db := loadedTrustedFactsCatalog()
 	for _, enforcement := range []string{"", config.TrustedEnforcementAuthoritative} {
 		name := "advisory observes"
 		if enforcement != "" {
@@ -248,12 +242,10 @@ func TestHandleToolSelectionTrustedFactsAllowAndObserveContinue(t *testing.T) {
 				TrustSources: []string{config.TrustedSourceOperatorPolicy},
 				StageRoles:   []string{config.TrustedStageCandidate},
 			})
-			router := &OpenAIRouter{ToolsDatabase: db}
+			router := trustedFactsRouter(db)
 			req := trustedFactsTestRequest()
 			resp := &ext_proc.ProcessingResponse{}
-			if err := router.handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)); err != nil {
-				t.Fatalf("handleToolSelection returned unexpected error: %v", err)
-			}
+			router.applyToolsPlugin(req, resp, trustedFactsTestContext(t, cfg))
 			if len(req.Tools) != 2 {
 				t.Fatalf("allow/observe must leave tools untouched, got %v", req.Tools)
 			}
@@ -262,17 +254,11 @@ func TestHandleToolSelectionTrustedFactsAllowAndObserveContinue(t *testing.T) {
 }
 
 func TestHandleToolSelectionWithoutTrustedFactsUnchanged(t *testing.T) {
-	cfg := &config.ToolsPluginConfig{
-		Enabled:           true,
-		Mode:              config.ToolsPluginModePassthrough,
-		SemanticSelection: boolPtr(false),
-	}
-	router := &OpenAIRouter{}
+	cfg := &config.ToolsPluginConfig{Enabled: true, Policy: &config.ToolsPolicyConfig{}}
+	router := trustedFactsRouter(nil)
 	req := trustedFactsTestRequest()
 	resp := &ext_proc.ProcessingResponse{}
-	if err := router.handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)); err != nil {
-		t.Fatalf("handleToolSelection returned unexpected error: %v", err)
-	}
+	router.applyToolsPlugin(req, resp, trustedFactsTestContext(t, cfg))
 	if len(req.Tools) != 2 {
 		t.Fatalf("absent trusted-facts block must leave tools untouched, got %v", req.Tools)
 	}
@@ -283,22 +269,18 @@ func TestHandleToolSelectionDisabledParentDisengagesGate(t *testing.T) {
 	// since the nested policy never passed startup validation for a disabled
 	// parent. Tools flow reaches the parent-disabled guard unchanged.
 	cfg := &config.ToolsPluginConfig{
-		Enabled:           false,
-		Mode:              config.ToolsPluginModePassthrough,
-		SemanticSelection: boolPtr(false),
-		TrustedFacts: &config.TrustedFactsConfig{
+		Enabled: false,
+		Policy: &config.ToolsPolicyConfig{TrustedFacts: &config.TrustedFactsConfig{
 			Enabled:      true,
 			Enforcement:  config.TrustedEnforcementAuthoritative,
 			TrustSources: []string{config.TrustedSourceOperatorPolicy},
 			StageRoles:   []string{config.TrustedStageCandidate},
-		},
+		}},
 	}
-	router := &OpenAIRouter{}
+	router := trustedFactsRouter(nil)
 	req := trustedFactsTestRequest()
 	resp := &ext_proc.ProcessingResponse{}
-	if err := router.handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)); err != nil {
-		t.Fatalf("handleToolSelection returned unexpected error: %v", err)
-	}
+	router.applyToolsPlugin(req, resp, trustedFactsTestContext(t, cfg))
 	if len(req.Tools) != 2 {
 		t.Fatalf("disabled parent must leave tools untouched, got %v", req.Tools)
 	}
@@ -312,29 +294,27 @@ func TestHandleToolSelectionTrustedFactsAvailabilityNeedsBoundedEvidence(t *test
 		FreshnessSeconds: 60,
 		StageRoles:       []string{config.TrustedStageCandidate},
 	})
-	cfg.AllowTools = []string{"search"}
+	cfg.Policy.Mode, cfg.Policy.AllowTools = config.ToolsPolicyModeFiltered, []string{"search"}
 	cases := map[string]struct {
-		db        *tools.ToolsDatabase
-		age       time.Duration
-		wantTools int
+		db   *toolCatalog
+		age  time.Duration
+		want llmprotocol.TrustedOutcome
 	}{
-		// Enabled but never loaded: the static flag is not evidence.
-		"unloaded database narrows": {db: tools.NewToolsDatabase(tools.ToolsDatabaseOptions{Enabled: true}), wantTools: 1},
-		"stale load narrows":        {db: loadedTrustedFactsToolsDB(t), age: 2 * time.Minute, wantTools: 1},
-		"fresh load allows":         {db: loadedTrustedFactsToolsDB(t), wantTools: 2},
+		// A decision without a catalog has no availability evidence.
+		"no catalog narrows": {db: nil, want: llmprotocol.TrustedNarrow},
+		"stale read narrows": {db: loadedTrustedFactsCatalog(), age: 2 * time.Minute, want: llmprotocol.TrustedNarrow},
+		"fresh read allows":  {db: loadedTrustedFactsCatalog(), want: llmprotocol.TrustedAllow},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			trustedFactsNow = func() time.Time { return time.Now().Add(tc.age) }
 			t.Cleanup(func() { trustedFactsNow = time.Now })
-			router := &OpenAIRouter{ToolsDatabase: tc.db}
+			router := trustedFactsRouter(tc.db)
 			req := trustedFactsTestRequest()
-			resp := &ext_proc.ProcessingResponse{}
-			if err := router.handleToolSelection(req, "look up the weather", nil, &resp, trustedFactsTestContext(t, cfg)); err != nil {
-				t.Fatalf("handleToolSelection returned unexpected error: %v", err)
-			}
-			if len(req.Tools) != tc.wantTools {
-				t.Fatalf("tools = %v, want %d", req.Tools, tc.wantTools)
+			ctx := trustedFactsTestContext(t, cfg)
+			router.applyToolsPlugin(req, &ext_proc.ProcessingResponse{}, ctx)
+			if len(req.Tools) != 1 || len(ctx.pendingToolsOutcomes) == 0 || ctx.pendingToolsOutcomes[0].Verdict != string(tc.want) {
+				t.Fatalf("tools = %v, outcomes %+v, want %s", req.Tools, ctx.pendingToolsOutcomes, tc.want)
 			}
 		})
 	}
@@ -346,14 +326,14 @@ func TestHandleToolSelectionTrustedFactsAvailabilityNeedsBoundedEvidence(t *test
 func TestHandleToolSelectionTrustedFactsKeepsModeNone(t *testing.T) {
 	cases := map[string]struct {
 		sources []string
-		db      *tools.ToolsDatabase
+		db      *toolCatalog
 		age     time.Duration
 	}{
 		"no database narrows":       {sources: []string{config.TrustedSourceOperatorPolicy, config.TrustedSourceRuntimeFresh}},
-		"unloaded database narrows": {sources: []string{config.TrustedSourceOperatorPolicy, config.TrustedSourceRuntimeFresh}, db: tools.NewToolsDatabase(tools.ToolsDatabaseOptions{Enabled: true})},
-		"stale load narrows":        {sources: []string{config.TrustedSourceOperatorPolicy, config.TrustedSourceRuntimeFresh}, db: loadedTrustedFactsToolsDB(t), age: 2 * time.Minute},
-		"unauthorized denies":       {sources: []string{config.TrustedSourceRuntimeFresh}, db: loadedTrustedFactsToolsDB(t)},
-		"fresh load allows":         {sources: []string{config.TrustedSourceOperatorPolicy, config.TrustedSourceRuntimeFresh}, db: loadedTrustedFactsToolsDB(t)},
+		"unloaded database narrows": {sources: []string{config.TrustedSourceOperatorPolicy, config.TrustedSourceRuntimeFresh}, db: nil},
+		"stale load narrows":        {sources: []string{config.TrustedSourceOperatorPolicy, config.TrustedSourceRuntimeFresh}, db: loadedTrustedFactsCatalog(), age: 2 * time.Minute},
+		"unauthorized denies":       {sources: []string{config.TrustedSourceRuntimeFresh}, db: loadedTrustedFactsCatalog()},
+		"fresh load allows":         {sources: []string{config.TrustedSourceOperatorPolicy, config.TrustedSourceRuntimeFresh}, db: loadedTrustedFactsCatalog()},
 	}
 	for name, tc := range cases {
 		for _, stripHistory := range []bool{false, true} {
@@ -367,18 +347,18 @@ func TestHandleToolSelectionTrustedFactsKeepsModeNone(t *testing.T) {
 					FreshnessSeconds: 60,
 					StageRoles:       []string{config.TrustedStageCandidate},
 				})
-				cfg.Mode = config.ToolsPluginModeNone
-				cfg.StripToolHistory = stripHistory
-				cfg.AllowTools = []string{"search"}
+				cfg.Policy.Mode = config.ToolsPolicyModeNone
+				cfg.Policy.StripToolHistory = stripHistory
+				cfg.Policy.AllowTools = []string{"search"}
 				req := trustedFactsTestRequest()
 				req.ParallelToolCalls = boolPtr(true)
 				req.Messages = append(req.Messages, llmprotocol.Message{
 					Role:    llmprotocol.RoleTool,
 					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "sunny"}},
 				})
-				router := &OpenAIRouter{ToolsDatabase: tc.db}
+				router := trustedFactsRouter(tc.db)
 				resp := &ext_proc.ProcessingResponse{}
-				router.handleToolSelectionForRequest(req, resp, trustedFactsTestContext(t, cfg))
+				router.applyToolsPlugin(req, resp, trustedFactsTestContext(t, cfg))
 
 				require.Nil(t, req.Tools)
 				require.Equal(t, llmprotocol.ToolChoice{}, req.ToolChoice)
@@ -426,7 +406,8 @@ func TestHandleToolSelectionTrustedFactsGatesHostedImageGeneration(t *testing.T)
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			router := &OpenAIRouter{
-				ToolsDatabase:     loadedTrustedFactsToolsDB(t),
+				Config:            &config.RouterConfig{},
+				toolCatalogs:      map[string]*toolCatalog{trustedFactsCatalogPath: loadedTrustedFactsCatalog()},
 				ResponseAPIFilter: NewResponseAPIFilter(NewMockResponseStore()),
 			}
 			ctx := trustedFactsTestContext(t, trustedFactsTestConfig(t, tc.trusted))
@@ -436,7 +417,7 @@ func TestHandleToolSelectionTrustedFactsGatesHostedImageGeneration(t *testing.T)
 			require.Nil(t, immediate)
 			require.NotNil(t, req.ImageGeneration, "fixture must normalize the hosted tool")
 
-			router.handleToolSelectionForRequest(req, &ext_proc.ProcessingResponse{}, ctx)
+			router.applyToolsPlugin(req, &ext_proc.ProcessingResponse{}, ctx)
 
 			engine, err := router.protocolEngine()
 			require.NoError(t, err)
@@ -498,5 +479,23 @@ func requireTrustedFactsReplayOutcome(t *testing.T, recorder *routerreplay.Recor
 		}
 	}
 	require.Equal(t, []string{string(want)}, verdicts, "trusted_facts outcomes on the Replay record")
-	require.Empty(t, ctx.pendingTrustedFactsOutcomes, "retained outcomes must be appended exactly once")
+	require.Empty(t, ctx.pendingToolsOutcomes, "retained outcomes must be appended exactly once")
+}
+
+// A narrowed request keeps a hosted tool only when the filtered policy
+// allows it by its type, as the policy does without trusted facts.
+func TestHandleToolSelectionTrustedFactsNarrowFiltersHostedTools(t *testing.T) {
+	cfg := trustedFactsTestConfig(t, &config.TrustedFactsConfig{
+		Enabled:      true,
+		Enforcement:  config.TrustedEnforcementAuthoritative,
+		TrustSources: []string{config.TrustedSourceOperatorPolicy},
+		StageRoles:   []string{config.TrustedStageCandidate},
+	})
+	cfg.Policy.Mode, cfg.Policy.AllowTools = config.ToolsPolicyModeFiltered, []string{"search"}
+	req := trustedFactsTestRequest()
+	req.ImageGeneration = &llmprotocol.ImageGenerationOptions{}
+	trustedFactsRouter(nil).applyToolsPlugin(req, &ext_proc.ProcessingResponse{}, trustedFactsTestContext(t, cfg))
+	if req.ImageGeneration != nil || len(req.Tools) != 1 || req.Tools[0].Name != "search" {
+		t.Fatalf("narrow kept image_generation=%v tools=%v", req.ImageGeneration != nil, req.Tools)
+	}
 }

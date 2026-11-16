@@ -28,17 +28,18 @@ func TestOutputTokenDefaultScalarContract(t *testing.T) {
 }
 
 func TestAutomaticOutputPolicyCanonicalRoundTrip(t *testing.T) {
-	body := []byte(`routing:
-  decisions:
-    - name: capacity
-      algorithm:
-        type: multi_factor
-        multi_factor:
-          expected_output_tokens: 4096
-      plugins:
-        - type: request_params
-          configuration:
-            default_max_tokens: auto
+	body := []byte(`recipes:
+  - name: default
+    decisions:
+      - name: capacity
+        algorithm:
+          type: multi_factor
+          multi_factor:
+            expected_output_tokens: 4096
+        plugins:
+          - type: request_params
+            configuration:
+              default_max_tokens: auto
 `)
 	cfg, err := ParseRoutingYAMLBytes(body)
 	require.NoError(t, err)

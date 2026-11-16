@@ -6,9 +6,10 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
@@ -120,9 +121,8 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	}
 	common.HeaderMutation.RemoveHeaders = append(
 		common.HeaderMutation.RemoveHeaders,
-		looperInternalHeadersForRemoval()...,
+		providerBoundRemovals(ctx.identity)...,
 	)
-	setHeaderValue(common.HeaderMutation, headers.VSRSelectedModel, modelName)
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 }
 
@@ -312,10 +312,6 @@ func (r *OpenAIRouter) runLooperInternalPlugins(
 		return response
 	}
 
-	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
-		return r.createErrorResponse(503, "RAG retrieval failed")
-	}
-
 	return nil
 }
 
@@ -326,4 +322,9 @@ func (r *OpenAIRouter) startLooperInternalReplay(
 ) {
 	ctx.RouterReplayID = ""
 	r.startRouterReplay(ctx, "ReMoM", modelName, decisionName)
+	// A hop's usage and price belong to the request that made it, whose
+	// record counts the call; this one says so rather than reading as unpriced.
+	r.writeRouterReplayUsageCost(ctx, routerreplay.UsageCost{
+		CostAccounting: &store.CostAccounting{UnpricedReason: store.UnpricedCountedInParent},
+	})
 }

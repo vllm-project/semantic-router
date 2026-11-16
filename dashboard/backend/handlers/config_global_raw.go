@@ -31,6 +31,14 @@ func GlobalConfigYAMLHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
+		if !callerCanViewConfigSecrets(r) {
+			globalYAML, err = redactConfigYAML(globalYAML)
+			if err != nil {
+				http.Error(w, "Failed to read global config", http.StatusInternalServerError)
+				return
+			}
+		}
+
 		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		_, _ = w.Write(globalYAML)
@@ -86,7 +94,7 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if err := writeConfigAtomically(configPath, updatedYAML); err != nil {
+		if _, err = persistConfig(configPath, updatedYAML); err != nil {
 			writeConfigPersistenceError(w, err)
 			return
 		}
@@ -121,7 +129,7 @@ func readEffectiveGlobalYAML(configPath string) ([]byte, error) {
 		return nil, err
 	}
 
-	parsed, err := routerconfig.ParseYAMLBytes(data)
+	parsed, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(data)
 	if err != nil {
 		return nil, fmt.Errorf("parse config.yaml: %w", err)
 	}
@@ -132,7 +140,22 @@ func readEffectiveGlobalYAML(configPath string) ([]byte, error) {
 		global = &defaults
 	}
 
-	globalYAML, err := yaml.Marshal(global)
+	var effective yaml.Node
+	if err = effective.Encode(global); err != nil {
+		return nil, fmt.Errorf("marshal effective global config: %w", err)
+	}
+	// The typed global omits an explicit false or empty value, which a save of
+	// this view would turn back into its default: show what config.yaml writes.
+	written, err := decodeConfigDocument[canonicalConfigTransport](data)
+	if err != nil {
+		return nil, err
+	}
+	if written.globalOverrideRaw != nil {
+		if err = mergeMappingNodes(&effective, written.globalOverrideRaw); err != nil {
+			return nil, err
+		}
+	}
+	globalYAML, err := yaml.Marshal(&effective)
 	if err != nil {
 		return nil, fmt.Errorf("marshal effective global config: %w", err)
 	}
@@ -167,6 +190,10 @@ func replaceGlobalOverrideYAML(existingData, rawGlobalYAML []byte) ([]byte, []ro
 		return nil, nil, fmt.Errorf("marshal updated config: %w", err)
 	}
 
+	updatedYAML, err = restoreConfigSecrets(existingData, updatedYAML)
+	if err != nil {
+		return nil, nil, err
+	}
 	parsed, err := routerconfig.ParseYAMLBytes(updatedYAML)
 	if err != nil {
 		return nil, nil, err

@@ -187,6 +187,36 @@
       }
     },
     {
+      "name": "safeguards",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 2048,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "safeguards": [
+            {
+              "classifier_context": {
+                "permission_mode": "auto",
+                "v": 1
+              },
+              "type": "auto_mode"
+            }
+          ]
+        }
+      }
+    },
+    {
       "name": "stop_sequences",
       "outcome": {
         "status": "ok",

@@ -13,9 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 RUNTIME = ROOT / "src/model-runtime/vllm_srun"
 OUTPUT = ROOT / "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json"
-BACKEND_OUTPUT = (
-    ROOT / "src/semantic-router/pkg/modelservice/decision_catalog.generated.json"
-)
+BACKEND_OUTPUT = ROOT / "src/semantic-router/pkg/config/decision_catalog.generated.json"
 RELEASE_OUTPUT = RUNTIME / "registry/releases.generated.json"
 
 
@@ -85,8 +83,8 @@ def assignment(path, name):
     )
 
 
-def descriptor_question_types(family):
-    """The ``question_types`` node of a family's ``descriptor()``."""
+def descriptor_field(family, field):
+    """The ``field`` node of a family's ``descriptor()``, or None."""
     family_tree = ast.parse((RUNTIME / f"families/{family}/family.py").read_text())
     descriptor = next(
         node
@@ -94,12 +92,27 @@ def descriptor_question_types(family):
         if isinstance(node, ast.FunctionDef) and node.name == "descriptor"
     )
     return next(
-        value
-        for node in ast.walk(descriptor)
-        if isinstance(node, ast.Dict)
-        for key, value in zip(node.keys, node.values, strict=True)
-        if isinstance(key, ast.Constant) and key.value == "question_types"
+        (
+            value
+            for node in ast.walk(descriptor)
+            if isinstance(node, ast.Dict)
+            for key, value in zip(node.keys, node.values, strict=True)
+            if isinstance(key, ast.Constant) and key.value == field
+        ),
+        None,
     )
+
+
+def descriptor_question_types(family):
+    """The ``question_types`` node of a family's ``descriptor()``."""
+    return descriptor_field(family, "question_types")
+
+
+def descriptor_modalities(family):
+    """The input modalities a family's decisions requests may carry: its
+    descriptor's ``modalities``, else text only."""
+    modalities = descriptor_field(family, "modalities")
+    return ["text"] if modalities is None else list(ast.literal_eval(modalities))
 
 
 def projection():
@@ -172,12 +185,15 @@ def vela_entries(table):
 
 
 def backend_projection(data):
-    """The shared semantic task resolver consumes the same native facts."""
+    """The shared semantic task resolver consumes the same native facts, and
+    the Router's load checks the input modalities each model reads and the
+    span heads a model with span answers has."""
     models = [
         {
             "id": item["id"],
             "family": item["family"],
             "question_types": data["questionTypes"],
+            "modalities": descriptor_modalities(item["family"]),
         }
         for item in data["models"]
     ]
@@ -205,15 +221,28 @@ def backend_projection(data):
     organization = ast.literal_eval(
         assignment(RUNTIME / "registry/tables/common.py", "ORG")
     )
+    # A Vela 2.0 release has the broad span head when its package ships the
+    # head's file, and the router head always.
+    broad_file = ast.literal_eval(
+        assignment(RUNTIME / "families/vela2/package.py", "BROAD_HEAD_FILE")
+    )
     for entry in vela_entries("vela2"):
         size = ast.literal_eval(entry.args[0])
+        files = ast.literal_eval(entry.args[7])
         models.append(
             {
                 "id": f"{organization}/Vela-2.0-{size}",
                 "family": "vela2",
                 "question_types": kinds,
+                "modalities": descriptor_modalities("vela2"),
+                "span_heads": (
+                    ["router", "broad"] if broad_file in files else ["router"]
+                ),
             }
         )
+    vela3_heads = list(
+        ast.literal_eval(assignment(RUNTIME / "families/vela3_shared.py", "SPAN_HEADS"))
+    )
     vela3_kinds = list(
         ast.literal_eval(
             assignment(RUNTIME / "families/vela3/family.py", "QUESTION_TYPES")
@@ -231,9 +260,12 @@ def backend_projection(data):
                 "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
                 "family": "vela3",
                 "question_types": vela3_kinds,
+                "modalities": descriptor_modalities("vela3"),
+                "span_heads": vela3_heads,
             }
         )
-    # The Vela 3.0 d3 sizes answer their base's System One kinds and span questions.
+    # The Vela 3.0 d3 sizes answer their base's System One kinds and span
+    # questions, and read what their d3 base reads.
     d3_kinds = list(ast.literal_eval(descriptor_question_types("vela3_d3")))
     for entry in vela_entries("vela3_d3"):
         models.append(
@@ -241,6 +273,8 @@ def backend_projection(data):
                 "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
                 "family": "vela3_d3",
                 "question_types": d3_kinds,
+                "modalities": descriptor_modalities("decision3"),
+                "span_heads": vela3_heads,
             }
         )
     return {"models": models}

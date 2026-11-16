@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -158,7 +159,11 @@ func (r *OpenAIRouter) prepareEvalRequest(input services.EvalModelSelectionInput
 	seed := int64(0)
 	if input.PreviewContext != nil {
 		cfg := r.Config.RouterLearning.Protection
-		ctx.Headers[cfg.HeaderName("session")] = strings.TrimSpace(input.PreviewContext.SessionID)
+		sessionHeader := cfg.HeaderName("session")
+		if sessionHeader == "" {
+			sessionHeader = headers.VSRSessionID
+		}
+		ctx.Headers[sessionHeader] = strings.TrimSpace(input.PreviewContext.SessionID)
 		ctx.Headers[cfg.HeaderName("conversation")] = strings.TrimSpace(input.PreviewContext.ConversationID)
 		ctx.SessionID = strings.TrimSpace(input.PreviewContext.SessionID)
 		if input.PreviewContext.SamplingSeed != nil {

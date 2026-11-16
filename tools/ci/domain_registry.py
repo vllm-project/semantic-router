@@ -160,6 +160,8 @@ def registry_schema_errors(
         _validate_string_list(domain, "paths", f"domain {name!r}", errors)
         _validate_string_list(domain, "checks", f"domain {name!r}", errors)
         _validate_string_list(domain, "verify", f"domain {name!r}", errors)
+        if domain.get("e2e_scope", "p0") != "p0":
+            errors.append(f"domain {name!r} e2e_scope must be p0")
         _validate_job_names(
             domain.get("verifications", []), jobs, f"domain {name!r}", errors
         )

@@ -9,7 +9,7 @@ compatibility:
   router:
     min: 0.3.0
     max_exclusive: 0.6.0
-  config_schema: v0.3
+  config_schema: v0.5
   required_features:
   - entrypoints
   - isolated_recipes
@@ -23,7 +23,7 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
+  sha256: sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87
 protocols:
 - id: vllm-sr/systemone@1
   display_name: System One
@@ -73,6 +73,19 @@ protocols:
   - structured_output
   - reasoning
   - usage
+- id: openai/images@1
+  display_name: OpenAI Images
+  wire_format: openai.images.v1
+  default_base_path: /v1
+  operations:
+  - id: create
+    method: POST
+    path: /v1/images/generations
+  - id: list_models
+    method: GET
+    path: /v1/models
+  capabilities:
+  - image_generation
 - id: anthropic/messages@1
   display_name: Anthropic Messages
   wire_format: anthropic.messages.v1
@@ -215,11 +228,69 @@ providers:
     status: fixture_verified
     verified_at: '2026-09-04'
   models:
+  - catalog: anthropic/claude-fable-5.2
+    relationship: first_party
+    id: claude-fable-5-2
+    protocols:
+    - anthropic/messages@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 8.0
+      cached_input_per_1m: 0.2
+      cache_write_per_1m: 10.0
+      cache_write_1h_per_1m: 16.0
+      completion_per_1m: 40.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://platform.claude.com/docs/en/models/fable-5-2/overview
+  - catalog: anthropic/claude-sonnet-5.5
+    relationship: first_party
+    id: claude-sonnet-5-5
+    protocols:
+    - anthropic/messages@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      cached_input_per_1m: 0.1
+      cache_write_per_1m: 2.5
+      cache_write_1h_per_1m: 4.0
+      completion_per_1m: 10.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://platform.claude.com/docs/en/models/sonnet-5-5/overview
+  - catalog: anthropic/claude-opus-5.5
+    relationship: first_party
+    id: claude-opus-5-5
+    protocols:
+    - anthropic/messages@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 4.0
+      cached_input_per_1m: 0.2
+      cache_write_per_1m: 5.0
+      cache_write_1h_per_1m: 8.0
+      completion_per_1m: 20.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://platform.claude.com/docs/en/models/opus-5-5/overview
   - catalog: anthropic/claude-sonnet-5
     relationship: first_party
     id: claude-sonnet-5
     protocols:
     - anthropic/messages@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      cached_input_per_1m: 0.2
+      cache_write_per_1m: 2.5
+      cache_write_1h_per_1m: 4.0
+      completion_per_1m: 10.0
     lifecycle: active
     verification:
       status: claimed
@@ -230,6 +301,13 @@ providers:
     id: claude-opus-4-8
     protocols:
     - anthropic/messages@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 5.0
+      cached_input_per_1m: 0.5
+      cache_write_per_1m: 6.25
+      cache_write_1h_per_1m: 10.0
+      completion_per_1m: 25.0
     lifecycle: active
     verification:
       status: claimed
@@ -240,6 +318,13 @@ providers:
     id: claude-opus-5
     protocols:
     - anthropic/messages@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 5.0
+      cached_input_per_1m: 0.5
+      cache_write_per_1m: 6.25
+      cache_write_1h_per_1m: 10.0
+      completion_per_1m: 25.0
     lifecycle: active
     verification:
       status: claimed
@@ -250,6 +335,13 @@ providers:
     id: claude-fable-5-1
     protocols:
     - anthropic/messages@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 10.0
+      cached_input_per_1m: 0.25
+      cache_write_per_1m: 12.5
+      cache_write_1h_per_1m: 20.0
+      completion_per_1m: 50.0
     lifecycle: active
     verification:
       status: claimed
@@ -260,11 +352,38 @@ providers:
     id: claude-fable-5
     protocols:
     - anthropic/messages@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 10.0
+      cached_input_per_1m: 1.0
+      cache_write_per_1m: 12.5
+      cache_write_1h_per_1m: 20.0
+      completion_per_1m: 50.0
     lifecycle: active
     verification:
       status: claimed
       verified_at: '2026-09-05'
       source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  price_list:
+  - id: claude-haiku-5-5
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.1
+      cached_input_per_1m: 0.01
+      cache_write_per_1m: 0.125
+      cache_write_1h_per_1m: 0.2
+      completion_per_1m: 0.5
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 100000
+        prompt_multiplier: 5.0
+        cached_input_multiplier: 5.0
+        cache_write_multiplier: 5.0
+        completion_multiplier: 5.0
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://platform.claude.com/docs/en/about-claude/pricing
 - id: apodex
   display_name: Apodex AI
   description: Apodex reasoning models through first-party OpenAI and Anthropic compatible APIs.
@@ -1704,12 +1823,15 @@ providers:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  - openai/images@1
   default_protocol: openai/chat-completions@1
   supported_operations:
   - openai/chat-completions@1#create
   - openai/chat-completions@1#list_models
   - openai/responses@1#create
   - openai/responses@1#list_models
+  - openai/images@1#create
+  - openai/images@1#list_models
   auth:
     strategy: bearer
     header: Authorization
@@ -1731,12 +1853,15 @@ providers:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  - openai/images@1
   default_protocol: openai/chat-completions@1
   supported_operations:
   - openai/chat-completions@1#create
   - openai/chat-completions@1#list_models
   - openai/responses@1#create
   - openai/responses@1#list_models
+  - openai/images@1#create
+  - openai/images@1#list_models
   reasoning_transport: top_level_effort
   auth:
     strategy: bearer
@@ -1810,6 +1935,17 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.5
+      cached_input_per_1m: 0.25
+      completion_per_1m: 15.0
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        completion_multiplier: 1.5
     lifecycle: active
     verification:
       status: claimed
@@ -1821,6 +1957,11 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.75
+      cached_input_per_1m: 0.075
+      completion_per_1m: 4.5
     lifecycle: active
     verification:
       status: claimed
@@ -1832,6 +1973,17 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 5.0
+      cached_input_per_1m: 0.5
+      completion_per_1m: 30.0
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        completion_multiplier: 1.5
     lifecycle: active
     verification:
       status: claimed
@@ -1843,6 +1995,19 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 4.0
+      cached_input_per_1m: 0.4
+      cache_write_per_1m: 5.0
+      completion_per_1m: 20.0
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
     lifecycle: active
     verification:
       status: claimed
@@ -1854,6 +2019,19 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      cached_input_per_1m: 0.2
+      cache_write_per_1m: 2.5
+      completion_per_1m: 12.0
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
     lifecycle: active
     verification:
       status: claimed
@@ -1865,11 +2043,97 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.2
+      cached_input_per_1m: 0.02
+      cache_write_per_1m: 0.25
+      completion_per_1m: 1.2
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
     lifecycle: active
     verification:
       status: claimed
       verified_at: '2026-09-05'
       source: https://developers.openai.com/api/docs/models/gpt-5.6-luna
+  price_list:
+  - id: gpt-6.1-sol
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      cached_input_per_1m: 0.1
+      cache_write_per_1m: 2.5
+      completion_per_1m: 10.0
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://developers.openai.com/api/docs/pricing
+  - id: gpt-6.1-terra
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.0
+      cached_input_per_1m: 0.05
+      cache_write_per_1m: 1.25
+      completion_per_1m: 5.0
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://developers.openai.com/api/docs/pricing
+  - id: gpt-6-sol
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      cached_input_per_1m: 0.2
+      cache_write_per_1m: 2.5
+      completion_per_1m: 10.0
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://developers.openai.com/api/docs/pricing
+  - id: gpt-6-luna
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.1
+      cached_input_per_1m: 0.01
+      cache_write_per_1m: 0.125
+      completion_per_1m: 0.5
+    restrictions:
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://developers.openai.com/api/docs/pricing
 - id: openrouter
   display_name: OpenRouter
   description: One API for a broad model catalog.
@@ -3015,6 +3279,7 @@ providers:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  - openai/images@1
   - anthropic/messages@1
   default_protocol: openai/chat-completions@1
   supported_operations:
@@ -3022,6 +3287,8 @@ providers:
   - openai/chat-completions@1#list_models
   - openai/responses@1#create
   - openai/responses@1#list_models
+  - openai/images@1#create
+  - openai/images@1#list_models
   - anthropic/messages@1#create
   - anthropic/messages@1#list_models
   auth:
@@ -5018,6 +5285,123 @@ models:
   - multimodal
   - enterprise
   released_at: '2024-12-02'
+- id: anthropic/claude-fable-5.2
+  display_name: Claude Fable 5.2
+  description: Anthropic Fable model for demanding reasoning and long-horizon agentic work.
+  kind: physical
+  publisher: Anthropic
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://platform.claude.com/docs/en/models/fable-5-2/overview
+  family: claude-fable
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: '2026-11-16'
+    source: https://platform.claude.com/docs/en/models/fable-5-2/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-11-09'
+- id: anthropic/claude-sonnet-5.5
+  display_name: Claude Sonnet 5.5
+  description: Anthropic Sonnet model combining speed and intelligence for coding, agents, and enterprise work.
+  kind: physical
+  publisher: Anthropic
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://platform.claude.com/docs/en/models/sonnet-5-5/overview
+  family: claude-sonnet
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: '2026-11-16'
+    source: https://platform.claude.com/docs/en/models/sonnet-5-5/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-09-28'
+- id: anthropic/claude-opus-5.5
+  display_name: Claude Opus 5.5
+  description: Anthropic Opus model for long-running agentic coding and knowledge work.
+  kind: physical
+  publisher: Anthropic
+  presentation:
+    logo: package:anthropic
+    monogram: A
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://platform.claude.com/docs/en/models/opus-5-5/overview
+  family: claude-opus
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Anthropic
+    status: claimed
+    verified_at: '2026-11-16'
+    source: https://platform.claude.com/docs/en/models/opus-5-5/overview
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-09-22'
 - id: anthropic/claude-fable-5.1
   display_name: Claude Fable 5.1
   description: Anthropic high-capability model with extended context and output limits.
@@ -9896,7 +10280,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
+    asset_sha256: sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
   description: Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.
@@ -9963,7 +10347,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
+    asset_sha256: sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
   description: Prioritizes measured first-token or output-token latency within task-specific quality bands.
@@ -10033,7 +10417,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
+    asset_sha256: sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
   description: Combines strict quality selection with bounded review and agent workflows.
@@ -10118,7 +10502,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
+    asset_sha256: sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
   description: Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.
@@ -10171,7 +10555,7 @@ models:
   verification:
     authority: vllm-sr-maintainers
     status: claimed
-    asset_sha256: sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb
+    asset_sha256: sha256:e7ea20325f77d089d72a24018eb88b731bf663aeb3ca93ab50b29a63246bba87
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro
@@ -15925,6 +16309,415 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://benchmarks.duellab.org/model-claude-sonnet-5
+    redistributable: true
+- id: anthropic/claude-opus-5-5-max-swe-bench-pro@1.0.0
+  model: anthropic/claude-opus-5.5
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Opus 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.899
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf
+    redistributable: true
+- id: anthropic/claude-opus-5-5-max-frontiercode-1-1-main@1.0.0
+  model: anthropic/claude-opus-5.5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: max
+  subject:
+    variant: Claude Opus 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    subset: main
+    trials: 5
+    source_kind: official_system_card
+  metrics:
+    score: 0.544
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf
+    redistributable: true
+- id: anthropic/claude-opus-5-5-max-terminal-bench-4@1.0.0
+  model: anthropic/claude-opus-5.5
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Opus 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    harness: Claude Code --bare
+    trials: 5
+    safeguards: enabled with default server-side fallback
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.648
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf
+    redistributable: true
+- id: anthropic/claude-opus-5-5-max-humanitys-last-exam-no-tools@1.0.0
+  model: anthropic/claude-opus-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: max
+  subject:
+    variant: Claude Opus 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    tool_policy: no_tools
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.644
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf
+    redistributable: true
+- id: anthropic/claude-opus-5-5-max-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-opus-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject:
+    variant: Claude Opus 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.677
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf
+    redistributable: true
+- id: anthropic/claude-opus-5-5-max-deep-swe-1-1@1.0.0
+  model: anthropic/claude-opus-5.5
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Opus 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.742
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf
+    redistributable: true
+- id: anthropic/claude-opus-5-5-max-automation-bench@1.0.6
+  model: anthropic/claude-opus-5.5
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Opus 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    subset: private held-out
+    run_by: Zapier
+    source_kind: official_system_card
+  metrics:
+    score: 0.4
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/fc1b44717c85dc068bc6ba5024219938094694bd.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-5-max-swe-bench-pro@1.0.0
+  model: anthropic/claude-sonnet-5.5
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Sonnet 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.813
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-5-max-frontiercode-1-1-main@1.0.0
+  model: anthropic/claude-sonnet-5.5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: max
+  subject:
+    variant: Claude Sonnet 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    subset: main
+    source_kind: official_system_card
+  metrics:
+    score: 0.462
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-5-max-terminal-bench-4@1.0.0
+  model: anthropic/claude-sonnet-5.5
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Sonnet 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    harness: Claude Code --bare
+    trials: 5
+    safeguards: enabled with default server-side fallback
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.706
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-5-max-humanitys-last-exam-no-tools@1.0.0
+  model: anthropic/claude-sonnet-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: max
+  subject:
+    variant: Claude Sonnet 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    tool_policy: no_tools
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.569
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-5-max-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-sonnet-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject:
+    variant: Claude Sonnet 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.645
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-5-max-automation-bench@1.0.6
+  model: anthropic/claude-sonnet-5.5
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Sonnet 5.5
+    reasoning_effort: max
+    thinking_mode: adaptive
+    subset: private
+    run_by: Zapier
+    fallbacks: API default
+    source_kind: official_system_card
+  metrics:
+    score: 0.447
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf
+    redistributable: true
+- id: anthropic/claude-fable-5-2-max-swe-bench-pro@1.0.0
+  model: anthropic/claude-fable-5.2
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Fable 5.2
+    reasoning_effort: max
+    thinking_mode: adaptive
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.93
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf
+    redistributable: true
+- id: anthropic/claude-fable-5-2-max-terminal-bench-4@1.0.0
+  model: anthropic/claude-fable-5.2
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Fable 5.2
+    reasoning_effort: max
+    thinking_mode: adaptive
+    harness: Claude Code --bare
+    trials: 10
+    safeguards: enabled with default server-side fallback
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.676
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf
+    redistributable: true
+- id: anthropic/claude-fable-5-2-max-humanitys-last-exam-no-tools@1.0.0
+  model: anthropic/claude-fable-5.2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: max
+  subject:
+    variant: Claude Fable 5.2
+    reasoning_effort: max
+    thinking_mode: adaptive
+    tool_policy: no_tools
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.732
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf
+    redistributable: true
+- id: anthropic/claude-fable-5-2-max-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-fable-5.2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject:
+    variant: Claude Fable 5.2
+    reasoning_effort: max
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.742
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf
+    redistributable: true
+- id: anthropic/claude-fable-5-2-max-deep-swe-1-1@1.0.0
+  model: anthropic/claude-fable-5.2
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Fable 5.2
+    reasoning_effort: max
+    thinking_mode: adaptive
+    trials: 5
+    effort_source: table_8_1_a_standard_configuration
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.743
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf
+    redistributable: true
+- id: anthropic/claude-fable-5-2-max-automation-bench@1.0.6
+  model: anthropic/claude-fable-5.2
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Claude Fable 5.2
+    reasoning_effort: max
+    thinking_mode: adaptive
+    subset: private held-out
+    run_by: Zapier
+    fallbacks: API default
+    source_kind: official_system_card
+  metrics:
+    score: 0.514
+  status: available
+  observed_at: '2026-11-16'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://assets.claude.com/27d60918d218125e7504bc7354c4b4626ec56b11.pdf
     redistributable: true
 - id: baidu/ernie-5.1-release-tau3-bench@1.0.0
   model: baidu/ernie-5.1

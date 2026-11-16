@@ -46,7 +46,7 @@ type RedisCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
+	embeddingDeployment string
 }
 
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
@@ -57,7 +57,7 @@ type RedisCacheOptions struct {
 	Enabled             bool
 	Config              *config.RedisConfig
 	ConfigPath          string
-	EmbeddingModel      string
+	EmbeddingDeployment string
 
 	// closeClient is a test seam for constructor cleanup.
 	closeClient func(*redis.Client)
@@ -113,8 +113,6 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		Protocol: 2, // Use RESP2 protocol for compatibility
 	})
 
-	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
-
 	cache := &RedisCache{
 		client:              redisClient,
 		config:              redisConfig,
@@ -122,8 +120,8 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
-		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider), 0)),
+		embeddingDeployment: options.EmbeddingDeployment,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, embedding.Options{Dimension: semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingProvider)}),
 	}
 
 	releaseClient := func() { _ = redisClient.Close() }

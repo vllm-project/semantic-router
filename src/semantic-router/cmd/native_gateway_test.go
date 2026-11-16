@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -47,7 +48,7 @@ func backendConfigWithRouting(t *testing.T, url, routing string) *config.RouterC
 
 func backendDocument(url, routing string) string {
 	host := strings.TrimPrefix(url, "http://")
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: http-8899
     address: 127.0.0.1
@@ -61,13 +62,8 @@ providers:
         - endpoint: ` + host + `
           protocol: http
           provider: vllm
-global:
-  stores:
-    semantic_cache:
-      enabled: false
-routing:
-  modelCards:
-    - name: m
+recipes:
+  - name: default
 ` + routing
 }
 
@@ -134,11 +130,11 @@ func TestNativeUpstreamSetIsOwnedByTheSnapshot(t *testing.T) {
 		t.Fatalf("calls = %d, %d (%v); the new snapshot must serve the new backend", first.Load(), second.Load(), err)
 	}
 
-	tuned, err := apply(backendConfigWithRouting(t, two.URL, `  signals:
-    keywords:
-      - name: urgent
-        operator: OR
-        keywords: ["urgent"]
+	tuned, err := apply(backendConfigWithRouting(t, two.URL, `    signals:
+      keywords:
+        - name: urgent
+          operator: OR
+          keywords: ["urgent"]
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -320,6 +316,40 @@ func TestListenNativeBindsTheOverrideAddress(t *testing.T) {
 	}
 	if listeners[0].server.TLSConfig != nil {
 		t.Fatal("a listener without tls serves cleartext")
+	}
+}
+
+// The listener's timeout bounds reading a request body: a client that stalls
+// it gets 408 instead of holding the connection.
+func TestListenNativeBoundsAStalledBodyByTheListenerTimeout(t *testing.T) {
+	cfg := backendConfig(t, "http://127.0.0.1:1")
+	cfg.Listeners[0].Port = 0
+	cfg.Listeners[0].Timeout = "200ms"
+	listeners, err := listenNative(cfg, "127.0.0.1", gateway.Options{Serving: gateway.Static(gateway.Serving{})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := listeners[0]
+	go func() { _ = gateway.Serve(l.server, l.listener) }()
+	defer func() { _ = l.server.Close() }()
+	conn, err := net.Dial("tcp", l.listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	if err = conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = conn.Write([]byte("POST /v1/chat/completions HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\n\r\n{")); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatalf("no answer to a stalled body: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestTimeout {
+		t.Fatalf("stalled body answered %d, want 408", resp.StatusCode)
 	}
 }
 

@@ -142,7 +142,7 @@ judgment deployment is selected by `system.decision_model`. Runtime modules own
 task policy, global bindings supply shared consumer defaults, and a recipe's
 `routing.model_bindings` can select a different resource or contract for its tasks.
 Native `candle`, `ort`, `openvino` execution fields such as `variant` are retired;
-use the [model-runtime migration guide](../model-runtime/migrate.md).
+use the [model-runtime migration guide](../model-runtime/deploy/migrate.md).
 
 Domain, complexity, safety, PII and other model consumers share this boundary.
 External classifier backends still declare `protocol`, `contract`, `model` and

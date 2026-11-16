@@ -9,14 +9,15 @@ import (
 )
 
 func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
-	template := `routing:
-  decisions:
-    - name: bounded
-      plugins:
-        - type: request_params
-          configuration:
-            %s
-            max_tokens_limit: 8192
+	template := `recipes:
+  - name: default
+    decisions:
+      - name: bounded
+        plugins:
+          - type: request_params
+            configuration:
+              %s
+              max_tokens_limit: 8192
 `
 	for _, field := range []string{"default_max_tokens: 0", "default_max_tokens: -1", "default_max_tokens: 1.5", "default_max_token: 4096"} {
 		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, field))); err == nil {
@@ -42,7 +43,7 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 	if again.Decisions[0].GetRequestParamsConfig().DefaultMaxTokens.Value != 4096 {
 		t.Fatal("canonical export lost output default")
 	}
-	legacy, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, "strip_unknown: true")))
+	legacy, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, "max_n: 1")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,13 +61,14 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 // A configured limit caps the client's value, so a non-positive one would
 // rewrite every request to an invalid max_tokens or n.
 func TestRequestParamsRejectsNonPositiveLimits(t *testing.T) {
-	template := `routing:
-  decisions:
-    - name: bounded
-      plugins:
-        - type: request_params
-          configuration:
-            %s
+	template := `recipes:
+  - name: default
+    decisions:
+      - name: bounded
+        plugins:
+          - type: request_params
+            configuration:
+              %s
 `
 	for _, field := range []string{
 		"max_tokens_limit: 0", "max_tokens_limit: -1", "max_n: 0", "max_n: -1",
@@ -75,7 +77,7 @@ func TestRequestParamsRejectsNonPositiveLimits(t *testing.T) {
 		configuration := field
 		if strings.HasPrefix(field, "{") {
 			configuration = strings.Trim(field, "{}")
-			configuration = strings.ReplaceAll(configuration, ", ", "\n            ")
+			configuration = strings.ReplaceAll(configuration, ", ", "\n              ")
 		}
 		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, configuration))); err == nil {
 			t.Errorf("accepted a non-positive limit: %s", field)
@@ -85,5 +87,20 @@ func TestRequestParamsRejectsNonPositiveLimits(t *testing.T) {
 		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, field))); err != nil {
 			t.Errorf("rejected a positive limit %s: %v", field, err)
 		}
+	}
+}
+
+func TestRequestParamsRefusesToBlockStream(t *testing.T) {
+	_, err := ParseRoutingYAMLBytes([]byte(`recipes:
+  - name: default
+    decisions:
+      - name: bounded
+        plugins:
+          - type: request_params
+            configuration:
+              blocked_params: [temperature, " stream "]
+`))
+	if err == nil || !strings.Contains(err.Error(), "blocked_params cannot include stream") {
+		t.Fatalf("blocked_params [stream] loaded: err=%v", err)
 	}
 }

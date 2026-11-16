@@ -49,7 +49,8 @@ type LlamaStackBackendConfig struct {
 	RequestTimeoutSeconds int
 
 	// SearchType controls the search strategy: "vector" (default) or
-	// "hybrid" (vector + BM25 with RRF). Requires Milvus vector_io provider.
+	// "hybrid" (vector + keyword with RRF). Hybrid requires a vector_io
+	// provider with keyword search, such as sqlite-vec or Milvus.
 	SearchType string
 }
 

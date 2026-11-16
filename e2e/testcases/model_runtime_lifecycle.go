@@ -51,8 +51,8 @@ func testModelRuntimeLifecycle(ctx context.Context, client *kubernetes.Clientset
 		return fmt.Errorf("attached runtime: %w", err)
 	}
 	served := modelIDs(attached.Data)
-	if strings.Join(served, ",") != "decision-a,feedback-a,vela2-a" {
-		return fmt.Errorf("the attached runtime serves %v, want decision-a, feedback-a and vela2-a", served)
+	if strings.Join(served, ",") != "decision-a,vela2-a" {
+		return fmt.Errorf("the attached runtime serves %v, want decision-a and vela2-a", served)
 	}
 	if err = checkLivenessAndReadiness(ctx, session.attachedRuntime(), attached.APIVersion); err != nil {
 		return fmt.Errorf("attached runtime: %w", err)
@@ -78,9 +78,6 @@ type mrInventoryDeployment struct {
 	Ready      bool   `json:"ready"`
 	State      string `json:"state"`
 	Family     string `json:"family"`
-	Heads      []struct {
-		Labels []string `json:"labels"`
-	} `json:"heads"`
 }
 
 // checkLivenessAndReadiness requires a ready runtime to answer GET /health/live
@@ -151,10 +148,7 @@ func checkInventory(ctx context.Context, session *modelRuntimeSession) (map[stri
 		}
 		processOwners[deployment.Process] = name
 	}
-	if err := checkInventoryLabels(ctx, session, listed[mrDomainDeployment]); err != nil {
-		return nil, err
-	}
-	for name, servedName := range map[string]string{mrAttachedDecisions: "decision-a", mrAttachedFeedback: "feedback-a", mrAttachedVela2: "vela2-a"} {
+	for name, servedName := range map[string]string{mrAttachedDecisions: "decision-a", mrAttachedVela2: "vela2-a"} {
 		deployment := listed[name]
 		if deployment.Managed || !deployment.Ready || deployment.ServedName != servedName ||
 			deployment.Endpoint != "http://"+mrAttachedService+"."+modelruntime.RouterNamespace+".svc.cluster.local:8100" {
@@ -165,30 +159,6 @@ func checkInventory(ctx context.Context, session *modelRuntimeSession) (map[stri
 		return nil, fmt.Errorf("%s is %+v, want attached and not ready", mrOfflineDeployment, offline)
 	}
 	return states, nil
-}
-
-// checkInventoryLabels requires the inventory to show a classifier's labels as
-// the runtime serving it reports them.
-func checkInventoryLabels(ctx context.Context, session *modelRuntimeSession, deployment mrInventoryDeployment) error {
-	client, _, err := session.managed(ctx, deployment.Name)
-	if err != nil {
-		return err
-	}
-	models, err := client.Models(ctx)
-	if err != nil {
-		return err
-	}
-	for _, card := range models.Data {
-		if card.ID != deployment.Name {
-			continue
-		}
-		if len(card.Heads) == 0 || len(deployment.Heads) != len(card.Heads) ||
-			strings.Join(deployment.Heads[0].Labels, ",") != strings.Join(card.Heads[0].Labels, ",") {
-			return fmt.Errorf("%s heads %+v, the runtime serves %+v", deployment.Name, deployment.Heads, card.Heads)
-		}
-		return nil
-	}
-	return fmt.Errorf("no managed runtime serves %s", deployment.Name)
 }
 
 // mrManagedProcess is what the lifecycle case reports of one managed process.
@@ -280,15 +250,12 @@ func checkFixtureCard(card modelruntime.ModelCard) error {
 		if card.Family != "decision2" || !card.HasSurface("decisions") {
 			return fmt.Errorf("model %s is %s serving %v, want decision2 decisions", card.ID, card.Family, card.Surfaces)
 		}
-	case mrEmbeddingDeployment, mrRerankerDeployment:
-		surface := map[string]string{mrEmbeddingDeployment: "embeddings", mrRerankerDeployment: "rerank"}[card.ID]
-		if card.Family != "task_heads" || !card.HasSurface(surface) {
-			return fmt.Errorf("model %s is %s serving %v, want task_heads %s", card.ID, card.Family, card.Surfaces, surface)
+	case mrEmbeddingDeployment:
+		if card.Family != "task_heads" || !card.HasSurface("embeddings") {
+			return fmt.Errorf("model %s is %s serving %v, want task_heads embeddings", card.ID, card.Family, card.Surfaces)
 		}
 	default:
-		if card.Family != "task_heads" || !card.HasSurface("classify") || len(card.Heads) == 0 {
-			return fmt.Errorf("model %s is %s serving %v with heads %v, want a task_heads classifier", card.ID, card.Family, card.Surfaces, card.Heads)
-		}
+		return fmt.Errorf("model %s is not a managed deployment of the profile", card.ID)
 	}
 	return nil
 }

@@ -223,9 +223,6 @@ func validateParsedHotReloadCompatibilityInMode(
 		if err := config.ValidateRoutingPreviewReload(currentCfg, nextCfg); err != nil {
 			return err
 		}
-		if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
-			return err
-		}
 	}
 	if currentCfg != nil && nextCfg != nil &&
 		currentCfg.Observability.Tracing != nextCfg.Observability.Tracing {
@@ -234,9 +231,17 @@ func validateParsedHotReloadCompatibilityInMode(
 		)
 	}
 	if mode == config.GatewayStandalone {
-		if currentCfg != nil && nextCfg != nil && !reflect.DeepEqual(currentCfg.Listeners, nextCfg.Listeners) {
+		if currentCfg == nil || nextCfg == nil {
+			return nil
+		}
+		var changes []string
+		for _, restart := range config.ListenerRestarts(currentCfg.Listeners, nextCfg.Listeners) {
+			changes = append(changes, restart.Path+": "+restart.Message)
+		}
+		if len(changes) > 0 {
 			return fmt.Errorf(
-				"listeners changed; standalone mode binds its listeners at startup, so the Router hot-reload API cannot activate them; restart the Router with this configuration",
+				"%s; standalone mode binds its listeners at startup, so the Router hot-reload API cannot activate this; restart the Router with this configuration",
+				strings.Join(changes, ", "),
 			)
 		}
 		return nil
@@ -269,6 +274,7 @@ type envoyEndpointProjection struct {
 	Protocol     string
 	BaseURL      string
 	ExtraHeaders map[string]string
+	TLS          *config.DeploymentTLS
 }
 
 func envoyDeploymentProjectionFromConfig(
@@ -298,6 +304,7 @@ func envoyDeploymentProjectionFromConfig(
 			Protocol:     endpoint.Protocol,
 			BaseURL:      profile.BaseURL,
 			ExtraHeaders: extraHeaders,
+			TLS:          profile.TLS,
 		})
 		if endpoint.Model == "" {
 			continue
@@ -337,7 +344,7 @@ func normalizeRouterConfigDocumentWithParser(
 	if _, err := parse(rawYAML); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
-	// The submitted document is already canonical v0.3 because ParseYAMLBytes
+	// The submitted document is already canonical v0.5 because ParseYAMLBytes
 	// rejects legacy layouts. Persist that document rather than exporting the
 	// runtime representation back to YAML: runtime endpoint names and explicit
 	// zero values are implementation details and must not rewrite user intent.
@@ -375,7 +382,37 @@ func mergeConfigDocuments(base map[string]any, patch map[string]any) map[string]
 	if !ok {
 		return map[string]any{}
 	}
+	if recipes, ok := patch["recipes"].([]any); ok {
+		merged["recipes"] = mergeRecipes(base["recipes"], recipes)
+	}
 	return merged
+}
+
+// mergeRecipes merges a patch's recipes into the base's by name: a recipe of
+// the patch merges into the base recipe of its name, and the base recipes the
+// patch does not name stay.
+func mergeRecipes(base any, patch []any) []any {
+	recipes, _ := cloneYAMLValue(base).([]any)
+	index := make(map[string]int, len(recipes))
+	for at, recipe := range recipes {
+		if name := recipeNameOf(recipe); name != "" {
+			index[name] = at
+		}
+	}
+	for _, recipe := range patch {
+		if at, ok := index[recipeNameOf(recipe)]; ok {
+			recipes[at] = mergeYAMLValue(recipes[at], recipe)
+			continue
+		}
+		recipes = append(recipes, cloneYAMLValue(recipe))
+	}
+	return recipes
+}
+
+func recipeNameOf(recipe any) string {
+	mapping, _ := recipe.(map[string]any)
+	name, _ := mapping["name"].(string)
+	return name
 }
 
 func mergeYAMLValue(base any, patch any) any {

@@ -14,7 +14,7 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
-const unreadableFileWarning = "dropped;1 files the selected model cannot read sent as a note;content.file"
+const unreadableFileWarning = `protocol;action=dropped;reason="1 files the selected model cannot read sent as a note";field="content.file"`
 
 func init() {
 	pkgtestcases.Register("protocol-codec-unreadable-file-opt-in", pkgtestcases.TestCase{
@@ -69,8 +69,8 @@ func testProtocolCodecUnreadableFileOptIn(ctx context.Context, client *kubernete
 			return fmt.Errorf("opted-in PDF was not dispatched (stream=%t): status=%d body=%s",
 				stream, result.StatusCode, truncateString(string(result.Body), 500))
 		}
-		if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !strings.Contains(warnings, unreadableFileWarning) {
-			return fmt.Errorf("x-vsr-protocol-warnings = %q, want %q (stream=%t)", warnings, unreadableFileWarning, stream)
+		if warnings := result.Headers.Get(warningsHeader); !strings.Contains(warnings, unreadableFileWarning) {
+			return fmt.Errorf("x-vsr-warnings = %q, want %q (stream=%t)", warnings, unreadableFileWarning, stream)
 		}
 		raw, err := lastProviderSimulatorRequest(ctx, provider, sessionID)
 		if err != nil {

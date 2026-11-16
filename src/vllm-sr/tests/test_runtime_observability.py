@@ -32,7 +32,7 @@ def tracing_block(config):
 def source_config(tmp_path, tracing=None):
     source = tmp_path / "config.yaml"
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http", "address": "127.0.0.1", "port": 8899}],
     }
     if tracing is not None:
@@ -53,7 +53,7 @@ def test_runtime_realization_scopes_default_collector_without_source_changes(
     original = source.read_bytes()
     runtime = tmp_path / "active.yaml"
 
-    realize_runtime_config(source, runtime, package_activation=True)
+    realize_runtime_config(source, runtime)
 
     expected_host = (
         "vllm-sr-jaeger"
@@ -65,9 +65,7 @@ def test_runtime_realization_scopes_default_collector_without_source_changes(
         == f"{expected_host}:4317"
     )
     assert source.read_bytes() == original
-    assert runtime.read_bytes() == build_effective_config_bytes(
-        source, None, False, None, package_activation=True
-    )
+    assert runtime.read_bytes() == build_effective_config_bytes(source, None, False)
 
 
 @pytest.mark.parametrize(
@@ -88,7 +86,7 @@ def test_custom_or_disabled_tracing_is_preserved(
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "named-trial")
     source = source_config(tmp_path, tracing)
     original = source.read_bytes()
-    runtime = yaml.safe_load(build_effective_config_bytes(source, None, False, None))
+    runtime = yaml.safe_load(build_effective_config_bytes(source, None, False))
     apply_local_tracing_endpoint(
         runtime, resolve_runtime_stack(), enable_observability=enable_observability
     )
@@ -130,7 +128,7 @@ def test_target_neutral_config_has_no_local_tracing_projection(tmp_path, monkeyp
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "named-trial")
     source = source_config(tmp_path)
     config = build_effective_config_document(
-        source, None, False, None, materialize_local_runtime=False
+        source, None, False, materialize_local_runtime=False
     )
     assert "global" not in config
 
@@ -141,7 +139,7 @@ def test_restart_preserves_active_custom_collector_and_source_hash(
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "named-trial")
     source = source_config(tmp_path)
     authored = source.read_bytes()
-    candidate = build_effective_config_bytes(source, None, False, None)
+    candidate = build_effective_config_bytes(source, None, False)
     active = materialize_runtime_config(source, candidate)
     provenance = json.loads(_runtime_config_provenance_path(active).read_text())
     assert (
@@ -168,7 +166,7 @@ def test_restart_refreshes_an_unedited_previous_runtime_default(tmp_path, monkey
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "named-trial")
     source = source_config(tmp_path)
     authored = source.read_bytes()
-    candidate = build_effective_config_bytes(source, None, False, None)
+    candidate = build_effective_config_bytes(source, None, False)
     previous = yaml.safe_load(candidate)
     tracing_block(previous)["exporter"]["endpoint"] = "vllm-sr-jaeger:4317"
     active = materialize_runtime_config(source, yaml.safe_dump(previous).encode())

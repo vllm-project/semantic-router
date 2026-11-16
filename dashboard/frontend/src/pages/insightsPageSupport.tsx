@@ -2,7 +2,8 @@ import type { Column } from '../components/DataTable'
 import CollapsibleSection from '../components/CollapsibleSection'
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
-import { formatDateTime } from '../utils/dateTime'
+import { X_VSR_SELECTED_DECISION } from '../generated/vsrHeaders'
+import { formatDateTime, formatSeconds } from '../utils/dateTime'
 import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 import { Link } from 'react-router-dom'
 
@@ -11,20 +12,31 @@ import type {
   InsightsCurrencyCostSummary,
   InsightsRecord,
 } from './insightsPageTypes'
+import InsightsDecisionBadge from './InsightsDecisionBadge'
+import InsightsSignalsCell from './InsightsSignalsCell'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
-import { buildSignalFields, collectSignals } from './insightsRecordSignals'
+import { buildSignalFields } from './insightsRecordSignals'
 import { buildInsightsPluginFields } from './insightsRecordPlugins'
 import { buildProviderCacheSection } from './insightsProviderCache'
+import { buildReviewSection } from './insightsReviewSupport'
+import {
+  CALLER_LOGIN_NOTE,
+  describeBaselineBasis,
+  describeMissingModelCost,
+  describePricingSource,
+  describeRouterCalls,
+  isLooperRecord,
+} from './insightsCostAccounting'
 import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
 export { collectSignals } from './insightsRecordSignals'
 
 export const formatInsightsDecisionName = (decision: string): string =>
-  formatRoutingMetadataValue('x-vsr-selected-decision', decision)
+  formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, decision)
 
 export function getInsightsLifecyclePresentation(record: InsightsRecord) {
   const state = record.lifecycle_state || 'unknown'
@@ -137,16 +149,19 @@ function formatCompactIdentifier(value: string) {
   return `${value.slice(0, 8)}…${value.slice(-8)}`
 }
 
-function buildCompactListSummary(items: string[], maxVisibleItems: number) {
-  if (items.length === 0) {
-    return '-'
-  }
-
-  const visibleItems = items.slice(0, maxVisibleItems)
-  const hiddenCount = items.length - visibleItems.length
-  return hiddenCount > 0
-    ? `${visibleItems.join(' · ')} · +${hiddenCount}`
-    : visibleItems.join(' · ')
+// The agent session a request belongs to, so a session search shows which rows matched.
+const SESSION_COLUMN: Column<InsightsRecord> = {
+  key: 'session_id',
+  header: 'Session',
+  width: '170px',
+  render: (row) =>
+    row.session_id ? (
+      <span className={styles.requestId} title={row.session_id}>
+        {formatCompactIdentifier(row.session_id)}
+      </span>
+    ) : (
+      '-'
+    ),
 }
 
 export function createInsightsTableColumns(): Column<InsightsRecord>[] {
@@ -167,6 +182,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
         </Link>
       ),
     },
+    SESSION_COLUMN,
     {
       key: 'timestamp',
       header: 'Created',
@@ -186,28 +202,21 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       header: 'Decision',
       width: '180px',
       sortable: true,
-      render: (row) => (
-        <span className={styles.decision}>
-          {row.decision ? formatInsightsDecisionName(row.decision) : '-'}
-        </span>
-      ),
+      render: (row) =>
+        row.decision ? (
+          <InsightsDecisionBadge
+            decision={row.decision}
+            label={formatInsightsDecisionName(row.decision)}
+          />
+        ) : (
+          <span className={styles.decision}>-</span>
+        ),
     },
     {
       key: 'signals',
       header: 'Signals',
-      width: '180px',
-      render: (row) => {
-        const allSignals = collectSignals(row.signals)
-        if (allSignals.length === 0) {
-          return <span>-</span>
-        }
-
-        return (
-          <span className={styles.tableSummaryText} title={allSignals.join(', ')}>
-            {buildCompactListSummary(allSignals, 2)}
-          </span>
-        )
-      },
+      width: '200px',
+      render: (row) => <InsightsSignalsCell record={row} />,
     },
     {
       key: 'tools',
@@ -265,13 +274,22 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
 
         return (
           <div className={styles.costCell}>
-            <strong className={zeroSavingsReason ? styles.costValue : styles.costValuePositive}>
+            <strong
+              className={
+                zeroSavingsReason || (row.cost_savings ?? 0) < 0
+                  ? styles.costValue
+                  : styles.costValuePositive
+              }
+            >
               {zeroSavingsReason ? 'No savings' : formatCurrency(row.cost_savings, row.currency)}
             </strong>
             {zeroSavingsReason && <span className={styles.costSubtle}>{zeroSavingsReason}</span>}
             <span className={styles.costSubtle}>
               Baseline (configured rates): {row.baseline_model}
             </span>
+            {row.cost_accounting?.router_calls?.length ? (
+              <span className={styles.costSubtle}>Before its Router calls</span>
+            ) : null}
           </div>
         )
       },
@@ -314,6 +332,10 @@ export function buildInsightsRecordSections(
   options: { isReadonly: boolean },
 ): ViewSection[] {
   const sections: ViewSection[] = []
+  const reviewSection = buildReviewSection(record)
+  if (reviewSection) {
+    sections.push(reviewSection)
+  }
 
   sections.push({
     title: 'Lifecycle',
@@ -323,7 +345,7 @@ export function buildInsightsRecordSections(
       { label: 'Ended at', value: record.ended_at ? formatDateTime(record.ended_at) : '-' },
       {
         label: 'Duration',
-        value: typeof record.duration_ms === 'number' ? `${record.duration_ms} ms` : '-',
+        value: typeof record.duration_ms === 'number' ? formatSeconds(record.duration_ms) : '-',
       },
       { label: 'Terminal reason', value: record.terminal_reason || '-' },
     ],
@@ -403,16 +425,13 @@ export function buildInsightsRecordSections(
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
       { label: 'Baseline model', value: record.baseline_model || 'Baseline not recorded' },
-      {
-        label: 'Cost basis',
-        value:
-          getInsightsCostUnavailableReason(record) ||
-          'Recorded tokens × configured model rates at capture time; not a GPU bill or provider invoice.',
-      },
+      ...buildRouterCallFields(record),
+      { label: 'Cost basis', value: describeCostBasis(record) },
       {
         label: 'Baseline basis',
-        value:
-          'New records use the highest estimate in the recipe’s complete model pool across all decisions at configured rates, in the same currency using the same recorded tokens. Direct requests compare against the selected model. Older records retain their captured baseline.',
+        value: record.cost_accounting?.baseline_source
+          ? `${describeBaselineBasis(record)} Same currency and recorded tokens; a negative saving means the baseline was cheaper.`
+          : 'New records use the highest estimate in the recipe’s complete model pool across all decisions at configured rates, in the same currency using the same recorded tokens, unless the route sets a cost_baseline_model. Direct requests compare against the selected model. Older records retain their captured baseline.',
       },
       {
         label: 'Current pricing',
@@ -470,6 +489,25 @@ export function getInsightsCostUnavailableReason(record: InsightsRecord): string
   return getUnavailableCost(record)?.reason
 }
 
+function describeCostBasis(record: InsightsRecord): string {
+  const rates = describePricingSource(record.cost_accounting)
+  if (rates && Number.isFinite(record.actual_cost)) {
+    const login = record.cost_accounting?.caller_login
+      ? ` It ran on the client’s own login: this is the ${CALLER_LOGIN_NOTE}.`
+      : ''
+    return `Recorded tokens × ${rates} at capture time; not a GPU bill or provider invoice.${login}`
+  }
+  return (
+    getInsightsCostUnavailableReason(record) ||
+    'Recorded tokens × configured model rates at capture time; not a GPU bill or provider invoice.'
+  )
+}
+
+function buildRouterCallFields(record: InsightsRecord): ViewField[] {
+  const value = describeRouterCalls(record.cost_accounting)
+  return value ? [{ label: 'Router calls', value }] : []
+}
+
 function getUnavailableCost(record: InsightsRecord) {
   if (record.lifecycle_state !== 'completed') {
     return { label: 'Not completed', reason: 'Request not completed' }
@@ -478,11 +516,7 @@ function getUnavailableCost(record: InsightsRecord) {
     return { label: 'Usage not recorded', reason: 'Token usage was not recorded for this request' }
   }
   if (!Number.isFinite(record.actual_cost) || !record.currency?.trim()) {
-    return {
-      label: 'Price not recorded',
-      reason:
-        'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
-    }
+    return getMissingModelCost(record)
   }
   if (
     !Number.isFinite(record.baseline_cost) ||
@@ -495,6 +529,24 @@ function getUnavailableCost(record: InsightsRecord) {
     }
   }
   return undefined
+}
+
+function getMissingModelCost(record: InsightsRecord) {
+  if (isLooperRecord(record)) {
+    return {
+      label: 'In router calls',
+      reason: `A Looper request: its cost is its calls, ${describeRouterCalls(record.cost_accounting)}`,
+    }
+  }
+  const missing = describeMissingModelCost(record)
+  if (missing) {
+    return { label: 'No price', reason: missing }
+  }
+  return {
+    label: 'Price not recorded',
+    reason:
+      'No pricing estimate was recorded with this request. Historical records are not repriced using current model rates.',
+  }
 }
 
 function renderUnavailableCost(record: InsightsRecord) {

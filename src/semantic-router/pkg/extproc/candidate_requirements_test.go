@@ -128,7 +128,7 @@ func TestStrictOmittedOutputPolicyMatchesEncodedDispatch(t *testing.T) {
 			if demand.MaxOutputTokens == nil || *demand.MaxOutputTokens != test.want {
 				t.Fatalf("prefilter demand=%+v", demand)
 			}
-			if _, err = r.applySemanticRequestParams(d, request, config.DefaultRecipeName); err != nil {
+			if _, err = r.applySemanticRequestParams(d.GetRequestParamsConfig(), request, d.Name); err != nil {
 				t.Fatal(err)
 			}
 			body, _, err := (protocolcodec.OpenAIChatCodec{}).EncodeRequest(*request, llmprotocol.Envelope{}, llmprotocol.DefaultPolicy())

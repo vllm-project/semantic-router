@@ -42,8 +42,7 @@ test('previews an uploaded image and sends it through the vision route', async (
       headers: {
         'Content-Type': 'text/event-stream',
         'x-vsr-selected-model': 'local/vision-backend',
-        'x-vsr-selected-modality': 'image',
-        'x-vsr-matched-context': 'image_content',
+        'x-vsr-trace': 'signals=("context:image_content")',
       },
       body: streamBody('The image is a one-pixel test fixture.'),
     })

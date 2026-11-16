@@ -68,9 +68,26 @@ def _load_recipe(path: Path) -> tuple[str, dict[str, Any]]:
     name = str(value.get("name") or "").strip()
     if not name:
         raise click.ClickException("Recipe file must declare name")
-    if not isinstance(value.get("routing"), dict):
-        raise click.ClickException("Recipe file must declare a routing object")
-    return name, value
+    if "routing" in value:
+        raise click.ClickException(
+            "recipes[].routing is removed; write its fields on the recipe "
+            "(signals, decisions, ...), or run `vllm-sr config migrate`"
+        )
+    payload: dict[str, Any] = {"name": name}
+    for field in ("description", "entrypoints"):
+        if field in value:
+            payload[field] = value[field]
+    profile = {
+        key: item
+        for key, item in value.items()
+        if key not in ("name", "description", "entrypoints")
+    }
+    if not profile:
+        raise click.ClickException(
+            "Recipe file must declare its routing fields (signals, decisions, ...)"
+        )
+    payload["profile"] = profile
+    return name, payload
 
 
 @recipe.command("list")

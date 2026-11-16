@@ -122,6 +122,10 @@ func cloneResponseInputItems(items []responseapi.InputItem) []responseapi.InputI
 	cloned := make([]responseapi.InputItem, len(items))
 	copy(cloned, items)
 	for index := range cloned {
+		if cloned[index].Input != nil {
+			input := *cloned[index].Input
+			cloned[index].Input = &input
+		}
 		cloned[index].Content = append(json.RawMessage(nil), cloned[index].Content...)
 		cloned[index].Output = append(json.RawMessage(nil), cloned[index].Output...)
 		cloned[index].Summary = append(json.RawMessage(nil), cloned[index].Summary...)

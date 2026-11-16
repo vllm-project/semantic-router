@@ -15,6 +15,7 @@ HELM_TEMPLATE_OUTPUT ?= /tmp/semantic-router-helm/default-template.yaml
 HELM_BACKEND_TARGET_VALUES ?= deploy/helm/testdata/backend-target-values.yaml
 HELM_BACKEND_TARGET_OUTPUT ?= /tmp/semantic-router-helm/backend-target-template.yaml
 HELM_REPO_UPDATE ?= true
+HELM_DEPENDENCIES_CACHED ?=
 
 # ── Remote OCI chart registry ────────────────────────────────────────────────
 # Used by helm-install-version, helm-upgrade-version, and related targets.
@@ -123,27 +124,8 @@ helm-template:
 helm-ci-setup: ## Prepare Helm repositories and chart dependencies for CI-style validation
 helm-ci-setup:
 	@$(LOG_TARGET)
-	@if [ "$(HELM_REPO_UPDATE)" = "true" ]; then \
-		helm repo add bitnami https://charts.bitnami.com/bitnami --force-update; \
-		helm repo add milvus https://milvus-io.github.io/milvus-helm/ --force-update; \
-		helm repo add jaegertracing https://jaegertracing.github.io/helm-charts --force-update; \
-		helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update; \
-		helm repo add grafana https://grafana.github.io/helm-charts --force-update; \
-		helm repo update; \
-		for attempt in 1 2 3; do \
-			if helm dependency build $(HELM_CHART_PATH); then \
-				break; \
-			fi; \
-			if [ "$$attempt" -eq 3 ]; then \
-				exit 1; \
-			fi; \
-			echo "$(YELLOW)[WARN]$(NC) Helm dependency download failed; retrying ($$((attempt + 1))/3)"; \
-			sleep 5; \
-		done; \
-	else \
-		echo "$(YELLOW)[WARN]$(NC) Skipping helm repo add/update; using Chart.lock dependency versions"; \
-		helm dependency build $(HELM_CHART_PATH) --skip-refresh; \
-	fi
+	@HELM_REPO_UPDATE="$(HELM_REPO_UPDATE)" HELM_DEPENDENCIES_CACHED="$(HELM_DEPENDENCIES_CACHED)" \
+		deploy/helm/fetch-dependencies.sh $(HELM_CHART_PATH)
 
 helm-ci-validate: ## Run the CI Helm lint and template validation flow
 helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
@@ -190,7 +172,9 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 	@"$(AGENT_PYTHON)" deploy/helm/check-gateway-mode.py $(HELM_CHART_PATH)
 	@echo "Standalone and extproc gateway modes verified"
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_data_volume.py -v
+	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_shutdown_grace.py -v
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_grafana_live.py -v
+	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_fetch_dependencies.py -v
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-safety-validate: ## Validate Helm schema and local-state safety guards
@@ -363,13 +347,13 @@ helm-test: _check-k8s
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm release test completed"
 
 helm-package: ## Package the Helm chart
-helm-package:
+helm-package: helm-ci-setup
 	@$(LOG_TARGET)
 	@mkdir -p ./dist
 	@tmp_dir=$$(mktemp -d); \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
 	cp -a $(HELM_CHART_PATH) "$$tmp_dir/chart"; \
-	helm package -u "$$tmp_dir/chart" --destination ./dist
+	helm package "$$tmp_dir/chart" --destination ./dist
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm chart packaged successfully"
 	@ls -lh ./dist/semantic-router-*.tgz
 

@@ -1,6 +1,10 @@
 package config
 
-import "strings"
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
 
 // InferenceAPI identifies an inference contract independently of its HTTP path.
 // Chat and System One have separate routing namespaces; neither inherits the
@@ -42,12 +46,12 @@ func (c *RouterConfig) EffectiveEntrypoints(api InferenceAPI) []EntrypointMappin
 		entrypoint.Source = EntrypointExplicit
 		entrypoint.ModelNames = append([]string(nil), entrypoint.ModelNames...)
 		result = append(result, entrypoint)
-		hasDefault = hasDefault || entrypoint.Recipe == DefaultRecipeName
+		hasDefault = hasDefault || c.IsDefaultRecipe(entrypoint.Recipe)
 	}
 	if api == ChatAPI && !hasDefault {
 		result = append([]EntrypointMapping{{
-			API: ChatAPI, Source: EntrypointBuiltin,
-			ModelNames: []string{DefaultEntrypointModel}, Recipe: DefaultRecipeName,
+			API: ChatAPI, Source: EntrypointBuiltin, Default: true,
+			ModelNames: []string{DefaultEntrypointModel}, Recipe: c.defaultRecipeName(),
 		}}, result...)
 	}
 	return result
@@ -65,14 +69,85 @@ func (c *RouterConfig) ResolveEntrypoint(api InferenceAPI, model string) (Entryp
 	return EntrypointMapping{}, false
 }
 
-// DefaultEntrypointNames returns the default recipe's effective public names.
-// Consumers that need a default selection use the first declared name.
+// DefaultEntrypointNames returns the default recipe's effective public names,
+// the default entrypoint's first. Consumers that need a default selection use
+// the first name.
 func (c *RouterConfig) DefaultEntrypointNames() []string {
-	var names []string
+	var marked, others []string
 	for _, entrypoint := range c.EffectiveEntrypoints(ChatAPI) {
-		if entrypoint.Recipe == DefaultRecipeName {
-			names = append(names, entrypoint.ModelNames...)
+		switch {
+		case entrypoint.Default:
+			marked = append(marked, entrypoint.ModelNames...)
+		case c.IsDefaultRecipe(entrypoint.Recipe):
+			others = append(others, entrypoint.ModelNames...)
 		}
 	}
-	return names
+	return append(marked, others...)
+}
+
+// ValidateDelegateModels checks the approval-review and memory bindings in the
+// public routing table. Their targets use the same inference namespace and
+// cannot delegate again.
+func (c *RouterConfig) ValidateDelegateModels() error {
+	for index, entrypoint := range c.Entrypoints {
+		api := entrypoint.API
+		if api == "" {
+			api = ChatAPI
+		}
+		for _, delegate := range []struct{ field, model string }{
+			{"review_model", entrypoint.ReviewModel},
+			{"memory_model", entrypoint.MemoryModel},
+		} {
+			field, model := delegate.field, strings.TrimSpace(delegate.model)
+			if model == "" {
+				continue
+			}
+			if slices.Contains(entrypoint.ModelNames, model) {
+				return fmt.Errorf("entrypoints[%d].%s: cannot reference its own model name %q", index, field, model)
+			}
+			target, ok := c.ResolveEntrypoint(api, model)
+			if !ok {
+				return fmt.Errorf("entrypoints[%d].%s: unknown entrypoint model %q in %s API", index, field, model, api)
+			}
+			if strings.TrimSpace(target.ReviewModel) != "" || strings.TrimSpace(target.MemoryModel) != "" {
+				return fmt.Errorf("entrypoints[%d].%s: target %q must not have a review_model or memory_model", index, field, model)
+			}
+		}
+	}
+	return nil
+}
+
+// IsReviewEntrypoint reports whether model names an entrypoint that another
+// entrypoint uses as its review_model, under any of the target's names.
+func (c *RouterConfig) IsReviewEntrypoint(api InferenceAPI, model string) bool {
+	return c.DelegateRole(api, model) == DelegateReview
+}
+
+// Roles an entrypoint serves for another one, as its review_model or
+// memory_model.
+const (
+	DelegateReview = "review"
+	DelegateMemory = "memory"
+)
+
+// DelegateRole is what another entrypoint sends to model: DelegateReview,
+// DelegateMemory, or "" when no entrypoint names it, under any of its names.
+func (c *RouterConfig) DelegateRole(api InferenceAPI, model string) string {
+	if c == nil {
+		return ""
+	}
+	target, ok := c.ResolveEntrypoint(api, model)
+	if !ok {
+		return ""
+	}
+	for _, entrypoint := range c.EffectiveEntrypoints(api) {
+		for _, delegate := range [...]struct{ role, name string }{
+			{DelegateReview, entrypoint.ReviewModel}, {DelegateMemory, entrypoint.MemoryModel},
+		} {
+			if name := strings.TrimSpace(delegate.name); name != "" && slices.Contains(target.ModelNames, name) {
+				return delegate.role
+			}
+		}
+	}
+	return ""
 }

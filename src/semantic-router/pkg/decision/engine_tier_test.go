@@ -8,15 +8,12 @@ import (
 
 func TestDecisionEngine_SelectBestDecisionPrefersLowerTier(t *testing.T) {
 	engine := NewDecisionEngine(
-		nil,
-		nil,
-		nil,
+
 		[]config.Decision{
 			testDecision("jailbreak-block", "jailbreak", "detector", 10, 1),
 			testDecision("math-route", "domain", "math", 200, 2),
 		},
-		"priority",
-	)
+		"priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
 		DomainRules:       []string{"math"},
@@ -36,15 +33,12 @@ func TestDecisionEngine_SelectBestDecisionPrefersLowerTier(t *testing.T) {
 
 func TestDecisionEngine_SelectBestDecisionUsesConfidenceWithinTier(t *testing.T) {
 	engine := NewDecisionEngine(
-		nil,
-		nil,
-		nil,
+
 		[]config.Decision{
 			testDecision("math-route", "domain", "math", 200, 2),
 			testDecision("science-route", "domain", "science", 100, 2),
 		},
-		"confidence",
-	)
+		"confidence")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
 		DomainRules: []string{"math", "science"},
@@ -66,15 +60,12 @@ func TestDecisionEngine_SelectBestDecisionUsesConfidenceWithinTier(t *testing.T)
 
 func TestDecisionEngine_SelectBestDecisionFallsBackToPriorityOnTierConfidenceTie(t *testing.T) {
 	engine := NewDecisionEngine(
-		nil,
-		nil,
-		nil,
+
 		[]config.Decision{
 			testDecision("math-route", "domain", "math", 200, 2),
 			testDecision("science-route", "domain", "science", 100, 2),
 		},
-		"priority",
-	)
+		"priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
 		DomainRules: []string{"math", "science"},
@@ -96,15 +87,12 @@ func TestDecisionEngine_SelectBestDecisionFallsBackToPriorityOnTierConfidenceTie
 
 func TestDecisionEngine_SelectBestDecisionKeepsLegacyPriorityWithoutTiers(t *testing.T) {
 	engine := NewDecisionEngine(
-		nil,
-		nil,
-		nil,
+
 		[]config.Decision{
 			testDecision("math-route", "domain", "math", 200, 0),
 			testDecision("science-route", "domain", "science", 100, 0),
 		},
-		"priority",
-	)
+		"priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
 		DomainRules: []string{"math", "science"},

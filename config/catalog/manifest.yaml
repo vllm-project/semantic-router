@@ -9,7 +9,7 @@ compatibility:
   router:
     min: 0.3.0
     max_exclusive: 0.6.0
-  config_schema: v0.3
+  config_schema: v0.5
   required_features:
     - entrypoints
     - isolated_recipes

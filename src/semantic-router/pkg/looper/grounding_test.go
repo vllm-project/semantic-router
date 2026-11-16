@@ -3,6 +3,7 @@ package looper
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -450,4 +451,23 @@ func spanEvidence(spans []string, score float32) GroundingEvidence {
 		evidence.Probability = &score
 	}
 	return evidence
+}
+
+// grounding.on_error defaults to skip whatever the algorithm's on_error is: a
+// detector that cannot answer leaves plain Fusion.
+func TestFusionGroundingOnErrorDefaultsToSkip(t *testing.T) {
+	server := newFusionStubServer(t, func(model, _ string) (string, int) { return model + " answer", http.StatusOK })
+	defer server.Close()
+	req := newFusionTestRequest()
+	req.Algorithm = &config.AlgorithmConfig{Type: "fusion", OnError: config.FusionOnErrorFail, Fusion: &config.FusionAlgorithmConfig{
+		Model: "judge", AnalysisModels: []string{"panel-a", "panel-b"}, AnalysisMode: config.FusionAnalysisModeNone,
+		Grounding: &config.FusionGroundingConfig{Enabled: true},
+	}}
+	req.Grounding = &GroundingBackends{Detect: func(context.Context, string, string, string) (GroundingEvidence, error) {
+		return GroundingEvidence{}, errors.New("decision model busy")
+	}}
+
+	resp, err := fusionHopsTo(server.URL).Execute(context.Background(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "judge", resp.Model)
 }

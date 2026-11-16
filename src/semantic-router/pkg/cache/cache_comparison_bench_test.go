@@ -27,7 +27,7 @@ func newInMemoryBench(b *testing.B, size int) LegacyCacheBackend {
 		HNSWM:               16,
 		HNSWEfConstruction:  64,
 		HNSWEfSearch:        50,
-		EmbeddingModel:      "qwen3",
+		EmbeddingDeployment: "qwen3-embedding",
 	})
 }
 

@@ -16,15 +16,17 @@ import unittest
 from pathlib import Path
 
 import yaml
+from cli.vsr_trace import TRACE_HEADER, parse_trace
 from cli_test_base import CLITestBase
 from mock_upstream import PROVIDER_MOCKER_PORT, MockUpstreamMixin
 from runtime_http import write_fixture
 from serve_session import ServeSessionMixin
 
 QUICKSTART = (
-    Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
+    Path(__file__).resolve().parents[3]
+    / "website/docs/model-runtime/get-started/quickstart.md"
 )
-YAML_BLOCK = re.compile(r"^```yaml\n(.*?)^```", re.M | re.S)
+YAML_BLOCK = re.compile(r"^```yaml[^\n]*\n(.*?)^```", re.M | re.S)
 PACKAGE = "decision-fixture"
 # The Router mounts the models directory next to config.yaml here.
 CONTAINER_MODELS_DIR = "/app/models"
@@ -38,7 +40,7 @@ def quickstart_router_config() -> dict:
     page = QUICKSTART.read_text(encoding="utf-8")
     for block in YAML_BLOCK.findall(page):
         document = yaml.safe_load(block)
-        if isinstance(document, dict) and "routing" in document:
+        if isinstance(document, dict) and "recipes" in document:
             return document
     raise AssertionError(f"{QUICKSTART} has no router configuration")
 
@@ -86,11 +88,11 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
         """The test stack's config plus the Quickstart's signal, route and
         deployment; returns the route that needs the signal's answer."""
         page = quickstart_router_config()
-        signal = copy.deepcopy(page["routing"]["signals"]["decision"][0])
+        signal = copy.deepcopy(page["recipes"][0]["signals"]["systemone"][0])
         route = copy.deepcopy(
             next(
                 decision
-                for decision in page["routing"]["decisions"]
+                for decision in page["recipes"][0]["decisions"]
                 if decision["rules"]["conditions"]
             )
         )
@@ -105,19 +107,19 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
 
         config_path = Path(
             self.write_minimal_canonical_config(
-                base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}",
+                endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}",
                 provider="openai",
                 api_only=True,
             )
         )
         config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-        default_route = config["routing"]["decisions"][0]
+        default_route = config["recipes"][0]["decisions"][0]
         route["priority"] = default_route["priority"] + 100
         route["modelRefs"] = copy.deepcopy(default_route["modelRefs"])
-        config["routing"]["signals"] = {"decision": [signal]}
-        config["routing"]["decisions"].insert(0, route)
-        config["global"]["model_catalog"]["deployments"] = deployments
-        # The route check reads x-vsr-matched-decision-model, a debug header.
+        config["recipes"][0]["signals"] = {"systemone": [signal]}
+        config["recipes"][0]["decisions"].insert(0, route)
+        config["global"].setdefault("model_catalog", {})["deployments"] = deployments
+        # The route check reads the systemone signals in x-vsr-trace, a debug header.
         config["global"].setdefault("router", {})["headers"] = {"debug": "any"}
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
@@ -138,7 +140,12 @@ class TestServeManagedModelRuntime(MockUpstreamMixin, ServeSessionMixin, CLITest
                 content="Plan a three-step proof that there are infinitely many primes.",
             )
             selected = headers.get("x-vsr-selected-decision", "")
-            matched = headers.get("x-vsr-matched-decision-model", "")
+            signals = parse_trace(headers.get(TRACE_HEADER)).get("signals")
+            matched = ",".join(
+                item.removeprefix("systemone:")
+                for item in (signals.items if signals else [])
+                if item.startswith("systemone:")
+            )
             if selected == route["name"]:
                 return selected, matched
             time.sleep(2)

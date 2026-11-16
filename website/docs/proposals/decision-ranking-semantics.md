@@ -10,7 +10,7 @@ status: Proposal
 :::note
 This proposal names classifier rules by their earlier `type: llm` field, which
 is deprecated: a classifier rule now names its `deployment`.
-[Migrate model resources](../installation/model-resource-migration.md#classifier-rules)
+[Migrate model resources](../installation/model-resource-migration.md#what-else-changes)
 shows the current form.
 :::
 

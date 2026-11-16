@@ -350,8 +350,6 @@ func featurePermission(method, path string) (string, bool) {
 			return PermEvalWrite, true
 		}
 		return PermEvalRead, true
-	case strings.HasPrefix(path, "/api/ml-pipeline/"):
-		return PermMlPipeline, true
 	default:
 		return "", false
 	}

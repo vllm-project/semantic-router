@@ -16,7 +16,6 @@ MODULE = "github.com/vllm-project/semantic-router/e2e"
 # These packages already have a dedicated required executor and receipt.
 DEDICATED_OWNERS = {
     f"{MODULE}/pkg/soak": "soak-tools",
-    f"{MODULE}/profiles/multimodal-routing": "platform.image-calibration-cpu",
 }
 
 

@@ -139,6 +139,9 @@ function TraceMessage({ message }: { message: InsightsTrajectoryMessage }) {
       {message.content ? (
         <div className={styles.recordTraceMarkdown}>
           <MarkdownRenderer content={message.content} />
+          {message.content_truncated ? (
+            <span>Text truncated at the configured tool trace byte limit</span>
+          ) : null}
         </div>
       ) : (
         <span className={styles.recordTraceRedacted}>
@@ -245,7 +248,13 @@ function buildRecordTraceFallback(record: InsightsRecord): InsightsTrajectoryMes
   for (const step of record.tool_trace?.steps ?? []) {
     switch (step.type) {
       case 'user_input':
-        messages.push({ role: 'user', content: step.text, turn_index: record.turn_index ?? 0 })
+        messages.push({
+          role: 'user',
+          content: step.text,
+          content_truncated: Boolean(step.text && step.truncated),
+          content_redacted: step.content_redacted,
+          turn_index: record.turn_index ?? 0,
+        })
         break
       case 'assistant_tool_call':
         messages.push({
@@ -277,6 +286,7 @@ function buildRecordTraceFallback(record: InsightsRecord): InsightsTrajectoryMes
         messages.push({
           role: 'assistant',
           content: step.text,
+          content_truncated: Boolean(step.text && step.truncated),
           content_redacted: step.content_redacted,
           turn_index: record.turn_index ?? 0,
         })

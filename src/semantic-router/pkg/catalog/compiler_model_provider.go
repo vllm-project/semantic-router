@@ -58,6 +58,11 @@ func (registry *Registry) compileModelProvider(
 		return EffectiveModelProvider{}, err
 	}
 	catalogBinding := registry.findCatalogBinding(provider.Definition.ID, card.Card.ID, binding.ModelID, binding.Protocol)
+	if catalogBinding == nil {
+		// provider_model_id names what the backend serves, not another catalog
+		// entry, so the card's mapping still describes the model behind it.
+		catalogBinding = registry.findCatalogBinding(provider.Definition.ID, card.Card.ID, "", binding.Protocol)
+	}
 	if binding.ModelID == "" && catalogBinding != nil {
 		if catalogBindingRequiresExplicitModelID(*catalogBinding) {
 			return EffectiveModelProvider{}, fmt.Errorf(

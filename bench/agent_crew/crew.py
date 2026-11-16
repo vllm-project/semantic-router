@@ -26,6 +26,9 @@ from typing import Any
 from openai import OpenAI
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
+from router_trace import TRACE_HEADER, trace_members  # noqa: E402
+
 FIXTURE = HERE / "fixture"
 PR_DIR = FIXTURE / "pr"
 
@@ -96,7 +99,6 @@ TOOL_SPECS = {
 
 HEADER_MODEL = "x-vsr-selected-model"
 HEADER_DECISION = "x-vsr-selected-decision"
-HEADER_ROUTING_MS = "x-vsr-routing-latency-ms"
 HEADER_COST = "x-vsr-cost"
 HEADER_CURRENCY = "x-vsr-cost-currency"
 HEADER_REPLAY = "x-vsr-replay-id"
@@ -268,7 +270,9 @@ class Crew:
             finish_reason=choice.finish_reason or "",
             tool_calls=len(choice.message.tool_calls or []),
             latency_s=round(time.perf_counter() - started, 3),
-            routing_latency_ms=header_float(headers, HEADER_ROUTING_MS),
+            routing_latency_ms=header_float(
+                trace_members(headers.get(TRACE_HEADER)), "routing_latency_ms"
+            ),
             cost=header_float(headers, HEADER_COST),
             cost_currency=headers.get(HEADER_CURRENCY) or "",
             replay_id=headers.get(HEADER_REPLAY) or "",
@@ -509,6 +513,7 @@ def main(argv: list[str] | None = None) -> list[Path]:
         api_key=args.api_key,
         timeout=args.timeout,
         max_retries=6,
+        default_headers={"x-vsr-debug": "true"},
     )
     run_dirs = []
     for repeat in range(1, args.repeat + 1):

@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/redaction"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -27,7 +28,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[routerreplay.ListResponse](http.StatusOK, "Successful replay response"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -41,7 +41,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[routerreplay.AggregateResponse](http.StatusOK, "Successful replay response"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -58,7 +57,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[routerreplay.TrajectoryResponse](http.StatusOK, "Successful replay response"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -72,7 +70,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[shadowdataset.Manifest](http.StatusOK, "Shadow comparison dataset manifest"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -90,7 +87,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			routePolicy{Permission: PermReplayDetail, Sensitivity: SensitivityReplay},
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[shadowdataset.JudgeTaskSet](http.StatusOK, "Blinded judge tasks"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -99,7 +95,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[routerreplay.RoutingRecord](http.StatusOK, "Successful replay response"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -113,7 +108,12 @@ func routerReplayFilterParameters() []OpenAPIParameter {
 		queryParameter("decision", "Filter by decision name.", "string"),
 		queryParameter("model", "Filter by selected model.", "string"),
 		queryParameter("session_id", "Filter by logical session identifier.", "string"),
+		queryParameter("turn_id", "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.", "string"),
 		queryParameter("cache_status", "Filter by response-cache outcome.", "string", "all", "cached", "streamed"),
+		queryParameter("request_kind", "Filter by request kind; codex_approval_review selects Codex approval reviews.", "string", "all", "codex_approval_review"),
+		queryParameter("review_status", "Filter approval reviews by status.", "string", "all", "pending", "completed", "tool_call", "invalid", "failed", "cancelled"),
+		queryParameter("review_outcome", "Filter completed approval reviews by verdict.", "string", "all", "allow", "deny"),
+		queryParameter("review_risk", "Filter completed approval reviews by reported risk.", "string", "all", "low", "medium", "high", "critical"),
 	}
 }
 
@@ -184,7 +184,7 @@ func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *h
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set(headers.XContentTypeOptions, "nosniff")
 	w.WriteHeader(statusCode)
 	_, _ = w.Write(body)
 }
