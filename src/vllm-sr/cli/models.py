@@ -2660,7 +2660,8 @@ class BackendAuth(BaseModel):
     """A backend's credential: the mode (delegated sends the requesting user's
     credential instead of a key, caller the client's own provider login), the
     header (the provider's own when unset), the prefix ("" sends the bare key)
-    and the key's environment variable."""
+    and the key's environment variable or owner-only file, which the Router
+    reads at every load."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -2668,6 +2669,14 @@ class BackendAuth(BaseModel):
     header: Optional[str] = None
     prefix: Optional[str] = None
     api_key_env: Optional[str] = None
+    api_key_file: Optional[str] = None
+
+    @field_validator("api_key_file")
+    @classmethod
+    def absolute_key_file(cls, value: Optional[str]) -> Optional[str]:
+        if value and not os.path.isabs(value):
+            raise ValueError("auth.api_key_file must be an absolute path")
+        return value
 
 
 class BackendTLS(BaseModel):

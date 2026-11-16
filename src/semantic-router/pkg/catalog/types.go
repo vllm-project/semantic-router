@@ -191,11 +191,12 @@ type PriceListEntry struct {
 }
 
 // CredentialsRef keeps secrets out of the catalog and lets configuration name
-// either an environment variable or an already-expanded value. APIKey is
-// runtime-only and is omitted from JSON projections.
+// an environment variable, an owner-only key file, or an already-expanded
+// value. APIKey is runtime-only and is omitted from JSON projections.
 type CredentialsRef struct {
-	APIKey    string `json:"-" yaml:"api_key,omitempty"`
-	APIKeyEnv string `json:"api_key_env,omitempty" yaml:"api_key_env,omitempty"`
+	APIKey     string `json:"-" yaml:"api_key,omitempty"`
+	APIKeyEnv  string `json:"api_key_env,omitempty" yaml:"api_key_env,omitempty"`
+	APIKeyFile string `json:"api_key_file,omitempty" yaml:"api_key_file,omitempty"`
 }
 
 // Endpoint describes one interchangeable network target in a provider

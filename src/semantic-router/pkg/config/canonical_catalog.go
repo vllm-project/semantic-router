@@ -193,7 +193,10 @@ func applyBindingMetadata(
 	for key, value := range binding.ExternalModelIDs {
 		params.ExternalModelIDs[key] = value
 	}
-	credential := resolveProviderCredential(effective.Provider.Instance.Credentials)
+	credential, err := resolveProviderCredential(effective.Provider.Instance.Credentials)
+	if err != nil {
+		return "", fmt.Errorf("providers.models[%s]: %w", modelAlias, err)
+	}
 	if existing := params.AccessKeys[providerID]; existing != "" && credential != "" && existing != credential {
 		return "", fmt.Errorf(
 			"providers.models[%s] uses multiple %q backends with different static credentials",
@@ -424,14 +427,18 @@ func endpointTemplateHostname(raw string) string {
 	return strings.Trim(authority, "[]")
 }
 
-func resolveProviderCredential(credentials modelcatalog.CredentialsRef) string {
-	if credentials.APIKey != "" {
-		return credentials.APIKey
+// resolveProviderCredential reads a backend's key at every load, so a hot
+// reload picks up a rotated key file.
+func resolveProviderCredential(credentials modelcatalog.CredentialsRef) (string, error) {
+	switch {
+	case credentials.APIKey != "":
+		return credentials.APIKey, nil
+	case credentials.APIKeyFile != "":
+		return readAPIKeyFile(credentials.APIKeyFile)
+	case credentials.APIKeyEnv != "":
+		return os.Getenv(credentials.APIKeyEnv), nil
 	}
-	if credentials.APIKeyEnv != "" {
-		return os.Getenv(credentials.APIKeyEnv)
-	}
-	return ""
+	return "", nil
 }
 
 func apiFormatForProtocol(protocol string) (string, error) {
