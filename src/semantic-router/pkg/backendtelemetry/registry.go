@@ -2,6 +2,7 @@ package backendtelemetry
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"time"
@@ -18,6 +19,9 @@ type Target struct {
 	// MetricsURL is the absolute URL the adapter reads, such as
 	// http://10.0.0.1:8000/metrics.
 	MetricsURL string
+	// TLS verifies an https MetricsURL as the backend's own calls are
+	// verified; nil keeps the system roots and the URL's host.
+	TLS *tls.Config
 }
 
 // AdapterConfig configures one adapter instance.

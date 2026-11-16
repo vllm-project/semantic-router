@@ -45,8 +45,13 @@ function backendRefFromEditor({
   auth_prefix: prefix,
   api_key_env: apiKeyEnv,
   api_key_file: apiKeyFile,
-  ...backendRef
+  ...editedRef
 }: EditableBackendRef): BackendRefEntry {
+  // metrics only says where an engine's metrics are, so clearing the engine
+  // clears them too; the Router refuses metrics without an engine.
+  const { metrics, ...rest } = editedRef
+  const backendRef: typeof rest & Pick<BackendRefEntry, 'metrics'> =
+    rest.engine && metrics ? { ...rest, metrics } : rest
   const auth: NonNullable<BackendRefEntry['auth']> = {}
   if (credential) auth.credential = credential
   if (header?.trim()) auth.header = header.trim()

@@ -57,7 +57,7 @@ func TestBackendTelemetryCollectsFromEngineBackends(t *testing.T) {
 	defer engine.Close()
 	cfg := telemetryConfig(t, strings.TrimPrefix(engine.URL, "http://"), "        enabled: true\n        poll_interval: 20ms")
 
-	targets := backendTelemetryTargets(cfg.VLLMEndpoints)
+	targets := backendTelemetryTargets(cfg)
 	if len(targets) != 1 || len(targets[backendtelemetry.EngineVLLM]) != 1 {
 		t.Fatalf("targets = %+v, want only the backend that names an engine", targets)
 	}

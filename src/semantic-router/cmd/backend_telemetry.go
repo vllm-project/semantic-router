@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendtelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendtelemetry/vllm"
@@ -73,7 +74,7 @@ func startBackendTelemetry(cfg *config.RouterConfig, registry *backendtelemetry.
 	if err != nil {
 		return nil, err
 	}
-	byEngine := backendTelemetryTargets(cfg.VLLMEndpoints)
+	byEngine := backendTelemetryTargets(cfg)
 	var adapters []backendtelemetry.Adapter
 	var targets []backendtelemetry.Target
 	for _, engine := range backendtelemetry.Engines() {
@@ -110,16 +111,30 @@ func startBackendTelemetry(cfg *config.RouterConfig, registry *backendtelemetry.
 	return part, nil
 }
 
-func backendTelemetryTargets(endpoints []config.VLLMEndpoint) map[backendtelemetry.Engine][]backendtelemetry.Target {
+func backendTelemetryTargets(cfg *config.RouterConfig) map[backendtelemetry.Engine][]backendtelemetry.Target {
 	byEngine := make(map[backendtelemetry.Engine][]backendtelemetry.Target)
-	for _, endpoint := range endpoints {
+	for _, endpoint := range cfg.VLLMEndpoints {
 		if !endpoint.Telemetry.Enabled() {
 			continue
 		}
 		identity := endpoint.TelemetryIdentity()
-		byEngine[identity.Engine] = append(byEngine[identity.Engine], backendtelemetry.Target{
+		target := backendtelemetry.Target{
 			Identity: identity, EndpointName: endpoint.Name, MetricsURL: endpoint.MetricsURL(),
-		})
+		}
+		if strings.EqualFold(endpoint.Protocol, "https") {
+			tlsConfig, err := cfg.ProviderProfiles[endpoint.ProviderProfileName].TLS.ClientConfig()
+			if err != nil {
+				// Telemetry is optional: an unreadable TLS file leaves this
+				// backend unobserved instead of failing the reload.
+				logging.ComponentWarnEvent("router", "backend_telemetry_tls_unavailable", map[string]interface{}{
+					"endpoint": endpoint.Name, "error": err.Error(),
+					"effect": "this backend reports no load metrics; load-aware balancing falls back for its model",
+				})
+				continue
+			}
+			target.TLS = tlsConfig
+		}
+		byEngine[identity.Engine] = append(byEngine[identity.Engine], target)
 	}
 	return byEngine
 }

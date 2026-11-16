@@ -1,6 +1,7 @@
 import importlib
 import sys
 from pathlib import Path
+from typing import Literal, get_args, get_origin
 
 import pytest
 
@@ -348,6 +349,31 @@ def test_backend_ref_accepts_engine_and_metrics():
 def test_backend_ref_rejects_invalid_telemetry(overrides):
     with pytest.raises(ValueError):
         _backend_ref(**overrides)
+
+
+def test_engine_and_lb_policy_choices_match_the_router_schema():
+    """The CLI accepts exactly the engines and policies the Router does."""
+    definitions = importlib.import_module("cli.config_schema").schema_document()[
+        "$defs"
+    ]
+
+    def choices(model, field):
+        annotation = model.model_fields[field].annotation
+        if get_origin(annotation) is not Literal:
+            annotation = next(
+                arg for arg in get_args(annotation) if get_origin(arg) is Literal
+            )
+        return set(get_args(annotation))
+
+    def schema_choices(definition, field):
+        return set(definitions[definition]["properties"][field]["enum"]) - {""}
+
+    assert choices(models.BackendRef, "engine") == schema_choices(
+        "CanonicalBackendRef", "engine"
+    )
+    assert choices(models.ProviderReliability, "lb_policy") == schema_choices(
+        "ProviderReliability", "lb_policy"
+    )
 
 
 def test_unquoted_measured_at_date_loads_as_the_router_reads_it(tmp_path):

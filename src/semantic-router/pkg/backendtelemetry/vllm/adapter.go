@@ -5,6 +5,7 @@ package vllm
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"math"
@@ -43,18 +44,36 @@ func New(cfg backendtelemetry.AdapterConfig) (backendtelemetry.Adapter, error) {
 	if timeout <= 0 {
 		timeout = defaultRequestTimeout
 	}
+	plain := scrapeClient(timeout, nil)
+	clients := make([]*http.Client, len(cfg.Targets))
+	for i, target := range cfg.Targets {
+		clients[i] = plain
+		if target.TLS != nil {
+			clients[i] = scrapeClient(timeout, target.TLS)
+		}
+	}
 	return &adapter{
 		targets: append([]backendtelemetry.Target(nil), cfg.Targets...),
 		ttl:     cfg.TTL,
-		client:  &http.Client{Timeout: timeout},
+		clients: clients,
 		now:     time.Now,
 	}, nil
+}
+
+// scrapeClient reaches a backend as the Router's own backend calls do: never
+// through an environment proxy, and with the backend's TLS settings.
+func scrapeClient(timeout time.Duration, tlsConfig *tls.Config) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.TLSClientConfig = tlsConfig
+	return &http.Client{Timeout: timeout, Transport: transport}
 }
 
 type adapter struct {
 	targets []backendtelemetry.Target
 	ttl     time.Duration
-	client  *http.Client
+	// clients[i] scrapes targets[i].
+	clients []*http.Client
 	now     func() time.Time
 }
 
@@ -81,7 +100,7 @@ func (a *adapter) Collect(ctx context.Context) ([]backendtelemetry.Observation, 
 				return
 			}
 			defer func() { <-limit }()
-			observation, err := a.scrape(ctx, target)
+			observation, err := a.scrape(ctx, a.clients[i], target)
 			results[i] = result{observation, err}
 		}()
 	}
@@ -98,8 +117,8 @@ func (a *adapter) Collect(ctx context.Context) ([]backendtelemetry.Observation, 
 	return observations, errors.Join(errs...)
 }
 
-func (a *adapter) scrape(ctx context.Context, target backendtelemetry.Target) (backendtelemetry.Observation, error) {
-	families, err := promscrape.Fetch(ctx, a.client, target.MetricsURL)
+func (a *adapter) scrape(ctx context.Context, client *http.Client, target backendtelemetry.Target) (backendtelemetry.Observation, error) {
+	families, err := promscrape.Fetch(ctx, client, target.MetricsURL)
 	if err != nil {
 		return backendtelemetry.Observation{}, err
 	}

@@ -86,6 +86,39 @@ describe('model structured editors', () => {
     },
   )
 
+  it('keeps a metrics override through unrelated edits and drops it with the engine', () => {
+    const backend = {
+      name: 'gpu-a',
+      endpoint: 'https://vllm.internal.example:8000',
+      provider: 'vllm',
+      auth: { api_key_env: 'VLLM_KEY' },
+      tls: { ca_file: '/etc/vllm-sr/certs/example-corp-ca.pem' },
+      engine: 'vllm' as const,
+      metrics: { port: 9000 },
+    }
+    let saved: unknown
+    const editor = ModelBackendRefsEditor({
+      value: [backend],
+      onChange: (value) => {
+        saved = value
+      },
+    })
+
+    editor.props.onChange([{ ...editor.props.value[0], weight: 2 }])
+    expect(saved).toEqual([{ ...backend, weight: 2 }])
+
+    editor.props.onChange([{ ...editor.props.value[0], engine: undefined }])
+    expect(saved).toEqual([
+      {
+        name: backend.name,
+        endpoint: backend.endpoint,
+        provider: backend.provider,
+        auth: backend.auth,
+        tls: backend.tls,
+      },
+    ])
+  })
+
   it('keeps the stored key file when a backend is edited, and a new inline key replaces it', () => {
     const backend = {
       name: 'openai-primary',

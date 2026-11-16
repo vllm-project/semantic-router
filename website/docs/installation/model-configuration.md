@@ -294,7 +294,9 @@ read that engine's load metrics:
 | `metrics.path` | `/metrics` | Path of those metrics. |
 
 Naming an engine changes nothing on its own; it only tells the Router where
-load evidence for that replica can be found.
+load evidence for that replica can be found. An `https` backend's metrics, on
+`metrics.port` too, are read over `https` with its `tls` block, as its chat
+calls are, and never through an environment proxy.
 
 ### Balance on serving-engine load
 
