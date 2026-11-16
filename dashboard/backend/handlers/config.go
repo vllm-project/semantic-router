@@ -138,8 +138,8 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 				if endpoint.ProviderProfileName != "" && endpoint.Address == "" {
 					continue
 				}
-				if err := validateEndpointAddress(endpoint.Address); err != nil {
-					http.Error(w, fmt.Sprintf("Config validation failed: vLLM endpoint '%s' address validation failed: %v\n\nSupported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n- DNS names: localhost, example.com, api.example.com\n\nUnsupported formats:\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead", endpoint.Name, err), http.StatusBadRequest)
+				if addressErr := validateEndpointAddress(endpoint.Address); addressErr != nil {
+					http.Error(w, fmt.Sprintf("Config validation failed: vLLM endpoint '%s' address validation failed: %v\n\nSupported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n- DNS names: localhost, example.com, api.example.com\n\nUnsupported formats:\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead", endpoint.Name, addressErr), http.StatusBadRequest)
 					return
 				}
 			}
@@ -148,7 +148,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if err := writeConfigAtomically(configPath, yamlData); err != nil {
+		if yamlData, err = persistConfig(configPath, yamlData); err != nil {
 			writeConfigPersistenceError(w, err)
 			return
 		}
@@ -268,7 +268,7 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if err := writeConfigAtomically(configPath, yamlData); err != nil {
+		if _, err = persistConfig(configPath, yamlData); err != nil {
 			writeConfigPersistenceError(w, err)
 			return
 		}

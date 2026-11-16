@@ -19,12 +19,13 @@ interface StructuredModelFieldProps {
   maskSensitive?: boolean
 }
 
-/** A backend ref as the editor shows it: its auth block as four fields. */
+/** A backend ref as the editor shows it: its auth block as five fields. */
 type EditableBackendRef = Omit<BackendRefEntry, 'auth'> & {
   auth_credential?: NonNullable<BackendRefEntry['auth']>['credential']
   auth_header?: string
   auth_prefix?: string
   api_key_env?: string
+  api_key_file?: string
 }
 
 function editableBackendRef({ auth, ...backendRef }: BackendRefEntry): EditableBackendRef {
@@ -33,6 +34,7 @@ function editableBackendRef({ auth, ...backendRef }: BackendRefEntry): EditableB
   if (auth?.header !== undefined) editable.auth_header = auth.header
   if (auth?.prefix !== undefined) editable.auth_prefix = auth.prefix
   if (auth?.api_key_env !== undefined) editable.api_key_env = auth.api_key_env
+  if (auth?.api_key_file !== undefined) editable.api_key_file = auth.api_key_file
   return editable
 }
 
@@ -41,6 +43,7 @@ function backendRefFromEditor({
   auth_header: header,
   auth_prefix: prefix,
   api_key_env: apiKeyEnv,
+  api_key_file: apiKeyFile,
   ...backendRef
 }: EditableBackendRef): BackendRefEntry {
   const auth: NonNullable<BackendRefEntry['auth']> = {}
@@ -48,6 +51,8 @@ function backendRefFromEditor({
   if (header?.trim()) auth.header = header.trim()
   if (prefix !== undefined) auth.prefix = prefix.trim()
   if (apiKeyEnv?.trim()) auth.api_key_env = apiKeyEnv.trim()
+  // A newly typed inline key replaces the stored file; saving moves it into a new one.
+  if (apiKeyFile?.trim() && !backendRef.api_key?.trim()) auth.api_key_file = apiKeyFile.trim()
   return Object.keys(auth).length > 0 ? { ...backendRef, auth } : backendRef
 }
 
@@ -71,10 +76,17 @@ const backendRefFields: ObjectEditorField<EditableBackendRef>[] = [
     fullWidth: true,
   },
   {
+    key: 'api_key_file',
+    label: 'API key file',
+    placeholder: '/run/secrets/openai-key',
+    fullWidth: true,
+    helpText: 'An owner-only file the Router reads the key from at every load.',
+  },
+  {
     key: 'api_key',
-    label: 'Inline API key',
+    label: 'API key',
     type: 'password',
-    placeholder: 'Stored in configuration',
+    placeholder: 'Saved to an owner-only key file',
     fullWidth: true,
   },
   {

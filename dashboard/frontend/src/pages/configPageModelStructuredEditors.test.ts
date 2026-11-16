@@ -73,6 +73,35 @@ describe('model structured editors', () => {
     },
   )
 
+  it('keeps the stored key file when a backend is edited, and a new inline key replaces it', () => {
+    const backend = {
+      name: 'openai-primary',
+      endpoint: 'https://api.openai.com/v1',
+      provider: 'openai',
+      auth: { api_key_file: '/app/.vllm-sr/provider-keys/key-1' },
+    }
+    let saved: unknown
+    const editor = ModelBackendRefsEditor({
+      value: [backend],
+      onChange: (value) => {
+        saved = value
+      },
+    })
+
+    editor.props.onChange(editor.props.value)
+    expect(saved).toEqual([backend])
+
+    editor.props.onChange([{ ...editor.props.value[0], api_key: 'replacement-key' }])
+    expect(saved).toEqual([
+      {
+        name: 'openai-primary',
+        endpoint: 'https://api.openai.com/v1',
+        provider: 'openai',
+        api_key: 'replacement-key',
+      },
+    ])
+  })
+
   it('renders capabilities, LoRAs, provider IDs, and pricing without JSON input', () => {
     const markup = renderToStaticMarkup(
       createElement(

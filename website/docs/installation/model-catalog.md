@@ -320,7 +320,8 @@ global:
 
 `providers.models` stays a separate concept: the models that answer users,
 which routing chooses among. Only the connection shape (`endpoint`, `auth`,
-`headers`) is shared. A backend reads its key from `auth.api_key_env`, or
+`headers`) is shared. A backend reads its key from `auth.api_key_env` or
+`auth.api_key_file` (at every load, so a reload picks up a rotated file), or
 takes the requesting user's with `auth.credential: delegated`. A
 deployment, the decision model included, is never a routing target and never
 appears in `/v1/models`. The native System One API answers for one only under
