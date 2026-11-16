@@ -248,8 +248,8 @@ vllm-sr connect codex --config codex.yaml --launch -- exec "fix the failing test
 ```
 
 `--launch` runs the same checks and the same probe, then starts the harness
-through the gateway for that one session and exits with its status. Nothing is
-written: Claude Code gets the settings with `--settings` from a temporary file
+through the gateway for that one session and exits with its status. No setting
+is written: Claude Code gets the settings with `--settings` from a temporary file
 only you can read, and Codex gets them as `-c` overrides. Both read the key from
 `VLLM_SR_API_KEY` in their own environment (Claude Code through an
 `apiKeyHelper` that prints it), so it never appears on the command line or in a
@@ -263,26 +263,91 @@ with `vllm-sr connect claude-code --launch -- --resume <session id>`.
 ### Launch in a worktree or another home
 
 ```bash
+vllm-sr connect codex --config codex.yaml --launch --worktree new:fix-auth
 vllm-sr connect codex --config codex.yaml --launch --worktree ../feature-x
 vllm-sr connect claude-code --config claude-code.yaml --launch \
-  --worktree ../feature-x --home ~/.claude-work
+  --worktree new --home ~/.claude-work
 ```
 
-`--worktree` starts the harness in an existing git worktree, with the same
-temporary settings as `--launch`. The command only checks that git sees a work
-tree there: it never creates, switches or removes a branch or a worktree, so
-make one with `git worktree add` first. The harness keeps its own home,
-`$CLAUDE_CONFIG_DIR` or `~/.claude` and `$CODEX_HOME` or `~/.codex`, and with
-it its own login. `--home` gives it another existing home for that session,
-such as one signed in to a second account. Nothing is copied into it, so the
-harness signs in there as that home's account does.
+`--worktree new:NAME` starts the harness in a new worktree. Once the gateway
+passes the probe, the command runs `git worktree add -b vllm-sr/NAME
+<checkout>-NAME HEAD` in the git checkout it is run from, so the worktree sits
+beside that checkout on a branch of its own and starts from the committed
+`HEAD`; uncommitted changes stay in the checkout. `new` alone names it after the
+harness and the time, such as `vllm-sr/codex-20261116-153012`. A name takes
+letters, digits, `.`, `_` and `-`, and a branch or directory that already
+exists is refused before anything is made. Give a directory called `new` as
+`./new`. `--dry-run` prints the `git worktree add` command and makes nothing.
 
-Before the harness starts, the command prints one line to match the session to
-its calls in Insights later:
+`--worktree <path>` starts the harness in an existing git worktree instead, and
+only checks that git sees a work tree there. Neither form switches or removes a
+branch or a worktree. The harness keeps its own home, `$CLAUDE_CONFIG_DIR` or
+`~/.claude` and `$CODEX_HOME` or `~/.codex`, and with it its own login.
+`--home` gives it another existing home for that session, such as one signed in
+to a second account. Nothing is copied into it, so the harness signs in there as
+that home's account does.
+
+Before the harness starts, the command prints the session's header:
 
 ```text
-Session: started=2026-11-15T21:03:11+09:00 worktree=/src/feature-x home=/home/me/.codex gateway=http://localhost:8899 model=vllm-sr/auto
+Session 0b6f8c2e-3d1a-4f6b-9a57-2c8e4d1f7a90
+  harness   claude-code
+  model     vllm-sr/auto
+  gateway   http://localhost:8899
+  worktree  /src/app-fix-auth (made by connect from 1a2b3c4d5e6f)
+  branch    vllm-sr/fix-auth
+  home      /home/me/.claude
+  started   2026-11-16T15:30:12+09:00
+  requests  x-vsr-session-id, x-claude-code-session-id: 0b6f8c2e-3d1a-4f6b-9a57-2c8e4d1f7a90
+  replay    files its calls under this session
 ```
+
+Every model call of a launched session carries its id in `x-vsr-session-id`:
+Claude Code sends it through `ANTHROPIC_CUSTOM_HEADERS`, keeping the headers
+your shell sets there, and Codex through `http_headers` in its provider
+settings. Claude Code also starts its conversation with `--session-id` set to
+the same id, so its own `x-claude-code-session-id` carries it too, and
+`-- --resume <id>` resumes it later. The Router reads `x-vsr-session-id` before
+the headers `global.router.headers.session_id_headers` names, but Router Replay
+and protection file a call under the header that
+`global.router.learning.protection.identity.headers.session` names when the
+call carries it. With `--config`, the `replay` line says which applies: for
+Codex on the `session-id` the [Codex settings](#router-settings-for-codex-cli)
+name, Replay files the calls under the session id Codex makes itself, one for
+each Codex session. A Claude Code launch that resumes or continues a
+conversation keeps that conversation's own id. Otherwise
+`GET /api/v1/observability/replays?session_id=<id>` returns every call of the
+launch, its subagents included.
+
+### List and clean up launched sessions
+
+```bash
+vllm-sr connect sessions
+```
+
+Each launch is recorded in `$XDG_STATE_HOME/vllm-sr/sessions` (by default
+`~/.local/state/vllm-sr/sessions`), and `connect sessions` lists them, the
+newest first, with the header above and what is left of each one now: whether
+the worktree still exists, how many uncommitted changes it has, and for a
+worktree connect made, how many commits on its branch no other branch and no
+remote has. `--json` prints the same as JSON.
+
+The command removes nothing. For a worktree connect made it prints the steps
+that remove it, and only steps that lose no work:
+
+```text
+  state     no uncommitted changes, no unmerged commits
+  cleanup   git -C /src/app worktree remove /src/app-fix-auth, then git -C /src/app branch -d vllm-sr/fix-auth
+```
+
+While the worktree has uncommitted changes it says to commit or discard them
+first, and while the branch has unmerged commits it says to push or merge the
+branch before deleting it; `git worktree remove` and `git branch -d` refuse
+those cases too. `git worktree remove` does delete the files git ignores there,
+such as build output. A launch with `--worktree <path>` or none is listed but
+never offered for removal, since that launch did not make the worktree. The
+record stays after the cleanup, so the list keeps the session id to look up in
+Insights.
 
 ### Fetch the key with a command
 
