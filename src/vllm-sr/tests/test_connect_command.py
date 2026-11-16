@@ -2999,6 +2999,10 @@ def test_launch_in_a_new_worktree_branches_from_head_and_tags_every_request(
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "home"))
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home"))
     monkeypatch.setenv("ANTHROPIC_CUSTOM_HEADERS", "x-team: red\nx-vsr-session-id: old")
+    # the new worktree has no settings of its own yet: the checkout's are read
+    local = {"env": {"ANTHROPIC_CUSTOM_HEADERS": "x-team: blue\nx-vsr-session-id: x"}}
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "settings.local.json").write_text(json.dumps(local))
     args = ["connect", harness, "--base-url", url, "--launch", "--worktree"]
     linked, before = tmp_path / "repo-fix", _git_state(repo)
 
@@ -3032,7 +3036,7 @@ def test_launch_in_a_new_worktree_branches_from_head_and_tags_every_request(
     # x-vsr-session-id, and Claude Code's own session id is the same one
     if harness == "claude-code":
         sent = json.loads(ran["settings"])["env"]["ANTHROPIC_CUSTOM_HEADERS"]
-        assert sent == f"x-team: red\nx-vsr-session-id: {session}"
+        assert sent == f"x-team: blue\nx-vsr-session-id: {session}"
         assert ran["args"][2:4] == ["--session-id", session]
         carried = "x-vsr-session-id, x-claude-code-session-id"
     else:
@@ -3040,27 +3044,34 @@ def test_launch_in_a_new_worktree_branches_from_head_and_tags_every_request(
         assert tag.replace("'", '"') in ran["args"]
         carried = "x-vsr-session-id"
     assert header.endswith(f"requests {carried}: {session}")
-    assert "replay" not in header  # without --config the Router's reading is unknown
-
-    # with it, the header says where Router Replay files the calls
-    named = hs.HARNESS_SESSION_HEADERS[harness]
-    learning = {"protection": {"identity": {"headers": {"session": named}}}}
+    # the docs say where Router Replay files the calls; the header does not
+    # guess at the Router's identity settings, given or not
+    learning = {"protection": {"identity": {"headers": {"session": "session-id"}}}}
     config = tmp_path / "router.yaml"
     config.write_text(yaml.safe_dump(_router(learning=learning)))
     result = CliRunner().invoke(main, [*args[:-1], "--config", str(config)])
     assert result.exit_code == 3, result.output
-    filed = (
-        "this session"
-        if harness == "claude-code"
-        else ("the session-id codex sends itself, not this session")
-    )
-    assert f"replay files its calls under {filed}" in " ".join(result.output.split())
+    assert "replay" not in result.output
 
-    # the branch is taken now; without a name one is made up
+    # its worktree removed, the branch is still taken, and git says so; a
+    # directory in the way is refused first, since git would make the branch
+    # before it refuses
     harness_bin.unlink()
+    remove = ["git", "-C", str(repo), "worktree", "remove", str(linked)]
+    subprocess.run(remove, check=True)
     result = CliRunner().invoke(main, [*args, "new:fix"])
-    assert result.exit_code == 2 and "vllm-sr/fix already exists" in result.output
-    assert not harness_bin.exists()
+    assert result.exit_code == 1, result.output
+    name = "claude" if harness == "claude-code" else harness
+    assert result.output.endswith(
+        "git worktree add failed: a branch named 'vllm-sr/fix' already exists,"
+        f" so {name} was not started.\n"
+    )
+    (tmp_path / "repo-taken").mkdir()
+    (tmp_path / "repo-taken" / "kept.txt").write_text("kept\n")
+    before = _git_state(repo)
+    result = CliRunner().invoke(main, [*args, "new:taken"])
+    assert result.exit_code == 2 and "repo-taken already exists" in result.output
+    assert _git_state(repo) == before and not harness_bin.exists()
     result = CliRunner().invoke(main, [*args, "new"])
     assert result.exit_code == 3, result.output
     made = re.search(rf"branch\s+vllm-sr/({harness}-\d{{8}}-\d{{6}})", result.output)
@@ -3073,18 +3084,7 @@ def test_launch_in_a_new_worktree_branches_from_head_and_tags_every_request(
     assert result.exit_code == 2 and "not inside a git checkout" in result.output
 
 
-def test_the_header_says_which_session_router_replay_files_the_calls_under():
-    # protection's identity header wins in Replay when the harness sends it
-    # itself; Claude Code's carries the launch's id, Codex's its own
-    own = hs.HARNESS_SESSION_HEADERS
-    claude = ["x-vsr-session-id", own["claude-code"]]
-    assert hs.filed_under(None, "codex", ["x-vsr-session-id"]) == "this session"
-    assert hs.filed_under(own["claude-code"], "claude-code", claude) == "this session"
-    assert hs.filed_under(own["claude-code"], "codex", claude[:1]) == "this session"
-    assert hs.filed_under("session-id", "codex", claude[:1]) == (
-        "the session-id codex sends itself, not this session"
-    )
-    # a conversation Claude Code resumes keeps its own id
+def test_a_conversation_claude_code_resumes_keeps_its_own_session_id():
     assert hs.claude_session_args(["-p", "hi"], "s") == ["--session-id", "s"]
     for picked in (["--resume", "x"], ["-c"], ["--session-id=x"], ["--fork-session"]):
         assert hs.claude_session_args(picked, "s") == []
@@ -3165,6 +3165,122 @@ def test_connect_sessions_lists_each_launch_and_how_to_clean_it_up(
         "state": None,
     }
     assert sessions[0]["state"]["worktree"] == "removed"
+
+
+def test_a_claude_code_launch_keeps_the_custom_headers_its_settings_set(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    # Claude Code 2.1.325 takes ANTHROPIC_CUSTOM_HEADERS whole from its local,
+    # project or user settings, the first that sets it, else from the shell,
+    # and the launch's --settings would replace them all
+    url, _, _ = gateway
+    home, project = tmp_path / "home", tmp_path / "project"
+    (project / ".claude").mkdir(parents=True)
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    monkeypatch.setenv("ANTHROPIC_CUSTOM_HEADERS", "x-from: shell")
+    launch = ["connect", "claude-code", "--base-url", url, "--launch"]
+
+    def sent(*args):
+        result = CliRunner().invoke(main, [*launch, *args])
+        assert result.exit_code == 3, result.output
+        session = re.search(rf"^Session ({UUID})$", result.output, re.M)[1]
+        settings = json.loads(json.loads(harness_bin.read_text())["settings"])
+        return settings["env"]["ANTHROPIC_CUSTOM_HEADERS"], session
+
+    def write(path, headers):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"env": {"ANTHROPIC_CUSTOM_HEADERS": headers}}))
+
+    headers, session = sent()
+    assert headers == f"x-from: shell\nx-vsr-session-id: {session}"
+    write(home / "settings.json", "x-from: user\nx-vsr-session-id: old")
+    headers, session = sent()
+    assert headers == f"x-from: user\nx-vsr-session-id: {session}"
+    write(project / ".claude" / "settings.json", "x-from: project")
+    assert sent()[0].startswith("x-from: project\n")
+    write(project / ".claude" / "settings.local.json", "x-from: local")
+    assert sent()[0].startswith("x-from: local\n")
+    # another home is read in place of the user's
+    other = tmp_path / "other"
+    write(other / "settings.json", "x-from: other")
+    (project / ".claude" / "settings.json").unlink()
+    (project / ".claude" / "settings.local.json").unlink()
+    assert sent("--home", str(other))[0].startswith("x-from: other\n")
+
+
+def test_connect_sessions_offers_no_cleanup_that_loses_detached_or_ignored_work(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    tmp_path = tmp_path.resolve()
+    repo, git, _ = _committed_repo(tmp_path, monkeypatch)
+    (repo / ".gitignore").write_text(".env\n")
+    subprocess.run([*git, str(repo), "add", ".gitignore"], check=True)
+    subprocess.run([*git, str(repo), "commit", "-q", "-m", "ignore"], check=True)
+    linked = tmp_path / "repo-fix"
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "home"))
+    launch = ["connect", "claude-code", "--base-url", url, "--launch"]
+    result = CliRunner().invoke(main, [*launch, "--worktree", "new:fix"])
+    assert result.exit_code == 3, result.output
+
+    def listed():
+        result = CliRunner().invoke(main, ["connect", "sessions"])
+        assert result.exit_code == 0, result.output
+        return " ".join(result.output.split())
+
+    remove = f"git -C {repo} worktree remove {linked}"
+    # a file git ignores is deleted by the removal: the list says so first
+    (linked / ".env").write_text("TOKEN=kept\n")
+    text = listed()
+    assert "state no uncommitted changes, 1 ignored path, no unmerged commits" in text
+    assert (
+        "cleanup keep what you need of the 1 ignored path there, which the"
+        f" removal deletes, then {remove}, then git -C {repo} branch -d" in text
+    )
+    # a commit on a detached HEAD is on no branch: no removal is offered
+    subprocess.run(["git", "-C", str(linked), "checkout", "-q", "--detach"], check=True)
+    (linked / "work.txt").write_text("work\n")
+    subprocess.run([*git, str(linked), "add", "work.txt"], check=True)
+    subprocess.run([*git, str(linked), "commit", "-q", "-m", "work"], check=True)
+    text = listed()
+    assert "1 ignored path, 1 detached commit, no unmerged commits" in text
+    assert "cleanup put the commits on its detached HEAD on a branch first" in text
+    assert remove not in text
+    # on a branch, the commits outlive the worktree
+    subprocess.run(["git", "-C", str(linked), "switch", "-q", "-c", "kept"], check=True)
+    text = listed()
+    assert "1 ignored path, no unmerged commits cleanup keep what" in text
+    assert remove in text
+
+
+def test_the_sessions_directory_is_private(tmp_path, state_home):
+    sessions = state_home / "vllm-sr" / "sessions"
+    hs.record("s1", "codex", hs.Workspace(tmp_path), tmp_path, "http://gw", "m")
+    assert stat.S_IMODE(sessions.stat().st_mode) == 0o700
+    assert stat.S_IMODE((sessions / "s1.json").stat().st_mode) == 0o600
+    # one an earlier version made readable is made private
+    sessions.chmod(0o755)
+    hs.record("s2", "codex", hs.Workspace(tmp_path), tmp_path, "http://gw", "m")
+    assert stat.S_IMODE(sessions.stat().st_mode) == 0o700
+
+
+def test_a_launch_needs_git_only_for_a_worktree(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PATH", str(harness_bin.parent / "bin"))
+    launch = ["connect", "codex", "--base-url", url, "--launch"]
+    result = CliRunner().invoke(main, launch)
+    assert result.exit_code == 3, result.output
+    assert json.loads(harness_bin.read_text())["cwd"] == str(tmp_path)
+    for worktree in ("new", str(tmp_path)):
+        result = CliRunner().invoke(main, [*launch, "--worktree", worktree])
+        assert result.exit_code == 2, result.output
+        assert "a worktree needs git, which is not on PATH" in result.output
 
 
 def test_a_key_command_gets_no_longer_than_the_harness_gives_it(

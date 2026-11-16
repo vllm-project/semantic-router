@@ -286,13 +286,17 @@ passes the probe, the command runs `git worktree add -b vllm-sr/NAME
 beside that checkout on a branch of its own and starts from the committed
 `HEAD`; uncommitted changes stay in the checkout. `new` alone names it after the
 harness and the time, such as `vllm-sr/codex-20261116-153012`. A name takes
-letters, digits, `.`, `_` and `-`, and a branch or directory that already
-exists is refused before anything is made. Give a directory called `new` as
-`./new`. `--dry-run` prints the `git worktree add` command and makes nothing.
+letters, digits, `.`, `_` and `-`. A directory that already exists is refused
+before anything is made, and `git worktree add` itself refuses a branch that
+already exists, such as one whose worktree was removed, and the harness is not
+started then. Give a directory called `new` as `./new`. `--dry-run` prints the
+`git worktree add` command and makes nothing.
 
 `--worktree <path>` starts the harness in an existing git worktree instead, and
 only checks that git sees a work tree there. Neither form switches or removes a
-branch or a worktree. The harness keeps its own home, `$CLAUDE_CONFIG_DIR` or
+branch or a worktree. Only a worktree needs git: without `--worktree`,
+`--launch` starts the harness in the directory it is run from, with or without
+git. The harness keeps its own home, `$CLAUDE_CONFIG_DIR` or
 `~/.claude` and `$CODEX_HOME` or `~/.codex`, and with it its own login.
 `--home` gives it another existing home for that session, such as one signed in
 to a second account. Nothing is copied into it, so the harness signs in there as
@@ -310,25 +314,31 @@ Session 0b6f8c2e-3d1a-4f6b-9a57-2c8e4d1f7a90
   home      /home/me/.claude
   started   2026-11-16T15:30:12+09:00
   requests  x-vsr-session-id, x-claude-code-session-id: 0b6f8c2e-3d1a-4f6b-9a57-2c8e4d1f7a90
-  replay    files its calls under this session
 ```
 
 Every model call of a launched session carries its id in `x-vsr-session-id`:
-Claude Code sends it through `ANTHROPIC_CUSTOM_HEADERS`, keeping the headers
-your shell sets there, and Codex through `http_headers` in its provider
-settings. Claude Code also starts its conversation with `--session-id` set to
-the same id, so its own `x-claude-code-session-id` carries it too, and
-`-- --resume <id>` resumes it later. The Router reads `x-vsr-session-id` before
-the headers `global.router.headers.session_id_headers` names, but Router Replay
-and protection file a call under the header that
-`global.router.learning.protection.identity.headers.session` names when the
-call carries it. With `--config`, the `replay` line says which applies: for
-Codex on the `session-id` the [Codex settings](#router-settings-for-codex-cli)
-name, Replay files the calls under the session id Codex makes itself, one for
-each Codex session. A Claude Code launch that resumes or continues a
-conversation keeps that conversation's own id. Otherwise
-`GET /api/v1/observability/replays?session_id=<id>` returns every call of the
-launch, its subagents included.
+Codex sends it through `http_headers` in its provider settings, and Claude Code
+through `ANTHROPIC_CUSTOM_HEADERS`, beside the headers it would send there
+anyway. Claude Code takes that variable whole from its local, project or user
+settings, the first that sets it, else from your shell, and the launch's
+`--settings` would replace them all, so the launch reads them in that order
+and keeps the lines it finds; for `--worktree new` the project's files are those
+of the checkout it is made from. Claude Code also starts its conversation with
+`--session-id` set to the same id, so its own `x-claude-code-session-id` carries
+it too, and `-- --resume <id>` resumes it later.
+
+The Router reads `x-vsr-session-id` before any other session header, so while
+`global.router.learning.protection.identity.headers.session` is unset, as in the
+Router settings below, Router Replay files every call of the launch under its
+id, and `GET /api/v1/observability/replays?session_id=<id>` returns them all,
+subagents included. A header named there replaces it: a call that carries the
+header is filed under that header's value whenever protection can key the
+call by it, as
+[Session identification](../api/session-identification#choose-the-identity-you-need)
+describes, and under the launch's id otherwise. Claude Code's
+`x-claude-code-session-id` holds the launch's id too, unless the launch resumes
+or continues a conversation, which keeps its own id, and Codex's `session-id`
+holds the id Codex makes for each of its sessions.
 
 ### List and clean up launched sessions
 
@@ -337,14 +347,16 @@ vllm-sr connect sessions
 ```
 
 Each launch is recorded in `$XDG_STATE_HOME/vllm-sr/sessions` (by default
-`~/.local/state/vllm-sr/sessions`), and `connect sessions` lists them, the
-newest first, with the header above and what is left of each one now: whether
-the worktree still exists, how many uncommitted changes it has, and for a
-worktree connect made, how many commits on its branch no other branch and no
-remote has. `--json` prints the same as JSON.
+`~/.local/state/vllm-sr/sessions`), a directory only you can read, and
+`connect sessions` lists them, the newest first, with the header above and what
+is left of each one now: whether the worktree still exists, how many
+uncommitted changes it has, and when there are any, how many paths git ignores
+there and how many commits on a detached `HEAD` no branch and no remote has.
+For a worktree connect made it also counts the commits on its branch no other
+branch and no remote has. `--json` prints the same as JSON.
 
 The command removes nothing. For a worktree connect made it prints the steps
-that remove it, and only steps that lose no work:
+that remove it, and only steps that lose no change and no commit:
 
 ```text
   state     no uncommitted changes, no unmerged commits
@@ -352,13 +364,16 @@ that remove it, and only steps that lose no work:
 ```
 
 While the worktree has uncommitted changes it says to commit or discard them
-first, and while the branch has unmerged commits it says to push or merge the
-branch before deleting it; `git worktree remove` and `git branch -d` refuse
-those cases too. `git worktree remove` does delete the files git ignores there,
-such as build output. A launch with `--worktree <path>` or none is listed but
-never offered for removal, since that launch did not make the worktree. The
-record stays after the cleanup, so the list keeps the session id to look up in
-Insights.
+first, and while commits on a detached `HEAD` there are on no branch, to put
+them on one first: removing the worktree would leave them unreachable. While
+the branch has unmerged commits it says to push or merge the branch before
+deleting it. `git worktree remove` and `git branch -d` refuse uncommitted
+changes and unmerged commits too, but `git worktree remove` deletes the files
+git ignores there, such as build output or a `.env`, so the steps then start by
+saying how many paths it deletes. A launch with `--worktree <path>` or none is
+listed but never offered for removal, since that launch did not make the
+worktree. The record stays after the cleanup, so the list keeps the session id
+to look up in Insights.
 
 ### Fetch the key with a command
 

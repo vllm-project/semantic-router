@@ -15,12 +15,13 @@ import datetime
 import json
 import re
 import shlex
+import shutil
 import subprocess
 import uuid
 from pathlib import Path
 
 from cli import harness_connect as hc
-from cli import harness_router_check as rc
+from cli.commands.runtime_paths import _create_or_harden_private_directory
 from cli.instance_paths import cli_state_directory
 
 # The variable each harness reads its home from.
@@ -61,11 +62,6 @@ def home_of(harness: str, env: dict[str, str]) -> Path:
 # global.router.headers.session_id_headers names; every launch sends its own.
 SESSION_HEADER = "x-vsr-session-id"
 CLAUDE_HEADERS = "ANTHROPIC_CUSTOM_HEADERS"
-# The session header each harness sends itself.
-HARNESS_SESSION_HEADERS = {
-    "claude-code": rc.CLAUDE_HEADERS["session"],
-    "codex": rc.CODEX_HEADERS["session"],
-}
 # Claude Code arguments that pick the conversation, and so its session id.
 CLAUDE_PICKS_SESSION = ("--session-id", "-r", "--resume", "-c", "--continue")
 # A worktree --worktree new:NAME makes is on this branch, beside the checkout.
@@ -96,7 +92,12 @@ class Workspace:
 
 def workspace(value: str | None, harness: str) -> Workspace:
     """--worktree as given: none is this directory, new or new:NAME a worktree
-    to make, anything else an existing git worktree. Nothing is changed."""
+    to make, anything else an existing git worktree. Nothing is changed. Only
+    a worktree needs git."""
+    if shutil.which("git") is None:
+        if value:
+            raise ValueError("a worktree needs git, which is not on PATH")
+        return Workspace(Path.cwd())
     if value == "new":
         stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         return _planned(Path.cwd(), f"{harness}-{stamp}")
@@ -129,12 +130,10 @@ def _planned(here: Path, name: str) -> Workspace:
     base = hc._git(here, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
     if not base.stdout.strip():
         raise ValueError(f"{top} has no commit for a new worktree to start from")
-    if not hc._git(
-        here, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"
-    ).returncode:
-        raise ValueError(f"the branch {branch} already exists; give another new:NAME")
     repository = Path(top)
     path = repository.parent / f"{repository.name}-{name}"
+    # git refuses a branch that exists itself, but makes the branch before it
+    # refuses a directory in the way (2.43)
     if path.exists():
         raise ValueError(f"{path} already exists; give another new:NAME")
     return Workspace(path, branch, repository, base.stdout.strip())
@@ -148,7 +147,8 @@ def add_argv(where: Workspace) -> list[str]:
 def add(where: Workspace) -> None:
     made = subprocess.run(add_argv(where), capture_output=True, text=True, check=False)
     if made.returncode:
-        raise ValueError(f"git worktree add failed: {made.stderr.strip()}")
+        said = made.stderr.strip().rsplit("\n", 1)[-1].removeprefix("fatal: ")
+        raise ValueError(f"git worktree add failed: {said}")
 
 
 def session_id() -> str:
@@ -165,19 +165,24 @@ def claude_session_args(args: list[str], session: str) -> list[str]:
     return ["--session-id", session]
 
 
-def filed_under(named: str | None, harness: str, carried: list[str]) -> str:
-    """The session Router Replay files a launched call under: that of the header
-    named by global.router.learning.protection.identity.headers.session when
-    the harness sends it itself, else the one the launch sends."""
-    own = HARNESS_SESSION_HEADERS[harness]
-    if (named or "").strip().lower() == own and own not in carried:
-        return f"the {own} {harness} sends itself, not this session"
-    return "this session"
-
-
-def claude_headers(given: str | None, session: str) -> str:
-    """ANTHROPIC_CUSTOM_HEADERS: the lines given, with this session's header in
-    place of one they hold."""
+def claude_headers(env: dict[str, str], cwd: Path, session: str) -> str:
+    """ANTHROPIC_CUSTOM_HEADERS: the lines Claude Code started in cwd would send,
+    with this session's header in place of one they hold. Claude Code takes the
+    variable whole from its local, project or user settings, the first that
+    sets it, else from env, and the launch's --settings replaces them all."""
+    given = env.get(CLAUDE_HEADERS)
+    project = cwd / ".claude"
+    for path in (
+        hc.claude_settings_path("user", cwd, env),
+        project / "settings.json",
+        project / "settings.local.json",
+    ):
+        try:
+            settings = hc._settings(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        value = settings.get("env", {}).get(CLAUDE_HEADERS)
+        given = value if isinstance(value, str) else given
     kept = [
         line
         for line in (given or "").splitlines()
@@ -197,7 +202,8 @@ def _records() -> Path:
 
 
 def record(session: str, harness: str, where: Workspace, home, gateway, model) -> dict:
-    """Write down the launch, so connect sessions lists it later."""
+    """Write down the launch, so connect sessions lists it later, in a directory
+    only its owner reads."""
     started = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     found = {
         "id": session,
@@ -212,7 +218,9 @@ def record(session: str, harness: str, where: Workspace, home, gateway, model) -
         "repository": str(where.repository) if where.new else None,
         "base": where.base or None,
     }
-    hc.write_private(_records() / f"{session}.json", json.dumps(found, indent=2) + "\n")
+    _records().parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    records = _create_or_harden_private_directory(_records())
+    hc.write_private(records / f"{session}.json", json.dumps(found, indent=2) + "\n")
     return found
 
 
@@ -240,18 +248,28 @@ def rows(session: dict) -> list[tuple[str, str]]:
 
 
 def state(session: dict) -> dict:
-    """What is left now of the launch's worktree, its uncommitted changes, and
-    when connect made it, its branch and the commits on it that no other branch
-    and no remote has."""
+    """What is left now of the launch's worktree: its uncommitted changes, the
+    paths git ignores there, which git worktree remove deletes, and the commits
+    on its HEAD that no branch and no remote has; and when connect made it, its
+    branch and the commits on it that no other branch and no remote has."""
     path = Path(session["worktree"])
     if not path.is_dir():
         found = {"worktree": "removed"}
     elif hc._git(path, "rev-parse", "--is-inside-work-tree").stdout.strip() != "true":
         found = {"worktree": "not a git work tree"}
     else:
-        status = hc._git(path, "status", "--porcelain")
-        changes = None if status.returncode else len(status.stdout.splitlines())
-        found = {"worktree": "present", "changes": changes}
+        status = hc._git(path, "status", "--porcelain", "--ignored")
+        lines = status.stdout.splitlines()
+        ignored = sum(line.startswith("!! ") for line in lines)
+        heads = ["rev-list", "--count", "HEAD", "--not", "--branches", "--remotes"]
+        only = hc._git(path, *heads)
+        # a count git could not make is no count: nothing is offered then
+        found = {
+            "worktree": "present",
+            "changes": None if status.returncode else len(lines) - ignored,
+            "ignored": None if status.returncode else ignored,
+            "detached": None if only.returncode else int(only.stdout),
+        }
     if session.get("made_by_connect"):
         repository, branch = Path(session["repository"]), session["branch"]
         ref = f"refs/heads/{branch}"
@@ -275,6 +293,12 @@ def describe(found: dict) -> str:
     worktree = found["worktree"]
     if worktree == "present":
         shown = [_count(found["changes"], "uncommitted change")]
+        for key, thing in (
+            ("ignored", "ignored path"),
+            ("detached", "detached commit"),
+        ):
+            if found[key] != 0:
+                shown.append(_count(found[key], thing))
     else:
         shown = ["worktree removed" if worktree == "removed" else worktree]
     if "unmerged" in found:
@@ -285,16 +309,27 @@ def describe(found: dict) -> str:
 
 
 def cleanup(session: dict, found: dict) -> list[str]:
-    """The steps that remove what connect made for a launch. None is offered
-    while the worktree has uncommitted changes or the branch has unmerged
-    commits; git refuses those two commands then too."""
+    """The steps that remove what connect made for a launch, and only steps that
+    lose no change and no commit: none while the worktree has uncommitted
+    changes, which git worktree remove refuses too, or commits on a detached
+    HEAD, which it does not, and no branch -d while the branch has unmerged
+    commits. The removal deletes what git ignores there, so the steps say that
+    first."""
     if not session.get("made_by_connect"):
         return ["none: this launch did not make the worktree"]
-    if found["worktree"] == "present" and found["changes"] != 0:
+    present = found["worktree"] == "present"
+    if present and found["changes"] != 0:
         return ["commit or discard the changes in it first"]
+    if present and found["detached"] != 0:
+        return ["put the commits on its detached HEAD on a branch first"]
     repository, branch = session["repository"], session["branch"]
     steps = []
-    if found["worktree"] == "present":
+    if present:
+        if found["ignored"]:
+            ignored = _count(found["ignored"], "ignored path")
+            steps.append(
+                f"keep what you need of the {ignored} there, which the removal deletes"
+            )
         remove = ["git", "-C", repository, "worktree", "remove", session["worktree"]]
         steps.append(shlex.join(remove))
     if found.get("unmerged") == 0:
