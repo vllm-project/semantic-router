@@ -104,7 +104,7 @@ func TestMaskingTemplatesIntersectMatchesEnumeration(t *testing.T) {
 				break
 			}
 		}
-		if ok != (shared != "") || ok && !(inA[written] && inB[written]) {
+		if ok != (shared != "") || ok && (!inA[written] || !inB[written]) {
 			t.Fatalf("maskingTemplatesIntersect(%q, %q) = %q, %t; enumeration found %q", a, b, written, ok, shared)
 		}
 		if ok {
