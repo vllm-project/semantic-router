@@ -1,0 +1,257 @@
+{
+  "repository": "vllm-project/semantic-router",
+  "recorded_utc": "2026-11-14T03:58:19.2076317Z",
+  "scope": "Public check/suite/run/rollup snapshots; qualification receipts in tests are synthetic. Closed PRs and superseded heads remain historical controls, not live failures.",
+  "cases": [
+    {
+      "pr": 5140,
+      "gate": {
+        "id": 128381414889,
+        "name": "PR Gate",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": "551374a5f25e5dca045c13964d57bf83f687bbda",
+        "external_id": "semantic-router-ci:5140:42364679944:2",
+        "check_suite": {
+          "id": 114779800426
+        },
+        "app": {
+          "id": 15368
+        }
+      },
+      "gate_suite": {
+        "id": 114779800426,
+        "head_sha": "551374a5f25e5dca045c13964d57bf83f687bbda",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "app": {
+          "id": 15368
+        }
+      },
+      "qualification_run": {
+        "id": 42364679944,
+        "head_sha": "551374a5f25e5dca045c13964d57bf83f687bbda",
+        "check_suite_id": 114779800525,
+        "status": "completed",
+        "conclusion": "success",
+        "run_attempt": 2
+      },
+      "qualification_suite": {
+        "id": 114779800525,
+        "head_sha": "551374a5f25e5dca045c13964d57bf83f687bbda",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "rollup": {
+        "oid": "551374a5f25e5dca045c13964d57bf83f687bbda",
+        "statusCheckRollup": {
+          "state": "FAILURE"
+        }
+      },
+      "expected_state": "suite_mismatch"
+    },
+    {
+      "pr": 5267,
+      "gate": {
+        "id": 127850315896,
+        "name": "PR Gate",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": "e187a363d5ed85bf6046cb6daaa1a12b99176de5",
+        "external_id": "semantic-router-ci:5267:42202539600:2",
+        "check_suite": {
+          "id": 114349095684
+        },
+        "app": {
+          "id": 15368
+        }
+      },
+      "gate_suite": {
+        "id": 114349095684,
+        "head_sha": "e187a363d5ed85bf6046cb6daaa1a12b99176de5",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "app": {
+          "id": 15368
+        }
+      },
+      "qualification_run": {
+        "id": 42202539600,
+        "head_sha": "e187a363d5ed85bf6046cb6daaa1a12b99176de5",
+        "check_suite_id": 114349100760,
+        "status": "completed",
+        "conclusion": "success",
+        "run_attempt": 2
+      },
+      "qualification_suite": {
+        "id": 114349100760,
+        "head_sha": "e187a363d5ed85bf6046cb6daaa1a12b99176de5",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "rollup": {
+        "oid": "e187a363d5ed85bf6046cb6daaa1a12b99176de5",
+        "statusCheckRollup": {
+          "state": "FAILURE"
+        }
+      },
+      "expected_state": "suite_mismatch"
+    },
+    {
+      "pr": 5693,
+      "gate": {
+        "id": 128301913062,
+        "name": "PR Gate",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": "b87de22a5800a3e6247f158e63b0947999ca8801",
+        "external_id": "semantic-router-ci:5693:42337850783:1",
+        "check_suite": {
+          "id": 114711160048
+        },
+        "app": {
+          "id": 15368
+        }
+      },
+      "gate_suite": {
+        "id": 114711160048,
+        "head_sha": "b87de22a5800a3e6247f158e63b0947999ca8801",
+        "status": "completed",
+        "conclusion": "skipped",
+        "app": {
+          "id": 15368
+        }
+      },
+      "qualification_run": {
+        "id": 42337850783,
+        "head_sha": "b87de22a5800a3e6247f158e63b0947999ca8801",
+        "check_suite_id": 114711160243,
+        "status": "completed",
+        "conclusion": "success",
+        "run_attempt": 1
+      },
+      "qualification_suite": {
+        "id": 114711160243,
+        "head_sha": "b87de22a5800a3e6247f158e63b0947999ca8801",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "rollup": {
+        "oid": "b87de22a5800a3e6247f158e63b0947999ca8801",
+        "statusCheckRollup": {
+          "state": "FAILURE"
+        }
+      },
+      "expected_state": "suite_mismatch"
+    },
+    {
+      "pr": 4955,
+      "gate": {
+        "id": 127843319614,
+        "name": "PR Gate",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": "3b024292439b940347fd1da791debc60efa80b2f",
+        "external_id": "semantic-router-ci:4955:42201659248:2",
+        "check_suite": {
+          "id": 114346799626
+        },
+        "app": {
+          "id": 15368
+        }
+      },
+      "gate_suite": {
+        "id": 114346799626,
+        "head_sha": "3b024292439b940347fd1da791debc60efa80b2f",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "qualification_run": {
+        "id": 42201659248,
+        "head_sha": "3b024292439b940347fd1da791debc60efa80b2f",
+        "check_suite_id": 114346799626,
+        "status": "completed",
+        "conclusion": "success",
+        "run_attempt": 2
+      },
+      "qualification_suite": {
+        "id": 114346799626,
+        "head_sha": "3b024292439b940347fd1da791debc60efa80b2f",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "rollup": {
+        "oid": "3b024292439b940347fd1da791debc60efa80b2f",
+        "statusCheckRollup": {
+          "state": "SUCCESS"
+        }
+      },
+      "expected_state": "healthy"
+    },
+    {
+      "pr": 6431,
+      "gate": {
+        "id": 131923984961,
+        "name": "PR Gate",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": "5f186e5699be58bb0d562584181458f0c2f6eb57",
+        "external_id": "semantic-router-ci:6431:43434634385:1",
+        "check_suite": {
+          "id": 117612348534
+        },
+        "app": {
+          "id": 15368
+        }
+      },
+      "gate_suite": {
+        "id": 117612348534,
+        "head_sha": "5f186e5699be58bb0d562584181458f0c2f6eb57",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "qualification_run": {
+        "id": 43434634385,
+        "head_sha": "5f186e5699be58bb0d562584181458f0c2f6eb57",
+        "check_suite_id": 117612349763,
+        "status": "completed",
+        "conclusion": "success",
+        "run_attempt": 1
+      },
+      "qualification_suite": {
+        "id": 117612349763,
+        "head_sha": "5f186e5699be58bb0d562584181458f0c2f6eb57",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "rollup": {
+        "oid": "5f186e5699be58bb0d562584181458f0c2f6eb57",
+        "statusCheckRollup": {
+          "state": "SUCCESS"
+        }
+      },
+      "expected_state": "healthy"
+    }
+  ]
+}

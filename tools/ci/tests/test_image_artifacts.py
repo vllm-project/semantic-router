@@ -216,6 +216,8 @@ class ImageArtifactTests(unittest.TestCase):
                     [
                         "skopeo",
                         "copy",
+                        "--retry-times",
+                        "3",
                         "--all",
                         "--preserve-digests",
                         "--digestfile",

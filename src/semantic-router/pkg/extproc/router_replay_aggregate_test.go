@@ -33,6 +33,24 @@ func TestHandleRouterReplayAPIListAppliesFilters(t *testing.T) {
 	}
 }
 
+// An agent harness names its session in a header; pasting that session id
+// into the search finds the session's requests.
+func TestHandleRouterReplayAPIListSearchesSessionIDs(t *testing.T) {
+	router := newReplayAggregateTestRouter(t)
+
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?search=6582A295-CLAUDE&limit=10")
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal("expected immediate replay list response")
+	}
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	if got := int(body["count"].(float64)); got != 1 {
+		t.Fatalf("expected count=1, got %d", got)
+	}
+	if got := mustReplayData(t, body["data"])[0]["id"]; got != "replay-2" {
+		t.Fatalf("expected the session's replay-2, got %#v", got)
+	}
+}
+
 func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 	router := newReplayAggregateTestRouter(t)
 
@@ -237,6 +255,7 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 			ID:               "replay-2",
 			Timestamp:        time.Unix(2, 0).UTC(),
 			RequestID:        "req-beta",
+			SessionID:        "6582a295-claude-code-session",
 			Recipe:           "beta",
 			Decision:         "decision-b",
 			OriginalModel:    "gpt-4",

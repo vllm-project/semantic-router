@@ -68,6 +68,9 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        # A save keeps the keys it moves out of the ConfigMap in this Secret.
+        - name: VLLM_SR_K8S_KEY_SECRET_NAME
+          value: {{ include "semantic-router.keySecretName" . | quote }}
         - name: TARGET_ROUTER_API_URL
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
         - name: TARGET_ROUTER_METRICS_URL
@@ -122,10 +125,14 @@ spec:
         {{- with .Values.dashboard.extraEnv }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.dashboard.envFrom }}
         envFrom:
+          # The keys config.yaml names by entry, which model verification and
+          # Try it read as the Router does.
+          - secretRef:
+              name: {{ include "semantic-router.keySecretName" . }}
+          {{- with .Values.dashboard.envFrom }}
           {{- toYaml . | nindent 10 }}
-        {{- end }}
+          {{- end }}
         volumeMounts:
         - name: config-volume
           mountPath: /app/config/config.yaml

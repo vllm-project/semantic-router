@@ -1104,8 +1104,21 @@ trained question and label set, as on the vela3 family; the card lists the
 presets the package's span schemas hold. Span answers follow the contract (`spans`, `thresholds`, a Noul of
 the most probable word); the decoder is the package's (its unit class starts
 its compatibility block at U+F900, unlike the word splitter's). Open labels
-without a description run by name: the packages' label-definition writers
-(vela3-mini's base, vela3-flash's grafted head) are not run
+without a description are defined before the span pass when
+`definitions.writer` is `base` (vela3-mini: the tied input embedding is the
+LM head) or `grafted_head` (vela3-flash: `labeldef_lm_head.safetensors`, cast
+to the embedding dtype). The native engine generates each definition with
+every adapter off and causal attention: a user turn, thinking off, the label
+set as context for at most 60 labels, greedy, at most 40 new tokens, ending
+at the checkpoint's `eos_token_id`. The family keeps the first line and
+caches it per label set (per label above 60). Generated definitions live in a
+4,096-entry least-recently-used cache; the entries of `label_definitions.json`
+are never evicted. Rows are right-padded in batches of at most 64. A row's positions are its attention-mask
+cumsum, with padding at position 0, and the next token is read at the last
+position; that is what makes one definition differ from generating that label
+alone. `names` (vela3-lite and vela3-turbo)
+still runs those labels by name. Image inputs on span questions and a separate
+`labeldef_writer` model are not run
 ([record](records/vela3-d3-parity.md)).
 
 ## 9. Scheduler and planner
@@ -1119,8 +1132,10 @@ bundle  -> plan every task -> submit all at once -> await each -> results in tas
 
 Each model has its own scheduler and worker thread. Validation and rendering
 happen on the request thread, so malformed requests never take queue
-capacity. The batcher plans the rows of every queued job together (section
-5.4). A bundle's tasks for one model are queued at once as one job group,
+capacity. A small request plans on the event loop unless a served model runs
+forwards while it plans (`plans_run_forwards`: a vela3_d3 model that writes
+label definitions); then every request plans in a thread-pool task. The
+batcher plans the rows of every queued job together (section 5.4). A bundle's tasks for one model are queued at once as one job group,
 whatever their deadlines (each job keeps its own, measured from when the HTTP
 request arrived), so one forward serves every head and consumer that reads
 the same input. On a batch-invariant model the batcher runs the queued jobs
@@ -1228,6 +1243,12 @@ surfaces count values. Without a reference the runtime checks
 determinism and well-formed answers and reports `golden: unverified`. A
 failed model does not stop the others; `/health` reports the process
 degraded and the router treats only that model's deployments as unavailable.
+An unexpected model scheduler worker failure closes that model's admission,
+fails every outstanding job (including work being planned), and marks the model
+degraded before answering those jobs. Subsequent requests receive `not_ready`.
+It uses the same clean-restart policy as a device fault, even if all affected
+clients have disconnected; with `exit_on_device_error` disabled, other models
+continue serving while the failed model remains unavailable.
 A device fault during serving exits the process so the supervisor restarts it
 with a clean device context. The accelerator decides what is one (on CUDA and
 ROCm: a CUDA or HIP error, a device-side assert or an illegal memory access;

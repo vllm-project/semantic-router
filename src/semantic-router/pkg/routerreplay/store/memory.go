@@ -173,7 +173,7 @@ func (m *MemoryStore) AttachResponse(ctx context.Context, id string, body string
 }
 
 // AttachPrompt stores the prompt of a record written without it.
-func (m *MemoryStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+func (m *MemoryStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -182,8 +182,7 @@ func (m *MemoryStore) AttachPrompt(ctx context.Context, id string, prompt string
 		return fmt.Errorf("record with ID %s not found", id)
 	}
 
-	rec.Prompt = prompt
-	rec.PromptTruncated = truncated
+	prompt.Apply(rec)
 
 	return nil
 }
@@ -242,6 +241,7 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	rec.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 	rec.Currency = cloneStringPtr(usage.Currency)
 	rec.BaselineModel = cloneStringPtr(usage.BaselineModel)
+	rec.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 
 	return nil
 }
@@ -257,6 +257,20 @@ func (m *MemoryStore) UpdateToolTrace(ctx context.Context, id string, trace Tool
 	}
 
 	rec.ToolTrace = cloneToolTrace(&trace)
+	return nil
+}
+
+// UpdateReview replaces the approval review of a record.
+func (m *MemoryStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.Review = CloneReview(&review)
 	return nil
 }
 

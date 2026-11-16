@@ -230,7 +230,10 @@ func (accumulator *responseAccumulator) startItem(event llmprotocol.Event) error
 	if event.ToolCall != nil {
 		call := *event.ToolCall
 		item.call = &call
-	} else if event.Content != nil {
+	} else if event.Content != nil && (event.Content.Kind != llmprotocol.ContentReasoning ||
+		event.Content.Text != "" || event.Content.Signature != "" || event.Content.ReasoningDetail != nil || event.Content.Reasoning != "") {
+		// An empty reasoning item-start only frames later content. Reserving its
+		// index would collide with an encrypted-only Responses item's blob.
 		content := *event.Content
 		item.contents[event.ContentIndex] = &content
 	}

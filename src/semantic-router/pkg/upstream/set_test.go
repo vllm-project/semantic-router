@@ -7,13 +7,18 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -340,6 +345,32 @@ func TestDoAnswersConnectionFailuresAsEnvoy(t *testing.T) {
 		if len(resp.Attempts) != 1 || resp.Attempts[0].Err != failure {
 			t.Fatalf("%s: attempts = %+v", key, resp.Attempts)
 		}
+	}
+}
+
+func TestDoLogsWhyNoAttemptGotAResponse(t *testing.T) {
+	core, logs := observer.New(zapcore.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+	reset := endpointOf(t, "e", backend(t, func(w http.ResponseWriter, r *http.Request) { hijackAndClose(w) }))
+	set := newSet(t, Options{}, clusterOf("reset", reset))
+	req := post("reset")
+	req.Header.Set(headers.RequestID, "req-1")
+
+	resp, err := set.Do(t.Context(), req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	_, _ = readAll(t, resp)
+	entries := logs.FilterMessage("upstream_call_failed").All()
+	if len(entries) != 1 || resp.Local == nil {
+		t.Fatalf("upstream_call_failed events = %d, local reply %v; want one event", len(entries), resp.Local)
+	}
+	want := map[string]interface{}{
+		"request_id": "req-1", "cluster": "reset", "endpoint": "e", "kind": "reset",
+		"attempts": int64(1), "error": resp.Local.Error(), "event": "upstream_call_failed", "component": "upstream",
+	}
+	if got := entries[0].ContextMap(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("fields = %v, want %v", got, want)
 	}
 }
 

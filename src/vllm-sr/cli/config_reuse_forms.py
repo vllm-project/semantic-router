@@ -61,7 +61,7 @@ def removed_reuse_forms(data: dict[str, Any]) -> list[str]:
             lines.append(
                 f"{prefix}.data_policy: removed_field: a recipe's data_policy is "
                 f"removed; {MIGRATE} (the recipe's router_replay plugin: enabled: "
-                "false for replay: false, capture_personal_data: false for "
+                "false for replay: false, prompt_capture: verified for "
                 "replay_personal_data: false)"
             )
     return lines

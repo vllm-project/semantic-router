@@ -54,8 +54,8 @@ type ProviderProfile struct {
 	ChatPath      string            `yaml:"chat_path,omitempty"`
 	// AuthCredential is the backend's credential mode (auth.credential):
 	// delegated selects the requesting user's delegated credential as this
-	// backend's credential; static keys and per-user provider keys are not
-	// consulted for it.
+	// backend's credential, caller the provider login the client sent; static
+	// keys and per-user provider keys are not consulted for either.
 	AuthCredential string `yaml:"auth_credential,omitempty"`
 	// TLS is how an https backend is verified, its tls block with the default
 	// CA applied; nil keeps the system roots and the endpoint's host. Envoy's
@@ -69,6 +69,12 @@ func (p *ProviderProfile) Delegated() bool {
 	return p != nil && p.AuthCredential == CredentialDelegated
 }
 
+// Caller reports whether the backend takes the client's own provider login
+// instead of a key.
+func (p *ProviderProfile) Caller() bool {
+	return p != nil && p.AuthCredential == CredentialCaller
+}
+
 type ModelPricing struct {
 	Currency          string   `yaml:"currency,omitempty"`
 	PromptPer1M       float64  `yaml:"prompt_per_1m,omitempty"`
@@ -76,6 +82,20 @@ type ModelPricing struct {
 	CachedInputPer1M  float64  `yaml:"cached_input_per_1m,omitempty"`
 	CacheWritePer1M   *float64 `yaml:"cache_write_per_1m,omitempty"`
 	CacheWrite1hPer1M *float64 `yaml:"cache_write_1h_per_1m,omitempty"`
+}
+
+// UnmarshalYAML reads a written pricing block without a currency as USD, as a
+// deployment's is, so a block of zero rates prices a model free instead of
+// leaving it for the catalog's list price.
+func (p *ModelPricing) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain ModelPricing
+	if err := unmarshal((*plain)(p)); err != nil {
+		return err
+	}
+	if p.Currency == "" {
+		p.Currency = "USD"
+	}
+	return nil
 }
 
 type ModelParams struct {

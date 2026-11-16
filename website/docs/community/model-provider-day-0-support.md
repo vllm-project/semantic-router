@@ -52,7 +52,10 @@ not add an obscure Model Card merely to make a provider card look populated.
 2. Add a mapping under `config/catalog/resources/providers/<provider>.yaml`
    `models[]` when vLLM-SR should know a provider-native model ID, protocol
    restriction, price, or other provider-specific fact. Do not create a second
-   provider/model inventory.
+   provider/model inventory. A model ID that is billed but has no Model Card
+   yet takes only a `price_list[]` entry in the same file: its `id`, `pricing`
+   and a `verification.source`. It prices custom models that call that ID and
+   is never listed or selectable as a model.
 3. Reuse a reasoning family. Add a new family only when the request projection
    itself is new; do not duplicate a built-in family in user configuration.
 4. Add benchmark records under `evaluations/single/` only when the result is

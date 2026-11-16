@@ -1,0 +1,335 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 1rem;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.section > button {
+  align-self: flex-start;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 1rem;
+  align-items: start;
+}
+
+.muted {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+h1.task {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: clamp(1.15rem, 2vw, 1.5rem);
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.heroStats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  margin-top: 0.8rem;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+
+.outcome {
+  display: inline-flex;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.outcome[data-status='answered'] {
+  color: var(--color-success);
+}
+
+.outcome[data-status='failed'] {
+  color: var(--color-danger);
+}
+
+.outcome[data-status='in_progress'],
+.outcome[data-status='aborted'] {
+  color: var(--color-warning);
+}
+
+.runTask {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  max-width: 300px;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.runTask strong {
+  overflow: hidden;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runTask span {
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+}
+
+.models,
+.events,
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.7rem;
+  font-size: 0.76rem;
+}
+
+.models span,
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-text-secondary);
+}
+
+.models i,
+.legend i {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 2px;
+}
+
+.marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.2rem;
+  border-radius: 4px;
+  background: rgba(9, 9, 10, 0.75);
+  color: var(--color-text);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.marker[data-marker='failure'],
+.marker[data-marker='block'],
+.marker[data-marker='tool_failure'] {
+  color: var(--color-danger);
+}
+
+.marker[data-marker='guard'],
+.marker[data-marker='fallback'] {
+  color: var(--color-warning);
+}
+
+.marker[data-marker='escalation'],
+.marker[data-marker='switch'] {
+  color: #7aa7e8;
+}
+
+.diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 2.4rem;
+}
+
+.laneLabel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.laneLabel strong {
+  color: var(--color-text);
+  font-size: 0.82rem;
+}
+
+.laneLabel span {
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  height: 1.7rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.spawn {
+  position: absolute;
+  top: -0.45rem;
+  bottom: 50%;
+  width: 0;
+  border-left: 1px dashed var(--color-text-secondary);
+}
+
+.segment {
+  position: absolute;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 10px;
+  padding: 0 0.15rem;
+  overflow: visible;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.segment:hover,
+.segment[data-selected='true'] {
+  border-color: var(--color-text);
+  opacity: 1;
+}
+
+.count {
+  color: #111214;
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  margin-left: calc(180px + 0.75rem);
+  color: var(--color-text-secondary);
+  font-size: 0.68rem;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: rgba(9, 9, 10, 0.5);
+}
+
+.panel header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--color-text);
+  font-size: 0.85rem;
+}
+
+.panel header span {
+  color: var(--color-text-secondary);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  max-height: 14rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.steps button {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr) auto auto;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.74rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.steps button:hover,
+.steps button[data-selected='true'] {
+  background: rgba(166, 171, 179, 0.16);
+  color: var(--color-text);
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: 4.6rem minmax(0, 1fr);
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+
+.field dt {
+  color: var(--color-text-secondary);
+}
+
+.field dd {
+  margin: 0;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.field a {
+  color: var(--color-text);
+}
+
+@media (max-width: 900px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lane {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+
+  .axis {
+    margin-left: calc(110px + 0.75rem);
+  }
+}
+
+/* A model read by its label, the configured name beside it. */
+.modelLabel small {
+  margin-left: 0.35rem;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+  font-weight: 400;
+}
