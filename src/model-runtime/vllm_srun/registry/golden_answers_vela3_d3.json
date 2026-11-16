@@ -56,7 +56,7 @@
  },
  "vllm-sr/vela3-lite": {
   "answers": {
-   "cuda": {
+   "cuda:sm_89": {
     "attack": {
      "choice": "benign",
      "confidence": 0.7208153945086093,
@@ -153,13 +153,13 @@
   },
   "revision": "c789afd6fbeaceb3c734b95b9ca3ad9772a7f434",
   "torch": {
-   "cuda": "2.15.0+cu132",
+   "cuda:sm_89": "2.15.0+cu132",
    "rocm": "2.12.0+git6bbd260"
   }
  },
  "vllm-sr/vela3-mini": {
   "answers": {
-   "cuda": {
+   "cuda:sm_89": {
     "attack": {
      "choice": "benign",
      "confidence": 0.982158506604832,
@@ -256,7 +256,7 @@
   },
   "revision": "bbc0206efbbbee5d41955b429e98238b5ad32252",
   "torch": {
-   "cuda": "2.15.0+cu132",
+   "cuda:sm_89": "2.15.0+cu132",
    "rocm": "2.12.0+git6bbd260"
   }
  },
