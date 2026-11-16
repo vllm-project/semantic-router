@@ -324,3 +324,12 @@ h1.task {
     margin-left: calc(110px + 0.75rem);
   }
 }
+
+/* A model read by its label, the configured name beside it. */
+.modelLabel small {
+  margin-left: 0.35rem;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+  font-weight: 400;
+}

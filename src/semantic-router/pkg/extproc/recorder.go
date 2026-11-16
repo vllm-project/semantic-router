@@ -303,6 +303,8 @@ func buildReplayRoutingRecord(
 		record.ConversationID = state.ConversationID
 	}
 	record.RequestKind, record.Review = replayApprovalReview(ctx)
+	sessionKind, sessionName := replaySessionNaming(ctx)
+	record.RequestKind, record.SessionName = firstNonEmptyString(record.RequestKind, sessionKind), sessionName
 	record.ThreadID, record.TurnID, record.ParentTurnID = ctx.AgentTurn.ThreadID, ctx.AgentTurn.TurnID, ctx.AgentTurn.ParentTurnID
 	// The sanitiser drops tool-result payloads unless the route captures tool
 	// results; a masking route persists no request text at all, because Replay
@@ -494,6 +496,7 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 	}
 
 	r.refreshReplayModelCalls(ctx, recorder)
+	settleReplaySessionName(ctx, recorder, state)
 	if err := recorder.FinalizeLifecycle(ctx.RouterReplayID, state, reason); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_lifecycle_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

@@ -90,6 +90,18 @@ func apiRouterReplayRoutes() []apiRoute {
 		),
 		managedRoute(
 			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/models",
+				Method:      "GET",
+				Description: "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id",
+			},
+			policy,
+			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			jsonResponse[routerreplay.ModelListResponse](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusNotFound, http.StatusInternalServerError),
+		),
+		managedRoute(
+			EndpointMetadata{
 				Path:        apiObservabilityReplaysPath + "/dataset",
 				Method:      "GET",
 				Description: "Export a shadow comparison dataset manifest built from the selected Router Replay records",

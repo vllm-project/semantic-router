@@ -560,10 +560,13 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 | `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
 | `GET` | `/api/v1/observability/replays/runs` | List agent runs, one summary per session |
 | `GET` | `/api/v1/observability/replays/run?session_id=...` | Read one agent run as a tree of its agents and calls |
+| `GET` | `/api/v1/observability/replays/models` | List the configured models with the label Insights shows for each |
 
 The runs list takes the list's filters, `limit` and `offset`; a run reads every
 recipe of its session. See
-[Agent runs](../tutorials/plugin/router-replay#agent-runs) for both responses.
+[Agent runs](../tutorials/plugin/router-replay#agent-runs) for both responses
+and [Model labels](../tutorials/plugin/router-replay#model-labels) for the
+labels.
 
 List and aggregate requests accept filters such as `recipe`, `decision`,
 `model`, `session_id`, `turn_id`, `cache_status`, and `search`, and, for agent

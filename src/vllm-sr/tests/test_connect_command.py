@@ -334,6 +334,13 @@ def test_the_displayed_diff_shows_owned_keys_and_hides_the_key(tmp_path):
     assert '"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"' in new
 
 
+def test_claude_code_names_its_request_class_for_the_session_title(tmp_path):
+    # Router Replay names an agent run by the title Claude Code asks for on an
+    # auxiliary request, which it marks only with its gateway hint headers on.
+    settings = json.loads(_claude(tmp_path / "settings.json").new_text())
+    assert settings["env"]["CLAUDE_CODE_GATEWAY_HINT_HEADERS"] == "1"
+
+
 def test_codex_profile_holds_the_provider_and_undo_restores_the_old_one(tmp_path):
     tomllib = pytest.importorskip("tomllib")
     profile = tmp_path / "vllm-sr.config.toml"

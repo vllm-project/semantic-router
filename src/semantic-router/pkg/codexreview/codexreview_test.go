@@ -115,6 +115,7 @@ func TestReadTurnFromTheHeaderOrClientMetadata(t *testing.T) {
 	review := Turn{
 		SessionID: "00000000-0000-4000-8000-000000000005", ThreadID: "00000000-0000-4000-8000-000000000007",
 		TurnID: "00000000-0000-4000-8000-000000000008", ParentTurnID: "00000000-0000-4000-8000-000000000010",
+		ThreadSource: "guardian_review",
 	}
 	for name, test := range map[string]struct {
 		header string
@@ -123,6 +124,7 @@ func TestReadTurnFromTheHeaderOrClientMetadata(t *testing.T) {
 	}{
 		"captured review body":      {"", captured, review},
 		"header over the body":      {`{"session_id":"s","thread_id":"s","turn_id":" t1 "}`, captured, Turn{SessionID: "s", ThreadID: "s", TurnID: "t1"}},
+		"title thread":              {`{"session_id":"s","thread_id":"s","turn_id":"t","thread_source":"thread_title"}`, nil, Turn{SessionID: "s", ThreadID: "s", TurnID: "t", ThreadSource: "thread_title"}},
 		"header without a turn":     {`{"session_id":"s"}`, captured, review},
 		"unreadable header":         {"not json", captured, review},
 		"metadata JSON only":        {"", []byte(`{"client_metadata":{"x-codex-turn-metadata":"{\"thread_id\":\"th\",\"turn_id\":\"t2\"}"}}`), Turn{ThreadID: "th", TurnID: "t2"}},

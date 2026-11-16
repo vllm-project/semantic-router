@@ -1318,7 +1318,11 @@ of the models the entrypoint reaches when that is lower, since a model refuses
 a request for more. `CLAUDE_CODE_GATEWAY_HINT_HEADERS` has Claude Code send
 each request's class and each subagent's type, which Claude Code leaves out for
 a custom base URL otherwise; the
-[agent signal](../tutorials/signal/heuristic/agent) routes on them.
+[agent signal](../tutorials/signal/heuristic/agent) routes on them, and Insights
+names a session's run with the title Claude Code shows for it
+([Session names](../tutorials/plugin/router-replay#session-names)). Codex sends
+no thread name the gateway can tie to its run, so Insights shows a Codex run by
+its first prompt.
 
 Codex reads the profile from `~/.codex/vllm-sr.config.toml`, which
 `codex --profile vllm-sr` layers over `~/.codex/config.toml`, and the provider

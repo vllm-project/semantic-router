@@ -3753,6 +3753,35 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/router/api/v1/observability/replays/models": {
+      "get": {
+        "operationId": "getApiRouterApiV1ObservabilityReplaysModels",
+        "summary": "GET /api/router/api/v1/observability/replays/models",
+        "tags": [
+          "router"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "secret",
+        "x-vllm-sr-resource-owner": "replay",
+        "x-vllm-sr-audit-mode": "required",
+        "x-vllm-sr-audit-action": "replay.read.read",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/api/router/api/v1/observability/replays/run": {
       "get": {
         "operationId": "getApiRouterApiV1ObservabilityReplaysRun",

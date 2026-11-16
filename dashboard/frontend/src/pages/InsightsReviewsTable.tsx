@@ -4,6 +4,7 @@ import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 
 import emptyStyles from './InsightsEmptyState.module.css'
+import { modelText, useModelLabels } from './insightsModelLabelSupport'
 import styles from './InsightsPage.module.css'
 import type { InsightsRecord } from './insightsPageTypes'
 import {
@@ -49,6 +50,7 @@ export default function InsightsReviewsTable({
   onFilterChange,
 }: InsightsReviewsTableProps) {
   const columns = useMemo(() => createReviewTableColumns(), [])
+  const labels = useModelLabels()
   return (
     <>
       <TableHeader
@@ -96,7 +98,7 @@ export default function InsightsReviewsTable({
           <option value="all">All review models</option>
           {modelOptions.map((model) => (
             <option key={model} value={model}>
-              {model}
+              {modelText(labels, model)}
             </option>
           ))}
         </select>

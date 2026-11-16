@@ -18,6 +18,7 @@ import type {
   InsightsAggregateCurrencySummary,
   InsightsAggregateTokenEntry,
 } from '../pages/insightsPageTypes'
+import { modelText, useModelLabels } from '../pages/insightsModelLabelSupport'
 import styles from './InsightsCharts.module.css'
 import InsightsCostCoverage from './InsightsCostCoverage'
 import InsightsProviderCacheSummary from './InsightsProviderCacheSummary'
@@ -281,7 +282,11 @@ function InsightsEstimateNotes() {
 export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
   const summary = aggregate.summary
   const costGroups = summary.by_currency?.length ? summary.by_currency : [summary]
-  const modelData = aggregate.model_selection
+  const labels = useModelLabels()
+  const modelData = aggregate.model_selection.map((entry) => ({
+    ...entry,
+    name: modelText(labels, entry.name),
+  }))
   const decisionData = aggregate.decision_distribution
   const signalData = aggregate.signal_distribution
   const tokenVolume = aggregate.token_volume
@@ -523,7 +528,10 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
         <TokenBreakdownChart title="Tokens by Decision" data={tokenBreakdown.by_decision} />
         <TokenBreakdownChart
           title="Tokens by Selected Model"
-          data={tokenBreakdown.by_selected_model}
+          data={tokenBreakdown.by_selected_model.map((entry) => ({
+            ...entry,
+            name: modelText(labels, entry.name),
+          }))}
         />
       </div>
     </section>

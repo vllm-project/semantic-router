@@ -47,12 +47,13 @@ type RunListResponse struct {
 	Data       []RunSummary `json:"data"`
 }
 
-// RunSummary is one agent run at a glance: the session, the harness, the
-// task its main agent was given when Replay kept the prompt, its agents,
-// the models that answered, how it ended, what it cost and took, and the
-// events worth a look.
+// RunSummary is one agent run at a glance: the session, the name the
+// harness gave it, the harness, the task its main agent was given when Replay
+// kept the prompt, its agents, the models that answered, how it ended, what
+// it cost and took, and the events worth a look.
 type RunSummary struct {
 	SessionID  string           `json:"session_id"`
+	Name       string           `json:"session_name,omitempty"`
 	Harness    string           `json:"harness,omitempty"`
 	Prompt     string           `json:"prompt,omitempty"`
 	StartedAt  time.Time        `json:"started_at"`
@@ -166,4 +167,20 @@ type RunCall struct {
 	Outcomes         []store.Outcome        `json:"outcomes,omitempty"`
 	Markers          []string               `json:"markers,omitempty"`
 	Hops             []RunCall              `json:"hops,omitempty"`
+}
+
+// ModelListResponse lists the models the Router's configuration holds, in
+// name order, each with the label Insights shows for it.
+type ModelListResponse struct {
+	Object string       `json:"object"`
+	Data   []ModelLabel `json:"data"`
+}
+
+// ModelLabel is a configured model's name and how a person reads it: its
+// card's display name when the catalog or the operator gives one, else the
+// display name of the catalog card its provider model id maps to, else that
+// provider model id.
+type ModelLabel struct {
+	Name  string `json:"name"`
+	Label string `json:"label"`
 }
