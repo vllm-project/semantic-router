@@ -287,7 +287,7 @@
       "sensitivity": "none",
       "owner": "router_learning",
       "version": "v0.5",
-      "doc": "Thread id Codex sends on every call, equal to `session-id` on a root thread, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it."
+      "doc": "Thread id Codex sends on every call, which protection and Router Replay read as the agent when `identity.headers.agent` is unset, except on a root thread, where it equals `session-id`; providers receive it."
     },
     {
       "name": "x-codex-turn-metadata",

@@ -100,7 +100,8 @@ protection:
 - **Codex CLI** sends `session-id` and `thread-id` on every request. A root
   thread sends its own ID in both, and a subagent or review child that Codex
   starts on it keeps the root's `session-id` and sends its own `thread-id`.
-  The root's key therefore holds both its session ID and its thread ID.
+  The root thread is therefore the main agent and keeps its session key, also
+  when the request pins another session, and each child gets its own.
 - **Both Codex IDs stay the same** across tool continuations and across turns
   after `codex exec resume`, so protection holds the root and each child on
   their own models for the whole session. `codex exec review` starts a new

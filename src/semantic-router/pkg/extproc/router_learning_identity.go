@@ -21,9 +21,18 @@ func protectionSessionID(ctx *RequestContext, cfg config.RouterLearningProtectio
 
 // protectionAgentID is the agent id protection keys on and the header it came
 // from: identity.headers.agent when configured, else the agent a supported
-// harness sends, a Claude Code subagent's id or a Codex thread's.
+// harness sends, a Claude Code subagent's id or a Codex thread's. A Codex
+// thread whose id is its session-id is the root thread, the main
+// conversation, and names no agent, also when the request pins a session.
 func protectionAgentID(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) (string, string) {
-	return protectionIdentityHeader(ctx, cfg, "agent", ctx.AgentTurn.ThreadID)
+	agentID, header := protectionIdentityHeader(ctx, cfg, "agent", ctx.AgentTurn.ThreadID)
+	if header == headers.CodexThreadID || header == headers.XCodexTurnMetadata {
+		codexSessionID := strings.TrimSpace(headerValueCI(ctx, headers.CodexSessionID))
+		if agentID == codexSessionID || agentID == ctx.AgentTurn.SessionID {
+			return "", header
+		}
+	}
+	return agentID, header
 }
 
 // protectionIdentityHeader reads key's id from the first identity header that
