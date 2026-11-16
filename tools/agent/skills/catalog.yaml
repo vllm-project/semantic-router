@@ -45,6 +45,21 @@ skills:
     handoff: Escalate model/runtime faults or propose a reviewed recipe change with fixed probes.
     support: v0.5 model catalog and maintained recipes; use installed schema and model cards.
 
+  - id: vllm-sr-configure-recipe
+    name: vllm-sr-configure-recipe
+    audience: user
+    source: tools/agent/skills/vllm-sr-configure-recipe/SKILL.md
+    published: website/static/install/agent/vllm-sr-configure-recipe/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-configure-recipe/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Turn workload goals and available backends into a reviewable recipe and entrypoint candidate.
+    prerequisites: Complete canonical config or active Router config, supported CLI, and verified backend facts.
+    inputs: Workload, objectives, constraints, backend capabilities, and baseline config identity.
+    outputs: Candidate YAML, redacted diff, validation and plan receipts, and an apply handoff.
+    handoff: Ask the reviewer to activate the candidate through the existing config workflow.
+    support: v0.5 canonical config and maintained recipe bundles; plan requires a running Router.
+
   - id: router-contract-change
     name: router-contract-change
     audience: contributor

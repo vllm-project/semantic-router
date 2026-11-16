@@ -31,6 +31,8 @@ For a focused local `vllm-sr serve` walkthrough, use the
 [Serve skill](https://vllm-sr.ai/install/agent/vllm-sr-serve/SKILL.md).
 To verify which decision model answers a recipe's signals, use the
 [Decision-model skill](https://vllm-sr.ai/install/agent/vllm-sr-decision-model/SKILL.md).
+For a reviewable workload-to-recipe configuration, use the
+[Configure-recipe skill](https://vllm-sr.ai/install/agent/vllm-sr-configure-recipe/SKILL.md).
 
 :::note Release channel
 The Skill follows `main`, as these pages do. It installs the stable release
