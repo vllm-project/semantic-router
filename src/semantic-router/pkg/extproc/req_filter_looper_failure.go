@@ -236,7 +236,7 @@ func (r *OpenAIRouter) recordLooperImmediateDispatchFailure(
 	}
 
 	r.startRouterReplay(ctx, originalModel, "", decisionName)
-	r.updateLooperReplayUsage(ctx, evidence.usage)
+	r.updateLooperReplayUsage(ctx, evidence.usage, evidence.iterations)
 	r.updateRouterReplayStatus(ctx, statusCode, false)
 	if immediate := response.GetImmediateResponse(); immediate != nil {
 		r.attachRouterReplayResponse(ctx, immediate.Body, false)
