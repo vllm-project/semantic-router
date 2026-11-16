@@ -44,6 +44,11 @@ const (
 	// client_metadata.
 	XCodexTurnMetadata = "x-codex-turn-metadata"
 
+	// XCodexParentThreadID names the thread that spawned a Codex subagent's
+	// thread, and XOpenAISubagent the subagent's kind, such as collab_spawn.
+	XCodexParentThreadID = "x-codex-parent-thread-id"
+	XOpenAISubagent      = "x-openai-subagent"
+
 	// XConversationID is the default header Router Learning protection reads a
 	// stable conversation identifier from.
 	XConversationID = "x-conversation-id"

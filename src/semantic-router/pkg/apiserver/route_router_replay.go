@@ -62,6 +62,34 @@ func apiRouterReplayRoutes() []apiRoute {
 		),
 		managedRoute(
 			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/runs",
+				Method:      "GET",
+				Description: "List agent runs, one summary per session over the filtered records, latest activity first",
+				Parameters:  routerReplayRunListParameters(),
+			},
+			policy,
+			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			jsonResponse[routerreplay.RunListResponse](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
+		),
+		managedRoute(
+			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/run",
+				Method:      "GET",
+				Description: "Read one agent run as a tree: its agents and their calls in time order, with each call's route, cost and outcome",
+				Parameters: []OpenAPIParameter{
+					requiredQueryParameter("session_id", "Session whose agent run should be returned, across recipes.", "string"),
+				},
+			},
+			policy,
+			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			jsonResponse[routerreplay.RunResponse](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
+		),
+		managedRoute(
+			EndpointMetadata{
 				Path:        apiObservabilityReplaysPath + "/dataset",
 				Method:      "GET",
 				Description: "Export a shadow comparison dataset manifest built from the selected Router Replay records",
@@ -134,6 +162,13 @@ func routerReplayListParameters() []OpenAPIParameter {
 		queryParameter("limit", "Maximum records; defaults to 20 and is capped at 100.", "integer"),
 		queryParameter("offset", "Zero-based result offset.", "integer"),
 		queryParameter("showDetails", "Include full replay details when the principal has replay_detail permission.", "boolean"),
+	)
+}
+
+func routerReplayRunListParameters() []OpenAPIParameter {
+	return append(routerReplayFilterParameters(),
+		queryParameter("limit", "Maximum runs; defaults to 20 and is capped at 100.", "integer"),
+		queryParameter("offset", "Zero-based result offset.", "integer"),
 	)
 }
 

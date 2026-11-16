@@ -84,6 +84,7 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 		sdktrace.WithResource(res),
 		sdktrace.WithBatcher(observedExporter{exporter}),
 		sdktrace.WithSampler(sampler),
+		sdktrace.WithIDGenerator(RunIDGenerator()),
 	)
 
 	// Set global tracer provider

@@ -174,6 +174,8 @@ Clients send these to steer or identify a request. See [Session identification](
 | `session-id` | yes | v0.5 | Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it. |
 | `thread-id` | yes | v0.5 | Thread id Codex sends on every call, which protection and Router Replay read as the agent when `identity.headers.agent` is unset, except on a root thread, where it equals `session-id`; providers receive it. |
 | `x-codex-turn-metadata` | yes | v0.5 | Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it. |
+| `x-codex-parent-thread-id` | yes | v0.5 | Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it. |
+| `x-openai-subagent` | yes | v0.5 | Kind of subagent a Codex call comes from, such as `collab_spawn` or `review`, which Router Replay records with the agent; providers receive it. |
 | `x-conversation-id` | yes | v0.4 | Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it. |
 | `x-vsr-memory` | no | v0.5 | `off` keeps Router-managed memory out of the request. |
 | `x-vsr-skip-processing` | no | v0.3 | `true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set. |

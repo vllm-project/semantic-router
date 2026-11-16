@@ -283,6 +283,7 @@ type Record struct {
 	OriginalModel            string                 `json:"original_model,omitempty"`
 	SelectedModel            string                 `json:"selected_model,omitempty"`
 	ReasoningMode            string                 `json:"reasoning_mode,omitempty"`
+	ReasoningEffort          string                 `json:"reasoning_effort,omitempty"`
 	ConfidenceScore          float64                `json:"confidence_score,omitempty"`
 	SelectionMethod          string                 `json:"selection_method,omitempty"`
 	RouteDiagnostics         *RouteDiagnostics      `json:"route_diagnostics,omitempty"`
@@ -317,6 +318,10 @@ type Record struct {
 	ThreadID     string `json:"thread_id,omitempty"`
 	TurnID       string `json:"turn_id,omitempty"`
 	ParentTurnID string `json:"parent_turn_id,omitempty"`
+	// Agent is the agent of the run, SessionID, that sent the request, and
+	// ParentRequestID the client request a Looper hop was made for.
+	Agent           *AgentIdentity `json:"agent,omitempty"`
+	ParentRequestID string         `json:"parent_request_id,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -605,6 +610,7 @@ func cloneRecord(record Record) Record {
 	cloned.SessionPolicy = cloneInterfaceMap(record.SessionPolicy)
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
 	cloned.Review = CloneReview(record.Review)
+	cloned.Agent = cloneAgentIdentity(record.Agent)
 	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
 	cloned.HallucinationSpanDetails = cloneHallucinationSpanDetails(record.HallucinationSpanDetails)

@@ -1050,6 +1050,10 @@ func (r *OpenAIRouter) buildFallbackImmediateResponse(
 	}
 }
 
+// fallbackOutcomeSource is the source of the outcome the fallback audit
+// appends to a request's replay record.
+const fallbackOutcomeSource = "fallback"
+
 // recordFallbackExecution persists one bounded terminal audit record containing
 // every correlated attempt. It runs for success, exhaustion, cancellation, and
 // policy rejection so replay consumers never have to infer missing attempts.
@@ -1115,7 +1119,7 @@ func (r *OpenAIRouter) recordFallbackExecution(ctx *RequestContext) {
 	}
 	outcome := routerreplay.Outcome{
 		Timestamp: time.Now().UTC(),
-		Source:    "fallback",
+		Source:    fallbackOutcomeSource,
 		Target:    "request",
 		TargetRef: selectedModel,
 		Verdict:   verdict,

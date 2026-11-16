@@ -11,6 +11,10 @@ type postgresRoutingMetadata struct {
 	CacheSource          string   `json:"cache_source,omitempty"`
 	CacheEntryAgeSeconds float64  `json:"cache_entry_age_seconds,omitempty"`
 	CacheTTLSeconds      int      `json:"cache_ttl_seconds,omitempty"`
+	// The record's place in its agent run and the effort it was sent with.
+	Agent           *AgentIdentity `json:"agent,omitempty"`
+	ParentRequestID string         `json:"parent_request_id,omitempty"`
+	ReasoningEffort string         `json:"reasoning_effort,omitempty"`
 }
 
 func marshalPostgresRoutingMetadata(record Record) ([]byte, error) {
@@ -18,6 +22,7 @@ func marshalPostgresRoutingMetadata(record Record) ([]byte, error) {
 		SelectionMethod: record.SelectionMethod,
 		CacheHitKind:    record.CacheHitKind, CacheSource: record.CacheSource,
 		CacheEntryAgeSeconds: record.CacheEntryAgeSeconds, CacheTTLSeconds: record.CacheTTLSeconds,
+		Agent: record.Agent, ParentRequestID: record.ParentRequestID, ReasoningEffort: record.ReasoningEffort,
 	}
 	if record.ConfidenceScoreAvailable {
 		metadata.ConfidenceScore = &record.ConfidenceScore
@@ -42,5 +47,7 @@ func unmarshalPostgresRoutingMetadata(encoded []byte, record *Record) error {
 	record.CacheSource = metadata.CacheSource
 	record.CacheEntryAgeSeconds = metadata.CacheEntryAgeSeconds
 	record.CacheTTLSeconds = metadata.CacheTTLSeconds
+	record.Agent, record.ParentRequestID = metadata.Agent, metadata.ParentRequestID
+	record.ReasoningEffort = metadata.ReasoningEffort
 	return nil
 }

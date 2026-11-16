@@ -11,6 +11,7 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
 import InsightsEmptyState from './InsightsEmptyState'
 import InsightsReviewsView from './InsightsReviewsView'
+import InsightsRunsView from './InsightsRunsView'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { buildReplayQueryString } from './insightsPageFilters'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
@@ -31,13 +32,16 @@ const insightsPageSize = 25
 const insightsSearchDebounceMs = 300
 const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
 
-// All requests, or the approval reviews among them, kept in the URL so a
-// reviewed session's link opens its reviews.
-function InsightsViewSwitch({ reviews }: { reviews: boolean }) {
+type InsightsView = 'requests' | 'runs' | 'reviews'
+
+// All requests, the agent runs they make up, or the approval reviews among
+// them, kept in the URL so a reviewed session's link opens its reviews.
+function InsightsViewSwitch({ view }: { view: InsightsView }) {
   const [, setSearchParams] = useSearchParams()
   const views: { label: string; active: boolean; params: Record<string, string> }[] = [
-    { label: 'All requests', active: !reviews, params: {} },
-    { label: 'Reviews', active: reviews, params: { view: 'reviews' } },
+    { label: 'All requests', active: view === 'requests', params: {} },
+    { label: 'Runs', active: view === 'runs', params: { view: 'runs' } },
+    { label: 'Reviews', active: view === 'reviews', params: { view: 'reviews' } },
   ]
   return (
     <div className={styles.viewSwitch} role="group" aria-label="Insights view">
@@ -80,6 +84,7 @@ export default function InsightsPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const reviewsView = searchParams.get('view') === 'reviews'
+  const runsView = searchParams.get('view') === 'runs'
   const turn = searchParams.get('turn') ?? ''
   const [records, setRecords] = useState<InsightsRecord[]>([])
   const [aggregate, setAggregate] = useState<InsightsAggregateResponse | null>(null)
@@ -200,7 +205,7 @@ export default function InsightsPage() {
   )
 
   useEffect(() => {
-    if (reviewsView) {
+    if (reviewsView || runsView) {
       return undefined
     }
     void fetchRecords()
@@ -214,7 +219,7 @@ export default function InsightsPage() {
     }, 5000)
 
     return () => window.clearInterval(interval)
-  }, [autoRefresh, fetchRecords, reviewsView])
+  }, [autoRefresh, fetchRecords, reviewsView, runsView])
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -268,10 +273,18 @@ export default function InsightsPage() {
     title: 'Insights',
     description: 'See what the router picked, what signals fired, and how much it saved.',
   }
+  if (runsView) {
+    return (
+      <ConfigPageManagerLayout {...layout}>
+        <InsightsViewSwitch view="runs" />
+        <InsightsRunsView />
+      </ConfigPageManagerLayout>
+    )
+  }
   if (reviewsView) {
     return (
       <ConfigPageManagerLayout {...layout}>
-        <InsightsViewSwitch reviews />
+        <InsightsViewSwitch view="reviews" />
         <InsightsReviewsView
           key={searchParams.get('session') ?? ''}
           initialSession={searchParams.get('session') ?? ''}
@@ -286,7 +299,7 @@ export default function InsightsPage() {
 
   return (
     <ConfigPageManagerLayout {...layout}>
-      <InsightsViewSwitch reviews={false} />
+      <InsightsViewSwitch view="requests" />
       {error ? (
         <div className={styles.error}>
           <span>{error}</span>
