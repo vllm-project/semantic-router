@@ -829,6 +829,8 @@ def test_cli_refuses_a_caller_gateway_of_another_provider(
     )
     assert result.exit_code != 0
     assert f"own {provider} login upstream" in result.output
+    own = "anthropic" if harness == "claude-code" else "openai"
+    assert f"sends its {own} login, so every call" in _flat(result.output)
     assert not (tmp_path / "vllm-sr.config.toml").exists()
     assert not (tmp_path / "claude").exists()
     assert len(seen) == asked
