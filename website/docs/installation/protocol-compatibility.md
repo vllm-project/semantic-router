@@ -250,8 +250,8 @@ backend:
 | Messages control | What happens |
 | --- | --- |
 | `thinking.type: adaptive` | The backend model's default reasoning behavior applies; `output_config.effort` is kept. |
-| `thinking.display: omitted` | Reasoning is removed from the translated response, including streaming output. |
-| `thinking.display: summarized` or `updates` (Claude Code sends these) | Rejected: they reach only Messages backends. |
+| `thinking.display: omitted` | Reasoning is removed from the translated response, including streaming output. An answer whose output limit went to reasoning comes back with no content blocks and the `max_tokens` stop reason, buffered or streamed. |
+| `thinking.display: summarized` or `updates` (Claude Code sends these) | The backend's reasoning comes back as thinking, as it does with no display, since the Router can't summarize it. `x-vsr-warnings` reports an `approximated` diagnostic for `thinking.display` when the model has a reasoning family and the decision doesn't turn reasoning off. |
 | `thinking.type: disabled` | Needs a configured reasoning family and an effective backend reasoning-off control. |
 | A `context_management` edit `clear_thinking_20251015` with `keep: all` | Omitted, since it has no effect. Edits that would change history are rejected. |
 | `cache_control` boundaries, toward a Responses backend | Omitted, since Responses can't represent them. The prompt and tool result still dispatch, and `x-vsr-warnings` reports a `dropped` diagnostic for `cache_control`. |
