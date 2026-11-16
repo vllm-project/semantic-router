@@ -1,7 +1,9 @@
 package extproc
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -11,7 +13,7 @@ import (
 )
 
 func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Recorder, *routerreplay.Recorder, bool, error) {
-	backend := resolveReplayStoreBackend(cfg.RouterReplay)
+	backend := replayBackend(cfg)
 	if usesSharedReplayStorage(backend) {
 		recorders, replayRecorder, err := initializeSharedReplayRecorders(cfg, backend)
 		shareReplayOutcomeQueueWithFallback(recorders, replayRecorder)
@@ -70,7 +72,7 @@ func shareReplayOutcomeQueueWithFallback(recorders map[string]*routerreplay.Reco
 
 // initializeReplayRecorders creates replay recorders for the decisions that record replay.
 func initializeReplayRecorders(cfg *config.RouterConfig) map[string]*routerreplay.Recorder {
-	backend := resolveReplayStoreBackend(cfg.RouterReplay)
+	backend := replayBackend(cfg)
 	if usesSharedReplayStorage(backend) {
 		recorders, _, _ := initializeSharedReplayRecorders(cfg, backend)
 		return recorders
@@ -115,8 +117,8 @@ func initializeSharedReplayRecorders(
 	)
 
 	// Global capture also covers direct requests and failures before a decision.
-	if policy := cfg.EffectiveRouterReplayConfig(nil); policy != nil {
-		storage, err := createSharedReplayStore(backend, &cfg.RouterReplay)
+	if policy := preDecisionReplayPolicy(cfg); policy != nil {
+		storage, err := createSharedReplayStore(backend, cfg, policy)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to initialize global replay store: %w", err)
 		}
@@ -132,7 +134,7 @@ func initializeSharedReplayRecorders(
 		}
 
 		if sharedStore == nil {
-			storage, err := createSharedReplayStore(backend, &cfg.RouterReplay)
+			storage, err := createSharedReplayStore(backend, cfg, pluginCfg)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to initialize shared replay store for backend %s: %w", backend, err)
 			}
@@ -195,11 +197,34 @@ func createSharedReplayRecorder(
 
 func usesSharedReplayStorage(backend string) bool {
 	switch backend {
-	case "postgres", "redis", "milvus", "qdrant":
+	case "file", "postgres", "redis", "milvus", "qdrant":
 		return true
 	default:
 		return false
 	}
+}
+
+// replayBackend is the backend that keeps the configuration's records. The
+// file store holds routing data only, so where a router_replay plugin keeps
+// prompt, body or tool text, the records stay in memory instead.
+func replayBackend(cfg *config.RouterConfig) string {
+	backend := resolveReplayStoreBackend(cfg.RouterReplay)
+	if backend == "file" && replayKeepsText(cfg) {
+		logging.Warnf("Router replay keeps prompt or body text, which the file store does not hold; " +
+			"its records stay in memory. Configure postgres or redis to keep them across restarts.")
+		return "memory"
+	}
+	return backend
+}
+
+// replayKeepsText reports whether a request may record text: the policy of
+// some layer it can run, global.plugins for a passthrough request included,
+// captures a prompt.
+func replayKeepsText(cfg *config.RouterConfig) (keeps bool) {
+	cfg.VisitEveryPlugins(func(plugins []config.DecisionPlugin) {
+		keeps = keeps || config.RouterReplayPolicyOf(plugins).PromptCaptureMode() != config.PromptCaptureNone
+	})
+	return keeps
 }
 
 func resolveReplayStoreBackend(cfg config.RouterReplayConfig) string {
@@ -247,7 +272,7 @@ func createReplayStore(
 		return createReplayQdrantStore(globalCfg)
 	default:
 		return nil, fmt.Errorf(
-			"unknown store_backend: %s (supported: memory, redis, postgres, milvus, qdrant)",
+			"unknown store_backend: %s (supported: file, memory, redis, postgres, milvus, qdrant)",
 			backend,
 		)
 	}
@@ -255,9 +280,13 @@ func createReplayStore(
 
 func createSharedReplayStore(
 	backend string,
-	globalCfg *config.RouterReplayConfig,
+	cfg *config.RouterConfig,
+	pluginCfg *config.RouterReplayPluginConfig,
 ) (store.Storage, error) {
+	globalCfg := &cfg.RouterReplay
 	switch backend {
+	case "file":
+		return createReplayFileStore(cfg, pluginCfg), nil
 	case "redis":
 		return createReplayRedisStore(globalCfg)
 	case "postgres":
@@ -269,6 +298,43 @@ func createSharedReplayStore(
 	default:
 		return nil, fmt.Errorf("shared replay storage not supported for backend %s", backend)
 	}
+}
+
+// replayFileMaxRecords caps the records the file store keeps: at about 8 KB a
+// record, 1,000 records make a file of about 8 MB, and 16 MB just before it is
+// rewritten.
+const replayFileMaxRecords = 1000
+
+// createReplayFileStore keeps the records in .vllm-sr/router-replay.jsonl in
+// the configuration file's directory, at most replayFileMaxRecords of them,
+// or in memory, as before the file store existed, where there is no such
+// file, the directory cannot be written or another process holds the file.
+func createReplayFileStore(cfg *config.RouterConfig, pluginCfg *config.RouterReplayPluginConfig) store.Storage {
+	path := filepath.Join(replayStateDir(cfg.ConfigBaseDir), "router-replay.jsonl")
+	err := errors.New("the configuration was not read from a file")
+	if cfg.ConfigBaseDir != "" {
+		maxRecords := min(pluginCfg.MaxRecords, replayFileMaxRecords)
+		var storage *store.FileStore
+		if storage, err = store.OpenFileStore(path, maxRecords, cfg.RouterReplay.TTLSeconds); err == nil {
+			logging.Infof("Router replay keeps records in %s (max_records=%d, ttl=%ds)",
+				path, maxRecords, cfg.RouterReplay.TTLSeconds)
+			return storage
+		}
+	}
+	logging.Warnf("Router replay cannot keep records in %s (%v); they stay in memory and are lost on restart. "+
+		"Make that directory writable, or configure postgres or redis.", path, err)
+	return store.NewMemoryStore(pluginCfg.MaxRecords, cfg.RouterReplay.TTLSeconds)
+}
+
+// replayStateDir is the .vllm-sr directory of the project whose configuration
+// lives in configDir: configDir itself for a generated
+// .vllm-sr/runtime-config*.yaml, as configsnapshot reads it, else the
+// .vllm-sr directory in configDir.
+func replayStateDir(configDir string) string {
+	if filepath.Base(configDir) == ".vllm-sr" {
+		return configDir
+	}
+	return filepath.Join(configDir, ".vllm-sr")
 }
 
 func createReplayMemoryStore(

@@ -436,7 +436,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'store_backend',
           label: 'Store Backend',
           type: 'select',
-          options: ['memory', 'redis', 'postgres', 'milvus'],
+          options: ['file', 'memory', 'redis', 'postgres', 'milvus'],
           required: true,
         },
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '2592000' },

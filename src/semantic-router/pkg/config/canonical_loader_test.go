@@ -466,7 +466,7 @@ global:
 	if !cfg.UsesRouterReplay() {
 		t.Fatal("expected sparse global override to keep the default routing record of router_replay")
 	}
-	if cfg.RouterReplay.StoreBackend != "memory" {
+	if cfg.RouterReplay.StoreBackend != "file" {
 		t.Fatalf("expected router replay backend to keep default, got %q", cfg.RouterReplay.StoreBackend)
 	}
 	if cfg.RouterReplay.TTLSeconds != 2592000 {

@@ -61,7 +61,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     max_responses: 1000,
   } satisfies ResponseAPIConfig,
   router_replay: {
-    store_backend: 'memory',
+    store_backend: 'file',
     ttl_seconds: 2592000,
     async_writes: false,
   } satisfies RouterReplayConfig,
