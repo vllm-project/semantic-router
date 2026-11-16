@@ -55,6 +55,10 @@ type requestSignalSnapshot struct {
 	LastAssistantToolCall     bool
 	LastUserAfterToolResult   bool
 	ToolFailures              classification.ToolFailureCount
+	// sourceFormat is the request's wire format and toolCalls its tool calls
+	// by ID, from which ToolFailures reads what each result answers.
+	sourceFormat llmprotocol.WireFormat
+	toolCalls    map[string]*llmprotocol.ToolCall
 
 	RoutingInput routinginput.Outcome
 }

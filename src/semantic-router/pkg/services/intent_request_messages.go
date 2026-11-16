@@ -364,7 +364,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		},
 	}
 	previousWasToolResult := false
-	var toolFailures classification.ToolFailureCount
+	toolFailures := intentToolFailures{calls: map[string]*llmprotocol.ToolCall{}}
 	routing := selector.Walk(intentUserTexts(selector, messages)...)
 
 	for index, msg := range messages {
@@ -399,7 +399,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			msg.ToolCallID,
 			previousWasToolResult,
 		)
-		observeIntentToolFailure(&toolFailures, role, rawText)
+		toolFailures.observe(role, msg, rawText)
 		if text != "" && (role == "user" || role == "assistant") {
 			history.turns = append(history.turns, classification.ConversationTurn{Role: role, Text: text})
 		}
@@ -409,19 +409,37 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		recordIntentNonUserMessage(&history, role, text)
 	}
 	history.routingInput = routing.Outcome()
-	history.conversationFacts.FailedToolResults = toolFailures.Failed
+	history.conversationFacts.FailedToolResults = toolFailures.count.Failed
 
 	return history
 }
 
-// observeIntentToolFailure counts tool results as the data plane does. Chat
-// messages carry no failure flag, and a user message starts a new turn.
-func observeIntentToolFailure(failures *classification.ToolFailureCount, role, text string) {
+// intentToolFailures counts failed tool results as live routing counts them
+// in a Chat Completions request: a user message starts a new turn, and a
+// tool message is read with the call it answers.
+type intentToolFailures struct {
+	count classification.ToolFailureCount
+	calls map[string]*llmprotocol.ToolCall
+}
+
+func (f *intentToolFailures) observe(role string, msg IntentMessage, text string) {
 	switch role {
 	case "user":
-		*failures = classification.ToolFailureCount{}
+		f.count = classification.ToolFailureCount{}
+	case "assistant":
+		for _, raw := range msg.ToolCalls {
+			var call struct {
+				ID       string `json:"id"`
+				Function struct {
+					Name string `json:"name"`
+				} `json:"function"`
+			}
+			if json.Unmarshal(raw, &call) == nil {
+				f.calls[call.ID] = &llmprotocol.ToolCall{ID: call.ID, Name: call.Function.Name}
+			}
+		}
 	case "tool":
-		failures.Observe(classification.ToolResultFailed(nil, text))
+		f.count.Observe(classification.ToolResultStatusOf(llmprotocol.OpenAIChatV1, f.calls[msg.ToolCallID], nil, text))
 	}
 }
 

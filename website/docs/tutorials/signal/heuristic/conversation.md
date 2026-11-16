@@ -142,26 +142,45 @@ recipes:
           - model: qwen-chat
 ```
 
-**What counts as a failure.** The Router reads only the failure markers a
-client puts in the request, never the wording of an error:
+**What counts as a failure.** The Router reads only the status markers a
+client puts in the request, never the wording of an error. Each tool result
+is a failure, a success, or neither, and a result that is neither leaves the
+count as it is:
 
-- Anthropic Messages: a `tool_result` block with `is_error: true`. Claude Code
-  sets it when a command exits nonzero or a tool reports an error. The cause
-  is not read, so a marked read of a missing file counts like a failed build.
-- OpenAI Responses and Chat Completions: a tool output has no failure field.
-  The one marker the Router reads is the exit code Codex writes above a shell
-  command's output, `Exit code: N` or, for `exec_command`, `Process exited with
-  code N`. Codex writes that header itself and ends it with an `Output:` line
-  that the command's own output follows, so only the lines above the first
-  `Output:` line are read and nothing the command prints can pass for a
-  status. A nonzero code is a failure; a command still running is not.
+- Anthropic Messages: a `tool_result` block with `is_error: true` is a
+  failure, whatever the tool. Claude Code sets it when a command exits
+  nonzero, when a tool reports an error such as a missing file, when a tool
+  call is denied permission, and when the user rejects the call. The cause is
+  not read, so a denied write counts like a failed build. A success is a
+  result of Claude Code's `Bash` tool without that flag, for a command run in
+  the foreground. A result of any other tool without the flag, such as a read
+  or a background command's start, is neither: it does not show that the
+  failing work now succeeds.
+- OpenAI Responses and Chat Completions: a tool output has no status field.
+  The one marker the Router reads is the exit code Codex writes above the
+  output of its shell tools, `exec_command` and `write_stdin`, and `shell` and
+  `shell_command` in older Codex versions: `Process exited with code N` or
+  `Exit code: N`. That header ends with an `Output:` line, and it counts only
+  when every line above that line is one Codex writes there (`Chunk ID`,
+  `Wall time`, the exit code, `Process running with session ID`,
+  `Original token count`, `Total output lines`). Nothing a command prints and
+  no text another tool returns can pass for a status. Exit code 0 is a
+  success, any other code a failure, and a command still running is neither.
+  Every other tool's output is neither, among them `apply_patch`,
+  `update_plan`, MCP tools, and the `exec` tool of Codex code mode, whose
+  result carries a command's exit code only when the script prints it.
 - A Chat client without that header never escalates, since its tool messages
   carry no marker at all.
+- The classify API reads Chat Completions messages, so it counts as live
+  routing does for a Chat request: Codex shell results whose assistant
+  message names the tool in `tool_calls`. Its messages have no `is_error`,
+  so a Claude Code history sent through it counts no failures.
 
 **When it starts and when it returns.** The count runs over the tool results of
-the current user turn, in order. A failed result adds one, two successful
-results in a row reset it to zero, and a user message that is not sent with
-tool results starts a new turn at zero. With `gte: 2`, two failures escalate,
+the current user turn, in order. A failed result adds one, two successes with
+no failure between them reset it to zero, a result that is neither changes
+nothing, and a user message that is not sent with tool results starts a new
+turn at zero. With `gte: 2`, two failures escalate,
 the escalation holds through one success, and the request after the second
 success in a row matches the normal decision again. A failure between single
 successes keeps counting, so alternating results escalate once and stay there
@@ -169,10 +188,17 @@ instead of switching models on every request. The count comes from the
 history the client resends, so it needs no session state and gives the same
 answer on every replica.
 
-**Prompt cache.** A model switch starts the new model's prompt cache cold. The
-first escalated request sends the whole conversation uncached, and so does the
-first request after the return. The two-success reset keeps that to one switch
-each way per run of failures.
+**Prompt cache.** The stronger model has not cached the conversation, so the
+first escalated request starts its prompt cache cold. Whether the worker still
+holds its cached prefix when the session returns depends on how long its
+backend keeps it. The two-success reset keeps the switches to one each way per
+run of failures.
+
+**API format.** Give the models of both decisions an API format that keeps
+the client's markers, or translation refuses the request: a Claude Code
+request sent to a Chat Completions model would lose `tool_result.is_error`,
+which the Router refuses unless `global.router.allow_lossy_translation` lists
+it.
 
 **Session protection.** Router Learning protection keeps a session on its
 model, also inside a tool loop, but a change of matched decision releases it,
