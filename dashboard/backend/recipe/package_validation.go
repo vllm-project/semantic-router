@@ -230,6 +230,19 @@ func detectEnvironmentBindingWarnings(configData []byte) []PackageWarning {
 	return warnings
 }
 
+// HasEnvironmentBindings reports whether config binds any environment
+// reference the Router expands and sends on, such as a provider key an
+// auth.api_key_env names or a ${NAME} in any value. A Dashboard caller who may
+// not read configuration secrets may not activate such a Recipe, as the value
+// a binding reads is one the caller never sees.
+func HasEnvironmentBindings(configData []byte) (bool, error) {
+	bindings, err := extractEnvironmentBindings(configData)
+	if err != nil {
+		return false, err
+	}
+	return len(bindings) > 0, nil
+}
+
 // ValidateEnvironmentBindings enforces the process-scoped allowlist populated
 // by `vllm-sr serve --recipe-env`. It never returns or logs secret values.
 func ValidateEnvironmentBindings(configData []byte) error {

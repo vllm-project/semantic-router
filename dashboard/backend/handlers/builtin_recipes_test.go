@@ -130,8 +130,15 @@ func TestBuiltinRecipeComposeHandlerReturnsTheComposedConfig(t *testing.T) {
 	BuiltinRecipeComposeHandler(runner, "/state/config.yaml", false).ServeHTTP(response,
 		httptest.NewRequest(http.MethodPost, "/api/recipes/builtin/compose", strings.NewReader(body)))
 
-	if response.Code != http.StatusOK || response.Body.String() != string(composed) ||
-		response.Header().Get("Content-Type") != "application/json" || response.Header().Get("Cache-Control") != "no-store" {
+	var actual, expected any
+	if err := json.Unmarshal(response.Body.Bytes(), &actual); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(composed, &expected); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusOK || !reflect.DeepEqual(actual, expected) ||
+		response.Header().Get("Content-Type") != "application/json" || !strings.Contains(response.Header().Get("Cache-Control"), "no-store") {
 		t.Fatalf("status=%d headers=%v body=%s", response.Code, response.Header(), response.Body.String())
 	}
 	want := BuiltinRecipeComposeRequest{
@@ -256,5 +263,117 @@ esac
 	_, err = runner.Compose(context.Background(), "/state/config.yaml", request)
 	if err == nil || errors.As(err, &rejection) {
 		t.Fatalf("crash = %v, want a failure that is not a rejection", err)
+	}
+}
+
+func TestBuiltinRecipeComposeRedactsConfigSecrets(t *testing.T) {
+	composed := []byte(`{"version":"v0.5","listeners":[{"api_keys":["listener-fixture"]}],"providers":{"models":[{"backend_refs":[{"auth":{"api_key":"backend-fixture"},"headers":{"Authorization":"header-fixture"},"endpoint":"https://user:url-fixture@example.test/v1"}]}]},"global":{"services":{"response_api":{"redis":{"password":"redis-fixture"}}}}}`)
+	for _, privileged := range []bool{false, true} {
+		t.Run(map[bool]string{false: "editor", true: "secret viewer"}[privileged], func(t *testing.T) {
+			runner := &fakeBuiltinRecipeRunner{composed: composed}
+			permissions := []string{"config.write"}
+			if privileged {
+				permissions = append(permissions, configSecretPermission)
+			}
+			request := httptest.NewRequest(http.MethodPost, builtinRecipeComposePath, strings.NewReader(`{"bundle":"mom-v1","recipe":"vault","bindings":{},"model_names":["my/vault"]}`))
+			request = request.WithContext(requestAs("/", permissions...).Context())
+			response := httptest.NewRecorder()
+			BuiltinRecipeComposeHandler(runner, "config.yaml", false)(response, request)
+			if response.Code != http.StatusOK || !json.Valid(response.Body.Bytes()) {
+				t.Fatalf("compose status=%d body=%s", response.Code, response.Body.String())
+			}
+			for _, secret := range []string{"listener-fixture", "backend-fixture", "header-fixture", "url-fixture", "redis-fixture"} {
+				if visible := strings.Contains(response.Body.String(), secret); visible != privileged {
+					t.Errorf("credential %s visible=%v, want %v", secret, visible, privileged)
+				}
+			}
+			if !strings.Contains(response.Header().Get("Cache-Control"), "no-store") {
+				t.Fatal("composed config can be cached")
+			}
+		})
+	}
+}
+
+func TestBuiltinRecipeComposeRedactedConfigCanBeSaved(t *testing.T) {
+	for _, retarget := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unchanged targets", true: "changed target"}[retarget], func(t *testing.T) {
+			path := writeSecretConfig(t, configSecretFixture)
+			original, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			node, err := configSecretDocument(original)
+			if err != nil {
+				t.Fatal(err)
+			}
+			recipes := mappingValueNode(node, "recipes")
+			added := cloneYAMLNode(recipes.Content[0])
+			mappingValueNode(added, "name").Value = "composed-recipe"
+			recipes.Content = append(recipes.Content, added)
+			published, err := configSecretDocument([]byte("entrypoints:\n  - model_names: [default]\n    recipe: default\n    default: true\n  - model_names: [composed]\n    recipe: composed-recipe\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			setMappingValueNode(node, "entrypoints", mappingValueNode(published, "entrypoints"))
+			composed, err := marshalYAMLTaggedJSON(node)
+			if err != nil {
+				t.Fatal(err)
+			}
+			runner := &fakeBuiltinRecipeRunner{composed: composed}
+			request := httptest.NewRequest(http.MethodPost, builtinRecipeComposePath, strings.NewReader(`{"bundle":"mom-v1","recipe":"composed-recipe","bindings":{},"model_names":["composed"]}`))
+			request = request.WithContext(requestAs("/", "config.write").Context())
+			view := httptest.NewRecorder()
+			BuiltinRecipeComposeHandler(runner, path, false)(view, request)
+			if view.Code != http.StatusOK || strings.Contains(view.Body.String(), configSecretFixture) {
+				t.Fatalf("compose did not return a redacted config: status=%d", view.Code)
+			}
+			body := view.Body.String()
+			if retarget {
+				body = strings.ReplaceAll(body, "127.0.0.1:6379", "different.example.test:6379")
+			}
+			previous := propagateConfig
+			calls := 0
+			propagateConfig = func(string, string) error { calls++; return nil }
+			t.Cleanup(func() { propagateConfig = previous })
+			request = httptest.NewRequest(http.MethodPut, "/", strings.NewReader(body))
+			request = request.WithContext(requestAs("/", "config.write").Context())
+			response := httptest.NewRecorder()
+			UpdateConfigHandler(path, false, filepath.Dir(path))(response, request)
+			saved, readErr := os.ReadFile(path)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if retarget {
+				if response.Code != http.StatusBadRequest || string(saved) != string(original) || calls != 0 {
+					t.Fatalf("retargeted composition was saved: status=%d calls=%d", response.Code, calls)
+				}
+				return
+			}
+			if response.Code != http.StatusOK {
+				t.Fatalf("composed save status=%d: %s", response.Code, response.Body.String())
+			}
+			if !strings.Contains(string(saved), "composed-recipe") || !strings.Contains(string(saved), configSecretFixture) || strings.Contains(string(saved), redactedConfigSecret) {
+				t.Fatal("composed save lost the recipe or original credential")
+			}
+		})
+	}
+}
+
+func TestBuiltinRecipeComposeRedactionFailureHidesDetails(t *testing.T) {
+	// Duplicate keys fail redaction; parser errors may quote their contents.
+	runner := &fakeBuiltinRecipeRunner{composed: []byte("password: first\npassword: " + configSecretFixture + "\n")}
+	request := httptest.NewRequest(http.MethodPost, builtinRecipeComposePath, strings.NewReader(`{"bundle":"mom-v1","recipe":"vault","bindings":{},"model_names":["my/vault"]}`))
+	request = request.WithContext(requestAs("/", "config.write").Context())
+	response := httptest.NewRecorder()
+	BuiltinRecipeComposeHandler(runner, "/private/config.yaml", false)(response, request)
+	var body BuiltinRecipeErrorResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusServiceUnavailable || body.Error != "builtin_recipes_unavailable" || body.Message != "The composed recipe configuration could not be prepared." {
+		t.Fatalf("redaction failure exposed unexpected response: status=%d", response.Code)
+	}
+	if strings.Contains(response.Body.String(), configSecretFixture) || strings.Contains(response.Body.String(), "/private/") {
+		t.Fatal("redaction failure exposed secret or filesystem details")
 	}
 }

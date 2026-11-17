@@ -56,6 +56,14 @@ func collectInputModalityRuleNames(rules []InputModalityRule) map[string]struct{
 	return names
 }
 
+func collectAgentRuleNames(rules []AgentRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
 func collectSystemOneRuleNames(rules []SystemOneRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {

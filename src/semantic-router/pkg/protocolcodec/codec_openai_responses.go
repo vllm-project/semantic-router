@@ -283,18 +283,12 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy), diagnostics, nil
 }
 
-// decodeResponsesDroppedFields accepts include and client_metadata without
-// forwarding them. The Router already drops provider-encrypted reasoning from
-// responses, so it can never honor that include, and client telemetry is not
-// model input. Each drop is reported instead of discarded silently.
+// decodeResponsesDroppedFields reports client telemetry that is not model input.
 func decodeResponsesDroppedFields(wire responsesRequestWire, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
-	include, err := decodeResponsesInclude(wire.Include, policy)
+	_, err := decodeResponsesInclude(wire.Include, policy)
 	if err != nil {
 		return nil, err
-	}
-	if len(include) > 0 {
-		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "include", "provider-encrypted reasoning is not relayed")
 	}
 	if len(wire.ClientMetadata) > 0 {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "client_metadata", "client telemetry is not model input")
@@ -323,7 +317,8 @@ func decodeResponsesInclude(raw json.RawMessage, policy llmprotocol.Policy) ([]s
 
 func decodeResponsesBaseRequest(wire responsesRequestWire, conversationID string) llmprotocol.Request {
 	request := llmprotocol.Request{
-		Generation: 1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
+		IncludeEncryptedReasoning: responsesRequestsEncryptedReasoning(wire.Include),
+		Generation:                1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
 		EndUserID: wire.User, PreviousResponseID: wire.PreviousResponseID, ConversationID: conversationID,
 		Truncation: wire.Truncation, PromptCacheKey: wire.PromptCacheKey,
 		Store: wire.Store, AutoStore: wire.AutoStore, ParallelToolCalls: wire.ParallelToolCalls,

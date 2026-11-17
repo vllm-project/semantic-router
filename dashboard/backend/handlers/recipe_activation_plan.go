@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"reflect"
 	"sort"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -348,4 +350,27 @@ func requireDeactivationConfirmation(request recipe.DeactivateRequest, plan reci
 
 func environmentStorageInventory() ([]string, error) {
 	return managedStorageInventory(os.Getenv(managedStorageBackends))
+}
+
+// refuseEnvironmentBindingWithoutSecrets refuses, for an authenticated caller
+// who may not read configuration secrets, the activation of a Recipe whose
+// config binds an environment reference. The Router expands the reference and
+// sends its value where the Recipe chose, so a Write-role caller could
+// otherwise exfiltrate a value they never saw, as rejectKeyReferenceRedirect
+// forbids on a Dashboard config save. A context with no authenticated caller,
+// such as an internal or test caller, is not restricted.
+func refuseEnvironmentBindingWithoutSecrets(ctx context.Context, rawConfig []byte) error {
+	ac, ok := auth.AuthFromContextValue(ctx)
+	if !ok || ac.Perms[auth.PermConfigSecretsRead] {
+		return nil
+	}
+	bound, err := recipe.HasEnvironmentBindings(rawConfig)
+	if err != nil {
+		return activationFailed("Recipe environment bindings could not be read.", err)
+	}
+	if !bound {
+		return nil
+	}
+	return recipe.NewPackageError("config_secrets_required", http.StatusForbidden,
+		"Activating a Recipe that binds an environment reference needs the config.secrets.read permission; its value is one the caller cannot see.", nil)
 }

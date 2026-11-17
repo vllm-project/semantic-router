@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -26,7 +27,7 @@ type Delivery struct {
 	// when Local is set; a local reply skips the response phases, as
 	// ext_proc skips Envoy's local replies. Nil when Immediate is set.
 	Response *routing.UpstreamResponse
-	Local    bool
+	Local    *routing.LocalReply
 	// Immediate is the answer a fallback chain gave without a backend.
 	Immediate *routing.Response
 	// Close releases the response; it may be nil.
@@ -54,7 +55,8 @@ type SessionCaller struct {
 // ErrHopBodyLimit reports a hop response larger than the caller's bound.
 var ErrHopBodyLimit = errors.New("graph: the hop's response exceeds the body limit")
 
-// Call sends one hop.
+// Call sends one hop. A hop answered with a local reply ends its session
+// with it, as the standalone gateway ends a client request.
 func (c *SessionCaller) Call(ctx context.Context, req *HopRequest) (resp *HopResponse, err error) {
 	request := &routing.Request{Header: req.Request.Header.Clone(), Body: req.Request.Body}
 	if request.Header.Get(headers.RequestID) == "" {
@@ -66,7 +68,8 @@ func (c *SessionCaller) Call(ctx context.Context, req *HopRequest) (resp *HopRes
 	if err != nil {
 		return nil, err
 	}
-	defer func() { plan.Finish(err) }()
+	var local error
+	defer func() { plan.Finish(cmp.Or(err, local)) }()
 	if plan.Immediate != nil {
 		return c.answer(plan.Immediate)
 	}
@@ -86,11 +89,12 @@ func (c *SessionCaller) Call(ctx context.Context, req *HopRequest) (resp *HopRes
 		return c.answer(delivery.Immediate)
 	case delivery.Response == nil:
 		return nil, errors.New("graph: the upstream layer returned no response")
-	case delivery.Local:
+	case delivery.Local != nil:
 		body, readErr := c.read(delivery.Response.Body)
 		if readErr != nil {
 			return nil, readErr
 		}
+		local = delivery.Local
 		return &HopResponse{Status: delivery.Response.Status, Header: delivery.Response.Header, Body: body}, nil
 	}
 	out, err := c.Engine.Respond(ctx, plan, delivery.Response)

@@ -138,11 +138,14 @@ func recordRouterSessionUsageFromContext(
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
 		CacheWriteTokens:            usage.cacheWriteTokens,
+		CacheWrite5mTokens:          usage.cacheWrite5mTokens,
+		CacheWrite1hTokens:          usage.cacheWrite1hTokens,
 		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
 		CompletionTokens:            usage.completionTokens,
 		Cost:                        sessionTurnCost(usage, pricing),
 		EstimatedCacheSavings:       accounting.estimatedSavings,
 		CacheAccountingSource:       accounting.source,
+		CacheReported:               usageReportsCache(usage),
 		Timestamp:                   time.Now(),
 	})
 	recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
@@ -174,8 +177,15 @@ func recordRouterLearningUsageFromContext(
 		Cost:                        sessionTurnCost(usage, pricing),
 		EstimatedCacheSavings:       accounting.estimatedSavings,
 		CacheAccountingSource:       accounting.source,
+		CacheReported:               usageReportsCache(usage),
 		Timestamp:                   time.Now(),
 	})
+}
+
+// usageReportsCache is true when the backend counted cache reads or writes,
+// so a zero is a cold cache rather than an unknown one.
+func usageReportsCache(usage responseUsageMetrics) bool {
+	return usage.cachedPromptTokensReported || usage.cacheWriteTokensReported
 }
 
 func estimateRouterCacheAccounting(

@@ -59,12 +59,10 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackendWithDiagnostics(
 		changed = true
 	}
 	if request.ReasoningDisplay != "" {
-		if request.ReasoningDisplay != "omitted" {
-			return request, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_reasoning_display",
-				fmt.Sprintf("the selected backend cannot produce thinking display %q", request.ReasoningDisplay), nil)
-		}
-		// The Router enforces omitted on the client response, both buffered
-		// and streaming, instead of relying on a backend display control.
+		// Neither format has a display control. The Router enforces omitted
+		// on the client response, buffered and streaming, and cannot
+		// summarize, so summarized and updates return the backend's reasoning
+		// as it is (see reportApproximatedReasoningDisplay).
 		projected.ReasoningDisplay = ""
 		changed = true
 	}

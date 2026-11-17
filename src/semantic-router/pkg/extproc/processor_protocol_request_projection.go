@@ -13,8 +13,9 @@ func (r *OpenAIRouter) projectRequestForBackend(
 	request llmprotocol.Request,
 	model string,
 	target llmprotocol.WireFormat,
+	shadows ...*shadowTarget,
 ) (llmprotocol.Request, error) {
-	projected, _, err := r.projectRequestForBackendWithDiagnostics(request, model, target)
+	projected, _, err := r.projectRequestForBackendWithDiagnostics(request, model, target, shadows...)
 	return projected, err
 }
 
@@ -22,13 +23,15 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	request llmprotocol.Request,
 	model string,
 	target llmprotocol.WireFormat,
+	shadows ...*shadowTarget,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
-	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(request, target)
+	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(request, model, target, shadows...)
+	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, samplingDiagnostics := r.projectUnsupportedSampling(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(verbosityDiagnostics, fileDiagnostics, storeDiagnostics, samplingDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, samplingDiagnostics, otherDiagnostics), err
 }
 
 // projectUnsupportedSampling sends a model the request without the sampling

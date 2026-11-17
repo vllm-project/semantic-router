@@ -212,13 +212,14 @@ func migrateHallucinationPlugin(m *Migration, at FormMatch) error {
 }
 
 // isThresholdMasking matches a masking plugin written before masking named
-// its pii rule: with its own threshold, or with no signal.
+// its pii rule: with its own threshold, or with neither a signal nor rules.
 func isThresholdMasking(node *yaml.Node, _ string) bool {
 	if !hasType(DecisionPluginMasking)(node, "") {
 		return false
 	}
 	configuration := mappingValue(node, "configuration")
-	return mappingValue(configuration, "threshold") != nil || scalarAt(configuration, "signal") == ""
+	return mappingValue(configuration, "threshold") != nil ||
+		(scalarAt(configuration, "signal") == "" && mappingValue(configuration, "rules") == nil)
 }
 
 func describeThresholdMasking(at FormMatch) (string, string) {

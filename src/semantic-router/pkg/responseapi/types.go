@@ -137,7 +137,7 @@ type ResponseAPIResponse struct {
 type InputItem struct {
 	// Type is the item type: "message", "function_call",
 	// "function_call_output", "custom_tool_call", "custom_tool_call_output",
-	// "reasoning", or "item_reference".
+	// "reasoning", "image_generation_call", or "item_reference".
 	Type string `json:"type"`
 
 	// ID is the item identifier (for item_reference)
@@ -159,7 +159,12 @@ type InputItem struct {
 	Output    json.RawMessage `json:"output,omitempty"`
 
 	// Summary contains reasoning summary blocks. Reasoning content uses Content.
-	Summary json.RawMessage `json:"summary,omitempty"`
+	Summary          json.RawMessage `json:"summary,omitempty"`
+	EncryptedContent string          `json:"encrypted_content,omitempty"`
+
+	// Generated-image results distinguish absent, null and empty string values.
+	// The canonical codec validates their shape before storage and on replay.
+	Result json.RawMessage `json:"result,omitempty"`
 
 	// Status of the item
 	Status string `json:"status,omitempty"`
@@ -168,7 +173,7 @@ type InputItem struct {
 // OutputItem represents an output item in a Response API response.
 type OutputItem struct {
 	// Type is the item type: "message", "function_call", "function_call_output",
-	// "custom_tool_call", "custom_tool_call_output", or "reasoning".
+	// "custom_tool_call", "custom_tool_call_output", "reasoning", or "image_generation_call".
 	Type string `json:"type"`
 
 	// ID is the item identifier
@@ -181,7 +186,11 @@ type OutputItem struct {
 	Content []ContentPart `json:"content,omitempty"`
 
 	// Summary is the public reasoning summary (for reasoning type).
-	Summary []ContentPart `json:"summary,omitempty"`
+	Summary          []ContentPart `json:"summary,omitempty"`
+	EncryptedContent string        `json:"encrypted_content,omitempty"`
+
+	// Preserve the generated-image payload across public object reads.
+	Result json.RawMessage `json:"result,omitempty"`
 
 	// Status of the output item
 	Status string `json:"status,omitempty"`

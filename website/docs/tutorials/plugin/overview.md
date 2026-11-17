@@ -77,7 +77,9 @@ content and the selected model can take it:
   to take text, so a model card never gates it.
 - **Other modalities.** A plugin that acts on, say, images is skipped when the
   model card declares capabilities and omits that modality. A model with no
-  recognized declaration is not gated.
+  recognized declaration is not gated. [Shadow dispatch](./router-replay#shadow)
+  applies the same rule to the shadow model, so media never reaches a model
+  whose card omits it.
 - **Everything else.** Other plugin types are not gated, and run on
   configuration alone.
 

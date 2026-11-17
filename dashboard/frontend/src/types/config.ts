@@ -187,6 +187,24 @@ export interface VSRProfile {
   // How far the router may go down: quality never below the session's model,
   // balanced when the decision is sure, save whenever it answers clearly enough.
   router_goal?: 'quality' | 'balanced' | 'save'
+  // Recipe rules guard and redact enforce besides their own checks.
+  rules?: VSRRules
+}
+
+// One rule of the bound recipe an app enforces.
+export interface VSRRule {
+  type: 'keyword' | 'systemone'
+  name: string
+  // required: a command waits for the person and an output is withheld when
+  // the rule cannot be checked; advisory (the default): it goes unchecked.
+  enforce?: 'required' | 'advisory'
+}
+
+// Rules of one recipe the vSR agent plugins enforce, evaluated by the Router.
+export interface VSRRules {
+  recipe: string
+  guard?: VSRRule[]
+  redact?: VSRRule[]
 }
 
 export interface ListenerTLS {
@@ -205,6 +223,9 @@ export interface Listener {
   port: number
   timeout?: string
   api_keys?: string[]
+  // Owner-only files that each hold one more client key, which a save
+  // writes in place of a literal api_keys entry.
+  api_key_files?: string[]
   // The APIs the listener serves, by API name (or alias); omitted, the four
   // LLM APIs and not systemone.
   apis?: Partial<Record<APIName | APIAlias, ListenerAPI>>
