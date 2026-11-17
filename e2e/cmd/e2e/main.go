@@ -18,7 +18,7 @@ const version = "v1.0.0"
 func main() {
 	// Parse command line flags
 	var (
-		baselineSuite      = flag.String("baseline-suite", baselineSuiteFromEnv(), "Baseline scope: standard (non-stress) or full")
+		baselineSuite      = flag.String("baseline-suite", baselineSuiteFromEnv(), "Case scope by priority: p0 (P0 cases only), standard (P0 and P1) or full (every case)")
 		profile            = flag.String("profile", "envoy-ai-gateway", fmt.Sprintf("Test profile to run (%s)", strings.Join(framework.RegisteredProfileNames(), ", ")))
 		clusterName        = flag.String("cluster", "semantic-router-e2e", "Kind cluster name")
 		imageTag           = flag.String("image-tag", "e2e-test", "Docker image tag")

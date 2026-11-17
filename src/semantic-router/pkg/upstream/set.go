@@ -9,6 +9,8 @@ import (
 
 	"golang.org/x/net/http/httpguts"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -20,7 +22,8 @@ type Options struct {
 	// so do the pools of unchanged security domains; RootCAs and Dial are then
 	// inherited from Previous. The caller still closes Previous.
 	Previous *Set
-	// RootCAs replaces the system certificate pool for upstream TLS.
+	// RootCAs replaces the system certificate pool for upstream TLS; a
+	// cluster's CA file replaces it in turn.
 	RootCAs *x509.CertPool
 	// Dial opens connections; nil uses a net.Dialer.
 	Dial DialFunc
@@ -180,6 +183,14 @@ func (s *Set) Do(ctx context.Context, req *Request) (*Response, error) {
 		return nil, failure
 	}
 	metrics.RecordUpstreamRequest(c.spec.Name, string(failure.Kind))
+	logging.ComponentWarnEvent("upstream", "upstream_call_failed", map[string]interface{}{
+		"request_id": req.Header.Get(headers.RequestID),
+		"cluster":    c.spec.Name,
+		"endpoint":   failure.Endpoint,
+		"kind":       string(failure.Kind),
+		"attempts":   len(cl.attempts),
+		"error":      failure.Error(),
+	})
 	return cl.localReply(failure), nil
 }
 
@@ -312,6 +323,11 @@ func (c *ClusterSpec) validate() error {
 	}
 	if h := c.HealthCheck; h != nil && (len(h.Path) == 0 || h.Path[0] != '/') {
 		return fmt.Errorf("health check path %q must start with /", h.Path)
+	}
+	if c.TLS != nil {
+		if _, _, err := c.TLS.clientFiles(); err != nil {
+			return err
+		}
 	}
 	for _, ep := range c.Endpoints {
 		wantTLS := ep.Scheme == schemeHTTPS

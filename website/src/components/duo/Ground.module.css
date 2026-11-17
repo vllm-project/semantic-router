@@ -1,0 +1,62 @@
+.ground {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+}
+
+.blueprint::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background-color: var(--paper-2);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1.3px);
+  background-size: 22px 22px;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 clamp(72px, 9vw, 132px), #000 calc(100% - clamp(72px, 9vw, 132px)), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 clamp(72px, 9vw, 132px), #000 calc(100% - clamp(72px, 9vw, 132px)), transparent 100%);
+}
+
+/* A ruled section keeps its top padding above the rule, then the rule, then its head. */
+.ruled {
+  --site-section-pad-top: calc(var(--duo-pad) + 40px + clamp(40px, 5vw, 56px));
+}
+
+.rule {
+  display: block;
+  width: 100%;
+  max-width: 960px;
+  height: 40px;
+}
+
+.groundRule {
+  position: absolute;
+  z-index: 1;
+  top: var(--duo-pad);
+  left: 50%;
+  width: min(100% - 2 * var(--gut), 960px);
+  transform: translateX(-50%);
+}
+
+/* The band's canvas is sized in whole blocks by BlockBand and may overflow; it must not be squeezed. */
+.blocks {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.blocks canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  image-rendering: pixelated;
+}
+
+@media (max-width: 600px) {
+  .ruled {
+    --site-section-pad-top: calc(var(--duo-pad) + 40px + 32px);
+  }
+}

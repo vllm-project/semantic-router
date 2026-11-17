@@ -9,7 +9,7 @@ import (
 
 func inventoryHandle(t *testing.T, pool *Pool, inventory *Inventory, recipe, device string) *Resolved[string, string] {
 	t.Helper()
-	task, err := Register(NewRegistry(inventory.Observe), "test.v1", func(string) error { return nil }, func(string, string) error { return nil })
+	task, err := RegisterTask(NewRegistry(inventory.Observe), "test.v1", "test.v1", func(string) error { return nil }, func(string, string) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}

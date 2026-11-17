@@ -1,0 +1,39 @@
+# A guard module's failure handling. on_error: block matched a request whose
+# classifier failed, so the module's request-stage rules get on_unknown:
+# match; the pii module had no on_error, so its rules take the default, which
+# matches too. on_unscanned: allow decided on what the model read, as
+# on_unscanned: best_effort does, and a response-stage rule keeps the
+# response guard's on_unknown.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    model_bindings:
+      pii: primary
+    signals:
+      jailbreak:
+        - {name: attack, on_unknown: match, on_unscanned: best_effort}
+        - {name: unsafe_answer, stage: response, on_unscanned: best_effort}
+      pii:
+        - {name: contact, predicate: {gte: 0.4}}
+    decisions:
+      - name: blocked
+        priority: 200
+        rules:
+          operator: OR
+          conditions:
+            - {type: jailbreak, name: attack}
+            - {type: pii, name: contact}
+        modelRefs: [{model: general}]
+      - name: answer
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: response_guard
+            configuration:
+              rules: [{when: {type: jailbreak, name: unsafe_answer}, action: block}]

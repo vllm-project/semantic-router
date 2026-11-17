@@ -31,14 +31,11 @@ metadata:
   namespace: default
 spec:
   signals:
-    embeddings:
+    keywords:
       - name: "financial_advice"
-        threshold: 0.78
-        candidates:
-          - "I need advice on investment strategies"
-          - "Can you help me with financial planning?"
-          - "What should I do with my retirement savings?"
-        aggregationMethod: "max"
+        operator: "OR"
+        keywords: ["I need advice on investment strategies", "Can you help me with financial planning?", "What should I do with my retirement savings?"]
+        caseSensitive: false
 
     domains:
       - name: "economics"
@@ -53,7 +50,7 @@ spec:
       signals:
         operator: "AND"
         conditions:
-          - type: "embedding"
+          - type: "keyword"
             name: "financial_advice"
           - type: "domain"
             name: "economics"
@@ -65,8 +62,8 @@ spec:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a financial information assistant. Provide general financial education but remind users this is not professional financial advice."
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.92
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.92}}}
 

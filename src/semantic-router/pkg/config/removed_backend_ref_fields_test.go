@@ -9,7 +9,7 @@ func TestRemovedBackendRefFieldsFailWithAHint(t *testing.T) {
 	for _, field := range []string{"compat_gateway", "openai_compat_gateway"} {
 		t.Run(field, func(t *testing.T) {
 			_, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: claude-via-gateway
@@ -18,9 +18,10 @@ providers:
       backend_refs:
         - name: gateway
           provider: anthropic-compatible
-          base_url: https://gateway.example.com/anthropic
+          endpoint: https://gateway.example.com/anthropic
           ` + field + `: true
-routing: {}
+recipes:
+  - name: default
 `))
 			want := "providers.models[claude-via-gateway].backend_refs[0]: " + field +
 				" was removed; gateway response fields are accepted by default, so delete it"
@@ -35,7 +36,7 @@ routing: {}
 // setting.
 func TestGatewayBackendNeedsNoSetting(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: claude-via-gateway
@@ -44,8 +45,9 @@ providers:
       backend_refs:
         - name: gateway
           provider: anthropic-compatible
-          base_url: https://gateway.example.com/anthropic
-routing: {}
+          endpoint: https://gateway.example.com/anthropic
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)

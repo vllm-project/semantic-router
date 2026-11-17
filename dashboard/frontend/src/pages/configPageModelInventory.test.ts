@@ -149,7 +149,7 @@ describe('model structured field validation', () => {
       /json array/i,
     )
     expect(() => validateModelStructuredFields({ backend_refs: [{}] })).toThrow(
-      /endpoint or base url/i,
+      /requires an endpoint/i,
     )
     expect(() =>
       validateModelStructuredFields({
@@ -159,7 +159,7 @@ describe('model structured field validation', () => {
     expect(() =>
       validateModelStructuredFields({
         backend_refs: [
-          { endpoint: 'localhost:8000', provider: 'vllm', extra_headers: { valid: 1 } },
+          { endpoint: 'localhost:8000', provider: 'vllm', headers: { valid: 1 } },
         ],
       }),
     ).toThrow(/text key\/value pairs/i)
@@ -205,7 +205,7 @@ describe('model structured field validation', () => {
             protocol: 'http',
             weight: 1,
             provider: 'vllm',
-            extra_headers: { 'X-Tenant': 'demo' },
+            headers: { 'X-Tenant': 'demo' },
           },
         ],
         capabilities: ['tools', 'vision'],

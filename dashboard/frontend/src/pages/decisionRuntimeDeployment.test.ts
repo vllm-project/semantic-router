@@ -24,8 +24,9 @@ function snapshot(): RouterConfig {
         deployments: {
           other: { provider: 'model_runtime', artifact: 'team/other', max_num_seqs: 4 },
           'private-specialist': {
-            provider: 'classify',
-            endpoint: 'https://pii.example.com/v1',
+            provider: 'systemone',
+            endpoint: 'https://pii.example.com/v1/systemone',
+            model: 'team/pii-judge',
             auth: { api_key_env: 'PII_KEY' },
           },
         },
@@ -35,7 +36,7 @@ function snapshot(): RouterConfig {
     },
     routing: {
       signals: {
-        decision: [
+        systemone: [
           { name: 'task', question: { type: 'noul', instructions: 'Is this coding?' } },
           { name: 'entities', deployment: 'other', question: { type: 'span' } },
         ],
@@ -47,7 +48,7 @@ function snapshot(): RouterConfig {
         name: 'research',
         routing: {
           signals: {
-            decision: [
+            systemone: [
               {
                 name: 'task',
                 deployment: 'other',
@@ -60,8 +61,8 @@ function snapshot(): RouterConfig {
             {
               name: 'select',
               algorithm: {
-                type: 'decision',
-                decision: {
+                type: 'systemone',
+                systemone: {
                   deployment: 'other',
                   instructions: 'Choose',
                   candidates: { answer: 'General' },
@@ -145,7 +146,7 @@ describe('Decision runtime canonical mutations', () => {
       revision: entry.revision,
       device: 'auto',
     }
-    expected.recipes![0].routing.signals!.decision[0].deployment = 'research-decider'
+    expected.recipes![0].routing.signals!.systemone[0].deployment = 'research-decider'
     expect(next).toEqual(expected)
   })
 
@@ -163,11 +164,11 @@ describe('Decision runtime canonical mutations', () => {
       device: 'cpu',
       consumerId: consumers[0].id,
     })
-    expect(next.routing?.signals?.decision[0].deployment).toBe('decider')
-    expect(next.recipes?.[0].routing.signals?.decision[0].deployment).toBe('other')
+    expect(next.routing?.signals?.systemone[0].deployment).toBe('decider')
+    expect(next.recipes?.[0].routing.signals?.systemone[0].deployment).toBe('other')
   })
 
-  it('writes a decision selector without changing its candidate set or routing rules', () => {
+  it('writes a System One selector without changing its candidate set or routing rules', () => {
     const current = snapshot()
     const consumer = compatibleRuntimeConsumers(current).find((value) => value.kind === 'selector')!
     const next = withDecisionRuntimeDeployment(current, {
@@ -179,8 +180,8 @@ describe('Decision runtime canonical mutations', () => {
     expect(next.recipes?.[0].routing.decisions?.[0]).toEqual({
       ...current.recipes![0].routing.decisions![0],
       algorithm: {
-        type: 'decision',
-        decision: {
+        type: 'systemone',
+        systemone: {
           deployment: 'selector-runtime',
           instructions: 'Choose',
           candidates: { answer: 'General' },
@@ -245,7 +246,7 @@ describe('Decision runtime canonical mutations', () => {
   it('rejects stale incompatible consumers, collisions, reserved names and removed deployments', () => {
     const current = snapshot()
     const consumerId = compatibleRuntimeConsumers(current)[0].id
-    current.routing!.signals!.decision[0].question = { type: 'set' }
+    current.routing!.signals!.systemone[0].question = { type: 'set' }
     const request = { entry, name: 'decider', device: 'auto', consumerId }
     expect(() => withDecisionRuntimeDeployment(current, request)).toThrow('no longer compatible')
     expect(() => withDecisionRuntimeDeployment(snapshot(), { ...request, name: 'other' })).toThrow(

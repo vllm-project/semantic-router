@@ -32,8 +32,7 @@ const (
 )
 
 const (
-	routerLearningDefaultSessionHeader      = "x-session-id"
-	routerLearningDefaultConversationHeader = "x-conversation-id"
+	routerLearningDefaultConversationHeader = headers.XConversationID
 
 	defaultProtectionReleaseMinUserTurnsBetween = 2
 )
@@ -100,12 +99,26 @@ type RouterLearningIdentityConfig struct {
 // runtime; future identity needs should add typed fields instead of accepting
 // arbitrary header keys.
 type RouterLearningIdentityHeadersConfig struct {
+	// Session names the header protection reads the session id from. Unset,
+	// protection keys on the session id the request pins: x-vsr-session-id,
+	// or a header global.router.headers.session_id_headers accepts, and
+	// without one on the session a supported harness sends.
 	Session      *string `yaml:"session,omitempty"`
 	Conversation *string `yaml:"conversation,omitempty"`
 	// Agent names an optional header that identifies one agent inside a
 	// session, such as a delegated subagent. Requests that carry it are held
 	// per agent; requests without it keep the session or conversation key.
+	// Unset, protection reads the agent a supported harness sends.
 	Agent *string `yaml:"agent,omitempty"`
+}
+
+// defaultIdentityHeaders are the headers supported agent harnesses send their
+// ids in, read in order when identity.headers names none. Codex sends
+// session-id and thread-id on every request, and Claude Code sends its
+// subagents' id; its session header is a session_id_headers default.
+var defaultIdentityHeaders = map[string][]string{
+	"session": {headers.CodexSessionID},
+	"agent":   {headers.XClaudeCodeAgentID, headers.CodexThreadID},
 }
 
 // RouterLearningProtectionTuning exposes the stable protection knobs.
@@ -115,7 +128,45 @@ type RouterLearningProtectionTuning struct {
 	SwitchMargin         *float64 `yaml:"switch_margin,omitempty"`
 	StabilityWeight      *float64 `yaml:"stability_weight,omitempty"`
 
-	ProgressGate *ProgressGateTuning `yaml:"progress_gate,omitempty"`
+	ProgressGate   *ProgressGateTuning   `yaml:"progress_gate,omitempty"`
+	CacheEconomics *CacheEconomicsTuning `yaml:"cache_economics,omitempty"`
+}
+
+// CacheEconomicsTuning prices a switch protection would make against the
+// prompt cache the session's last receipt left warm on its current model.
+// Omitting the section keeps it on with the defaults.
+type CacheEconomicsTuning struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
+	// CacheTTLSeconds is how long a cache entry lives after its last use. A
+	// receipt that wrote 1-hour entries extends it to 3600.
+	CacheTTLSeconds *int `yaml:"cache_ttl_seconds,omitempty" jsonschema:"minimum=1,maximum=86400"`
+	// DefaultRemainingTurns is the turns a switch has to repay its rewrite in
+	// when no remaining-turn prior applies.
+	DefaultRemainingTurns *int `yaml:"default_remaining_turns,omitempty" jsonschema:"minimum=1"`
+}
+
+// CacheEconomicsConfig is the resolved policy shared by validation and execution.
+type CacheEconomicsConfig struct {
+	Enabled               bool
+	CacheTTLSeconds       int
+	DefaultRemainingTurns int
+}
+
+func (tuning *CacheEconomicsTuning) EffectiveConfig() CacheEconomicsConfig {
+	cfg := CacheEconomicsConfig{Enabled: true, CacheTTLSeconds: 300, DefaultRemainingTurns: 3}
+	if tuning == nil {
+		return cfg
+	}
+	if tuning.Enabled != nil {
+		cfg.Enabled = *tuning.Enabled
+	}
+	if tuning.CacheTTLSeconds != nil {
+		cfg.CacheTTLSeconds = *tuning.CacheTTLSeconds
+	}
+	if tuning.DefaultRemainingTurns != nil {
+		cfg.DefaultRemainingTurns = *tuning.DefaultRemainingTurns
+	}
+	return cfg
 }
 
 // ProgressGateTuning gates session model switches on recent-window progress
@@ -266,7 +317,7 @@ func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 				return value
 			}
 		}
-		return routerLearningDefaultSessionHeader
+		return ""
 	case "conversation":
 		if cfg.Identity.Headers.Conversation != nil {
 			if value := strings.TrimSpace(*cfg.Identity.Headers.Conversation); value != "" {
@@ -282,6 +333,17 @@ func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 	default:
 		return ""
 	}
+}
+
+// IdentityHeaderNames are the headers protection reads key's id from, in
+// order: the one identity.headers names, else the defaults supported
+// harnesses send. An unset session is read first from the session the
+// request pins.
+func (cfg RouterLearningProtectionConfig) IdentityHeaderNames(key string) []string {
+	if header := cfg.HeaderName(key); header != "" {
+		return []string{header}
+	}
+	return defaultIdentityHeaders[key]
 }
 
 func (cfg DecisionAdaptationsConfig) EffectiveMode() string {

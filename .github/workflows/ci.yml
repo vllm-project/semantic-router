@@ -6,7 +6,7 @@ on:
       verification:
         description: Verification ID from tools/ci/verification_catalog.yaml (or e2e.PROFILE) to run on the selected branch or tag.
         type: string
-        default: platform.image-calibration-cpu
+        default: platform.models-cpu
         required: true
   workflow_call:
     inputs:
@@ -117,10 +117,17 @@ jobs:
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
+  # The CUDA and ROCm images are the longest builds and nothing in the run
+  # consumes them before the gate, so they start once the source checks have
+  # not failed: a run that fails them, or that a newer push cancels meanwhile,
+  # spends no accelerator build.
   image-distribution:
     name: Artifacts / Distribution Images
-    needs: plan
-    if: toJSON(fromJSON(needs.plan.outputs.image_producers)['image-distribution'].images) != '[]'
+    needs: [plan, quality, generated]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.quality.result != 'failure' && needs.generated.result != 'failure'
+      && toJSON(fromJSON(needs.plan.outputs.image_producers)['image-distribution'].images) != '[]'
     uses: ./.github/workflows/build-artifacts.yml
     with:
       images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-distribution'].build_images) }}

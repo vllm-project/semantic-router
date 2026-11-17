@@ -196,7 +196,7 @@ routing:
 ```
 
 The `computer science` signal and both provider models must also exist in the
-same recipe. See the [Confidence tutorial](/docs/tutorials/algorithm/looper/confidence)
+same recipe. See the [Confidence tutorial](/docs/v0.4/tutorials/algorithm/looper/confidence)
 for the complete contract.
 
 When the client sends `"stream": true`, Semantic Router calls the candidate model(s), aggregates the looper result, and returns an immediate SSE body to the gateway. The client still receives a normal OpenAI-compatible stream:

@@ -273,6 +273,77 @@ def test_pii_threshold_missing_bucket_raises_value_error(model) -> None:
         model.router.span["pii_buckets"] = original_buckets
 
 
+def test_span_threshold_without_pii_buckets_serves_non_pii_routes(model) -> None:
+    """A package whose span block carries no ``pii_buckets`` still answers every non-PII span question.
+
+    Only a PII question reads that field, so a generic Span route must not fail
+    on a package that verifies and loads without it.
+    """
+    generic = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set=None,
+        evidence=False,
+        relation_wording=False,
+        text="Which spans are named entities of these types?",
+        labels=(("drug", "a medicine"),),
+        window=128,
+    )
+
+    original_buckets = model.router.span.pop("pii_buckets")
+    try:
+        threshold, temperature = model.router.span_threshold(generic, 2)
+        assert threshold == 0.6
+        assert temperature == 1.0
+    finally:
+        model.router.span["pii_buckets"] = original_buckets
+
+
+def test_span_set_threshold_without_pii_buckets_serves_non_pii_routes(model) -> None:
+    """The same holds when the ``span_set`` head has no buckets of its own."""
+    hallucinated = routing.SpanRoute(
+        adapter="span_set",
+        head="span_set",
+        label_set="halu",
+        evidence=False,
+        relation_wording=False,
+        text="Which spans of the answer are not supported by the context?",
+        labels=(("unsupported", ""),),
+        window=128,
+    )
+
+    original_buckets = model.router.span["set_adapter"].pop("pii_buckets")
+    try:
+        threshold, temperature = model.router.span_threshold(hallucinated, 2)
+        assert threshold == 0.4
+        assert temperature == 0.25
+    finally:
+        model.router.span["set_adapter"]["pii_buckets"] = original_buckets
+
+
+def test_pii_threshold_without_pii_buckets_still_reports_the_missing_field(
+    model,
+) -> None:
+    """A PII route over a package with no ``pii_buckets`` keeps failing, and only there."""
+    pii = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set="pii",
+        evidence=False,
+        relation_wording=False,
+        text="PII",
+        labels=(("email", ""),),
+        window=128,
+    )
+
+    original_buckets = model.router.span.pop("pii_buckets")
+    try:
+        with pytest.raises(KeyError, match="pii_buckets"):
+            model.router.span_threshold(pii, 2)
+    finally:
+        model.router.span["pii_buckets"] = original_buckets
+
+
 def test_evidence_threshold_missing_bucket_raises_value_error(model) -> None:
     route = routing.SpanRoute(
         adapter="span",
@@ -489,6 +560,40 @@ def test_long_inputs_fail_decisions_and_window_spans(model) -> None:
         model, {"user": medium}, {"names": {"type": "span", "criteria": {"drug": None}}}
     )
     assert "error" not in answer["answers"]["names"]
+
+
+def test_truncating_spans_read_their_route_window(model) -> None:
+    text = "paracetamol dose " * 200
+    span = {"type": "span", "overflow": "truncate"}
+    plan = model.plan(
+        {"user": text},
+        {
+            "evidence": {**span, "criteria": {"evidence": None}},
+            "names": {**span, "criteria": {"drug": None}},
+        },
+    )
+    read = {q: len(plan.rows[q].row.part("user").ids) for q in plan.rows}
+    assert read == {"evidence": 512, "names": 256}
+
+
+def test_evidence_truncation_cuts_unread_parts_to_the_router_window(model) -> None:
+    # The unread answer at the evidence window would leave the context no room.
+    state = {
+        "user": "what dose",
+        "context": "paracetamol dose " * 400,
+        "answer": "take two " * 400,
+    }
+    question = {
+        "type": "span",
+        "overflow": "truncate",
+        "over": "context",
+        "criteria": {"evidence": None},
+    }
+    plan = model.plan(state, {"evidence": question})
+    assert plan.errors == {}
+    row = plan.rows["evidence"].row
+    assert len(row.part("context").ids) == 512
+    assert len(row.part("answer").ids) == 256
 
 
 def test_deadline_answers_every_question(model) -> None:

@@ -27,37 +27,54 @@ trap cleanup EXIT
 
 git -C "$ROOT_DIR" worktree add --detach "$BASE_TREE" "$BASE_COMMIT"
 
-if [[ ! -d "$BASE_TREE/src/semantic-router/pkg/modelruntime/serving" ]]; then
-  # The base revision runs models in the removed native bindings, so no common
-  # harness can measure both sides. Record the reset instead of a comparison,
-  # citing the records that measured the bindings against the runtime.
-  records=()
-  shopt -s nullglob
-  for record in "$ROOT_DIR"/src/model-runtime/docs/records/{router-,vela1-,embed-,decision1-,stores-algorithms}*; do
-    records+=("${record#"$ROOT_DIR"/}")
-  done
-  shopt -u nullglob
-  if ((${#records[@]} == 0)); then
-    echo "A model baseline reset must cite the legacy-versus-runtime records; none found." >&2
+# record_reset records a reset instead of a comparison when no common harness
+# can measure both sides: why, and the records that measured them against each
+# other. Usage: record_reset REASON NOTICE RECORD...
+record_reset() {
+  local reason=$1 notice=$2
+  shift 2
+  if (($# == 0)); then
+    echo "A model baseline reset must cite the records that compare both sides; none found." >&2
     exit 1
   fi
-  python3 - "$BASE_COMMIT" "$OUTPUT_DIR/model-baseline.json" "${records[@]}" <<'PYCODE'
+  python3 - "$BASE_COMMIT" "$OUTPUT_DIR/model-baseline.json" "$reason" "${@#"$ROOT_DIR"/}" <<'PYCODE'
 import json
 import sys
 json.dump(
     {
         "git_commit": sys.argv[1],
-        "model_baseline_reset": "base revision predates the model runtime; no common model harness",
-        "legacy_comparison_records": sorted(sys.argv[3:]),
+        "model_baseline_reset": sys.argv[3],
+        "legacy_comparison_records": sorted(sys.argv[4:]),
         "benchmarks": {},
     },
     open(sys.argv[2], "w"),
     indent=2,
 )
 PYCODE
-  echo "Model baseline reset: $BASE_COMMIT predates the model runtime."
+  echo "Model baseline reset: $BASE_COMMIT $notice."
   exit 0
+}
+
+shopt -s nullglob
+if [[ ! -d "$BASE_TREE/src/semantic-router/pkg/modelruntime/serving" ]]; then
+  # The base revision runs models in the removed native bindings, so no common
+  # harness can measure both sides. Record the reset instead of a comparison,
+  # citing the records that measured the bindings against the runtime.
+  record_reset "base revision predates the model runtime; no common model harness" \
+    "predates the model runtime" \
+    "$ROOT_DIR"/src/model-runtime/docs/records/{router-,vela1-,embed-,decision1-,stores-algorithms}*
 fi
+if [[ ! -d "$BASE_TREE/src/semantic-router/pkg/presets" ]]; then
+  # The base revision answers the classify benchmarks' signals with the Vela
+  # 1.0 specialists and has no preset questions to ask the decision model, so
+  # no common harness can measure both sides. Record the reset instead of a
+  # comparison, citing the records that measured the decision model against
+  # the specialists.
+  record_reset "base revision predates the decision model's preset questions; no common model harness" \
+    "predates the decision model's preset questions" \
+    "$ROOT_DIR"/src/model-runtime/docs/records/{vela2-router-signals,vela2-decision-model-sizes,vela3-router-signals}.*
+fi
+shopt -u nullglob
 
 # The measurement program is held constant; only the implementation changes.
 rm -rf "$BASE_TREE/perf"

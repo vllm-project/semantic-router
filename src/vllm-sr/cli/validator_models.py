@@ -1,10 +1,11 @@
-"""Catalog-aware validation for the public v0.3 model configuration."""
+"""Catalog-aware validation for the public v0.5 model configuration."""
 
 from __future__ import annotations
 
 from functools import lru_cache
 from typing import Any
 
+from cli.config_contract import iter_routing_profiles
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
@@ -57,14 +58,12 @@ def validate_model_references(config: UserConfig) -> list[ValidationError]:
     ) = _catalog_index()
     built_in_models = physical_models | virtual_models
     aliases = {model.name for model in config.providers.models}
-    cards = {card.name: card for card in config.routing.model_cards}
+    cards = _model_cards(config)
     catalogs_by_alias = {
         model.name: model.catalog or model.name for model in config.providers.models
     }
     lora_aliases = {
-        adapter.name
-        for card in config.routing.model_cards
-        for adapter in (card.loras or [])
+        adapter.name for card in cards.values() for adapter in (card.loras or [])
     }
     errors = _blank_identity_errors(config)
     errors.extend(_duplicate_identity_errors(config, aliases, cards))
@@ -79,13 +78,10 @@ def validate_model_references(config: UserConfig) -> list[ValidationError]:
             reasoning_families,
         )
     )
-    errors.extend(
-        _model_card_errors(
-            cards, set(catalogs_by_alias.values()), aliases, lora_aliases
-        )
-    )
     errors.extend(_built_in_card_claim_errors(config, built_in_cards))
-    errors.extend(_decision_errors(config, aliases, cards, catalogs_by_alias))
+    errors.extend(
+        _decision_errors(config, aliases, cards, catalogs_by_alias, lora_aliases)
+    )
     errors.extend(_default_model_errors(config, aliases, cards, lora_aliases))
     return errors
 
@@ -98,14 +94,6 @@ def _blank_identity_errors(config: UserConfig) -> list[ValidationError]:
                 ValidationError(
                     "Provider model name cannot be empty",
                     field=f"providers.models[{index}].name",
-                )
-            )
-    for index, card in enumerate(config.routing.model_cards):
-        if not card.name.strip():
-            errors.append(
-                ValidationError(
-                    "Model card name cannot be empty",
-                    field=f"routing.modelCards[{index}].name",
                 )
             )
     return errors
@@ -122,13 +110,20 @@ def _duplicate_identity_errors(
                 field="providers.models",
             )
         )
-    if len(cards) != len(config.routing.model_cards):
-        errors.append(
-            ValidationError(
-                "routing.modelCards[].name values must be unique",
-                field="routing.modelCards",
+    declared_by: dict[str, str] = {}
+    for model in config.providers.models:
+        if not model.declares_facts():
+            continue
+        card = model.catalog or model.name
+        if card in declared_by:
+            errors.append(
+                ValidationError(
+                    f"the facts of model card '{card}' are already declared by "
+                    f"providers.models[{declared_by[card]}]",
+                    field=f"providers.models[{model.name}]",
+                )
             )
-        )
+        declared_by.setdefault(card, model.name)
     return errors
 
 
@@ -144,14 +139,6 @@ def _provider_model_errors(
     errors: list[ValidationError] = []
     for model in config.providers.models:
         catalog = catalogs_by_alias[model.name]
-        if not model.backend_refs and not _provider_model_has_metadata(model):
-            errors.append(
-                ValidationError(
-                    f"Provider model '{model.name}' must define backend_refs or model metadata",
-                    field=f"providers.models.{model.name}",
-                )
-            )
-            continue
         if model.catalog and catalog not in built_in_models:
             errors.append(
                 ValidationError(
@@ -164,6 +151,7 @@ def _provider_model_errors(
             and not model.backend_refs
             and not model.deployment
             and catalog not in virtual_models
+            and not model.states_only_facts()
         ):
             errors.append(
                 ValidationError(
@@ -171,13 +159,6 @@ def _provider_model_errors(
                     "router-owned listener and must define backend_refs with an "
                     "explicit Provider ID",
                     field=f"providers.models.{model.name}.backend_refs",
-                )
-            )
-        if model.catalog and model.name in cards and model.name != catalog:
-            errors.append(
-                ValidationError(
-                    f"Model card override for '{model.name}' must use canonical catalog name '{catalog}'",
-                    field=f"routing.modelCards.{model.name}.name",
                 )
             )
         if model.catalog and model.reasoning:
@@ -209,60 +190,12 @@ def _provider_model_errors(
     return errors
 
 
-def _provider_model_has_metadata(model: Any) -> bool:
-    if (
-        model.catalog
-        or model.deployment
-        or model.reasoning is not None
-        or model.provider_model_id
-        or model.api_format
-        or model.external_model_ids
-    ):
-        return True
-    return _has_meaningful_authored_fields(
-        model.pricing
-    ) or _has_meaningful_authored_fields(model.reliability)
-
-
-def _has_meaningful_authored_fields(value: Any) -> bool:
-    if value is None:
-        return False
-    return any(
-        getattr(value, field_name) not in (None, "", [], {})
-        for field_name in value.model_fields_set
-    )
-
-
-def _model_card_errors(
-    cards: dict[str, Any],
-    referenced_cards: set[str],
-    aliases: set[str],
-    lora_aliases: set[str],
-) -> list[ValidationError]:
-    if not aliases:
-        return []
-    errors: list[ValidationError] = []
-    for card_name in cards:
-        if (
-            card_name not in referenced_cards
-            and card_name not in aliases
-            and card_name not in lora_aliases
-        ):
-            errors.append(
-                ValidationError(
-                    f"Model card '{card_name}' does not match a providers.models catalog identity",
-                    field=f"routing.modelCards.{card_name}.name",
-                )
-            )
-    return errors
-
-
 def _built_in_card_claim_errors(
     config: UserConfig, built_in_cards: dict[str, dict[str, Any]]
 ) -> list[ValidationError]:
     """Match the Router catalog compiler's built-in claim widening rule.
 
-    A public v0.3 model card cannot carry verification.status=reproduced, so
+    A provider model's facts cannot carry verification.status=reproduced, so
     additions to a catalog-backed card must be rejected before serve starts.
     Custom cards, even ones sharing a built-in name, remain operator-owned.
     """
@@ -271,10 +204,10 @@ def _built_in_card_claim_errors(
         model.catalog for model in config.providers.models if model.catalog
     }
     errors: list[ValidationError] = []
-    for index, card in enumerate(config.routing.model_cards):
-        if card.name not in catalog_backed:
+    for card in config.providers.models:
+        if not card.declares_facts() or card.catalog not in catalog_backed:
             continue
-        built_in = built_in_cards.get(card.name)
+        built_in = built_in_cards.get(card.catalog)
         if built_in is None:
             continue  # The unknown catalog identity is reported by provider validation.
         if card.capabilities is not None:
@@ -284,7 +217,7 @@ def _built_in_card_claim_errors(
                     ValidationError(
                         "capabilities widen a built-in claim without "
                         "verification.status=reproduced: " + ", ".join(sorted(added)),
-                        field=f"routing.modelCards[{index}].capabilities",
+                        field=f"providers.models[{card.name}].capabilities",
                     )
                 )
         if card.modalities is not None:
@@ -300,7 +233,7 @@ def _built_in_card_claim_errors(
                     ValidationError(
                         "modalities widen a built-in claim without "
                         "verification.status=reproduced: " + ", ".join(sorted(added)),
-                        field=f"routing.modelCards[{index}].modalities",
+                        field=f"providers.models[{card.name}].modalities",
                     )
                 )
     return errors
@@ -311,6 +244,7 @@ def _decision_errors(
     aliases: set[str],
     cards: dict[str, Any],
     catalogs_by_alias: dict[str, str],
+    lora_aliases: set[str],
 ) -> list[ValidationError]:
     # Match the canonical Go contract: routing-only metadata can describe
     # external-gateway targets before any Router-owned provider alias exists.
@@ -318,28 +252,66 @@ def _decision_errors(
         return []
     errors: list[ValidationError] = []
     for field_prefix, decision in _all_decisions(config):
-        for model_ref in decision.modelRefs:
-            if model_ref.model not in aliases:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown model '{model_ref.model}'",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
+        field = f"{field_prefix}.{decision.name}"
+        errors.extend(
+            _model_ref_errors(
+                decision.name,
+                decision.modelRefs,
+                f"{field}.modelRefs",
+                aliases,
+                cards,
+                catalogs_by_alias,
+            )
+        )
+        # The Router checks candidate iteration models as it checks modelRefs
+        # and takes a declared LoRA's name as the model in either place. The
+        # modelRefs check above is older and still refuses that name.
+        for index, iteration in enumerate(decision.candidateIterations):
+            errors.extend(
+                _model_ref_errors(
+                    decision.name,
+                    iteration.models,
+                    f"{field}.candidateIterations[{index}].models",
+                    aliases | lora_aliases,
+                    cards,
+                    catalogs_by_alias,
                 )
-                continue
-            if not model_ref.lora_name:
-                continue
-            card = cards.get(catalogs_by_alias[model_ref.model])
-            declared_loras = {
-                adapter.name for adapter in ((card.loras if card else None) or [])
-            }
-            if model_ref.lora_name not in declared_loras:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
+            )
+    return errors
+
+
+def _model_ref_errors(
+    decision: str,
+    model_refs: list[Any],
+    field: str,
+    models: set[str],
+    cards: dict[str, Any],
+    catalogs_by_alias: dict[str, str],
+) -> list[ValidationError]:
+    errors: list[ValidationError] = []
+    for model_ref in model_refs:
+        if model_ref.model not in models:
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision}' references unknown model '{model_ref.model}'",
+                    field=field,
                 )
+            )
+            continue
+        catalog = catalogs_by_alias.get(model_ref.model)
+        if not model_ref.lora_name or catalog is None:
+            continue
+        card = cards.get(catalog)
+        declared_loras = {
+            adapter.name for adapter in ((card.loras if card else None) or [])
+        }
+        if model_ref.lora_name not in declared_loras:
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
+                    field=field,
+                )
+            )
     return errors
 
 
@@ -366,11 +338,17 @@ def _default_model_errors(
 
 
 def _all_decisions(config: UserConfig):
-    yield from (
-        ("routing.decisions", decision) for decision in config.routing.decisions
-    )
-    for recipe in config.recipes:
+    for name, recipe in iter_routing_profiles(config):
         yield from (
-            (f"recipes.{recipe.name}.decisions", decision)
-            for decision in recipe.routing.decisions
+            (f"recipes.{name}.decisions", decision) for decision in recipe.decisions
         )
+
+
+def _model_cards(config: UserConfig) -> dict[str, Any]:
+    """The provider models that state facts, by the card they describe: the
+    entry's catalog identity, else its name."""
+    return {
+        model.catalog or model.name: model
+        for model in config.providers.models
+        if model.declares_facts()
+    }

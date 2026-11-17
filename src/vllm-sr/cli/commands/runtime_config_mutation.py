@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import yaml
 
 from cli.commands.runtime_paths import _write_runtime_config
+from cli.config_recipe_scopes import recipe_scopes
 from cli.config_schema import routing_surface_catalog
-from cli.consts import PLATFORM_CUDA, PLATFORM_ROCM
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -25,32 +24,16 @@ _CANONICAL_ALGORITHM_TYPES = frozenset(
 # remains discoverable through `vllm-sr config schema`.
 ALGORITHM_OVERRIDE_TYPES = (
     "static",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "workflows",
-    "latency_aware",
-    "knn",
-    "kmeans",
-    "svm",
-    "mlp",
-    "multi_factor",
     "random",
+    "multi_factor",
+    "workflows",
 )
 
 if not set(ALGORITHM_OVERRIDE_TYPES).issubset(_CANONICAL_ALGORITHM_TYPES):
     raise RuntimeError("CLI algorithm override policy is stale against Router schema")
 
 ALGORITHM_HINTS = {
-    "router_dc": "  Tip: Ensure models have 'description' fields",
-    "automix": "  Tip: Configure model 'pricing' for cost optimization",
-    "hybrid": "  Tip: Configure weights in decision.algorithm.hybrid",
     "workflows": "  Tip: Configure decision.algorithm.workflows; dynamic mode requires planner.model",
-    "latency_aware": "  Tip: Configure decision.algorithm.latency_aware with TPOT or TTFT percentiles",
-    "knn": "  Tip: Configure global.router.model_selection.ml.knn for trained KNN routing",
-    "kmeans": "  Tip: Configure global.router.model_selection.ml.kmeans for cluster routing",
-    "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
-    "mlp": "  Tip: Configure global.router.model_selection.ml.mlp for trained MLP routing",
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
     "random": "  Tip: No configuration needed",
 }
@@ -61,6 +44,17 @@ ALGORITHM_CONFIG_BLOCKS = tuple(
     if surface.get("config_field")
 )
 
+EXECUTOR_ALGORITHM_TYPES = frozenset(
+    surface["type"]
+    for surface in _ALGORITHM_SURFACES
+    if surface.get("kind") == "executor"
+)
+
+# The settings every executor reads; a selector carries neither.
+EXECUTOR_SETTINGS = ("budget", "on_error")
+
+# Blocks of retired and removed algorithm types, and the native cascade's
+# settings, which an override replaces with the overriding type's own.
 RETIRED_ALGORITHM_CONFIG_BLOCKS = (
     "session_aware",
     "elo",
@@ -68,6 +62,14 @@ RETIRED_ALGORITHM_CONFIG_BLOCKS = (
     "gmtrouter",
     "bandit",
     "personalization",
+    "confidence",
+    "prompt",
+    "router_dc",
+    "automix",
+    "hybrid",
+    "latency_aware",
+    "quality",
+    "stages",
 )
 
 EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
@@ -77,221 +79,11 @@ EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
 }
 
 DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
-    "latency_aware": {
-        "tpot_percentile": 90,
-        "ttft_percentile": 95,
-    },
     "workflows": {
         "template": "micro_agent",
     },
     "multi_factor": {},
 }
-
-GPU_OVERRIDE_PREVIEW_LIMIT = 8
-TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
-FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
-# Platforms with GPU defaults for router internal models. AMD semantic
-# embeddings retain their authored use_cpu setting.
-GPU_DEFAULT_PLATFORMS = (PLATFORM_ROCM, PLATFORM_CUDA)
-SEMANTIC_EMBEDDING_USE_CPU_PATH = (
-    "global",
-    "model_catalog",
-    "embeddings",
-    "semantic",
-    "use_cpu",
-)
-GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
-    SEMANTIC_EMBEDDING_USE_CPU_PATH,
-    ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
-    ("global", "model_catalog", "modules", "classifier", "domain", "use_cpu"),
-    ("global", "model_catalog", "modules", "classifier", "pii", "use_cpu"),
-    (
-        "global",
-        "model_catalog",
-        "modules",
-        "hallucination_mitigation",
-        "fact_check",
-        "use_cpu",
-    ),
-    (
-        "global",
-        "model_catalog",
-        "modules",
-        "hallucination_mitigation",
-        "detector",
-        "use_cpu",
-    ),
-    ("global", "model_catalog", "modules", "feedback_detector", "use_cpu"),
-    (
-        "global",
-        "model_catalog",
-        "modules",
-        "modality_detector",
-        "classifier",
-        "use_cpu",
-    ),
-    # Safety runs the decision model too: on a GPU it shares the other
-    # signals' deployment instead of loading a CPU copy.
-    ("global", "model_catalog", "modules", "safety", "safety", "use_cpu"),
-)
-
-
-def _normalize_platform(value: str | None) -> str:
-    if value is None:
-        return ""
-    return str(value).strip().lower()
-
-
-def _preserve_use_cpu_setting(path: str, platform: str) -> bool:
-    return platform == PLATFORM_ROCM and path == ".".join(
-        SEMANTIC_EMBEDDING_USE_CPU_PATH
-    )
-
-
-def _set_use_cpu_false(
-    config_node: object, path: str, changed_paths: list[str], platform: str
-) -> None:
-    if isinstance(config_node, dict):
-        for key, value in config_node.items():
-            current_path = f"{path}.{key}" if path else key
-            if _preserve_use_cpu_setting(current_path, platform):
-                continue
-            if key == "use_cpu" and value is True:
-                config_node[key] = False
-                changed_paths.append(current_path)
-            else:
-                _set_use_cpu_false(value, current_path, changed_paths, platform)
-        return
-
-    if isinstance(config_node, list):
-        for index, item in enumerate(config_node):
-            _set_use_cpu_false(item, f"{path}[{index}]", changed_paths, platform)
-
-
-def _ensure_mapping_path(
-    root: dict[str, object], path: tuple[str, ...], platform: str
-) -> dict[str, object] | None:
-    current: dict[str, object] = root
-    current_path: list[str] = []
-
-    for key in path:
-        current_path.append(key)
-        next_node = current.get(key)
-        if next_node is None:
-            next_mapping: dict[str, object] = {}
-            current[key] = next_mapping
-            current = next_mapping
-            continue
-        if not isinstance(next_node, dict):
-            log.warning(
-                "Platform %s detected: skipping GPU default injection for %s because %s is not a mapping",
-                platform,
-                ".".join(path),
-                ".".join(current_path),
-            )
-            return None
-        current = next_node
-
-    return current
-
-
-def _inject_missing_gpu_defaults(
-    merged_config: dict[str, object], changed_paths: list[str], platform: str
-) -> None:
-    for use_cpu_path in GPU_USE_CPU_PATHS:
-        parent = _ensure_mapping_path(merged_config, use_cpu_path[:-1], platform)
-        if parent is None:
-            continue
-
-        leaf_key = use_cpu_path[-1]
-        if _preserve_use_cpu_setting(".".join(use_cpu_path), platform):
-            if leaf_key not in parent:
-                parent[leaf_key] = True
-                changed_paths.append(".".join(use_cpu_path))
-            continue
-        existing_value = parent.get(leaf_key)
-        if existing_value is False:
-            continue
-
-        parent[leaf_key] = False
-        changed_paths.append(".".join(use_cpu_path))
-
-
-def _resolve_gpu_default_platform(platform: str | None) -> str:
-    """Return the normalized GPU platform requiring use_cpu defaults, else ""."""
-    normalized_platform = _normalize_platform(
-        platform or os.getenv("VLLM_SR_PLATFORM") or os.getenv("DASHBOARD_PLATFORM")
-    )
-    if normalized_platform not in GPU_DEFAULT_PLATFORMS:
-        return ""
-
-    env_prefix = f"VLLM_SR_{normalized_platform.upper()}"
-    force_gpu = os.getenv(f"{env_prefix}_FORCE_GPU", "").strip().lower()
-    if force_gpu in TRUTHY_ENV_VALUES:
-        return normalized_platform
-    if force_gpu in FALSEY_ENV_VALUES:
-        log.info(
-            "Platform %s detected: keeping router internal model use_cpu settings; "
-            "%s_FORCE_GPU is explicitly disabled",
-            normalized_platform,
-            env_prefix,
-        )
-        return ""
-
-    preserve_cpu = os.getenv(f"{env_prefix}_PRESERVE_CPU", "").strip().lower()
-    if preserve_cpu in TRUTHY_ENV_VALUES:
-        log.info(
-            "Platform %s detected: keeping router internal model use_cpu settings; "
-            "%s_PRESERVE_CPU is enabled",
-            normalized_platform,
-            env_prefix,
-        )
-        return ""
-    return normalized_platform
-
-
-def _platform_requires_gpu_defaults(platform: str | None) -> bool:
-    return bool(_resolve_gpu_default_platform(platform))
-
-
-def apply_platform_gpu_defaults(
-    merged_config: dict[str, object], platform: str | None
-) -> bool:
-    """
-    Apply platform-specific GPU defaults.
-
-    AMD (ROCm) and NVIDIA (CUDA) platforms default local signal models to GPU.
-    AMD semantic embeddings retain their authored `use_cpu` value, defaulting
-    to true when absent. Platform defaults never construct or modify bindings.
-    Set
-    VLLM_SR_<PLATFORM>_PRESERVE_CPU=1/true/yes/on (e.g. VLLM_SR_NVIDIA_PRESERVE_CPU)
-    or VLLM_SR_<PLATFORM>_FORCE_GPU=0/false/no/off
-    to preserve CPU settings when the router does not have dedicated GPU headroom.
-    """
-    resolved_platform = _resolve_gpu_default_platform(platform)
-    if not resolved_platform:
-        return False
-
-    changed_paths: list[str] = []
-    _set_use_cpu_false(merged_config, "", changed_paths, resolved_platform)
-    _inject_missing_gpu_defaults(merged_config, changed_paths, resolved_platform)
-    if not changed_paths:
-        log.info(
-            "Platform %s detected: no use_cpu flags found to override",
-            resolved_platform,
-        )
-        return False
-
-    preview = ", ".join(changed_paths[:GPU_OVERRIDE_PREVIEW_LIMIT])
-    if len(changed_paths) > GPU_OVERRIDE_PREVIEW_LIMIT:
-        preview = f"{preview}, ..."
-    log.info(
-        "Platform %s detected: applied %d internal model use_cpu default(s) (%s)",
-        resolved_platform,
-        len(changed_paths),
-        preview,
-    )
-    return True
 
 
 def _normalized_algorithm_override(
@@ -310,17 +102,21 @@ def _normalized_algorithm_override(
 
 
 def _routing_decisions(config: dict[str, object]) -> list[dict[str, object]]:
-    routing = config.get("routing")
-    if not isinstance(routing, dict):
-        log.warning("No routing section found; skipping --algorithm override")
+    scopes = recipe_scopes(config)
+    if not scopes:
+        log.warning("No recipe found; skipping --algorithm override")
         return []
 
-    decisions = routing.get("decisions", [])
-    if not isinstance(decisions, list):
-        log.warning("routing.decisions is not a list; skipping --algorithm override")
-        return []
-
-    return [decision for decision in decisions if isinstance(decision, dict)]
+    found: list[dict[str, object]] = []
+    for path, recipe in scopes:
+        decisions = recipe.get("decisions", [])
+        if not isinstance(decisions, list):
+            log.warning(
+                f"{path}.decisions is not a list; skipping --algorithm override"
+            )
+            continue
+        found.extend(decision for decision in decisions if isinstance(decision, dict))
+    return found
 
 
 def log_algorithm_hint(algorithm: str) -> None:
@@ -338,6 +134,9 @@ def _replace_algorithm_config(
     for block in (*ALGORITHM_CONFIG_BLOCKS, *RETIRED_ALGORITHM_CONFIG_BLOCKS):
         if block != expected_block:
             algorithm_config.pop(block, None)
+    if normalized_algorithm not in EXECUTOR_ALGORITHM_TYPES:
+        for setting in EXECUTOR_SETTINGS:
+            algorithm_config.pop(setting, None)
     algorithm_config["type"] = normalized_algorithm
     if (
         expected_block

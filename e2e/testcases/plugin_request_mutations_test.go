@@ -26,8 +26,8 @@ func TestPluginMutationProviderHeaderCardinality(t *testing.T) {
 					"max_completion_tokens": 64, "n": 1,
 				},
 				// The lossy compatibility view must not hide duplicate values.
-				"headers":       map[string]string{"x-vsr-e2e-added": "added-by-router", "x-vsr-e2e-updated": "updated-by-router"},
-				"header_values": map[string][]string{"x-vsr-e2e-added": {"added-by-router"}, "x-vsr-e2e-updated": tc.values},
+				"headers":       map[string]string{"x-e2e-added": "added-by-router", "x-e2e-updated": "updated-by-router"},
+				"header_values": map[string][]string{"x-e2e-added": {"added-by-router"}, "x-e2e-updated": tc.values},
 			}
 			data, err := json.Marshal(observed)
 			if err != nil {

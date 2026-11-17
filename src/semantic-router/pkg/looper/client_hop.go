@@ -120,21 +120,31 @@ func hopStatusError(resp *graph.HopResponse) error {
 	)
 }
 
+// UpstreamStatus is the HTTP status a model answered the failed call err
+// reports with, or 0 when no model answered it.
+func UpstreamStatus(err error) int {
+	var hopErr *hopOperationError
+	var connectorErr *connector.Error
+	switch {
+	case errors.As(err, &hopErr) && hopErr.status != 0:
+		return hopErr.status
+	case errors.As(err, &connectorErr):
+		return connectorErr.StatusCode
+	}
+	return 0
+}
+
 // modelFailureReason is how a failed model call reads in a trace that
 // reaches the client: the status it was answered with, or what ended it,
 // never transport or provider text.
 func modelFailureReason(err error) string {
-	var hopErr *hopOperationError
-	var connectorErr *connector.Error
-	switch {
+	switch status := UpstreamStatus(err); {
 	case errors.Is(err, context.DeadlineExceeded):
 		return "timed out"
 	case errors.Is(err, context.Canceled):
 		return "cancelled"
-	case errors.As(err, &hopErr) && hopErr.status != 0:
-		return fmt.Sprintf("answered %d", hopErr.status)
-	case errors.As(err, &connectorErr) && connectorErr.StatusCode != 0:
-		return fmt.Sprintf("answered %d", connectorErr.StatusCode)
+	case status != 0:
+		return fmt.Sprintf("answered %d", status)
 	case attemptReasonFromError(err) == AttemptReasonInvalidResponse:
 		return "invalid response"
 	default:

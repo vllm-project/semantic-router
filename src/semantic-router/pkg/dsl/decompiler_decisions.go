@@ -134,7 +134,7 @@ func decompileRuleLeaf(node *config.RuleCombination) string {
 		arguments = append(
 			arguments,
 			"predicate: "+formatPluginConfigValue(
-				structurePredicateToMap(node.Predicate),
+				numericPredicateToMap(node.Predicate),
 			),
 		)
 	}
@@ -186,20 +186,6 @@ func formatDSLFieldValue(value Value) string {
 	return formatPluginConfigValue(dslFieldValueFromValue(value).asInterface())
 }
 
-func decompileComposerObj(node *config.RuleCombination) string {
-	if node == nil {
-		return "{}"
-	}
-	if node.Type != "" {
-		return fmt.Sprintf("{ type: %q, name: %q }", node.Type, node.Name)
-	}
-	var parts []string
-	for i := range node.Conditions {
-		parts = append(parts, decompileComposerObj(&node.Conditions[i]))
-	}
-	return fmt.Sprintf("{ operator: %q, conditions: [%s] }", normalizedRuleOperator(node.Operator), strings.Join(parts, ", "))
-}
-
 func (d *decompiler) decompileDecisions() {
 	for _, dec := range d.cfg.Decisions {
 		d.decompileDecision(dec)
@@ -224,9 +210,8 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 	}
 	d.writeDecisionAlgorithm(dec)
 	d.writeDecisionPlugins(dec)
-	for _, e := range dec.Emits {
-		d.decompileEmit(e)
-	}
+	d.decompileRetention(dec.Retention)
+	d.decompileOutput(dec.Output)
 	d.write("}\n\n")
 }
 
@@ -275,7 +260,7 @@ func (d *decompiler) writeDecisionAlgorithm(dec config.Decision) {
 }
 
 func (d *decompiler) writeDecisionPlugins(dec config.Decision) {
-	for _, p := range dec.Plugins {
+	for _, p := range dec.DeclaredPlugins() {
 		pluginType := config.NormalizeDecisionPluginType(p.Type)
 		pluginFields := decompilePluginConfig(&p)
 		if pluginFields != "" {

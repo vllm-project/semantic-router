@@ -75,7 +75,9 @@ func TestStreamingSafetyRejectsUnrelatedFastResponses(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			headers := make(http.Header)
 			headers.Set("x-vsr-selected-decision", tc.decision)
-			headers.Set("x-vsr-fast-response", tc.fast)
+			if tc.fast == "true" {
+				headers.Set(responsePathHeader, "fast_response")
+			}
 			err := validateStreamingSafetyResponse(headers, []byte(tc.body), tc.wantDecision, tc.refusal)
 			if (err != nil) != tc.wantError {
 				t.Fatalf("error = %v, wantError = %v", err, tc.wantError)
@@ -112,7 +114,9 @@ func TestStreamingCacheRequiresActualSSEReplay(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			headers := make(http.Header)
-			headers.Set("x-vsr-cache-hit", tc.hit)
+			if tc.hit == "true" {
+				headers.Set(responsePathHeader, "cache")
+			}
 			headers.Set("Content-Type", tc.contentType)
 			err := validateStreamingCacheReplay(headers, []byte(tc.body), "answer")
 			if (err != nil) != tc.wantError {

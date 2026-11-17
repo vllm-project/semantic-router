@@ -1,200 +1,98 @@
 .section {
-  padding: clamp(1.75rem, 3vw, 2.5rem) 0 clamp(3.25rem, 5.5vw, 4.5rem);
-  border-bottom: 0;
-  background: var(--site-bg);
+  position: relative;
+  padding: var(--site-section-pad-top, var(--site-section-pad)) 0 var(--site-section-pad);
 }
 
-/* A single centred column: heading, command, links. Compound selector so this
- * wins over the global .site-section-intro regardless of stylesheet order. */
-:global(.site-section-intro).heading {
-  justify-items: center;
-  gap: 0.5rem;
-  margin-bottom: var(--site-section-gap);
-  text-align: center;
+.wrap {
+  width: min(100% - 2 * var(--gut), var(--wrap));
+  margin-inline: auto;
 }
 
-.heading h2 {
-  margin: 0.1rem 0 0;
-  font-size: clamp(1.3rem, 2.1vw, 1.7rem);
-  line-height: 1.2;
-  letter-spacing: -0.028em;
-  color: var(--site-text-strong);
-  text-wrap: balance;
-}
-
+/* Duo's segmented tabs: a soft track, the selected tab on a surface pill. */
 .audienceTabs {
-  display: grid;
-  width: fit-content;
-  margin: 0 auto 1rem;
-  padding: 0.2rem;
-  grid-template-columns: repeat(2, minmax(7rem, 1fr));
-  border: 1px solid var(--site-border);
-  border-radius: 0.68rem;
-  background: var(--site-surface-alt);
+  display: flex;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto 28px;
+  padding: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
 }
 
 .audienceTab {
   display: inline-flex;
-  min-height: 2.1rem;
   align-items: center;
   justify-content: center;
-  gap: 0.38rem;
-  padding: 0.4rem 0.78rem;
+  gap: 8px;
+  min-width: 96px;
+  height: 40px;
+  padding: 0 18px;
   border: 0;
-  border-radius: 0.49rem;
-  background: transparent;
-  color: var(--site-muted-bright);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: 500 14px/1 var(--sans);
+  white-space: nowrap;
   cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 650;
-  letter-spacing: -0.005em;
-  transition:
-    background var(--site-transition-fast),
-    color var(--site-transition-fast),
-    box-shadow var(--site-transition-fast);
+  transition: color 0.35s, background-color 0.35s var(--ease), box-shadow 0.35s var(--ease);
 }
 
 .audienceTab:hover {
-  color: var(--site-text-strong);
+  color: var(--ink);
 }
 
-.audienceTab:focus-visible {
-  outline: 2px solid var(--site-accent);
-  outline-offset: 2px;
-}
-
-.audienceTabActive,
-.audienceTabActive:hover {
-  background: var(--site-bg);
-  color: var(--site-text-strong);
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
+.audienceTabActive {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(22, 24, 29, 0.1), 0 4px 12px rgba(22, 24, 29, 0.06);
 }
 
 .audienceIcon {
-  width: 0.9rem;
-  height: 0.9rem;
-  flex: 0 0 auto;
-  stroke-width: 1.8;
+  width: 16px;
+  height: 16px;
 }
 
-.audienceTabActive .audienceIcon {
-  color: var(--site-accent-strong);
-}
-
-/* Carries the surface the install card used to have, so the command reads as a
- * deliberate object rather than a bare input. */
-.commandShell {
+.way {
   display: grid;
-  width: 100%;
-  max-width: 58rem;
-  margin-inline: auto;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.5fr);
   align-items: center;
-  gap: 0.8rem;
-  padding: 1.05rem 0.9rem 1.05rem 1.15rem;
-  border: 1px solid var(--site-border);
-  border-radius: 0.95rem;
-  background:
-    radial-gradient(ellipse 70% 60% at 0% 0%, rgba(48, 162, 255, 0.1), transparent 60%),
-    radial-gradient(ellipse 55% 45% at 100% 100%, rgba(48, 162, 255, 0.06), transparent 55%),
-    var(--site-surface-alt);
-  box-shadow: var(--site-shadow-soft);
-  transition:
-    border-color var(--site-transition-medium),
-    box-shadow var(--site-transition-medium);
+  gap: clamp(24px, 4vw, 56px);
+  padding: clamp(22px, 3vw, 36px);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
 }
 
-.commandShell:hover {
-  border-color: var(--site-hover-border);
-  box-shadow: var(--site-hover-glow);
-}
-
-.commandShellAgent {
-  max-width: 58rem;
-  align-items: start;
-}
-
-.commandPrompt {
-  color: var(--site-accent-strong);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.95rem;
-  font-weight: 600;
-  user-select: none;
-}
-
-.copyButton {
-  display: grid;
-  width: 1.95rem;
-  height: 1.95rem;
-  place-items: center;
-  border: 1px solid var(--site-border);
-  border-radius: 0.45rem;
-  background: transparent;
-  color: var(--site-muted-bright);
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition:
-    border-color var(--site-transition-fast),
-    background var(--site-transition-fast),
-    color var(--site-transition-fast);
-}
-
-.copyButton:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-accent-soft);
-  color: var(--site-accent-strong);
-}
-
-.copyButton:focus-visible {
-  outline: 2px solid var(--site-accent);
-  outline-offset: 2px;
-}
-
-.copyButtonSuccess,
-.copyButtonSuccess:hover {
-  border-color: rgba(48, 162, 255, 0.55);
-  color: var(--site-accent-strong);
-}
-
-.copyButton svg {
-  display: block;
-  width: 0.92rem;
-  height: 0.92rem;
-  stroke-width: 1.8;
-}
-
-.command {
-  display: block;
+.wayCopy {
   min-width: 0;
-  overflow: visible;
-  padding: 0 0 0 0.15rem;
-  border: 0;
-  background: transparent;
-  color: var(--site-text-strong);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: clamp(0.9rem, 1.1vw, 1.05rem);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
-.agentPrompt {
-  overflow: visible;
-  white-space: normal;
-  word-break: normal;
+.way .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: var(--ink);
+  font: 600 13px/1.2 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
-.channelNote {
-  max-width: 58rem;
-  margin: 0.85rem auto 0;
-  color: var(--site-muted);
-  font-size: 0.76rem;
-  line-height: 1.65;
-  text-align: center;
+.brand svg {
+  width: 18px;
+  height: 18px;
+  color: var(--ember);
+}
+
+.way .channelNote {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 15.5px;
+  line-height: 1.6;
 }
 
 .channelNote strong {
-  color: var(--site-accent-strong);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -202,60 +100,55 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-  margin-top: 1.25rem;
+  gap: 14px 22px;
+  margin-top: 22px;
 }
 
-.guideLink.guideLink {
-  border-color: var(--site-cta-border) !important;
-  background: var(--site-cta-bg) !important;
-  color: var(--site-cta-text) !important;
-  box-shadow: var(--site-cta-shadow) !important;
+.guide {
+  display: inline-flex;
+  align-items: center;
+  height: 46px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-size: 15.5px;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: 0 8px 22px rgba(22, 24, 29, 0.18);
+  transition: background-color 0.2s, transform 0.3s var(--ease);
 }
 
-.guideLink.guideLink:hover {
-  border-color: var(--site-cta-border-hover) !important;
-  background: var(--site-cta-bg-hover) !important;
-  color: var(--site-cta-text) !important;
-  box-shadow: var(--site-hover-glow) !important;
-  transform: translateY(-1px);
+.guide:hover,
+.guide:focus-visible {
+  background: var(--btn-bg-hover);
+  color: var(--btn-fg);
+  text-decoration: none;
 }
 
-.docsLink.docsLink:hover {
-  border-color: var(--site-hover-border) !important;
-  background: var(--site-hover-surface-bg-soft) !important;
-  color: var(--site-accent-strong) !important;
-  box-shadow: var(--site-hover-inset) !important;
+.guide:active {
+  transform: scale(0.98);
 }
 
-@media (max-width: 768px) {
-  .section {
-    padding: 1.5rem 0 3rem;
-  }
-
-  .command {
-    word-break: normal;
-    font-size: 0.82rem;
-  }
-
-  .agentPrompt {
-    word-break: normal;
-  }
-
-  .actions {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .guideLink,
-  .docsLink {
-    width: 100%;
+@media (max-width: 1000px) {
+  .way {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .guideLink.guideLink:hover {
-    transform: none;
+@media (max-width: 600px) {
+  .way {
+    padding: 20px 16px;
+    border-radius: 22px;
   }
+
+  .audienceTab {
+    min-width: 0;
+    padding: 0 15px;
+  }
+}
+
+/* Both audiences keep one height, so switching tabs never moves the page. */
+.terminal pre {
+  min-height: 5.5rem;
 }

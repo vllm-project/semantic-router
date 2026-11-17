@@ -166,9 +166,9 @@ func uniqueReinforcementSuffix() string {
 
 func reinforcementEmbeddingConfig() *EmbeddingConfig {
 	return &EmbeddingConfig{
-		Provider:  storageMemoryVectors(),
-		Model:     EmbeddingModelQwen3,
-		Dimension: 384,
+		Provider:   storageMemoryVectors(),
+		Deployment: "qwen3-embedding",
+		Dimension:  384,
 	}
 }
 

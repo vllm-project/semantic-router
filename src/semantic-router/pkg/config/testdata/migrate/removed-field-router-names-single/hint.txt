@@ -1,0 +1,1 @@
+global.router.auto_model_name: removed_field: the auto model names are removed; run `vllm-sr config migrate` (the model_names of the default recipe's entrypoint)

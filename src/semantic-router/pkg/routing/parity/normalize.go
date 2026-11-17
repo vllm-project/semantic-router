@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
@@ -15,20 +16,19 @@ import (
 const Placeholder = "<volatile>"
 
 // volatileHeaders change on every run without changing behavior: trace
-// context, generated identifiers and clocks. Measured latencies are matched
-// by suffix in VolatileHeader.
+// context, generated identifiers and clocks.
 var volatileHeaders = map[string]bool{
-	"date":                          true,
-	"traceparent":                   true,
-	"tracestate":                    true,
-	"x-envoy-upstream-service-time": true,
-	"x-vsr-replay-id":               true,
+	"date":                           true,
+	"traceparent":                    true,
+	"tracestate":                     true,
+	headers.EnvoyUpstreamServiceTime: true,
+	headers.RouterReplayID:           true,
 }
 
 // VolatileHeader reports whether a header's value is normalized away.
 func VolatileHeader(name string) bool {
 	name = strings.ToLower(name)
-	return volatileHeaders[name] || strings.HasSuffix(name, "-latency-ms")
+	return volatileHeaders[name]
 }
 
 // volatileJSONFields are body fields that carry the clock.

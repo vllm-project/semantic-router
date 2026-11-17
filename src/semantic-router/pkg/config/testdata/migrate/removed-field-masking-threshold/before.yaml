@@ -1,0 +1,21 @@
+# masking names the pii rule whose detections it masks; a pii rule with the
+# plugin's threshold and no allowed types masks what the plugin masked.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: support
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: masking
+            configuration:
+              enabled: true
+              threshold: 0.6
+              entity_types: [EMAIL_ADDRESS, PHONE_NUMBER]

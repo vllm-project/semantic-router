@@ -1,5 +1,5 @@
 configOverride:
-  version: v0.3
+  version: v0.5
   listeners:
     - name: http
       address: 0.0.0.0
@@ -24,19 +24,18 @@ configOverride:
               X-Tenant: production
             api_version: "2026-09-01"
             chat_path: /chat/completions
-  routing:
-    modelCards:
-      - name: local/custom
         description: Helm backend-target compatibility fixture
-    decisions:
-      - name: custom-route
-        priority: 100
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: local/custom
-            use_reasoning: false
+  recipes:
+    - name: default
+      decisions:
+        - name: custom-route
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: local/custom
+              use_reasoning: false
   global:
     router:
       skip_processing:

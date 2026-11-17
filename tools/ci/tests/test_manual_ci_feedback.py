@@ -119,6 +119,25 @@ class ManualCIFeedbackTests(unittest.TestCase):
             "comment": copy.deepcopy(self.client.comment),
         }
 
+    def test_unreadable_planned_merge_feedback_keeps_qualification_blocked(self):
+        self.client.pull["merge_commit_sha"] = "e" * 40
+        original = self.client.request
+
+        def request(endpoint, **kwargs):
+            if endpoint.endswith("/git/commits/" + "c" * 40):
+                raise manual_ci.ManualCIError("SECRET object response", http_status=404)
+            return original(endpoint, **kwargs)
+
+        self.client.request = request
+        with self.assertRaises(manual_ci.ManualCIError):
+            manual_ci.authorize_with_feedback(self.client, self.event)
+        body = self.client.comments[-1]["body"]
+        self.assertIn("planned merge", body)
+        self.assertIn("cannot be verified", body)
+        self.assertNotIn("SECRET", body)
+        self.assertNotIn("rocket", self.client.reactions)
+        self.assertEqual(self.client.posts, [])
+
     def test_valid_request_is_received_and_rocket_follows_actual_rerun(self):
         record = manual_ci.authorize_with_feedback(self.client, self.event)
         self.assertEqual(self.client.reactions, {"eyes"})
@@ -200,6 +219,7 @@ class ManualCIFeedbackTests(unittest.TestCase):
 
     def test_stale_merge_reports_branch_update_instead_of_only_waiting_for_plan(self):
         self.client.base_ref["object"]["sha"] = "f" * 40
+        self.client.merge_ancestor = "unrelated" * 4
         with self.assertRaises(manual_ci.ManualCIError) as error:
             manual_ci.authorize_with_feedback(self.client, self.event)
         self.assertEqual(error.exception.reason, "revision")

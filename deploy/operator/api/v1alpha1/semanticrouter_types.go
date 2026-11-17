@@ -61,10 +61,10 @@ type SemanticRouterSpec struct {
 	// +optional
 	Persistence PersistenceSpec `json:"persistence,omitempty"`
 
-	// Configuration overrides merged into the canonical v0.3 config.yaml.
+	// Configuration overrides merged into the canonical v0.5 config.yaml.
 	// Router-wide runtime overrides land under config.global.router/services/stores/
-	// integrations/model_catalog, with model-backed modules nested under
-	// config.global.model_catalog.modules. Provider defaults land under
+	// integrations/model_catalog, and the default plugins under
+	// config.global.plugins. Provider defaults land under
 	// config.providers.defaults.
 	// +optional
 	Config ConfigSpec `json:"config,omitempty"`
@@ -75,7 +75,7 @@ type SemanticRouterSpec struct {
 
 	// VLLMEndpoints is a Kubernetes-native backend discovery adapter.
 	// It generates canonical config.providers.models[].backend_refs
-	// and config.routing.modelCards entries.
+	// and the loras of those entries.
 	// +optional
 	VLLMEndpoints []VLLMEndpointSpec `json:"vllmEndpoints,omitempty"`
 
@@ -275,14 +275,42 @@ type DecisionModelBinding struct {
 
 // ConfigSpec defines the semantic router configuration
 type ConfigSpec struct {
-	// Routing contains canonical v0.3 routing configuration under config.routing.
-	// It is intentionally preserved as an object so the operator can pass through
-	// the router-owned signal, projection, decision, and algorithm contract without
-	// lagging behind every router schema addition.
+	// Routing is removed: the router configuration has no top-level routing
+	// block. Its fields are the recipe named default under config.recipes. A
+	// resource that sets it is refused.
 	// +optional
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
+
+	// Recipes contains canonical recipes[]: each recipe's signals,
+	// projections, decisions, model_bindings and plugins. It is preserved as
+	// objects so the operator passes the router-owned contract through
+	// without lagging behind every router schema addition. The fields a
+	// recipe named default sets replace the operator's default recipe's.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Recipes *apiextensionsv1.JSON `json:"recipes,omitempty" yaml:"recipes,omitempty"`
+
+	// Entrypoints contains canonical entrypoints[]: the public model names of
+	// each recipe. Several recipes need them, with exactly one marked
+	// default: true.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Entrypoints *apiextensionsv1.JSON `json:"entrypoints,omitempty" yaml:"entrypoints,omitempty"`
+
+	// Plugins contains canonical global.plugins: the default plugins of every
+	// decision, which a recipe's and a decision's plugins override.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Plugins *apiextensionsv1.JSON `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+
+	// Models contains the facts of providers.models[] entries (capabilities,
+	// modalities, description, context_window_size, ...), by name; the
+	// operator writes each entry's transport from vllmEndpoints.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Models *apiextensionsv1.JSON `json:"models,omitempty" yaml:"models,omitempty"`
 
 	// DecisionModel selects the declared deployment that answers default judgment
 	// tasks: a model_runtime deployment, or a systemone deployment that a remote
@@ -297,8 +325,8 @@ type ConfigSpec struct {
 
 	// ModelDeployments contains canonical global.model_catalog.deployments.
 	// The router validates provider, device, precision and task compatibility.
-	// A remote deployment (provider systemone, openai_embeddings, classify,
-	// openai_chat or rerank) takes a connection block: endpoint, model, auth,
+	// A remote deployment (provider systemone, openai_embeddings, classify or
+	// openai_chat) takes a connection block: endpoint, model, auth,
 	// headers, timeout_ms, max_retries, tls, limits and capabilities. Its key
 	// never goes in the resource: auth.api_key_env names a spec.env variable
 	// that valueFrom.secretKeyRef fills from a Secret. The operator mounts no
@@ -309,12 +337,13 @@ type ConfigSpec struct {
 	ModelDeployments *apiextensionsv1.JSON `json:"model_deployments,omitempty" yaml:"model_deployments,omitempty"`
 
 	// ModelBindings contains canonical global.model_catalog.bindings: each key
-	// is a signal type whose rules share one answer (domain, jailbreak, pii,
-	// fact_check, user_feedback, modality, hallucination, preference, reask),
-	// and each value names the model_deployments entry that answers it. A rule
+	// is an application signal type whose rules share one answer (domain,
+	// fact_check, user_feedback, jailbreak, safety, pii, hallucination,
+	// refusal, turn_relation, complexity, modality), and each value names the
+	// model_deployments entry that answers it. A rule
 	// that asks its own question names its deployment on the rule. A signal no
-	// binding names follows decision_model; routing.model_bindings binds in
-	// the routing scope and wins over these.
+	// binding names follows decision_model; recipes[].model_bindings binds in
+	// its recipe and wins over these.
 	// +optional
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
@@ -327,9 +356,13 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	ModelAdmission *apiextensionsv1.JSON `json:"model_admission,omitempty" yaml:"model_admission,omitempty"`
 
-	// Embedding models configuration (qwen3, gemma, mmbert)
+	// EmbeddingModels is removed: an embedding model is a model deployment,
+	// and global.model_catalog.embeddings.default names the one stores embed
+	// with (vela-embedding by default). A resource that sets it is refused.
 	// +optional
-	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	EmbeddingModels *apiextensionsv1.JSON `json:"embedding_models,omitempty"`
 
 	// Response cache configuration.
 	// +optional
@@ -339,37 +372,40 @@ type ConfigSpec struct {
 	// +optional
 	SemanticCache *SemanticCacheConfig `json:"semantic_cache,omitempty"`
 
-	// Tools configuration
+	// PromptGuard is removed: the decision model answers jailbreak rules, and
+	// a threshold is a jailbreak rule's predicate. A resource that sets it is
+	// refused.
 	// +optional
-	Tools *ToolsConfig `json:"tools,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	PromptGuard *apiextensionsv1.JSON `json:"prompt_guard,omitempty"`
 
-	// Prompt guard configuration
+	// Classifier is removed: the decision model answers domain and pii rules,
+	// and a threshold is the rule's predicate. A resource that sets it is
+	// refused.
 	// +optional
-	PromptGuard *PromptGuardConfig `json:"prompt_guard,omitempty"`
-
-	// Classifier configuration
-	// +optional
-	Classifier *ClassifierConfig `json:"classifier,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Classifier *apiextensionsv1.JSON `json:"classifier,omitempty"`
 
 	// Complexity rules for complexity-aware routing
 	// +optional
 	ComplexityRules []ComplexityRulesConfig `json:"complexity_rules,omitempty"`
 
-	// ComplexityModel says how the complexity signal produces its score.
-	// Absent, the signal scores locally against each rule's hard/easy
-	// candidates. With a backend, a remote model produces the score and the
-	// candidates are never read. Mirrors
-	// global.model_catalog.modules.complexity in the router config.
+	// ComplexityModel is removed: the decision model answers complexity
+	// rules. A resource that sets it is refused.
 	// +optional
-	ComplexityModel *ComplexityModelConfig `json:"complexity_model,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ComplexityModel *apiextensionsv1.JSON `json:"complexity_model,omitempty"`
 
-	// ExternalModels declares the remote models that classifier backends
-	// (`classifier.pii.backend.model`, `complexity_model.backend.model`) and
-	// the prompt guard protocol refer to by name. Mirrors
-	// global.model_catalog.external[] in the router config field for field;
-	// the router's own validator decides whether a backend resolves against it.
+	// ExternalModels is removed: a remote model is a model deployment with
+	// provider openai_chat, openai_embeddings or systemone. A resource that
+	// sets it is refused.
 	// +optional
-	ExternalModels []ExternalModelConfig `json:"external_models,omitempty"`
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	ExternalModels *apiextensionsv1.JSON `json:"external_models,omitempty"`
 
 	// Decision routing strategy ("priority" for priority-based matching)
 	// +kubebuilder:validation:Enum=priority
@@ -424,7 +460,9 @@ type StreamedBodyConfig struct {
 
 // SemanticCacheConfig defines semantic cache configuration
 type SemanticCacheConfig struct {
-	// Enabled controls whether semantic caching is active
+	// Enabled, on by default, gives a configuration without decisions a
+	// response_cache plugin in config.plugins that caches every request; off,
+	// it turns the decisions' response_cache plugins off.
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
@@ -436,7 +474,8 @@ type SemanticCacheConfig struct {
 	// +optional
 	BackendType string `json:"backend_type,omitempty"`
 
-	// Similarity threshold for cache hits (0.0-1.0). Stored as string to avoid float precision issues.
+	// SimilarityThreshold (0.0-1.0) is the min_similarity of the response_cache
+	// plugin Enabled adds. Stored as string to avoid float precision issues.
 	// +kubebuilder:default="0.8"
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
@@ -474,12 +513,16 @@ type SemanticCacheConfig struct {
 	// +optional
 	Qdrant *QdrantCacheConfig `json:"qdrant,omitempty"`
 
-	// EmbeddingModel specifies which embedding model to use for semantic similarity
-	// Options: "mmbert" (default), "bert", "qwen3", "gemma"
-	// +kubebuilder:default="mmbert"
-	// +kubebuilder:validation:Enum=bert;qwen3;gemma;mmbert
+	// EmbeddingModel is removed: embedding.deployment names the deployment
+	// semantic reuse embeds with, embeddings.default without one. A resource
+	// that sets it is refused.
 	// +optional
 	EmbeddingModel string `json:"embedding_model,omitempty"`
+
+	// Embedding names the deployment semantic reuse embeds with, and the
+	// width of its vectors.
+	// +optional
+	Embedding *EmbeddingBinding `json:"embedding,omitempty"`
 
 	// HNSW configuration for hybrid/in-memory backends
 	// +optional
@@ -1087,112 +1130,19 @@ type HNSWCacheConfig struct {
 	MaxMemoryEntries int `json:"max_memory_entries,omitempty"`
 }
 
-// EmbeddingModelsConfig defines configuration for embedding models
-type EmbeddingModelsConfig struct {
-	// Path to Qwen3-Embedding-0.6B model directory
-	// Qwen3 provides 32K context and high quality embeddings (1024 dimensions)
+// EmbeddingBinding names the deployment that embeds a store's vectors, and
+// their dimension.
+type EmbeddingBinding struct {
+	// Deployment is a global.model_catalog deployment; without it the store
+	// embeds with embeddings.default.
 	// +optional
-	Qwen3ModelPath string `json:"qwen3_model_path,omitempty"`
+	Deployment string `json:"deployment,omitempty"`
 
-	// Path to mmBERT 2D Matryoshka embedding model directory
-	// Supports layer early exit (3/6/11/22) and dimension reduction (64-768)
-	// +optional
-	MmBertModelPath string `json:"mmbert_model_path,omitempty"`
-
-	// Use CPU for inference (default: true)
-	// +kubebuilder:default=true
-	// +optional
-	UseCPU bool `json:"use_cpu,omitempty"`
-
-	// Embedding configuration for embedding-based classification
-	// +optional
-	EmbeddingConfig *HNSWEmbeddingConfig `json:"embedding_config,omitempty"`
-
-	// Endpoint configures an external embedding provider endpoint.
-	// The API key should be injected into the semantic router pod environment
-	// and referenced by APIKeyEnv rather than stored directly in the CR.
-	// +optional
-	Endpoint *EmbeddingEndpointConfig `json:"endpoint,omitempty"`
-}
-
-// HNSWEmbeddingConfig contains settings for embedding classification with HNSW indexing
-type HNSWEmbeddingConfig struct {
-	// Backend selects the embedding provider backend: the built-in model
-	// runtime (the default) or an external OpenAI-compatible endpoint.
-	// +kubebuilder:validation:Enum=model_runtime;openai_compatible
-	// +optional
-	Backend string `json:"backend,omitempty"`
-
-	// ModelType specifies which embedding model to use
-	// Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual), "remote" (external provider)
-	// +kubebuilder:validation:Enum=qwen3;gemma;mmbert;remote
-	// +optional
-	ModelType string `json:"model_type,omitempty"`
-
-	// PreloadEmbeddings enables precomputing candidate embeddings at startup
-	// +kubebuilder:default=true
-	// +optional
-	PreloadEmbeddings bool `json:"preload_embeddings,omitempty"`
-
-	// TargetDimension is the embedding dimension to use (default: 768)
-	// For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.
-	// External providers may use other positive dimensions such as 1024, 1536, or 3072.
+	// Dimension is the width of the vectors: the deployment's own, or a
+	// narrower one its model serves.
 	// +kubebuilder:validation:Minimum=1
 	// +optional
-	TargetDimension int `json:"target_dimension,omitempty"`
-
-	// TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".
-	// Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.
-	// Evaluate the latency and quality trade-off on representative deployment data.
-	// +kubebuilder:validation:Enum=3;6;11;22
-	// +optional
-	TargetLayer int `json:"target_layer,omitempty"`
-
-	// EnableSoftMatching allows below-threshold matches when no rule meets its threshold.
-	// +kubebuilder:default=false
-	// +optional
-	EnableSoftMatching bool `json:"enable_soft_matching,omitempty"`
-
-	// MinScoreThreshold for matching (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.5"
-	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
-	// +optional
-	MinScoreThreshold string `json:"min_score_threshold,omitempty"`
-}
-
-// EmbeddingEndpointConfig defines an external OpenAI-compatible embedding endpoint.
-type EmbeddingEndpointConfig struct {
-	// BaseURL is the base URL for the embedding endpoint, typically ending in /v1.
-	// +optional
-	BaseURL string `json:"base_url,omitempty"`
-
-	// Model is the embedding model name sent to the external provider.
-	// +optional
-	Model string `json:"model,omitempty"`
-
-	// APIKeyEnv names the environment variable containing the provider API key.
-	// +optional
-	APIKeyEnv string `json:"api_key_env,omitempty"`
-
-	// TimeoutSeconds is the request timeout for embedding calls.
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	TimeoutSeconds int `json:"timeout_seconds,omitempty"`
-
-	// MaxRetries is the maximum number of retry attempts for embedding calls.
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	MaxRetries int `json:"max_retries,omitempty"`
-
-	// MaxResponseBytes caps the size of each embedding response body.
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	MaxResponseBytes int64 `json:"max_response_bytes,omitempty"`
-
-	// Dimensions requests a provider-side output dimension when supported.
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	Dimensions int `json:"dimensions,omitempty"`
+	Dimension int `json:"dimension,omitempty"`
 }
 
 // PrototypeScoringConfig overrides prototype-bank construction and scoring for
@@ -1320,98 +1270,6 @@ type ComplexityCandidates struct {
 	Candidates []string `json:"candidates"`
 }
 
-// ComplexityModelConfig configures how the complexity signal produces its
-// score. It mirrors global.model_catalog.modules.complexity in the router
-// config and is passed through field for field.
-//
-// The contract requirement sits here rather than on
-// RemoteClassifierBackendConfig because it is a property of this consumer, not
-// of the block: complexity reads two response shapes, so guessing wrong would
-// surface per request instead of at admission. A consumer that reads one shape
-// - categories does - keeps the field optional and defaults it.
-//
-// +kubebuilder:validation:XValidation:rule="!has(self.backend) || has(self.backend.contract)",message="complexity reads two response shapes, so backend.contract must be stated: score.v1 or label_distribution.v1"
-// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract in ['score.v1', 'label_distribution.v1']",message="complexity reads score.v1 or label_distribution.v1; token_spans.v1 is the PII contract"
-type ComplexityModelConfig struct {
-	// Backend names a remote scoring model. Its absence keeps local prototype
-	// scoring; when set, the signal never reads the rules' hard/easy
-	// candidates. It sits on the module rather than on a rule because routing
-	// signals are replaced wholesale per recipe, so a per-rule backend would
-	// vanish under any recipe that did not repeat it.
-	// +optional
-	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
-}
-
-// ExternalModelConfig is one entry of global.model_catalog.external[]: a
-// remote model a classifier backend or the prompt guard can name. Field names
-// are the router's YAML keys so the generic typed conversion carries them
-// unchanged.
-type ExternalModelConfig struct {
-	// Name is the catalog name a backend block refers to in its model field.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
-
-	// ModelRole is what the model is used for; classifier backends require
-	// "classification", the prompt guard protocol requires "guardrail".
-	// +kubebuilder:validation:MinLength=1
-	ModelRole string `json:"model_role"`
-
-	// ModelName is the model identifier the remote service expects, and the
-	// value a token_spans.v1 envelope's model member must equal.
-	// +kubebuilder:validation:MinLength=1
-	ModelName string `json:"llm_model_name"`
-
-	// Endpoint is where the remote model is reached.
-	Endpoint ExternalModelEndpoint `json:"llm_endpoint"`
-
-	// TimeoutSeconds bounds one call when the backend block sets no deadline.
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	TimeoutSeconds int `json:"llm_timeout_seconds,omitempty"`
-}
-
-// ExternalModelEndpoint is the address of a remote classification model.
-type ExternalModelEndpoint struct {
-	// +kubebuilder:validation:MinLength=1
-	Address string `json:"address"`
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=65535
-	Port int `json:"port"`
-	// +kubebuilder:validation:Enum=http;https
-	// +optional
-	Protocol string `json:"protocol,omitempty"`
-}
-
-// RemoteClassifierBackendConfig is the shared remote-classifier block. How
-// the remote is called (protocol), what shape it answers with (contract),
-// which catalog entry it is (model) and how long to wait (deadline) are
-// independent axes rather than one enumeration. It mirrors the router's
-// backend block field for field so the operator passes it through unchanged.
-type RemoteClassifierBackendConfig struct {
-	// Protocol is how the remote is called.
-	// +kubebuilder:validation:Enum=http_classify;http_chat
-	Protocol string `json:"protocol"`
-
-	// Contract is the response shape the signal reads. Complexity reads two -
-	// score.v1, one regression number interpreted through each rule's
-	// boundaries, and label_distribution.v1, hard/easy/medium probabilities -
-	// so the router requires it there rather than guessing per request. PII
-	// reads token_spans.v1, entity spans with code-point offsets. Prompt guard
-	// http_chat reads label_decision.v1, a verdict without invented probability.
-	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1;token_spans.v1;label_decision.v1
-	// +optional
-	Contract string `json:"contract,omitempty"`
-
-	// Model is the name of an entry in the external model catalog.
-	// +kubebuilder:validation:MinLength=1
-	Model string `json:"model"`
-
-	// DeadlineMs bounds one remote call. Defaults to the router's value.
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	DeadlineMs *int `json:"deadline_ms,omitempty"`
-}
-
 // RuleComposition defines how to compose/filter rules based on other signals
 type RuleComposition struct {
 	// Operator for combining conditions (AND, OR, NOT). NOT is strictly unary and negates its single child.
@@ -1476,6 +1334,15 @@ type DecisionConfig struct {
 	// requests, over the recipe's and the router's
 	// +optional
 	Fallback *DecisionFallbackConfig `json:"fallback,omitempty" yaml:"fallback,omitempty"`
+
+	// Output declares the media this decision's answers carry, such as
+	// {kind: image, action: generate}; without it the decision answers in
+	// text. The router checks it against the referenced models when it loads
+	// the configuration.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Output *apiextensionsv1.JSON `json:"output,omitempty" yaml:"output,omitempty"`
 }
 
 // RuleCombinationConfig defines how to combine multiple rule conditions
@@ -1494,14 +1361,47 @@ type RuleCombinationConfig struct {
 	Conditions []RuleConditionConfig `json:"conditions" yaml:"conditions"`
 }
 
-// RuleConditionConfig references a specific rule by type and name
+// RuleConditionConfig is one condition of a decision's rules: a leaf that
+// references a rule by type and name, or a subtree that combines its own
+// conditions with an operator.
 type RuleConditionConfig struct {
-	// Type specifies the signal or projection type referenced by this condition.
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;user_feedback;reask;preference;language;context;structure;complexity;modality;authz;jailbreak;pii;kb;conversation;event;projection
-	Type string `json:"type" yaml:"type"`
+	// Type specifies the signal or projection type a leaf references: a type
+	// the router accepts in decision rules.
+	// +optional
+	// +kubebuilder:validation:Enum=authz;complexity;context;conversation;domain;fact_check;input_modality;jailbreak;keyword;language;metadata;modality;pii;projection;safety;systemone;turn_relation;user_feedback
+	Type string `json:"type,omitempty" yaml:"type,omitempty"`
 
-	// Name is the name of the rule to reference
-	Name string `json:"name" yaml:"name"`
+	// Name is the name of the rule a leaf references
+	// +optional
+	Name string `json:"name,omitempty" yaml:"name,omitempty"`
+
+	// Label matches one label of the referenced rule (systemone and
+	// application signal conditions)
+	// +optional
+	Label string `json:"label,omitempty" yaml:"label,omitempty"`
+
+	// Predicate bounds the referenced rule's score, as {gt, gte, lt, lte}.
+	// The router checks it when it loads the configuration.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Predicate *apiextensionsv1.JSON `json:"predicate,omitempty" yaml:"predicate,omitempty"`
+
+	// OnError resolves a systemone leaf whose model backend fails
+	// +optional
+	// +kubebuilder:validation:Enum=no_match;match
+	OnError string `json:"on_error,omitempty" yaml:"on_error,omitempty"`
+
+	// Operator combines a subtree's conditions: "AND", "OR", or "NOT" (unary)
+	// +optional
+	// +kubebuilder:validation:Enum=AND;OR;NOT
+	Operator string `json:"operator,omitempty" yaml:"operator,omitempty"`
+
+	// Conditions are a subtree's conditions, each of this same shape. They
+	// are preserved as router-owned objects, since a CRD schema cannot
+	// recurse; the router validates them when it loads the configuration.
+	// +optional
+	Conditions []runtime.RawExtension `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 }
 
 // ModelRefConfig defines a model reference for routing
@@ -1528,168 +1428,6 @@ type ModelRefConfig struct {
 	ReasoningEffort string `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
 }
 
-// ToolsConfig defines tools configuration
-type ToolsConfig struct {
-	// +kubebuilder:default=true
-	// +optional
-	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default=3
-	// +optional
-	TopK int `json:"top_k,omitempty"`
-	// Similarity threshold for tool selection (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.2"
-	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
-	// +optional
-	SimilarityThreshold string `json:"similarity_threshold,omitempty"`
-	// +kubebuilder:default="config/tools_db.json"
-	// +optional
-	ToolsDBPath string `json:"tools_db_path,omitempty"`
-	// +kubebuilder:default=true
-	// +optional
-	FallbackToEmpty bool `json:"fallback_to_empty,omitempty"`
-}
-
-// PromptGuardConfig defines prompt guard configuration.
-//
-// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || !has(self.backend)",message="max_sequence_length applies to the local model; omit it with backend"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || !has(self.backend)",message="window applies to the local model; omit it with backend"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
-type PromptGuardConfig struct {
-	// Backend selects a named external classifier and its typed result contract.
-	// +optional
-	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
-	// MaxSequenceLength limits the total tokenized input, including special
-	// tokens. Omission or zero retains the 512-token budget. The model loader
-	// validates the requested budget against the loaded model's capacity.
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
-	// Window enables explicit scanning of all input tokens. Omission or null
-	// keeps whole-input inference. Only the local model supports it.
-	// +nullable
-	// +optional
-	Window *PromptGuardWindowConfig `json:"window,omitempty"`
-	// +kubebuilder:default=true
-	// +optional
-	Enabled bool `json:"enabled,omitempty"`
-	// ModelID binds the guard to one model; empty runs the deployment
-	// model_bindings names for jailbreak, else the decision model. Deprecated:
-	// bind jailbreak in model_bindings instead.
-	// +optional
-	ModelID string `json:"model_id,omitempty"`
-	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
-	// precision issues; empty takes the threshold of the deployment that
-	// answers the guard.
-	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
-	// +optional
-	Threshold string `json:"threshold,omitempty"`
-	// +kubebuilder:default=true
-	// +optional
-	UseCPU bool `json:"use_cpu,omitempty"`
-	// +optional
-	JailbreakMappingPath string `json:"jailbreak_mapping_path,omitempty"`
-	// PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
-	// for a custom backend whose positive class isn't named "jailbreak"
-	// (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
-	// +optional
-	PositiveLabels []string `json:"positive_labels,omitempty"`
-	// OnError selects what a prompt-guard classifier failure does to the rule
-	// that failed to evaluate. "allow" (the default) tolerates the failure and
-	// treats the content as not matching; "block" treats it as a positive
-	// detection, because an inference failure means the content could not be
-	// verified safe. Without this field on the CRD the setting is pruned by the
-	// API server and an operator-managed deployment silently fails open.
-	// +kubebuilder:validation:Enum=allow;block
-	// +optional
-	OnError string `json:"on_error,omitempty"`
-}
-
-// PromptGuardWindowConfig scans original content tokens with overlap. The
-// native tokenizer also checks that special tokens leave enough content room.
-//
-// +kubebuilder:validation:XValidation:rule="!has(self.overlap) || self.overlap < self.size",message="window.overlap must be smaller than window.size"
-type PromptGuardWindowConfig struct {
-	// Size is the inference window budget, including special tokens.
-	// +kubebuilder:validation:Minimum=1
-	Size int `json:"size"`
-	// Overlap counts content tokens shared by consecutive windows.
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	Overlap int `json:"overlap,omitempty"`
-}
-
-// ClassifierConfig defines classifier configuration
-type ClassifierConfig struct {
-	// +optional
-	CategoryModel *CategoryModelConfig `json:"category_model,omitempty"`
-	// +optional
-	PIIModel *PIIModelConfig `json:"pii_model,omitempty"`
-}
-
-// CategoryModelConfig defines category model configuration
-type CategoryModelConfig struct {
-	// ModelID binds the domain classifier to one model. Deprecated: bind domain
-	// in model_bindings instead.
-	// +optional
-	ModelID string `json:"model_id,omitempty"`
-	// Classification threshold (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
-	// +optional
-	Threshold string `json:"threshold,omitempty"`
-	// +optional
-	UseCPU bool `json:"use_cpu,omitempty"`
-	// +optional
-	CategoryMappingPath string `json:"category_mapping_path,omitempty"`
-}
-
-// PIIModelConfig defines PII model configuration.
-//
-// The contract rule sits on the consumer, as on ComplexityModelConfig: the
-// shared backend block lists every contract any consumer reads, and each
-// consumer narrows it to what it can parse, so a mismatch is refused at
-// admission instead of by the router at load.
-//
-// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract == 'token_spans.v1'",message="PII reads token_spans.v1 only; omit backend.contract or set it to token_spans.v1"
-// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || !has(self.backend)",message="max_sequence_length applies to the local model; omit it with backend"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || !has(self.backend)",message="window applies to the local model; omit it with backend"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
-type PIIModelConfig struct {
-	// MaxSequenceLength is the total tokenized input budget, including special
-	// tokens. Omission or zero preserves the 512-token legacy limit.
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
-	// Window scans original content tokens with explicit overlap. Omission or
-	// null leaves window selection unchanged; no CRD defaults are injected.
-	// +nullable
-	// +optional
-	Window *PromptGuardWindowConfig `json:"window,omitempty"`
-	// ModelID binds the PII classifier to one model. Deprecated: bind pii in
-	// model_bindings instead.
-	// +optional
-	ModelID string `json:"model_id,omitempty"`
-	// Detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
-	// +optional
-	Threshold string `json:"threshold,omitempty"`
-	// +optional
-	UseCPU bool `json:"use_cpu,omitempty"`
-	// +optional
-	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
-	// Backend names a remote token classifier speaking token_spans.v1. Its
-	// absence keeps local PII inference. The local selectors this replaces are
-	// model_id and use_cpu above. Explicit token windows are only supported by
-	// the local model.
-	// +optional
-	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
-	// OnError selects what a PII backend failure, or a provider-declared
-	// truncation, does to the rule that consumed it: allow (default) treats the
-	// content as not matching, block matches it as classification_error.
-	// +kubebuilder:validation:Enum=allow;block
-	// +optional
-	OnError string `json:"on_error,omitempty"`
-}
-
 // APIConfig defines API configuration
 type APIConfig struct {
 	// +optional
@@ -1701,12 +1439,6 @@ type BatchClassificationConfig struct {
 	// +kubebuilder:default=100
 	// +optional
 	MaxBatchSize int `json:"max_batch_size,omitempty"`
-	// +kubebuilder:default=5
-	// +optional
-	ConcurrencyThreshold int `json:"concurrency_threshold,omitempty"`
-	// +kubebuilder:default=8
-	// +optional
-	MaxConcurrency int `json:"max_concurrency,omitempty"`
 	// +optional
 	Metrics *BatchMetricsConfig `json:"metrics,omitempty"`
 }
@@ -1959,7 +1691,7 @@ type VLLMEndpointSpec struct {
 	// +optional
 	Reasoning *ModelReasoningSpec `json:"reasoning,omitempty"`
 
-	// LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards.
+	// LoRAs declares the LoRA adapters exposed for this logical model: the loras of its providers.models[] entry.
 	// +optional
 	// +kubebuilder:validation:MaxItems=50
 	LoRAs []LoRAAdapterSpec `json:"loras,omitempty"`

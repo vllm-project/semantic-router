@@ -76,16 +76,19 @@ export default function ConfigPageConnectModelAdvanced({
             <span>Help recipes match work to this model.</span>
           </div>
           <div className={styles.advancedGrid}>
-            <Field label="Modality" hint="Optional">
-              <select
-                value={value.modality}
-                onChange={(event) => update('modality', event.target.value)}
-              >
-                <option value="">Not specified</option>
-                <option value="ar">Text / autoregressive</option>
-                <option value="omni">Omni</option>
-                <option value="diffusion">Diffusion</option>
-              </select>
+            <Field label="Input modalities" hint="Comma-separated; text when empty">
+              <input
+                value={value.inputModalities}
+                onChange={(event) => update('inputModalities', event.target.value)}
+                placeholder="e.g. text, image"
+              />
+            </Field>
+            <Field label="Output modalities" hint="Comma-separated; text when empty">
+              <input
+                value={value.outputModalities}
+                onChange={(event) => update('outputModalities', event.target.value)}
+                placeholder="e.g. image"
+              />
             </Field>
             <Field label="Parameter size" hint="Optional">
               <input

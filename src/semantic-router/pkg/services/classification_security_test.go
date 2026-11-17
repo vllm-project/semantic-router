@@ -1,13 +1,8 @@
 package services
 
 import (
-	"encoding/json"
 	"math"
-	"strings"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // securityWant is the expected shape of a buildSecurityResponse result.
@@ -103,19 +98,5 @@ func TestBuildSecurityResponse(t *testing.T) {
 				t.Errorf("ProcessingTimeMs = %d, want 42", resp.ProcessingTimeMs)
 			}
 		})
-	}
-}
-
-func TestSecurityCategoricalDecisionOmitsProbabilities(t *testing.T) {
-	response := buildSecurityVerdictResponse(classification.JailbreakVerdict{Detected: true, Label: "jailbreak", Decision: &tasks.LabelDecision{Label: "jailbreak", SourceLabel: "unsafe"}}, true, 1)
-	if response.RiskScore != nil || response.Confidence != nil || response.ScoresAvailable || response.Decision == nil || response.Recommendation != "block" {
-		t.Fatalf("response=%+v", response)
-	}
-	raw, err := json.Marshal(response)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(raw), `"risk_score":null`) || !strings.Contains(string(raw), `"confidence":null`) {
-		t.Fatalf("missing probability availability: %s", raw)
 	}
 }

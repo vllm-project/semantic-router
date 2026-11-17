@@ -32,7 +32,7 @@ from ...systemone import (
     require_full_input,
 )
 from ..vela2.request import Question, State, resolve_over, typed_state
-from ..vela3_shared import expand_preset, invalid, text, threshold_of
+from ..vela3_shared import SPAN_HEADS, expand_preset, invalid, text, threshold_of
 from .routing import ROUTER_TYPES, Router, RouterQuestion, SpanRoute
 
 DECISION, ROUTER, SPAN = "decision", "router", "span"
@@ -248,7 +248,7 @@ class Reader:
         if unknown:
             raise invalid(f"span questions do not take {sorted(unknown)}")
         head = question.get("head")
-        if head not in (None, "router"):
+        if head not in (None, *SPAN_HEADS):
             raise invalid("this model has no broad span head")
         criteria = question.get("criteria")
         if question.get("labels") is not None:

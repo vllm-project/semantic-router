@@ -22,7 +22,7 @@ func TestShouldUseLooper(t *testing.T) {
 				{Model: "model-a"},
 				{Model: "model-b"},
 			},
-			Algorithm: &config.AlgorithmConfig{Type: "router_dc"},
+			Algorithm: &config.AlgorithmConfig{Type: "systemone"},
 		}
 
 		assert.False(t, router.shouldUseLooper(decision))
@@ -86,7 +86,7 @@ func TestShouldUseLooper(t *testing.T) {
 		decision := &config.Decision{
 			Name:      "routing",
 			ModelRefs: []config.ModelRef{{Model: "model-a"}},
-			Algorithm: &config.AlgorithmConfig{Type: "router_dc"},
+			Algorithm: &config.AlgorithmConfig{Type: "systemone"},
 		}
 
 		assert.False(t, router.shouldUseLooper(decision))
@@ -96,7 +96,7 @@ func TestShouldUseLooper(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
 		}
-		for _, algorithmType := range config.SupportedLooperAlgorithmTypes() {
+		for _, algorithmType := range config.SupportedExecutorAlgorithmTypes() {
 			decision := &config.Decision{
 				Name: "routing",
 				ModelRefs: []config.ModelRef{
@@ -108,6 +108,21 @@ func TestShouldUseLooper(t *testing.T) {
 
 			assert.True(t, router.shouldUseLooper(decision), "algorithm %s should use looper routing", algorithmType)
 		}
+	})
+
+	t.Run("leaves a System One escalate to its native executor", func(t *testing.T) {
+		router := &OpenAIRouter{
+			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
+		}
+		decision := &config.Decision{
+			Name:      "native",
+			ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+			Algorithm: &config.AlgorithmConfig{
+				Type:     config.DecisionAlgorithmEscalate,
+				Escalate: &config.EscalateAlgorithmConfig{Stages: []config.EscalateStage{{Model: "model-a"}, {Model: "model-b"}}},
+			},
+		}
+		assert.False(t, router.shouldUseLooper(decision))
 	})
 }
 
@@ -127,7 +142,7 @@ func TestLooperProviderDispatchReevaluatesOntoSelectedRoute(t *testing.T) {
 		t.Fatal("Looper provider dispatch did not clear the fallback route cache")
 	}
 	setHeaders := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-	if got := setHeaders[headers.SelectedModel]; got != model {
+	if got := setHeaders[headers.VSRRouteModel]; got != model {
 		t.Fatalf("selected model header = %q, want %q", got, model)
 	}
 	if got := setHeaders[":path"]; got != "/v1/chat/completions" {

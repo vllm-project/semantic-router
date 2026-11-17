@@ -10,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`context` 检测需要更大有效上下文窗口的请求。在 `routing.signals.context` 下定义上下文规则。
+`context` 检测需要更大有效上下文窗口的请求。在 `recipes[].signals.context` 下定义上下文规则。
 
 该族为启发式：按 token 窗口需求路由，而非分类器推理。
 
@@ -39,13 +39,14 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    context:
-      - name: long_context
-        min_tokens: 32K
-        max_tokens: 256K
-        description: Requests that need a larger effective context window.
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: 32K
+          max_tokens: 256K
+          description: Requests that need a larger effective context window.
 ```
 
 当 Router 应根据提示长度或预期上下文需求切换候选时，使用 `context`。
@@ -57,7 +58,7 @@ routing:
 - 两个上限都可选，但至少要设一个。缺少 `min_tokens` 表示 0。
 - 省略 `max_tokens` 使该档开口向上。所有大于等于 `min_tokens` 的请求都匹配，没有上限。把开口档放在最后，这样超出最大有界档的溢出仍带有上下文信号。
 - 将 `min_tokens` 设成与 `max_tokens` 相等，即该 token 数的精确匹配档。
-- 每条匹配规则都会按配置顺序报告。允许重叠档，两个名称都会出现在 `x-vsr-matched-context` 中。
+- 每条匹配规则都会按配置顺序报告。允许重叠档，两个名称都会以 `context:<name>` 出现在 `x-vsr-trace` 的 `signals` 成员中。
 - 档之间的空隙与重叠会在配置加载时记为警告。落在空隙中的请求不匹配任何上下文规则。
 - 校验会拒绝既无上限、无法解析、负数或过大的值，以及 `min_tokens` 大于 `max_tokens` 的规则。Router、`vllm-sr` CLI 与控制面板使用同一套规则，因此通过 `vllm-sr config validate` 的档也会在 Router 中加载。
 
@@ -68,18 +69,19 @@ routing:
 上限可以引用环境变量，例如 `${CTX_MIN}`。Router 在配置加载时展开它，因此 CLI 会带警告接受该档，而不是检查它。
 
 ```yaml
-routing:
-  signals:
-    context:
-      - name: short_context
-        min_tokens: 0
-        max_tokens: 8K
-      - name: medium_context
-        min_tokens: 8001
-        max_tokens: 64K
-      - name: long_context
-        min_tokens: 64001
-        description: Open-ended band; matches everything above 64K tokens.
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: short_context
+          min_tokens: 0
+          max_tokens: 8K
+        - name: medium_context
+          min_tokens: 8001
+          max_tokens: 64K
+        - name: long_context
+          min_tokens: 64001
+          description: Open-ended band; matches everything above 64K tokens.
 ```
 
 上下文档只是路由信号。它们不改变模型上下文窗口上限；Router 仍会在筛选候选时单独强制这些上限。

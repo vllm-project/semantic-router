@@ -26,10 +26,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-const (
-	processShutdownTimeout      = 30 * time.Second
-	processResourceDrainReserve = 5 * time.Second
-)
+// processResourceDrainReserve is the part of the shutdown left after the
+// serving drain, for the runtime resources to retire.
+const processResourceDrainReserve = 5 * time.Second
+
+// processShutdownTimeout bounds the whole shutdown: the standalone gateway's
+// drain (cfg.DrainTimeout), then the reserve after it. It is 30 s unless a
+// standalone Router sets global.router.drain_timeout_seconds. Behind Envoy it
+// stays 30 s: a routing-disabled config skips the gateway capability checks,
+// so it can carry a drain there.
+func processShutdownTimeout(mode config.GatewayMode, cfg *config.RouterConfig) time.Duration {
+	if mode != config.GatewayStandalone {
+		cfg = nil
+	}
+	return cfg.DrainTimeout() + processResourceDrainReserve
+}
 
 func main() {
 	opts := parseRuntimeOptions()
@@ -75,7 +86,8 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
-	startupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
+	startupWriter, closeStartupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
+	defer func() { runErr = errors.Join(runErr, closeStartupWriter()) }()
 	resolvedOpts, err := resolveRuntimeManagementOptions(opts, cfg)
 	if err != nil {
 		return recordStartupError(startupWriter, "resolve management API", err)
@@ -97,7 +109,12 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	)
 	// Return errors below so deferred shutdown can release started resources.
 	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), processShutdownTimeout)
+		// The configuration the standalone gateway drains by.
+		shutdownCfg := cfg
+		if routerServer != nil {
+			shutdownCfg = routerServer.CurrentConfig()
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), processShutdownTimeout(opts.gateway, shutdownCfg))
 		defer cancel()
 		runErr = errors.Join(runErr, shutdownRouterProcess(
 			shutdownCtx,
@@ -121,6 +138,9 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return recordStartupError(startupWriter, "ensure models are downloaded", err)
 	}
 	if opts.downloadOnly {
+		// A serving Router fetches tokenizers in the background; a
+		// download-only run, which fills the model volume, waits for them.
+		_ = modeldownload.EnsureTokenizers(ctx, cfg.ContextWindowTokenizers())
 		logging.ComponentEvent("router", "download_only_complete", map[string]interface{}{
 			"mode": "download_only",
 		})
@@ -133,7 +153,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	metricsServer = startMetricsServerIfEnabled(cfg, opts.metricsPort)
 	startProfilingServerIfEnabled(cfg, opts, &shutdownHooks)
 
-	_, err = initializeRuntimeDependencies(ctx, cfg, startupWriter, &shutdownHooks, runtimeRegistry)
+	err = initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
 	if err != nil {
 		return recordStartupError(startupWriter, "initialize runtime dependencies", err)
 	}
@@ -150,9 +170,6 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 
 	embeddingRuntime := routerServer.EmbeddingRuntimeState()
-	if err = warmupRouterRuntime(ctx, routerServer); err != nil {
-		return recordStartupError(startupWriter, "warm up router runtime", err)
-	}
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	servingLifecycle, err = runRouterServing(ctx, cfg, opts, routerServer, startupWriter)
 	if err != nil {
@@ -516,7 +533,7 @@ func logStartupSummary(cfg *config.RouterConfig, opts runtimeOptions, embeddingM
 		"config_source":       cfg.ConfigSource,
 		"decisions":           strings.Join(decisionNames, ","),
 		"embedding_ready":     embeddingModelsReady,
-		"sem_cache_enabled":   cfg.Enabled,
+		"sem_cache_enabled":   cfg.SemanticCache.InUse,
 		"model_selection":     cfg.ModelSelection.Enabled,
 		"authz_providers":     len(cfg.Authz.Providers),
 		"ratelimit_providers": len(cfg.RateLimit.Providers),

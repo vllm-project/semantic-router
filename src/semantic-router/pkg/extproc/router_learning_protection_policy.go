@@ -62,16 +62,20 @@ func newProtectionPolicy(
 	policy.Action = action
 	policy.Reason = reason
 	policy.Scope = scope
+	sessionID, sessionHeader := protectionSessionID(ctx, cfg)
+	conversationID, conversationDerived := protectionConversationID(ctx, cfg, sessionID)
+	agentID, agentHeader := protectionAgentID(ctx, cfg)
 	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
 		nil,
 		newRouterLearningIdentityDiagnostics(routerLearningIdentity{
-			scope:              scope,
-			sessionHeader:      cfg.HeaderName("session"),
-			conversationHeader: cfg.HeaderName("conversation"),
-			agentHeader:        cfg.HeaderName("agent"),
-			sessionID:          strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session"))),
-			conversationID:     strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))),
-			agentID:            strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("agent"))),
+			scope:               scope,
+			sessionHeader:       sessionHeader,
+			conversationHeader:  cfg.HeaderName("conversation"),
+			agentHeader:         agentHeader,
+			sessionID:           sessionID,
+			conversationID:      conversationID,
+			conversationDerived: conversationDerived,
+			agentID:             agentID,
 		}),
 	)
 	return policy
@@ -296,6 +300,9 @@ func newRouterLearningIdentityDiagnostics(identity routerLearningIdentity) route
 		session:       newRouterLearningIdentityPart(identity.sessionHeader, identity.sessionID, true),
 		conversation:  newRouterLearningIdentityPart(identity.conversationHeader, identity.conversationID, conversationRequired),
 		memoryKeyHash: shortLearningIdentityHash(identity.memoryKey),
+	}
+	if identity.conversationDerived {
+		diagnostics.conversation.source = string(SessionProvenanceMessageHash)
 	}
 	if identity.agentHeader != "" {
 		diagnostics.agent = newRouterLearningIdentityPart(identity.agentHeader, identity.agentID, false)

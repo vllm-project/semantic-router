@@ -49,42 +49,19 @@ func appendFusionStageMessage(req *openai.ChatCompletionNewParams, content strin
 	if err != nil {
 		return req
 	}
+	// Decoding drops a json_schema payload from response_format (#3024).
+	appended.ResponseFormat = req.ResponseFormat
 	return &appended
 }
 
-func buildFusionStreamingToolCallSSE(
-	id string,
-	created int64,
-	model string,
-	raw []byte,
-) ([]byte, error) {
-	toolCalls, err := fusionToolCallDeltasFromRaw(raw)
+// buildStreamingToolCallSSE streams an answer that calls tools: the text the
+// model wrote beside the calls, then the calls.
+func buildStreamingToolCallSSE(id string, created int64, resp *ModelResponse) ([]byte, error) {
+	toolCalls, err := fusionToolCallDeltasFromRaw(resp.Raw)
 	if err != nil {
 		return nil, err
 	}
-
-	var body []byte
-	roleChoice := map[string]interface{}{
-		"index":         0,
-		"delta":         map[string]interface{}{"role": "assistant"},
-		"finish_reason": nil,
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, nil))
-
-	toolChoice := map[string]interface{}{
-		"index":         0,
-		"delta":         map[string]interface{}{"tool_calls": toolCalls},
-		"finish_reason": nil,
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, toolChoice, nil))
-
-	finalChoice := map[string]interface{}{
-		"index":         0,
-		"delta":         map[string]interface{}{},
-		"finish_reason": "tool_calls",
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, finalChoice, nil))
-	return appendSSEDone(body), nil
+	return buildSimulatedChatCompletionSSE(id, created, resp.Model, splitIntoChunks(resp.Content, 50), toolCalls, backendFinishReason(resp)), nil
 }
 
 func fusionToolCallDeltasFromRaw(raw []byte) ([]map[string]interface{}, error) {

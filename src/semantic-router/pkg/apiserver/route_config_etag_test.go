@@ -9,7 +9,7 @@ import (
 )
 
 func TestConfigPreconditionRequiresExactCurrentETag(t *testing.T) {
-	current := []byte("version: v0.3\n")
+	current := []byte("version: v0.5\n")
 
 	missingRequest := httptest.NewRequest(http.MethodPut, apiConfigPath, nil)
 	missingResponse := httptest.NewRecorder()

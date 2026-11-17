@@ -160,11 +160,7 @@ export default function InsightsProjectionTrace({
                               <tr key={`${input.type}-${input.name}-${inputIndex}`}>
                                 <th scope="row">
                                   {input.name || input.type}
-                                  <small>
-                                    {[input.type, input.kb, input.metric]
-                                      .filter(Boolean)
-                                      .join(' · ')}
-                                  </small>
+                                  <small>{input.type}</small>
                                 </th>
                                 <td>{projectionMetric(input.value)}</td>
                                 <td>{projectionMetric(input.weight)}</td>

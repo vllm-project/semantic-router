@@ -12,26 +12,28 @@ func TestEmptyDiagnosticHelpers(t *testing.T) {
 }
 
 func TestDecompilePreservesEnvironmentExpressions(t *testing.T) {
-	result := Decompile(`version: v0.3
-routing:
-  decisions:
-    - name: direct
-      priority: 1
-      modelRefs:
-        - model: ${EDITOR_MODEL}
+	result := Decompile(`version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: direct
+        priority: 1
+        modelRefs:
+          - model: ${EDITOR_MODEL}
 `)
 	if result.Error != "" {
 		t.Fatal(result.Error)
 	}
 	// Transport must never substitute the Dashboard's environment into user text.
 	t.Setenv("EDITOR_MODEL", "private-runtime-value")
-	again := Decompile(`version: v0.3
-routing:
-  decisions:
-    - name: direct
-      priority: 1
-      modelRefs:
-        - model: ${EDITOR_MODEL}
+	again := Decompile(`version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: direct
+        priority: 1
+        modelRefs:
+          - model: ${EDITOR_MODEL}
 `)
 	if again != result {
 		t.Fatal("server environment changed editor output")

@@ -123,7 +123,7 @@ func TestHandleRequestHeadersSkipProcessingReturnsToDefaultRoute(t *testing.T) {
 	request := newSkipProcessingRequestHeaders("POST", "/v1/chat/completions", "true")
 	request.RequestHeaders.Headers.Headers = append(
 		request.RequestHeaders.Headers.Headers,
-		&core.HeaderValue{Key: "X-Selected-Model", Value: "test-model"},
+		&core.HeaderValue{Key: "X-VSR-Route-Model", Value: "test-model"},
 	)
 
 	response, err := router.handleRequestHeaders(request, ctx)
@@ -134,7 +134,7 @@ func TestHandleRequestHeadersSkipProcessingReturnsToDefaultRoute(t *testing.T) {
 	if !common.GetClearRouteCache() {
 		t.Fatal("expected selected-route cache to be cleared for skip processing")
 	}
-	if !containsHeaderName(common.GetHeaderMutation().GetRemoveHeaders(), headers.SelectedModel) {
+	if !containsHeaderName(common.GetHeaderMutation().GetRemoveHeaders(), headers.VSRRouteModel) {
 		t.Fatalf("selected-model header was not removed: %v", common.GetHeaderMutation().GetRemoveHeaders())
 	}
 }
@@ -332,6 +332,7 @@ func TestHandleResponseHeadersSkipProcessingBypassesVSRHeaders(t *testing.T) {
 			Headers: &core.HeaderMap{
 				Headers: []*core.HeaderValue{
 					{Key: ":status", Value: "200"},
+					{Key: headers.VSRTrace, Value: "algorithm=forged"},
 				},
 			},
 		},
@@ -352,11 +353,8 @@ func TestHandleResponseHeadersSkipProcessingBypassesVSRHeaders(t *testing.T) {
 		t.Fatal("expected no router headers to be added when skipping processing")
 	}
 	removed := mutation.GetRemoveHeaders()
-	wantRemoved := map[string]bool{
-		headers.VSRUpstreamHost:             true,
-		headers.VSREffectiveInputTokens:     true,
-		headers.VSREffectiveMaxOutputTokens: true,
-	}
+	// The provider's own x-vsr- headers never reach the client.
+	wantRemoved := map[string]bool{headers.VSRTrace: true}
 	if len(removed) != len(wantRemoved) {
 		t.Fatalf("RemoveHeaders = %v, want %v", removed, wantRemoved)
 	}

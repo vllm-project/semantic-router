@@ -51,8 +51,23 @@ func (decoder *responsesStreamDecoder) decodeResponsesContentEvent(
 	if err != nil {
 		return true, nil, nil, err
 	}
-	events, diagnostics, err := decoder.emitResponsesEvent(*event)
-	return true, events, diagnostics, err
+	var events []llmprotocol.Event
+	if event.Type == llmprotocol.EventOutputItemCompleted && event.Content != nil && event.Content.ReasoningDetail != nil {
+		// Item-done is the replay snapshot. Terminal output may carry a different
+		// ciphertext; validation accepts that snapshot without emitting it again.
+		delta := *event
+		delta.Type = llmprotocol.EventReasoningDelta
+		delta.ContentIndex = decoder.nextContentIndex[event.ItemIndex]
+		decoder.nextContentIndex[event.ItemIndex]++
+		emitted, _, emitErr := decoder.emitResponsesEvent(delta)
+		if emitErr != nil {
+			return true, nil, nil, emitErr
+		}
+		events = append(events, emitted...)
+		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning}
+	}
+	completed, diagnostics, err := decoder.emitResponsesEvent(*event)
+	return true, append(events, completed...), diagnostics, err
 }
 
 func (decoder *responsesStreamDecoder) applyResponsesContentEvent(
@@ -560,22 +575,32 @@ func (decoder *responsesStreamDecoder) validateResponsesTerminalOutput(raw json.
 	}
 	for index, item := range output {
 		completed, found := decoder.completedOutput[index]
-		if !found || !providerJSONEquivalent(completed, item) {
+		if !found || !responsesTerminalItemEquivalent(completed, item) {
 			return invalidProviderResponse("stream_terminal_output_mismatch", "Responses terminal output does not match completed output items")
 		}
 	}
 	return nil
 }
 
-func providerJSONEquivalent(left, right []byte) bool {
-	var leftValue any
+func responsesTerminalItemEquivalent(left, right []byte) bool {
+	var leftItem map[string]any
 	leftDecoder := json.NewDecoder(bytes.NewReader(left))
 	leftDecoder.UseNumber()
-	if err := leftDecoder.Decode(&leftValue); err != nil {
+	if err := leftDecoder.Decode(&leftItem); err != nil {
 		return false
 	}
-	var rightValue any
+	var rightItem map[string]any
 	rightDecoder := json.NewDecoder(bytes.NewReader(right))
 	rightDecoder.UseNumber()
-	return rightDecoder.Decode(&rightValue) == nil && reflect.DeepEqual(leftValue, rightValue)
+	if err := rightDecoder.Decode(&rightItem); err != nil {
+		return false
+	}
+	if leftItem["type"] == "reasoning" && rightItem["type"] == "reasoning" {
+		leftCiphertext, _ := leftItem["encrypted_content"].(string)
+		rightCiphertext, _ := rightItem["encrypted_content"].(string)
+		if leftCiphertext != "" && rightCiphertext != "" {
+			rightItem["encrypted_content"] = leftCiphertext
+		}
+	}
+	return reflect.DeepEqual(leftItem, rightItem)
 }

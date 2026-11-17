@@ -77,8 +77,8 @@
 }
 
 .emeritus {
-  border-color: #a1a1aa;
-  color: #71717a;
+  border-color: var(--site-border-strong);
+  color: var(--site-muted);
 }
 
 .role {

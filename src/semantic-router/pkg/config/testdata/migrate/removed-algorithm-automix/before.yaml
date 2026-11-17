@@ -1,0 +1,36 @@
+# automix is multi_factor weighted {quality: 1-t, cost: t} by its
+# cost_quality_tradeoff t: a decision without its own tradeoff reads the
+# global automix block's, and the global block goes.
+version: v0.5
+providers:
+  defaults: {model: small}
+  models:
+    - name: small
+      pricing: {prompt_per_1m: 0.1, completion_per_1m: 0.2}
+      backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Fast general model
+    - name: large
+      pricing: {prompt_per_1m: 3, completion_per_1m: 6}
+      backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+      description: Strong reasoning model
+recipes:
+  - name: default
+    decisions:
+      - name: tradeoff
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: automix
+          automix: {cost_quality_tradeoff: 0.25, enable_self_verification: true}
+      - name: inherited
+        priority: 50
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: automix
+global:
+  router:
+    model_selection:
+      enabled: true
+      automix: {cost_quality_tradeoff: 0.4, verification_threshold: 0.7}

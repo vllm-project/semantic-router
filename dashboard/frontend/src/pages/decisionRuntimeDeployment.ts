@@ -42,7 +42,7 @@ export function decisionRuntimeConsumers(config: RouterConfig | null): DecisionR
     ...(config?.recipes ?? []).map((recipe) => ({ recipe: recipe.name, routing: recipe.routing })),
   ]
   return scopes.flatMap(({ recipe, routing }) => [
-    ...(routing?.signals?.decision ?? []).flatMap((signal): DecisionRuntimeConsumer[] =>
+    ...(routing?.signals?.systemone ?? []).flatMap((signal): DecisionRuntimeConsumer[] =>
       signal.name
         ? [
             {
@@ -58,7 +58,7 @@ export function decisionRuntimeConsumers(config: RouterConfig | null): DecisionR
     ),
     ...(routing?.decisions ?? []).flatMap((decision): DecisionRuntimeConsumer[] => {
       const algorithm = record(decision.algorithm)
-      if (!decision.name || algorithm.type !== 'decision' || !algorithm.decision) return []
+      if (!decision.name || algorithm.type !== 'systemone' || !algorithm.systemone) return []
       return [
         {
           id: JSON.stringify([recipe, 'selector', decision.name]),
@@ -66,7 +66,7 @@ export function decisionRuntimeConsumers(config: RouterConfig | null): DecisionR
           name: decision.name,
           kind: 'selector',
           questionType: 'choice',
-          deployment: String(record(algorithm.decision).deployment ?? ''),
+          deployment: String(record(algorithm.systemone).deployment ?? ''),
         },
       ]
     }),
@@ -129,7 +129,7 @@ export function withDecisionRuntimeDeployment(
     : undefined
   if (request.consumerId && !consumer)
     throw new Error(
-      'The selected consumer is no longer compatible. Refresh and select a choice, score or noul question, or a decision selector.',
+      'The selected consumer is no longer compatible. Refresh and select a choice, score or noul question, or a System One selector.',
     )
   const next = structuredClone(config)
   const global = (next.global ?? {}) as CanonicalGlobalConfig
@@ -155,16 +155,16 @@ export function withDecisionRuntimeDeployment(
         ? next.routing
         : next.recipes?.find((recipe) => recipe.name === consumer.recipe)?.routing
     if (consumer.kind === 'question') {
-      const signal = routing?.signals?.decision?.find((value) => value.name === consumer.name)
+      const signal = routing?.signals?.systemone?.find((value) => value.name === consumer.name)
       if (!signal) throw new Error('The selected question is no longer available.')
       signal.deployment = name
     } else {
       const decision = routing?.decisions?.find((value) => value.name === consumer.name)
-      if (!decision) throw new Error('The selected decision selector is no longer available.')
+      if (!decision) throw new Error('The selected System One selector is no longer available.')
       const algorithm = record(decision.algorithm)
       decision.algorithm = {
         ...algorithm,
-        decision: { ...record(algorithm.decision), deployment: name },
+        systemone: { ...record(algorithm.systemone), deployment: name },
       }
     }
   }

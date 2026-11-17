@@ -194,7 +194,6 @@ def _capture(target):
         "recipes": document["recipes"],
         "entrypoints": document.get("entrypoints", []),
         "evaluation": document.get("evaluation", {}),
-        "routing": document.get("routing", {}),
         "learning": global_config.get("router", {}).get("learning", {}),
     }
     redactions = []

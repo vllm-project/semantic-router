@@ -1,4 +1,6 @@
-"""Every config the model-selection pages show passes `config validate`.
+"""Every config the model-selection pages show passes `config validate`, but
+the migration page's earlier forms (the -before examples), which it refuses
+with the line that names `vllm-sr config migrate`.
 
 The pages document each example as a ```yaml title="..."``` block. Most are
 fragments: like the Router's docs test, this one merges each onto
@@ -98,5 +100,9 @@ def test_documented_configs_validate(monkeypatch, tmp_path, page, title, text):
 
     result = CliRunner().invoke(main, ["config", "validate", "--config", str(config)])
 
+    if title.endswith("-before"):
+        assert result.exit_code == 1, f'{page} "{title}":\n{result.output}'
+        assert "run `vllm-sr config migrate`" in " ".join(result.output.split())
+        return
     assert result.exit_code == 0, f'{page} "{title}":\n{result.output}'
     assert "Checked by the Router binary" in result.stdout, result.output
