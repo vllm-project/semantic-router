@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"net/url"
 	"sort"
 	"strings"
@@ -16,9 +17,17 @@ const (
 	routerReplayRunPath  = routerReplayAPIBasePath + "/run"
 )
 
+// replayRunList is every run the filters select, newest first, and for each
+// run the record whose prompt is its task.
+type replayRunList struct {
+	runs    []routerreplay.RunSummary
+	prompts map[string]string
+}
+
 // handleRouterReplayRunsAPI serves GET /api/v1/observability/replays/runs:
-// one summary per agent run, a session, over the filtered records.
-func (r *OpenAIRouter) handleRouterReplayRunsAPI(method string, rawQuery string) *ext_proc.ProcessingResponse {
+// one summary per agent run, a session, over the filtered records. Every page
+// of one filter comes from one cached scan.
+func (r *OpenAIRouter) handleRouterReplayRunsAPI(ctx context.Context, method string, rawQuery string) *ext_proc.ProcessingResponse {
 	if method != "GET" {
 		return r.createErrorResponse(405, "method not allowed")
 	}
@@ -26,16 +35,18 @@ func (r *OpenAIRouter) handleRouterReplayRunsAPI(method string, rawQuery string)
 	if err != nil {
 		return r.createErrorResponse(400, err.Error())
 	}
-	payload, err := r.queryRouterReplayRuns(query)
+	list, err := r.replayRuns.get(ctx, query.filters.cacheKey(), func(ctx context.Context) (replayRunList, error) {
+		return r.queryRouterReplayRuns(ctx, query.filters)
+	})
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
-	return r.createJSONResponse(200, payload)
+	return r.createJSONResponse(200, r.pageRouterReplayRuns(list, query))
 }
 
 // handleRouterReplayRunAPI serves GET /api/v1/observability/replays/run?session_id={id}:
 // one agent run as a tree of its agents and their calls, across recipes.
-func (r *OpenAIRouter) handleRouterReplayRunAPI(method string, rawQuery string) *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) handleRouterReplayRunAPI(ctx context.Context, method string, rawQuery string) *ext_proc.ProcessingResponse {
 	if method != "GET" {
 		return r.createErrorResponse(405, "method not allowed")
 	}
@@ -47,7 +58,7 @@ func (r *OpenAIRouter) handleRouterReplayRunAPI(method string, rawQuery string) 
 	if sessionID == "" {
 		return r.createErrorResponse(400, "session_id is required")
 	}
-	records, err := r.queryRouterReplaySession(sessionID, nil)
+	records, err := r.queryRouterReplaySession(ctx, sessionID, nil)
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
@@ -62,12 +73,12 @@ func (r *OpenAIRouter) handleRouterReplayRunAPI(method string, rawQuery string) 
 	return r.createJSONResponse(200, routerreplay.RunResponse{Object: "router_replay.run", Run: summary, Calls: calls})
 }
 
-func (r *OpenAIRouter) queryRouterReplayRuns(query routerReplayListQuery) (routerreplay.RunListResponse, error) {
-	search := strings.ToLower(query.filters.search)
+func (r *OpenAIRouter) queryRouterReplayRuns(ctx context.Context, filters routerReplayFilters) (replayRunList, error) {
+	search := strings.ToLower(filters.search)
 	builders := make(map[string]*replayRunBuilder)
 	for _, reader := range r.routerReplayReaders() {
-		if err := reader.ScanMetadata(func(record routerreplay.RoutingRecord) error {
-			if record.SessionID == "" || !doesRouterReplayRecordMatchFilters(record, query.filters, search) {
+		if err := reader.ScanMetadata(ctx, filters.storageFilters(), func(record routerreplay.RoutingRecord) error {
+			if record.SessionID == "" || !doesRouterReplayRecordMatchFilters(record, filters, search) {
 				return nil
 			}
 			builder := builders[record.SessionID]
@@ -78,35 +89,43 @@ func (r *OpenAIRouter) queryRouterReplayRuns(query routerReplayListQuery) (route
 			builder.add(record)
 			return nil
 		}); err != nil {
-			return routerreplay.RunListResponse{}, err
+			return replayRunList{}, err
 		}
 	}
-	runs := make([]routerreplay.RunSummary, 0, len(builders))
-	prompts := make(map[string]string, len(builders))
+	list := replayRunList{
+		runs:    make([]routerreplay.RunSummary, 0, len(builders)),
+		prompts: make(map[string]string, len(builders)),
+	}
 	for sessionID, builder := range builders {
 		if builder.titlesOnly() {
 			continue
 		}
 		summary, _ := builder.build()
-		runs = append(runs, summary)
-		prompts[sessionID] = builder.firstMain.recordID
+		list.runs = append(list.runs, summary)
+		list.prompts[sessionID] = builder.firstMain.recordID
 	}
-	sort.Slice(runs, func(i, j int) bool {
-		if runs[i].EndedAt.Equal(runs[j].EndedAt) {
-			return runs[i].SessionID < runs[j].SessionID
+	sort.Slice(list.runs, func(i, j int) bool {
+		if list.runs[i].EndedAt.Equal(list.runs[j].EndedAt) {
+			return list.runs[i].SessionID < list.runs[j].SessionID
 		}
-		return runs[i].EndedAt.After(runs[j].EndedAt)
+		return list.runs[i].EndedAt.After(list.runs[j].EndedAt)
 	})
-	payload := pageReplayRuns(runs, query)
+	return list, nil
+}
+
+// pageRouterReplayRuns copies one page out of the shared list, then reads the
+// first main call of each run whose prompt the metadata scan left out.
+func (r *OpenAIRouter) pageRouterReplayRuns(list replayRunList, query routerReplayListQuery) routerreplay.RunListResponse {
+	payload := pageReplayRuns(list.runs, query)
+	payload.Data = append(make([]routerreplay.RunSummary, 0, len(payload.Data)), payload.Data...)
 	for index, run := range payload.Data {
-		// A metadata scan may leave the prompt out; read the first main call.
-		if run.Prompt == "" && prompts[run.SessionID] != "" {
-			if record, ok := r.findRouterReplayRecord(prompts[run.SessionID]); ok {
+		if run.Prompt == "" && list.prompts[run.SessionID] != "" {
+			if record, ok := r.findRouterReplayRecord(list.prompts[run.SessionID]); ok {
 				payload.Data[index].Prompt = looper.WithoutSystemReminders(record.Prompt)
 			}
 		}
 	}
-	return payload, nil
+	return payload
 }
 
 func pageReplayRuns(runs []routerreplay.RunSummary, query routerReplayListQuery) routerreplay.RunListResponse {

@@ -261,6 +261,21 @@ Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
 it, all required checks pass, and all review conversations are resolved.
 
+GitHub requests the repository-wide reviewers in `.github/CODEOWNERS` when a
+non-draft PR is ready for review. After the linked issue is accepted and its
+single `wg/*` owner is synchronized to the PR, Community Label Sync requests
+one Lead of that Working Group, rotating among the group's Leads by PR number.
+It skips the PR author and the repository-wide reviewers, and requests no one
+while a Lead of the group is already requested or has reviewed. With each
+request it keeps one PR comment that names the requested Lead and up to two
+other Leads of the group; mention them in a reply to speed up the review. Only
+Leads who are Maintainers or Committers with write access are requested,
+because only their approvals count toward the two the merge queue needs. The
+rosters are maintained in `tools/ci/community_reviewers.py`; update them when
+a Lead joins or leaves a group or their repository access changes.
+Cross-Workgroup changes may need additional specialist reviewers. Working
+Group membership alone does not grant repository review or merge authority.
+
 ### Troubleshoot the merge queue
 
 Check the **Mergify Merge Queue** check or Mergify's **Merge Queue Status**
