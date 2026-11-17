@@ -44,16 +44,22 @@ configured, because protection reads what they send:
 | --- | --- | --- |
 | Claude Code | `x-claude-code-session-id`, a `session_id_headers` default | `x-claude-code-agent-id`, sent on subagent requests only |
 | Codex CLI | `session-id` | `thread-id`; on a root thread it equals `session-id` |
+| OpenCode | `x-session-id`, a `session_id_headers` default; on a subagent's calls `x-parent-session-id` | on a subagent's calls, its own session in `x-session-id` |
 | Pi, with the provider `vllm-sr connect pi` writes, and the VS Code extension | `x-session-id`, a `session_id_headers` default | none |
 
 - **Session.** With `identity.headers.session` unset, protection reads the
   session the request pins, `x-vsr-session-id` or a `session_id_headers`
-  header, and without one Codex's `session-id`.
+  header, and without one Codex's `session-id`. An OpenCode subagent runs in
+  a child session of its own and sends the session that spawned it in
+  `x-parent-session-id`; unless the request pins a session in
+  `x-vsr-session-id`, protection keys the call by that parent session.
 - **Agent.** With `identity.headers.agent` unset, protection reads
   `x-claude-code-agent-id`, then `thread-id`. A `thread-id` equal to the
   request's `session-id` marks Codex's root thread, the main agent, and names no
   agent, also when the request pins another session, as
-  `vllm-sr connect codex --launch` does.
+  `vllm-sr connect codex --launch` does. An OpenCode subagent's own session,
+  its `x-session-id`, is its agent. OpenCode is known by its User-Agent,
+  `opencode/<version>`.
 - **Codex's turn metadata.** Without those headers, protection reads the
   `session_id` and `thread_id` of Codex's `x-codex-turn-metadata`, or of a
   Responses request's `client_metadata`.
@@ -69,7 +75,8 @@ Codex's `session-id`. A Codex Responses call under `scope: conversation`
 without `x-conversation-id`, which has no conversation start to name its
 conversation by, or under an `identity.headers.session` Codex does not send,
 is filed under its `session-id` that way, so a run is one session rather than
-one per call. Replay also records the agent of each call from the harness
+one per call. An OpenCode subagent's calls are filed under the session that
+spawned it. Replay also records the agent of each call from the harness
 defaults above, whichever agent header protection reads, and the agent that
 spawned it, Codex's `x-codex-parent-thread-id`: see
 [Agent runs](../tutorials/plugin/router-replay#agent-runs). Recording a

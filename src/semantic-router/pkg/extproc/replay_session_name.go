@@ -27,13 +27,16 @@ const (
 )
 
 // observeSessionTitleRequest recognises the side request a harness sends to
-// name its session from what the harness marks, never from its prompt: a
-// Claude Code auxiliary request asking for a JSON object of one title field,
-// or a Codex thread whose turn metadata says thread_title.
+// name its session from what the harness marks: a Claude Code auxiliary
+// request asking for a JSON object of one title field, or a Codex thread
+// whose turn metadata says thread_title. OpenCode marks nothing, so its title
+// call is the one exception read from its prompt: a tool-less call that opens
+// with OpenCode's built-in title instructions.
 func observeSessionTitleRequest(ctx *RequestContext, request *llmprotocol.Request) {
 	ctx.SessionTitleRequest = ctx.AgentTurn.ThreadSource == codexThreadSourceTitle ||
 		(strings.EqualFold(headerValueCI(ctx, headers.XClaudeCodeRequestClass), claudeCodeAuxiliaryClass) &&
-			asksForTitleOnly(request.OutputFormat))
+			asksForTitleOnly(request.OutputFormat)) ||
+		isOpenCodeTitleRequest(ctx, request)
 }
 
 func asksForTitleOnly(format llmprotocol.OutputFormat) bool {
@@ -55,9 +58,15 @@ func asksForTitleOnly(format llmprotocol.OutputFormat) bool {
 
 // observeSessionTitle reads the name a title request answered with. A Codex
 // title thread carries no field naming the thread it titles, so its answer
-// names no run Replay knows.
+// names no run Replay knows. OpenCode asks for the title alone, as plain
+// text on one line.
 func observeSessionTitle(ctx *RequestContext, response *llmprotocol.Response) {
 	if ctx == nil || !ctx.SessionTitleRequest || ctx.AgentTurn.ThreadSource == codexThreadSourceTitle || response == nil {
+		return
+	}
+	if isOpenCode(ctx) {
+		title, _, _ := strings.Cut(strings.TrimSpace(extractSemanticAssistantResponseText(response)), "\n")
+		ctx.sessionName = boundedSessionName(title)
 		return
 	}
 	var answer struct {
