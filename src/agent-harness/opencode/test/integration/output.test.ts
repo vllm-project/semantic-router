@@ -103,6 +103,45 @@ test(
 );
 
 test(
+  "a subagent's read is listed in its parent session's decisions, in the subagent's own session",
+  { timeout: 60000 },
+  async (t) => {
+    const native = await fixture(t);
+    const run = await native.run("OUTPUT_CASE SUBAGENT");
+    const read = async () =>
+      (await native.rpc("snapshot", { sessionID: run.sessionID })) as Snapshot;
+    let snapshot = await read();
+    for (let i = 0; i < 20 && snapshot.decisions.length < 2; i++) {
+      await delay(250);
+      snapshot = await read();
+    }
+    const children = snapshot.decisions.filter(
+      (decision) => decision.sessionID !== run.sessionID,
+    );
+    assert.deepEqual(
+      children.map((decision) => decision.app).sort(),
+      ["redact", "shield"],
+      JSON.stringify(snapshot.decisions),
+    );
+    assert.ok(
+      children.every((decision) => /fixture\.txt/.test(decision.subject ?? "")),
+    );
+    const child = children[0]!.sessionID;
+    const own = (await native.rpc("snapshot", {
+      sessionID: child,
+    })) as Snapshot;
+    assert.equal(own.decisions.length, 2);
+    // An answer to the subagent's decision is kept in its session and shown in the parent's view.
+    await native.rpc("feedback", {
+      sessionID: child,
+      decisionID: children[0]!.id,
+      feedback: "right",
+    });
+    assert.equal((await read()).feedback[children[0]!.id], "right");
+  },
+);
+
+test(
   "packed bounded failures remain visibly partial and strict failures withhold original content",
   { timeout: 60000 },
   async (t) => {

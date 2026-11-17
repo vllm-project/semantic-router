@@ -1,11 +1,12 @@
 import { Plugin } from "@opencode/plugin/tui";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import type { JSX } from "solid-js";
-import type { RGBA } from "@opentui/core";
+import type { RGBA, ScrollBoxRenderable } from "@opentui/core";
 import { Vsr } from "./rpc.ts";
 import { APPS } from "./settings.ts";
 import type { App, Wait } from "./settings.ts";
 import {
+  answersOf,
   APP_LOOK,
   APP_NAMES,
   calibrationQuestion,
@@ -32,7 +33,7 @@ import type {
 } from "./view.ts";
 import type { ViewSnapshot, ViewState } from "./view.ts";
 import type { ControlResult } from "./controls.ts";
-import type { Decision, Feedback } from "./decisions.ts";
+import type { Decision } from "./decisions.ts";
 import type { Verification } from "./verify.ts";
 
 // OpenCode colors a span through its style, which this OpenTUI's span type leaves out.
@@ -50,10 +51,6 @@ const Span = (props: { fg?: unknown; bg?: unknown; children: JSX.Element }) => (
   </span>
 );
 const names: Record<App, string> = APP_NAMES;
-const outcome = (decision: Decision) =>
-  decision.outcome === "verified"
-    ? "VERIFIED against supplied evidence"
-    : decision.outcome.toUpperCase();
 export default Plugin.define({
   id: "vsr.opencode.tui",
   setup(ctx) {
@@ -158,44 +155,6 @@ export default Plugin.define({
       });
       if (wait !== undefined)
         await controller.change({ waits: { [app]: wait } });
-    }
-    async function feedback() {
-      const snapshot = current();
-      if (!snapshot) return;
-      const decision = await ctx.ui.dialog.select<Decision>({
-        title: "vSR decision feedback",
-        options: [...snapshot.decisions].reverse().map((value) => ({
-          value,
-          title: `${names[value.app]}: ${outcome(value)}`,
-          description: `${subjectLine(value)}${snapshot.feedback[value.id] ? ` · ${snapshot.feedback[value.id]}` : ""}`,
-        })),
-      });
-      if (!decision) return;
-      const choices: { value: Feedback; title: string }[] = [
-        { value: "right", title: "Right decision" },
-        { value: "wrong", title: "Wrong decision" },
-        ...(decision.app === "router"
-          ? [
-              {
-                value: "right-model" as const,
-                title: "Model was appropriate",
-              },
-              {
-                value: "needed-stronger" as const,
-                title: "Needed a stronger model",
-              },
-              {
-                value: "could-be-lighter" as const,
-                title: "Could use a lighter model",
-              },
-            ]
-          : []),
-      ];
-      const label = await ctx.ui.dialog.select({
-        title: "Label this decision",
-        options: choices,
-      });
-      if (label) await controller.feedback(decision, label);
     }
     const call = { ...options, signal: AbortSignal.timeout(10_000) };
     // Calibration: pick an app, answer questions about its decisions nearest the line, pick a goal, then apply
@@ -338,13 +297,6 @@ export default Plugin.define({
           run: waits,
         },
         {
-          id: "vsr.feedback",
-          title: "vSR decision feedback",
-          slash: { name: "vsr-feedback" },
-          palette: true,
-          run: feedback,
-        },
-        {
           id: "vsr.diagnose",
           title: "vSR check the decision runtime",
           slash: { name: "vsr-check" },
@@ -363,42 +315,6 @@ export default Plugin.define({
               title: "vSR decision runtime",
               message: report(found),
             });
-          },
-        },
-        {
-          id: "vsr.sessions",
-          title: "vSR select session",
-          slash: { name: "vsr-sessions" },
-          palette: true,
-          run: async () => {
-            try {
-              const sessions = await ctx.client.session.list(
-                { limit: 100 },
-                { ...options, signal: AbortSignal.timeout(3000) },
-              );
-              const sessionID = await ctx.ui.dialog.select({
-                title: "vSR session",
-                current: view.sessionID,
-                options: [...sessions.data]
-                  .sort((a, b) =>
-                    (a.title ?? a.id).localeCompare(b.title ?? b.id),
-                  )
-                  .map((session) => ({
-                    value: session.id,
-                    title: session.title ?? session.id,
-                    description: session.parentID
-                      ? "Child session"
-                      : "Root session",
-                  })),
-              });
-              if (sessionID)
-                ctx.ui.router.navigate({ type: "session", sessionID });
-            } catch {
-              ctx.ui.toast.show({
-                message: "Session list unavailable; retry when connected.",
-                variant: "warning",
-              });
-            }
           },
         },
         {
@@ -434,16 +350,44 @@ export default Plugin.define({
           },
         },
       ],
-      bindings: [
-        "vsr.panel",
-        "vsr.apps",
-        "vsr.waits",
-        "vsr.feedback",
-        "vsr.diagnose",
-        "vsr.sessions",
-      ],
+      bindings: ["vsr.panel", "vsr.apps", "vsr.waits", "vsr.diagnose"],
     }));
-    // Esc closes the panel only while it has focus; at the prompt Esc stays OpenCode's interrupt.
+    // The panel's list, newest first, and the decision picked in it.
+    const rows = () => [...(current()?.decisions ?? [])].reverse();
+    const [picked, setPicked] = createSignal<string>();
+    let list: ScrollBoxRenderable | undefined;
+    const pick = (id: string) => {
+      setPicked(id);
+      list?.scrollChildIntoView(`vsr-decision-${id}`);
+    };
+    const move = (step: number) => {
+      const ids = rows().map((decision) => decision.id);
+      if (!ids.length) return;
+      const at = ids.indexOf(picked() ?? "");
+      pick(ids[at < 0 ? 0 : Math.min(ids.length - 1, Math.max(0, at + step))]!);
+    };
+    const answerable = (decision: Decision) =>
+      current()?.answerable.includes(decision.id) ?? false;
+    // Saves an answer to a decision, as a button under it or its number key does.
+    const answer = (decision: Decision | undefined, index: number) => {
+      const choice = decision && answersOf(decision)[index];
+      if (!decision || !choice) return;
+      if (!answerable(decision)) {
+        ctx.ui.toast.show({
+          message:
+            "A rule or a skipped call decided this one; calibration does not learn from it.",
+        });
+        return;
+      }
+      void controller.feedback(decision, choice.value);
+    };
+    const answerPicked = (index: number) =>
+      answer(
+        rows().find((decision) => decision.id === picked()),
+        index,
+      );
+    // While the panel has focus, its keys pick and answer decisions and Esc closes it; at the prompt Esc stays
+    // OpenCode's interrupt.
     const [focused, setFocused] = createSignal(false);
     ctx.keymap.layer(() => ({
       mode: "global",
@@ -454,6 +398,13 @@ export default Plugin.define({
           bind: "escape",
           run: () => ctx.ui.panel.close(),
         },
+        { title: "Previous vSR decision", bind: "up", run: () => move(-1) },
+        { title: "Next vSR decision", bind: "down", run: () => move(1) },
+        ...[1, 2, 3].map((key) => ({
+          title: `vSR answer ${key}`,
+          bind: String(key),
+          run: () => answerPicked(key - 1),
+        })),
       ],
     }));
     // A token the theme lacks gives no color rather than a broken one.
@@ -709,12 +660,13 @@ export default Plugin.define({
                         : ""}
                     </text>
                     <scrollbox
+                      ref={(found: ScrollBoxRenderable) => (list = found)}
                       flexGrow={1}
                       marginTop={1}
                       focused={panel.focused}
                     >
                       <For
-                        each={[...snapshot().decisions].reverse()}
+                        each={rows()}
                         fallback={
                           <text fg={tone("muted")}>
                             No decisions in this session yet.
@@ -722,7 +674,24 @@ export default Plugin.define({
                         }
                       >
                         {(decision) => (
-                          <box flexDirection="column" marginBottom={1}>
+                          <box
+                            id={`vsr-decision-${decision.id}`}
+                            flexDirection="column"
+                            marginBottom={1}
+                            marginLeft={
+                              decision.sessionID === snapshot().sessionID
+                                ? 0
+                                : 2
+                            }
+                            // The picked decision is barred in the focus color; the others keep the bar's room.
+                            border={["left"]}
+                            borderStyle="heavy"
+                            borderColor={tone(
+                              picked() === decision.id ? "focus" : "background",
+                            )}
+                            paddingLeft={1}
+                            onMouseDown={() => pick(decision.id)}
+                          >
                             <text>
                               <Span
                                 bg={tone(toneOf(decision))}
@@ -739,6 +708,9 @@ export default Plugin.define({
                                 decision.reason !== "selected"
                                   ? ` · ${decision.reason.replaceAll("-", " ")}`
                                   : ""}
+                                {decision.sessionID === snapshot().sessionID
+                                  ? ""
+                                  : " · in a subagent"}
                               </Span>
                             </text>
                             <text>{subjectLine(decision)}</text>
@@ -800,14 +772,54 @@ export default Plugin.define({
                                 {decision.coverage?.total} characters
                               </text>
                             </Show>
-                            <Show when={snapshot().feedback[decision.id]}>
-                              <text fg={tone("info")}>
-                                you said:{" "}
-                                {snapshot().feedback[decision.id]!.replaceAll(
-                                  "-",
-                                  " ",
-                                )}
-                              </text>
+                            <Show
+                              when={answerable(decision)}
+                              fallback={
+                                <Show when={snapshot().feedback[decision.id]}>
+                                  <text fg={tone("info")}>
+                                    you said:{" "}
+                                    {snapshot().feedback[
+                                      decision.id
+                                    ]!.replaceAll("-", " ")}
+                                  </text>
+                                </Show>
+                              }
+                            >
+                              {/* The answers calibration learns from; the chosen one is filled in. */}
+                              <box flexDirection="row">
+                                {answersOf(decision).map((choice, index) => (
+                                  <text
+                                    marginRight={1}
+                                    onMouseDown={(event: {
+                                      stopPropagation(): void;
+                                    }) => {
+                                      event.stopPropagation();
+                                      pick(decision.id);
+                                      answer(decision, index);
+                                    }}
+                                  >
+                                    {snapshot().feedback[decision.id] ===
+                                    choice.value ? (
+                                      <Span
+                                        bg={tone("info")}
+                                        fg={tone("background")}
+                                      >
+                                        {` ${index + 1} ${choice.title} `}
+                                      </Span>
+                                    ) : (
+                                      <Span
+                                        fg={tone(
+                                          picked() === decision.id
+                                            ? "info"
+                                            : "muted",
+                                        )}
+                                      >
+                                        {`[${index + 1} ${choice.title}]`}
+                                      </Span>
+                                    )}
+                                  </text>
+                                ))}
+                              </box>
                             </Show>
                           </box>
                         )}
@@ -818,8 +830,8 @@ export default Plugin.define({
               </Show>
               <text flexShrink={0} fg={tone("muted")}>
                 {panel.focused
-                  ? "Esc close · ctrl+x ← back to the prompt"
-                  : "/vsr-apps · /vsr-waits · /vsr-feedback · /vsr-check"}
+                  ? "↑↓ pick · 1-3 answer · Esc close · ctrl+x ← prompt"
+                  : "click a decision to answer it · /vsr-apps · /vsr-check"}
               </text>
             </box>
           );

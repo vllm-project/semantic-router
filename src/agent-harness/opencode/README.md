@@ -129,6 +129,15 @@ The decisions panel, `/vsr`, is for looking back:
     got nothing from that output.
   - `skipped`: an app got no answer in time; the model went on without it.
   - `allowed`: a command guard let run.
+- A subagent's decisions, such as the files an Explore subagent read, are
+  listed with the session that started it, indented and marked
+  `in a subagent`.
+- Under each decision calibration can learn from, the answers you can give,
+  as in the Claude Code plugin's `/vsr` pane: `right call` or `wrong call`,
+  and for a route `right model`, `needed stronger` or `could be lighter`.
+  Click one, or pick the decision with `↑` `↓` and press its number. The
+  answer you gave is filled in. A decision a rule made, or one that was
+  skipped, has none.
 
 Every control is a command; type `/vsr` to list them. The panel takes the
 keyboard when it opens, and `Esc` closes it. To keep the panel open and type,
@@ -140,9 +149,7 @@ model as usual, and `/vsr` closes the panel.
 | `/vsr`           | Open the decisions panel, or close it                                  |
 | `/vsr-apps`      | Turn an app on or off, or hand the apps back to a Router listener      |
 | `/vsr-waits`     | Choose how long redact, shield and guard wait: 1 to 3 s, or until done |
-| `/vsr-feedback`  | Say whether a decision was right; for router, whether the model fit    |
 | `/vsr-check`     | Check the decision runtime: one case per enabled app                   |
-| `/vsr-sessions`  | Show another session's decisions                                       |
 | `/vsr-goal`      | Choose the router's goal: balanced, quality or save                    |
 | `/vsr-refresh`   | Refresh the panel                                                      |
 | `/vsr-calibrate` | Fit an app's thresholds to your answers                                |
@@ -261,7 +268,7 @@ kept. Run `/vsr-calibrate` and pick an app:
 3. It shows the new lines, and how many of your answers the current and the new
    ones agree with. Apply, or keep the current ones.
 
-Some answers come without asking: `/vsr-feedback` on a decision, a held command you
+Some answers come without asking: one you gave in the panel, a held command you
 declined (it should have asked), and pushback within 15 minutes of a route to
 the lighter two tiers (it needed a stronger one). An app needs 8 answers before
 its lines move, and each line moves at most 0.15 per calibration, the same fit

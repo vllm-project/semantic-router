@@ -5,6 +5,7 @@ import type { RuntimeStatus } from "./runtime.ts";
 import type { ControlResult } from "./controls.ts";
 import type { Verification } from "./verify.ts";
 export interface ViewSnapshot extends Snapshot {
+  answerable: string[];
   apps: Settings["apps"];
   waits: Settings["waits"];
   controls: {
@@ -172,8 +173,15 @@ export class DecisionView {
     return saved;
   }
   async feedback(decision: Decision, feedback: Feedback): Promise<boolean> {
-    const id = this.state.sessionID;
-    if (!id || decision.sessionID !== id || this.state.busy || this.closed)
+    // A subagent's decision is listed in its parent's view and answered in its own session.
+    if (
+      !this.state.snapshot?.decisions.some(
+        (item) =>
+          item.id === decision.id && item.sessionID === decision.sessionID,
+      ) ||
+      this.state.busy ||
+      this.closed
+    )
       return false;
     const operation = ++this.operation;
     this.state.busy = true;
@@ -181,7 +189,7 @@ export class DecisionView {
     let saved = false,
       failure: string | undefined;
     try {
-      await this.service.feedback(id, decision.id, feedback);
+      await this.service.feedback(decision.sessionID, decision.id, feedback);
       saved = true;
     } catch {
       failure = "Could not confirm feedback; refresh to reconcile.";
@@ -269,6 +277,22 @@ export function summary(decisions: readonly Decision[]) {
     priced,
     unpriced,
   };
+}
+// The answers the panel offers for a decision, as the Claude Code plugin's pane offers them: a route's model fit,
+// or whether another app's call was right.
+export function answersOf(
+  decision: Pick<Decision, "app">,
+): { value: Feedback; title: string }[] {
+  return decision.app === "router"
+    ? [
+        { value: "right-model", title: "right model" },
+        { value: "needed-stronger", title: "needed stronger" },
+        { value: "could-be-lighter", title: "could be lighter" },
+      ]
+    : [
+        { value: "right", title: "right call" },
+        { value: "wrong", title: "wrong call" },
+      ];
 }
 export const APP_NAMES = {
   router: "Router",

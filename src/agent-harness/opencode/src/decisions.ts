@@ -132,6 +132,8 @@ function thresholdsOf(values: readonly number[] | undefined) {
 // Only a decision's clipped subject is kept of its text; prompts, outputs and model explanations are not.
 export class DecisionStore {
   private readonly sessions = new Map<string, Session>();
+  // Each subagent session's parent, so a session's view also lists what its subagents decided.
+  private readonly parents = new Map<string, string>();
   private readonly instanceID = crypto.randomUUID();
   private revision = 0;
   private readonly maxSessions: number;
@@ -160,6 +162,7 @@ export class DecisionStore {
     if (this.sessions.size > this.maxSessions) {
       const oldest = this.sessions.keys().next().value!;
       this.sessions.delete(oldest);
+      this.parents.delete(oldest);
       this.onChange?.(oldest, true);
     }
     return session;
@@ -331,14 +334,60 @@ export class DecisionStore {
     const session = this.touch(sessionID);
     session.decisions = restored;
     session.feedback = feedback;
+    if (typeof saved.parentID === "string" && saved.parentID !== sessionID)
+      this.parents.set(sessionID, saved.parentID);
     this.revision++;
   }
   // A session's decisions and feedback as an archive keeps them.
-  saved(
-    sessionID: string,
-  ): { decisions: Decision[]; feedback: Record<string, Feedback> } | undefined {
+  saved(sessionID: string):
+    | {
+        decisions: Decision[];
+        feedback: Record<string, Feedback>;
+        parentID?: string;
+      }
+    | undefined {
     const session = this.sessions.get(sessionID);
-    return session && structuredClone(session);
+    const parentID = this.parents.get(sessionID);
+    return (
+      session &&
+      structuredClone({ ...session, ...(parentID ? { parentID } : {}) })
+    );
+  }
+  // Records that a session is a subagent's, run from parentID.
+  adopt(sessionID: string, parentID: string): void {
+    if (
+      sessionID === parentID ||
+      this.parents.get(sessionID) === parentID ||
+      this.ancestors(parentID).includes(sessionID)
+    )
+      return;
+    this.parents.set(sessionID, parentID);
+    while (this.parents.size > this.maxSessions * 4)
+      this.parents.delete(this.parents.keys().next().value!);
+    this.revision++;
+    if (this.sessions.has(sessionID)) this.onChange?.(sessionID, false);
+  }
+  parentOf(sessionID: string): string | undefined {
+    return this.parents.get(sessionID);
+  }
+  // The sessions above one, nearest first.
+  ancestors(sessionID: string): string[] {
+    const found: string[] = [];
+    for (
+      let id = this.parents.get(sessionID);
+      id && id !== sessionID && !found.includes(id);
+      id = this.parents.get(id)
+    )
+      found.push(id);
+    return found;
+  }
+  // A session and every subagent session under it.
+  private family(sessionID: string): string[] {
+    const found = [sessionID];
+    for (let i = 0; i < found.length; i++)
+      for (const [child, parent] of this.parents)
+        if (parent === found[i] && !found.includes(child)) found.push(child);
+    return found;
   }
   observe(
     sessionID: string,
@@ -421,19 +470,28 @@ export class DecisionStore {
   changed(): void {
     this.revision++;
   }
+  // A session's decisions with its subagents' in time order; each keeps the sessionID it was made in.
   snapshot(sessionID: string): Snapshot {
-    const session = this.sessions.get(sessionID);
-    if (session) this.touch(sessionID);
+    if (this.sessions.has(sessionID)) this.touch(sessionID);
+    const sessions = this.family(sessionID)
+      .map((id) => this.sessions.get(id))
+      .filter((session) => session !== undefined);
     return structuredClone({
       version: 1,
       instanceID: this.instanceID,
       revision: this.revision,
       sessionID,
-      decisions: session?.decisions ?? [],
-      feedback: session?.feedback ?? {},
+      decisions: sessions
+        .flatMap((session) => session.decisions)
+        .sort((a, b) => a.at - b.at),
+      feedback: Object.assign(
+        {},
+        ...sessions.map((session) => session.feedback),
+      ),
     });
   }
   remove(sessionID: string): void {
+    this.parents.delete(sessionID);
     if (this.sessions.delete(sessionID)) this.revision++;
     this.onChange?.(sessionID, true);
   }

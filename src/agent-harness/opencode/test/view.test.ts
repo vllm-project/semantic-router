@@ -13,6 +13,7 @@ import {
   THEME_TOKENS,
   tokenCount,
   toneOf,
+  answersOf,
 } from "../src/view.ts";
 import type { ViewSnapshot, ViewState, ViewService } from "../src/view.ts";
 import { parseSettings } from "../src/settings.ts";
@@ -25,6 +26,7 @@ const snapshot = (
   instanceID = "instance",
 ): ViewSnapshot => ({
   ...new DecisionStore(2, 5).snapshot(sessionID),
+  answerable: [],
   instanceID,
   revision,
   apps: { ...config.apps },
@@ -118,8 +120,19 @@ test("feedback remains bound to its original session during selection changes", 
   const pending = deferred<unknown>();
   const seen: string[] = [];
   let latest: ViewState | undefined;
+  const decision = {
+    id: "decision",
+    sessionID: "A",
+    app: "guard" as const,
+    outcome: "held" as const,
+    at: 1,
+  };
   const view = new DecisionView(
     service({
+      snapshot: async (id) => ({
+        ...snapshot(id),
+        decisions: id === "A" ? [decision] : [],
+      }),
       feedback: async (id) => {
         seen.push(id);
         return pending.promise;
@@ -131,13 +144,6 @@ test("feedback remains bound to its original session during selection changes", 
   );
   view.select("A");
   await view.refresh();
-  const decision = {
-    id: "decision",
-    sessionID: "A",
-    app: "guard" as const,
-    outcome: "held" as const,
-    at: 1,
-  };
   const save = view.feedback(decision, "wrong");
   view.select("B");
   await view.refresh();
@@ -147,6 +153,42 @@ test("feedback remains bound to its original session during selection changes", 
   assert.equal(latest?.snapshot?.sessionID, "B");
   assert.equal(await view.feedback(decision, "right"), false);
   view.close();
+});
+test("a subagent's decision listed in its parent's view is answered in the subagent's session", async () => {
+  const seen: string[] = [];
+  const child = {
+    id: "read",
+    sessionID: "child",
+    app: "shield" as const,
+    outcome: "allowed" as const,
+    at: 2,
+  };
+  const view = new DecisionView(
+    service({
+      snapshot: async (id) => ({ ...snapshot(id), decisions: [child] }),
+      feedback: async (id, decisionID, feedback) => {
+        seen.push(`${id}:${decisionID}:${feedback}`);
+      },
+    }),
+    () => {},
+  );
+  view.select("parent");
+  await view.refresh();
+  assert.equal(await view.feedback(child, "right"), true);
+  assert.deepEqual(seen, ["child:read:right"]);
+  // A decision the view does not list is not sent.
+  assert.equal(await view.feedback({ ...child, id: "other" }, "right"), false);
+  view.close();
+});
+test("the panel offers a route's model fit, and right or wrong for other apps", () => {
+  assert.deepEqual(
+    answersOf({ app: "router" }).map((choice) => choice.value),
+    ["right-model", "needed-stronger", "could-be-lighter"],
+  );
+  assert.deepEqual(
+    answersOf({ app: "shield" }).map((choice) => choice.value),
+    ["right", "wrong"],
+  );
 });
 test("usage summaries deduplicate children and suppress estimates with unknown pricing", () => {
   const base = {

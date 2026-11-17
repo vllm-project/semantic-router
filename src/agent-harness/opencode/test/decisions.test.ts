@@ -150,3 +150,50 @@ test("a decision keeps the thresholds in force when it was made", () => {
     undefined,
   );
 });
+
+test("a session's view lists its subagents' decisions in time order, each in its own session", () => {
+  const store = new DecisionStore(8, 10);
+  const route = store.record({
+    sessionID: "main",
+    app: "router",
+    outcome: "routed",
+  });
+  const read = store.record({
+    sessionID: "child",
+    app: "shield",
+    outcome: "allowed",
+  });
+  const deeper = store.record({
+    sessionID: "grandchild",
+    app: "redact",
+    outcome: "redacted",
+  });
+  store.record({ sessionID: "other", app: "guard", outcome: "held" });
+  assert.deepEqual(
+    store.snapshot("main").decisions.map((decision) => decision.id),
+    [route.id],
+  );
+  store.adopt("child", "main");
+  store.adopt("grandchild", "child");
+  store.label("child", read.id, "right");
+  const view = store.snapshot("main");
+  assert.deepEqual(
+    view.decisions.map((decision) => [decision.id, decision.sessionID]),
+    [
+      [route.id, "main"],
+      [read.id, "child"],
+      [deeper.id, "grandchild"],
+    ],
+  );
+  assert.deepEqual(view.feedback, { [read.id]: "right" });
+  assert.deepEqual(store.ancestors("grandchild"), ["child", "main"]);
+  // The child's own view holds only what was decided under it, and a loop is refused.
+  assert.equal(store.snapshot("child").decisions.length, 2);
+  store.adopt("main", "grandchild");
+  assert.equal(store.parentOf("main"), undefined);
+  store.remove("child");
+  assert.deepEqual(
+    store.ancestors("grandchild"),
+    ["child", "main"].slice(0, 1),
+  );
+});

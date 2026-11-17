@@ -138,6 +138,14 @@ export async function fixture(t: TestContext, strict = false) {
                 : "cat fixture.txt",
         ...(label === "BACKGROUND" ? { background: true } : {}),
       };
+    } else if (label === "SUBAGENT") {
+      // An Explore subagent that reads the fixture file in its own session.
+      name = "subagent";
+      args = {
+        agent: "explore",
+        description: "Read the fixture",
+        prompt: "OUTPUT_CASE READ",
+      };
     } else if (label === "WEB") {
       name = "webfetch";
       const address = server.address();

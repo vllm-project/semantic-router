@@ -150,6 +150,7 @@ export const Vsr = Rpc.define({
             type: "object",
             additionalProperties: { type: "string", enum: [...FEEDBACK] },
           },
+          answerable: { type: "array", items: id },
           apps: appFlags,
           controls: {
             type: "object",
@@ -201,6 +202,7 @@ export const Vsr = Rpc.define({
           "waits",
           "calibration",
           "runtime",
+          "answerable",
         ],
         additionalProperties: false,
       },

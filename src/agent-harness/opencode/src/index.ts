@@ -175,14 +175,21 @@ export default Plugin.define({
     );
     await controls.load(() => ctx.storage.get("controls.v1"));
     const registration = await ctx.rpc.register(Vsr, {
-      snapshot: async (input) => ({
-        ...decisions.snapshot(sessionID(input)),
-        apps: { ...settings.apps },
-        waits: { ...settings.waits },
-        controls: controls.state(),
-        calibration: calibrationState(),
-        runtime: runtime.status(),
-      }),
+      snapshot: async (input) => {
+        const found = decisions.snapshot(sessionID(input));
+        return {
+          ...found,
+          // The decisions an answer teaches calibration: those in the decision log.
+          answerable: found.decisions
+            .filter((decision) => log.has(decision.id))
+            .map((decision) => decision.id),
+          apps: { ...settings.apps },
+          waits: { ...settings.waits },
+          controls: controls.state(),
+          calibration: calibrationState(),
+          runtime: runtime.status(),
+        };
+      },
       diagnose: async (_input, request) => {
         const result = await runtime.discover(3000, request.signal);
         decisions.changed();
@@ -297,14 +304,7 @@ export default Plugin.define({
         )
           throw new Error("Invalid feedback");
         decisions.label(id, input.decisionID, input.feedback as Feedback);
-        const { instanceID, revision } = decisions.snapshot(id);
-        await registration.events
-          .emit("updated", {
-            instanceID,
-            sessionID: id,
-            revision,
-          })
-          .catch(() => {});
+        await notify(id);
         return { saved: true };
       },
     });
@@ -315,11 +315,37 @@ export default Plugin.define({
         .emit("stateChanged", { instanceID, revision })
         .catch(() => {});
     }
+    // Sessions known to have no parent; a subagent's session is adopted by its parent instead.
+    const roots = new Set<string>();
+    async function adopt(id: string): Promise<void> {
+      for (let depth = 0; depth < 8 && !roots.has(id); depth++) {
+        let parentID = decisions.parentOf(id);
+        if (!parentID) {
+          try {
+            parentID = (await ctx.session.get({ sessionID: id })).parentID;
+          } catch {
+            return;
+          }
+          if (!parentID) {
+            roots.add(id);
+            while (roots.size > settings.maxSessions * 4)
+              roots.delete(roots.values().next().value!);
+            return;
+          }
+          decisions.adopt(id, parentID);
+        }
+        id = parentID;
+      }
+    }
+    // Tells the views of the session and of the sessions above it, which list its decisions too.
     const notify = async (id: string): Promise<void> => {
-      const { instanceID, revision } = decisions.snapshot(id);
-      await registration.events
-        .emit("updated", { instanceID, sessionID: id, revision })
-        .catch(() => {});
+      await adopt(id);
+      for (const sessionID of [id, ...decisions.ancestors(id)]) {
+        const { instanceID, revision } = decisions.snapshot(sessionID);
+        await registration.events
+          .emit("updated", { instanceID, sessionID, revision })
+          .catch(() => {});
+      }
     };
     const closeRouting = await registerRouting(
       ctx,

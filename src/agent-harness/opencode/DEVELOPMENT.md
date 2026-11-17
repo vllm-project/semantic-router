@@ -307,7 +307,10 @@ with least recently used session eviction.
 
 Use arrows and Enter in native dialogs, Escape to dismiss. Composer counts and
 the panel show metadata, reasons, coverage, partial/withheld/unverified states,
-planned/observed models and confirmed feedback. The 2.2.0 SDK has no per-tool
+planned/observed models and confirmed feedback. While the panel has focus,
+`↑`/`↓` pick a decision and `1`-`3` answer it; a mouse press on an answer does
+the same. Answers are offered only for the decisions the snapshot lists in
+`answerable` (those in the calibration log). The 2.2.0 SDK has no per-tool
 activity annotation slot: the panel associates decisions by tool-call, turn or
 message identity instead. Rendering never classifies or generates; only explicit
 Diagnose queries capabilities. The panel replaces host fallback content only
@@ -333,8 +336,12 @@ are valid. These estimates are not billing receipts or savings measurements.
 The server registers RPC `vsr.opencode.v1` with `snapshot`, `diagnose`, `verify`,
 `controls`, `feedback` and the `calibration*` methods. `diagnose` queries runtime capabilities and
 `verify` asks the runtime check's cases; loading the package alone sends no content to a model. Import the exported `./rpc`
-definition to call these through an OpenCode client. Snapshots are scoped to the
-requested session. Of a decision's text only its subject is kept: the command,
+definition to call these through an OpenCode client. A snapshot holds the
+requested session's decisions and those of the subagent sessions under it, in
+time order, each with the `sessionID` it was made in; feedback is sent with that
+session. The server learns a session's parent from OpenCode when it first
+records a decision there, keeps it with the session in plugin storage, and
+notifies the views of the session and of every session above it. Of a decision's text only its subject is kept: the command,
 child task, prompt or output source (file, address or command, never the output
 itself), on one line, at most 200 characters, with fixed secret patterns hidden.
 Each decision also keeps a copy of its app's thresholds when it was made

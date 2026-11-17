@@ -7,20 +7,11 @@ import { fixture } from "./output-fixture.ts";
 import type { ViewSnapshot } from "../../src/view.ts";
 
 test(
-  "packed native TUI renders decisions and keyboard app/wait/feedback controls change authoritative state",
+  "packed native TUI renders decisions, slash app/wait controls and panel answers change authoritative state",
   { timeout: 60000 },
   async (t) => {
     const native = await fixture(t);
     const first = await native.run("OUTPUT_CASE READ");
-    await native.api(
-      `/api/session/${first.sessionID}`,
-      { title: "First fixture session" },
-      "PATCH",
-    );
-    const second = (await native.api("/api/session", {
-      title: "Second fixture session",
-      model: { providerID: "fixture", id: "middle" },
-    })) as { data: { id: string } };
     const generations = native.requests.length,
       classifications = native.states.length;
     const screen = await native.terminal(
@@ -37,16 +28,15 @@ test(
         { at: 6500, keys: "\r" },
         { at: 7000, keys: "\r" },
         { at: 7500, keys: "\u001b[B\r" }, // Strict is the final option.
-        { at: 8500, keys: "/vsr-feedback" },
-        { at: 9000, keys: "\r" },
-        { at: 9500, keys: "\r" },
-        { at: 10000, keys: "\u001b[B\r" }, // Wrong decision.
+        { at: 8500, keys: "\u0018" }, // ctrl+x →: into the panel.
+        { at: 8700, keys: "\u001b[C" },
+        { at: 9200, keys: "\u001b[B" }, // Picks the newest decision.
+        { at: 9600, keys: "2" }, // Its second answer: wrong call.
+        { at: 10200, keys: "\u0018" },
+        { at: 10400, keys: "\u001b[D" },
         { at: 11000, keys: "/vsr-check" },
         { at: 11500, keys: "\r" },
         { at: 13000, keys: "\r" }, // Close its report.
-        { at: 14000, keys: "/vsr-sessions" },
-        { at: 14500, keys: "\r" },
-        { at: 15000, keys: "\u001b[B\r" },
         { at: 16000, keys: "/vsr" },
         { at: 16500, keys: "\r" },
         { at: 17500, resize: [46, 161] },
@@ -85,8 +75,11 @@ test(
     );
     assert.equal(snapshot.controls.persistence, "durable");
     assert.equal(snapshot.runtime.models[0]?.id, "fixture");
-    assert.ok(screen.text.includes("Second fixture session"));
-    assert.ok(screen.text.includes(second.data.id), screen.text.slice(-8000));
+    // An answer not given is a bracketed button; the given one is filled, without brackets.
+    assert.ok(
+      /\[1 right call\] {1,2}2 wrong call /.test(screen.text),
+      "the answer given is filled in the panel: " + screen.text.slice(-8000),
+    );
     assert.equal(
       native.requests.length,
       generations,
@@ -103,7 +96,6 @@ test(
       "only /vsr-check's cases are classified, never the rendering: " +
         JSON.stringify(asked),
     );
-    assert.notEqual(second.data.id, first.sessionID);
   },
 );
 
@@ -255,5 +247,40 @@ test(
     assert.match(screen.last, /vSR +· 2 decisions · \/vsr/, screen.last);
     assert.match(screen.last, /▒ redacted +read …\/fixture\.txt/, screen.last);
     assert.match(screen.last, /◆ shielded +read …\/fixture\.txt/, screen.last);
+  },
+);
+
+test(
+  "a subagent's decisions are listed in its parent's panel, and a click on an answer saves it",
+  { timeout: 90000 },
+  async (t) => {
+    const native = await fixture(t);
+    const run = await native.run("OUTPUT_CASE SUBAGENT");
+    const open = [
+      { at: 2000, keys: "/vsr" },
+      { at: 2500, keys: "\r" },
+    ];
+    const shown = await native.terminal(run.sessionID, open, 5);
+    const lines = shown.last.split("\n");
+    const row = lines.findIndex((line) => line.includes("[2 wrong call]"));
+    assert.ok(row >= 0, shown.last);
+    assert.equal(
+      lines.filter((line) => line.includes("· in a subagent")).length,
+      2,
+      shown.last,
+    );
+    // An SGR mouse press and release on the first decision's "wrong call".
+    const at = `${lines[row]!.indexOf("[2 wrong call]") + 4};${row + 1}`;
+    await native.terminal(
+      run.sessionID,
+      [...open, { at: 3500, keys: `\u001b[<0;${at}M\u001b[<0;${at}m` }],
+      5,
+    );
+    const snapshot = (await native.rpc("snapshot", {
+      sessionID: run.sessionID,
+    })) as ViewSnapshot;
+    const newest = snapshot.decisions.at(-1)!;
+    assert.notEqual(newest.sessionID, run.sessionID);
+    assert.deepEqual(snapshot.feedback, { [newest.id]: "wrong" });
   },
 );

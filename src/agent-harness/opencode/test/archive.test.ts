@@ -144,3 +144,21 @@ test("the archive drops what fails the checks and follows the store's limits", a
   );
   assert.deepEqual(bad.feedback, {});
 });
+
+test("a restarted server still lists a subagent's decisions under its parent", async () => {
+  const store = memory();
+  const before = new DecisionStore(4, 10);
+  const archive = new SessionArchive(store, before);
+  await archive.load();
+  before.record({ sessionID: "main", app: "router", outcome: "routed" });
+  before.record({ sessionID: "child", app: "shield", outcome: "allowed" });
+  before.adopt("child", "main");
+  await archive.close();
+
+  const after = new DecisionStore(4, 10);
+  await new SessionArchive(store, after).load();
+  assert.deepEqual(
+    after.snapshot("main").decisions.map((decision) => decision.sessionID),
+    ["main", "child"],
+  );
+});

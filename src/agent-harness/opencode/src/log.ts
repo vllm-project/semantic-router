@@ -248,6 +248,9 @@ export class DecisionLog {
     for (const line of this.lines.values()) if (line.at > at) count++;
     return count;
   }
+  has(id: string): boolean {
+    return this.lines.has(id);
+  }
   all(): LogLine[] {
     return structuredClone([...this.lines.values()]);
   }
