@@ -122,7 +122,9 @@ def test_agent_rule_refuses_what_the_router_refuses(rule, message):
     "harness", ["claude_code", "codex", "opencode", "deepseek_harness"]
 )
 def test_agent_rule_accepts_every_harness_the_router_names(harness):
-    assert AgentRule.model_validate({"name": "x", "harness": harness}).harness == harness
+    assert (
+        AgentRule.model_validate({"name": "x", "harness": harness}).harness == harness
+    )
 
 
 def test_agent_rule_matches_request_classes():
