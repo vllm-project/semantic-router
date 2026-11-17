@@ -21851,6 +21851,178 @@
                                   ]
                                 }
                               },
+                              "retention": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "acknowledged": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "actions": {
+                                        "nullable": true,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "feature": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "feature"
+                                          ]
+                                        }
+                                      },
+                                      "capability": {
+                                        "type": "object",
+                                        "properties": {
+                                          "backend": {
+                                            "type": "string"
+                                          },
+                                          "features": {
+                                            "nullable": true,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "version": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "backend",
+                                          "version"
+                                        ]
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "capability",
+                                      "status"
+                                    ]
+                                  },
+                                  "observed": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "enforced": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "status",
+                                      "enforced"
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "requested": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "drop": {
+                                        "nullable": true,
+                                        "type": "boolean"
+                                      },
+                                      "keep_current_model": {
+                                        "nullable": true,
+                                        "type": "boolean"
+                                      },
+                                      "prefer_prefix_retention": {
+                                        "nullable": true,
+                                        "type": "boolean"
+                                      },
+                                      "ttl_turns": {
+                                        "nullable": true,
+                                        "type": "integer"
+                                      }
+                                    }
+                                  },
+                                  "schema_version": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "translated": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "actions": {
+                                        "nullable": true,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "feature": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "feature"
+                                          ]
+                                        }
+                                      },
+                                      "capability": {
+                                        "type": "object",
+                                        "properties": {
+                                          "backend": {
+                                            "type": "string"
+                                          },
+                                          "features": {
+                                            "nullable": true,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "version": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "backend",
+                                          "version"
+                                        ]
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "capability",
+                                      "status"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "schema_version",
+                                  "status"
+                                ]
+                              },
                               "routing_input_skipped_messages": {
                                 "type": "integer"
                               },
@@ -29203,6 +29375,178 @@
                               "request_generation"
                             ]
                           }
+                        },
+                        "retention": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "acknowledged": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "actions": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "feature": {
+                                        "type": "string"
+                                      },
+                                      "value": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "feature"
+                                    ]
+                                  }
+                                },
+                                "capability": {
+                                  "type": "object",
+                                  "properties": {
+                                    "backend": {
+                                      "type": "string"
+                                    },
+                                    "features": {
+                                      "nullable": true,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "version": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "backend",
+                                    "version"
+                                  ]
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "capability",
+                                "status"
+                              ]
+                            },
+                            "observed": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "enforced": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "status",
+                                "enforced"
+                              ]
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "requested": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "drop": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "keep_current_model": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "prefer_prefix_retention": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "ttl_turns": {
+                                  "nullable": true,
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "schema_version": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "translated": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "actions": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "feature": {
+                                        "type": "string"
+                                      },
+                                      "value": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "feature"
+                                    ]
+                                  }
+                                },
+                                "capability": {
+                                  "type": "object",
+                                  "properties": {
+                                    "backend": {
+                                      "type": "string"
+                                    },
+                                    "features": {
+                                      "nullable": true,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "version": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "backend",
+                                    "version"
+                                  ]
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "capability",
+                                "status"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "schema_version",
+                            "status"
+                          ]
                         },
                         "routing_input_skipped_messages": {
                           "type": "integer"
