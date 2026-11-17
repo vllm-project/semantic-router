@@ -10,7 +10,8 @@ Install:
 - Docker or Podman;
 - Make;
 - Git; and
-- Python 3.10 or newer for the CLI, tests, or training tools you plan to use.
+- Python 3.10 or newer for the CLI and tests, and Python 3.11 or newer for the
+  training projects under `src/training/`.
 
 Clone the repository:
 
