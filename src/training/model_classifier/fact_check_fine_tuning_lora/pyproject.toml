@@ -5,7 +5,7 @@ description = "Environment for the fact-check LoRA scripts under src/training/mo
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "accelerate>=0.28,<2",
-    "datasets>=2.19,<5",
+    "datasets>=2.19,<6",
     "numpy>=1.24,<3",
     "peft>=0.10,<1",
     "pyarrow>=14,<26",
