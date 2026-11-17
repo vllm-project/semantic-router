@@ -1,7 +1,9 @@
 import importlib.util
 import os
+import re
 import sys
 import unittest
+from collections import Counter
 from pathlib import Path
 from unittest import mock
 from urllib.parse import quote, unquote
@@ -18,6 +20,7 @@ community_lifecycle = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = community_lifecycle
 SPEC.loader.exec_module(community_lifecycle)
 community_lifecycle_github = sys.modules["community_lifecycle_github"]
+community_reviewers = sys.modules["community_reviewers"]
 
 
 def labels(*names: str) -> list[dict[str, str]]:
@@ -609,6 +612,10 @@ class FakePullRequestApi:
         self.fetched: list[int] = []
         self.added: set[str] = set()
         self.removed: set[str] = set()
+        self.requested_reviewers: dict[int, set[str]] = {}
+        self.reviews: dict[int, list[dict]] = {}
+        self.review_posts: list[tuple[int, str]] = []
+        self.review_removals: list[tuple[int, str]] = []
 
     def request(
         self,
@@ -627,6 +634,21 @@ class FakePullRequestApi:
         number = int(parts[4])
         if parts[3] == "pulls":
             self.fetched.append(number)
+            if parts[5:] == ["requested_reviewers"]:
+                if method == "POST":
+                    reviewer = payload["reviewers"][0]
+                    self.requested_reviewers.setdefault(number, set()).add(reviewer)
+                    self.review_posts.append((number, reviewer))
+                elif method == "DELETE":
+                    reviewer = payload["reviewers"][0]
+                    self.requested_reviewers.setdefault(number, set()).discard(reviewer)
+                    self.review_removals.append((number, reviewer))
+                return {
+                    "users": [
+                        {"login": login}
+                        for login in self.requested_reviewers.get(number, set())
+                    ]
+                }
             return self.pull_requests.get(number)
         tail = parts[5:]
         if not tail:
@@ -650,6 +672,22 @@ class FakePullRequestApi:
                         "closingIssuesReferences": {"nodes": nodes},
                         "reviewDecision": signals.get("review_decision"),
                         "mergeStateStatus": signals.get("merge_state"),
+                        "reviewRequests": {
+                            "nodes": [
+                                {"requestedReviewer": {"login": login}}
+                                for login in self.requested_reviewers.get(
+                                    int(pull_request["number"]), set()
+                                )
+                            ]
+                        },
+                        "latestReviews": {
+                            "nodes": [
+                                {"author": review.get("user")}
+                                for review in self.reviews.get(
+                                    int(pull_request["number"]), []
+                                )
+                            ]
+                        },
                         "commits": {
                             "nodes": [{"commit": {"statusCheckRollup": rollup}}]
                         },
@@ -721,7 +759,211 @@ class PullRequestReconciliationTests(unittest.TestCase):
 
         self.assertEqual(client.added, {"pr/merge-ready"})
 
-    def test_synchronized_pull_request_costs_three_reads_and_no_writes(self) -> None:
+    def test_each_workgroup_routes_to_active_maintainers_or_committers(self) -> None:
+        self.assertEqual(
+            set(community_reviewers.WORKGROUP_REVIEWERS),
+            set(community_lifecycle.WORKGROUP_LABELS),
+        )
+        data = REPO_ROOT / "website/src/data"
+        workgroups = (data / "workGroups.ts").read_text()
+        member_types = {
+            login.casefold(): member_type
+            for login, member_type in re.findall(
+                r"github: 'https://github\.com/([^']+)'.*?memberType: '(\w+)'",
+                (data / "teamMembers.tsx").read_text(),
+                flags=re.S,
+            )
+        }
+        committer_status = {
+            login.casefold(): status
+            for login, status in re.findall(
+                r'"login": "([^"]+)".*?"status": "(\w+)"',
+                (data / "committerActivity.generated.ts").read_text(),
+                flags=re.S,
+            )
+        }
+        for owner, leads in community_reviewers.WORKGROUP_REVIEWERS.items():
+            self.assertIn(f"label: '{owner}'", workgroups)
+            self.assertTrue(leads, owner)
+            keys = [login.casefold() for login in leads]
+            self.assertEqual(len(keys), len(set(keys)), owner)
+            for login in keys:
+                member_type = member_types.get(login)
+                self.assertTrue(
+                    member_type == "maintainer"
+                    or (
+                        member_type == "committer"
+                        and committer_status.get(login) == "active"
+                    ),
+                    f"{owner}: {login}",
+                )
+
+    def test_default_reviewers_match_codeowners(self) -> None:
+        codeowners = (REPO_ROOT / ".github/CODEOWNERS").read_text().splitlines()
+        owners = next(line.split()[1:] for line in codeowners if line.startswith("* "))
+        self.assertEqual(
+            {owner.removeprefix("@") for owner in owners},
+            set(community_reviewers.DEFAULT_REVIEWERS),
+        )
+
+    def test_rotation_gives_every_eligible_lead_an_equal_share(self) -> None:
+        for owner in community_reviewers.WORKGROUP_REVIEWERS:
+            leads = community_reviewers.workgroup_reviewers(owner, "contributor")
+            picks = Counter(
+                community_reviewers.desired_workgroup_reviewer(
+                    owner, number, "contributor"
+                )
+                for number in range(3 * len(leads))
+            )
+            self.assertEqual(picks, Counter(dict.fromkeys(leads, 3)), owner)
+
+    def test_author_and_repository_wide_reviewers_are_skipped(self) -> None:
+        reviewers = community_reviewers.workgroup_reviewers
+        self.assertNotIn("Xunzhuo", reviewers("wg/mom-routing", "contributor"))
+        self.assertEqual(
+            reviewers("wg/evaluation-quality", "faust-benchou"), ("Zi-Yi-Ming",)
+        )
+        self.assertIsNone(
+            community_reviewers.desired_workgroup_reviewer(
+                "wg/enterprise-environment", 7, "AayushSaini101"
+            )
+        )
+        self.assertEqual(reviewers(None, "contributor"), ())
+        with mock.patch.dict(
+            community_reviewers.WORKGROUP_REVIEWERS,
+            {"wg/evaluation-quality": ("Xunzhuo", "FAUST-BENCHOU")},
+        ):
+            self.assertEqual(
+                reviewers("wg/evaluation-quality", "FAUST-BENCHOU"), ("Xunzhuo",)
+            )
+
+    def test_requests_one_workgroup_reviewer_once(self) -> None:
+        pull_request = self.pull_request(
+            state="open",
+            labels=[],
+            user={"type": "User", "login": "contributor"},
+        )
+        client = FakePullRequestApi([pull_request], [self.accepted_issue()])
+
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+        self.assertEqual(len(client.review_posts), 1)
+        self.assertIn(
+            client.review_posts[0][1],
+            community_reviewers.WORKGROUP_REVIEWERS["wg/mom-routing"],
+        )
+
+    def test_does_not_request_author_or_repeat_completed_review(self) -> None:
+        owner = "wg/evaluation-quality"
+        candidate = community_reviewers.desired_workgroup_reviewer(
+            owner, 7, "FAUST-BENCHOU"
+        )
+        self.assertEqual(candidate, "Zi-Yi-Ming")
+        pull_request = self.pull_request(
+            state="open",
+            labels=[],
+            user={"type": "User", "login": "FAUST-BENCHOU"},
+            closes=[5],
+        )
+        issue = {**self.accepted_issue(), "labels": labels("accepted", owner)}
+        client = FakePullRequestApi([pull_request], [issue])
+        client.reviews[7] = [{"user": {"login": candidate}, "state": "COMMENTED"}]
+
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+        self.assertEqual(client.review_posts, [])
+
+    def test_engaged_lead_is_not_joined_by_another(self) -> None:
+        owner = "wg/mom-routing"
+        reviewer = community_reviewers.desired_workgroup_reviewer(
+            owner, 7, "contributor"
+        )
+        other = next(
+            login
+            for login in community_reviewers.workgroup_reviewers(owner, "contributor")
+            if login != reviewer
+        )
+        pull_request = self.pull_request(
+            state="open",
+            labels=[],
+            user={"type": "User", "login": "contributor"},
+        )
+        client = FakePullRequestApi([pull_request], [self.accepted_issue()])
+        client.reviews[7] = [{"user": {"login": other}, "state": "APPROVED"}]
+
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+        self.assertEqual(client.review_posts, [])
+
+    def test_repository_wide_request_does_not_stand_in_for_the_group(self) -> None:
+        pull_request = self.pull_request(
+            state="open",
+            labels=[],
+            user={"type": "User", "login": "contributor"},
+        )
+        client = FakePullRequestApi([pull_request], [self.accepted_issue()])
+        client.requested_reviewers[7] = set(community_reviewers.DEFAULT_REVIEWERS)
+
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+        self.assertEqual(
+            client.review_posts,
+            [
+                (
+                    7,
+                    community_reviewers.desired_workgroup_reviewer(
+                        "wg/mom-routing", 7, "contributor"
+                    ),
+                )
+            ],
+        )
+
+    def test_draft_or_unaccepted_pr_does_not_request_review(self) -> None:
+        draft = self.pull_request(state="open", draft=True)
+        unaccepted = self.pull_request(state="open", number=8, closes=[6])
+        issue = {"number": 6, "labels": labels("needs-acceptance", "wg/mom-routing")}
+        client = FakePullRequestApi([draft, unaccepted], [self.accepted_issue(), issue])
+
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+        community_lifecycle_github.sync_pull_request(client, self.REPO, 8)
+
+        self.assertEqual(client.review_posts, [])
+
+    def owner_change(self, old_roster, new_roster, requested):
+        old_owner = "wg/mom-routing"
+        new_owner = "wg/evaluation-quality"
+        pull_request = self.pull_request(
+            state="open",
+            labels=labels(old_owner),
+            user={"type": "User", "login": "contributor"},
+        )
+        issue = {**self.accepted_issue(), "labels": labels("accepted", new_owner)}
+        client = FakePullRequestApi([pull_request], [issue])
+        client.requested_reviewers[7] = set(requested)
+        rosters = {old_owner: old_roster, new_owner: new_roster}
+        with mock.patch.dict(community_reviewers.WORKGROUP_REVIEWERS, rosters):
+            community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+        return client
+
+    def test_owner_change_replaces_outstanding_group_request(self) -> None:
+        client = self.owner_change(("old-lead",), ("new-lead",), {"old-lead", "rootfs"})
+
+        self.assertEqual(client.review_removals, [(7, "old-lead")])
+        self.assertEqual(client.review_posts, [(7, "new-lead")])
+
+    def test_owner_change_keeps_shared_and_repository_wide_requests(self) -> None:
+        for previous, new_roster, posts in (
+            ("shared-lead", ("new-lead", "shared-lead"), []),
+            ("Xunzhuo", ("new-lead",), [(7, "new-lead")]),
+        ):
+            with self.subTest(previous=previous):
+                client = self.owner_change((previous,), new_roster, {previous})
+
+                self.assertEqual(client.review_removals, [])
+                self.assertEqual(client.review_posts, posts)
+
+    def test_synchronized_pull_request_does_not_repeat_review_request(self) -> None:
         pull_request = self.pull_request(
             state="open",
             labels=labels("pr/merge-ready", "wg/mom-routing"),
@@ -732,6 +974,10 @@ class PullRequestReconciliationTests(unittest.TestCase):
             },
         )
         client = FakePullRequestApi([pull_request], [self.accepted_issue()])
+        reviewer = community_reviewers.desired_workgroup_reviewer(
+            "wg/mom-routing", 7, ""
+        )
+        client.requested_reviewers[7] = {reviewer}
 
         community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
 

@@ -29,6 +29,11 @@ from community_lifecycle_policy import (
     plan_issue_kind,
     title_format_error,
 )
+from community_reviewers import (
+    DEFAULT_REVIEWERS,
+    desired_workgroup_reviewer,
+    workgroup_reviewers,
+)
 
 # gh prints "message (HTTP 502)" for a JSON error and a bare "HTTP 502" otherwise.
 SERVER_ERROR = re.compile(
@@ -633,6 +638,10 @@ PULL_REQUEST_QUERY = """
       pullRequest(number: $number) {
         reviewDecision
         mergeStateStatus
+        reviewRequests(first: 100) {
+          nodes { requestedReviewer { ... on User { login } } }
+        }
+        latestReviews(first: 100) { nodes { author { login } } }
         closingIssuesReferences(first: 20) { nodes { number } }
         commits(last: 1) {
           nodes { commit { statusCheckRollup { state } } }
@@ -761,6 +770,71 @@ def sync_pull_request(
             method="PATCH",
             payload={"milestone": evaluation.milestone_number},
         )
+
+    if (
+        pull_request.get("state") == "open"
+        and not pull_request.get("draft")
+        and evaluation.valid
+    ):
+        request_workgroup_review(
+            client,
+            repo,
+            pull_request,
+            graph,
+            evaluation.owner_label,
+            current_workgroups,
+        )
+
+
+def request_workgroup_review(
+    client: GitHubClient,
+    repo: str,
+    pull_request: dict[str, Any],
+    graph: dict[str, Any],
+    owner_label: str | None,
+    previous_workgroups: set[str],
+) -> None:
+    """Request one Lead of the owning group unless one is already engaged."""
+
+    number = int(pull_request["number"])
+    author = (pull_request.get("user") or {}).get("login") or ""
+    leads = {login.casefold() for login in workgroup_reviewers(owner_label, author)}
+    keep = leads | {login.casefold() for login in DEFAULT_REVIEWERS}
+    requested_logins = {
+        requested_user["login"].casefold()
+        for node in (graph.get("reviewRequests") or {}).get("nodes") or []
+        if (requested_user := node.get("requestedReviewer"))
+        and requested_user.get("login")
+    }
+    for previous_owner in previous_workgroups - {owner_label}:
+        previous_reviewer = desired_workgroup_reviewer(previous_owner, number, author)
+        if (
+            previous_reviewer
+            and previous_reviewer.casefold() in requested_logins
+            and previous_reviewer.casefold() not in keep
+        ):
+            client.request(
+                f"repos/{repo}/pulls/{number}/requested_reviewers",
+                method="DELETE",
+                payload={"reviewers": [previous_reviewer]},
+            )
+
+    reviewed_logins = {
+        review_author["login"].casefold()
+        for node in (graph.get("latestReviews") or {}).get("nodes") or []
+        if (review_author := node.get("author")) and review_author.get("login")
+    }
+    if leads & (requested_logins | reviewed_logins):
+        return
+    reviewer = desired_workgroup_reviewer(owner_label, number, author)
+    if not reviewer:
+        return
+
+    client.request(
+        f"repos/{repo}/pulls/{number}/requested_reviewers",
+        method="POST",
+        payload={"reviewers": [reviewer]},
+    )
 
 
 def sync_pull_request_event(client: GitHubClient, event: dict[str, Any]) -> None:
