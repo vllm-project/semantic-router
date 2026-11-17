@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 )
 
 type replayRuntimeStub struct {
+	ctx           context.Context
 	method        string
 	requestTarget string
 	response      routerruntime.ReplayResponse
@@ -25,10 +27,12 @@ type replayRuntimeStub struct {
 }
 
 func (runtime *replayRuntimeStub) HandleReplayRequest(
+	ctx context.Context,
 	method string,
 	requestTarget string,
 ) (routerruntime.ReplayResponse, bool) {
 	runtime.calls++
+	runtime.ctx = ctx
 	runtime.method = method
 	runtime.requestTarget = requestTarget
 	return runtime.response, runtime.handled
@@ -109,6 +113,10 @@ func assertViewerReplayResponse(
 	assertReplayStatus(t, response, http.StatusOK, "viewer")
 	if runtime.method != http.MethodGet || runtime.requestTarget != wantTarget {
 		t.Fatalf("forwarded replay request = %s %s", runtime.method, runtime.requestTarget)
+	}
+	// The read runs under the request's context, so it ends when the client leaves.
+	if _, ok := managementPrincipalFromContext(runtime.ctx); !ok {
+		t.Fatal("replay runtime did not receive the authenticated request's context")
 	}
 	if response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("Cache-Control = %q, want no-store", response.Header().Get("Cache-Control"))

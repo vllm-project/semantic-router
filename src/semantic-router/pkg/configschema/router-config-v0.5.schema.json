@@ -51,7 +51,8 @@
           "type": "string",
           "enum": [
             "claude_code",
-            "codex"
+            "codex",
+            "opencode"
           ]
         },
         "types": {

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -99,7 +100,7 @@ func TestReplayTrajectorySeparatesConversationTurns(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	response := r.handleRouterReplayTrajectoryAPI("GET", "session_id=shared-session&recipe=same-recipe").GetImmediateResponse()
+	response := r.handleRouterReplayTrajectoryAPI(context.Background(), "GET", "session_id=shared-session&recipe=same-recipe").GetImmediateResponse()
 	if int(response.Status.Code) != 200 {
 		t.Fatal("trajectory failed")
 	}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<body>
+<div id="links" class="results">
+  <div class="result web-result">
+    <div class="links_main result__body">
+      <a class="result__a" href="javascript:alert(1)">Script scheme without redirect</a>
+      <a class="result__snippet">Should be dropped</a>
+    </div>
+  </div>
+  <div class="result web-result">
+    <div class="links_main result__body">
+      <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fduckduckgo.com%2Fsettings&amp;rut=1">DuckDuckGo internal page</a>
+      <a class="result__snippet">Should be dropped</a>
+    </div>
+  </div>
+  <div class="result web-result">
+    <div class="links_main result__body">
+      <a class="result__a" href="//duckduckgo.com/l/?uddg=data%3Atext%2Fhtml%2Cpayload&amp;rut=2">Data URL behind redirect</a>
+      <a class="result__snippet">Should be dropped</a>
+    </div>
+  </div>
+  <div class="result web-result">
+    <div class="links_main result__body">
+      <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fsafe.example%2Fpage&amp;rut=3">Safe result</a>
+      <a class="result__snippet">Kept</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>
