@@ -245,6 +245,8 @@ providers:
       # Request capabilities the backends reject, as vLLM rejects min_p and
       # logit_bias under speculative decoding: the Router sends this model
       # requests without those fields and reports each in x-vsr-warnings.
+      # developer_role, for a model that drops developer messages as DeepSeek V4
+      # does, sends them to it as system messages instead.
       unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
       backend_refs:
         - name: omni-primary
