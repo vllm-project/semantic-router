@@ -8,7 +8,7 @@ import { canRunEvaluation, canWriteConfig } from '../utils/accessControl'
 import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import { TriangleAlert } from 'lucide-react'
 import RouteLoadingFallback from '../app/RouteLoadingFallback'
-import { Button, EmptyState, PageContainer } from '../ui'
+import { Button, EmptyState, PageContainer, toast } from '../ui'
 import { responseConfigWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import {
   canonicalizeConfigForManagerSave,
@@ -19,6 +19,24 @@ import { getNormalizedModels } from './configPageModelNormalization'
 import { responseErrorMessage } from './configPageRequestErrors'
 import type { OpenViewModal } from './configPageRouterSectionSupport'
 import { withRequestTimeout } from '../utils/boundedRequest'
+
+/** What a configuration save reports: whether the running stack applies it or a restart does. */
+interface ConfigSaveResult {
+  restartRequired: boolean
+  message?: string
+}
+
+async function responseSaveResult(response: Response): Promise<ConfigSaveResult> {
+  try {
+    const body = (await response.clone().json()) as { status?: unknown; message?: unknown }
+    return {
+      restartRequired: body?.status === 'restart_required',
+      message: typeof body?.message === 'string' ? body.message : undefined,
+    }
+  } catch {
+    return { restartRequired: false }
+  }
+}
 
 const ConfigPageRouterConfigSection = lazy(() => import('./ConfigPageRouterConfigSection'))
 const ConfigPageModelsSection = lazy(() => import('./ConfigPageModelsSection'))
@@ -130,6 +148,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         throw new Error(await responseErrorMessage(response))
       }
       setSaveWarnings(await responseConfigWarnings(response))
+      const result = await responseSaveResult(response)
+      if (result.restartRequired) {
+        toast.warning('Saved. A restart applies this change.', {
+          description: result.message,
+          duration: 15000,
+        })
+      }
 
       // Refresh config after save
       await fetchConfig()
